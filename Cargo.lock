@@ -2457,6 +2457,7 @@ dependencies = [
  "rattler",
  "rattler_conda_types",
  "rattler_repodata_gateway",
+ "rattler_shell",
  "rattler_solve",
  "reqwest",
  "tokio",
@@ -2861,6 +2862,18 @@ dependencies = [
  "tracing",
  "url",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "rattler_shell"
+version = "0.2.0"
+source = "git+https://github.com/baszalmstra/rattler?branch=fix/small_issues#a2d73b816c5c3dd8cfa50881881551c1c9bf267b"
+dependencies = [
+ "indexmap",
+ "rattler_conda_types",
+ "serde_json",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -3275,6 +3288,7 @@ version = "1.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "057d394a50403bcac12672b2b18fb387ab6d289d957dab67dd201875391e52f1"
 dependencies = [
+ "indexmap",
  "itoa",
  "ryu",
  "serde",

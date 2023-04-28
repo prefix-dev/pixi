@@ -18,6 +18,7 @@ rattler = { version = "0.2.0", default-features = false, git = "https://github.c
 rattler_conda_types = { version = "0.2.0", default-features = false, git = "https://github.com/baszalmstra/rattler", branch = "fix/small_issues" }
 rattler_repodata_gateway = { version = "0.2.0", default-features = false, git = "https://github.com/baszalmstra/rattler", branch = "fix/small_issues", features = ["sparse"] }
 rattler_solve = { version = "0.2.0", default-features = false, git = "https://github.com/baszalmstra/rattler", branch = "fix/small_issues" }
+rattler_shell = { version = "0.2.0", default-features = false, git = "https://github.com/baszalmstra/rattler", branch = "fix/small_issues" }
 #rattler = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler" }
 #rattler_conda_types = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_conda_types" }
 #rattler_repodata_gateway = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_repodata_gateway", features = ["sparse"] }

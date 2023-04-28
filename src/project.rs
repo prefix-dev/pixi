@@ -2,6 +2,7 @@ use crate::consts;
 use anyhow::Context;
 use futures::TryFutureExt;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{env, fs};
@@ -53,7 +54,7 @@ impl Project {
         })?;
 
         let mut result = Vec::with_capacity(deps.len());
-        for (name, value)  in deps.iter() {
+        for (name, value) in deps.iter() {
             let match_spec = value
                 .as_str()
                 .map(|str| format!("{} {}", name, str))
@@ -164,6 +165,24 @@ impl Project {
         }
 
         Ok(platforms)
+    }
+
+    pub fn commands(&self) -> anyhow::Result<HashMap<String, String>> {
+        let commands_table = self
+            .doc
+            .get("commands")
+            .and_then(|x| x.as_table_like())
+            .ok_or_else(|| anyhow::anyhow!("malformed or missing 'commands'"))?;
+
+        let mut res = HashMap::new();
+        for (key, val) in commands_table.iter() {
+            let command_str = val
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("malformed command"))?;
+            res.insert(key.to_string(), command_str.to_string());
+        }
+
+        Ok(res)
     }
 }
 

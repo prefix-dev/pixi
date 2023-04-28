@@ -8,10 +8,7 @@ use futures::StreamExt;
 use rattler_conda_types::{Channel, ChannelConfig, Platform};
 use rattler_repodata_gateway::{fetch, sparse::SparseRepoData};
 use reqwest::{Client, StatusCode};
-use std::{
-    path::Path,
-    time::Duration
-};
+use std::{path::Path, time::Duration};
 
 impl Project {
     pub async fn fetch_sparse_repodata(&self) -> anyhow::Result<Vec<SparseRepoData>> {
