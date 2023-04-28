@@ -1,0 +1,16 @@
+use console::style;
+
+mod cli;
+mod config;
+mod consts;
+mod project;
+mod repodata;
+mod progress;
+
+#[tokio::main]
+pub async fn main() {
+    if let Err(err) = cli::execute().await {
+        eprintln!("{}: {:?}", style("error").bold().red(), err);
+        std::process::exit(1);
+    }
+}
