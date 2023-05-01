@@ -1,7 +1,7 @@
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use rattler_conda_types::PrefixRecord;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::task::JoinHandle;
 
 /// Points to a directory that serves as a Conda prefix.
@@ -14,6 +14,11 @@ impl Prefix {
     pub fn new(path: impl Into<PathBuf>) -> anyhow::Result<Self> {
         let root = path.into();
         Ok(Self { root })
+    }
+
+    /// Returns the root directory of the prefix
+    pub fn root(&self) -> &Path {
+        &self.root
     }
 
     /// Scans the `conda-meta` directory of an environment and returns all the [`PrefixRecord`]s found
