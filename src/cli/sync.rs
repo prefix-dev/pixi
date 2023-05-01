@@ -1,11 +1,12 @@
+use crate::prefix::Prefix;
 use crate::project::Project;
 use clap::Parser;
 use itertools::Itertools;
 use rattler_conda_types::conda_lock::builder::{LockedPackage, LockedPackages};
-use rattler_conda_types::conda_lock::PackageHashes;
+use rattler_conda_types::conda_lock::{PackageHashes, VersionConstraint};
 use rattler_conda_types::{
     conda_lock, conda_lock::builder::LockFileBuilder, conda_lock::CondaLock, ChannelConfig,
-    MatchSpec, Platform, Version,
+    MatchSpec, NamelessMatchSpec, Platform, Version,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
@@ -19,9 +20,8 @@ pub struct Args {}
 // TODO: I dont like this command, if it is at all possible it would be so much better when this
 //  command is run when needed. E.g. have a cheap way to determine if the environment is up-to-date,
 //  if not, update it.
-pub async fn execute(args: Args) -> anyhow::Result<()> {
+pub async fn execute(_: Args) -> anyhow::Result<()> {
     let project = Project::discover()?;
-    let channels = project.channels(&ChannelConfig::default())?;
     let platforms = project.platforms()?;
     let dependencies = project.dependencies()?;
 
@@ -34,19 +34,25 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     };
 
     // Check if the lock file is up to date with the requirements in the project.
-    let lock_file_up_to_date = dependencies.iter().all(|match_spec| {
-        lock_file
-            .package
-            .iter()
-            .find(|locked_package| locked_dependency_satisfies(*locked_package, match_spec))
-            .is_some()
+    let specs_out_of_date = dependencies.iter().any(|(dep_name, constraints)| {
+        !lock_file.package.iter().any(|locked_package| {
+            locked_dependency_satisfies(locked_package, dep_name, constraints)
+        })
     });
+    let platforms_out_of_date =
+        HashSet::<Platform>::from_iter(lock_file.metadata.platforms.iter().copied())
+            != HashSet::from_iter(platforms.into_iter());
+    let channels_out_of_date = false; // TODO:
 
-    let lock_file = if !lock_file_up_to_date {
+    let lock_file = if platforms_out_of_date || channels_out_of_date || specs_out_of_date {
         update_lock_file(&project, lock_file).await?
     } else {
         lock_file
     };
+
+    // Check to see if the environment is out of date or not.
+    let prefix = Prefix::new(project.root().join(".pax/env"))?;
+    let current_packages = prefix.find_installed_packages(None);
 
     Ok(())
 }
@@ -56,10 +62,11 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 /// TODO: Make this more elaborate to include all properties of MatchSpec
 fn locked_dependency_satisfies(
     locked_package: &conda_lock::LockedDependency,
-    spec: &MatchSpec,
+    name: &str,
+    spec: &NamelessMatchSpec,
 ) -> bool {
     // Check if the name of the package matches
-    if Some(locked_package.name.as_str()) != spec.name.as_deref() {
+    if locked_package.name.as_str() != name {
         return false;
     }
 
@@ -97,10 +104,7 @@ async fn update_lock_file(
     let dependencies = project.dependencies()?;
 
     // Extract the package names from the dependencies
-    let package_names = dependencies
-        .iter()
-        .filter_map(|spec| spec.name.as_deref())
-        .collect_vec();
+    let package_names = dependencies.iter().map(|(name, _)| name).collect_vec();
 
     // Get the repodata for the project
     let sparse_repo_data = project.fetch_sparse_repodata().await?;
@@ -111,7 +115,12 @@ async fn update_lock_file(
         .into_iter()
         .map(|channel| conda_lock::Channel::from(channel.base_url().to_string()));
 
-    let mut builder = LockFileBuilder::new(channels, platforms.clone(), dependencies.clone());
+    let match_specs = dependencies
+        .iter()
+        .map(|(name, constraint)| MatchSpec::from_nameless(constraint.clone(), Some(name.clone())))
+        .collect_vec();
+
+    let mut builder = LockFileBuilder::new(channels, platforms.clone(), match_specs.clone());
     for platform in platforms {
         // Get the repodata for the current platform and for NoArch
         let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
@@ -126,7 +135,7 @@ async fn update_lock_file(
 
         // Construct a solver task that we can start solving.
         let task = rattler_solve::SolverTask {
-            specs: dependencies.clone(),
+            specs: match_specs.clone(),
             available_packages: available_packages
                 .iter()
                 .map(|records| LibsolvRepoData::from_records(records)),
@@ -153,7 +162,25 @@ async fn update_lock_file(
                     (None, Some(md5)) => PackageHashes::Md5(md5),
                     _ => unreachable!("package without any hash??"),
                 },
-                dependency_list: Default::default(),
+                dependency_list: record
+                    .package_record
+                    .depends
+                    .iter()
+                    .map(|dep| {
+                        MatchSpec::from_str(dep)
+                            .map_err(anyhow::Error::from)
+                            .and_then(|spec| match &spec.name {
+                                Some(name) => Ok((
+                                    name.to_owned(),
+                                    VersionConstraint::from(NamelessMatchSpec::from(spec)),
+                                )),
+                                None => Err(anyhow::anyhow!(
+                                    "dependency matchspec missing a name '{}'",
+                                    dep
+                                )),
+                            })
+                    })
+                    .collect::<Result<_, _>>()?,
                 optional: None,
             });
         }

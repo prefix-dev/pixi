@@ -2719,7 +2719,6 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/small_issues#a2d73b816c5c3dd8cfa50881881551c1c9bf267b"
 dependencies = [
  "anyhow",
  "apple-codesign",
@@ -2759,7 +2758,6 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/small_issues#a2d73b816c5c3dd8cfa50881881551c1c9bf267b"
 dependencies = [
  "chrono",
  "fxhash",
@@ -2787,7 +2785,6 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/small_issues#a2d73b816c5c3dd8cfa50881881551c1c9bf267b"
 dependencies = [
  "digest 0.10.6",
  "hex",
@@ -2801,7 +2798,6 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/small_issues#a2d73b816c5c3dd8cfa50881881551c1c9bf267b"
 dependencies = [
  "quote",
  "syn 2.0.15",
@@ -2810,7 +2806,6 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/small_issues#a2d73b816c5c3dd8cfa50881881551c1c9bf267b"
 dependencies = [
  "bzip2",
  "chrono",
@@ -2831,7 +2826,6 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/small_issues#a2d73b816c5c3dd8cfa50881881551c1c9bf267b"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2866,7 +2860,6 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/small_issues#a2d73b816c5c3dd8cfa50881881551c1c9bf267b"
 dependencies = [
  "anyhow",
  "cc",

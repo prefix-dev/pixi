@@ -1,7 +1,6 @@
 use crate::project::Project;
 use clap::Parser;
-use futures::StreamExt;
-use rattler_conda_types::{MatchSpec, Version, VersionSpec, version_spec::VersionOperator};
+use rattler_conda_types::{version_spec::VersionOperator, MatchSpec, Version, VersionSpec};
 use std::collections::HashMap;
 
 /// Adds a dependency to the project

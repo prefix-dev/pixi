@@ -3,9 +3,10 @@ use console::style;
 mod cli;
 mod config;
 mod consts;
+mod prefix;
+mod progress;
 mod project;
 mod repodata;
-mod progress;
 
 #[tokio::main]
 pub async fn main() {

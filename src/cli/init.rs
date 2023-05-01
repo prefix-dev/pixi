@@ -1,15 +1,8 @@
-use std::{
-    env,
-    fs,
-    path::PathBuf,
-};
+use crate::{config::get_default_author, consts};
 use clap::Parser;
-use minijinja::{Environment, context};
+use minijinja::{context, Environment};
 use rattler_conda_types::Platform;
-use crate::{
-    config::get_default_author,
-    consts
-};
+use std::{env, fs, path::PathBuf};
 
 /// Creates a new project
 #[derive(Parser, Debug)]

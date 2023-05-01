@@ -14,14 +14,14 @@ clap = { version = "4.2.4", default-features = false, features = ["derive", "usa
 minijinja = { version = "0.32.0" }
 console = { version = "0.15.5", features = ["windows-console-colors"] }
 toml_edit = "0.19.8"
-rattler = { version = "0.2.0", default-features = false, git = "https://github.com/baszalmstra/rattler", branch = "fix/small_issues" }
-rattler_conda_types = { version = "0.2.0", default-features = false, git = "https://github.com/baszalmstra/rattler", branch = "fix/small_issues" }
-rattler_repodata_gateway = { version = "0.2.0", default-features = false, git = "https://github.com/baszalmstra/rattler", branch = "fix/small_issues", features = ["sparse"] }
-rattler_solve = { version = "0.2.0", default-features = false, git = "https://github.com/baszalmstra/rattler", branch = "fix/small_issues" }
-#rattler = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler" }
-#rattler_conda_types = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_conda_types" }
-#rattler_repodata_gateway = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_repodata_gateway", features = ["sparse"] }
-#rattler_solve = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_solve" }
+#rattler = { version = "0.2.0", default-features = false, git = "https://github.com/baszalmstra/rattler", branch = "fix/small_issues" }
+#rattler_conda_types = { version = "0.2.0", default-features = false, git = "https://github.com/baszalmstra/rattler", branch = "fix/small_issues" }
+#rattler_repodata_gateway = { version = "0.2.0", default-features = false, git = "https://github.com/baszalmstra/rattler", branch = "fix/small_issues", features = ["sparse"] }
+#rattler_solve = { version = "0.2.0", default-features = false, git = "https://github.com/baszalmstra/rattler", branch = "fix/small_issues" }
+rattler = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler" }
+rattler_conda_types = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_conda_types" }
+rattler_repodata_gateway = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_repodata_gateway", features = ["sparse"] }
+rattler_solve = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_solve" }
 reqwest = { version = "0.11.16", default-features = false }
 tokio = { version = "1.27.0", features = ["macros", "rt-multi-thread"] }
 indicatif = "0.17.3"
