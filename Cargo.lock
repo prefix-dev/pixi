@@ -2733,7 +2733,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#c5e1f51b7285b957a2a39b009a8a50c4b622d281"
+source = "git+https://github.com/mamba-org/rattler?branch=main#6a1b18ff8517421f00217342ef6d2606e18bf048"
 dependencies = [
  "anyhow",
  "apple-codesign",
@@ -2773,7 +2773,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#c5e1f51b7285b957a2a39b009a8a50c4b622d281"
+source = "git+https://github.com/mamba-org/rattler?branch=main#6a1b18ff8517421f00217342ef6d2606e18bf048"
 dependencies = [
  "chrono",
  "fxhash",
@@ -2801,7 +2801,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#c5e1f51b7285b957a2a39b009a8a50c4b622d281"
+source = "git+https://github.com/mamba-org/rattler?branch=main#6a1b18ff8517421f00217342ef6d2606e18bf048"
 dependencies = [
  "digest 0.10.6",
  "hex",
@@ -2815,7 +2815,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#c5e1f51b7285b957a2a39b009a8a50c4b622d281"
+source = "git+https://github.com/mamba-org/rattler?branch=main#6a1b18ff8517421f00217342ef6d2606e18bf048"
 dependencies = [
  "quote",
  "syn 2.0.15",
@@ -2824,7 +2824,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#c5e1f51b7285b957a2a39b009a8a50c4b622d281"
+source = "git+https://github.com/mamba-org/rattler?branch=main#6a1b18ff8517421f00217342ef6d2606e18bf048"
 dependencies = [
  "bzip2",
  "chrono",
@@ -2845,7 +2845,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#c5e1f51b7285b957a2a39b009a8a50c4b622d281"
+source = "git+https://github.com/mamba-org/rattler?branch=main#6a1b18ff8517421f00217342ef6d2606e18bf048"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2880,7 +2880,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#c5e1f51b7285b957a2a39b009a8a50c4b622d281"
+source = "git+https://github.com/mamba-org/rattler?branch=main#6a1b18ff8517421f00217342ef6d2606e18bf048"
 dependencies = [
  "enum_dispatch",
  "indexmap",
@@ -2894,7 +2894,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#c5e1f51b7285b957a2a39b009a8a50c4b622d281"
+source = "git+https://github.com/mamba-org/rattler?branch=main#6a1b18ff8517421f00217342ef6d2606e18bf048"
 dependencies = [
  "anyhow",
  "cc",
