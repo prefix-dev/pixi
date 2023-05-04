@@ -2,6 +2,7 @@ use crate::project::Project;
 use clap::Parser;
 use rattler_conda_types::{version_spec::VersionOperator, MatchSpec, Version, VersionSpec};
 use std::collections::HashMap;
+use std::ops::Deref;
 
 /// Adds a dependency to the project
 #[derive(Parser, Debug)]
@@ -43,7 +44,7 @@ pub async fn execute(mut args: Args) -> anyhow::Result<()> {
                 all_package_records.fold(HashMap::<String, Version>::new(), |mut init, record| {
                     init.entry(record.package_record.subdir.clone())
                         .and_modify(|version| {
-                            if &*version < &record.package_record.version {
+                            if version.deref().lt(&record.package_record.version) {
                                 *version = record.package_record.version.clone()
                             }
                         })

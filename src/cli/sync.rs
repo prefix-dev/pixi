@@ -211,7 +211,7 @@ async fn update_lock_file(
     let dependencies = project.dependencies()?;
 
     // Extract the package names from the dependencies
-    let package_names = dependencies.keys().map(|name| name).collect_vec();
+    let package_names = dependencies.keys().collect_vec();
 
     // Get the repodata for the project
     let sparse_repo_data = project.fetch_sparse_repodata().await?;

@@ -1,10 +1,6 @@
-use indicatif::{
-    HumanBytes, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState, ProgressStyle,
-};
+use indicatif::{HumanBytes, MultiProgress, ProgressDrawTarget, ProgressState};
 use once_cell::sync::Lazy;
-use std::borrow::Cow;
 use std::fmt::Write;
-use std::time::Duration;
 
 /// Returns a global instance of [`indicatif::MultiProgress`].
 ///
@@ -73,18 +69,18 @@ pub fn errored_progress_style() -> indicatif::ProgressStyle {
         .progress_chars("━━╾─")
 }
 
-/// Returns the style to use for a progressbar that is indeterminate and simply shows a spinner.
-pub fn long_running_progress_style() -> indicatif::ProgressStyle {
-    ProgressStyle::with_template("{spinner:.green} {msg}").unwrap()
-}
-
-/// Displays a spinner with the given message while running the specified function to completion.
-pub fn wrap_in_progress<T, F: FnOnce() -> T>(msg: impl Into<Cow<'static, str>>, func: F) -> T {
-    let pb = global_multi_progress().add(ProgressBar::new_spinner());
-    pb.enable_steady_tick(Duration::from_millis(100));
-    pb.set_style(long_running_progress_style());
-    pb.set_message(msg);
-    let result = func();
-    pb.finish_and_clear();
-    result
-}
+// /// Returns the style to use for a progressbar that is indeterminate and simply shows a spinner.
+// pub fn long_running_progress_style() -> indicatif::ProgressStyle {
+//     ProgressStyle::with_template("{spinner:.green} {msg}").unwrap()
+// }
+//
+// /// Displays a spinner with the given message while running the specified function to completion.
+// pub fn wrap_in_progress<T, F: FnOnce() -> T>(msg: impl Into<Cow<'static, str>>, func: F) -> T {
+//     let pb = global_multi_progress().add(ProgressBar::new_spinner());
+//     pb.enable_steady_tick(Duration::from_millis(100));
+//     pb.set_style(long_running_progress_style());
+//     pb.set_message(msg);
+//     let result = func();
+//     pb.finish_and_clear();
+//     result
+// }
