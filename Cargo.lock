@@ -1376,6 +1376,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "enum_dispatch"
+version = "0.3.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11f36e95862220b211a6e2aa5eca09b4fa391b13cd52ceb8035a24bf65a79de2"
+dependencies = [
+ "once_cell",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "env_logger"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2457,8 +2469,10 @@ dependencies = [
  "rattler",
  "rattler_conda_types",
  "rattler_repodata_gateway",
+ "rattler_shell",
  "rattler_solve",
  "reqwest",
+ "tempfile",
  "tokio",
  "toml_edit",
 ]
@@ -2719,6 +2733,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.2.0"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#42eb4bdf1e6063054af96b1df6be9bd50254b883"
 dependencies = [
  "anyhow",
  "apple-codesign",
@@ -2758,6 +2773,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.2.0"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#42eb4bdf1e6063054af96b1df6be9bd50254b883"
 dependencies = [
  "chrono",
  "fxhash",
@@ -2785,6 +2801,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.2.0"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#42eb4bdf1e6063054af96b1df6be9bd50254b883"
 dependencies = [
  "digest 0.10.6",
  "hex",
@@ -2798,6 +2815,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.2.0"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#42eb4bdf1e6063054af96b1df6be9bd50254b883"
 dependencies = [
  "quote",
  "syn 2.0.15",
@@ -2806,6 +2824,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.2.0"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#42eb4bdf1e6063054af96b1df6be9bd50254b883"
 dependencies = [
  "bzip2",
  "chrono",
@@ -2826,6 +2845,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.2.0"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#42eb4bdf1e6063054af96b1df6be9bd50254b883"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2858,8 +2878,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_shell"
+version = "0.2.0"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#42eb4bdf1e6063054af96b1df6be9bd50254b883"
+dependencies = [
+ "enum_dispatch",
+ "indexmap",
+ "itertools",
+ "rattler_conda_types",
+ "serde_json",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "rattler_solve"
 version = "0.2.0"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/dynamic_shell#42eb4bdf1e6063054af96b1df6be9bd50254b883"
 dependencies = [
  "anyhow",
  "cc",
@@ -3268,6 +3303,7 @@ version = "1.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "057d394a50403bcac12672b2b18fb387ab6d289d957dab67dd201875391e52f1"
 dependencies = [
+ "indexmap",
  "itoa",
  "ryu",
  "serde",
