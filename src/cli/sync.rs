@@ -34,7 +34,7 @@ use std::{
     time::Duration,
 };
 
-/// Adds a dependency to the project
+/// Sync the project configuration with its environment
 #[derive(Parser, Debug)]
 pub struct Args {}
 
