@@ -4,6 +4,7 @@ mod add;
 mod init;
 mod run;
 mod sync;
+mod auth;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -17,6 +18,7 @@ enum Command {
     Add(add::Args),
     Sync(sync::Args),
     Run(run::Args),
+    Auth(auth::Args),
 }
 
 pub async fn execute() -> anyhow::Result<()> {
@@ -27,5 +29,6 @@ pub async fn execute() -> anyhow::Result<()> {
         Command::Add(cmd) => add::execute(cmd).await,
         Command::Sync(cmd) => sync::execute(cmd).await,
         Command::Run(cmd) => run::execute(cmd).await,
+        Command::Auth(cmd) => auth::execute(cmd).await,
     }
 }
