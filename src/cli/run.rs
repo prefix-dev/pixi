@@ -9,10 +9,11 @@ use rattler_shell::{
     shell::{Shell, ShellEnum},
 };
 
-/// Adds a dependency to the project
+/// Runs command in project.
 #[derive(Parser, Debug)]
+#[clap(trailing_var_arg=true)]
 pub struct Args {
-    command: String,
+    command: Vec<String>,
 }
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
@@ -38,7 +39,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     // Generate a temporary file with the script to execute. This includes the activation of the
     // environment.
     let mut script = format!("{}\n", activator_result.script.trim());
-    shell.run_command(&mut script, [args.command.as_str()])?;
+    shell.run_command(&mut script, args.command.iter().map(|s| s.as_str()))?;
 
     let mut temp_file = tempfile::Builder::new()
         .suffix(&format!(".{}", shell.extension()))
