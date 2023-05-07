@@ -11,13 +11,14 @@ use rattler_shell::{
 
 /// Runs command in project.
 #[derive(Parser, Debug)]
-#[clap(trailing_var_arg=true)]
+#[clap(trailing_var_arg = true)]
 pub struct Args {
     command: Vec<String>,
 }
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
     let project = Project::discover()?;
+    let commands = project.commands()?;
 
     // Determine the current shell
     let shell: ShellEnum = ShellEnum::detect_from_environment()
@@ -36,10 +37,20 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         conda_prefix: None,
     })?;
 
+    // if args[0] is in commands, run it
+    let command = if let Some(command) = commands.get(&args.command[0]) {
+        command.split(" ").collect::<Vec<&str>>()
+    } else {
+        args.command
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<&str>>()
+    };
+
     // Generate a temporary file with the script to execute. This includes the activation of the
     // environment.
     let mut script = format!("{}\n", activator_result.script.trim());
-    shell.run_command(&mut script, args.command.iter().map(|s| s.as_str()))?;
+    shell.run_command(&mut script, command)?;
 
     let mut temp_file = tempfile::Builder::new()
         .suffix(&format!(".{}", shell.extension()))
