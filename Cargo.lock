@@ -2464,30 +2464,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pax"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "clap_complete",
- "console",
- "futures 0.3.28",
- "indicatif",
- "itertools",
- "minijinja",
- "once_cell",
- "rattler",
- "rattler_conda_types",
- "rattler_repodata_gateway",
- "rattler_shell",
- "rattler_solve",
- "reqwest",
- "tempfile",
- "tokio",
- "toml_edit",
-]
-
-[[package]]
 name = "pbkdf2"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2646,6 +2622,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b63bdb0cd06f1f4dedf69b254734f9b45af66e4a031e42a7480257d9898b435"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "px"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "clap_complete",
+ "console",
+ "futures 0.3.28",
+ "indicatif",
+ "itertools",
+ "minijinja",
+ "once_cell",
+ "rattler",
+ "rattler_conda_types",
+ "rattler_repodata_gateway",
+ "rattler_shell",
+ "rattler_solve",
+ "reqwest",
+ "tempfile",
+ "tokio",
+ "toml_edit",
 ]
 
 [[package]]

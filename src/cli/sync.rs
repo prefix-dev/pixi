@@ -72,7 +72,7 @@ pub async fn execute(_: Args) -> anyhow::Result<()> {
     };
 
     // Check to see if the environment is out of date or not.
-    let prefix = Prefix::new(project.root().join(".pax/env"))?;
+    let prefix = Prefix::new(project.root().join(".px/env"))?;
     let current_packages = prefix
         .find_installed_packages(None)
         .await

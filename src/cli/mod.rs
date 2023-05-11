@@ -37,7 +37,7 @@ fn completion(args: CompletionCommand) -> Result<(), Error> {
     clap_complete::generate(
         args.shell.unwrap_or(Shell::Bash),
         &mut Args::command(),
-        "pax",
+        "px",
         &mut std::io::stdout(),
     );
 

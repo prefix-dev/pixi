@@ -25,7 +25,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("could not detect the current shell"))?;
 
     // Construct an activator so we can run commands from the environment
-    let prefix = project.root().join(".pax/env");
+    let prefix = project.root().join(".px/env");
     let activator = Activator::from_path(&prefix, shell.clone(), Platform::current())?;
 
     let path = std::env::split_paths(&std::env::var("PATH").unwrap_or_default())
