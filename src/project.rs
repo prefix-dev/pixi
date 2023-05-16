@@ -172,18 +172,16 @@ impl Project {
 
     /// Get the commands defined under the `commands` section of the project manifest.
     pub fn commands(&self) -> anyhow::Result<HashMap<String, String>> {
-        let commands_table = self
-            .doc
-            .get("commands")
-            .and_then(|x| x.as_table_like())
-            .ok_or_else(|| anyhow::anyhow!("malformed or missing 'commands'"))?;
-
         let mut res = HashMap::new();
-        for (key, val) in commands_table.iter() {
-            let command_str = val
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("malformed command"))?;
-            res.insert(key.to_string(), command_str.to_string());
+
+        // If some commands are defined commit them otherwise return empty map
+        if let Some(commands_table) = self.doc.get("commands").and_then(|x| x.as_table_like()) {
+            for (key, val) in commands_table.iter() {
+                let command_str = val
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("malformed command"))?;
+                res.insert(key.to_string(), command_str.to_string());
+            }
         }
 
         Ok(res)

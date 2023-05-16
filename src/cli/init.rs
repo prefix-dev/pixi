@@ -25,6 +25,9 @@ authors = ["{{ author[0] }} <{{ author[1] }}>"]
 channels = ["{{ channel }}"]
 platforms = ["{{ platform }}"]
 
+[commands]
+custom_command = "echo hello_world"
+
 [dependencies]
 "#;
 
