@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use tokio::task::JoinHandle;
 
 /// Points to a directory that serves as a Conda prefix.
+#[derive(Debug, Clone)]
 pub struct Prefix {
     root: PathBuf,
 }
