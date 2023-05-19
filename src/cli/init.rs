@@ -12,7 +12,7 @@ pub struct Args {
     path: PathBuf,
 }
 
-/// The pex.toml template
+/// The px.toml template
 ///
 /// This uses a template just to simplify the flexibility of emitting it.
 const PROJECT_TEMPLATE: &str = r#"[project]
@@ -28,8 +28,8 @@ platforms = ["{{ platform }}"]
 [dependencies]
 "#;
 
-const GITIGNORE_TEMPLATE: &str = r#"# pex environments
-.pex
+const GITIGNORE_TEMPLATE: &str = r#"# px environments
+.px
 "#;
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
@@ -46,7 +46,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     // Fail silently if it already exists or cannot be created.
     fs::create_dir_all(&dir).ok();
 
-    // Write pex.toml
+    // Write px.toml
     let name = dir.file_name().unwrap().to_string_lossy();
     let version = "0.1.0";
     let author = get_default_author();
