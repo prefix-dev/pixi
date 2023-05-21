@@ -8,6 +8,7 @@ use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::{Shell, ShellEnum},
 };
+use crate::environment::get_up_to_date_prefix;
 
 /// Runs command in project.
 #[derive(Parser, Debug)]
@@ -25,8 +26,8 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("could not detect the current shell"))?;
 
     // Construct an activator so we can run commands from the environment
-    let prefix = project.root().join(".pax/env");
-    let activator = Activator::from_path(&prefix, shell.clone(), Platform::current())?;
+    let prefix = get_up_to_date_prefix(&project).await?;
+    let activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())?;
 
     let path = std::env::split_paths(&std::env::var("PATH").unwrap_or_default())
         .map(PathBuf::from)
@@ -39,7 +40,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 
     // if args[0] is in commands, run it
     let command = if let Some(command) = commands.get(&args.command[0]) {
-        command.split(" ").collect::<Vec<&str>>()
+        command.split(' ').collect::<Vec<&str>>()
     } else {
         args.command
             .iter()

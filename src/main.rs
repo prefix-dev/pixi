@@ -7,6 +7,7 @@ mod prefix;
 mod progress;
 mod project;
 mod repodata;
+mod environment;
 
 pub use project::Project;
 

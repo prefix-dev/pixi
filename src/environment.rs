@@ -1,146 +1,64 @@
-use crate::{
-    prefix::Prefix,
-    progress::{default_progress_style, finished_progress_style, global_multi_progress},
-    project::Project,
-};
+use crate::prefix::Prefix;
+use crate::progress::{default_progress_style, finished_progress_style, global_multi_progress};
+use crate::{consts, Project};
 use anyhow::Context;
-use clap::Parser;
-use futures::{future::ready, stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
+use futures::future::ready;
+use futures::{stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use rattler::{
-    install::{link_package, InstallDriver, InstallOptions, Transaction, TransactionOperation},
-    package_cache::PackageCache,
+use rattler::install::{
+    link_package, InstallDriver, InstallOptions, Transaction, TransactionOperation,
 };
+use rattler::package_cache::PackageCache;
 use rattler_conda_types::{
-    conda_lock::{
-        self,
-        builder::LockFileBuilder,
-        builder::{LockedPackage, LockedPackages},
-        CondaLock, PackageHashes, VersionConstraint,
-    },
+    conda_lock,
+    conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
+    conda_lock::{CondaLock, PackageHashes, VersionConstraint},
     ChannelConfig, MatchSpec, NamelessMatchSpec, PackageRecord, Platform, PrefixRecord,
     RepoDataRecord, Version,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
 use reqwest::Client;
-use std::{
-    collections::HashSet,
-    ffi::OsStr,
-    io::ErrorKind,
-    path::{Path, PathBuf},
-    str::FromStr,
-    time::Duration,
-};
+use std::collections::HashSet;
+use std::ffi::OsStr;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
+use std::time::Duration;
 
-/// Sync the project configuration with its environment
-#[derive(Parser, Debug)]
-pub struct Args {}
+/// Returns the prefix associated with the given environment. If the prefix doesnt exist or is not
+/// up to date it is updated.
+pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> {
+    // Make sure the project supports the current platform
+    let platform = Platform::current();
+    if !project.platforms()?.contains(&platform) {
+        anyhow::bail!("the project is not configured for your current platform. Add '{}' to the 'platforms' key in project's {} to include it", platform, consts::PROJECT_MANIFEST)
+    }
 
-// TODO: I dont like this command, if it is at all possible it would be so much better when this
-//  command is run when needed. E.g. have a cheap way to determine if the environment is up-to-date,
-//  if not, update it.
-pub async fn execute(_: Args) -> anyhow::Result<()> {
-    let project = Project::discover()?;
-    let platforms = project.platforms()?;
-    let dependencies = project.dependencies()?;
-
-    // Load the lockfile or create a dummy one
-    let lock_file_path = project.lock_file_path();
-    let lock_file = if lock_file_path.is_file() {
-        CondaLock::from_path(&lock_file_path)?
-    } else {
-        LockFileBuilder::default().build()?
+    // Start loading the installed packages in the background
+    let prefix = Prefix::new(project.root().join(".pax/env"))?;
+    let installed_packages_future = {
+        let prefix = prefix.clone();
+        tokio::spawn(async move { prefix.find_installed_packages(None).await })
     };
 
-    // Check if the lock file is up to date with the requirements in the project.
-    let specs_out_of_date = dependencies.iter().any(|(dep_name, constraints)| {
-        !lock_file.package.iter().any(|locked_package| {
-            locked_dependency_satisfies(locked_package, dep_name, constraints)
-        })
-    });
-    let platforms_out_of_date =
-        HashSet::<Platform>::from_iter(lock_file.metadata.platforms.iter().copied())
-            != HashSet::from_iter(platforms.into_iter());
-    let channels_out_of_date = false; // TODO:
-
-    let lock_file = if platforms_out_of_date || channels_out_of_date || specs_out_of_date {
-        update_lock_file(&project, lock_file).await?
+    // Update the lock-file if it is out of date.
+    let lock_file = load_lock_file(project).await?;
+    let lock_file = if !lock_file_up_to_date(project, &lock_file)? {
+        update_lock_file(project, lock_file, None).await?
     } else {
         lock_file
     };
 
-    // Check to see if the environment is out of date or not.
-    let prefix = Prefix::new(project.root().join(".pax/env"))?;
-    let current_packages = prefix
-        .find_installed_packages(None)
-        .await
-        .context("failed to determine the currently installed packages")?;
-
-    // TODO: Stop doing anything if the currently installed packages already match our lock file
-    let current_platform = Platform::current();
-    let required_packages = lock_file
-        .package
-        .into_iter()
-        .filter(|pkg| pkg.platform == current_platform)
-        .map(|pkg| {
-            Ok(RepoDataRecord {
-                channel: String::new(),
-                file_name: Path::new(pkg.url.path())
-                    .file_name()
-                    .and_then(OsStr::to_str)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("failed to determine file name from {}", &pkg.url)
-                    })?
-                    .to_owned(),
-                url: pkg.url,
-                package_record: PackageRecord {
-                    arch: None,
-                    build: pkg.build.unwrap_or_default(),
-                    build_number: 0,
-                    constrains: vec![],
-                    depends: pkg
-                        .dependencies
-                        .into_iter()
-                        .map(|(pkg_name, spec)| format!("{} {}", pkg_name, spec))
-                        .collect(),
-                    features: None,
-                    legacy_bz2_md5: None,
-                    legacy_bz2_size: None,
-                    license: None,
-                    license_family: None,
-                    md5: match &pkg.hash {
-                        PackageHashes::Md5(md5) => Some(*md5),
-                        PackageHashes::Sha256(_) => None,
-                        PackageHashes::Md5Sha256(md5, _) => Some(*md5),
-                    },
-                    name: pkg.name,
-                    noarch: Default::default(),
-                    platform: None,
-                    sha256: match &pkg.hash {
-                        PackageHashes::Md5(_) => None,
-                        PackageHashes::Sha256(sha256) => Some(*sha256),
-                        PackageHashes::Md5Sha256(_, sha256) => Some(*sha256),
-                    },
-                    size: None,
-                    subdir: "".to_string(),
-                    timestamp: None,
-                    track_features: vec![],
-                    version: Version::from_str(&pkg.version)?,
-                },
-            })
-        })
-        .collect::<anyhow::Result<Vec<_>>>()?;
-
-    // Construct a transaction to be able to update the environment to the correct versions of all
-    // packages.
-    let transaction = rattler::install::Transaction::from_current_and_desired(
-        current_packages,
-        required_packages,
-        current_platform,
+    // Construct a transaction to bring the environment up to date with the lock-file content
+    let transaction = Transaction::from_current_and_desired(
+        installed_packages_future.await??,
+        get_required_packages(lock_file, platform)?,
+        platform,
     )?;
 
+    // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
         // Execute the operations that are returned by the solver.
         execute_transaction(
@@ -150,18 +68,59 @@ pub async fn execute(_: Args) -> anyhow::Result<()> {
             Client::default(),
         )
         .await?;
-        println!(
-            "{} Successfully updated the environment",
-            console::style(console::Emoji("✔", "")).green(),
-        );
-    } else {
-        println!(
-            "{} Already up to date",
-            console::style(console::Emoji("✔", "")).green(),
-        );
     }
 
-    Ok(())
+    Ok(prefix)
+}
+
+/// Loads the lockfile for the specified project or returns a dummy one if none could be found.
+pub async fn load_lock_file(project: &Project) -> anyhow::Result<CondaLock> {
+    let lock_file_path = project.lock_file_path();
+    tokio::task::spawn_blocking(move || {
+        if lock_file_path.is_file() {
+            CondaLock::from_path(&lock_file_path).map_err(anyhow::Error::from)
+        } else {
+            LockFileBuilder::default()
+                .build()
+                .map_err(anyhow::Error::from)
+        }
+    })
+    .await
+    .unwrap_or_else(|e| Err(e.into()))
+}
+
+/// Returns true if the locked packages match the dependencies in the project.
+pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow::Result<bool> {
+    let platforms = project.platforms()?;
+
+    // If a platform is missing from the lock file the lock file is completely out-of-date.
+    if HashSet::<Platform>::from_iter(lock_file.metadata.platforms.iter().copied())
+        != HashSet::from_iter(platforms.iter().copied())
+    {
+        return Ok(false);
+    }
+
+    // For each platform, check if a package exists in the lock file that match a dependency.
+    let dependencies = project.dependencies()?;
+    for platform in platforms {
+        for (name, spec) in dependencies.iter() {
+            if !lock_file
+                .package
+                .iter()
+                .any(|locked_package| {
+                    locked_package.platform == platform
+                        && locked_dependency_satisfies(locked_package, name, spec)
+                })
+            {
+                // Could not find a locked package that matches the project spec.
+                return Ok(false);
+            }
+        }
+    }
+
+    // TODO: Check if the channels are out-of-date.
+
+    Ok(true)
 }
 
 /// Returns true if the specified [`conda_lock::LockedDependency`] satisfies the given match spec.
@@ -203,9 +162,11 @@ fn locked_dependency_satisfies(
     true
 }
 
-async fn update_lock_file(
+/// Updates the lock file for a project.
+pub async fn update_lock_file(
     project: &Project,
     _existing_lock_file: CondaLock,
+    repodata: Option<Vec<SparseRepoData>>,
 ) -> anyhow::Result<CondaLock> {
     let platforms = project.platforms()?;
     let dependencies = project.dependencies()?;
@@ -214,7 +175,11 @@ async fn update_lock_file(
     let package_names = dependencies.keys().collect_vec();
 
     // Get the repodata for the project
-    let sparse_repo_data = project.fetch_sparse_repodata().await?;
+    let sparse_repo_data = if let Some(sparse_repo_data) = repodata {
+        sparse_repo_data
+    } else {
+        project.fetch_sparse_repodata().await?
+    };
 
     // Construct a conda lock file
     let channels = project
@@ -303,8 +268,67 @@ async fn update_lock_file(
     Ok(conda_lock)
 }
 
+/// Returns the [`RepoDataRecord`]s for the packages of the current platform from the lock-file.
+pub fn get_required_packages(
+    lock_file: CondaLock,
+    platform: Platform,
+) -> anyhow::Result<Vec<RepoDataRecord>> {
+    lock_file
+        .package
+        .into_iter()
+        .filter(|pkg| pkg.platform == platform)
+        .map(|pkg| {
+            Ok(RepoDataRecord {
+                channel: String::new(),
+                file_name: Path::new(pkg.url.path())
+                    .file_name()
+                    .and_then(OsStr::to_str)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("failed to determine file name from {}", &pkg.url)
+                    })?
+                    .to_owned(),
+                url: pkg.url,
+                package_record: PackageRecord {
+                    arch: None,
+                    build: pkg.build.unwrap_or_default(),
+                    build_number: 0,
+                    constrains: vec![],
+                    depends: pkg
+                        .dependencies
+                        .into_iter()
+                        .map(|(pkg_name, spec)| format!("{} {}", pkg_name, spec))
+                        .collect(),
+                    features: None,
+                    legacy_bz2_md5: None,
+                    legacy_bz2_size: None,
+                    license: None,
+                    license_family: None,
+                    md5: match &pkg.hash {
+                        PackageHashes::Md5(md5) => Some(*md5),
+                        PackageHashes::Sha256(_) => None,
+                        PackageHashes::Md5Sha256(md5, _) => Some(*md5),
+                    },
+                    name: pkg.name,
+                    noarch: Default::default(),
+                    platform: None,
+                    sha256: match &pkg.hash {
+                        PackageHashes::Md5(_) => None,
+                        PackageHashes::Sha256(sha256) => Some(*sha256),
+                        PackageHashes::Md5Sha256(_, sha256) => Some(*sha256),
+                    },
+                    size: None,
+                    subdir: "".to_string(),
+                    timestamp: None,
+                    track_features: vec![],
+                    version: Version::from_str(&pkg.version)?,
+                },
+            })
+        })
+        .collect()
+}
+
 /// Executes the transaction on the given environment.
-async fn execute_transaction(
+pub async fn execute_transaction(
     transaction: Transaction<PrefixRecord, RepoDataRecord>,
     target_prefix: PathBuf,
     cache_dir: PathBuf,
