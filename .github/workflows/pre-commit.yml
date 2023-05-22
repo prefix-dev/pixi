@@ -10,5 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    # Initialize rust as pre-commit expects rust to be install systsem wide.
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+    - name: Install Rustfmt
+      run: rustup component add rustfmt
+
     - uses: actions/setup-python@v3
     - uses: pre-commit/action@v3.0.0
