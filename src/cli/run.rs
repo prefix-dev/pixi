@@ -4,11 +4,11 @@ use crate::Project;
 use clap::Parser;
 use rattler_conda_types::Platform;
 
+use crate::environment::get_up_to_date_prefix;
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::{Shell, ShellEnum},
 };
-use crate::environment::get_up_to_date_prefix;
 
 /// Runs command in project.
 #[derive(Parser, Debug)]

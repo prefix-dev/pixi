@@ -20,8 +20,6 @@ pub struct CompletionCommand {
     shell: Option<Shell>,
 }
 
-
-
 #[derive(Parser, Debug)]
 enum Command {
     Completion(CompletionCommand),
@@ -29,7 +27,6 @@ enum Command {
     Add(add::Args),
     Run(run::Args),
 }
-
 
 fn completion(args: CompletionCommand) -> Result<(), Error> {
     clap_complete::generate(
