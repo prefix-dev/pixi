@@ -1,3 +1,4 @@
+use crate::environment::{load_lock_file, update_lock_file};
 use crate::project::Project;
 use clap::Parser;
 use rattler_conda_types::{version_spec::VersionOperator, MatchSpec, Version, VersionSpec};
@@ -15,12 +16,7 @@ pub async fn execute(mut args: Args) -> anyhow::Result<()> {
     let mut project = Project::discover()?;
 
     // Check if there are specs that do not specify an explicit version
-    let has_unspecified_version = args.specs.iter().any(|spec| spec.version.is_none());
-    let sparse_repo_data = if has_unspecified_version {
-        project.fetch_sparse_repodata().await?
-    } else {
-        Default::default()
-    };
+    let sparse_repo_data = project.fetch_sparse_repodata().await?;
 
     // Add all the specs to the project
     for spec in args.specs.iter_mut() {
@@ -60,6 +56,14 @@ pub async fn execute(mut args: Args) -> anyhow::Result<()> {
 
         project.add_dependency(spec)?;
     }
+
+    // Update the lock file
+    update_lock_file(
+        &project,
+        load_lock_file(&project).await?,
+        Some(sparse_repo_data),
+    )
+    .await?;
 
     // Save the project to disk
     project.save()?;
