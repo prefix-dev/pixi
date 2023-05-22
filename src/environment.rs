@@ -104,14 +104,10 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
     let dependencies = project.dependencies()?;
     for platform in platforms {
         for (name, spec) in dependencies.iter() {
-            if !lock_file
-                .package
-                .iter()
-                .any(|locked_package| {
-                    locked_package.platform == platform
-                        && locked_dependency_satisfies(locked_package, name, spec)
-                })
-            {
+            if !lock_file.package.iter().any(|locked_package| {
+                locked_package.platform == platform
+                    && locked_dependency_satisfies(locked_package, name, spec)
+            }) {
                 // Could not find a locked package that matches the project spec.
                 return Ok(false);
             }
