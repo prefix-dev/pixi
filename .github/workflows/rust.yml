@@ -10,15 +10,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  style:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Format
-        run: cargo fmt --verbose
-
   build:
-    needs: style
+    needs: pre-commit
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
