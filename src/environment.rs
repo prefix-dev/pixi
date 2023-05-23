@@ -14,8 +14,8 @@ use rattler_conda_types::{
     conda_lock,
     conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
     conda_lock::{CondaLock, PackageHashes, VersionConstraint},
-    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageRecord, Platform, PrefixRecord,
-    RepoDataRecord, Version,
+    ChannelConfig, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageRecord, Platform,
+    PrefixRecord, RepoDataRecord, Version,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
@@ -35,7 +35,6 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
     if !project.platforms()?.contains(&platform) {
         anyhow::bail!("the project is not configured for your current platform. Add '{}' to the 'platforms' key in project's {} to include it", platform, consts::PROJECT_MANIFEST)
     }
-
     // Start loading the installed packages in the background
     let prefix = Prefix::new(project.root().join(".pax/env"))?;
     let installed_packages_future = {
@@ -50,11 +49,11 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
     } else {
         lock_file
     };
-
     // Construct a transaction to bring the environment up to date with the lock-file content
+    let required_packages = get_required_packages(lock_file, platform)?;
     let transaction = Transaction::from_current_and_desired(
         installed_packages_future.await??,
-        get_required_packages(lock_file, platform)?,
+        required_packages,
         platform,
     )?;
 
@@ -104,14 +103,10 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
     let dependencies = project.dependencies()?;
     for platform in platforms {
         for (name, spec) in dependencies.iter() {
-            if !lock_file
-                .package
-                .iter()
-                .any(|locked_package| {
-                    locked_package.platform == platform
-                        && locked_dependency_satisfies(locked_package, name, spec)
-                })
-            {
+            if !lock_file.package.iter().any(|locked_package| {
+                locked_package.platform == platform
+                    && locked_dependency_satisfies(locked_package, name, spec)
+            }) {
                 // Could not find a locked package that matches the project spec.
                 return Ok(false);
             }
@@ -205,6 +200,17 @@ pub async fn update_lock_file(
             package_names.iter().copied(),
         )?;
 
+        // Determine virtual packages of the system. These packages define the capabilities of the
+        // system. Some packages depend on these virtual packages to indiciate compability with the
+        // hardware of the system.
+        let virtual_packages =
+            rattler_virtual_packages::VirtualPackage::current().map(|vpkgs| {
+                vpkgs
+                    .iter()
+                    .map(|vpkg| GenericVirtualPackage::from(vpkg.clone()))
+                    .collect::<Vec<_>>()
+            })?;
+
         // Construct a solver task that we can start solving.
         let task = rattler_solve::SolverTask {
             specs: match_specs.clone(),
@@ -215,7 +221,7 @@ pub async fn update_lock_file(
             // TODO: All these things.
             locked_packages: vec![],
             pinned_packages: vec![],
-            virtual_packages: vec![],
+            virtual_packages,
         };
 
         // Solve the task

@@ -4,11 +4,11 @@ use crate::Project;
 use clap::Parser;
 use rattler_conda_types::Platform;
 
+use crate::environment::get_up_to_date_prefix;
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::{Shell, ShellEnum},
 };
-use crate::environment::get_up_to_date_prefix;
 
 /// Runs command in project.
 #[derive(Parser, Debug)]
@@ -38,14 +38,14 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         conda_prefix: None,
     })?;
 
-    // if args[0] is in commands, run it
-    let command = if let Some(command) = commands.get(&args.command[0]) {
-        command.split(' ').collect::<Vec<&str>>()
+    // If arguments are given put them in the command vec.
+    let command: Vec<&str> = if let Some(first_command) = args.command.get(0) {
+        match commands.get(first_command) {
+            Some(command) => command.split(' ').collect(),
+            None => args.command.iter().map(|s| s.as_str()).collect(),
+        }
     } else {
-        args.command
-            .iter()
-            .map(|s| s.as_str())
-            .collect::<Vec<&str>>()
+        vec![] // args.command is empty, so return an empty Vec
     };
 
     // Generate a temporary file with the script to execute. This includes the activation of the
