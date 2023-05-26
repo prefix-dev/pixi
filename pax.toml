@@ -1,0 +1,15 @@
+[project]
+name = "pax"
+version = "0.1.0"
+description = "Add a short description here"
+authors = ["Ruben Arts <ruben.arts@hotmail.com>"]
+channels = ["conda-forge"]
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+[commands]
+custom_command = "echo hello_world"
+style = "pre-commit run --all"
+test = "cargo test"
+
+[dependencies]
+pre-commit = "*"
