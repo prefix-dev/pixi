@@ -26,8 +26,8 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
-      - name: Install Rustfmt
-        run: rustup component add rustfmt
+      - name: Install prerequisites
+        run: rustup component add rustfmt clippy
 
       - uses: actions/setup-python@v3
       - uses: pre-commit/action@v3.0.0
