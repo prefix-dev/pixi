@@ -29,6 +29,7 @@ repos:
         - id: test
           name: test
           language: system
+          stages: [push]
           types: [file, rust]
           entry: cargo test
           pass_filenames: false
