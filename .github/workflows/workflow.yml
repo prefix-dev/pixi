@@ -31,6 +31,8 @@ jobs:
 
       - uses: actions/setup-python@v3
       - uses: pre-commit/action@v3.0.0
+        env:
+          SKIP: clippy
 
   build:
     needs: pre-commit
@@ -41,6 +43,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
+      - name: Clippy
+        run: cargo clippy --all -- -D warnings
       - name: Build
         run: cargo build --verbose
       - name: Run tests

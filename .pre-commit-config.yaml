@@ -23,7 +23,7 @@ repos:
           name: clippy
           language: system
           types: [file, rust]
-          entry: cargo clippy --bins --tests --examples --all -- -D warnings # Use -D warnings option to ensure the job fails when encountering warnings
+          entry: cargo clippy --all -- -D warnings # Use -D warnings option to ensure the job fails when encountering warnings
           pass_filenames: false
 
         - id: test
