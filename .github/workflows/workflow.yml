@@ -4,7 +4,6 @@ on:
   push:
     branches: [ "main" ]
   pull_request:
-    branches: [ "main" ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -14,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      # Initialize rust as pre-commit expects rust to be install systsem wide.
+      # Initialize rust as pre-commit expects rust to be installed system-wide.
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
