@@ -20,7 +20,7 @@ jobs:
           profile: minimal
           toolchain: stable
       - name: Install prerequisites
-        run: rustup component add rustfmt clippy
+        run: rustup component add rustfmt
 
       - uses: actions/setup-python@v3
       - uses: pre-commit/action@v3.0.0
@@ -36,6 +36,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
+      - name: Install prerequisites
+        run: rustup component add clippy
       - name: Clippy
         run: cargo clippy --all -- -D warnings
       - name: Build
