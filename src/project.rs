@@ -196,3 +196,35 @@ pub fn find_project_root() -> Option<PathBuf> {
         .find(|dir| dir.join(consts::PROJECT_MANIFEST).is_file())
         .map(Path::to_path_buf)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rattler_conda_types::MatchSpec;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_add_dependency() {
+        let mut project = Project {
+            root: PathBuf::from("/tmp"),
+            doc: Document::new(),
+        };
+
+        let spec = MatchSpec {
+            name: Some("test-package".to_string()),
+            version: None,
+            build: None,
+            build_number: None,
+            file_name: None,
+            channel: None,
+            subdir: None,
+            namespace: None,
+        };
+
+        assert!(project.add_dependency(&spec).is_ok());
+        assert_eq!(
+            project.doc["dependencies"]["test-package"].as_str(),
+            Some("*")
+        );
+    }
+}
