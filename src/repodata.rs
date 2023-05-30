@@ -1,3 +1,4 @@
+use crate::auth::default_authenticated_client;
 use crate::progress;
 use crate::progress::{
     default_bytes_style, deserializing_progress_style, errored_progress_style,
@@ -6,8 +7,9 @@ use crate::progress::{
 use crate::project::Project;
 use futures::StreamExt;
 use rattler_conda_types::{Channel, ChannelConfig, Platform};
+use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::{fetch, sparse::SparseRepoData};
-use reqwest::{Client, StatusCode};
+use reqwest::{StatusCode};
 use std::{path::Path, time::Duration};
 
 impl Project {
@@ -39,7 +41,7 @@ impl Project {
         // Start fetching all repodata
         let channel_and_platform_len = fetch_targets.len();
         let repodata_cache_path = rattler::default_cache_dir()?.join("repodata");
-        let repodata_download_client = Client::default();
+        let repodata_download_client = default_authenticated_client()?;
         let multi_progress = progress::global_multi_progress();
         let sparse_repo_datas = futures::stream::iter(fetch_targets)
             .map(move |(channel, platform)| {
@@ -82,7 +84,7 @@ async fn fetch_repo_data_records_with_progress(
     channel: Channel,
     platform: Platform,
     repodata_cache: &Path,
-    client: Client,
+    client: AuthenticatedClient,
     multi_progress: indicatif::MultiProgress,
     allow_not_found: bool,
 ) -> Result<Option<SparseRepoData>, anyhow::Error> {

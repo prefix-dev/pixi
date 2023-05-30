@@ -39,7 +39,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 
     // if args[0] is in commands, run it
     let command = if let Some(command) = commands.get(&args.command[0]) {
-        command.split(" ").collect::<Vec<&str>>()
+        command.split(' ').collect::<Vec<&str>>()
     } else {
         args.command
             .iter()

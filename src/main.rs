@@ -1,5 +1,6 @@
 use console::style;
 
+mod auth;
 mod cli;
 mod config;
 mod consts;

@@ -28,8 +28,11 @@ rattler_conda_types = { version = "0.2.0", default-features = false, path="../ra
 rattler_repodata_gateway = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_repodata_gateway", features = ["sparse"] }
 rattler_shell = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_shell" }
 rattler_solve = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_solve" }
-rattler_auth = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_auth" }
+rattler_networking = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_networking" }
 reqwest = { version = "0.11.16", default-features = false }
 tempfile = "3.5.0"
 tokio = { version = "1.27.0", features = ["macros", "rt-multi-thread"] }
 toml_edit = "0.19.8"
+dirs = "5.0.1"
+webbrowser = "0.8.10"
+url = "2.3.1"

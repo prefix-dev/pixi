@@ -1,10 +1,10 @@
 use clap::Parser;
 
 mod add;
+mod auth;
 mod init;
 mod run;
 mod sync;
-mod auth;
 
 #[derive(Parser, Debug)]
 struct Args {

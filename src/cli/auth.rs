@@ -1,20 +1,21 @@
-use crate::project::Project;
 use clap::Parser;
-use rattler_conda_types::{version_spec::VersionOperator, MatchSpec, Version, VersionSpec};
-use std::collections::HashMap;
-use std::ops::Deref;
-use rattler_auth::Authentication;
+use rattler_networking::Authentication;
+
+use crate::auth::{default_authentication_storage, listen_and_open_browser};
+
 /// Adds a dependency to the project
 #[derive(Parser, Debug)]
 pub struct Args {
-    host: String, 
+    host: String,
     token: String,
 }
 
-pub async fn execute(mut args: Args) -> anyhow::Result<()> {
-
+pub async fn execute(args: Args) -> anyhow::Result<()> {
+    let storage = default_authentication_storage()?;
     let auth = Authentication::BearerToken(args.token.to_string());
-    rattler_auth::store_authentication_entry(&args.host, &auth)?;
+    storage.store(&args.host, &auth)?;
+
+    listen_and_open_browser()?;
 
     Ok(())
 }
