@@ -27,9 +27,7 @@ jobs:
     needs: crate_metadata
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ needs.crate_metadata.outputs.msrv }}
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
       - run: |
           for package in $(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | .name'); do
             cargo rustdoc -p "$package" --all-features -- -D warnings -W unreachable-pub
@@ -37,27 +35,24 @@ jobs:
 
   fmt:
     name: Ensure 'cargo fmt' has been run
-    runs-on: ubuntu-20.04
-    needs: crate_metadata
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ needs.crate_metadata.outputs.msrv }}
       - uses: actions/checkout@v3
-      - run: cargo fmt -- --check
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt
+      - name: Rustfmt Check
+        uses: actions-rust-lang/rustfmt@v1
 
   clippy:
     runs-on: ubuntu-latest
     needs: crate_metadata
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v3
-      - name: Install rust toolchain (v${{ needs.crate_metadata.outputs.msrv }})
-        uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@v3
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: ${{ needs.crate_metadata.outputs.msrv }}
           components: clippy
-      - name: Run clippy (on minimum supported rust version to prevent warnings we can't fix)
+      - name: Run clippy
         run: cargo clippy --locked
 
   crate_metadata:
@@ -72,13 +67,11 @@ jobs:
           cargo metadata --no-deps --format-version 1 | jq -r '"version=" + .packages[0].version' | tee -a $GITHUB_OUTPUT
           cargo metadata --no-deps --format-version 1 | jq -r '"maintainer=" + .packages[0].authors[0]' | tee -a $GITHUB_OUTPUT
           cargo metadata --no-deps --format-version 1 | jq -r '"homepage=" + .packages[0].homepage' | tee -a $GITHUB_OUTPUT
-          cargo metadata --no-deps --format-version 1 | jq -r '"msrv=" + .packages[0].rust_version' | tee -a $GITHUB_OUTPUT
     outputs:
       name: ${{ steps.crate_metadata.outputs.name }}
       version: ${{ steps.crate_metadata.outputs.version }}
       maintainer: ${{ steps.crate_metadata.outputs.maintainer }}
       homepage: ${{ steps.crate_metadata.outputs.homepage }}
-      msrv: ${{ steps.crate_metadata.outputs.msrv }}
 
   build:
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
@@ -117,9 +110,9 @@ jobs:
           echo "PROJECT_HOMEPAGE=$(sed -n 's/^homepage = "\(.*\)"/\1/p' Cargo.toml)" >> $GITHUB_ENV
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          targets: ${{ matrix.job.target }}
+          target: ${{ matrix.job.target }}
 
       - name: Cache cargo & target directories
         uses: Swatinem/rust-cache@v2
