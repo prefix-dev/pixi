@@ -2,8 +2,8 @@ use anyhow::bail;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_virtual_packages::{Archspec, LibC, Linux, Osx, VirtualPackage};
 
-/// Define a reasonable modern set of virtual packages that should be safe enough to assume.
-/// On design this is in sync with the conda-lock set of default packages.
+/// Returns a reasonable modern set of virtual packages that should be safe enough to assume.
+/// At the time of writing, this is in sync with the conda-lock set of minimal virtual packages.
 /// https://github.com/conda/conda-lock/blob/3d36688278ebf4f65281de0846701d61d6017ed2/conda_lock/virtual_package.py#L175
 pub fn get_minimal_virtual_packages(platform: Platform) -> Vec<VirtualPackage> {
     // TODO: How to add a default cuda requirements
@@ -18,7 +18,7 @@ pub fn get_minimal_virtual_packages(platform: Platform) -> Vec<VirtualPackage> {
             version: "5.10".parse().unwrap(),
         }));
         virtual_packages.push(VirtualPackage::LibC(LibC {
-            family: "glib".parse().unwrap(),
+            family: "glibc".parse().unwrap(),
             version: "2.17".parse().unwrap(),
         }));
     }
@@ -47,9 +47,8 @@ pub fn get_minimal_virtual_packages(platform: Platform) -> Vec<VirtualPackage> {
     virtual_packages
 }
 
-pub fn verify_current_platform_has_minimal_virtual_package_requirements(
-    local_platform: Platform,
-) -> Result<(), anyhow::Error> {
+/// Verifies if the current platform satisfies the minimal virtual package requirements.
+pub fn verify_current_platform_has_minimal_virtual_package_requirements() -> Result<(), anyhow::Error> {
     let local_vpkgs = VirtualPackage::current().map(|vpkgs| {
         vpkgs
             .iter()
@@ -58,7 +57,7 @@ pub fn verify_current_platform_has_minimal_virtual_package_requirements(
     })?;
 
     let local_minimal_vpkgs: Vec<GenericVirtualPackage> =
-        get_minimal_virtual_packages(local_platform)
+        get_minimal_virtual_packages(Platform::current())
             .iter()
             .map(|vpkg| GenericVirtualPackage::from(vpkg.clone()))
             .collect();
@@ -82,7 +81,8 @@ pub fn verify_current_platform_has_minimal_virtual_package_requirements(
 
 mod tests {
     use insta::assert_debug_snapshot;
-    use super::*;
+    use rattler_conda_types::Platform;
+    use crate::virtual_packages::get_minimal_virtual_packages;
 
     // Regression test on the virtual packages so there is not accidental changes
     #[test]

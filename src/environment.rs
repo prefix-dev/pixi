@@ -17,7 +17,7 @@ use rattler_conda_types::{
     conda_lock,
     conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
     conda_lock::{CondaLock, PackageHashes, VersionConstraint},
-    ChannelConfig, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageRecord, Platform,
+    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageRecord, Platform,
     PrefixRecord, RepoDataRecord, Version,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
@@ -171,7 +171,7 @@ pub async fn update_lock_file(
     let dependencies = project.dependencies()?;
 
     // Check if local system has minimal requirements
-    verify_current_platform_has_minimal_virtual_package_requirements(Platform::current())?;
+    verify_current_platform_has_minimal_virtual_package_requirements()?;
     // Extract the package names from the dependencies
     let package_names = dependencies.keys().collect_vec();
 
@@ -217,9 +217,7 @@ pub async fn update_lock_file(
             locked_packages: vec![],
             pinned_packages: vec![],
             virtual_packages: get_minimal_virtual_packages(platform)
-                .iter()
-                .map(|vpkg| GenericVirtualPackage::from(vpkg.clone()))
-                .collect(),
+                .into_iter().map(Into::into).collect(),
         };
 
         // Solve the task

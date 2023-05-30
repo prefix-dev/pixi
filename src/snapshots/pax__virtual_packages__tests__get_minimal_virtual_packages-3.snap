@@ -15,7 +15,7 @@ expression: packages
     ),
     LibC(
         LibC {
-            family: "glib",
+            family: "glibc",
             version: Version {
                 norm: "2.17",
                 version: [[0], [2], [17]],
