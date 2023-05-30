@@ -1,5 +1,7 @@
 use crate::prefix::Prefix;
-use crate::progress::{default_progress_style, finished_progress_style, global_multi_progress};
+use crate::progress::{
+    await_in_progress, default_progress_style, finished_progress_style, global_multi_progress,
+};
 use crate::{consts, Project};
 use anyhow::Context;
 use futures::future::ready;
@@ -61,11 +63,14 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
     // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
         // Execute the operations that are returned by the solver.
-        execute_transaction(
-            transaction,
-            prefix.root().to_path_buf(),
-            rattler::default_cache_dir()?,
-            Client::default(),
+        await_in_progress(
+            "updating environment",
+            execute_transaction(
+                transaction,
+                prefix.root().to_path_buf(),
+                rattler::default_cache_dir()?,
+                Client::default(),
+            ),
         )
         .await?;
     }
@@ -104,14 +109,10 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
     let dependencies = project.dependencies()?;
     for platform in platforms {
         for (name, spec) in dependencies.iter() {
-            if !lock_file
-                .package
-                .iter()
-                .any(|locked_package| {
-                    locked_package.platform == platform
-                        && locked_dependency_satisfies(locked_package, name, spec)
-                })
-            {
+            if !lock_file.package.iter().any(|locked_package| {
+                locked_package.platform == platform
+                    && locked_dependency_satisfies(locked_package, name, spec)
+            }) {
                 // Could not find a locked package that matches the project spec.
                 return Ok(false);
             }
@@ -378,7 +379,7 @@ pub async fn execute_transaction(
     link_pb.enable_steady_tick(Duration::from_millis(100));
 
     // Perform all transactions operations in parallel.
-    stream::iter(transaction.operations)
+    let result = stream::iter(transaction.operations)
         .map(Ok)
         .try_for_each_concurrent(50, |op| {
             let target_prefix = target_prefix.clone();
@@ -402,9 +403,15 @@ pub async fn execute_transaction(
                 .await
             }
         })
-        .await?;
+        .await;
 
-    Ok(())
+    // Clear progress bars
+    if let Some(download_pb) = download_pb {
+        download_pb.finish_and_clear();
+    }
+    link_pb.finish_and_clear();
+
+    result
 }
 
 /// Executes a single operation of a transaction on the environment.
