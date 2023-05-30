@@ -26,11 +26,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          submodules: recursive
       - uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
+          toolchain: ${{ needs.crate_metadata.outputs.msrv }}
       - run: |
           for package in $(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | .name'); do
             cargo rustdoc -p "$package" --all-features -- -D warnings -W unreachable-pub
