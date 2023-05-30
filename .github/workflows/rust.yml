@@ -38,9 +38,9 @@ jobs:
     name: Ensure 'cargo fmt' has been run
     runs-on: ubuntu-20.04
     steps:
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions-rs/toolchain@v1
         with:
-          components: rustfmt
+          toolchain: ${{ needs.crate_metadata.outputs.msrv }}
       - uses: actions/checkout@v3
       - run: cargo fmt -- --check
 
