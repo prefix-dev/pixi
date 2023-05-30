@@ -24,6 +24,7 @@ jobs:
   check-rustdoc-links:
     name: Check intra-doc links
     runs-on: ubuntu-latest
+    needs: crate_metadata
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -37,6 +38,7 @@ jobs:
   fmt:
     name: Ensure 'cargo fmt' has been run
     runs-on: ubuntu-20.04
+    needs: crate_metadata
     steps:
       - uses: actions-rs/toolchain@v1
         with:
