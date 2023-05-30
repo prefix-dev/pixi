@@ -33,3 +33,8 @@ reqwest = { version = "0.11.16", default-features = false }
 tempfile = "3.5.0"
 tokio = { version = "1.27.0", features = ["macros", "rt-multi-thread"] }
 toml_edit = "0.19.8"
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1
