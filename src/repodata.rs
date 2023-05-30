@@ -1,7 +1,4 @@
-use crate::{
-    progress,
-    project::Project,
-};
+use crate::{progress, project::Project};
 use anyhow::Context;
 use indicatif::ProgressBar;
 use rattler_conda_types::{Channel, ChannelConfig, Platform};
