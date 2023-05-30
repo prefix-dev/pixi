@@ -5,6 +5,7 @@ use anyhow::Error;
 mod add;
 mod init;
 mod run;
+mod install;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -28,6 +29,7 @@ enum Command {
     Init(init::Args),
     Add(add::Args),
     Run(run::Args),
+    Install(install::Args),
 }
 
 
@@ -50,5 +52,6 @@ pub async fn execute() -> anyhow::Result<()> {
         Command::Init(cmd) => init::execute(cmd).await,
         Command::Add(cmd) => add::execute(cmd).await,
         Command::Run(cmd) => run::execute(cmd).await,
+        Command::Install(cmd) => install::execute(cmd).await,
     }
 }
