@@ -21,6 +21,50 @@ env:
   CICD_INTERMEDIATES_DIR: "_cicd-intermediates"
 
 jobs:
+  check-rustdoc-links:
+    name: Check intra-doc links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+      - run: |
+          for package in $(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | .name'); do
+            cargo rustdoc -p "$package" --all-features -- -D warnings -W unreachable-pub
+          done
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+      - run: rustup component add rustfmt
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: clippy
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features -- -D warnings
+
   crate_metadata:
     name: Extract crate metadata
     runs-on: ubuntu-latest
@@ -76,7 +120,7 @@ jobs:
           echo "PROJECT_HOMEPAGE=$(sed -n 's/^homepage = "\(.*\)"/\1/p' Cargo.toml)" >> $GITHUB_ENV
 
       - name: Install Rust toolchain
-        uses:  IronCoreLabs/rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@v1
         with:
           targets: ${{ matrix.job.target }}
 
