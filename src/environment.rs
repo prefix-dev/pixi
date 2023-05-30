@@ -1,5 +1,8 @@
 use crate::prefix::Prefix;
 use crate::progress::{default_progress_style, finished_progress_style, global_multi_progress};
+use crate::virtual_packages::{
+    get_minimal_virtual_packages, verify_current_platform_has_minimal_virtual_package_requirements,
+};
 use crate::{consts, Project};
 use anyhow::Context;
 use futures::future::ready;
@@ -14,8 +17,8 @@ use rattler_conda_types::{
     conda_lock,
     conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
     conda_lock::{CondaLock, PackageHashes, VersionConstraint},
-    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageRecord, Platform, PrefixRecord,
-    RepoDataRecord, Version,
+    ChannelConfig, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageRecord, Platform,
+    PrefixRecord, RepoDataRecord, Version,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
@@ -104,14 +107,10 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
     let dependencies = project.dependencies()?;
     for platform in platforms {
         for (name, spec) in dependencies.iter() {
-            if !lock_file
-                .package
-                .iter()
-                .any(|locked_package| {
-                    locked_package.platform == platform
-                        && locked_dependency_satisfies(locked_package, name, spec)
-                })
-            {
+            if !lock_file.package.iter().any(|locked_package| {
+                locked_package.platform == platform
+                    && locked_dependency_satisfies(locked_package, name, spec)
+            }) {
                 // Could not find a locked package that matches the project spec.
                 return Ok(false);
             }
@@ -171,6 +170,8 @@ pub async fn update_lock_file(
     let platforms = project.platforms()?;
     let dependencies = project.dependencies()?;
 
+    // Check if local system has minimal requirements
+    verify_current_platform_has_minimal_virtual_package_requirements(Platform::current())?;
     // Extract the package names from the dependencies
     let package_names = dependencies.keys().collect_vec();
 
@@ -215,7 +216,10 @@ pub async fn update_lock_file(
             // TODO: All these things.
             locked_packages: vec![],
             pinned_packages: vec![],
-            virtual_packages: vec![],
+            virtual_packages: get_minimal_virtual_packages(platform)
+                .iter()
+                .map(|vpkg| GenericVirtualPackage::from(vpkg.clone()))
+                .collect(),
         };
 
         // Solve the task
