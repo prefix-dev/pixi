@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
   pull_request:
 
-name: Release
+name: Rust
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -48,11 +48,11 @@ jobs:
       matrix:
         job:
           - { target: x86_64-unknown-linux-musl,  os: ubuntu-20.04, use-cross: true }
-          - { target: aarch64-unknown-linux-musl, os: ubuntu-20.04, use-cross: true }
-          - { target: arm-unknown-linux-musleabi, os: ubuntu-20.04, use-cross: true }
+#          - { target: aarch64-unknown-linux-musl, os: ubuntu-20.04, use-cross: true }
+#          - { target: arm-unknown-linux-musleabi, os: ubuntu-20.04, use-cross: true }
 
           - { target: x86_64-apple-darwin,        os: macOS-latest }
-          - { target: aarch64-apple-darwin,       os: macOS-latest, use-cross: true, }
+          - { target: aarch64-apple-darwin,       os: macOS-latest }
 
           - { target: x86_64-pc-windows-msvc,     os: windows-2019 }
     env:
@@ -69,9 +69,6 @@ jobs:
             aarch64-unknown-linux-gnu) sudo apt-get -y update ; sudo apt-get -y install gcc-aarch64-linux-gnu ;;
           esac
 
-      - name: Cache cargo & target directories
-        uses: Swatinem/rust-cache@v2
-
       - name: Extract crate information
         shell: bash
         run: |
@@ -85,6 +82,11 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.job.target }}
+
+      - name: Cache cargo & target directories
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust"
 
       - name: Install cross
         if: matrix.job.use-cross
@@ -121,7 +123,7 @@ jobs:
         run: |
           unset CARGO_BUILD_OPTIONS
           case ${{ matrix.job.target }} in
-            *-musl) CARGO_BUILD_OPTIONS="--no-default-features --features rustls-tls"  ;;
+            *-musl*) CARGO_BUILD_OPTIONS="--no-default-features --features rustls-tls"  ;;
             *) CARGO_BUILD_OPTIONS=""  ;;
           esac
           echo "CARGO_BUILD_OPTIONS=${CARGO_BUILD_OPTIONS}" >> $GITHUB_OUTPUT
