@@ -76,9 +76,8 @@ jobs:
           echo "PROJECT_HOMEPAGE=$(sed -n 's/^homepage = "\(.*\)"/\1/p' Cargo.toml)" >> $GITHUB_ENV
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses:  IronCoreLabs/rust-toolchain@v1
         with:
-          toolchain: stable
           targets: ${{ matrix.job.target }}
 
       - name: Cache cargo & target directories
@@ -127,8 +126,11 @@ jobs:
           echo "CARGO_BUILD_OPTIONS=${CARGO_BUILD_OPTIONS}" >> $GITHUB_OUTPUT
 
       - name: Build
-        shell: bash
-        run: $BUILD_CMD build --locked --release --target=${{ matrix.job.target }} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: ${{ matrix.job.use-cross }}
+          command: build
+          args: --locked --release --target=${{ matrix.job.target }} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 
       - name: Set binary name & path
         id: bin
@@ -158,8 +160,11 @@ jobs:
           echo "CARGO_TEST_OPTIONS=${CARGO_TEST_OPTIONS}" >> $GITHUB_OUTPUT
 
       - name: Run tests
-        shell: bash
-        run: $BUILD_CMD test --locked --target=${{ matrix.job.target }} ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: ${{ matrix.job.use-cross }}
+          command: build
+          args: --locked --target=${{ matrix.job.target }} ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 
       - name: Create tarball
         id: package
