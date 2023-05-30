@@ -1,7 +1,4 @@
-use crate::{
-    progress,
-    project::Project,
-};
+use crate::{progress, project::Project};
 use anyhow::Context;
 use indicatif::ProgressBar;
 use rattler_conda_types::{Channel, ChannelConfig, Platform};
@@ -17,9 +14,10 @@ impl Project {
     }
 }
 
-
-pub async fn fetch_sparse_repodata(channels: &Vec<Channel>, target_platforms: &Vec<Platform>) -> anyhow::Result<Vec<SparseRepoData>> {
-
+pub async fn fetch_sparse_repodata(
+    channels: &Vec<Channel>,
+    target_platforms: &Vec<Platform>,
+) -> anyhow::Result<Vec<SparseRepoData>> {
     // Determine all the repodata that requires fetching.
     let mut fetch_targets = Vec::with_capacity(channels.len() * target_platforms.len());
     for channel in channels {
@@ -34,8 +32,7 @@ pub async fn fetch_sparse_repodata(channels: &Vec<Channel>, target_platforms: &V
         }
 
         // Add noarch if the channel did not specify explicit platforms.
-        let noarch_missing =
-            !platforms.contains(&Platform::NoArch) && channel.platforms.is_none();
+        let noarch_missing = !platforms.contains(&Platform::NoArch) && channel.platforms.is_none();
         if noarch_missing {
             fetch_targets.push((channel.clone(), Platform::NoArch));
         }
@@ -51,9 +48,8 @@ pub async fn fetch_sparse_repodata(channels: &Vec<Channel>, target_platforms: &V
     let repodata_cache_path = rattler::default_cache_dir()?.join("repodata");
     let repodata_download_client = Client::default();
     let multi_progress = progress::global_multi_progress();
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<anyhow::Result<Option<SparseRepoData>>>(
-        fetch_targets.len(),
-    );
+    let (tx, mut rx) =
+        tokio::sync::mpsc::channel::<anyhow::Result<Option<SparseRepoData>>>(fetch_targets.len());
     let mut progress_bars = Vec::new();
     for (channel, platform) in fetch_targets {
         // Construct a progress bar for the fetch
@@ -78,7 +74,7 @@ pub async fn fetch_sparse_repodata(channels: &Vec<Channel>, target_platforms: &V
                 progress_bar.clone(),
                 platform == Platform::NoArch,
             )
-                .await;
+            .await;
 
             // Silently ignore send error, it means the receiving end has been dropped and this
             // task was probably cancelled.

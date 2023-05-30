@@ -4,8 +4,8 @@ use clap_complete::Shell;
 use anyhow::Error;
 mod add;
 mod init;
-mod run;
 mod install;
+mod run;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -21,8 +21,6 @@ pub struct CompletionCommand {
     shell: Option<Shell>,
 }
 
-
-
 #[derive(Parser, Debug)]
 enum Command {
     Completion(CompletionCommand),
@@ -31,7 +29,6 @@ enum Command {
     Run(run::Args),
     Install(install::Args),
 }
-
 
 fn completion(args: CompletionCommand) -> Result<(), Error> {
     clap_complete::generate(
