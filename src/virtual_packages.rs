@@ -80,6 +80,7 @@ pub fn verify_current_platform_has_minimal_virtual_package_requirements(
     Ok(())
 }
 
+#[cfg(test)]
 mod tests {
     use crate::virtual_packages::get_minimal_virtual_packages;
     use insta::assert_debug_snapshot;

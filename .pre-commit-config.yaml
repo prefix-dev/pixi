@@ -1,0 +1,35 @@
+repos:
+  -   repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v4.4.0
+      hooks:
+        -   id: check-yaml
+        -   id: end-of-file-fixer
+        -   id: trailing-whitespace
+  # Copied from Mozilla https://github.com/mozilla/grcov/blob/master/.pre-commit-config.yaml
+  -   repo: https://github.com/DevinR528/cargo-sort
+      rev: v1.0.7
+      hooks:
+        -   id: cargo-sort
+  -   repo: local
+      hooks:
+        - id: fmt
+          name: fmt
+          language: system
+          types: [file, rust]
+          entry: cargo fmt -- --check
+          pass_filenames: false
+
+        - id: clippy
+          name: clippy
+          language: system
+          types: [file, rust]
+          entry: cargo clippy --all -- -D warnings # Use -D warnings option to ensure the job fails when encountering warnings
+          pass_filenames: false
+
+        - id: test
+          name: test
+          language: system
+          stages: [push]
+          types: [file, rust]
+          entry: cargo test
+          pass_filenames: false
