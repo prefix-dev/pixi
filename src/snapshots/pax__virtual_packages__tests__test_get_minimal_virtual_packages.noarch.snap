@@ -1,0 +1,5 @@
+---
+source: src/virtual_packages.rs
+expression: packages
+---
+[]

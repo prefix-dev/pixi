@@ -16,6 +16,7 @@ clap_complete = "4.2.1"
 console = { version = "0.15.5", features = ["windows-console-colors"] }
 futures = "0.3.28"
 indicatif = "0.17.3"
+insta = "1.29.0"
 itertools = "0.10.5"
 minijinja = { version = "0.32.0" }
 once_cell = "1.17.1"
@@ -24,11 +25,13 @@ rattler_conda_types = { version = "0.2.0", default-features = false, git = "http
 rattler_repodata_gateway = { version = "0.2.0", default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["sparse"] }
 rattler_shell = { version = "0.2.0", default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_solve = { version = "0.2.0", default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_virtual_packages = { version = "0.2.0", default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
 #rattler = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler" }
 #rattler_conda_types = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_conda_types" }
 #rattler_repodata_gateway = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_repodata_gateway", features = ["sparse"] }
 #rattler_shell = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_shell" }
 #rattler_solve = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_solve" }
+#rattler_virtual_packages = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_virtual_packages" }
 reqwest = { version = "0.11.16", default-features = false }
 tempfile = "3.5.0"
 tokio = { version = "1.27.0", features = ["macros", "rt-multi-thread"] }
