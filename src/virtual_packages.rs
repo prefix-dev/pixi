@@ -4,7 +4,7 @@ use rattler_virtual_packages::{Archspec, LibC, Linux, Osx, VirtualPackage};
 
 /// Returns a reasonable modern set of virtual packages that should be safe enough to assume.
 /// At the time of writing, this is in sync with the conda-lock set of minimal virtual packages.
-/// https://github.com/conda/conda-lock/blob/3d36688278ebf4f65281de0846701d61d6017ed2/conda_lock/virtual_package.py#L175
+/// <https://github.com/conda/conda-lock/blob/3d36688278ebf4f65281de0846701d61d6017ed2/conda_lock/virtual_package.py#L175>
 pub fn get_minimal_virtual_packages(platform: Platform) -> Vec<VirtualPackage> {
     // TODO: How to add a default cuda requirements
     let mut virtual_packages: Vec<VirtualPackage> = vec![];
