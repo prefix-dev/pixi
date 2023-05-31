@@ -48,7 +48,8 @@ pub fn get_minimal_virtual_packages(platform: Platform) -> Vec<VirtualPackage> {
 }
 
 /// Verifies if the current platform satisfies the minimal virtual package requirements.
-pub fn verify_current_platform_has_minimal_virtual_package_requirements() -> Result<(), anyhow::Error> {
+pub fn verify_current_platform_has_minimal_virtual_package_requirements(
+) -> Result<(), anyhow::Error> {
     let local_vpkgs = VirtualPackage::current().map(|vpkgs| {
         vpkgs
             .iter()
@@ -80,20 +81,18 @@ pub fn verify_current_platform_has_minimal_virtual_package_requirements() -> Res
 }
 
 mod tests {
+    use crate::virtual_packages::get_minimal_virtual_packages;
     use insta::assert_debug_snapshot;
     use rattler_conda_types::Platform;
-    use crate::virtual_packages::get_minimal_virtual_packages;
 
     // Regression test on the virtual packages so there is not accidental changes
     #[test]
     fn test_get_minimal_virtual_packages() {
         let platforms = vec![
             Platform::NoArch,
-
             Platform::Linux64,
             Platform::LinuxAarch64,
             Platform::LinuxPpc64le,
-
             Platform::Osx64,
             Platform::OsxArm64,
             Platform::Win64,
@@ -101,7 +100,8 @@ mod tests {
 
         for platform in platforms {
             let packages = get_minimal_virtual_packages(platform);
-            assert_debug_snapshot!(packages);
+            let snapshot_name = format!("test_get_minimal_virtual_packages.{}", platform);
+            assert_debug_snapshot!(snapshot_name, packages);
         }
     }
 }

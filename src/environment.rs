@@ -17,8 +17,8 @@ use rattler_conda_types::{
     conda_lock,
     conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
     conda_lock::{CondaLock, PackageHashes, VersionConstraint},
-    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageRecord, Platform,
-    PrefixRecord, RepoDataRecord, Version,
+    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageRecord, Platform, PrefixRecord,
+    RepoDataRecord, Version,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
@@ -217,7 +217,9 @@ pub async fn update_lock_file(
             locked_packages: vec![],
             pinned_packages: vec![],
             virtual_packages: get_minimal_virtual_packages(platform)
-                .into_iter().map(Into::into).collect(),
+                .into_iter()
+                .map(Into::into)
+                .collect(),
         };
 
         // Solve the task
