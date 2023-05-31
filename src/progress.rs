@@ -1,6 +1,6 @@
-use std::borrow::Cow;
 use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState};
 use once_cell::sync::Lazy;
+use std::borrow::Cow;
 use std::fmt::Write;
 use std::future::Future;
 use std::time::Duration;
@@ -89,7 +89,10 @@ pub fn long_running_progress_style() -> indicatif::ProgressStyle {
 // }
 
 /// Displays a spinner with the given message while running the specified function to completion.
-pub async fn await_in_progress<T, F: Future<Output=T>>(msg: impl Into<Cow<'static, str>>, future: F) -> T {
+pub async fn await_in_progress<T, F: Future<Output = T>>(
+    msg: impl Into<Cow<'static, str>>,
+    future: F,
+) -> T {
     let pb = global_multi_progress().add(ProgressBar::new_spinner());
     pb.enable_steady_tick(Duration::from_millis(100));
     pb.set_style(long_running_progress_style());

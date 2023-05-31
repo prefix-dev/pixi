@@ -3,11 +3,12 @@ use console::style;
 mod cli;
 mod config;
 mod consts;
+mod environment;
 mod prefix;
 mod progress;
 mod project;
 mod repodata;
-mod environment;
+mod virtual_packages;
 
 pub use project::Project;
 
