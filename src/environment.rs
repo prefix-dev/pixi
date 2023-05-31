@@ -1,5 +1,7 @@
 use crate::prefix::Prefix;
-use crate::progress::{default_progress_style, finished_progress_style, global_multi_progress};
+use crate::progress::{
+    await_in_progress, default_progress_style, finished_progress_style, global_multi_progress,
+};
 use crate::virtual_packages::{
     get_minimal_virtual_packages, verify_current_platform_has_minimal_virtual_package_requirements,
 };
@@ -57,18 +59,21 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
     // Construct a transaction to bring the environment up to date with the lock-file content
     let transaction = Transaction::from_current_and_desired(
         installed_packages_future.await??,
-        get_required_packages(lock_file, platform)?,
+        get_required_packages(&lock_file, platform)?,
         platform,
     )?;
 
     // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
         // Execute the operations that are returned by the solver.
-        execute_transaction(
-            transaction,
-            prefix.root().to_path_buf(),
-            rattler::default_cache_dir()?,
-            Client::default(),
+        await_in_progress(
+            "updating environment",
+            execute_transaction(
+                transaction,
+                prefix.root().to_path_buf(),
+                rattler::default_cache_dir()?,
+                Client::default(),
+            ),
         )
         .await?;
     }
@@ -274,12 +279,12 @@ pub async fn update_lock_file(
 
 /// Returns the [`RepoDataRecord`]s for the packages of the current platform from the lock-file.
 pub fn get_required_packages(
-    lock_file: CondaLock,
+    lock_file: &CondaLock,
     platform: Platform,
 ) -> anyhow::Result<Vec<RepoDataRecord>> {
     lock_file
         .package
-        .into_iter()
+        .iter()
         .filter(|pkg| pkg.platform == platform)
         .map(|pkg| {
             Ok(RepoDataRecord {
@@ -291,15 +296,15 @@ pub fn get_required_packages(
                         anyhow::anyhow!("failed to determine file name from {}", &pkg.url)
                     })?
                     .to_owned(),
-                url: pkg.url,
+                url: pkg.url.clone(),
                 package_record: PackageRecord {
                     arch: None,
-                    build: pkg.build.unwrap_or_default(),
+                    build: pkg.build.clone().unwrap_or_default(),
                     build_number: 0,
                     constrains: vec![],
                     depends: pkg
                         .dependencies
-                        .into_iter()
+                        .iter()
                         .map(|(pkg_name, spec)| format!("{} {}", pkg_name, spec))
                         .collect(),
                     features: None,
@@ -312,7 +317,7 @@ pub fn get_required_packages(
                         PackageHashes::Sha256(_) => None,
                         PackageHashes::Md5Sha256(md5, _) => Some(*md5),
                     },
-                    name: pkg.name,
+                    name: pkg.name.clone(),
                     noarch: Default::default(),
                     platform: None,
                     sha256: match &pkg.hash {
@@ -382,7 +387,7 @@ pub async fn execute_transaction(
     link_pb.enable_steady_tick(Duration::from_millis(100));
 
     // Perform all transactions operations in parallel.
-    stream::iter(transaction.operations)
+    let result = stream::iter(transaction.operations)
         .map(Ok)
         .try_for_each_concurrent(50, |op| {
             let target_prefix = target_prefix.clone();
@@ -406,9 +411,15 @@ pub async fn execute_transaction(
                 .await
             }
         })
-        .await?;
+        .await;
 
-    Ok(())
+    // Clear progress bars
+    if let Some(download_pb) = download_pb {
+        download_pb.finish_and_clear();
+    }
+    link_pb.finish_and_clear();
+
+    result
 }
 
 /// Executes a single operation of a transaction on the environment.
