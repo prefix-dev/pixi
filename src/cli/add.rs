@@ -57,7 +57,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         for (name, version) in solved_versions {
             match best_versions.get_mut(&name) {
                 Some(prev) => {
-                    if &*prev > &version {
+                    if *prev > version {
                         *prev = version
                     }
                 }
@@ -114,7 +114,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 pub fn determine_best_version(
     new_specs: &HashMap<String, NamelessMatchSpec>,
     current_specs: &HashMap<String, NamelessMatchSpec>,
-    sparse_repo_data: &Vec<SparseRepoData>,
+    sparse_repo_data: &[SparseRepoData],
     platform: Platform,
 ) -> anyhow::Result<HashMap<String, Version>> {
     // Extract the package names from all the dependencies
