@@ -11,6 +11,7 @@ use rattler_conda_types::{
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
 use std::collections::HashMap;
+use crate::virtual_packages::get_minimal_virtual_packages;
 
 /// Adds a dependency to the project
 #[derive(Parser, Debug)]
@@ -152,7 +153,10 @@ pub fn determine_best_version(
 
         // TODO: All these things.
         locked_packages: vec![],
-        virtual_packages: vec![],
+        virtual_packages: get_minimal_virtual_packages(platform)
+            .into_iter()
+            .map(Into::into)
+            .collect(),
     };
 
     let records = rattler_solve::LibsolvBackend.solve(task)?;
