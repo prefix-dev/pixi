@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{env, fs};
-use toml_edit::{Document, Item, Table};
+use toml_edit::{Document, Item, Table, Value};
 
 /// A project represented by a pax.toml file.
 #[derive(Debug)]
@@ -204,7 +204,7 @@ impl Project {
                     "windows" => {
                         let windows = val
                             .as_bool()
-                            .ok_or(anyhow::anyhow!("expected boolean value"))?;
+                            .ok_or(anyhow::anyhow!("expected boolean value for windows"))?;
                         if windows {
                             res.push(VirtualPackage::Win);
                         }
@@ -212,7 +212,7 @@ impl Project {
                     "unix" => {
                         let unix = val
                             .as_bool()
-                            .ok_or(anyhow::anyhow!("expected boolean value"))?;
+                            .ok_or(anyhow::anyhow!("expected boolean value for unix"))?;
                         if unix {
                             res.push(VirtualPackage::Unix);
                         }
@@ -220,7 +220,7 @@ impl Project {
                     "macos" => {
                         let macos_version = val
                             .as_str()
-                            .ok_or(anyhow::anyhow!("expected string value"))?
+                            .ok_or(anyhow::anyhow!("expected string value for macos"))?
                             .to_owned();
                         res.push(VirtualPackage::Osx(Osx {
                             version: Version::from_str(macos_version.as_str()).unwrap(),
@@ -229,7 +229,7 @@ impl Project {
                     "cuda" => {
                         let cuda_version = val
                             .as_str()
-                            .ok_or(anyhow::anyhow!("expected string value"))?
+                            .ok_or(anyhow::anyhow!("expected string value for cuda"))?
                             .to_owned();
                         res.push(VirtualPackage::Cuda(Cuda {
                             version: Version::from_str(cuda_version.as_str()).unwrap(),
@@ -238,26 +238,60 @@ impl Project {
                     "archspec" => {
                         let spec = val
                             .as_str()
-                            .ok_or(anyhow::anyhow!("expected string value"))?
+                            .ok_or(anyhow::anyhow!("expected string value for archspec"))?
                             .to_owned();
                         res.push(VirtualPackage::Archspec(Archspec { spec }));
                     }
-                    "libc" => {
-                        let libc = val
-                            .as_inline_table()
-                            .ok_or(anyhow::anyhow!("expected inline table"))?;
-                        let family = libc
-                            .get("family")
-                            .and_then(|v| v.as_str())
-                            .ok_or(anyhow::anyhow!("missing or invalid 'family'"))?
-                            .to_owned();
-                        let version_str = libc
-                            .get("version")
-                            .and_then(|v| v.as_str())
-                            .ok_or(anyhow::anyhow!("missing or invalid 'version'"))?;
-                        let version = Version::from_str(version_str)?;
-                        res.push(VirtualPackage::LibC(LibC { family, version }));
-                    }
+                    "libc" => match val {
+                        Item::Table(table) => {
+                            let family: String = table
+                                .get("family")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_owned())
+                                .unwrap_or_else(|| String::from("glibc"));
+                            let version_str = table
+                                .get("version")
+                                .and_then(|v| v.as_str())
+                                .ok_or(anyhow::anyhow!("missing or invalid 'version'"))?;
+                            let version = Version::from_str(version_str)?;
+                            // Check for other keys
+                            for (key, _) in table.iter() {
+                                if key != "family" && key != "version" {
+                                    return Err(anyhow::anyhow!("Unexpected key in 'libc' table: {}", key));
+                                }
+                            }
+                            res.push(VirtualPackage::LibC(LibC { family, version }));
+                        }
+                        Item::Value(value) => match value {
+                            Value::InlineTable(inline) => {
+                                let family: String = inline
+                                    .get("family")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_owned())
+                                    .unwrap_or_else(|| String::from("glibc"));
+                                let version_str = inline
+                                    .get("version")
+                                    .and_then(|v| v.as_str())
+                                    .ok_or(anyhow::anyhow!("missing or invalid 'version'"))?;
+                                let version = Version::from_str(version_str)?;
+                                // check for other keys
+                                for (key, _) in inline.iter() {
+                                    if key != "family" && key != "version" {
+                                        return Err(anyhow::anyhow!("Unexpected key in 'libc' table: {}", key));
+                                    }
+                                }
+                                res.push(VirtualPackage::LibC(LibC { family, version }));
+                            }
+                            Value::String(version) => {
+                                res.push(VirtualPackage::LibC(LibC {
+                                    family: "glibc".to_string(),
+                                    version: Version::from_str(version.value())?,
+                                }));
+                            }
+                            _ => bail!("expected version string or table as value for libc"),
+                        },
+                        _ => bail!("expected version string or table as value for libc"),
+                    },
                     // handle other cases
                     _ => bail!(
                         "'{}' is an unknown system-requirement, please use one of the defaults.",
@@ -318,5 +352,76 @@ mod tests {
         }));
 
         assert_eq!(system_requirements, expected_requirements);
+    }
+
+    #[test]
+    fn test_system_requirements_edge_cases() {
+        let file_contents = [
+            r#"
+        [system-requirements]
+        libc = { version = "2.12" }
+        "#,
+            r#"
+        [system-requirements]
+        libc = "2.12"
+        "#,
+            r#"
+        [system-requirements.libc]
+        version = "2.12"
+        "#,
+            r#"
+        [system-requirements.libc]
+        version = "2.12"
+        family = "glibc"
+        "#,
+        ];
+
+        for file_content in file_contents {
+            let project = Project {
+                root: PathBuf::from(""),
+                doc: Document::from_str(file_content).unwrap(),
+            };
+
+            let expected_result = vec![VirtualPackage::LibC(LibC {
+                family: "glibc".to_string(),
+                version: Version::from_str("2.12").unwrap(),
+            })];
+
+            let system_requirements = project.system_requirements().unwrap();
+
+            assert_eq!(system_requirements, expected_result);
+        }
+    }
+
+    #[test]
+    fn test_system_requirements_failing_edge_cases() {
+        let file_contents = [
+            r#"
+        [system-requirements]
+        libc = { verion = "2.12" }
+        "#,
+            r#"
+        [system-requirements]
+        lib = "2.12"
+        "#,
+            r#"
+        [system-requirements.libc]
+        version = "2.12"
+        fam = "glibc"
+        "#,
+            r#"
+        [system-requirements.lic]
+        version = "2.12"
+        family = "glibc"
+        "#,
+        ];
+
+        for file_content in file_contents {
+            let project = Project {
+                root: PathBuf::from(""),
+                doc: Document::from_str(file_content).unwrap(),
+            };
+            assert!(project.system_requirements().is_err());
+        }
     }
 }
