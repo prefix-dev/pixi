@@ -211,7 +211,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
             .map(|records| LibsolvRepoData::from_records(records)),
 
         virtual_packages: rattler_virtual_packages::VirtualPackage::current()?
-            .into_iter()
+            .iter()
             .cloned()
             .map(Into::into)
             .collect(),
