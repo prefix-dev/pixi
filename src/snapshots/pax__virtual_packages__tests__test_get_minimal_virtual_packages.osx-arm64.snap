@@ -1,0 +1,21 @@
+---
+source: src/virtual_packages.rs
+expression: packages
+---
+[
+    Unix,
+    Archspec(
+        Archspec {
+            spec: "arm64",
+        },
+    ),
+    Osx(
+        Osx {
+            version: Version {
+                norm: "11.0",
+                version: [[0], [11], [0]],
+                local: [],
+            },
+        },
+    ),
+]

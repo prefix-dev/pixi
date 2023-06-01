@@ -7,7 +7,7 @@ use std::str::FromStr;
 use std::{env, fs};
 use toml_edit::{Document, Item, Table};
 
-/// A project represented by a pex.toml file.
+/// A project represented by a pax.toml file.
 #[derive(Debug)]
 pub struct Project {
     root: PathBuf,
