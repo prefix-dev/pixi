@@ -210,9 +210,14 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
             .iter()
             .map(|records| LibsolvRepoData::from_records(records)),
 
+        virtual_packages: rattler_virtual_packages::VirtualPackage::current()?
+            .into_iter()
+            .cloned()
+            .map(Into::into)
+            .collect(),
+
         locked_packages: vec![],
         pinned_packages: vec![],
-        virtual_packages: vec![],
     };
 
     // Solve it
@@ -231,7 +236,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     if !transaction.operations.is_empty() {
         // Execute the operations that are returned by the solver.
         await_in_progress(
-            "Creating virtual environment",
+            "creating virtual environment",
             execute_transaction(
                 transaction,
                 prefix.root().to_path_buf(),
