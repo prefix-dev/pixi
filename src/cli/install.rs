@@ -108,8 +108,7 @@ async fn create_executable_scripts(
     for exec in executables {
         let script = activation_script.clone().add(&format!(
             "\n ${{CONDA_PREFIX}}/{}",
-            exec.to_str()
-                .expect("could not convert path to string")
+            exec.to_str().expect("could not convert path to string")
         ));
         let filename =
             bin_dir.0.join(exec.file_name().ok_or_else(|| {
