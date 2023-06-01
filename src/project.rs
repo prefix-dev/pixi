@@ -1,11 +1,12 @@
 use crate::consts;
 use anyhow::{bail, Context};
-use rattler_conda_types::{Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, ParseVersionError, Platform, Version};
+use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, Platform, Version};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{env, fs};
-use toml_edit::{Document, Item, Table, Value};
+use rattler_virtual_packages::{Archspec, Cuda, LibC, Osx, VirtualPackage};
+use toml_edit::{Document, Item, Table};
 
 /// A project represented by a pex.toml file.
 #[derive(Debug)]
@@ -187,96 +188,45 @@ impl Project {
         Ok(res)
     }
 
-    pub fn system_requirements(&self) -> anyhow::Result<HashMap<String, Vec<GenericVirtualPackage>>> {
-        let mut  res = HashMap::new();
+    pub fn system_requirements(&self) -> anyhow::Result<Vec<VirtualPackage>> {
+        let mut res = vec![];
 
-        // Read platform-independent requirements.
-        if let Some(system_req_table) = self.doc.get("system-requirements").and_then(|x| x.as_table_like()){
-            let mut platform_reqs = vec![];
-            for (key, val) in system_req_table.iter() {
-
-                let requirement = match val {
-                    Item::Value(value) => {
-                        match value {
-                            Value::String(value) => GenericVirtualPackage {
-                                name: key.to_string(),
-                                version: Version::from_str(value.value()).unwrap(),
-                                build_string: "".to_string(),
-                            },
-                            Value::Integer(value) => GenericVirtualPackage {
-                                name: key.to_string(),
-                                version: Version::from_str(&value.to_string()).unwrap(),
-                                build_string: "".to_string(),
-                            },
-                            Value::Float(value) => GenericVirtualPackage {
-                                name: key.to_string(),
-                                version: Version::from_str(&value.to_string()).unwrap(),
-                                build_string: "".to_string(),
-                            },
-                            Value::InlineTable(t) => {
-                                let version = t.get("version").and_then(|x| x.as_str()).unwrap_or_default();
-                                let build_string = t.get("build_string").and_then(|x| x.as_str()).map(String::from);
-                                GenericVirtualPackage {
-                                    name: key.to_string(),
-                                    version: Version::from_str(version).unwrap(),
-                                    build_string: build_string.unwrap_or("".to_string()),
-                                }
-                            }
-                            _ => {bail!("The value of key: {} can not be rendered into a system-requirement", key.to_string())}
-                        }
-                                            }
-                    ,
-                    Item::Table(value) => {
-                        if value.contains_key("version") || value.contains_key("build_string") {
-                            let version = value.get("version").and_then(|x| x.as_str()).unwrap_or_default();
-                            let build_string = value.get("build_string").and_then(|x| x.as_str()).map(String::from);
-                            GenericVirtualPackage {
-                                name: key.to_string(),
-                                version: Version::from_str(version).unwrap(),
-                                build_string: build_string.unwrap_or("".to_string()),
-                            }
-                        } else {
-                            continue;
-                        }
+        // If some system requirements are defined, commit them
+        if let Some(sys_req_table) = self.doc.get("system-requirements").and_then(|x| x.as_table_like()) {
+            for (key, val) in sys_req_table.iter() {
+                match key {
+                    "windows" => {
+                        let windows = val.as_bool().ok_or(anyhow::anyhow!("expected boolean value"))?;
+                        if windows { res.push(VirtualPackage::Win); }
                     },
-                    _ => continue,  // Skip values that are neither a simple value nor a table.
-                };
-                platform_reqs.push( requirement);
-            }
-            res.insert("default".to_string(), platform_reqs);
-        }
-
-        // Read platform-specific requirements.
-        if let Some(system_req_table) = self.doc.get("system-requirements").and_then(|x| x.as_table()){
-            for (platform, platform_table) in system_req_table.iter() {
-                if let Some(pkg_table) = platform_table.as_table() {
-                    let mut platform_reqs = vec![];
-                    for (key, val) in pkg_table.iter() {
-                        let requirement = match val {
-                            Item::Value(value) => GenericVirtualPackage {
-                                name: key.to_string(),
-                                version: Version::from_str(value.as_str().unwrap_or_default()).unwrap(),
-                                build_string: "".to_string(),
-                            },
-                            Item::Table(value) => {
-                                let version = value.get("version").and_then(|x| x.as_str()).unwrap_or_default();
-                                let build_string = value.get("build_string").and_then(|x| x.as_str()).map(String::from);
-                                GenericVirtualPackage {
-                                    name: key.to_string(),
-                                    version: Version::from_str(version).unwrap(),
-                                    build_string: build_string.unwrap_or("".to_string()),
-                                }
-                            },
-                            _ => continue,  // Skip values that are neither a simple value nor a table.
-                        };
-                        platform_reqs.push(requirement);
-                    }
-
-                    res.insert(platform.to_string(), platform_reqs);
+                    "unix" => {
+                        let unix = val.as_bool().ok_or(anyhow::anyhow!("expected boolean value"))?;
+                        if unix { res.push(VirtualPackage::Unix); }
+                    },
+                    "macos" => {
+                        let macos_version = val.as_str().ok_or(anyhow::anyhow!("expected string value"))?.to_owned();
+                        res.push(VirtualPackage::Osx(Osx{version: Version::from_str(macos_version.as_str()).unwrap()}));
+                    },
+                    "cuda" => {
+                        let cuda_version = val.as_str().ok_or(anyhow::anyhow!("expected string value"))?.to_owned();
+                        res.push(VirtualPackage::Cuda(Cuda{version: Version::from_str(cuda_version.as_str()).unwrap()}));
+                    },
+                    "archspec" => {
+                        let spec = val.as_str().ok_or(anyhow::anyhow!("expected string value"))?.to_owned();
+                        res.push(VirtualPackage::Archspec(Archspec{spec}));
+                    },
+                    "libc" => {
+                        let libc = val.as_inline_table().ok_or(anyhow::anyhow!("expected inline table"))?;
+                        let family = libc.get("family").and_then(|v| v.as_str()).ok_or(anyhow::anyhow!("missing or invalid 'family'"))?.to_owned();
+                        let version_str = libc.get("version").and_then(|v| v.as_str()).ok_or(anyhow::anyhow!("missing or invalid 'version'"))?;
+                        let version = Version::from_str(version_str)?;
+                        res.push(VirtualPackage::LibC(LibC { family, version }));
+                    },
+                    // handle other cases
+                    _ => bail!("'{}' is an unknown system-requirement, please use one of the defaults.", key),
                 }
             }
         }
-
         Ok(res)
     }
 }
@@ -290,60 +240,38 @@ pub fn find_project_root() -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-fn match_table_like_with_generic_virtual_package(){
-
-}
-
 #[cfg(test)]
 mod tests {
+    use rattler_virtual_packages::{Cuda, Osx, VirtualPackage};
     use super::*;
 
     #[test]
     fn system_requirements_works() {
         let file_content = r#"
             [system-requirements]
-            __cuda = "11.4.1"
-            __linux = {version = "5.1", build_string="musl"}
-
-            [system-requirements.linux]
-            __glibc = "2.17"
-            __archspec = "1"
-            __linux = {version = "5.2", build_string="arm64"}
+            windows = true
+            unix = true
+            cuda = "12.2"
+            macos = "10.15"
+            libc = { family = "glibc", version = "2.12" }
         "#;
 
-        let mut project = Project {
+        let project = Project {
             root: PathBuf::from(""),
             doc: Document::from_str(file_content).unwrap(),
         };
 
         let system_requirements = project.system_requirements().unwrap();
-        let expected_default_requirements = vec![
-                GenericVirtualPackage {
-                    name: "__cuda".to_string(),
-                    version: Version::from_str("11.4").unwrap(),
-                    build_string: "".to_string(),
-                },
-        ].into_iter().collect::<Vec<_>>();
+        println!("{:?}", system_requirements);
 
-        let expected_linux_requirements = vec![
-                GenericVirtualPackage {
-                    name: "__glibc".to_string(),
-                    version: Version::from_str("2.17").unwrap(),
-                    build_string: "".to_string(),
-                },
-                GenericVirtualPackage {
-                    name: "__archspec".to_string(),
-                    version: Version::from_str("1").unwrap(),
-                    build_string: "".to_string(),
-                },
-                GenericVirtualPackage {
-                    name: "__linux".to_string(),
-                    version: Version::from_str("5.2").unwrap(),
-                    build_string: "arm64".to_string(),
-                },
-        ].into_iter().collect::<Vec<_>>();
+        let mut expected_requirements: Vec<VirtualPackage> = vec![];
+        expected_requirements.push(VirtualPackage::Win);
+        expected_requirements.push(VirtualPackage::Unix);
+        expected_requirements.push(VirtualPackage::Cuda(Cuda {version: Version::from_str("12.2").unwrap()}));
+        expected_requirements.push(VirtualPackage::Osx(Osx{version: Version::from_str("10.15").unwrap()}));
+        expected_requirements.push(VirtualPackage::LibC(LibC{ version: Version::from_str("2.12").unwrap(), family: "glibc".to_string()}));
 
-        assert_eq!(system_requirements.get("default").unwrap(), &expected_default_requirements);
-        assert_eq!(system_requirements.get("linux").unwrap(), &expected_linux_requirements);
+
+        assert_eq!(system_requirements, expected_requirements);
     }
 }

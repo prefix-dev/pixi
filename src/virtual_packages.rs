@@ -1,6 +1,56 @@
+use std::str::FromStr;
 use anyhow::bail;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
-use rattler_virtual_packages::{Archspec, LibC, Linux, Osx, VirtualPackage};
+use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
+use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+pub struct SystemRequirements {
+    windows: Option<bool>,
+    unix: Option<bool>,
+    linux: Option<Linux>,
+    osx: Option<String>,
+    libc: Option<LibC>,
+    cuda: Option<String>,
+    archspec: Option<Archspec>,
+}
+
+impl From<SystemRequirements> for Vec<VirtualPackage> {
+    fn from(requirements: SystemRequirements) -> Vec<VirtualPackage> {
+        let mut packages = Vec::new();
+
+        if let Some(true) = requirements.windows {
+            packages.push(VirtualPackage::Win);
+        }
+
+        if let Some(true) = requirements.unix {
+            packages.push(VirtualPackage::Unix);
+        }
+
+        if let Some(linux_config) = requirements.linux {
+            packages.push(VirtualPackage::Linux(Linux::from(linux_config)));
+        }
+
+        if let Some(version) = requirements.osx {
+            packages.push(VirtualPackage::Osx(Osx{version: Version::from_str(version.as_str()).unwrap()}));
+        }
+
+        if let Some(libc_config) = requirements.libc {
+            packages.push(VirtualPackage::LibC(LibC::from(libc_config)));
+        }
+
+        if let Some(version) = requirements.cuda {
+            packages.push(VirtualPackage::Cuda(Cuda{version: Version::from_str(version.as_str()).unwrap()}));
+        }
+
+        if let Some(archspec_config) = requirements.archspec {
+            packages.push(VirtualPackage::Archspec(Archspec::from(archspec_config)));
+        }
+
+        packages
+    }
+}
+
 
 /// Returns a reasonable modern set of virtual packages that should be safe enough to assume.
 /// At the time of writing, this is in sync with the conda-lock set of minimal virtual packages.
