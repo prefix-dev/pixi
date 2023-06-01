@@ -1,11 +1,13 @@
 use crate::consts;
 use anyhow::{bail, Context};
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, Platform, Version};
+use rattler_conda_types::{
+    Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, Platform, Version,
+};
+use rattler_virtual_packages::{Archspec, Cuda, LibC, Osx, VirtualPackage};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{env, fs};
-use rattler_virtual_packages::{Archspec, Cuda, LibC, Osx, VirtualPackage};
 use toml_edit::{Document, Item, Table};
 
 /// A project represented by a pex.toml file.
@@ -192,38 +194,75 @@ impl Project {
         let mut res = vec![];
 
         // If some system requirements are defined, commit them
-        if let Some(sys_req_table) = self.doc.get("system-requirements").and_then(|x| x.as_table_like()) {
+        if let Some(sys_req_table) = self
+            .doc
+            .get("system-requirements")
+            .and_then(|x| x.as_table_like())
+        {
             for (key, val) in sys_req_table.iter() {
                 match key {
                     "windows" => {
-                        let windows = val.as_bool().ok_or(anyhow::anyhow!("expected boolean value"))?;
-                        if windows { res.push(VirtualPackage::Win); }
-                    },
+                        let windows = val
+                            .as_bool()
+                            .ok_or(anyhow::anyhow!("expected boolean value"))?;
+                        if windows {
+                            res.push(VirtualPackage::Win);
+                        }
+                    }
                     "unix" => {
-                        let unix = val.as_bool().ok_or(anyhow::anyhow!("expected boolean value"))?;
-                        if unix { res.push(VirtualPackage::Unix); }
-                    },
+                        let unix = val
+                            .as_bool()
+                            .ok_or(anyhow::anyhow!("expected boolean value"))?;
+                        if unix {
+                            res.push(VirtualPackage::Unix);
+                        }
+                    }
                     "macos" => {
-                        let macos_version = val.as_str().ok_or(anyhow::anyhow!("expected string value"))?.to_owned();
-                        res.push(VirtualPackage::Osx(Osx{version: Version::from_str(macos_version.as_str()).unwrap()}));
-                    },
+                        let macos_version = val
+                            .as_str()
+                            .ok_or(anyhow::anyhow!("expected string value"))?
+                            .to_owned();
+                        res.push(VirtualPackage::Osx(Osx {
+                            version: Version::from_str(macos_version.as_str()).unwrap(),
+                        }));
+                    }
                     "cuda" => {
-                        let cuda_version = val.as_str().ok_or(anyhow::anyhow!("expected string value"))?.to_owned();
-                        res.push(VirtualPackage::Cuda(Cuda{version: Version::from_str(cuda_version.as_str()).unwrap()}));
-                    },
+                        let cuda_version = val
+                            .as_str()
+                            .ok_or(anyhow::anyhow!("expected string value"))?
+                            .to_owned();
+                        res.push(VirtualPackage::Cuda(Cuda {
+                            version: Version::from_str(cuda_version.as_str()).unwrap(),
+                        }));
+                    }
                     "archspec" => {
-                        let spec = val.as_str().ok_or(anyhow::anyhow!("expected string value"))?.to_owned();
-                        res.push(VirtualPackage::Archspec(Archspec{spec}));
-                    },
+                        let spec = val
+                            .as_str()
+                            .ok_or(anyhow::anyhow!("expected string value"))?
+                            .to_owned();
+                        res.push(VirtualPackage::Archspec(Archspec { spec }));
+                    }
                     "libc" => {
-                        let libc = val.as_inline_table().ok_or(anyhow::anyhow!("expected inline table"))?;
-                        let family = libc.get("family").and_then(|v| v.as_str()).ok_or(anyhow::anyhow!("missing or invalid 'family'"))?.to_owned();
-                        let version_str = libc.get("version").and_then(|v| v.as_str()).ok_or(anyhow::anyhow!("missing or invalid 'version'"))?;
+                        let libc = val
+                            .as_inline_table()
+                            .ok_or(anyhow::anyhow!("expected inline table"))?;
+                        let family = libc
+                            .get("family")
+                            .and_then(|v| v.as_str())
+                            .ok_or(anyhow::anyhow!("missing or invalid 'family'"))?
+                            .to_owned();
+                        let version_str = libc
+                            .get("version")
+                            .and_then(|v| v.as_str())
+                            .ok_or(anyhow::anyhow!("missing or invalid 'version'"))?;
                         let version = Version::from_str(version_str)?;
                         res.push(VirtualPackage::LibC(LibC { family, version }));
-                    },
+                    }
                     // handle other cases
-                    _ => bail!("'{}' is an unknown system-requirement, please use one of the defaults.", key),
+                    _ => bail!(
+                        "'{}' is an unknown system-requirement, please use one of the defaults.",
+                        key
+                    ),
                 }
             }
         }
@@ -242,8 +281,8 @@ pub fn find_project_root() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use rattler_virtual_packages::{Cuda, Osx, VirtualPackage};
     use super::*;
+    use rattler_virtual_packages::{Cuda, Osx, VirtualPackage};
 
     #[test]
     fn system_requirements_works() {
@@ -267,10 +306,16 @@ mod tests {
         let mut expected_requirements: Vec<VirtualPackage> = vec![];
         expected_requirements.push(VirtualPackage::Win);
         expected_requirements.push(VirtualPackage::Unix);
-        expected_requirements.push(VirtualPackage::Cuda(Cuda {version: Version::from_str("12.2").unwrap()}));
-        expected_requirements.push(VirtualPackage::Osx(Osx{version: Version::from_str("10.15").unwrap()}));
-        expected_requirements.push(VirtualPackage::LibC(LibC{ version: Version::from_str("2.12").unwrap(), family: "glibc".to_string()}));
-
+        expected_requirements.push(VirtualPackage::Cuda(Cuda {
+            version: Version::from_str("12.2").unwrap(),
+        }));
+        expected_requirements.push(VirtualPackage::Osx(Osx {
+            version: Version::from_str("10.15").unwrap(),
+        }));
+        expected_requirements.push(VirtualPackage::LibC(LibC {
+            version: Version::from_str("2.12").unwrap(),
+            family: "glibc".to_string(),
+        }));
 
         assert_eq!(system_requirements, expected_requirements);
     }

@@ -1,8 +1,9 @@
-use std::str::FromStr;
 use anyhow::bail;
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Deserialize;
+use std::collections::HashSet;
+use std::str::FromStr;
 
 #[derive(Debug, Deserialize)]
 pub struct SystemRequirements {
@@ -28,29 +29,32 @@ impl From<SystemRequirements> for Vec<VirtualPackage> {
         }
 
         if let Some(linux_config) = requirements.linux {
-            packages.push(VirtualPackage::Linux(Linux::from(linux_config)));
+            packages.push(VirtualPackage::Linux(linux_config));
         }
 
         if let Some(version) = requirements.osx {
-            packages.push(VirtualPackage::Osx(Osx{version: Version::from_str(version.as_str()).unwrap()}));
+            packages.push(VirtualPackage::Osx(Osx {
+                version: Version::from_str(version.as_str()).unwrap(),
+            }));
         }
 
         if let Some(libc_config) = requirements.libc {
-            packages.push(VirtualPackage::LibC(LibC::from(libc_config)));
+            packages.push(VirtualPackage::LibC(libc_config));
         }
 
         if let Some(version) = requirements.cuda {
-            packages.push(VirtualPackage::Cuda(Cuda{version: Version::from_str(version.as_str()).unwrap()}));
+            packages.push(VirtualPackage::Cuda(Cuda {
+                version: Version::from_str(version.as_str()).unwrap(),
+            }));
         }
 
         if let Some(archspec_config) = requirements.archspec {
-            packages.push(VirtualPackage::Archspec(Archspec::from(archspec_config)));
+            packages.push(VirtualPackage::Archspec(archspec_config));
         }
 
         packages
     }
 }
-
 
 /// Returns a reasonable modern set of virtual packages that should be safe enough to assume.
 /// At the time of writing, this is in sync with the conda-lock set of minimal virtual packages.
@@ -98,7 +102,8 @@ pub fn get_minimal_virtual_packages(platform: Platform) -> Vec<VirtualPackage> {
 }
 
 /// Verifies if the current platform satisfies the minimal virtual package requirements.
-pub fn verify_current_platform_has_minimal_virtual_package_requirements(
+pub fn verify_current_platform_has_required_virtual_packages(
+    custom_system_requirements: &[GenericVirtualPackage],
 ) -> Result<(), anyhow::Error> {
     let local_vpkgs = VirtualPackage::current().map(|vpkgs| {
         vpkgs
@@ -107,29 +112,34 @@ pub fn verify_current_platform_has_minimal_virtual_package_requirements(
             .collect::<Vec<_>>()
     })?;
 
-    let local_minimal_vpkgs: Vec<GenericVirtualPackage> =
+    // The required virtual packages for the current system
+    let required_vpkgs: Vec<GenericVirtualPackage> =
         get_minimal_virtual_packages(Platform::current())
             .iter()
             .map(|vpkg| GenericVirtualPackage::from(vpkg.clone()))
+            .chain(custom_system_requirements.to_owned())
+            .collect::<HashSet<_>>()
+            .into_iter()
             .collect();
 
     // Check for every local minimum package if it is available and on the correct version.
-    for local_min in local_minimal_vpkgs {
+    for req_pkg in required_vpkgs {
         if let Some(local_vpkg) = local_vpkgs
             .iter()
-            .find(|&pkg| pkg.name == local_min.name && pkg.build_string == local_min.build_string)
+            .find(|&pkg| pkg.name == req_pkg.name && pkg.build_string == req_pkg.build_string)
         {
-            if local_min.version > local_vpkg.version {
-                bail!("The platform you are running on does not contain the minimal version ({}) of the virtual package {}, overwrite it or use newer system for this package.", local_min.version, local_min.name)
+            if req_pkg.version > local_vpkg.version {
+                bail!("The platform you are running on does not contain the minimal version ({}) of the virtual package {}, overwrite it or use newer system for this package.", req_pkg.version, req_pkg.name)
             }
         } else {
-            bail!("The platform you are running on should at least have the virtual package: {} on version: {} and build_string: {}", local_min.name, local_min.version, local_min.build_string)
+            bail!("The platform you are running on should at least have the virtual package: {} on version: {} and build_string: {}", req_pkg.name, req_pkg.version, req_pkg.build_string)
         }
     }
 
     Ok(())
 }
 
+#[cfg(test)]
 mod tests {
     use crate::virtual_packages::get_minimal_virtual_packages;
     use insta::assert_debug_snapshot;

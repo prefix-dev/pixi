@@ -3,7 +3,7 @@ use crate::progress::{
     await_in_progress, default_progress_style, finished_progress_style, global_multi_progress,
 };
 use crate::virtual_packages::{
-    get_minimal_virtual_packages, verify_current_platform_has_minimal_virtual_package_requirements,
+    get_minimal_virtual_packages, verify_current_platform_has_required_virtual_packages,
 };
 use crate::{consts, Project};
 use anyhow::Context;
@@ -19,8 +19,8 @@ use rattler_conda_types::{
     conda_lock,
     conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
     conda_lock::{CondaLock, PackageHashes, VersionConstraint},
-    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageRecord, Platform, PrefixRecord,
-    RepoDataRecord, Version,
+    ChannelConfig, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageRecord, Platform,
+    PrefixRecord, RepoDataRecord, Version,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
@@ -175,8 +175,14 @@ pub async fn update_lock_file(
     let platforms = project.platforms()?;
     let dependencies = project.dependencies()?;
 
-    // Check if local system has minimal requirements
-    verify_current_platform_has_minimal_virtual_package_requirements()?;
+    // Verify the if the system that this is run on has the right virtual packages, including the system requirements from the config.
+    let custom_system_requirements: Vec<GenericVirtualPackage> = project
+        .system_requirements()?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    verify_current_platform_has_required_virtual_packages(&custom_system_requirements)?;
+
     // Extract the package names from the dependencies
     let package_names = dependencies.keys().collect_vec();
 
@@ -211,6 +217,19 @@ pub async fn update_lock_file(
             package_names.iter().copied(),
         )?;
 
+        // Extend the list of virtual package for every platform.
+        let minimal_virtual_packages: Vec<GenericVirtualPackage> =
+            get_minimal_virtual_packages(platform)
+                .into_iter()
+                .map(Into::into)
+                .collect();
+        let virtual_packages = minimal_virtual_packages
+            .into_iter()
+            .chain(custom_system_requirements.clone()) // Clone it now, change to platform specific map later.
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+
         // Construct a solver task that we can start solving.
         let task = rattler_solve::SolverTask {
             specs: match_specs.clone(),
@@ -221,10 +240,7 @@ pub async fn update_lock_file(
             // TODO: All these things.
             locked_packages: vec![],
             pinned_packages: vec![],
-            virtual_packages: get_minimal_virtual_packages(platform)
-                .into_iter()
-                .map(Into::into)
-                .collect(),
+            virtual_packages,
         };
 
         // Solve the task
