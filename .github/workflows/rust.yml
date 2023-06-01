@@ -72,19 +72,19 @@ jobs:
       homepage: ${{ steps.crate_metadata.outputs.homepage }}
 
   build:
-    name: ${{ matrix.job.target }} (${{ matrix.job.os }})
+    name: ${{ matrix.job.name }}
     runs-on: ${{ matrix.job.os }}
     needs: [ crate_metadata, clippy ]
     strategy:
       fail-fast: false
       matrix:
         job:
-          - { target: x86_64-unknown-linux-musl,  os: ubuntu-20.04, use-cross: true }
+          - { name: "Linux-x86_64",   target: x86_64-unknown-linux-musl,  os: ubuntu-20.04, use-cross: true }
 
-          - { target: x86_64-apple-darwin,        os: macOS-latest }
-          - { target: aarch64-apple-darwin,       os: macOS-latest }
+          - { name: "macOS-x86_64",   target: x86_64-apple-darwin,        os: macOS-latest }
+          - { name: "macOS-aarch64",  target: aarch64-apple-darwin,       os: macOS-latest }
 
-          - { target: x86_64-pc-windows-msvc,     os: windows-2019 }
+          - { name: "Windows-x86_64", target: x86_64-pc-windows-msvc,     os: windows-2019 }
     env:
       BUILD_CMD: cargo  # The build and test command to use if not overwritten
     steps:
@@ -210,7 +210,7 @@ jobs:
           PKG_STAGING="${{ env.CICD_INTERMEDIATES_DIR }}/package"
           ARCHIVE_DIR="${PKG_STAGING}/${PKG_BASENAME}/"
           mkdir -p "${ARCHIVE_DIR}"
-          mkdir -p "${ARCHIVE_DIR}/autocomplete"
+          # mkdir -p "${ARCHIVE_DIR}/autocomplete"
           
           # Binary
           cp "${{ steps.bin.outputs.BIN_PATH }}" "$ARCHIVE_DIR"
