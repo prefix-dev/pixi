@@ -112,11 +112,6 @@ jobs:
         with:
           target: ${{ matrix.job.target }}
 
-      - name: Cache cargo & target directories
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "rust"
-
       - name: Install cross
         if: matrix.job.use-cross
         uses: taiki-e/install-action@v2
@@ -134,7 +129,6 @@ jobs:
         run: |
           echo "SDKROOT=$(xcrun -sdk macosx --show-sdk-path)" >> $GITHUB_ENV
           echo "MACOSX_DEPLOYMENT_TARGET=$(xcrun -sdk macosx --show-sdk-platform-version)" >> $GITHUB_ENV
-          rustup default stable-aarch64-apple-darwin
 
       - name: Show version information (Rust, cargo, GCC)
         shell: bash
@@ -142,7 +136,6 @@ jobs:
           gcc --version || true
           rustup -V
           rustup toolchain list
-          rustup default
           cargo -V
           rustc -V
 
