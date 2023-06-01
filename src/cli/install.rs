@@ -70,7 +70,7 @@ async fn find_designated_package(
     let prefix_records = prefix.find_installed_packages(None).await?;
     prefix_records
         .into_iter()
-        .find(|r| &r.repodata_record.package_record.name == &package_name)
+        .find(|r| r.repodata_record.package_record.name == package_name)
         .ok_or_else(|| anyhow::anyhow!("could not find {} in prefix", package_name))
 }
 
@@ -110,7 +110,6 @@ async fn create_executable_scripts(
             "\n ${{CONDA_PREFIX}}/{}",
             exec.to_str()
                 .expect("could not convert path to string")
-                .to_string()
         ));
         let filename =
             bin_dir.0.join(exec.file_name().ok_or_else(|| {
@@ -150,7 +149,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         package_matchspec,
         channels
             .iter()
-            .map(|c| friendly_channel_name(c))
+            .map(friendly_channel_name)
             .collect::<Vec<_>>()
             .join(", ")
     );
