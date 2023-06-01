@@ -4,6 +4,7 @@ use clap_complete::Shell;
 use anyhow::Error;
 mod add;
 mod init;
+mod install;
 mod run;
 
 #[derive(Parser, Debug)]
@@ -26,6 +27,7 @@ enum Command {
     Init(init::Args),
     Add(add::Args),
     Run(run::Args),
+    Install(install::Args),
 }
 
 fn completion(args: CompletionCommand) -> Result<(), Error> {
@@ -47,5 +49,6 @@ pub async fn execute() -> anyhow::Result<()> {
         Command::Init(cmd) => init::execute(cmd).await,
         Command::Add(cmd) => add::execute(cmd).await,
         Command::Run(cmd) => run::execute(cmd).await,
+        Command::Install(cmd) => install::execute(cmd).await,
     }
 }
