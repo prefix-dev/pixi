@@ -1,6 +1,7 @@
 use crate::{
     environment::{load_lock_file, update_lock_file},
     project::Project,
+    virtual_packages::get_minimal_virtual_packages,
 };
 use anyhow::Context;
 use clap::Parser;
@@ -11,7 +12,6 @@ use rattler_conda_types::{
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
 use std::collections::HashMap;
-use crate::virtual_packages::get_minimal_virtual_packages;
 
 /// Adds a dependency to the project
 #[derive(Parser, Debug)]
@@ -43,16 +43,20 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     let mut best_versions = HashMap::new();
     for platform in project.platforms()? {
         // Solve the environment with the new specs added
-        let solved_versions =
-            match determine_best_version(&new_specs, &current_specs, &sparse_repo_data, platform) {
-                Ok(versions) => versions,
-                Err(err) => {
-                    return Err(err).context(anyhow::anyhow!(
+        let solved_versions = match determine_best_version(
+            &new_specs,
+            &current_specs,
+            &sparse_repo_data,
+            platform,
+        ) {
+            Ok(versions) => versions,
+            Err(err) => {
+                return Err(err).context(anyhow::anyhow!(
                         "could not determine any available versions for {} on {platform}. Either the package could not be found or version constraints on other dependencies result in a conflict.",
                         new_specs.keys().join(", ")
-                    ))
-                }
-            };
+                    ));
+            }
+        };
 
         // Determine the minimum compatible constraining version.
         for (name, version) in solved_versions {
@@ -118,12 +122,14 @@ pub fn determine_best_version(
     sparse_repo_data: &[SparseRepoData],
     platform: Platform,
 ) -> anyhow::Result<HashMap<String, Version>> {
+    let combined_specs = current_specs
+        .iter()
+        .chain(new_specs.iter())
+        .map(|(name, spec)| (name.clone(), spec.clone()))
+        .collect::<HashMap<_, _>>();
+
     // Extract the package names from all the dependencies
-    let package_names = new_specs
-        .keys()
-        .chain(current_specs.keys())
-        .cloned()
-        .collect_vec();
+    let package_names = combined_specs.keys().cloned().collect_vec();
 
     // Get the repodata for the current platform and for NoArch
     let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
@@ -138,9 +144,8 @@ pub fn determine_best_version(
 
     // Construct a solver task to start solving.
     let task = rattler_solve::SolverTask {
-        specs: new_specs
+        specs: combined_specs
             .iter()
-            .chain(current_specs.iter())
             .map(|(name, spec)| MatchSpec::from_nameless(spec.clone(), Some(name.clone())))
             .collect(),
 
@@ -148,15 +153,15 @@ pub fn determine_best_version(
             .iter()
             .map(|records| LibsolvRepoData::from_records(records)),
 
-        // TODO: Add the information from the current lock file here.
-        pinned_packages: vec![],
-
-        // TODO: All these things.
-        locked_packages: vec![],
         virtual_packages: get_minimal_virtual_packages(platform)
             .into_iter()
             .map(Into::into)
             .collect(),
+
+        // TODO: Add the information from the current lock file here.
+        locked_packages: vec![],
+
+        pinned_packages: vec![],
     };
 
     let records = rattler_solve::LibsolvBackend.solve(task)?;
