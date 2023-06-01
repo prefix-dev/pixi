@@ -107,7 +107,7 @@ async fn create_executable_scripts(
     let bin_dir = BinDir::create().await?;
     for exec in executables {
         let script = activation_script.clone().add(&format!(
-            "\n ${{CONDA_PREFIX}}/{}",
+            "\n ${{CONDA_PREFIX}}/{} $@",
             exec.to_str().expect("could not convert path to string")
         ));
         let filename =
