@@ -26,11 +26,33 @@ pub struct Args {
     channels: Vec<String>,
 }
 
+struct BinDir(pub PathBuf);
+
+impl BinDir {
+    /// Create the Binary Executable directory
+    pub async fn create() -> anyhow::Result<Self> {
+        let bin_dir = bin_dir()?;
+        tokio::fs::create_dir_all(&bin_dir).await?;
+        Ok(Self(bin_dir))
+    }
+}
+
 /// Binaries are installed in ~/.pax/bin
 fn bin_dir() -> anyhow::Result<PathBuf> {
     Ok(home_dir()
         .ok_or_else(|| anyhow::anyhow!("could not find home directory"))?
         .join(".pax/bin"))
+}
+
+struct BinEnvDir(pub PathBuf);
+
+impl BinEnvDir {
+    /// Create the Binary Environment directory
+    pub async fn create(package_name: &str) -> anyhow::Result<Self> {
+        let bin_env_dir = bin_env_dir()?.join(package_name);
+        tokio::fs::create_dir_all(&bin_env_dir).await?;
+        Ok(Self(bin_env_dir))
+    }
 }
 
 /// Binary environments are installed in ~/.pax/envs
@@ -40,6 +62,7 @@ fn bin_env_dir() -> anyhow::Result<PathBuf> {
         .join(".pax/envs"))
 }
 
+/// Find the designated package in the prefix
 async fn find_designated_package(
     prefix: &Prefix,
     package_name: &str,
@@ -51,16 +74,75 @@ async fn find_designated_package(
         .ok_or_else(|| anyhow::anyhow!("could not find {} in prefix", package_name))
 }
 
+/// Create the environment activation script
+fn create_activation_script(prefix: &Prefix) -> anyhow::Result<String> {
+    let shell_type = rattler_shell::shell::ShellEnum::detect_from_environment()
+        .ok_or_else(|| anyhow::anyhow!("Could not detect shell type"))?;
+    let activator = Activator::from_path(prefix.root(), shell_type, Platform::Osx64)?;
+    let result = activator.activation(ActivationVariables {
+        conda_prefix: None,
+        path: Some(vec![
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin"),
+            PathBuf::from("/usr/sbin"),
+            PathBuf::from("/sbin"),
+            PathBuf::from("/usr/local/bin"),
+        ]),
+    })?;
+    Ok(result.script)
+}
+
+/// Create the executable scripts by modifying the activation script
+/// to activate the environment and run the executable
+async fn create_executable_scripts(
+    prefix: &Prefix,
+    prefix_package: &PrefixRecord,
+    activation_script: String,
+) -> anyhow::Result<()> {
+    let executables = prefix_package
+        .files
+        .iter()
+        .filter(|f| f.starts_with("bin/") && is_executable::is_executable(prefix.root().join(f)));
+
+    let bin_dir = BinDir::create().await?;
+    for exec in executables {
+        let script = activation_script.clone().add(&format!(
+            "\n ${{CONDA_PREFIX}}/{}",
+            exec.to_str()
+                .expect("could not convert path to string")
+                .to_string()
+        ));
+        let filename =
+            bin_dir.0.join(exec.file_name().ok_or_else(|| {
+                anyhow::anyhow!("could not get filename from {}", exec.display())
+            })?);
+        tokio::fs::write(&filename, script).await?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(filename, std::fs::Permissions::from_mode(0o744))?;
+        }
+    }
+    Ok(())
+}
+
 /// Install a global command
 pub async fn execute(args: Args) -> anyhow::Result<()> {
-    tokio::fs::create_dir_all(bin_dir().unwrap()).await?;
+    // Figure out what channels we are using
     let channels = args
         .channels
         .iter()
         .map(|c| Channel::from_str(c, &ChannelConfig::default()))
         .collect::<Result<Vec<Channel>, _>>()?;
-    let package_matchspec = MatchSpec::from_str(&args.package).unwrap();
-    let package_name = package_matchspec.name.clone().unwrap();
+
+    // Find the matchspec we want to install
+    let package_matchspec = MatchSpec::from_str(&args.package)?;
+    let package_name = package_matchspec.name.clone().ok_or_else(|| {
+        anyhow::anyhow!(
+            "could not find package name in matchspec {}",
+            package_matchspec
+        )
+    })?;
     let platform = Platform::current();
 
     println!(
@@ -76,12 +158,12 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     // Fetch sparse repodata
     let platform_sparse_repodata = fetch_sparse_repodata(&channels, &vec![platform]).await?;
 
-    // Solve for environment
     let available_packages = SparseRepoData::load_records_recursive(
         platform_sparse_repodata.iter(),
         vec![package_name.clone()],
     )?;
 
+    // Solve for environment
     // Construct a solver task that we can start solving.
     let task = rattler_solve::SolverTask {
         specs: vec![package_matchspec],
@@ -89,7 +171,6 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
             .iter()
             .map(|records| LibsolvRepoData::from_records(records)),
 
-        // TODO: All these things.
         locked_packages: vec![],
         pinned_packages: vec![],
         virtual_packages: vec![],
@@ -98,9 +179,9 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     // Solve it
     let records = rattler_solve::LibsolvBackend.solve(task)?;
 
-    // Create the binary prefix
-    let prefix = Prefix::new(bin_env_dir()?.join(&package_name))?;
-    tokio::fs::create_dir_all(prefix.root()).await?;
+    // Create the binary environment prefix where we install or update the package
+    let bin_prefix = BinEnvDir::create(&package_name).await?;
+    let prefix = Prefix::new(bin_prefix.0)?;
     let prefix_records = prefix.find_installed_packages(None).await?;
 
     // Create the transaction that we need
@@ -121,43 +202,10 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         )
         .await?;
     }
+
     let prefix_package = find_designated_package(&prefix, &package_name).await?;
-    let executable_files = prefix_package
-        .files
-        .iter()
-        .filter(|f| f.starts_with("bin/") && is_executable::is_executable(prefix.root().join(f)))
-        .collect::<Vec<_>>();
-
-    let shell_type = rattler_shell::shell::ShellEnum::detect_from_environment().unwrap();
-    let activator = Activator::from_path(prefix.root(), shell_type, Platform::Osx64).unwrap();
-    let result = activator
-        .activation(ActivationVariables {
-            conda_prefix: None,
-            path: Some(vec![
-                PathBuf::from("/usr/bin"),
-                PathBuf::from("/bin"),
-                PathBuf::from("/usr/sbin"),
-                PathBuf::from("/sbin"),
-                PathBuf::from("/usr/local/bin"),
-            ]),
-        })
-        .unwrap();
-
-    for exec in executable_files {
-        let script = result.script.clone();
-        let script = script.add(&format!(
-            "\n ${{CONDA_PREFIX}}/{}",
-            exec.to_str().unwrap().to_string()
-        ));
-        let filename = bin_dir()?.join(exec.file_name().unwrap());
-        dbg!(filename.clone());
-        tokio::fs::write(&filename, script).await?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(filename, std::fs::Permissions::from_mode(0o744))?;
-        }
-    }
+    let activation_script = create_activation_script(&prefix)?;
+    create_executable_scripts(&prefix, &prefix_package, activation_script).await?;
 
     Ok(())
 }
