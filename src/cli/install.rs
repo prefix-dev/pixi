@@ -122,7 +122,7 @@ fn is_executable(prefix: &Prefix, relative_path: &Path) -> bool {
 
     // Check if the file is executable
     let absolute_path = prefix.root().join(relative_path);
-    is_executable::is_executable(&absolute_path)
+    is_executable::is_executable(absolute_path)
 }
 
 /// Create the executable scripts by modifying the activation script
@@ -166,7 +166,7 @@ async fn create_executable_scripts(
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(filename, std::fs::Permissions::from_mode(0o744))?;
+            std::fs::set_permissions(shim_path, std::fs::Permissions::from_mode(0o744))?;
         }
 
         scripts.push(file_name.to_string_lossy().into_owned());
@@ -292,9 +292,9 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         } else {
             let bin_dir = format!("~/{BIN_DIR}");
             eprintln!("{whitespace}These apps have been added to {}\n{whitespace} -  {script_names}\n\n{} To use them, make sure to add {} to your PATH",
-                      &console::style(bin_dir).bold(),
+                      console::style(&bin_dir).bold(),
                       console::style("!").yellow().bold(),
-                      &console::style(bin_dir).bold()
+                      console::style(&bin_dir).bold()
             )
         }
     }
