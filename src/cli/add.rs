@@ -11,6 +11,7 @@ use rattler_conda_types::{
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
 use std::collections::HashMap;
+use crate::virtual_packages::get_minimal_virtual_packages;
 
 /// Adds a dependency to the project
 #[derive(Parser, Debug)]
@@ -57,7 +58,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         for (name, version) in solved_versions {
             match best_versions.get_mut(&name) {
                 Some(prev) => {
-                    if &*prev > &version {
+                    if *prev > version {
                         *prev = version
                     }
                 }
@@ -114,7 +115,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 pub fn determine_best_version(
     new_specs: &HashMap<String, NamelessMatchSpec>,
     current_specs: &HashMap<String, NamelessMatchSpec>,
-    sparse_repo_data: &Vec<SparseRepoData>,
+    sparse_repo_data: &[SparseRepoData],
     platform: Platform,
 ) -> anyhow::Result<HashMap<String, Version>> {
     // Extract the package names from all the dependencies
@@ -152,7 +153,10 @@ pub fn determine_best_version(
 
         // TODO: All these things.
         locked_packages: vec![],
-        virtual_packages: vec![],
+        virtual_packages: get_minimal_virtual_packages(platform)
+            .into_iter()
+            .map(Into::into)
+            .collect(),
     };
 
     let records = rattler_solve::LibsolvBackend.solve(task)?;
