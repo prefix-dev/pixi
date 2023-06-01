@@ -41,6 +41,14 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
         anyhow::bail!("the project is not configured for your current platform. Add '{}' to the 'platforms' key in project's {} to include it", platform, consts::PROJECT_MANIFEST)
     }
 
+    // Make sure the system requirements are met
+    let custom_system_requirements: Vec<GenericVirtualPackage> = project
+        .system_requirements()?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    verify_current_platform_has_required_virtual_packages(&custom_system_requirements)?;
+
     // Start loading the installed packages in the background
     let prefix = Prefix::new(project.root().join(".pax/env"))?;
     let installed_packages_future = {
