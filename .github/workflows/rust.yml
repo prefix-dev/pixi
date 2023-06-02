@@ -82,7 +82,7 @@ jobs:
           - { name: "Linux-x86_64",   target: x86_64-unknown-linux-musl,  os: ubuntu-20.04, use-cross: true }
 
           - { name: "macOS-x86_64",   target: x86_64-apple-darwin,        os: macOS-latest }
-          - { name: "macOS-aarch64",  target: aarch64-apple-darwin,       os: macOS-latest }
+          - { name: "macOS-aarch64",  target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
 
           - { name: "Windows-x86_64", target: x86_64-pc-windows-msvc,     os: windows-2019 }
     env:
@@ -177,6 +177,7 @@ jobs:
 
       - name: Set testing options
         id: test-options
+        if: ${{ !matrix.job.skip-tests }}
         shell: bash
         run: |
           # test only library unit tests and binary for arm-type targets
@@ -185,10 +186,11 @@ jobs:
           echo "CARGO_TEST_OPTIONS=${CARGO_TEST_OPTIONS}" >> $GITHUB_OUTPUT
 
       - name: Run tests
+        if: ${{ !matrix.job.skip-tests }}
         uses: actions-rs/cargo@v1
         with:
           use-cross: ${{ matrix.job.use-cross }}
-          command: build
+          command: test
           args: --locked --target=${{ matrix.job.target }} ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 
       - name: Create tarball
