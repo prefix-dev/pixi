@@ -55,7 +55,7 @@ Options:
 
 ```
 ## Making a pax project
-Initialize the project
+Initialize a new project
 ```
 pax init myproject
 ```
