@@ -3,12 +3,38 @@ use anyhow::{bail, Context};
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, Platform, Version,
 };
-use rattler_virtual_packages::{Archspec, Cuda, LibC, Osx, VirtualPackage};
+use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{env, fs};
 use toml_edit::{Document, Item, Table, Value};
+
+pub enum SystemRequirementKey {
+    Windows,
+    Unix,
+    Linux,
+    MacOS,
+    Cuda,
+    ArchSpec,
+    LibC,
+    Unknown(String),
+}
+
+impl From<&str> for SystemRequirementKey {
+    fn from(key: &str) -> Self {
+        match key {
+            "windows" => SystemRequirementKey::Windows,
+            "unix" => SystemRequirementKey::Unix,
+            "linux" => SystemRequirementKey::Linux,
+            "macos" => SystemRequirementKey::MacOS,
+            "cuda" => SystemRequirementKey::Cuda,
+            "archspec" => SystemRequirementKey::ArchSpec,
+            "libc" => SystemRequirementKey::LibC,
+            other => SystemRequirementKey::Unknown(other.to_string()),
+        }
+    }
+}
 
 /// A project represented by a pax.toml file.
 #[derive(Debug)]
@@ -190,6 +216,9 @@ impl Project {
         Ok(res)
     }
 
+    /// Get the system requirements defined under the `system-requirements` section of the project manifest.
+    /// These get turned into virtual packages which are used in the solve.
+    /// They will act as the description of a reference machine which is minimally needed for this package to be run.
     pub fn system_requirements(&self) -> anyhow::Result<Vec<VirtualPackage>> {
         let mut res = vec![];
 
@@ -200,108 +229,46 @@ impl Project {
             .and_then(|x| x.as_table_like())
         {
             for (key, val) in sys_req_table.iter() {
-                match key {
-                    "windows" => {
-                        let windows = val
-                            .as_bool()
-                            .ok_or(anyhow::anyhow!("expected boolean value for windows"))?;
-                        if windows {
-                            res.push(VirtualPackage::Win);
+                match SystemRequirementKey::from(key) {
+                    SystemRequirementKey::Windows => {
+                        if let Some(win_pkg) = parse_windows_system_requirements(val)? {
+                            res.push(win_pkg);
                         }
                     }
-                    "unix" => {
-                        let unix = val
-                            .as_bool()
-                            .ok_or(anyhow::anyhow!("expected boolean value for unix"))?;
-                        if unix {
-                            res.push(VirtualPackage::Unix);
+                    SystemRequirementKey::Unix => {
+                        if let Some(unix_pkg) = parse_unix_system_requirements(val)? {
+                            res.push(unix_pkg);
                         }
                     }
-                    "macos" => {
-                        let macos_version = val
-                            .as_str()
-                            .ok_or(anyhow::anyhow!("expected string value for macos"))?
-                            .to_owned();
-                        res.push(VirtualPackage::Osx(Osx {
-                            version: Version::from_str(macos_version.as_str()).unwrap(),
-                        }));
-                    }
-                    "cuda" => {
-                        let cuda_version = val
-                            .as_str()
-                            .ok_or(anyhow::anyhow!("expected string value for cuda"))?
-                            .to_owned();
-                        res.push(VirtualPackage::Cuda(Cuda {
-                            version: Version::from_str(cuda_version.as_str()).unwrap(),
-                        }));
-                    }
-                    "archspec" => {
-                        let spec = val
-                            .as_str()
-                            .ok_or(anyhow::anyhow!("expected string value for archspec"))?
-                            .to_owned();
-                        res.push(VirtualPackage::Archspec(Archspec { spec }));
-                    }
-                    "libc" => match val {
-                        Item::Table(table) => {
-                            let family: String = table
-                                .get("family")
-                                .and_then(|v| v.as_str())
-                                .map(|s| s.to_owned())
-                                .unwrap_or_else(|| String::from("glibc"));
-                            let version_str = table
-                                .get("version")
-                                .and_then(|v| v.as_str())
-                                .ok_or(anyhow::anyhow!("missing or invalid 'version'"))?;
-                            let version = Version::from_str(version_str)?;
-                            // Check for other keys
-                            for (key, _) in table.iter() {
-                                if key != "family" && key != "version" {
-                                    return Err(anyhow::anyhow!(
-                                        "Unexpected key in 'libc' table: {}",
-                                        key
-                                    ));
-                                }
-                            }
-                            res.push(VirtualPackage::LibC(LibC { family, version }));
+                    SystemRequirementKey::Linux => {
+                        if let Some(linux_pkg) = parse_linux_system_requirements(val)? {
+                            res.push(linux_pkg);
                         }
-                        Item::Value(value) => match value {
-                            Value::InlineTable(inline) => {
-                                let family: String = inline
-                                    .get("family")
-                                    .and_then(|v| v.as_str())
-                                    .map(|s| s.to_owned())
-                                    .unwrap_or_else(|| String::from("glibc"));
-                                let version_str = inline
-                                    .get("version")
-                                    .and_then(|v| v.as_str())
-                                    .ok_or(anyhow::anyhow!("missing or invalid 'version'"))?;
-                                let version = Version::from_str(version_str)?;
-                                // check for other keys
-                                for (key, _) in inline.iter() {
-                                    if key != "family" && key != "version" {
-                                        return Err(anyhow::anyhow!(
-                                            "Unexpected key in 'libc' table: {}",
-                                            key
-                                        ));
-                                    }
-                                }
-                                res.push(VirtualPackage::LibC(LibC { family, version }));
-                            }
-                            Value::String(version) => {
-                                res.push(VirtualPackage::LibC(LibC {
-                                    family: "glibc".to_string(),
-                                    version: Version::from_str(version.value())?,
-                                }));
-                            }
-                            _ => bail!("expected version string or table as value for libc"),
-                        },
-                        _ => bail!("expected version string or table as value for libc"),
-                    },
+                    }
+                    SystemRequirementKey::MacOS => {
+                        if let Some(macos_pkg) = parse_macos_system_requirements(val)? {
+                            res.push(macos_pkg);
+                        }
+                    }
+                    SystemRequirementKey::Cuda => {
+                        if let Some(cuda_pkg) = parse_cuda_system_requirements(val)? {
+                            res.push(cuda_pkg);
+                        }
+                    }
+                    SystemRequirementKey::ArchSpec => {
+                        if let Some(arch_pkg) = parse_archspec_system_requirements(val)? {
+                            res.push(arch_pkg);
+                        }
+                    }
+                    SystemRequirementKey::LibC => {
+                        if let Some(libc_pkg) = parse_libc_system_requirements(val)? {
+                            res.push(libc_pkg);
+                        }
+                    }
                     // handle other cases
-                    _ => bail!(
+                    SystemRequirementKey::Unknown(input) => bail!(
                         "'{}' is an unknown system-requirement, please use one of the defaults.",
-                        key
+                        input
                     ),
                 }
             }
@@ -318,6 +285,116 @@ pub fn find_project_root() -> Option<PathBuf> {
         .find(|dir| dir.join(consts::PROJECT_MANIFEST).is_file())
         .map(Path::to_path_buf)
 }
+// Parse windows virtual package from the system requirement input.
+fn parse_windows_system_requirements(item: &Item) -> anyhow::Result<Option<VirtualPackage>> {
+    let windows = item
+        .as_bool()
+        .ok_or(anyhow::anyhow!("expected boolean value for windows"))?;
+    if windows {
+        Ok(Some(VirtualPackage::Win))
+    } else {
+        Ok(None)
+    }
+}
+// Parse unix virtual package from the system requirement input.
+fn parse_unix_system_requirements(item: &Item) -> anyhow::Result<Option<VirtualPackage>> {
+    let unix = item
+        .as_bool()
+        .ok_or(anyhow::anyhow!("expected boolean value for unix"))?;
+    if unix {
+        Ok(Some(VirtualPackage::Unix))
+    } else {
+        Ok(None)
+    }
+}
+// Parse macos virtual package from the system requirement input.
+fn parse_macos_system_requirements(item: &Item) -> anyhow::Result<Option<VirtualPackage>> {
+    let macos_version = item
+        .as_str()
+        .ok_or(anyhow::anyhow!("expected string value for macos"))?;
+    Ok(Some(VirtualPackage::Osx(Osx {
+        version: Version::from_str(macos_version).unwrap(),
+    })))
+}
+// Parse linux virtual package from the system requirement input.
+fn parse_linux_system_requirements(item: &Item) -> anyhow::Result<Option<VirtualPackage>> {
+    let linux_version = item
+        .as_str()
+        .ok_or(anyhow::anyhow!("expected string value for linux"))?;
+    Ok(Some(VirtualPackage::Linux(Linux {
+        version: Version::from_str(linux_version).unwrap(),
+    })))
+}
+// Parse cuda virtual package from the system requirement input.
+fn parse_cuda_system_requirements(item: &Item) -> anyhow::Result<Option<VirtualPackage>> {
+    let cuda_version = item
+        .as_str()
+        .ok_or(anyhow::anyhow!("expected string value for cuda"))?;
+    Ok(Some(VirtualPackage::Cuda(Cuda {
+        version: Version::from_str(cuda_version).unwrap(),
+    })))
+}
+// Parse archspec virtual package from the system requirement input.
+fn parse_archspec_system_requirements(item: &Item) -> anyhow::Result<Option<VirtualPackage>> {
+    let archspec_version = item
+        .as_str()
+        .ok_or(anyhow::anyhow!("expected string value for archspec"))?;
+    Ok(Some(VirtualPackage::Archspec(Archspec {
+        spec: archspec_version.to_string(),
+    })))
+}
+
+// Parse libc virtual package from the system requirement input.
+fn parse_libc_system_requirements(item: &Item) -> anyhow::Result<Option<VirtualPackage>> {
+    match item {
+        Item::Table(table) => {
+            let family: String = table
+                .get("family")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_owned())
+                .unwrap_or_else(|| String::from("glibc"));
+            let version_str = table
+                .get("version")
+                .and_then(|v| v.as_str())
+                .ok_or(anyhow::anyhow!("missing or invalid 'version'"))?;
+            let version = Version::from_str(version_str)?;
+            // Check for other keys
+            for (key, _) in table.iter() {
+                if key != "family" && key != "version" {
+                    return Err(anyhow::anyhow!("Unexpected key in 'libc' table: {}", key));
+                }
+            }
+            Ok(Some(VirtualPackage::LibC(LibC { family, version })))
+        }
+        Item::Value(value) => match value {
+            Value::InlineTable(inline) => {
+                let family: String = inline
+                    .get("family")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_owned())
+                    .unwrap_or_else(|| String::from("glibc"));
+                let version_str = inline
+                    .get("version")
+                    .and_then(|v| v.as_str())
+                    .ok_or(anyhow::anyhow!("missing or invalid 'version'"))?;
+                let version = Version::from_str(version_str)?;
+                // check for other keys
+                for (key, _) in inline.iter() {
+                    if key != "family" && key != "version" {
+                        return Err(anyhow::anyhow!("Unexpected key in 'libc' table: {}", key));
+                    }
+                }
+                Ok(Some(VirtualPackage::LibC(LibC { family, version })))
+            }
+            Value::String(version) => Ok(Some(VirtualPackage::LibC(LibC {
+                family: "glibc".to_string(),
+                version: Version::from_str(version.value())?,
+            }))),
+            _ => bail!("expected version string or table as value for libc"),
+        },
+        _ => bail!("expected version string or table as value for libc"),
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -330,8 +407,10 @@ mod tests {
             [system-requirements]
             windows = true
             unix = true
+            linux = "5.11"
             cuda = "12.2"
             macos = "10.15"
+            archspec = "arm64"
             libc = { family = "glibc", version = "2.12" }
         "#;
 
@@ -341,16 +420,21 @@ mod tests {
         };
 
         let system_requirements = project.system_requirements().unwrap();
-        println!("{:?}", system_requirements);
 
         let mut expected_requirements: Vec<VirtualPackage> = vec![];
         expected_requirements.push(VirtualPackage::Win);
         expected_requirements.push(VirtualPackage::Unix);
+        expected_requirements.push(VirtualPackage::Linux(Linux {
+            version: Version::from_str("5.11").unwrap(),
+        }));
         expected_requirements.push(VirtualPackage::Cuda(Cuda {
             version: Version::from_str("12.2").unwrap(),
         }));
         expected_requirements.push(VirtualPackage::Osx(Osx {
             version: Version::from_str("10.15").unwrap(),
+        }));
+        expected_requirements.push(VirtualPackage::Archspec(Archspec {
+            spec: "arm64".to_string(),
         }));
         expected_requirements.push(VirtualPackage::LibC(LibC {
             version: Version::from_str("2.12").unwrap(),
