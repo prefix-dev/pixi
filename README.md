@@ -28,7 +28,7 @@ Install `pax`:
 curl ....
 ```
 
-Or, Build `pax` yourself:
+Or, build `pax` yourself:
 ```bash
 # Clone this project
 git clone https://github.com/prefix-dev/pax.git
