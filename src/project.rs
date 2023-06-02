@@ -1,5 +1,6 @@
 use crate::consts;
 use anyhow::{bail, Context};
+use enum_iterator::{all, Sequence};
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, Platform, Version,
 };
@@ -7,9 +8,10 @@ use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage}
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::{env, fs};
+use std::{env, fmt, fs};
 use toml_edit::{Document, Item, Table, Value};
 
+#[derive(Debug, Sequence)]
 pub enum SystemRequirementKey {
     Windows,
     Unix,
@@ -18,7 +20,22 @@ pub enum SystemRequirementKey {
     Cuda,
     ArchSpec,
     LibC,
-    Unknown(String),
+    Unknown,
+}
+
+impl fmt::Display for SystemRequirementKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SystemRequirementKey::Windows => write!(f, "windows"),
+            SystemRequirementKey::Unix => write!(f, "unix"),
+            SystemRequirementKey::Linux => write!(f, "linux"),
+            SystemRequirementKey::MacOS => write!(f, "macos"),
+            SystemRequirementKey::Cuda => write!(f, "cuda"),
+            SystemRequirementKey::ArchSpec => write!(f, "archspec"),
+            SystemRequirementKey::LibC => write!(f, "libc"),
+            SystemRequirementKey::Unknown => write!(f, ""),
+        }
+    }
 }
 
 impl From<&str> for SystemRequirementKey {
@@ -31,7 +48,7 @@ impl From<&str> for SystemRequirementKey {
             "cuda" => SystemRequirementKey::Cuda,
             "archspec" => SystemRequirementKey::ArchSpec,
             "libc" => SystemRequirementKey::LibC,
-            other => SystemRequirementKey::Unknown(other.to_string()),
+            _ => SystemRequirementKey::Unknown,
         }
     }
 }
@@ -266,9 +283,10 @@ impl Project {
                         }
                     }
                     // handle other cases
-                    SystemRequirementKey::Unknown(input) => bail!(
-                        "'{}' is an unknown system-requirement, please use one of the defaults.",
-                        input
+                    SystemRequirementKey::Unknown => bail!(
+                        "'{}' is an unknown system-requirement, please use one of the following: {}.",
+                        key,
+                        all::<SystemRequirementKey>().collect::<Vec<_>>().iter().map(|k| format!("{}", k)).collect::<Vec<_>>().join(", ")
                     ),
                 }
             }
