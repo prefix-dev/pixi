@@ -183,13 +183,12 @@ pub async fn update_lock_file(
     let platforms = project.platforms()?;
     let dependencies = project.dependencies()?;
 
-    // Verify the if the system that this is run on has the right virtual packages, including the system requirements from the config.
+    // The virtual packages defined as system-requirements in the config
     let custom_system_requirements: Vec<GenericVirtualPackage> = project
         .system_requirements()?
         .into_iter()
         .map(Into::into)
         .collect();
-    verify_current_platform_has_required_virtual_packages(&custom_system_requirements)?;
 
     // Extract the package names from the dependencies
     let package_names = dependencies.keys().collect_vec();
@@ -231,6 +230,7 @@ pub async fn update_lock_file(
                 .into_iter()
                 .map(Into::into)
                 .collect();
+
         let virtual_packages = minimal_virtual_packages
             .into_iter()
             .chain(custom_system_requirements.clone()) // Clone it now, change to platform specific map later.
