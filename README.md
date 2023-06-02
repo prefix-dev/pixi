@@ -1,23 +1,26 @@
 # PAX: Package management made easy on ALL platforms
+![License][license-badge]
+[![Build Status][build-badge]][build]
+[![Project Chat][chat-badge]][chat-url]
 
-Pax is a universal package manager designed to make installing and managing dependencies in Python, C++, and Conda super easy.
+[license-badge]: https://img.shields.io/badge/license-BSD--3--Clause-blue?style=flat-square
+[build-badge]: https://img.shields.io/github/actions/workflow/status/prefix-dev/pax/rust.yml?style=flat-square&branch=main
+[build]: https://github.com/prefix-dev/pax/actions/
+[chat-badge]: https://img.shields.io/discord/1082332781146800168.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2&style=flat-square
+[chat-url]: https://discord.gg/kKV8ZxyzY4
 
-Pax aims to provide AI/Data Science professionals the exceptional developer experience that is usually found with package managers like Cargo or Yarn.
+`pax` is a universal package management tool designed to make installing and managing dependencies in Python, C++ and R using Conda packages.
 
+`pax` aims to provide AI/Data Science professionals the exceptional developer experience that is usually found with package managers like `cargo` or `yarn`.
+
+`pax` is completely written in Rust and build on top of the [rattler](https://github.com/mamba-org/rattler) library.
 
 # Features
 
 - Seamless integration with Python, C++ and R using Conda packages
 - All os's: linux, windows, osx and osx-arm
-- A clean and simple cargo-like command-line interface.
-- Project initialization and dependency management
-- System-wide installation of conda packages
-
-What is the main goal?
-
-Who is it for?
-
-Why would you use this over other managers?
+- A clean and simple Cargo-like command-line interface.
+- System-wide installation of Conda packages
 
 # Installation
 Install `pax`:
@@ -73,10 +76,9 @@ This behaviour is simular to `pipx` and `condax`.
 pax install cowpy
 ```
 
-# Contribution
+# Contribution 😍
+We would absolutely love for you to contribute to `pax`! 
+Whether you want to start an issue, fix a bug you encountered, or suggest an improvement, every contribution is greatly appreciated.
 
-We welcome contributions of all sorts. Even if you can't contribute code, reporting issues that you encounter is a great help.
-
-# License
-
-Pax is licensed under the .....
+Got questions or ideas, or just want to chat? Join our lively conversations on Discord. 
+We're very active and would be happy to welcome you to our community. [Join our discord server today!][chat-url]
