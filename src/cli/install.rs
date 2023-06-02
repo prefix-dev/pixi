@@ -155,18 +155,21 @@ async fn create_executable_scripts(
         let file_name = exec
             .file_stem()
             .ok_or_else(|| anyhow::anyhow!("could not get filename from {}", exec.display()))?;
-        let mut shim_path = bin_dir.0.join(file_name);
+        let mut executable_script_path = bin_dir.0.join(file_name);
 
         if cfg!(windows) {
-            shim_path.set_extension("bat");
+            executable_script_path.set_extension("bat");
         };
 
-        tokio::fs::write(&shim_path, script).await?;
+        tokio::fs::write(&executable_script_path, script).await?;
 
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(shim_path, std::fs::Permissions::from_mode(0o744))?;
+            std::fs::set_permissions(
+                executable_script_path,
+                std::fs::Permissions::from_mode(0o744),
+            )?;
         }
 
         scripts.push(file_name.to_string_lossy().into_owned());
