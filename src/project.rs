@@ -257,7 +257,10 @@ impl Project {
                             // Check for other keys
                             for (key, _) in table.iter() {
                                 if key != "family" && key != "version" {
-                                    return Err(anyhow::anyhow!("Unexpected key in 'libc' table: {}", key));
+                                    return Err(anyhow::anyhow!(
+                                        "Unexpected key in 'libc' table: {}",
+                                        key
+                                    ));
                                 }
                             }
                             res.push(VirtualPackage::LibC(LibC { family, version }));
@@ -277,7 +280,10 @@ impl Project {
                                 // check for other keys
                                 for (key, _) in inline.iter() {
                                     if key != "family" && key != "version" {
-                                        return Err(anyhow::anyhow!("Unexpected key in 'libc' table: {}", key));
+                                        return Err(anyhow::anyhow!(
+                                            "Unexpected key in 'libc' table: {}",
+                                            key
+                                        ));
                                     }
                                 }
                                 res.push(VirtualPackage::LibC(LibC { family, version }));

@@ -16,7 +16,7 @@ repos:
           name: fmt
           language: system
           types: [file, rust]
-          entry: cargo fmt -- --check
+          entry: cargo fmt
           pass_filenames: false
 
         - id: clippy
