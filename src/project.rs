@@ -20,7 +20,6 @@ pub enum SystemRequirementKey {
     Cuda,
     ArchSpec,
     LibC,
-    Unknown,
 }
 
 impl fmt::Display for SystemRequirementKey {
@@ -33,26 +32,39 @@ impl fmt::Display for SystemRequirementKey {
             SystemRequirementKey::Cuda => write!(f, "cuda"),
             SystemRequirementKey::ArchSpec => write!(f, "archspec"),
             SystemRequirementKey::LibC => write!(f, "libc"),
-            SystemRequirementKey::Unknown => write!(f, ""),
         }
     }
 }
 
-impl From<&str> for SystemRequirementKey {
-    fn from(key: &str) -> Self {
+impl FromStr for SystemRequirementKey {
+    type Err = &'static str;
+    fn from_str(key: &str) -> Result<Self, Self::Err> {
         match key {
-            "windows" => SystemRequirementKey::Windows,
-            "unix" => SystemRequirementKey::Unix,
-            "linux" => SystemRequirementKey::Linux,
-            "macos" => SystemRequirementKey::MacOS,
-            "cuda" => SystemRequirementKey::Cuda,
-            "archspec" => SystemRequirementKey::ArchSpec,
-            "libc" => SystemRequirementKey::LibC,
-            _ => SystemRequirementKey::Unknown,
+            "windows" => Ok(SystemRequirementKey::Windows),
+            "unix" => Ok(SystemRequirementKey::Unix),
+            "linux" => Ok(SystemRequirementKey::Linux),
+            "macos" => Ok(SystemRequirementKey::MacOS),
+            "cuda" => Ok(SystemRequirementKey::Cuda),
+            "archspec" => Ok(SystemRequirementKey::ArchSpec),
+            "libc" => Ok(SystemRequirementKey::LibC),
+            _ => Err("Invalid system requirement"),
         }
     }
 }
 
+impl SystemRequirementKey {
+    fn parse_requirements(&self, item: &Item) -> anyhow::Result<Option<VirtualPackage>> {
+        match self {
+            SystemRequirementKey::Windows => parse_windows_system_requirements(item),
+            SystemRequirementKey::Unix => parse_unix_system_requirements(item),
+            SystemRequirementKey::Linux => parse_linux_system_requirements(item),
+            SystemRequirementKey::MacOS => parse_macos_system_requirements(item),
+            SystemRequirementKey::Cuda => parse_cuda_system_requirements(item),
+            SystemRequirementKey::ArchSpec => parse_archspec_system_requirements(item),
+            SystemRequirementKey::LibC => parse_libc_system_requirements(item),
+        }
+    }
+}
 /// A project represented by a pax.toml file.
 #[derive(Debug)]
 pub struct Project {
@@ -245,49 +257,20 @@ impl Project {
             .get("system-requirements")
             .and_then(|x| x.as_table_like())
         {
-            for (key, val) in sys_req_table.iter() {
-                match SystemRequirementKey::from(key) {
-                    SystemRequirementKey::Windows => {
-                        if let Some(win_pkg) = parse_windows_system_requirements(val)? {
-                            res.push(win_pkg);
-                        }
-                    }
-                    SystemRequirementKey::Unix => {
-                        if let Some(unix_pkg) = parse_unix_system_requirements(val)? {
-                            res.push(unix_pkg);
-                        }
-                    }
-                    SystemRequirementKey::Linux => {
-                        if let Some(linux_pkg) = parse_linux_system_requirements(val)? {
-                            res.push(linux_pkg);
-                        }
-                    }
-                    SystemRequirementKey::MacOS => {
-                        if let Some(macos_pkg) = parse_macos_system_requirements(val)? {
-                            res.push(macos_pkg);
-                        }
-                    }
-                    SystemRequirementKey::Cuda => {
-                        if let Some(cuda_pkg) = parse_cuda_system_requirements(val)? {
-                            res.push(cuda_pkg);
-                        }
-                    }
-                    SystemRequirementKey::ArchSpec => {
-                        if let Some(arch_pkg) = parse_archspec_system_requirements(val)? {
-                            res.push(arch_pkg);
-                        }
-                    }
-                    SystemRequirementKey::LibC => {
-                        if let Some(libc_pkg) = parse_libc_system_requirements(val)? {
-                            res.push(libc_pkg);
+            for (key, item) in sys_req_table.iter() {
+                let req = SystemRequirementKey::from_str(key);
+                match req {
+                    Ok(requirement) => {
+                        if let Some(pkg) = requirement.parse_requirements(item)? {
+                            res.push(pkg);
                         }
                     }
                     // handle other cases
-                    SystemRequirementKey::Unknown => bail!(
-                        "'{}' is an unknown system-requirement, please use one of the following: {}.",
-                        key,
-                        all::<SystemRequirementKey>().collect::<Vec<_>>().iter().map(|k| format!("{}", k)).collect::<Vec<_>>().join(", ")
-                    ),
+                    _ => bail!(
+                    "'{}' is an unknown system-requirement, please use one of the following: {}.",
+                    key,
+                    all::<SystemRequirementKey>().collect::<Vec<_>>().iter().map(|k| format!("{}", k)).collect::<Vec<_>>().join(", ")
+                ),
                 }
             }
         }
