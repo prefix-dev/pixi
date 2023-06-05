@@ -5,6 +5,7 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::str::FromStr;
 
+/// The supported system requirements that can be defined in the configuration.
 #[derive(Debug, Deserialize)]
 pub struct SystemRequirements {
     windows: Option<bool>,

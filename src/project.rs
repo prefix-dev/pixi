@@ -11,6 +11,8 @@ use std::str::FromStr;
 use std::{env, fmt, fs};
 use toml_edit::{Document, Item, Table, Value};
 
+/// Enum representing supported system requirements.
+/// Used for compile-time mapping and enhanced error reporting.
 #[derive(Debug, Sequence)]
 pub enum SystemRequirementKey {
     Windows,
