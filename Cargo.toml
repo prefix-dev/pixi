@@ -42,4 +42,3 @@ toml_edit = "0.19.8"
 [profile.release]
 lto = true
 strip = true
-codegen-units = 1
