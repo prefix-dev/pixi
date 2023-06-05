@@ -313,7 +313,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 /// Returns the string to add for all arguments passed to the script
 fn get_catch_all_arg(shell: &ShellEnum) -> &str {
     match shell {
-        ShellEnum::CmdExe(_) => "\"%*\"",
+        ShellEnum::CmdExe(_) => "%*",
         ShellEnum::PowerShell(_) => "@args",
         _ => "\"$@\"",
     }
