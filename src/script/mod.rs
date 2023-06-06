@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use serde_with::{serde_as};
+use serde_with::serde_as;
 
 /// Represents different types of scripts
 #[derive(Debug, Clone, Deserialize)]
@@ -20,7 +20,7 @@ pub struct ProcessCmd {
 
     /// A list of commands that should be run before this one
     #[serde(default)]
-    pub depends_on: Vec<String>
+    pub depends_on: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -34,5 +34,5 @@ pub enum CmdArgs {
 #[serde(deny_unknown_fields)]
 pub struct AliasCmd {
     /// A list of commands that should be run before this one
-    pub depends_on: Vec<String>
+    pub depends_on: Vec<String>,
 }

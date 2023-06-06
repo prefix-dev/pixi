@@ -9,16 +9,17 @@ native-tls = ["reqwest/native-tls", "rattler_repodata_gateway/native-tls", "ratt
 rustls-tls = ["reqwest/rustls-tls", "rattler_repodata_gateway/rustls-tls", "rattler/rustls-tls"]
 
 [dependencies]
-
 anyhow = "1.0.70"
 clap = { version = "4.2.4", default-features = false, features = ["derive", "usage", "wrap_help", "std"] }
 clap_complete = "4.2.1"
 console = { version = "0.15.5", features = ["windows-console-colors"] }
 dirs = "5.0.1"
+dunce = "1.0.4"
+enum-iterator = "1.4.1"
 futures = "0.3.28"
 indicatif = "0.17.3"
-is_executable = "1.0.1"
 insta = "1.29.0"
+is_executable = "1.0.1"
 itertools = "0.10.5"
 minijinja = { version = "0.32.0" }
 once_cell = "1.17.1"
@@ -37,11 +38,10 @@ rattler_virtual_packages = { version = "0.2.0", default-features = false, git = 
 reqwest = { version = "0.11.16", default-features = false }
 serde = "1.0.163"
 serde_with = "3.0.0"
+shlex = "1.1.0"
 tempfile = "3.5.0"
 tokio = { version = "1.27.0", features = ["macros", "rt-multi-thread"] }
 toml_edit = { version = "0.19.8", features = ["serde"] }
-shlex = "1.1.0"
-dunce = "1.0.4"
 
 [profile.release]
 lto = true

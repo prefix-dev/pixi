@@ -82,7 +82,7 @@ jobs:
           - { name: "Linux-x86_64",   target: x86_64-unknown-linux-musl,  os: ubuntu-20.04, use-cross: true }
 
           - { name: "macOS-x86_64",   target: x86_64-apple-darwin,        os: macOS-latest }
-          - { name: "macOS-aarch64",  target: aarch64-apple-darwin,       os: macOS-latest }
+          - { name: "macOS-aarch64",  target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
 
           - { name: "Windows-x86_64", target: x86_64-pc-windows-msvc,     os: windows-2019 }
     env:
@@ -166,17 +166,18 @@ jobs:
           case ${{ matrix.job.target }} in
             *-pc-windows-*) EXE_suffix=".exe" ;;
           esac;
-          
+
           # Setup paths
           BIN_NAME="${{ needs.crate_metadata.outputs.name }}${EXE_suffix}"
           BIN_PATH="target/${{ matrix.job.target }}/release/${BIN_NAME}"
-          
+
           # Let subsequent steps know where to find the binary
           echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
           echo "BIN_NAME=${BIN_NAME}" >> $GITHUB_OUTPUT
 
       - name: Set testing options
         id: test-options
+        if: ${{ !matrix.job.skip-tests }}
         shell: bash
         run: |
           # test only library unit tests and binary for arm-type targets
@@ -185,10 +186,11 @@ jobs:
           echo "CARGO_TEST_OPTIONS=${CARGO_TEST_OPTIONS}" >> $GITHUB_OUTPUT
 
       - name: Run tests
+        if: ${{ !matrix.job.skip-tests }}
         uses: actions-rs/cargo@v1
         with:
           use-cross: ${{ matrix.job.use-cross }}
-          command: build
+          command: test
           args: --locked --target=${{ matrix.job.target }} ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 
       - name: Create tarball
@@ -199,15 +201,15 @@ jobs:
           PKG_BASENAME=${{ needs.crate_metadata.outputs.name }}-v${{ needs.crate_metadata.outputs.version }}-${{ matrix.job.target }}
           PKG_NAME=${PKG_BASENAME}${PKG_suffix}
           echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
-          
+
           PKG_STAGING="${{ env.CICD_INTERMEDIATES_DIR }}/package"
           ARCHIVE_DIR="${PKG_STAGING}/${PKG_BASENAME}/"
           mkdir -p "${ARCHIVE_DIR}"
           # mkdir -p "${ARCHIVE_DIR}/autocomplete"
-          
+
           # Binary
           cp "${{ steps.bin.outputs.BIN_PATH }}" "$ARCHIVE_DIR"
-          
+
           # README, LICENSE and CHANGELOG files
           # cp "README.md" "LICENSE-MIT" "LICENSE-APACHE" "CHANGELOG.md" "$ARCHIVE_DIR"
 
@@ -218,7 +220,7 @@ jobs:
             *) tar czf "${PKG_NAME}" "${PKG_BASENAME}"/* ;;
           esac;
           popd >/dev/null
-          
+
           # Let subsequent steps know where to find the compressed package
           echo "PKG_PATH=${PKG_STAGING}/${PKG_NAME}" >> $GITHUB_OUTPUT
 
@@ -244,4 +246,3 @@ jobs:
             ${{ steps.debian-package.outputs.DPKG_PATH }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
