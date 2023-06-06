@@ -135,7 +135,7 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
     Ok(true)
 }
 
-/// Returns true if the specified [`conda_lock::LockedDependency`] satisfies the given match spec.
+/// Returns true if the specified [`conda_lock::LockedDependency`] satisfies the given MatchSpec.
 /// TODO: Move this back to rattler.
 /// TODO: Make this more elaborate to include all properties of MatchSpec
 fn locked_dependency_satisfies(
@@ -280,7 +280,7 @@ pub async fn update_lock_file(
                                     VersionConstraint::from(NamelessMatchSpec::from(spec)),
                                 )),
                                 None => Err(anyhow::anyhow!(
-                                    "dependency matchspec missing a name '{}'",
+                                    "dependency MatchSpec missing a name '{}'",
                                     dep
                                 )),
                             })

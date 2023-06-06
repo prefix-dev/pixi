@@ -19,7 +19,7 @@ use std::collections::HashMap;
 pub struct Args {
     /// Specify the dependencies you wish to add to the project.
     ///
-    /// All dependencies should be defined as match specifications. If no specific version is
+    /// All dependencies should be defined as MatchSpec. If no specific version is
     /// provided, the latest version compatible with your project will be chosen automatically.
     ///
     /// Example usage:

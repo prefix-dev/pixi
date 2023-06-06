@@ -195,11 +195,11 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         .map(|c| Channel::from_str(c, &channel_config))
         .collect::<Result<Vec<Channel>, _>>()?;
 
-    // Find the matchspec we want to install
+    // Find the MatchSpec we want to install
     let package_matchspec = MatchSpec::from_str(&args.package)?;
     let package_name = package_matchspec.name.clone().ok_or_else(|| {
         anyhow::anyhow!(
-            "could not find package name in matchspec {}",
+            "could not find package name in MatchSpec {}",
             package_matchspec
         )
     })?;
