@@ -144,7 +144,7 @@ fn format_execute_command(
     Ok([command_path.to_string_lossy().as_ref()]
         .into_iter()
         .chain(args.iter().skip(1).map(|x| x.as_ref()))
-        .map(|arg| shlex::quote(&arg).into_owned())
+        .map(|arg| shlex::quote(arg).into_owned())
         .collect())
 }
 
@@ -227,7 +227,7 @@ impl Command {
     ) -> anyhow::Result<()> {
         let args = match self {
             Command::Plain(cmd) => {
-                let args = shlex::split(&cmd)
+                let args = shlex::split(cmd)
                     .ok_or_else(|| anyhow::anyhow!("invalid quoted command arguments"))?;
                 Some(format_execute_command(
                     project,
@@ -237,9 +237,9 @@ impl Command {
             }
             Command::Process(cmd) => {
                 let args = match &cmd.cmd {
-                    CmdArgs::Single(str) => shlex::split(&str)
+                    CmdArgs::Single(str) => shlex::split(str)
                         .ok_or_else(|| anyhow::anyhow!("invalid quoted command arguments"))?,
-                    CmdArgs::Multiple(args) => args.iter().cloned().collect(),
+                    CmdArgs::Multiple(args) => args.to_vec(),
                 };
                 Some(format_execute_command(
                     project,
