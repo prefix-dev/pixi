@@ -1,5 +1,5 @@
-A clear guide on how to install and setup your tool. 
-Include instructions for different platforms (Windows, MacOS, Linux) if applicable. 
+A clear guide on how to install and setup your tool.
+Include instructions for different platforms (Windows, MacOS, Linux) if applicable.
 If the tool requires an understanding of certain concepts, provide explanations or links to further resources.
 
 # Extended installation tutorial
@@ -7,10 +7,10 @@ If the tool requires an understanding of certain concepts, provide explanations 
 
 
 # Understanding Pax's Directory Structure
-The central philosophy of pax revolves around maintaining a separate conda environment for each project. 
+The central philosophy of pax revolves around maintaining a separate conda environment for each project.
 The `pax` tool achieves this by organizing environments and installations within unique directories.
 
-When you use pax to install a standalone tool, for example `cowpy`, it creates a distinct structure in your home directory. 
+When you use pax to install a standalone tool, for example `cowpy`, it creates a distinct structure in your home directory.
 To illustrate, running the command `pax install cowpy` would yield the following directory structure:
 ```shell
 $HOME
@@ -27,7 +27,7 @@ $HOME
 ```
 In this case, a cowpy directory is created within the `.pax/envs` directory, hosting the conda environment specific to `cowpy`.
 
-Now, if you're working with `pax` on a project-level, the setup process is slightly different. 
+Now, if you're working with `pax` on a project-level, the setup process is slightly different.
 You start by initializing an empty project with `pax` and then add the necessary tools or languages - in this case, `python`.
 
 To visualize this, running the following set of commands:
@@ -51,18 +51,18 @@ my_project
         ├── lib
         ├── ...
 ```
-Here, a `.pax` directory is created within the `my_project` directory, containing the conda environment specific to `my_project`. 
+Here, a `.pax` directory is created within the `my_project` directory, containing the conda environment specific to `my_project`.
 The `pax.toml` and `pax.lock` files are also added to manage and lock the project's dependencies respectively.
 
 # Basics of the configuration file
-All Pax projects use a configuration file to setup the environment. 
+All Pax projects use a configuration file to setup the environment.
 For this the decision is made to use toml, as it is a properly supported format in Cargo(Rust's package manager) and `pyproject.toml`(multiple package managers).
 
 Minimal example, that gets created by `pax init`
 ```shell
 [project]
 name = "my_project"                           # This is defaulted to the directory name or the name given to pax init
-version = "0.1.0" 
+version = "0.1.0"
 description = "Add a short description here"
 authors = ["John Doe <john@prefix.dev>"]      # Gets the information from you currently configured git user.
 channels = ["conda-forge"]                    # Defaults to conda-forge, add in vector style more channels if needed.
@@ -76,32 +76,32 @@ custom_command = "echo hello_world"
 ## The `project` part.
 ```shell
 [project]
-name = "my_project"                           
-version = "0.1.0" 
+name = "my_project"
+version = "0.1.0"
 description = "Add a short description here"
-authors = ["John Doe <john@prefix.dev>"]      
-channels = ["conda-forge"]                    
-platforms = ["linux-64"] 
+authors = ["John Doe <john@prefix.dev>"]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
 ```
-Currently the `name`, `version`, `description` and `authors` are just there for extra information.
+Currently, the `name`, `version`, `description` and `authors` are just there for extra information.
 As soon as we start supporting building packages this will directly be used.
 
 ### Name
-The `name` gets automatically derived from the name you use in the `pax init NAME` command. 
+The `name` gets automatically derived from the name you use in the `pax init NAME` command.
 Using `pax init .` will derive the name from the current folder.
 ### Authors
-The `authors` get automatically derived from the git user. 
+The `authors` gets automatically added by finding your git user and email adress from the `git config`
 ### Channels
-As pax utilizes conda packages, it also supports the use of channels - a concept that allows packages to be fetched from multiple sources. 
+As pax utilizes conda packages, it also supports the use of channels - a concept that allows packages to be fetched from multiple sources.
 For a detailed understanding, we recommend reading our [blog](https://prefix.dev/blog/introducing_channels) or consulting our [documentation](https://prefix.dev/docs/mamba/channels).
 
-In brief, channels are defined within the `channels` section of your configuration. 
-For example, if you need packages from `bioconda`, your configuration would look like this: 
+In brief, channels are defined within the `channels` section of your configuration.
+For example, if you need packages from `bioconda`, your configuration would look like this:
 ```toml
 channels = ["conda-forge", "bioconda"]
 ```
-However, be mindful to explicitly specify all necessary channels. 
-For instance, while `bioconda` relies on packages from `conda-forge`, there's no automatic dependency resolution for channels as of now. 
+However, be mindful to explicitly specify all necessary channels.
+For instance, while `bioconda` relies on packages from `conda-forge`, there's no automatic dependency resolution for channels as of now.
 Hence, both `conda-forge` and `bioconda` need to be defined explicitly.
 
 By clearly defining the necessary channels, you can ensure pax fetches the appropriate packages to fulfill your project's requirements.
@@ -122,7 +122,7 @@ platforms = [
 "win-64"
 ]
 ```
-However, it's important to be aware that not every conda package supports all platforms. 
+However, it's important to be aware that not every conda package supports all platforms.
 To ascertain the platform support for each package, you can visit our website at [prefix.dev](https://prefix.dev).
 
 For instance, to check the platform compatibility of the python package, you can follow this link: [python](https://prefix.dev/channels/conda-forge/packages/python)
@@ -130,8 +130,8 @@ For instance, to check the platform compatibility of the python package, you can
 Incorporating the appropriate platform configurations in your project ensures its broad usability and accessibility across various environments.
 
 ## The `commands` part
-In addition to managing dependencies, `pax` aims to provide a user-friendly interface that simplifies the execution of repetitive, complex commands. 
-The commands section in your `pax` configuration serves this purpose. 
+In addition to managing dependencies, `pax` aims to provide a user-friendly interface that simplifies the execution of repetitive, complex commands.
+The commands section in your `pax` configuration serves this purpose.
 Here, you can specify any commands that you frequently use in your project's environment.
 
 Here are a few examples:
@@ -153,7 +153,7 @@ This commands feature makes it straightforward and efficient to execute commonly
 As pax is a package manager we obviously provide a way to specify dependencies.
 Dependencies are specified using a "version" or "version range" which for Conda is a "MatchSpec"
 
-This is a conda specific way to specify dependencies, to avoid failing to write a good explination I'll link you to some excelent reads:
+This is a conda specific way to specify dependencies, to avoid failing to write a good explanation I'll link you to some excellent reads:
 - [Conda build documentation](https://docs.conda.io/projects/conda-build/en/latest/resources/package-spec.html#id6)
 - [Excelent stackoverflow answer](https://stackoverflow.com/a/57734390/13258625)
 - [Conda's python implementation](https://github.com/conda/conda/blob/main/conda/models/match_spec.py)
@@ -171,7 +171,9 @@ python = "<3.8.2"
 python = ">=3.8.2"
 python = "<=3.8.2"
 python = ">=3.8,<3.9"
+python = "3.11"
+python = "3.10.9|3.11.*"
 ```
 
-**Gotcha**: `python = "3"` resolves to `3.0.0` which is not a possible version. 
-To get the lastest version of something always append with `.*` so that would be `python = "3.*"`
+**Gotcha**: `python = "3"` resolves to `3.0.0` which is not a possible version.
+To get the latest version of something always append with `.*` so that would be `python = "3.*"`
