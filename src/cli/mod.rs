@@ -46,6 +46,8 @@ fn completion(args: CompletionCommand) -> Result<(), Error> {
     Ok(())
 }
 
+/// Run the project initialization when there is a manifest available.
+/// This is run when only running `pax`, which aligns with yarns implementation.
 async fn default() -> Result<(), Error> {
     let project = Project::discover()?;
     get_up_to_date_prefix(&project).await?;
