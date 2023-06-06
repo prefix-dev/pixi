@@ -1,11 +1,3 @@
-A clear guide on how to install and setup your tool.
-Include instructions for different platforms (Windows, MacOS, Linux) if applicable.
-If the tool requires an understanding of certain concepts, provide explanations or links to further resources.
-
-# Extended installation tutorial
-
-
-
 # Understanding Pax's Directory Structure
 The central philosophy of pax revolves around maintaining a separate conda environment for each project.
 The `pax` tool achieves this by organizing environments and installations within unique directories.

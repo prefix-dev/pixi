@@ -30,3 +30,6 @@ pax install "python [version="3.11.0", build_number=1]"
 pax install "python [version="3.11.0", build=he550d4f_1_cpython]"
 pax install python=3.11.0=h10a6764_1_cpython
 ```
+
+## Project management
+`pax` can next to package management also help you with your project, by improving the developer experience.

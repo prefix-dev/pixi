@@ -23,19 +23,20 @@
 - System-wide installation of Conda packages
 
 # Installation
-Install `pax`:
-```bash
-curl ....
-```
 
-Or, build `pax` yourself:
-```bash
-# Clone this project
-git clone https://github.com/prefix-dev/pax.git
-
-# Cargo install it to your system
-cargo install --path pax
+## Install from source
+`pax` is 100% written in Rust and therefor it can be installed, build and tested with cargo.
+To start using `pax` from a source build run:
+```shell
+cargo install --git https://github.com/prefix-dev/pax.git
 ```
+or when you want to make changes use:
+```shell
+cargo build
+cargo test
+```
+If you have any issues building because of the dependency on `rattler` checkout it's [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try)
+
 
 # Usage
 The cli looks as follows:
@@ -68,6 +69,7 @@ Run the installed package in its environment
 ```bash
 pax run cowpy Thanks for using pax
 ```
+For more information check [the documentation](getting_started.md#basics-of-the-configuration-file)
 
 ## Installing a conda package globally
 Next to having a project linked the folder its in, you can also globally install conda packages into there own environment.
@@ -75,6 +77,7 @@ This behavior is similar to `pipx` and `condax`.
 ```bash
 pax install cowpy
 ```
+For more examples check [the documentation](./examples.md#global-package-installation-in-isolation)
 
 # Contribution 😍
 We would absolutely love for you to contribute to `pax`!
