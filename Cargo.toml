@@ -35,9 +35,13 @@ rattler_virtual_packages = { version = "0.2.0", default-features = false, git = 
 #rattler_solve = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_solve" }
 #rattler_virtual_packages = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_virtual_packages" }
 reqwest = { version = "0.11.16", default-features = false }
+serde = "1.0.163"
+serde_with = "3.0.0"
 tempfile = "3.5.0"
 tokio = { version = "1.27.0", features = ["macros", "rt-multi-thread"] }
-toml_edit = "0.19.8"
+toml_edit = { version = "0.19.8", features = ["serde"] }
+shlex = "1.1.0"
+dunce = "1.0.4"
 
 [profile.release]
 lto = true

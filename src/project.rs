@@ -1,6 +1,8 @@
 use crate::consts;
 use anyhow::Context;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, Platform};
+use serde::de::IntoDeserializer;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -170,21 +172,34 @@ impl Project {
         Ok(platforms)
     }
 
-    /// Get the commands defined under the `commands` section of the project manifest.
-    pub fn commands(&self) -> anyhow::Result<HashMap<String, String>> {
-        let mut res = HashMap::new();
+    /// Get the command with the specified name or `None` if no such command exists.
+    pub fn command_opt(&self, name: &str) -> anyhow::Result<Option<crate::script::Command>> {
+        if let Some(command) = self
+            .doc
+            .get("commands")
+            .and_then(|x| x.as_table_like())
+            .and_then(|tbl| tbl.get(name))
+        {
+            let script = match command.clone().into_table() {
+                Ok(table) => {
+                    let de = Document::from(table).into_deserializer();
+                    crate::script::Command::deserialize(de)?
+                }
+                Err(command) => match command.into_value() {
+                    Ok(value) => {
+                        let de = value.into_deserializer();
+                        crate::script::Command::deserialize(de)?
+                    }
+                    Err(_) => {
+                        anyhow::bail!("could not convert TOML to command")
+                    }
+                },
+            };
 
-        // If some commands are defined commit them otherwise return empty map
-        if let Some(commands_table) = self.doc.get("commands").and_then(|x| x.as_table_like()) {
-            for (key, val) in commands_table.iter() {
-                let command_str = val
-                    .as_str()
-                    .ok_or_else(|| anyhow::anyhow!("malformed command"))?;
-                res.insert(key.to_string(), command_str.to_string());
-            }
+            Ok(Some(script))
+        } else {
+            Ok(None)
         }
-
-        Ok(res)
     }
 }
 

@@ -9,6 +9,7 @@ mod progress;
 mod project;
 mod repodata;
 mod virtual_packages;
+mod script;
 
 pub use project::Project;
 
