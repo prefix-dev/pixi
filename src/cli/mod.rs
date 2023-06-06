@@ -1,7 +1,10 @@
 use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
 
+use crate::environment::get_up_to_date_prefix;
+use crate::Project;
 use anyhow::Error;
+
 mod add;
 mod init;
 mod install;
@@ -10,7 +13,7 @@ mod run;
 #[derive(Parser, Debug)]
 struct Args {
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 /// Generates a completion script for a shell.
@@ -25,7 +28,6 @@ pub struct CompletionCommand {
 enum Command {
     Completion(CompletionCommand),
     Init(init::Args),
-    #[clap(alias = "a")]
     Add(add::Args),
     #[clap(alias = "r")]
     Run(run::Args),
@@ -44,14 +46,27 @@ fn completion(args: CompletionCommand) -> Result<(), Error> {
     Ok(())
 }
 
+async fn default() -> Result<(), Error> {
+    let project = Project::discover()?;
+    get_up_to_date_prefix(&project).await?;
+    // Emit success
+    eprintln!(
+        "{}Project in {} is ready to use!",
+        console::style(console::Emoji("✔ ", "")).green(),
+        project.root().display()
+    );
+    Ok(())
+}
+
 pub async fn execute() -> anyhow::Result<()> {
     let args = Args::parse();
 
     match args.command {
-        Command::Completion(cmd) => completion(cmd),
-        Command::Init(cmd) => init::execute(cmd).await,
-        Command::Add(cmd) => add::execute(cmd).await,
-        Command::Run(cmd) => run::execute(cmd).await,
-        Command::Install(cmd) => install::execute(cmd).await,
+        Some(Command::Completion(cmd)) => completion(cmd),
+        Some(Command::Init(cmd)) => init::execute(cmd).await,
+        Some(Command::Add(cmd)) => add::execute(cmd).await,
+        Some(Command::Run(cmd)) => run::execute(cmd).await,
+        Some(Command::Install(cmd)) => install::execute(cmd).await,
+        None => default().await,
     }
 }
