@@ -25,8 +25,11 @@ pub struct CompletionCommand {
 enum Command {
     Completion(CompletionCommand),
     Init(init::Args),
+    #[clap(alias = "a")]
     Add(add::Args),
+    #[clap(alias = "r")]
     Run(run::Args),
+    #[clap(alias = "i")]
     Install(install::Args),
 }
 

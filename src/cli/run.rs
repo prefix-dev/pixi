@@ -14,6 +14,7 @@ use rattler_shell::{
 #[derive(Parser, Debug)]
 #[clap(trailing_var_arg = true)]
 pub struct Args {
+    /// The command you want to run in the projects environment.
     command: Vec<String>,
 }
 
