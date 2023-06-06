@@ -24,15 +24,23 @@ use std::{
 const BIN_DIR: &str = ".pax/bin";
 const BIN_ENVS_DIR: &str = ".pax/envs";
 
-/// Runs command in project.
+/// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
+#[clap(arg_required_else_help = true)]
 pub struct Args {
-    /// Package to install
+    /// Specifies the package that is to be installed.
     package: String,
 
-    /// Channel to install from
+    /// Represents the channels from which the package will be installed.
+    /// Multiple channels can be specified by using this field multiple times.
+    ///
+    /// When specifying a channel, it is common that the selected channel also
+    /// depends on the `conda-forge` channel.
+    /// For example: `pax install --channel conda-forge --channel bioconda`.
+    ///
+    /// By default, if no channel is provided, `conda-forge` is used.
     #[clap(short, long, default_values = ["conda-forge"])]
-    channels: Vec<String>,
+    channel: Vec<String>,
 }
 
 struct BinDir(pub PathBuf);
@@ -182,16 +190,16 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     // Figure out what channels we are using
     let channel_config = ChannelConfig::default();
     let channels = args
-        .channels
+        .channel
         .iter()
         .map(|c| Channel::from_str(c, &channel_config))
         .collect::<Result<Vec<Channel>, _>>()?;
 
-    // Find the matchspec we want to install
+    // Find the MatchSpec we want to install
     let package_matchspec = MatchSpec::from_str(&args.package)?;
     let package_name = package_matchspec.name.clone().ok_or_else(|| {
         anyhow::anyhow!(
-            "could not find package name in matchspec {}",
+            "could not find package name in MatchSpec {}",
             package_matchspec
         )
     })?;

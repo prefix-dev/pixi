@@ -77,12 +77,12 @@ pax install cowpy
 ```
 
 # Contribution 😍
-We would absolutely love for you to contribute to `pax`! 
+We would absolutely love for you to contribute to `pax`!
 Whether you want to start an issue, fix a bug you encountered, or suggest an improvement, every contribution is greatly appreciated.
 
-If you're just getting started with our project or stepping into the Rust ecosystem for the first time, we've got your back! 
-We recommend beginning with issues labeled as `good first issue`. 
+If you're just getting started with our project or stepping into the Rust ecosystem for the first time, we've got your back!
+We recommend beginning with issues labeled as `good first issue`.
 These are carefully chosen tasks that provide a smooth entry point into contributing.These issues are typically more straightforward and are a great way to get familiar with the project.
 
-Got questions or ideas, or just want to chat? Join our lively conversations on Discord. 
+Got questions or ideas, or just want to chat? Join our lively conversations on Discord.
 We're very active and would be happy to welcome you to our community. [Join our discord server today!][chat-url]
