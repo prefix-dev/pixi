@@ -12,7 +12,7 @@ pub struct Args {
     path: PathBuf,
 }
 
-/// The pax.toml template
+/// The pixi.toml template
 ///
 /// This uses a template just to simplify the flexibility of emitting it.
 const PROJECT_TEMPLATE: &str = r#"[project]
@@ -31,8 +31,8 @@ custom_command = "echo hello_world"
 [dependencies]
 "#;
 
-const GITIGNORE_TEMPLATE: &str = r#"# pax environments
-.pax
+const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
+.pixi
 "#;
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
@@ -49,7 +49,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     // Fail silently if it already exists or cannot be created.
     fs::create_dir_all(&dir).ok();
 
-    // Write pax.toml
+    // Write pixi.toml
     let name = dir.file_name().unwrap().to_string_lossy();
     let version = "0.1.0";
     let author = get_default_author();

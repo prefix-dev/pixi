@@ -3,7 +3,7 @@ use crate::progress::{
     await_in_progress, default_progress_style, finished_progress_style, global_multi_progress,
 };
 use crate::virtual_packages::{
-    get_minimal_virtual_packages, verify_current_platform_has_minimal_virtual_package_requirements,
+    get_minimal_virtual_packages, verify_current_platform_has_required_virtual_packages,
 };
 use crate::{consts, Project};
 use anyhow::Context;
@@ -19,8 +19,8 @@ use rattler_conda_types::{
     conda_lock,
     conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
     conda_lock::{CondaLock, PackageHashes, VersionConstraint},
-    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageRecord, Platform, PrefixRecord,
-    RepoDataRecord, Version,
+    ChannelConfig, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageRecord, Platform,
+    PrefixRecord, RepoDataRecord, Version,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
@@ -41,8 +41,16 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
         anyhow::bail!("the project is not configured for your current platform. Add '{}' to the 'platforms' key in project's {} to include it", platform, consts::PROJECT_MANIFEST)
     }
 
+    // Make sure the system requirements are met
+    let custom_system_requirements: Vec<GenericVirtualPackage> = project
+        .system_requirements()?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    verify_current_platform_has_required_virtual_packages(&custom_system_requirements)?;
+
     // Start loading the installed packages in the background
-    let prefix = Prefix::new(project.root().join(".pax/env"))?;
+    let prefix = Prefix::new(project.root().join(".pixi/env"))?;
     let installed_packages_future = {
         let prefix = prefix.clone();
         tokio::spawn(async move { prefix.find_installed_packages(None).await })
@@ -127,7 +135,7 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
     Ok(true)
 }
 
-/// Returns true if the specified [`conda_lock::LockedDependency`] satisfies the given match spec.
+/// Returns true if the specified [`conda_lock::LockedDependency`] satisfies the given MatchSpec.
 /// TODO: Move this back to rattler.
 /// TODO: Make this more elaborate to include all properties of MatchSpec
 fn locked_dependency_satisfies(
@@ -175,8 +183,13 @@ pub async fn update_lock_file(
     let platforms = project.platforms()?;
     let dependencies = project.dependencies()?;
 
-    // Check if local system has minimal requirements
-    verify_current_platform_has_minimal_virtual_package_requirements()?;
+    // The virtual packages defined as system-requirements in the config
+    let custom_system_requirements: Vec<GenericVirtualPackage> = project
+        .system_requirements()?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+
     // Extract the package names from the dependencies
     let package_names = dependencies.keys().collect_vec();
 
@@ -211,6 +224,20 @@ pub async fn update_lock_file(
             package_names.iter().copied(),
         )?;
 
+        // Extend the list of virtual package for every platform.
+        let minimal_virtual_packages: Vec<GenericVirtualPackage> =
+            get_minimal_virtual_packages(platform)
+                .into_iter()
+                .map(Into::into)
+                .collect();
+
+        let virtual_packages = minimal_virtual_packages
+            .into_iter()
+            .chain(custom_system_requirements.clone()) // Clone it now, change to platform specific map later.
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+
         // Construct a solver task that we can start solving.
         let task = rattler_solve::SolverTask {
             specs: match_specs.clone(),
@@ -221,10 +248,7 @@ pub async fn update_lock_file(
             // TODO: All these things.
             locked_packages: vec![],
             pinned_packages: vec![],
-            virtual_packages: get_minimal_virtual_packages(platform)
-                .into_iter()
-                .map(Into::into)
-                .collect(),
+            virtual_packages,
         };
 
         // Solve the task
@@ -256,7 +280,7 @@ pub async fn update_lock_file(
                                     VersionConstraint::from(NamelessMatchSpec::from(spec)),
                                 )),
                                 None => Err(anyhow::anyhow!(
-                                    "dependency matchspec missing a name '{}'",
+                                    "dependency MatchSpec missing a name '{}'",
                                     dep
                                 )),
                             })

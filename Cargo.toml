@@ -1,5 +1,5 @@
 [package]
-name = "pax"
+name = "pixi"
 version = "0.1.0"
 edition = "2021"
 
@@ -15,10 +15,11 @@ clap = { version = "4.2.4", default-features = false, features = ["derive", "usa
 clap_complete = "4.2.1"
 console = { version = "0.15.5", features = ["windows-console-colors"] }
 dirs = "5.0.1"
+enum-iterator = "1.4.1"
 futures = "0.3.28"
 indicatif = "0.17.3"
-is_executable = "1.0.1"
 insta = "1.29.0"
+is_executable = "1.0.1"
 itertools = "0.10.5"
 minijinja = { version = "0.32.0" }
 once_cell = "1.17.1"
@@ -35,6 +36,7 @@ rattler_virtual_packages = { version = "0.2.0", default-features = false, git = 
 #rattler_solve = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_solve" }
 #rattler_virtual_packages = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_virtual_packages" }
 reqwest = { version = "0.11.16", default-features = false }
+serde = "1.0.163"
 tempfile = "3.5.0"
 tokio = { version = "1.27.0", features = ["macros", "rt-multi-thread"] }
 toml_edit = "0.19.8"
@@ -42,4 +44,3 @@ toml_edit = "0.19.8"
 [profile.release]
 lto = true
 strip = true
-codegen-units = 1
