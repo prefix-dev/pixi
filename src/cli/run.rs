@@ -60,7 +60,10 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     let activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())?;
 
     let activator_result = activator.activation(ActivationVariables {
-        path: Some(vec![]),
+        // Get the current PATH variable
+        path: std::env::var_os("PATH").map(|path_var| std::env::split_paths(&path_var).collect()),
+
+        // Start from an empty prefix
         conda_prefix: None,
     })?;
 
