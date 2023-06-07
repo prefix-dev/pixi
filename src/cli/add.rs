@@ -24,15 +24,15 @@ pub struct Args {
     ///
     /// Example usage:
     ///
-    /// - `pax add python=3.9`: This will select the latest minor version that complies with 3.9.*, i.e.,
+    /// - `pixi add python=3.9`: This will select the latest minor version that complies with 3.9.*, i.e.,
     ///   python version 3.9.0, 3.9.1, 3.9.2, etc.
     ///
-    /// - `pax add python`: In absence of a specified version, the latest version will be chosen.
+    /// - `pixi add python`: In absence of a specified version, the latest version will be chosen.
     ///   For instance, this could resolve to python version 3.11.3.* at the time of writing.
     ///
     /// Adding multiple dependencies at once is also supported:
     ///
-    /// - `pax add python pytest`: This will add both `python` and `pytest` to the project's dependencies.
+    /// - `pixi add python pytest`: This will add both `python` and `pytest` to the project's dependencies.
     specs: Vec<MatchSpec>,
 }
 

@@ -39,7 +39,7 @@ fn completion(args: CompletionCommand) -> Result<(), Error> {
     clap_complete::generate(
         args.shell.unwrap_or(Shell::Bash),
         &mut Args::command(),
-        "pax",
+        "pixi",
         &mut std::io::stdout(),
     );
 
@@ -47,7 +47,7 @@ fn completion(args: CompletionCommand) -> Result<(), Error> {
 }
 
 /// Run the project initialization when there is a manifest available.
-/// This is run when only running `pax`, which aligns with yarns implementation.
+/// This is run when only running `pixi`, which aligns with yarns implementation.
 async fn default() -> Result<(), Error> {
     let project = Project::discover()?;
     get_up_to_date_prefix(&project).await?;
