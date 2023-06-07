@@ -37,6 +37,17 @@ cargo test
 ```
 If you have any issues building because of the dependency on `rattler` checkout it's [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try)
 
+To get autocompletion run:
+```shell
+# On unix (MacOS or Linux), pick your shell (use `echo $SHELL` to find the shell you are using.):
+echo 'eval "$(pax completion --shell bash)"' >> ~/.bashrc
+echo 'eval "$(pax completion --shell zsh)"' >> ~/.zshrc
+echo 'pax completion --shell fish | source' >> ~/.config/fish/config.fish
+echo 'eval (pax completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+
+# On Windows:
+Add-Content -Path $PROFILE -Value 'Invoke-Expression (&pax completion --shell powershell)'
+```
 
 # Usage
 The cli looks as follows:
