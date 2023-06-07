@@ -1,12 +1,12 @@
-# Understanding Pax's Directory Structure
-The central philosophy of pax revolves around maintaining a separate conda environment for each project.
-The `pax` tool achieves this by organizing environments and installations within unique directories.
+# Understanding Pixi's Directory Structure
+The central philosophy of pixi revolves around maintaining a separate conda environment for each project.
+The `pixi` tool achieves this by organizing environments and installations within unique directories.
 
-When you use pax to install a standalone tool, for example `cowpy`, it creates a distinct structure in your home directory.
-To illustrate, running the command `pax install cowpy` would yield the following directory structure:
+When you use pixi to install a standalone tool, for example `cowpy`, it creates a distinct structure in your home directory.
+To illustrate, running the command `pixi install cowpy` would yield the following directory structure:
 ```shell
 $HOME
-└── .pax
+└── .pixi
     ├── bin
     │   └── cowpy
     └── envs
@@ -17,23 +17,23 @@ $HOME
             ├── lib
             ├── ...
 ```
-In this case, a cowpy directory is created within the `.pax/envs` directory, hosting the conda environment specific to `cowpy`.
+In this case, a cowpy directory is created within the `.pixi/envs` directory, hosting the conda environment specific to `cowpy`.
 
-Now, if you're working with `pax` on a project-level, the setup process is slightly different.
-You start by initializing an empty project with `pax` and then add the necessary tools or languages - in this case, `python`.
+Now, if you're working with `pixi` on a project-level, the setup process is slightly different.
+You start by initializing an empty project with `pixi` and then add the necessary tools or languages - in this case, `python`.
 
 To visualize this, running the following set of commands:
 ```shell
-pax init my_project && cd my_project
-pax add python
+pixi init my_project && cd my_project
+pixi add python
 ```
 ...results in a unique project structure:
 ```shell
 
 my_project
-├── pax.toml
-├── pax.lock
-└── .pax
+├── pixi.toml
+├── pixi.lock
+└── .pixi
     └── env
         ├── bin
         │   ├── python
@@ -43,17 +43,17 @@ my_project
         ├── lib
         ├── ...
 ```
-Here, a `.pax` directory is created within the `my_project` directory, containing the conda environment specific to `my_project`.
-The `pax.toml` and `pax.lock` files are also added to manage and lock the project's dependencies respectively.
+Here, a `.pixi` directory is created within the `my_project` directory, containing the conda environment specific to `my_project`.
+The `pixi.toml` and `pixi.lock` files are also added to manage and lock the project's dependencies respectively.
 
 # Basics of the configuration file
-All Pax projects use a configuration file to setup the environment.
+All Pixi projects use a configuration file to setup the environment.
 For this the decision is made to use toml, as it is a properly supported format in Cargo(Rust's package manager) and `pyproject.toml`(multiple package managers).
 
-Minimal example, that gets created by `pax init`
+Minimal example, that gets created by `pixi init`
 ```shell
 [project]
-name = "my_project"                           # This is defaulted to the directory name or the name given to pax init
+name = "my_project"                           # This is defaulted to the directory name or the name given to pixi init
 version = "0.1.0"
 description = "Add a short description here"
 authors = ["John Doe <john@prefix.dev>"]      # Gets the information from you currently configured git user.
@@ -79,12 +79,12 @@ Currently, the `name`, `version`, `description` and `authors` are just there for
 As soon as we start supporting building packages this will directly be used.
 
 ### Name
-The `name` gets automatically derived from the name you use in the `pax init NAME` command.
-Using `pax init .` will derive the name from the current folder.
+The `name` gets automatically derived from the name you use in the `pixi init NAME` command.
+Using `pixi init .` will derive the name from the current folder.
 ### Authors
 The `authors` gets automatically added by finding your git user and email adress from the `git config`
 ### Channels
-As pax utilizes conda packages, it also supports the use of channels - a concept that allows packages to be fetched from multiple sources.
+As pixi utilizes conda packages, it also supports the use of channels - a concept that allows packages to be fetched from multiple sources.
 For a detailed understanding, we recommend reading our [blog](https://prefix.dev/blog/introducing_channels) or consulting our [documentation](https://prefix.dev/docs/mamba/channels).
 
 In brief, channels are defined within the `channels` section of your configuration.
@@ -96,11 +96,11 @@ However, be mindful to explicitly specify all necessary channels.
 For instance, while `bioconda` relies on packages from `conda-forge`, there's no automatic dependency resolution for channels as of now.
 Hence, both `conda-forge` and `bioconda` need to be defined explicitly.
 
-By clearly defining the necessary channels, you can ensure pax fetches the appropriate packages to fulfill your project's requirements.
+By clearly defining the necessary channels, you can ensure pixi fetches the appropriate packages to fulfill your project's requirements.
 
 ### Platforms
-To ensure that your project supports multiple platforms, you can specify these within the platforms key in your pax configuration.
-**At least one** platform must be designated so that pax can determine the appropriate packages and record these in the lockfile. By doing so, pax will resolve the environment for each specified platform, ensuring multi-platform compatibility.
+To ensure that your project supports multiple platforms, you can specify these within the platforms key in your pixi configuration.
+**At least one** platform must be designated so that pixi can determine the appropriate packages and record these in the lockfile. By doing so, pixi will resolve the environment for each specified platform, ensuring multi-platform compatibility.
 
 The platforms that can be included are:
 
@@ -122,8 +122,8 @@ For instance, to check the platform compatibility of the python package, you can
 Incorporating the appropriate platform configurations in your project ensures its broad usability and accessibility across various environments.
 
 ## The `commands` part
-In addition to managing dependencies, `pax` aims to provide a user-friendly interface that simplifies the execution of repetitive, complex commands.
-The commands section in your `pax` configuration serves this purpose.
+In addition to managing dependencies, `pixi` aims to provide a user-friendly interface that simplifies the execution of repetitive, complex commands.
+The commands section in your `pixi` configuration serves this purpose.
 Here, you can specify any commands that you frequently use in your project's environment.
 
 Here are a few examples:
@@ -133,16 +133,16 @@ build = "cargo build --release"
 test = "pytest /tests"
 check = "ruff check path/to/code/*.py"
 ```
-With these commands specified in the configuration, you can easily execute them using `pax run`:
+With these commands specified in the configuration, you can easily execute them using `pixi run`:
 ```shell
-pax run build
-pax run test
-pax run check
+pixi run build
+pixi run test
+pixi run check
 ```
-This commands feature makes it straightforward and efficient to execute commonly-used commands, further enhancing `pax` as a versatile tool for project management.
+This commands feature makes it straightforward and efficient to execute commonly-used commands, further enhancing `pixi` as a versatile tool for project management.
 
 ## The `dependencies` part
-As pax is a package manager we obviously provide a way to specify dependencies.
+As pixi is a package manager we obviously provide a way to specify dependencies.
 Dependencies are specified using a "version" or "version range" which for Conda is a "MatchSpec"
 
 This is a conda specific way to specify dependencies, to avoid failing to write a good explanation I'll link you to some excellent reads:

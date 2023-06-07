@@ -25,10 +25,10 @@
 # Installation
 
 ## Install from source
-`pax` is 100% written in Rust and therefor it can be installed, build and tested with cargo.
-To start using `pax` from a source build run:
+`pixi` is 100% written in Rust and therefor it can be installed, build and tested with cargo.
+To start using `pixi` from a source build run:
 ```shell
-cargo install --git https://github.com/prefix-dev/pax.git
+cargo install --git https://github.com/prefix-dev/pixi.git
 ```
 or when you want to make changes use:
 ```shell
@@ -40,13 +40,13 @@ If you have any issues building because of the dependency on `rattler` checkout 
 To get autocompletion run:
 ```shell
 # On unix (MacOS or Linux), pick your shell (use `echo $SHELL` to find the shell you are using.):
-echo 'eval "$(pax completion --shell bash)"' >> ~/.bashrc
-echo 'eval "$(pax completion --shell zsh)"' >> ~/.zshrc
-echo 'pax completion --shell fish | source' >> ~/.config/fish/config.fish
-echo 'eval (pax completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
+echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
+echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
+echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
 
 # On Windows:
-Add-Content -Path $PROFILE -Value 'Invoke-Expression (&pax completion --shell powershell)'
+Add-Content -Path $PROFILE -Value 'Invoke-Expression (&pixi completion --shell powershell)'
 ```
 
 # Usage
