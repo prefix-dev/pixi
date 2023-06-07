@@ -67,7 +67,7 @@ impl SystemRequirementKey {
         }
     }
 }
-/// A project represented by a pax.toml file.
+/// A project represented by a pixi.toml file.
 #[derive(Debug)]
 pub struct Project {
     root: PathBuf,
