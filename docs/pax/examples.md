@@ -14,12 +14,13 @@ Examples of such installations, which automatically fetch the tools from the `co
 pax install starship
 pax install ruff
 ```
+After running the above commands (and adding the binary folder to your path) the tools are directly available from the command line.
 
 If you wish to install packages from a different channel, the `--channel` or `-c` option can be used:
 ```shell
-pax install --channel conda-forge --channel bioconda
+pax install --channel conda-forge --channel bioconda trackplot
 # Or in a more concise form
-pax install -c conda-forge -c bioconda
+pax install -c conda-forge -c bioconda trackplot
 ```
 
 The `install` command in pax can take a matchspec, providing you with the flexibility to specify the exact version of a package you want to install.
@@ -30,6 +31,3 @@ pax install "python [version="3.11.0", build_number=1]"
 pax install "python [version="3.11.0", build=he550d4f_1_cpython]"
 pax install python=3.11.0=h10a6764_1_cpython
 ```
-
-## Project management
-`pax` can next to package management also help you with your project, by improving the developer experience.

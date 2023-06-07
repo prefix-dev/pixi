@@ -72,8 +72,8 @@ pax run cowpy Thanks for using pax
 For more information check [the documentation](getting_started.md#basics-of-the-configuration-file)
 
 ## Installing a conda package globally
-Next to having a project linked the folder its in, you can also globally install conda packages into there own environment.
-This behavior is similar to `pipx` and `condax`.
+Next to having a project linked the folder its in, you can also globally install conda packages into their own environment.
+This behavior is similar to [`pipx`](https://github.com/pypa/pipx).
 ```bash
 pax install cowpy
 ```
