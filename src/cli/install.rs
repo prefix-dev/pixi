@@ -21,8 +21,8 @@ use std::{
     str::FromStr,
 };
 
-const BIN_DIR: &str = ".pax/bin";
-const BIN_ENVS_DIR: &str = ".pax/envs";
+const BIN_DIR: &str = ".pixi/bin";
+const BIN_ENVS_DIR: &str = ".pixi/envs";
 
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
@@ -36,7 +36,7 @@ pub struct Args {
     ///
     /// When specifying a channel, it is common that the selected channel also
     /// depends on the `conda-forge` channel.
-    /// For example: `pax install --channel conda-forge --channel bioconda`.
+    /// For example: `pixi install --channel conda-forge --channel bioconda`.
     ///
     /// By default, if no channel is provided, `conda-forge` is used.
     #[clap(short, long, default_values = ["conda-forge"])]
@@ -54,7 +54,7 @@ impl BinDir {
     }
 }
 
-/// Binaries are installed in ~/.pax/bin
+/// Binaries are installed in ~/.pixi/bin
 fn bin_dir() -> anyhow::Result<PathBuf> {
     Ok(home_dir()
         .ok_or_else(|| anyhow::anyhow!("could not find home directory"))?
@@ -72,7 +72,7 @@ impl BinEnvDir {
     }
 }
 
-/// Binary environments are installed in ~/.pax/envs
+/// Binary environments are installed in ~/.pixi/envs
 fn bin_env_dir() -> anyhow::Result<PathBuf> {
     Ok(home_dir()
         .ok_or_else(|| anyhow::anyhow!("could not find home directory"))?

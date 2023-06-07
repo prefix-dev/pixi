@@ -50,7 +50,7 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
     verify_current_platform_has_required_virtual_packages(&custom_system_requirements)?;
 
     // Start loading the installed packages in the background
-    let prefix = Prefix::new(project.root().join(".pax/env"))?;
+    let prefix = Prefix::new(project.root().join(".pixi/env"))?;
     let installed_packages_future = {
         let prefix = prefix.clone();
         tokio::spawn(async move { prefix.find_installed_packages(None).await })
