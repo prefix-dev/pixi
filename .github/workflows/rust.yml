@@ -80,6 +80,7 @@ jobs:
       matrix:
         job:
           - { name: "Linux-x86_64",   target: x86_64-unknown-linux-musl,  os: ubuntu-20.04, use-cross: true }
+          - { name: "Linux-x86_64",   target: x86_64-unknown-linux-gnu,   os: ubuntu-20.04 }
 
           - { name: "macOS-x86_64",   target: x86_64-apple-darwin,        os: macOS-latest }
           - { name: "macOS-aarch64",  target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
