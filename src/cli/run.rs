@@ -6,7 +6,6 @@ use std::{fmt::Write, path::PathBuf};
 use crate::Project;
 use clap::Parser;
 use is_executable::IsExecutable;
-use once_cell::sync::Lazy;
 use rattler_conda_types::Platform;
 
 use crate::environment::get_up_to_date_prefix;
@@ -196,6 +195,7 @@ fn find_canonical_executable_path(path: &Path) -> Option<PathBuf> {
 /// Returns all file extensions that are considered for executable files.
 #[cfg(windows)]
 fn executable_extensions() -> &'static [String] {
+    use once_cell::sync::Lazy;
     static PATHEXT: Lazy<Vec<String>> = Lazy::new(|| {
         if let Some(pathext) = std::env::var_os("PATHEXT") {
             pathext
