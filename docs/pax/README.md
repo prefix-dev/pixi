@@ -48,11 +48,12 @@ echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
 # On Windows:
 Add-Content -Path $PROFILE -Value 'Invoke-Expression (&pixi completion --shell powershell)'
 ```
+And then restart the shell or source the shell config file.
 
 # Usage
 The cli looks as follows:
 ```bash
-➜ pixi
+➜ pixi -h
 Usage: pixi <COMMAND>
 
 Commands:
