@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use serde_with::serde_as;
+use serde_with::{formats::PreferMany, serde_as, OneOrMany};
 
 /// Represents different types of scripts
 #[derive(Debug, Clone, Deserialize)]
@@ -19,7 +19,7 @@ pub struct ProcessCmd {
     pub cmd: CmdArgs,
 
     /// A list of commands that should be run before this one
-    #[serde(default)]
+    #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<String>,
 }
 
@@ -32,7 +32,9 @@ pub enum CmdArgs {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[serde_as]
 pub struct AliasCmd {
     /// A list of commands that should be run before this one
+    #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<String>,
 }
