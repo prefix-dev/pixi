@@ -84,7 +84,7 @@ pixi run cowpy Thanks for using pixi
 For more information check [the documentation](getting_started.md#basics-of-the-configuration-file)
 
 ## Installing a conda package globally
-Next to having a project linked the folder its in, you can also globally install conda packages into their own environment.
+You can also globally install conda packages into their own environment.
 This behavior is similar to [`pipx`](https://github.com/pypa/pipx).
 ```bash
 pixi install cowpy

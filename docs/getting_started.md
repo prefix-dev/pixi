@@ -17,14 +17,15 @@ $HOME
             ├── lib
             ├── ...
 ```
-In this case, a cowpy directory is created within the `.pixi/envs` directory, hosting the conda environment specific to `cowpy`.
+In this case, a cowpy directory is created within the `.pixi/envs` directory, installing the conda environment specific to `cowpy`.
 
 Now, if you're working with `pixi` on a project-level, the setup process is slightly different.
-You start by initializing an empty project with `pixi` and then add the necessary tools or languages - in this case, `python`.
+You start by initializing an empty project with `pixi` and then add the necessary tools, compilers, interpreters, and dependencies - in this case, `python`.
 
 To visualize this, running the following set of commands:
 ```shell
-pixi init my_project && cd my_project
+pixi init my_project
+cd my_project
 pixi add python
 ```
 ...results in a unique project structure:
@@ -48,7 +49,7 @@ The `pixi.toml` and `pixi.lock` files are also added to manage and lock the proj
 
 # Basics of the configuration file
 All Pixi projects use a configuration file to setup the environment.
-For this the decision is made to use toml, as it is a properly supported format in Cargo(Rust's package manager) and `pyproject.toml`(multiple package managers).
+A project file is written in toml format similar to Cargo.toml (Rust) and `pyproject.toml`(Python).
 
 Minimal example, that gets created by `pixi init`
 ```shell
@@ -61,7 +62,6 @@ channels = ["conda-forge"]                    # Defaults to conda-forge, add in 
 platforms = ["linux-64"]                      # Defaults to the platform you are currently on but add the platform you want to support as needed.
 
 [commands]
-custom_command = "echo hello_world"
 
 [dependencies]
 ```
@@ -130,8 +130,10 @@ Here are a few examples:
 ```toml
 [commands]
 build = "cargo build --release"
-test = "pytest /tests"
-check = "ruff check path/to/code/*.py"
+test = {cmd = "pytest /tests", depends_on=["build"]}
+
+[commands.check]
+cmd = "ruff check path/to/code/*.py"
 ```
 With these commands specified in the configuration, you can easily execute them using `pixi run`:
 ```shell
