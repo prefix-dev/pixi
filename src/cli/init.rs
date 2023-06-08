@@ -26,7 +26,6 @@ channels = ["{{ channel }}"]
 platforms = ["{{ platform }}"]
 
 [commands]
-custom_command = "echo hello_world"
 
 [dependencies]
 "#;
