@@ -91,6 +91,11 @@ pixi install cowpy
 ```
 For more examples check [the documentation](./examples.md#global-package-installation-in-isolation)
 
+## Examples
+Check the `examples` folder and find a project you want to try out!
+It's as simple as running `pixi run start` in one of the folders!
+
+
 # Contribution 😍
 We would absolutely love for you to contribute to `pixi`!
 Whether you want to start an issue, fix a bug you encountered, or suggest an improvement, every contribution is greatly appreciated.
