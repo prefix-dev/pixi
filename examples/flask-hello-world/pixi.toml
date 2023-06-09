@@ -2,7 +2,7 @@
 name = "flask-hello-world"
 version = "0.1.0"
 description = "Example how to get started with flask in a pixi environment."
-authors = ["Wolf Vollprecht <w.vollprecht@gmail.com>"]
+authors = ["Wolf Vollprecht <wolf@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
