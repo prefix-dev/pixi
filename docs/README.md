@@ -43,13 +43,13 @@ with package managers like `cargo` or `yarn` but for any language.
 * ⚙️ [Examples](../examples)
 * 📚 [Documentation](./getting_started.md)
 * 😍 [Contributing](#contributing)
-  
+
 # Status
 
-This project is currently in _alpha stage_. 
-There are many features that we want to add. 
-The file formats are still in flux. 
-Expect breaking changes while we work towards a v1.0. 
+This project is currently in _alpha stage_.
+There are many features that we want to add.
+The file formats are still in flux.
+Expect breaking changes while we work towards a v1.0.
 
 Some notable features that we have in the pipeline are:
 
@@ -59,6 +59,28 @@ Some notable features that we have in the pipeline are:
 * Improve docs, examples and user experience
 
 # Installation
+You can install `pixi` as a binary from the releases.
+Here's what this command does:
+- Downloads the compressed pixi binary using curl.
+- Extracts the file.
+- Removes the downloaded file.
+- Moves the pixi executable making it available system-wide.
+### On Linux:
+```bash
+curl -L -o pixi.tar.gz "https://github.com/prefix-dev/pixi/releases/download/v0.0.1/pixi-v0.1.0-x86_64-unknown-linux-musl.tar.gz" && tar -xzf pixi.tar.gz && rm pixi.tar.gz && mv pixi-v0.1.0-x86_64-unknown-linux-musl/pixi ~/.local/bin/
+```
+### On MacOS(bash)
+```bash
+curl -L -o pixi.tar.gz "https://github.com/prefix-dev/pixi/releases/download/v0.0.1/pixi-v0.1.0-x86_64-apple-darwin.tar.gz" && tar -xzf pixi.tar.gz && rm pixi.tar.gz && mv pixi-v0.1.0-x86_64-apple-darwin/pixi /usr/local/bin/
+```
+### On Apple silicon (Bash):
+```bash
+curl -L -o pixi.tar.gz "https://github.com/prefix-dev/pixi/releases/download/v0.0.1/pixi-v0.1.0-aarch64-apple-darwin.tar.gz" && tar -xzf pixi.tar.gz && rm pixi.tar.gz && mv pixi-v0.1.0-x86_64-apple-darwin/pixi /usr/local/bin/
+```
+### On Windows(PowerShell)
+```shell
+Invoke-WebRequest -Uri "https://github.com/prefix-dev/pixi/releases/download/v0.0.1/pixi-v0.1.0-x86_64-pc-windows-msvc.zip" -OutFile "pixi.zip"; Expand-Archive -Path "pixi.zip" -DestinationPath "."; Remove-Item -Path "pixi.zip"; Move-Item -Path ".\pixi-v0.1.0-x86_64-pc-windows-msvc\pixi.exe" -Destination "$HOME\bin\"
+```
 
 ## Install from source
 
