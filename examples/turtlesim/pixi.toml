@@ -1,0 +1,15 @@
+[project]
+name = "turtlesim"
+version = "0.1.0"
+description = "ultra fast turtlesim installation on multiple platforms"
+authors = ["Ruben Arts <ruben@prefix.dev>"]
+channels = ["conda-forge", "robostack-staging"]
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+[commands]
+start = "ros2 run turtlesim turtlesim_node"
+teleop = "ros2 run turtlesim turtle_teleop_key"
+
+[dependencies]
+ros-humble-desktop = "0.10.0.*"
+ros-humble-turtlesim = "1.4.2.*"
