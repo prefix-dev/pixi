@@ -54,18 +54,18 @@ And then restart the shell or source the shell config file.
 The cli looks as follows:
 ```bash
 ➜ pixi -h
-Usage: pixi <COMMAND>
+Usage: pixi [COMMAND]
 
 Commands:
   completion  Generates a completion script for a shell
   init        Creates a new project
   add         Adds a dependency to the project
   run         Runs command in project
+  install     Installs the defined package in a global accessible location
   help        Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
-
 ```
 ## Making a pixi project
 Initialize a new project

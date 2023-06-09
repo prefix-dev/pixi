@@ -143,6 +143,10 @@ pixi run check
 ```
 This commands feature makes it straightforward and efficient to execute commonly-used commands, further enhancing `pixi` as a versatile tool for project management.
 
+The `depends_on` will run the specified command in there to be run before the command itself.
+So in the example `build` will be run before `test`.
+`depends_on` can be a string or a list of strings e.g.: `depends_on="build"` or `depends_on=["build", "anything"]`
+
 ## The `dependencies` part
 As pixi is a package manager we obviously provide a way to specify dependencies.
 Dependencies are specified using a "version" or "version range" which for Conda is a "MatchSpec"
