@@ -39,12 +39,16 @@ def capture_and_grayscale():
         # Detect faces
         faces = face_cascade.detectMultiScale(gray, 1.1, 4)
 
-        # Draw rectangle around the faces
-        for (x, y, w, h) in faces:
-            cv2.rectangle(gray, (x, y), (x+w, y+h), (0, 255, 0), 2)
+        # Convert grayscale image back to BGR
+        gray_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
-        # Display the grayscale image
-        cv2.imshow('Input', gray)
+        # Replace the grayscale face area with the original colored face
+        for (x, y, w, h) in faces:
+            gray_bgr[y:y+h, x:x+w] = frame[y:y+h, x:x+w]
+            cv2.rectangle(gray_bgr, (x, y), (x+w, y+h), (0, 255, 0), 2)
+
+        # Display the image
+        cv2.imshow('Input', gray_bgr)
 
         # Break the loop if 'q' is pressed
         if cv2.waitKey(1) & 0xFF == ord('q'):
