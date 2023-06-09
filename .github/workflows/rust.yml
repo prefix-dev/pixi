@@ -4,6 +4,8 @@ on:
       - 'v*.*.*'
     branches:
       - main
+    paths-ignore:
+      - 'docs/**'
   workflow_dispatch:
   pull_request:
 
