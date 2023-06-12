@@ -60,27 +60,25 @@ Some notable features that we have in the pipeline are:
 
 # Installation
 You can install `pixi` as a binary from the releases.
-Here's what this command does:
-- Downloads the compressed pixi binary using curl.
-- Extracts the file.
-- Removes the downloaded file.
-- Moves the pixi executable making it available system-wide.
-### On Linux:
+`pixi` can be installed on macOS, Linux, and Windows.
+The provided scripts will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `~/.pixi/bin`.
+If this directory does not already exist, the script will create it.
+
+## macOS and Linux
+To install Pixi on macOS and Linux, open a terminal and run the following command:
 ```bash
-curl -L -o pixi.tar.gz "https://github.com/prefix-dev/pixi/releases/download/v0.0.1/pixi-v0.1.0-x86_64-unknown-linux-musl.tar.gz" && tar -xzf pixi.tar.gz && rm pixi.tar.gz && mv pixi-v0.1.0-x86_64-unknown-linux-musl/pixi ~/.local/bin/
+curl -fsSL https://raw.githubusercontent.com/prefix-dev/pixi/main/install.sh | bash
 ```
-### On MacOS(bash)
-```bash
-curl -L -o pixi.tar.gz "https://github.com/prefix-dev/pixi/releases/download/v0.0.1/pixi-v0.1.0-x86_64-apple-darwin.tar.gz" && tar -xzf pixi.tar.gz && rm pixi.tar.gz && mv pixi-v0.1.0-x86_64-apple-darwin/pixi /usr/local/bin/
+The script will also update your ~/.bash_profile to include ~/.pixi/bin in your PATH, allowing you to invoke the pixi command from anywhere.
+You might need to restart your terminal or source your shell for the changes to take effect.
+
+## Windows
+To install Pixi on Windows, open a PowerShell terminal (you may need to run it as an administrator) and run the following command:
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/prefix-dev/pixi/main/install.ps1 | iex
 ```
-### On Apple silicon (Bash):
-```bash
-curl -L -o pixi.tar.gz "https://github.com/prefix-dev/pixi/releases/download/v0.0.1/pixi-v0.1.0-aarch64-apple-darwin.tar.gz" && tar -xzf pixi.tar.gz && rm pixi.tar.gz && mv pixi-v0.1.0-x86_64-apple-darwin/pixi /usr/local/bin/
-```
-### On Windows(PowerShell)
-```shell
-Invoke-WebRequest -Uri "https://github.com/prefix-dev/pixi/releases/download/v0.0.1/pixi-v0.1.0-x86_64-pc-windows-msvc.zip" -OutFile "pixi.zip"; Expand-Archive -Path "pixi.zip" -DestinationPath "."; Remove-Item -Path "pixi.zip"; Move-Item -Path ".\pixi-v0.1.0-x86_64-pc-windows-msvc\pixi.exe" -Destination "$HOME\bin\"
-```
+The script will inform you once the installation is successful and will guide you to add the ~/.pixi/bin directory to your PATH, which will allow you to run the pixi command from any location.
 
 ## Install from source
 
