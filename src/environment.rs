@@ -25,7 +25,7 @@ use rattler_conda_types::{
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
 use reqwest::Client;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::ffi::OsStr;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -116,17 +116,60 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
         return Ok(false);
     }
 
-    // For each platform, check if a package exists in the lock file that match a dependency.
-    let dependencies = project.dependencies()?;
+    // Check if all dependencies exist in the lock-file.
+    let dependencies = project.dependencies()?.into_iter().collect::<VecDeque<_>>();
+
+    // For each platform,
     for platform in platforms {
-        for (name, spec) in dependencies.iter() {
-            if !lock_file.package.iter().any(|locked_package| {
-                locked_package.platform == platform
-                    && locked_dependency_satisfies(locked_package, name, spec)
-            }) {
-                // Could not find a locked package that matches the project spec.
-                return Ok(false);
+        // Construct a queue of dependencies that we wanna find in the lock file
+        let mut queue = dependencies.clone();
+
+        // Keep track of which dependencies we already found. Since there can always only be one
+        // version per named package we can just keep track of the package names.
+        let mut seen = dependencies
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect::<HashSet<_>>();
+
+        while let Some((name, spec)) = queue.pop_back() {
+            // Find the package in the lock-file that matches our dependency.
+            let locked_package = lock_file
+                .packages_for_platform(platform)
+                .find(|locked_package| locked_dependency_satisfies(locked_package, &name, &spec));
+
+            match locked_package {
+                None => {
+                    // No package found that matches the dependency, the lock file is not in a
+                    // consistent state.
+                    tracing::info!("failed to find a locked package for '{} {}', assuming the lock file is out of date.", &name, &spec);
+                    return Ok(false);
+                }
+                Some(package) => {
+                    for (depends_name, depends_constriant) in package.dependencies.iter() {
+                        if !seen.contains(depends_name) {
+                            // Parse the constraint
+                            match NamelessMatchSpec::from_str(&depends_constriant.to_string()) {
+                                Ok(spec) => {
+                                    queue.push_back((depends_name.clone(), spec));
+                                    seen.insert(depends_name.clone());
+                                }
+                                Err(_) => {
+                                    tracing::warn!("failed to parse spec '{}', assuming the lock file is corrupt.", depends_constriant);
+                                    return Ok(false);
+                                }
+                            }
+                        }
+                    }
+                }
             }
+        }
+
+        // If the number of "seen" dependencies is less than the number of packages for this
+        // platform in the first place, there are more packages in the lock file than are used. This
+        // means the lock file is also out of date.
+        if seen.len() < lock_file.packages_for_platform(platform).count() {
+            tracing::info!("there are more packages in the lock-file than required to fulfill all dependency requirements. Assuming the lock file is out of date.");
+            return Ok(false);
         }
     }
 
