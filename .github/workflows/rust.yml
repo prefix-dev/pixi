@@ -205,15 +205,12 @@ jobs:
           echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
           PKG_STAGING="${{ env.CICD_INTERMEDIATES_DIR }}/package"
-          ARCHIVE_DIR="${PKG_STAGING}/${PKG_BASENAME}/"
-          mkdir -p "${ARCHIVE_DIR}"
-          # mkdir -p "${ARCHIVE_DIR}/autocomplete"
 
           # Binary
-          cp "${{ steps.bin.outputs.BIN_PATH }}" "$ARCHIVE_DIR"
+          cp "${{ steps.bin.outputs.BIN_PATH }}" "$PKG_STAGING"
 
           # README, LICENSE and CHANGELOG files
-          # cp "README.md" "LICENSE-MIT" "LICENSE-APACHE" "CHANGELOG.md" "$ARCHIVE_DIR"
+          # cp "README.md" "LICENSE-MIT" "LICENSE-APACHE" "CHANGELOG.md" "$PKG_STAGING"
 
           # base compressed package
           pushd "${PKG_STAGING}/" >/dev/null
@@ -239,7 +236,7 @@ jobs:
           unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true' ; fi
           echo "IS_RELEASE=${IS_RELEASE}" >> $GITHUB_OUTPUT
 
-      - name: Publish archives and packages
+      - name: Publish packages
         uses: softprops/action-gh-release@v1
         if: steps.is-release.outputs.IS_RELEASE
         with:
