@@ -22,7 +22,7 @@ pub fn global_multi_progress() -> MultiProgress {
 /// Returns the style to use for a progressbar that is currently in progress.
 pub fn default_bytes_style() -> indicatif::ProgressStyle {
     indicatif::ProgressStyle::default_bar()
-        .template("    {prefix:20!} [{elapsed_precise}] [{bar:40!.bright.yellow/dim.white}] {bytes:>8} @ {smoothed_bytes_per_sec:8}").unwrap()
+        .template("    {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {bytes:>8} @ {smoothed_bytes_per_sec:8}").unwrap()
         .progress_chars("━━╾─")
         .with_key(
             "smoothed_bytes_per_sec",
@@ -38,7 +38,7 @@ pub fn default_bytes_style() -> indicatif::ProgressStyle {
 /// Returns the style to use for a progressbar that is currently in progress.
 pub fn default_progress_style() -> indicatif::ProgressStyle {
     indicatif::ProgressStyle::default_bar()
-        .template("    {prefix:20!} [{elapsed_precise}] [{bar:40!.bright.yellow/dim.white}] {pos:>7}/{len:7}").unwrap()
+        .template("    {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {pos:>7}/{len:7}").unwrap()
         .progress_chars("━━╾─")
 }
 
