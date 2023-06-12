@@ -111,9 +111,16 @@ impl Project {
     }
 
     pub fn dependencies(&self) -> anyhow::Result<HashMap<String, NamelessMatchSpec>> {
-        let deps = self.doc["dependencies"].as_table_like().ok_or_else(|| {
-            anyhow::anyhow!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
-        })?;
+        let deps = self
+            .doc
+            .get("dependencies")
+            .ok_or_else(|| {
+                anyhow::anyhow!("No dependencies found in {}", consts::PROJECT_MANIFEST)
+            })?
+            .as_table_like()
+            .ok_or_else(|| {
+                anyhow::anyhow!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
+            })?;
 
         let mut result = HashMap::with_capacity(deps.len());
         for (name, value) in deps.iter() {
