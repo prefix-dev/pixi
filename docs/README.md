@@ -43,13 +43,13 @@ with package managers like `cargo` or `yarn` but for any language.
 * ⚙️ [Examples](../examples)
 * 📚 [Documentation](./getting_started.md)
 * 😍 [Contributing](#contributing)
-  
+
 # Status
 
-This project is currently in _alpha stage_. 
-There are many features that we want to add. 
-The file formats are still in flux. 
-Expect breaking changes while we work towards a v1.0. 
+This project is currently in _alpha stage_.
+There are many features that we want to add.
+The file formats are still in flux.
+Expect breaking changes while we work towards a v1.0.
 
 Some notable features that we have in the pipeline are:
 

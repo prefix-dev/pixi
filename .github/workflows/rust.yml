@@ -200,26 +200,24 @@ jobs:
         shell: bash
         run: |
           PKG_suffix=".tar.gz" ; case ${{ matrix.job.target }} in *-pc-windows-*) PKG_suffix=".zip" ;; esac;
-          PKG_BASENAME=${{ needs.crate_metadata.outputs.name }}-v${{ needs.crate_metadata.outputs.version }}-${{ matrix.job.target }}
+          PKG_BASENAME=${{ needs.crate_metadata.outputs.name }}-${{ matrix.job.target }}
           PKG_NAME=${PKG_BASENAME}${PKG_suffix}
           echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
           PKG_STAGING="${{ env.CICD_INTERMEDIATES_DIR }}/package"
-          ARCHIVE_DIR="${PKG_STAGING}/${PKG_BASENAME}/"
-          mkdir -p "${ARCHIVE_DIR}"
-          # mkdir -p "${ARCHIVE_DIR}/autocomplete"
+          mkdir -p "${PKG_STAGING}"
 
           # Binary
-          cp "${{ steps.bin.outputs.BIN_PATH }}" "$ARCHIVE_DIR"
+          cp "${{ steps.bin.outputs.BIN_PATH }}" "$PKG_STAGING"
 
           # README, LICENSE and CHANGELOG files
-          # cp "README.md" "LICENSE-MIT" "LICENSE-APACHE" "CHANGELOG.md" "$ARCHIVE_DIR"
+          # cp "README.md" "LICENSE-MIT" "LICENSE-APACHE" "CHANGELOG.md" "$PKG_STAGING"
 
           # base compressed package
           pushd "${PKG_STAGING}/" >/dev/null
           case ${{ matrix.job.target }} in
-            *-pc-windows-*) 7z -y a "${PKG_NAME}" "${PKG_BASENAME}"/* | tail -2 ;;
-            *) tar czf "${PKG_NAME}" "${PKG_BASENAME}"/* ;;
+            *-pc-windows-*) 7z -y a "${PKG_NAME}" ./* | tail -2 ;;
+            *) tar czf "${PKG_NAME}" ./* ;;
           esac;
           popd >/dev/null
 
@@ -239,7 +237,7 @@ jobs:
           unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true' ; fi
           echo "IS_RELEASE=${IS_RELEASE}" >> $GITHUB_OUTPUT
 
-      - name: Publish archives and packages
+      - name: Publish packages
         uses: softprops/action-gh-release@v1
         if: steps.is-release.outputs.IS_RELEASE
         with:
