@@ -140,15 +140,33 @@ impl Project {
     }
 
     pub fn name(&self) -> anyhow::Result<&str> {
-        return self.doc["name"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("No name found in {}", consts::PROJECT_MANIFEST));
+        match self.doc.get("project").and_then(|x| x.get("name")) {
+            Some(name) => name.as_str().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Can not parse 'name' as str in {}",
+                    consts::PROJECT_MANIFEST
+                )
+            }),
+            None => Err(anyhow::anyhow!(
+                "No name found in {}",
+                consts::PROJECT_MANIFEST
+            )),
+        }
     }
 
     pub fn version(&self) -> anyhow::Result<&str> {
-        return self.doc["version"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("No version found in {}", consts::PROJECT_MANIFEST));
+        match self.doc.get("project").and_then(|x| x.get("version")) {
+            Some(version) => version.as_str().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Can not parse 'version' as str in {}",
+                    consts::PROJECT_MANIFEST
+                )
+            }),
+            None => Err(anyhow::anyhow!(
+                "No version found in {}",
+                consts::PROJECT_MANIFEST
+            )),
+        }
     }
 
     pub fn add_dependency(&mut self, spec: &MatchSpec) -> anyhow::Result<()> {
@@ -438,7 +456,39 @@ fn parse_libc_system_requirements(item: &Item) -> anyhow::Result<Option<VirtualP
 mod tests {
     use super::*;
     use rattler_virtual_packages::{Cuda, Osx, VirtualPackage};
+    #[test]
+    fn test_main_project_config() {
+        let file_content = r#"
+            [project]
+            name = "pixi"
+            version = "0.0.2"
+            channels = ["conda-forge"]
+            platforms = ["linux-64", "win-64"]
+        "#;
 
+        let project = Project {
+            root: PathBuf::from(""),
+            doc: Document::from_str(file_content).unwrap(),
+        };
+
+        assert_eq!(project.name().unwrap(), "pixi");
+        assert_eq!(project.version().unwrap(), "0.0.2");
+        assert_eq!(
+            project.channels(&ChannelConfig::default()).unwrap(),
+            [Channel::from_name(
+                "conda-forge",
+                None,
+                &ChannelConfig::default()
+            )]
+        );
+        assert_eq!(
+            project.platforms().unwrap(),
+            [
+                Platform::from_str("linux-64").unwrap(),
+                Platform::from_str("win-64").unwrap()
+            ]
+        );
+    }
     #[test]
     fn system_requirements_works() {
         let file_content = r#"
