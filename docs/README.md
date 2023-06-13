@@ -59,6 +59,26 @@ Some notable features that we have in the pipeline are:
 * Improve docs, examples and user experience
 
 # Installation
+You can install `pixi` as a binary from the releases.
+`pixi` can be installed on macOS, Linux, and Windows.
+The provided scripts will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `~/.pixi/bin`.
+If this directory does not already exist, the script will create it.
+
+## macOS and Linux
+To install Pixi on macOS and Linux, open a terminal and run the following command:
+```bash
+curl -fsSL https://raw.githubusercontent.com/prefix-dev/pixi/main/scripts/install.sh | bash
+```
+The script will also update your ~/.bash_profile to include ~/.pixi/bin in your PATH, allowing you to invoke the pixi command from anywhere.
+You might need to restart your terminal or source your shell for the changes to take effect.
+
+## Windows
+To install Pixi on Windows, open a PowerShell terminal (you may need to run it as an administrator) and run the following command:
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/prefix-dev/pixi/main/scripts/install.ps1 | iex
+```
+The script will inform you once the installation is successful and add the ~/.pixi/bin directory to your PATH, which will allow you to run the pixi command from any location.
 
 ## Install from source
 
@@ -79,6 +99,21 @@ cargo test
 
 If you have any issues building because of the dependency on `rattler` checkout
 it's [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try)
+
+## Uninstall
+To uninstall the pixi binary should be removed.
+Delete `pixi` from the `$PIXI_DIR` which is default to `~/.pixi/bin/pixi`
+
+So on linux its:
+```shell
+rm ~/.pixi/bin/pixi
+```
+and on windows:
+```shell
+$PIXI_BIN = "$Env:LocalAppData\pixi\bin\pixi"; Remove-Item -Path $PIXI_BIN
+```
+After this command you can still use the tools you installed with `pixi`.
+To remove these as well just remove the whole `~/.pixi` directory and remove the directory from your path.
 
 ### Autocompletion
 
