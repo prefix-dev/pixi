@@ -152,16 +152,27 @@ jobs:
           esac
           echo "CARGO_BUILD_OPTIONS=${CARGO_BUILD_OPTIONS}" >> $GITHUB_OUTPUT
 
+      - name: Check for release
+        id: is-release
+        shell: bash
+        run: |
+          unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true' ; fi
+          echo "IS_RELEASE=${IS_RELEASE}" >> $GITHUB_OUTPUT
+
       - name: Build
         uses: actions-rs/cargo@v1
+        env:
+          BUILD_PROFILE: ${{ steps.is-release.outputs.IS_RELEASE && '--profile release-lto' || '--release' }}
         with:
           use-cross: ${{ matrix.job.use-cross }}
           command: build
-          args: --locked --release --target=${{ matrix.job.target }} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+          args: --locked ${BUILD_PROFILE} --target=${{ matrix.job.target }} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 
       - name: Set binary name & path
         id: bin
         shell: bash
+        env:
+          BUILD_TARGET_FOLDER: ${{ steps.is-release.outputs.IS_RELEASE && 'release-lto' || 'release' }}
         run: |
           # Figure out suffix of binary
           EXE_suffix=""
@@ -171,7 +182,7 @@ jobs:
 
           # Setup paths
           BIN_NAME="${{ needs.crate_metadata.outputs.name }}${EXE_suffix}"
-          BIN_PATH="target/${{ matrix.job.target }}/release/${BIN_NAME}"
+          BIN_PATH="target/${{ matrix.job.target }}/${BUILD_TARGET_FOLDER}/${BIN_NAME}"
 
           # Let subsequent steps know where to find the binary
           echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
@@ -229,13 +240,6 @@ jobs:
         with:
           name: ${{ steps.package.outputs.PKG_NAME }}
           path: ${{ steps.package.outputs.PKG_PATH }}
-
-      - name: Check for release
-        id: is-release
-        shell: bash
-        run: |
-          unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true' ; fi
-          echo "IS_RELEASE=${IS_RELEASE}" >> $GITHUB_OUTPUT
 
       - name: Publish packages
         uses: softprops/action-gh-release@v1
