@@ -78,7 +78,7 @@ To install Pixi on Windows, open a PowerShell terminal (you may need to run it a
 ```powershell
 iwr -useb https://raw.githubusercontent.com/prefix-dev/pixi/main/scripts/install.ps1 | iex
 ```
-The script will inform you once the installation is successful and will guide you to add the ~/.pixi/bin directory to your PATH, which will allow you to run the pixi command from any location.
+The script will inform you once the installation is successful and add the ~/.pixi/bin directory to your PATH, which will allow you to run the pixi command from any location.
 
 ## Install from source
 
@@ -99,6 +99,21 @@ cargo test
 
 If you have any issues building because of the dependency on `rattler` checkout
 it's [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try)
+
+## Uninstall
+To uninstall the pixi binary should be removed.
+Delete `pixi` from the `$PIXI_DIR` which is default to `~/.pixi/bin/pixi`
+
+So on linux its:
+```shell
+rm ~/.pixi/bin/pixi
+```
+and on windows:
+```shell
+$PIXI_BIN = "$Env:LocalAppData\pixi\bin\pixi"; Remove-Item -Path $PIXI_BIN
+```
+After this command you can still use the tools you installed with `pixi`.
+To remove these as well just remove the whole `~/.pixi` directory and remove the directory from your path.
 
 ### Autocompletion
 
