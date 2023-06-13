@@ -141,6 +141,13 @@ jobs:
           cargo -V
           rustc -V
 
+      - name: Check for release
+        id: is-release
+        shell: bash
+        run: |
+          unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true' ; fi
+          echo "IS_RELEASE=${IS_RELEASE}" >> $GITHUB_OUTPUT
+
       - name: Set build options
         id: build-options
         shell: bash
@@ -150,14 +157,17 @@ jobs:
             *-musl*) CARGO_BUILD_OPTIONS="--no-default-features --features rustls-tls"  ;;
             *) CARGO_BUILD_OPTIONS=""  ;;
           esac
-          echo "CARGO_BUILD_OPTIONS=${CARGO_BUILD_OPTIONS}" >> $GITHUB_OUTPUT
 
-      - name: Check for release
-        id: is-release
-        shell: bash
-        run: |
-          unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true' ; fi
-          echo "IS_RELEASE=${IS_RELEASE}" >> $GITHUB_OUTPUT
+          if [[ ${{ steps.is-release.outputs.IS_RELEASE }} == 'true' ]]; then
+            CARGO_BUILD_OPTIONS="${CARGO_BUILD_OPTIONS} --release-lto"
+            BUILD_TARGET_FOLDER="release-lto"
+          else
+            CARGO_BUILD_OPTIONS="${CARGO_BUILD_OPTIONS} --release"
+            BUILD_TARGET_FOLDER="release"
+          fi
+
+          echo "BUILD_TARGET_FOLDER=${BUILD_TARGET_FOLDER}" >> $GITHUB_OUTPUT
+          echo "CARGO_BUILD_OPTIONS=${CARGO_BUILD_OPTIONS}" >> $GITHUB_OUTPUT
 
       - name: Build
         uses: actions-rs/cargo@v1
@@ -166,13 +176,11 @@ jobs:
         with:
           use-cross: ${{ matrix.job.use-cross }}
           command: build
-          args: --locked ${BUILD_PROFILE} --target=${{ matrix.job.target }} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+          args: --locked --target=${{ matrix.job.target }} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 
       - name: Set binary name & path
         id: bin
         shell: bash
-        env:
-          BUILD_TARGET_FOLDER: ${{ steps.is-release.outputs.IS_RELEASE && 'release-lto' || 'release' }}
         run: |
           # Figure out suffix of binary
           EXE_suffix=""
@@ -181,6 +189,7 @@ jobs:
           esac;
 
           # Setup paths
+          BUILD_TARGET_FOLDER="${{ steps.build-options.outputs.BUILD_TARGET_FOLDER }}"
           BIN_NAME="${{ needs.crate_metadata.outputs.name }}${EXE_suffix}"
           BIN_PATH="target/${{ matrix.job.target }}/${BUILD_TARGET_FOLDER}/${BIN_NAME}"
 
