@@ -70,6 +70,9 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     // environment.
     let mut script = format!("{}\n", activator_result.script.trim());
 
+    // Add meta data env variables to help user interact with there configuration.
+    add_metadata_as_env_vars(&mut script, &shell, &project)?;
+
     // Perform post order traversal of the commands and their `depends_on` to make sure they are
     // executed in the right order.
     let mut s1 = VecDeque::new();
@@ -190,6 +193,42 @@ fn find_canonical_executable_path(path: &Path) -> Option<PathBuf> {
     }
 
     None
+}
+
+// Add pixi meta data into the environment as environment variables.
+fn add_metadata_as_env_vars(
+    script: &mut impl Write,
+    shell: &ShellEnum,
+    project: &Project,
+) -> anyhow::Result<()> {
+    // Setting a base prefix for the pixi package
+    let prefix: String = "PIXI_PACKAGE_".to_string();
+
+    shell.set_env_var(
+        script,
+        &(prefix.clone() + "ROOT"),
+        &(project.root().to_string_lossy()),
+    )?;
+    shell.set_env_var(
+        script,
+        &(prefix.clone() + "MANIFEST"),
+        &(project.manifest_path().to_string_lossy()),
+    )?;
+    shell.set_env_var(
+        script,
+        &(prefix.clone() + "PLATFORMS"),
+        &(project
+            .platforms()
+            .unwrap()
+            .into_iter()
+            .map(|plat| plat.as_str())
+            .collect::<Vec<&str>>()
+            .join(",")),
+    )?;
+    shell.set_env_var(script, &(prefix.clone() + "NAME"), project.name()?)?;
+    shell.set_env_var(script, &(prefix + "VERSION"), project.version()?)?;
+
+    Ok(())
 }
 
 /// Returns all file extensions that are considered for executable files.
