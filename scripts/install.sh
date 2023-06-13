@@ -61,7 +61,11 @@ mkdir -p "$INSTALL_DIR"
 tar -xzf "$TEMP_FILE" -C "$INSTALL_DIR"
 
 # Make it executable and add it to the path.
-echo "export PATH=$PATH:${INSTALL_DIR}" >> ~/.bash_profile
+LINE="export PATH=\$PATH:${INSTALL_DIR}"
+if ! grep -Fxq "$LINE" ~/.bash_profile
+then
+    echo "$LINE" >> ~/.bash_profile
+fi
 chmod +x "$INSTALL_DIR/pixi"
 
 echo "Please restart or source your shell."
