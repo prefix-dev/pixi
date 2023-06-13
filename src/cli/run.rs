@@ -202,21 +202,21 @@ fn add_metadata_as_env_vars(
     project: &Project,
 ) -> anyhow::Result<()> {
     // Setting a base prefix for the pixi package
-    let prefix: String = "PIXI_PACKAGE_".to_string();
+    const PREFIX: &str = "PIXI_PACKAGE_";
 
     shell.set_env_var(
         script,
-        &(prefix.clone() + "ROOT"),
+        &format!("{PREFIX}ROOT"),
         &(project.root().to_string_lossy()),
     )?;
     shell.set_env_var(
         script,
-        &(prefix.clone() + "MANIFEST"),
+        &format!("{PREFIX}MANIFEST"),
         &(project.manifest_path().to_string_lossy()),
     )?;
     shell.set_env_var(
         script,
-        &(prefix.clone() + "PLATFORMS"),
+        &format!("{PREFIX}PLATFORMS"),
         &(project
             .platforms()
             .unwrap()
@@ -225,8 +225,8 @@ fn add_metadata_as_env_vars(
             .collect::<Vec<&str>>()
             .join(",")),
     )?;
-    shell.set_env_var(script, &(prefix.clone() + "NAME"), project.name()?)?;
-    shell.set_env_var(script, &(prefix + "VERSION"), project.version()?)?;
+    shell.set_env_var(script, &format!("{PREFIX}NAME"), project.name()?)?;
+    shell.set_env_var(script, &format!("{PREFIX}VERSION"), project.version()?)?;
 
     Ok(())
 }
