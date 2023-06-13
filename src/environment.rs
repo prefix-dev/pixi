@@ -1,36 +1,41 @@
-use crate::prefix::Prefix;
-use crate::progress::{
-    await_in_progress, default_progress_style, finished_progress_style, global_multi_progress,
+use crate::{
+    consts,
+    prefix::Prefix,
+    progress::{
+        await_in_progress, default_progress_style, finished_progress_style, global_multi_progress,
+    },
+    virtual_packages::{
+        get_minimal_virtual_packages, verify_current_platform_has_required_virtual_packages,
+    },
+    Project,
 };
-use crate::virtual_packages::{
-    get_minimal_virtual_packages, verify_current_platform_has_required_virtual_packages,
-};
-use crate::{consts, Project};
 use anyhow::Context;
 use futures::future::ready;
 use futures::{stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use rattler::install::{
-    link_package, InstallDriver, InstallOptions, Transaction, TransactionOperation,
+use rattler::{
+    install::{link_package, InstallDriver, InstallOptions, Transaction, TransactionOperation},
+    package_cache::PackageCache,
 };
-use rattler::package_cache::PackageCache;
 use rattler_conda_types::{
     conda_lock,
     conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
-    conda_lock::{CondaLock, PackageHashes, VersionConstraint},
+    conda_lock::{CondaLock, PackageHashes},
     ChannelConfig, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageRecord, Platform,
     PrefixRecord, RepoDataRecord, Version,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
 use reqwest::Client;
-use std::collections::{HashSet, VecDeque};
-use std::ffi::OsStr;
-use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use std::time::Duration;
+use std::{
+    collections::{HashSet, VecDeque},
+    ffi::OsStr,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::Duration,
+};
 
 /// Returns the prefix associated with the given environment. If the prefix doesnt exist or is not
 /// up to date it is updated.
@@ -116,6 +121,18 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
         return Ok(false);
     }
 
+    // Check if the channels in the lock file match our current configuration. Note that the order
+    // matters here. If channels are added in a different order, the solver might return a different
+    // result.
+    let channels = project
+        .channels(&ChannelConfig::default())?
+        .into_iter()
+        .map(|channel| conda_lock::Channel::from(channel.base_url().to_string()))
+        .collect_vec();
+    if lock_file.metadata.channels.iter().ne(channels.iter()) {
+        return Ok(false);
+    }
+
     // Check if all dependencies exist in the lock-file.
     let dependencies = project.dependencies()?.into_iter().collect::<VecDeque<_>>();
 
@@ -172,8 +189,6 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
             return Ok(false);
         }
     }
-
-    // TODO: Check if the channels are out-of-date.
 
     Ok(true)
 }
@@ -318,10 +333,9 @@ pub async fn update_lock_file(
                         MatchSpec::from_str(dep)
                             .map_err(anyhow::Error::from)
                             .and_then(|spec| match &spec.name {
-                                Some(name) => Ok((
-                                    name.to_owned(),
-                                    VersionConstraint::from(NamelessMatchSpec::from(spec)),
-                                )),
+                                Some(name) => {
+                                    Ok((name.to_owned(), NamelessMatchSpec::from(spec).into()))
+                                }
                                 None => Err(anyhow::anyhow!(
                                     "dependency MatchSpec missing a name '{}'",
                                     dep
