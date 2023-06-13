@@ -1,6 +1,6 @@
 param (
     [string]$PIXI_VERSION = "latest",
-    [string]$PIXI_DIR = "$HOME/.pixi/bin"
+    [string]$PIXI_DIR = "$Env:LocalAppData\pixi\bin"
 )
 
 # Repository name
@@ -33,8 +33,14 @@ try {
     # Extract pixi from the downloaded zip file
     Expand-Archive -Path $TEMP_FILE -DestinationPath $PIXI_DIR -Force
 
-    Write-Host "Installation complete. Please add '$PIXI_DIR' to your PATH."
-
+    # Add pixi to PATH if the folder is not already in the PATH variable
+    $PATH = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($PATH -notlike "*$PIXI_DIR*") {
+        Write-Output "Adding $PIXI_DIR to PATH`n"
+        [Environment]::SetEnvironmentVariable("Path", "$PIXI_DIR;" + [Environment]::GetEnvironmentVariable("Path", "User"), "User")
+    } else {
+        Write-Output "$PIXI_DIR is already in PATH`n"
+    }
 } catch {
     Write-Host "Error: '$DOWNLOAD_URL' is not available or failed to download"
     exit 1
