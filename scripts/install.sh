@@ -60,12 +60,6 @@ fi
 mkdir -p "$INSTALL_DIR"
 tar -xzf "$TEMP_FILE" -C "$INSTALL_DIR"
 
-# Get the name of the extracted folder
-EXTRACTED_FOLDER=$(ls -lt "$INSTALL_DIR" | grep '^d' | head -n1 | awk '{print $NF}')
-
-# Move the pixi bin to the install dir
-mv "$INSTALL_DIR/$EXTRACTED_FOLDER/pixi" "$INSTALL_DIR/pixi"
-
 # Make it executable and add it to the path.
 echo "export PATH=$PATH:${INSTALL_DIR}" >> ~/.bash_profile
 chmod +x "$INSTALL_DIR/pixi"

@@ -33,12 +33,6 @@ try {
     # Extract pixi from the downloaded zip file
     Expand-Archive -Path $TEMP_FILE -DestinationPath $PIXI_DIR -Force
 
-    # Get the name of the extracted folder
-    $EXTRACTED_FOLDER = Get-ChildItem -Path $PIXI_DIR -Directory | Sort-Object LastAccessTime -Descending | Select-Object -First 1
-
-    # Move the pixi bin to the install dir
-    Move-Item -Path "$PIXI_DIR/$EXTRACTED_FOLDER/pixi" -Destination "$PIXI_DIR/pixi"
-
     Write-Host "Installation complete. Please add '$PIXI_DIR' to your PATH."
 
 } catch {
