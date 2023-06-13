@@ -139,6 +139,18 @@ impl Project {
         Ok(result)
     }
 
+    pub fn name(&self) -> anyhow::Result<&str> {
+        return self.doc["name"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("No name found in {}", consts::PROJECT_MANIFEST));
+    }
+
+    pub fn version(&self) -> anyhow::Result<&str> {
+        return self.doc["version"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("No version found in {}", consts::PROJECT_MANIFEST));
+    }
+
     pub fn add_dependency(&mut self, spec: &MatchSpec) -> anyhow::Result<()> {
         // Find the dependencies table
         let deps = &mut self.doc["dependencies"];
