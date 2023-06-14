@@ -37,7 +37,7 @@ enum Command {
 
 fn completion(args: CompletionCommand) -> Result<(), Error> {
     clap_complete::generate(
-        args.shell.unwrap_or(Shell::Bash),
+        args.shell.or(Shell::from_env()).unwrap_or(Shell::Bash),
         &mut Args::command(),
         "pixi",
         &mut std::io::stdout(),
