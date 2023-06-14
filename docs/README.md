@@ -1,5 +1,5 @@
 <h1>
-  <a href="https://https://github.com/prefix-dev/pixi/">
+  <a href="https://github.com/prefix-dev/pixi/">
     <img alt="banner" src="https://github.com/prefix-dev/pixi/assets/4995967/2f45b4a8-2976-4f06-bc88-9825c282df84">
   </a>
 </h1>
