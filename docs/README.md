@@ -87,7 +87,7 @@ tested with cargo.
 To start using `pixi` from a source build run:
 
 ```shell
-cargo install --git https://github.com/prefix-dev/pixi.git
+cargo install --locked --git https://github.com/prefix-dev/pixi.git
 ```
 
 or when you want to make changes use:
