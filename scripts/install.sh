@@ -70,7 +70,7 @@ fi
 # fish: if config.fish exists, add pixi to the path
 if [[ -f ~/.config/fish/config.fish ]]; then
   LINE="fish_add_path ${INSTALL_DIR}"
-  if ! grep -Fxq "$LINE" ~/.config/fish/config.fishfi
+  if ! grep -Fxq "$LINE" ~/.config/fish/config.fish
   then
       echo "$LINE" >> ~/.config/fish/config.fish
   fi
