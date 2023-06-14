@@ -138,7 +138,9 @@ The cli looks as follows:
 
 ```bash
 ➜ pixi -h
-Usage: pixi [COMMAND]
+A package management and workflow tool
+
+Usage: pixi.exe [COMMAND]
 
 Commands:
   completion  Generates a completion script for a shell
@@ -149,7 +151,8 @@ Commands:
   help        Print this message or the help of the given subcommand(s)
 
 Options:
-  -h, --help  Print help
+  -h, --help     Print help
+  -V, --version  Print version
 ```
 
 ## Creating a pixi project

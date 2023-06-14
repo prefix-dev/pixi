@@ -11,6 +11,7 @@ mod install;
 mod run;
 
 #[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
 struct Args {
     #[command(subcommand)]
     command: Option<Command>,
