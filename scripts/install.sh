@@ -60,12 +60,31 @@ fi
 mkdir -p "$INSTALL_DIR"
 tar -xzf "$TEMP_FILE" -C "$INSTALL_DIR"
 
-# Make it executable and add it to the path.
+# bash: add line to config such that pixi is in the path
 LINE="export PATH=\$PATH:${INSTALL_DIR}"
 if ! grep -Fxq "$LINE" ~/.bash_profile
 then
     echo "$LINE" >> ~/.bash_profile
 fi
+
+# fish: if config.fish exists, add pixi to the path
+if [[ -f ~/.config/fish/config.fish ]]; then
+  LINE="fish_add_path ${INSTALL_DIR}"
+  if ! grep -Fxq "$LINE" ~/.config/fish/config.fishfi
+  then
+      echo "$LINE" >> ~/.config/fish/config.fish
+  fi
+fi
+
+# zsh: if zshrc exists, add pixi to the path
+if [[ -f ~/.zshrc ]]; then
+  LINE="export PATH=\$PATH:${INSTALL_DIR}"
+  if ! grep -Fxq "$LINE" ~/.zshrc
+  then
+      echo "$LINE" >> ~/.zshrc
+  fi
+fi
+
 chmod +x "$INSTALL_DIR/pixi"
 
 echo "Please restart or source your shell."
