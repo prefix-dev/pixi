@@ -140,7 +140,7 @@ The cli looks as follows:
 ➜ pixi -h
 A package management and workflow tool
 
-Usage: pixi.exe [COMMAND]
+Usage: pixi [COMMAND]
 
 Commands:
   completion  Generates a completion script for a shell
