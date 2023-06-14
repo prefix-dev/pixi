@@ -26,7 +26,7 @@ build on the shoulders of the conda ecosystem.
 `pixi` provides all developers the exceptional experience that is usually found
 with package managers like `cargo` or `yarn` but for any language.
 
-<img alt="example" src="https://github.com/prefix-dev/pixi/assets/4995967/e27e0d8d-6cfd-4c28-ab62-ad1eff3cf5fe">
+https://github.com/prefix-dev/pixi/assets/885054/64666dee-841d-4680-9a61-7927913bc4e2
 
 ## Highlights
 
