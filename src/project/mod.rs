@@ -39,17 +39,19 @@ impl Project {
         let root = filename.parent().unwrap_or(Path::new("."));
 
         // Load the TOML document
-        let doc = fs::read_to_string(filename)?
-            .parse::<Document>()
-            .with_context(|| {
-                format!(
-                    "failed to parse {} from {}",
-                    consts::PROJECT_MANIFEST,
-                    filename.display()
-                )
-            })?;
+        Self::from_manifest_str(root, &fs::read_to_string(filename)?).with_context(|| {
+            format!(
+                "failed to parse {} from {}",
+                consts::PROJECT_MANIFEST,
+                root.display()
+            )
+        })
+    }
 
-        let manifest = toml_edit::de::from_document(doc.clone())?;
+    /// Loads a project manifest.
+    pub fn from_manifest_str(root: &Path, contents: &str) -> anyhow::Result<Self> {
+        let manifest = toml_edit::de::from_str(contents)?;
+        let doc = contents.parse::<Document>()?;
 
         Ok(Self {
             root: root.to_path_buf(),
@@ -213,11 +215,7 @@ mod tests {
             platforms = ["linux-64", "win-64"]
         "#;
 
-        let project = Project {
-            root: PathBuf::from(""),
-            doc: Document::from_str(file_content).unwrap(),
-            manifest: toml_edit::de::from_str(file_content).unwrap(),
-        };
+        let project = Project::from_manifest_str(Path::new(""), &file_content).unwrap();
 
         assert_eq!(project.name(), "pixi");
         assert_eq!(project.version(), &Version::from_str("0.0.2").unwrap());
@@ -303,11 +301,7 @@ mod tests {
         for file_content in file_contents {
             let file_content = format!("{PROJECT_BOILERPLATE}\n{file_content}");
 
-            let project = Project {
-                root: PathBuf::from(""),
-                doc: Document::from_str(&file_content).unwrap(),
-                manifest: toml_edit::de::from_str(&file_content).unwrap(),
-            };
+            let project = Project::from_manifest_str(Path::new(""), &file_content).unwrap();
 
             let expected_result = vec![VirtualPackage::LibC(LibC {
                 family: "glibc".to_string(),
