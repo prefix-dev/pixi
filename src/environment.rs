@@ -312,7 +312,15 @@ pub async fn update_lock_file(
         };
 
         // Solve the task
-        let records = rattler_solve::LibsolvBackend.solve(task)?;
+        let mut records = rattler_solve::LibsolvBackend.solve(task)?;
+
+        // Sort the packages by subdir + name to reduce the size of the diff.
+        records.sort_by(|a, b| {
+            a.package_record
+                .subdir
+                .cmp(&b.package_record.subdir)
+                .then_with(|| a.package_record.name.cmp(&b.package_record.name))
+        });
 
         let mut locked_packages = LockedPackages::new(platform);
         for record in records {
