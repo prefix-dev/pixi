@@ -8,6 +8,7 @@ use dirs::home_dir;
 use itertools::Itertools;
 use rattler::install::Transaction;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform, PrefixRecord};
+use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
@@ -19,7 +20,6 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
-use rattler_networking::AuthenticatedClient;
 
 const BIN_DIR: &str = ".pixi/bin";
 const BIN_ENVS_DIR: &str = ".pixi/envs";

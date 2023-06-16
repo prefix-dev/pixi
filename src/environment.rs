@@ -23,6 +23,7 @@ use rattler_conda_types::{
     ChannelConfig, MatchSpec, NamelessMatchSpec, PackageRecord, Platform, PrefixRecord,
     RepoDataRecord, Version,
 };
+use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
 use std::collections::HashMap;
@@ -34,7 +35,6 @@ use std::{
     str::FromStr,
     time::Duration,
 };
-use rattler_networking::AuthenticatedClient;
 
 /// Returns the prefix associated with the given environment. If the prefix doesnt exist or is not
 /// up to date it is updated.
