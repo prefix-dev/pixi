@@ -1,4 +1,3 @@
-use anyhow::Context;
 use std::collections::{HashSet, VecDeque};
 use std::path::Path;
 use std::{fmt::Write, path::PathBuf};
@@ -8,8 +7,8 @@ use clap::Parser;
 use is_executable::IsExecutable;
 use rattler_conda_types::Platform;
 
+use crate::command::{CmdArgs, Command, ProcessCmd};
 use crate::environment::get_up_to_date_prefix;
-use crate::script::{CmdArgs, Command, ProcessCmd};
 use rattler_shell::activation::ActivationResult;
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
@@ -31,15 +30,11 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     let (command_name, command) = args
         .command
         .first()
-        .map_or_else(
-            || Ok(None),
-            |cmd_name| {
-                project
-                    .command_opt(cmd_name)
-                    .with_context(|| format!("failed to parse command {cmd_name}"))
-                    .map(|cmd| cmd.map(|cmd| (Some(cmd_name.clone()), cmd)))
-            },
-        )?
+        .and_then(|cmd_name| {
+            project
+                .command_opt(cmd_name)
+                .map(|cmd| (Some(cmd_name.clone()), cmd.clone()))
+        })
         .unwrap_or_else(|| {
             (
                 None,
@@ -98,8 +93,8 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
             if !added.contains(dependency) {
                 let cmd = project
                     .command_opt(dependency)
-                    .with_context(|| format!("failed to parse command {dependency}"))?
-                    .ok_or_else(|| anyhow::anyhow!("failed to find dependency {}", dependency))?;
+                    .ok_or_else(|| anyhow::anyhow!("failed to find dependency {}", dependency))?
+                    .clone();
 
                 s1.push_back(cmd);
                 added.insert(dependency.clone());
@@ -219,14 +214,17 @@ fn add_metadata_as_env_vars(
         &format!("{PREFIX}PLATFORMS"),
         &(project
             .platforms()
-            .unwrap()
-            .into_iter()
+            .iter()
             .map(|plat| plat.as_str())
             .collect::<Vec<&str>>()
             .join(",")),
     )?;
-    shell.set_env_var(script, &format!("{PREFIX}NAME"), project.name()?)?;
-    shell.set_env_var(script, &format!("{PREFIX}VERSION"), project.version()?)?;
+    shell.set_env_var(script, &format!("{PREFIX}NAME"), project.name())?;
+    shell.set_env_var(
+        script,
+        &format!("{PREFIX}VERSION"),
+        &project.version().to_string(),
+    )?;
 
     Ok(())
 }
