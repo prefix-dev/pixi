@@ -159,7 +159,7 @@ jobs:
           esac
 
           if [[ '${{ steps.is-release.outputs.IS_RELEASE }}' == 'true' ]]; then
-            CARGO_BUILD_OPTIONS="${CARGO_BUILD_OPTIONS} --release-lto"
+            CARGO_BUILD_OPTIONS="${CARGO_BUILD_OPTIONS} --profile=release-lto"
             BUILD_TARGET_FOLDER="release-lto"
           else
             CARGO_BUILD_OPTIONS="${CARGO_BUILD_OPTIONS} --release"
