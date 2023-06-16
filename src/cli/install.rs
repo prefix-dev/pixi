@@ -15,11 +15,11 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use rattler_solve::{LibsolvRepoData, SolverBackend};
-use reqwest::Client;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
+use rattler_networking::AuthenticatedClient;
 
 const BIN_DIR: &str = ".pixi/bin";
 const BIN_ENVS_DIR: &str = ".pixi/envs";
@@ -252,7 +252,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
                 transaction,
                 prefix.root().to_path_buf(),
                 rattler::default_cache_dir()?,
-                Client::default(),
+                AuthenticatedClient::default(),
             ),
         )
         .await?;

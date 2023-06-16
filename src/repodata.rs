@@ -3,8 +3,9 @@ use anyhow::Context;
 use indicatif::ProgressBar;
 use rattler_conda_types::{Channel, ChannelConfig, Platform};
 use rattler_repodata_gateway::{fetch, sparse::SparseRepoData};
-use reqwest::{Client, StatusCode};
+use reqwest::{StatusCode};
 use std::{path::Path, time::Duration};
+use rattler_networking::AuthenticatedClient;
 
 impl Project {
     pub async fn fetch_sparse_repodata(&self) -> anyhow::Result<Vec<SparseRepoData>> {
@@ -46,7 +47,7 @@ pub async fn fetch_sparse_repodata(
     top_level_progress.enable_steady_tick(Duration::from_millis(50));
 
     let repodata_cache_path = rattler::default_cache_dir()?.join("repodata");
-    let repodata_download_client = Client::default();
+    let repodata_download_client = AuthenticatedClient::default();
     let multi_progress = progress::global_multi_progress();
     let (tx, mut rx) =
         tokio::sync::mpsc::channel::<anyhow::Result<Option<SparseRepoData>>>(fetch_targets.len());
@@ -118,7 +119,7 @@ async fn fetch_repo_data_records_with_progress(
     channel: Channel,
     platform: Platform,
     repodata_cache: &Path,
-    client: Client,
+    client: AuthenticatedClient,
     progress_bar: indicatif::ProgressBar,
     allow_not_found: bool,
 ) -> anyhow::Result<Option<SparseRepoData>> {
