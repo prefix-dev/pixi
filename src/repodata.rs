@@ -1,7 +1,7 @@
 use crate::{progress, project::Project};
 use anyhow::Context;
 use indicatif::ProgressBar;
-use rattler_conda_types::{Channel, ChannelConfig, Platform};
+use rattler_conda_types::{Channel, Platform};
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::{fetch, sparse::SparseRepoData};
 use reqwest::StatusCode;
@@ -9,25 +9,21 @@ use std::{path::Path, time::Duration};
 
 impl Project {
     pub async fn fetch_sparse_repodata(&self) -> anyhow::Result<Vec<SparseRepoData>> {
-        let channels = self.channels(&ChannelConfig::default())?;
-        let platforms = self.platforms()?;
-        fetch_sparse_repodata(&channels, &platforms).await
+        let channels = self.channels();
+        let platforms = self.platforms();
+        fetch_sparse_repodata(channels, platforms).await
     }
 }
 
 pub async fn fetch_sparse_repodata(
-    channels: &Vec<Channel>,
-    target_platforms: &Vec<Platform>,
+    channels: &[Channel],
+    target_platforms: &[Platform],
 ) -> anyhow::Result<Vec<SparseRepoData>> {
     // Determine all the repodata that requires fetching.
     let mut fetch_targets = Vec::with_capacity(channels.len() * target_platforms.len());
     for channel in channels {
         // Determine the platforms to use for this channel.
-        let platforms = match &channel.platforms {
-            None => &target_platforms[..],
-            Some(platforms) => &platforms[..],
-        };
-
+        let platforms = channel.platforms.as_deref().unwrap_or(target_platforms);
         for platform in platforms {
             fetch_targets.push((channel.clone(), *platform));
         }

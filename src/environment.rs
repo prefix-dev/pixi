@@ -20,8 +20,7 @@ use rattler_conda_types::{
     conda_lock,
     conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
     conda_lock::{CondaLock, PackageHashes},
-    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageRecord, Platform, PrefixRecord,
-    RepoDataRecord, Version,
+    MatchSpec, NamelessMatchSpec, PackageRecord, Platform, PrefixRecord, RepoDataRecord, Version,
 };
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
@@ -41,7 +40,7 @@ use std::{
 pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> {
     // Make sure the project supports the current platform
     let platform = Platform::current();
-    if !project.platforms()?.contains(&platform) {
+    if !project.platforms().contains(&platform) {
         anyhow::bail!("the project is not configured for your current platform. Add '{}' to the 'platforms' key in project's {} to include it", platform, consts::PROJECT_MANIFEST)
     }
 
@@ -106,7 +105,7 @@ pub async fn load_lock_file(project: &Project) -> anyhow::Result<CondaLock> {
 
 /// Returns true if the locked packages match the dependencies in the project.
 pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow::Result<bool> {
-    let platforms = project.platforms()?;
+    let platforms = project.platforms();
 
     // If a platform is missing from the lock file the lock file is completely out-of-date.
     if HashSet::<Platform>::from_iter(lock_file.metadata.platforms.iter().copied())
@@ -119,8 +118,8 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
     // matters here. If channels are added in a different order, the solver might return a different
     // result.
     let channels = project
-        .channels(&ChannelConfig::default())?
-        .into_iter()
+        .channels()
+        .iter()
         .map(|channel| conda_lock::Channel::from(channel.base_url().to_string()))
         .collect_vec();
     if lock_file.metadata.channels.iter().ne(channels.iter()) {
@@ -131,7 +130,7 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
     let dependencies = project.dependencies()?.into_iter().collect::<VecDeque<_>>();
 
     // For each platform,
-    for platform in platforms {
+    for platform in platforms.iter().cloned() {
         // Construct a queue of dependencies that we wanna find in the lock file
         let mut queue = dependencies.clone();
 
@@ -258,7 +257,7 @@ pub async fn update_lock_file(
     _existing_lock_file: CondaLock,
     repodata: Option<Vec<SparseRepoData>>,
 ) -> anyhow::Result<CondaLock> {
-    let platforms = project.platforms()?;
+    let platforms = project.platforms();
     let dependencies = project.dependencies()?;
 
     // Extract the package names from the dependencies
@@ -273,8 +272,8 @@ pub async fn update_lock_file(
 
     // Construct a conda lock file
     let channels = project
-        .channels(&ChannelConfig::default())?
-        .into_iter()
+        .channels()
+        .iter()
         .map(|channel| conda_lock::Channel::from(channel.base_url().to_string()));
 
     let match_specs = dependencies
@@ -282,8 +281,9 @@ pub async fn update_lock_file(
         .map(|(name, constraint)| MatchSpec::from_nameless(constraint.clone(), Some(name.clone())))
         .collect_vec();
 
-    let mut builder = LockFileBuilder::new(channels, platforms.clone(), match_specs.clone());
-    for platform in platforms {
+    let mut builder =
+        LockFileBuilder::new(channels, platforms.iter().cloned(), match_specs.clone());
+    for platform in platforms.iter().cloned() {
         // Get the repodata for the current platform and for NoArch
         let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
             sparse.subdir() == platform.as_str() || sparse.subdir() == Platform::NoArch.as_str()

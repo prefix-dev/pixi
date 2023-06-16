@@ -114,7 +114,7 @@ impl Project {
         let reference_packages = get_minimal_virtual_packages(platform);
 
         // Get the system requirements from the project manifest
-        let system_requirements = self.system_requirements()?;
+        let system_requirements = self.system_requirements();
 
         // Combine the requirements, allowing the system requirements to overwrite the reference
         // virtual packages.
