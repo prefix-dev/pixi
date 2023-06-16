@@ -1,8 +1,9 @@
+use crate::Project;
 use anyhow::bail;
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Deserialize;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::str::FromStr;
 
 /// The supported system requirements that can be defined in the configuration.
@@ -102,38 +103,58 @@ pub fn get_minimal_virtual_packages(platform: Platform) -> Vec<VirtualPackage> {
     virtual_packages
 }
 
+impl Project {
+    /// Returns the set of virtual packages to use for the specified platform according. This method
+    /// takes into account the system requirements specified in the project manifest.
+    pub fn virtual_packages(
+        &self,
+        platform: Platform,
+    ) -> anyhow::Result<Vec<GenericVirtualPackage>> {
+        // Start with the minimal virtual packages
+        let reference_packages = get_minimal_virtual_packages(platform);
+
+        // Get the system requirements from the project manifest
+        let system_requirements = self.system_requirements()?;
+
+        // Combine the requirements, allowing the system requirements to overwrite the reference
+        // virtual packages.
+        let combined_packages = reference_packages
+            .into_iter()
+            .chain(system_requirements.into_iter())
+            .map(GenericVirtualPackage::from)
+            .map(|vpkg| (vpkg.name.clone(), vpkg))
+            .collect::<HashMap<_, _>>();
+
+        Ok(combined_packages.into_values().collect())
+    }
+}
+
 /// Verifies if the current platform satisfies the minimal virtual package requirements.
 pub fn verify_current_platform_has_required_virtual_packages(
-    custom_system_requirements: &[GenericVirtualPackage],
+    project: &Project,
 ) -> Result<(), anyhow::Error> {
-    let local_vpkgs = VirtualPackage::current().map(|vpkgs| {
-        vpkgs
-            .iter()
-            .map(|vpkg| GenericVirtualPackage::from(vpkg.clone()))
-            .collect::<Vec<_>>()
-    })?;
+    let current_platform = Platform::current();
 
-    // The required virtual packages for the current system
-    let required_vpkgs: Vec<GenericVirtualPackage> =
-        get_minimal_virtual_packages(Platform::current())
-            .iter()
-            .map(|vpkg| GenericVirtualPackage::from(vpkg.clone()))
-            .chain(custom_system_requirements.to_owned())
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
+    let system_virtual_packages = VirtualPackage::current()?
+        .iter()
+        .cloned()
+        .map(GenericVirtualPackage::from)
+        .map(|vpkg| (vpkg.name.clone(), vpkg))
+        .collect::<HashMap<_, _>>();
+    let required_pkgs = project.virtual_packages(current_platform)?;
 
     // Check for every local minimum package if it is available and on the correct version.
-    for req_pkg in required_vpkgs {
-        if let Some(local_vpkg) = local_vpkgs
-            .iter()
-            .find(|&pkg| pkg.name == req_pkg.name && pkg.build_string == req_pkg.build_string)
-        {
+    for req_pkg in required_pkgs {
+        if let Some(local_vpkg) = system_virtual_packages.get(&req_pkg.name) {
+            if req_pkg.build_string != local_vpkg.build_string {
+                bail!("The current system has a mismatching virtual package. The project requires '{}' to be on build '{}' but the system has build '{}'", req_pkg.name, req_pkg.build_string, local_vpkg.build_string);
+            }
+
             if req_pkg.version > local_vpkg.version {
-                bail!("The platform you are running on does not contain the minimal version ({}) of the virtual package {}, overwrite it or use newer system for this package.", req_pkg.version, req_pkg.name)
+                bail!("The current system has a mismatching virtual package. The project requires '{}' to be at least version '{}' but the system has version '{}'", req_pkg.name, req_pkg.version, local_vpkg.version);
             }
         } else {
-            bail!("The platform you are running on should at least have the virtual package: {} on version: {} and build_string: {}", req_pkg.name, req_pkg.version, req_pkg.build_string)
+            bail!("The platform you are running on should at least have the virtual package {} on version {}, build_string: {}", req_pkg.name, req_pkg.version, req_pkg.build_string)
         }
     }
 

@@ -4,9 +4,7 @@ use crate::{
     progress::{
         await_in_progress, default_progress_style, finished_progress_style, global_multi_progress,
     },
-    virtual_packages::{
-        get_minimal_virtual_packages, verify_current_platform_has_required_virtual_packages,
-    },
+    virtual_packages::verify_current_platform_has_required_virtual_packages,
     Project,
 };
 use anyhow::Context;
@@ -22,12 +20,13 @@ use rattler_conda_types::{
     conda_lock,
     conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
     conda_lock::{CondaLock, PackageHashes},
-    ChannelConfig, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageRecord, Platform,
-    PrefixRecord, RepoDataRecord, Version,
+    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageRecord, Platform, PrefixRecord,
+    RepoDataRecord, Version,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
 use reqwest::Client;
+use std::collections::HashMap;
 use std::{
     collections::{HashSet, VecDeque},
     ffi::OsStr,
@@ -47,12 +46,7 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
     }
 
     // Make sure the system requirements are met
-    let custom_system_requirements: Vec<GenericVirtualPackage> = project
-        .system_requirements()?
-        .into_iter()
-        .map(Into::into)
-        .collect();
-    verify_current_platform_has_required_virtual_packages(&custom_system_requirements)?;
+    verify_current_platform_has_required_virtual_packages(project)?;
 
     // Start loading the installed packages in the background
     let prefix = Prefix::new(project.root().join(".pixi/env"))?;
@@ -141,6 +135,13 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
         // Construct a queue of dependencies that we wanna find in the lock file
         let mut queue = dependencies.clone();
 
+        // Get the virtual packages for the system
+        let virtual_packages = project
+            .virtual_packages(platform)?
+            .into_iter()
+            .map(|vpkg| (vpkg.name.clone(), vpkg))
+            .collect::<HashMap<_, _>>();
+
         // Keep track of which dependencies we already found. Since there can always only be one
         // version per named package we can just keep track of the package names.
         let mut seen = dependencies
@@ -149,6 +150,25 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
             .collect::<HashSet<_>>();
 
         while let Some((name, spec)) = queue.pop_back() {
+            // Is this a virtual package? And does it match?
+            if let Some(vpkg) = virtual_packages.get(&name) {
+                if let Some(version_spec) = spec.version {
+                    if !version_spec.matches(&vpkg.version) {
+                        tracing::info!("found a dependency on virtual package '{}' but the version spec '{}' does not match the expected version of the virtual package '{}'.", &name, &version_spec, &vpkg.version);
+                        return Ok(false);
+                    }
+                }
+                if let Some(build_spec) = spec.build {
+                    if !build_spec.matches(&vpkg.build_string) {
+                        tracing::info!("found a dependency on virtual package '{}' but the build spec '{}' does not match the expected build of the virtual package '{}'.", &name, &build_spec, &vpkg.build_string);
+                        return Ok(false);
+                    }
+                }
+
+                // Virtual package matches
+                continue;
+            }
+
             // Find the package in the lock-file that matches our dependency.
             let locked_package = lock_file
                 .packages_for_platform(platform)
@@ -241,13 +261,6 @@ pub async fn update_lock_file(
     let platforms = project.platforms()?;
     let dependencies = project.dependencies()?;
 
-    // The virtual packages defined as system-requirements in the config
-    let custom_system_requirements: Vec<GenericVirtualPackage> = project
-        .system_requirements()?
-        .into_iter()
-        .map(Into::into)
-        .collect();
-
     // Extract the package names from the dependencies
     let package_names = dependencies.keys().collect_vec();
 
@@ -282,19 +295,8 @@ pub async fn update_lock_file(
             package_names.iter().copied(),
         )?;
 
-        // Extend the list of virtual package for every platform.
-        let minimal_virtual_packages: Vec<GenericVirtualPackage> =
-            get_minimal_virtual_packages(platform)
-                .into_iter()
-                .map(Into::into)
-                .collect();
-
-        let virtual_packages = minimal_virtual_packages
-            .into_iter()
-            .chain(custom_system_requirements.clone()) // Clone it now, change to platform specific map later.
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
+        // Get the virtual packages for this platform
+        let virtual_packages = project.virtual_packages(platform)?;
 
         // Construct a solver task that we can start solving.
         let task = rattler_solve::SolverTask {
