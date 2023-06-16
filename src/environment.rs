@@ -22,9 +22,9 @@ use rattler_conda_types::{
     conda_lock::{CondaLock, PackageHashes},
     MatchSpec, NamelessMatchSpec, PackageRecord, Platform, PrefixRecord, RepoDataRecord, Version,
 };
+use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
-use reqwest::Client;
 use std::collections::HashMap;
 use std::{
     collections::{HashSet, VecDeque},
@@ -78,7 +78,7 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
                 transaction,
                 prefix.root().to_path_buf(),
                 rattler::default_cache_dir()?,
-                Client::default(),
+                AuthenticatedClient::default(),
             ),
         )
         .await?;
@@ -424,7 +424,7 @@ pub async fn execute_transaction(
     transaction: Transaction<PrefixRecord, RepoDataRecord>,
     target_prefix: PathBuf,
     cache_dir: PathBuf,
-    download_client: Client,
+    download_client: AuthenticatedClient,
 ) -> anyhow::Result<()> {
     // Open the package cache
     let package_cache = PackageCache::new(cache_dir.join("pkgs"));
@@ -510,7 +510,7 @@ pub async fn execute_transaction(
 #[allow(clippy::too_many_arguments)]
 async fn execute_operation(
     target_prefix: &Path,
-    download_client: Client,
+    download_client: AuthenticatedClient,
     package_cache: &PackageCache,
     install_driver: &InstallDriver,
     download_pb: Option<&ProgressBar>,

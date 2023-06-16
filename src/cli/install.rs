@@ -8,6 +8,7 @@ use dirs::home_dir;
 use itertools::Itertools;
 use rattler::install::Transaction;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform, PrefixRecord};
+use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
@@ -15,7 +16,6 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use rattler_solve::{LibsolvRepoData, SolverBackend};
-use reqwest::Client;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -252,7 +252,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
                 transaction,
                 prefix.root().to_path_buf(),
                 rattler::default_cache_dir()?,
-                Client::default(),
+                AuthenticatedClient::default(),
             ),
         )
         .await?;
