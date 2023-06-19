@@ -3,7 +3,8 @@ use ::serde::Deserialize;
 use indexmap::IndexMap;
 use rattler_conda_types::{Channel, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
-use serde_with::{serde_as, DisplayFromStr};
+use serde::Deserializer;
+use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
 use std::collections::HashMap;
 
 /// Describes the contents of a project manifest.
@@ -34,15 +35,28 @@ pub struct ProjectManifest {
     /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
     /// manifest.
     #[serde(default)]
+    #[serde_as(as = "IndexMap<PickFirst<(PlatformTargetSelector, )>, _>")]
     pub target: IndexMap<TargetSelector, TargetMetadata>,
 }
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Hash)]
-#[serde(untagged)]
 pub enum TargetSelector {
     // Platform specific configuration
     Platform(Platform),
     // TODO: Add minijinja coolness here.
+}
+
+struct PlatformTargetSelector;
+
+impl<'de> DeserializeAs<'de, TargetSelector> for PlatformTargetSelector {
+    fn deserialize_as<D>(deserializer: D) -> Result<TargetSelector, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(TargetSelector::Platform(Platform::deserialize(
+            deserializer,
+        )?))
+    }
 }
 
 #[serde_as]
