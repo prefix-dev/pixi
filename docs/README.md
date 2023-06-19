@@ -147,7 +147,7 @@ Commands:
   init        Creates a new project
   add         Adds a dependency to the project
   run         Runs command in project
-  install     Installs the defined package in a global accessible location
+  global      Global is the main entry point for the part of pixi that executes on the global(system) level
   help        Print this message or the help of the given subcommand(s)
 
 Options:
@@ -183,7 +183,7 @@ You can also globally install conda packages into their own environment.
 This behavior is similar to [`pipx`](https://github.com/pypa/pipx).
 
 ```bash
-pixi install cowpy
+pixi global add cowpy
 ```
 
 For more examples
