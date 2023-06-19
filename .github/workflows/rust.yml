@@ -86,9 +86,13 @@ jobs:
           - { name: "macOS-x86_64",   target: x86_64-apple-darwin,        os: macOS-latest }
           - { name: "macOS-aarch64",  target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
 
-          - { name: "Windows-x86_64", target: x86_64-pc-windows-msvc,     os: windows-2019 }
+          - { name: "Windows-x86_64", target: x86_64-pc-windows-msvc,     os: windows-latest }
+        include:
+          - os: windows-latest
+            rustflags: -C target-feature=+crt-static
     env:
       BUILD_CMD: cargo  # The build and test command to use if not overwritten
+      RUSTFLAGS: ${{ matrix.rustflags || '' }} -D warnings
     steps:
       - name: Checkout source code
         uses: actions/checkout@v3
@@ -113,6 +117,15 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: ${{ matrix.job.target }}
+
+      - name: Setup | Install cargo-wix [Windows]
+        continue-on-error: true
+        # aarch64 is only supported in wix 4.0 development builds
+        if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
+        run: cargo install --version 0.3.4 cargo-wix
+        env:
+          # cargo-wix does not require static crt
+          RUSTFLAGS: ""
 
       - name: Install cross
         if: matrix.job.use-cross
@@ -183,19 +196,20 @@ jobs:
         shell: bash
         run: |
           # Figure out suffix of binary
-          EXE_suffix=""
+          EXE_SUFFIX=""
           case ${{ matrix.job.target }} in
-            *-pc-windows-*) EXE_suffix=".exe" ;;
+            *-pc-windows-*) EXE_SUFFIX=".exe" ;;
           esac;
 
           # Setup paths
           BUILD_TARGET_FOLDER="${{ steps.build-options.outputs.BUILD_TARGET_FOLDER }}"
-          BIN_NAME="${{ needs.crate_metadata.outputs.name }}${EXE_suffix}"
+          BIN_NAME="${{ needs.crate_metadata.outputs.name }}${EXE_SUFFIX}"
           BIN_PATH="target/${{ matrix.job.target }}/${BUILD_TARGET_FOLDER}/${BIN_NAME}"
 
           # Let subsequent steps know where to find the binary
           echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
           echo "BIN_NAME=${BIN_NAME}" >> $GITHUB_OUTPUT
+          echo "EXE_SUFFIX=${EXE_SUFFIX}" >> $GITHUB_OUTPUT
 
       - name: Set testing options
         id: test-options
@@ -214,6 +228,14 @@ jobs:
           use-cross: ${{ matrix.job.use-cross }}
           command: test
           args: --locked --target=${{ matrix.job.target }} ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+
+      - name: Build Installer
+        continue-on-error: true
+        if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
+        run: >
+          cargo wix -v --no-build --nocapture -I install/windows/main.wxs
+          --target ${{ matrix.job.target }}
+          --output target/wix/pixi-${{ matrix.job.target }}.msi
 
       - name: Create tarball
         id: package
@@ -240,9 +262,12 @@ jobs:
             *) tar czf "${PKG_NAME}" ./* ;;
           esac;
           popd >/dev/null
+          
+          cp "${{ steps.bin.outputs.BIN_PATH }}" "$PKG_STAGING/pixi-${{ matrix.job.target }}${{ steps.bin.outputs.EXE_SUFFIX }}"
 
           # Let subsequent steps know where to find the compressed package
           echo "PKG_PATH=${PKG_STAGING}/${PKG_NAME}" >> $GITHUB_OUTPUT
+          echo "BIN_PATH=$PKG_STAGING/pixi-${{ matrix.job.target }}${{ steps.bin.outputs.EXE_SUFFIX }}" >> $GITHUB_OUTPUT 
 
       - name: "Artifact upload: tarball"
         uses: actions/upload-artifact@master
@@ -250,12 +275,27 @@ jobs:
           name: ${{ steps.package.outputs.PKG_NAME }}
           path: ${{ steps.package.outputs.PKG_PATH }}
 
+      - name: "Artifact upload: binary"
+        uses: actions/upload-artifact@master
+        with:
+          name: pixi-${{ matrix.job.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
+          path: ${{ steps.package.outputs.BIN_PATH }}
+
+      - name: "Artifact upload: windows installer"
+        continue-on-error: true
+        if: matrix.os == 'windows-latest' && matrix.job.target != 'aarch64-pc-windows-msvc'
+        uses: actions/upload-artifact@v3
+        with:
+          name: pixi-${{ matrix.job.target }}.msi
+          path: target/wix/pixi-${{ matrix.job.target }}.msi
+
       - name: Publish packages
         uses: softprops/action-gh-release@v1
         if: steps.is-release.outputs.IS_RELEASE
         with:
           files: |
             ${{ steps.package.outputs.PKG_PATH }}
-            ${{ steps.debian-package.outputs.DPKG_PATH }}
+            ${{ steps.package.outputs.BIN_PATH }}
+            target/wix/pixi-${{ matrix.job.target }}.msi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
