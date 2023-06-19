@@ -275,7 +275,10 @@ pub async fn update_lock_file(
         .iter()
         .map(|channel| conda_lock::Channel::from(channel.base_url().to_string()));
 
-    let mut builder = LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
+
+    // Empty match-specs because these differ per platform
+    let mut builder =
+        LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
     for platform in platforms.iter().cloned() {
         let dependencies = project.dependencies(platform)?;
         let match_specs = dependencies

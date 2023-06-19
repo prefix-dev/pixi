@@ -121,6 +121,55 @@ For instance, to check the platform compatibility of the python package, you can
 
 Incorporating the appropriate platform configurations in your project ensures its broad usability and accessibility across various environments.
 
+## The `dependencies` part
+
+As pixi is a package manager we obviously provide a way to specify dependencies.
+Dependencies are specified using a "version" or "version range" which for Conda is a "MatchSpec"
+
+This is a conda specific way to specify dependencies, to avoid failing to write a good explanation I'll link you to some introductory reads:
+- [Conda build documentation](https://docs.conda.io/projects/conda-build/en/latest/resources/package-spec.html#id6)
+- [Excellent stackoverflow answer](https://stackoverflow.com/a/57734390/13258625)
+- [Conda's python implementation](https://github.com/conda/conda/blob/main/conda/models/match_spec.py)
+- [Rattler's rust implementation (ours)](https://github.com/mamba-org/rattler/blob/main/crates/rattler_conda_types/src/match_spec/mod.rs)
+
+Here are some examples:
+```toml
+[dependencies]
+python = "3.*"
+python = "3.7.*"
+python = "3.7.10.*"
+python = "3.8.2 h8356626_7_cpython"
+python = ">3.8.2"
+python = "<3.8.2"
+python = ">=3.8.2"
+python = "<=3.8.2"
+python = ">=3.8,<3.9"
+python = "3.11"
+python = "3.10.9|3.11.*"
+```
+
+**Gotcha**: `python = "3"` resolves to `3.0.0` which is not a possible version.
+To get the latest version of something always append with `.*` so that would be `python = "3.*"`
+
+### Dependencies per platform
+
+You can also specify a dependency specific to a certain platform:
+
+```toml
+[dependencies]
+python = "3.11"
+
+[target.osx-arm64.dependencies]
+python = "3.10"
+```
+
+In the case above, we specify a specific dependency to OSX. 
+This overwrites the generic python dependency specified in the dependencies block.
+
+### Resolution order
+As a rule the target specific dependencies take precedence over generic ones
+in the order that they are specified, so should multiple targets match the last specification is used.
+
 ## The `commands` part
 In addition to managing dependencies, `pixi` aims to provide a user-friendly interface that simplifies the execution of repetitive, complex commands.
 The commands section in your `pixi` configuration serves this purpose.
@@ -147,31 +196,3 @@ The `depends_on` will run the specified command in there to be run before the co
 So in the example `build` will be run before `test`.
 `depends_on` can be a string or a list of strings e.g.: `depends_on="build"` or `depends_on=["build", "anything"]`
 
-## The `dependencies` part
-As pixi is a package manager we obviously provide a way to specify dependencies.
-Dependencies are specified using a "version" or "version range" which for Conda is a "MatchSpec"
-
-This is a conda specific way to specify dependencies, to avoid failing to write a good explanation I'll link you to some excellent reads:
-- [Conda build documentation](https://docs.conda.io/projects/conda-build/en/latest/resources/package-spec.html#id6)
-- [Excelent stackoverflow answer](https://stackoverflow.com/a/57734390/13258625)
-- [Conda's python implementation](https://github.com/conda/conda/blob/main/conda/models/match_spec.py)
-- [Rattler's rust implementation(ours)](https://github.com/mamba-org/rattler/blob/main/crates/rattler_conda_types/src/match_spec/mod.rs)
-
-Here are some examples:
-```toml
-[dependencies]
-python = "3.*"
-python = "3.7.*"
-python = "3.7.10.*"
-python = "3.8.2 h8356626_7_cpython"
-python = ">3.8.2"
-python = "<3.8.2"
-python = ">=3.8.2"
-python = "<=3.8.2"
-python = ">=3.8,<3.9"
-python = "3.11"
-python = "3.10.9|3.11.*"
-```
-
-**Gotcha**: `python = "3"` resolves to `3.0.0` which is not a possible version.
-To get the latest version of something always append with `.*` so that would be `python = "3.*"`
