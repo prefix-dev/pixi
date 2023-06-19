@@ -61,10 +61,18 @@ mkdir -p "$INSTALL_DIR"
 tar -xzf "$TEMP_FILE" -C "$INSTALL_DIR"
 
 # bash: add line to config such that pixi is in the path
+if [ -f ~/.bash_profile ]; then
+  BASH_FILE=~/.bash_profile
+else
+  # Default to bashrc as that is used in non login shells instead of the profile.
+  BASH_FILE=~/.bashrc
+fi
+
 LINE="export PATH=\$PATH:${INSTALL_DIR}"
-if ! grep -Fxq "$LINE" ~/.bash_profile
+if ! grep -Fxq "$LINE" "$BASH_FILE"
 then
-    echo "$LINE" >> ~/.bash_profile
+    echo "Updating ${BASH_FILE} ..."
+    echo "$LINE" >> "$BASH_FILE"
 fi
 
 # fish: if config.fish exists, add pixi to the path
