@@ -1,5 +1,6 @@
 use crate::command::Command;
 use ::serde::Deserialize;
+use indexmap::IndexMap;
 use rattler_conda_types::{Channel, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde_with::{serde_as, DisplayFromStr};
@@ -21,13 +22,19 @@ pub struct ProjectManifest {
     pub system_requirements: SystemRequirements,
 
     /// The dependencies of the project.
+    ///
+    /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
+    /// manifest.
     #[serde(default)]
-    #[serde_as(as = "HashMap<_, DisplayFromStr>")]
-    pub dependencies: HashMap<String, NamelessMatchSpec>,
+    #[serde_as(as = "IndexMap<_, DisplayFromStr>")]
+    pub dependencies: IndexMap<String, NamelessMatchSpec>,
 
-    /// Target specific configuration
+    /// Target specific configuration.
+    ///
+    /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
+    /// manifest.
     #[serde(default)]
-    pub target: HashMap<TargetSelector, TargetMetadata>
+    pub target: IndexMap<TargetSelector, TargetMetadata>,
 }
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Hash)]
@@ -35,7 +42,6 @@ pub struct ProjectManifest {
 pub enum TargetSelector {
     // Platform specific configuration
     Platform(Platform),
-
     // TODO: Add minijinja coolness here.
 }
 
@@ -44,8 +50,8 @@ pub enum TargetSelector {
 pub struct TargetMetadata {
     /// Target specific dependencies
     #[serde(default)]
-    #[serde_as(as = "HashMap<_, DisplayFromStr>")]
-    pub dependencies: HashMap<String, NamelessMatchSpec>,
+    #[serde_as(as = "IndexMap<_, DisplayFromStr>")]
+    pub dependencies: IndexMap<String, NamelessMatchSpec>,
 }
 
 /// Describes the contents of the `[package]` section of the project manifest.
@@ -168,5 +174,55 @@ impl From<LibCFamilyAndVersion> for LibC {
             version: value.version,
             family: value.family.unwrap_or_else(|| String::from("glibc")),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::ProjectManifest;
+    use insta::{assert_debug_snapshot, assert_display_snapshot};
+
+    const PROJECT_BOILERPLATE: &str = r#"
+        [project]
+        name = "foo"
+        version = "0.1.0"
+        channels = []
+        platforms = []
+        "#;
+
+    #[test]
+    fn test_target_specific() {
+        let contents = format!(
+            r#"
+        {PROJECT_BOILERPLATE}
+
+        [target.win-64.dependencies]
+        foo = "3.4.5"
+
+        [target.osx-64.dependencies]
+        foo = "1.2.3"
+        "#
+        );
+        assert_debug_snapshot!(
+            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
+        );
+    }
+
+    #[test]
+    fn test_invalid_target_specific() {
+        let examples = [r#"[target.foobar.dependencies]
+            invalid_platform = "henk""#];
+
+        assert_display_snapshot!(examples
+            .into_iter()
+            .map(
+                |example| toml_edit::de::from_str::<ProjectManifest>(&format!(
+                    "{PROJECT_BOILERPLATE}\n{example}"
+                ))
+                .unwrap_err()
+                .to_string()
+            )
+            .collect::<Vec<_>>()
+            .join("\n"))
     }
 }

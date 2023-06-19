@@ -2,7 +2,7 @@ mod manifest;
 mod serde;
 
 use crate::consts;
-use crate::project::manifest::ProjectManifest;
+use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
 use anyhow::Context;
 use rattler_conda_types::{Channel, MatchSpec, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::VirtualPackage;
@@ -60,8 +60,41 @@ impl Project {
     }
 
     /// Returns the dependencies of the project.
-    pub fn dependencies(&self, _platform: &Platform) -> anyhow::Result<HashMap<String, NamelessMatchSpec>> {
-        Ok(self.manifest.dependencies.clone())
+    pub fn dependencies(
+        &self,
+        platform: Platform,
+    ) -> anyhow::Result<HashMap<String, NamelessMatchSpec>> {
+        // Get the base dependencies (defined in the `[dependencies]` section)
+        let base_dependencies = self.manifest.dependencies.iter();
+
+        // Get the platform specific dependencies in the order they were defined.
+        let platform_specific = self
+            .target_specific_metadata(platform)
+            .flat_map(|target| target.dependencies.iter());
+
+        // Combine the specs.
+        //
+        // Note that if a dependency was specified twice the platform specific one "wins".
+        Ok(base_dependencies
+            .chain(platform_specific)
+            .map(|(name, spec)| (name.clone(), spec.clone()))
+            .collect())
+    }
+
+    /// Returns all the targets specific metadata that apply with the given context.
+    /// TODO: Add more context here?
+    /// TODO: Should we return the selector too to provide better diagnostics later?
+    pub fn target_specific_metadata(
+        &self,
+        platform: Platform,
+    ) -> impl Iterator<Item = &'_ TargetMetadata> + '_ {
+        self.manifest
+            .target
+            .iter()
+            .filter_map(move |(selector, manifest)| match selector {
+                TargetSelector::Platform(p) if p == &platform => Some(manifest),
+                _ => None,
+            })
     }
 
     /// Returns the name of the project
@@ -171,6 +204,7 @@ mod tests {
     use crate::project::manifest::SystemRequirements;
     use rattler_conda_types::ChannelConfig;
     use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
+    use std::str::FromStr;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]

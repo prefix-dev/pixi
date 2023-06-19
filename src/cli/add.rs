@@ -58,7 +58,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     // Determine the best version per platform
     let mut best_versions = HashMap::new();
     for platform in project.platforms() {
-        let current_specs = project.dependencies(platform)?;
+        let current_specs = project.dependencies(*platform)?;
         // Solve the environment with the new specs added
         let solved_versions = match determine_best_version(
             &new_specs,

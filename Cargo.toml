@@ -23,7 +23,7 @@ dirs = "5.0.1"
 dunce = "1.0.4"
 futures = "0.3.28"
 indicatif = "0.17.3"
-insta = "1.29.0"
+insta = { version = "1.29.0", features=["yaml"] }
 is_executable = "1.0.1"
 itertools = "0.10.5"
 minijinja = { version = "0.32.0" }
@@ -43,12 +43,13 @@ rattler_networking = { version = "0.3.0", default-features = false, git = "https
 #rattler_virtual_packages = { version = "0.2.0", default-features = false, path="../rattler/crates/rattler_virtual_packages" }
 reqwest = { version = "0.11.16", default-features = false }
 serde = "1.0.163"
-serde_with = "3.0.0"
+serde_with = { version = "3.0.0", features = ["indexmap"] }
 shlex = "1.1.0"
 tempfile = "3.5.0"
 tokio = { version = "1.27.0", features = ["macros", "rt-multi-thread"] }
 toml_edit = { version = "0.19.8", features = ["serde"] }
 tracing = "0.1.37"
+indexmap = { version = "1.9.3", features = ["serde"] }
 
 [profile.release-lto]
 inherits = "release"

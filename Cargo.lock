@@ -2114,6 +2114,7 @@ dependencies = [
  "console",
  "lazy_static",
  "linked-hash-map",
+ "serde",
  "similar",
  "yaml-rust",
 ]
@@ -2862,6 +2863,7 @@ dependencies = [
  "dirs 5.0.1",
  "dunce",
  "futures 0.3.28",
+ "indexmap",
  "indicatif",
  "insta",
  "is_executable",
