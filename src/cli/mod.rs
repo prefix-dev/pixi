@@ -9,6 +9,7 @@ mod add;
 mod init;
 mod install;
 mod run;
+mod shell;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -32,6 +33,8 @@ enum Command {
     Add(add::Args),
     #[clap(alias = "r")]
     Run(run::Args),
+    #[clap(alias = "s")]
+    Shell(shell::Args),
     #[clap(alias = "i")]
     Install(install::Args),
 }
@@ -69,6 +72,7 @@ pub async fn execute() -> anyhow::Result<()> {
         Some(Command::Init(cmd)) => init::execute(cmd).await,
         Some(Command::Add(cmd)) => add::execute(cmd).await,
         Some(Command::Run(cmd)) => run::execute(cmd).await,
+        Some(Command::Shell(cmd)) => shell::execute(cmd).await,
         Some(Command::Install(cmd)) => install::execute(cmd).await,
         None => default().await,
     }
