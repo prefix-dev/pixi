@@ -24,6 +24,28 @@ pub struct ProjectManifest {
     #[serde(default)]
     #[serde_as(as = "HashMap<_, DisplayFromStr>")]
     pub dependencies: HashMap<String, NamelessMatchSpec>,
+
+    /// Target specific configuration
+    #[serde(default)]
+    pub target: HashMap<TargetSelector, TargetMetadata>
+}
+
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Hash)]
+#[serde(untagged)]
+pub enum TargetSelector {
+    // Platform specific configuration
+    Platform(Platform),
+
+    // TODO: Add minijinja coolness here.
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Deserialize)]
+pub struct TargetMetadata {
+    /// Target specific dependencies
+    #[serde(default)]
+    #[serde_as(as = "HashMap<_, DisplayFromStr>")]
+    pub dependencies: HashMap<String, NamelessMatchSpec>,
 }
 
 /// Describes the contents of the `[package]` section of the project manifest.
