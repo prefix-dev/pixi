@@ -1,11 +1,11 @@
 ---
 source: src/project/manifest.rs
-assertion_line: 216
+assertion_line: 230
 expression: "examples.into_iter().map(|example|\n                toml_edit::de::from_str::<ProjectManifest>(&format!(\"{PROJECT_BOILERPLATE}\\n{example}\")).unwrap_err().to_string()).collect::<Vec<_>>().join(\"\\n\")"
 ---
 TOML parse error at line 8, column 9
   |
 8 | [target.foobar.dependencies]
   |         ^^^^^^
-data did not match any variant of untagged enum TargetSelector
+'foobar' is not a known platform
 
