@@ -60,7 +60,7 @@ impl Project {
     }
 
     /// Returns the dependencies of the project.
-    pub fn dependencies(&self) -> anyhow::Result<HashMap<String, NamelessMatchSpec>> {
+    pub fn dependencies(&self, _platform: &Platform) -> anyhow::Result<HashMap<String, NamelessMatchSpec>> {
         Ok(self.manifest.dependencies.clone())
     }
 

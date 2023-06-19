@@ -126,11 +126,12 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
         return Ok(false);
     }
 
-    // Check if all dependencies exist in the lock-file.
-    let dependencies = project.dependencies()?.into_iter().collect::<VecDeque<_>>();
 
     // For each platform,
     for platform in platforms.iter().cloned() {
+        // Check if all dependencies exist in the lock-file.
+        let dependencies = project.dependencies(&platform)?.into_iter().collect::<VecDeque<_>>();
+
         // Construct a queue of dependencies that we wanna find in the lock file
         let mut queue = dependencies.clone();
 
@@ -258,10 +259,6 @@ pub async fn update_lock_file(
     repodata: Option<Vec<SparseRepoData>>,
 ) -> anyhow::Result<CondaLock> {
     let platforms = project.platforms();
-    let dependencies = project.dependencies()?;
-
-    // Extract the package names from the dependencies
-    let package_names = dependencies.keys().collect_vec();
 
     // Get the repodata for the project
     let sparse_repo_data = if let Some(sparse_repo_data) = repodata {
@@ -276,14 +273,19 @@ pub async fn update_lock_file(
         .iter()
         .map(|channel| conda_lock::Channel::from(channel.base_url().to_string()));
 
-    let match_specs = dependencies
-        .iter()
-        .map(|(name, constraint)| MatchSpec::from_nameless(constraint.clone(), Some(name.clone())))
-        .collect_vec();
 
     let mut builder =
-        LockFileBuilder::new(channels, platforms.iter().cloned(), match_specs.clone());
+        LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
     for platform in platforms.iter().cloned() {
+        let dependencies = project.dependencies(&platform)?;
+        let match_specs = dependencies
+            .iter()
+            .map(|(name, constraint)| MatchSpec::from_nameless(constraint.clone(), Some(name.clone())))
+            .collect_vec();
+
+        // Extract the package names from the dependencies
+        let package_names = dependencies.keys().collect_vec();
+
         // Get the repodata for the current platform and for NoArch
         let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
             sparse.subdir() == platform.as_str() || sparse.subdir() == Platform::NoArch.as_str()
