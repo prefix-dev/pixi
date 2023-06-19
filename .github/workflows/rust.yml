@@ -263,11 +263,11 @@ jobs:
           esac;
           popd >/dev/null
           
-          cp "${{ steps.bin.outputs.BIN_PATH }}" "$PKG_STAGING/pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}"
+          cp "${{ steps.bin.outputs.BIN_PATH }}" "$PKG_STAGING/pixi-${{ matrix.job.target }}${{ steps.bin.outputs.EXE_SUFFIX }}"
 
           # Let subsequent steps know where to find the compressed package
           echo "PKG_PATH=${PKG_STAGING}/${PKG_NAME}" >> $GITHUB_OUTPUT
-          echo "BIN_PATH=$PKG_STAGING/pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}" >> $GITHUB_OUTPUT 
+          echo "BIN_PATH=$PKG_STAGING/pixi-${{ matrix.job.target }}${{ steps.bin.outputs.EXE_SUFFIX }}" >> $GITHUB_OUTPUT 
 
       - name: "Artifact upload: tarball"
         uses: actions/upload-artifact@master
@@ -278,16 +278,16 @@ jobs:
       - name: "Artifact upload: binary"
         uses: actions/upload-artifact@master
         with:
-          name: pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
+          name: pixi-${{ matrix.job.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
           path: ${{ steps.package.outputs.BIN_PATH }}
 
       - name: "Artifact upload: windows installer"
         continue-on-error: true
-        if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
+        if: matrix.os == 'windows-latest' && matrix.job.target != 'aarch64-pc-windows-msvc'
         uses: actions/upload-artifact@v3
         with:
-          name: pixi-${{ matrix.target }}.msi
-          path: target/wix/pixi-${{ matrix.target }}.msi
+          name: pixi-${{ matrix.job.target }}.msi
+          path: target/wix/pixi-${{ matrix.job.target }}.msi
 
       - name: Publish packages
         uses: softprops/action-gh-release@v1
@@ -296,6 +296,6 @@ jobs:
           files: |
             ${{ steps.package.outputs.PKG_PATH }}
             ${{ steps.package.outputs.BIN_PATH }}
-            target/wix/pixi-${{ matrix.target }}.msi
+            target/wix/pixi-${{ matrix.job.target }}.msi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
