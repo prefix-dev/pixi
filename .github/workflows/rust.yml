@@ -234,8 +234,8 @@ jobs:
         if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
         run: >
           cargo wix -v --no-build --nocapture -I install/windows/main.wxs
-          --target ${{ matrix.target }}
-          --output target/wix/pixi-${{ matrix.target }}.msi
+          --target ${{ matrix.job.target }}
+          --output target/wix/pixi-${{ matrix.job.target }}.msi
 
       - name: Create tarball
         id: package
