@@ -10,7 +10,6 @@ use std::{
     collections::HashMap,
     env, fs,
     path::{Path, PathBuf},
-    str::FromStr,
 };
 use toml_edit::{Document, Item, Table};
 
@@ -60,33 +59,9 @@ impl Project {
         })
     }
 
+    /// Returns the dependencies of the project.
     pub fn dependencies(&self) -> anyhow::Result<HashMap<String, NamelessMatchSpec>> {
-        let deps = self
-            .doc
-            .get("dependencies")
-            .ok_or_else(|| {
-                anyhow::anyhow!("No dependencies found in {}", consts::PROJECT_MANIFEST)
-            })?
-            .as_table_like()
-            .ok_or_else(|| {
-                anyhow::anyhow!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
-            })?;
-
-        let mut result = HashMap::with_capacity(deps.len());
-        for (name, value) in deps.iter() {
-            let match_spec = value
-                .as_str()
-                .map(|str| NamelessMatchSpec::from_str(str).map_err(Into::into))
-                .unwrap_or_else(|| {
-                    Err(anyhow::anyhow!(
-                        "dependencies in {} are malformed",
-                        consts::PROJECT_MANIFEST
-                    ))
-                })?;
-            result.insert(name.to_owned(), match_spec);
-        }
-
-        Ok(result)
+        Ok(self.manifest.dependencies.clone())
     }
 
     /// Returns the name of the project

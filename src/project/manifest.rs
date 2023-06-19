@@ -1,11 +1,12 @@
 use crate::command::Command;
 use ::serde::Deserialize;
-use rattler_conda_types::{Channel, Platform, Version};
+use rattler_conda_types::{Channel, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde_with::{serde_as, DisplayFromStr};
 use std::collections::HashMap;
 
 /// Describes the contents of a project manifest.
+#[serde_as]
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProjectManifest {
     /// Information about the project
@@ -18,6 +19,11 @@ pub struct ProjectManifest {
     /// Additional system requirements
     #[serde(default, rename = "system-requirements")]
     pub system_requirements: SystemRequirements,
+
+    /// The dependencies of the project.
+    #[serde(default)]
+    #[serde_as(as = "HashMap<_, DisplayFromStr>")]
+    pub dependencies: HashMap<String, NamelessMatchSpec>,
 }
 
 /// Describes the contents of the `[package]` section of the project manifest.
