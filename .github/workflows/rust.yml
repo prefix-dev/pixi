@@ -92,7 +92,7 @@ jobs:
             rustflags: -C target-feature=+crt-static
     env:
       BUILD_CMD: cargo  # The build and test command to use if not overwritten
-      RUSTFLAGS: ${{ matrix.rustflags || '' }} ${{ env.RUSTFLAGS }}
+      RUSTFLAGS: ${{ matrix.rustflags || '' }} -D warnings
     steps:
       - name: Checkout source code
         uses: actions/checkout@v3
