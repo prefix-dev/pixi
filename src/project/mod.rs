@@ -2,8 +2,11 @@ mod manifest;
 mod serde;
 
 use crate::consts;
+use crate::consts::PROJECT_MANIFEST;
 use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
+use crate::report_error::ReportError;
 use anyhow::Context;
+use ariadne::{Label, Report, ReportKind, Source};
 use rattler_conda_types::{Channel, MatchSpec, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::VirtualPackage;
 use std::{
@@ -11,7 +14,7 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
 };
-use toml_edit::{Document, Item, Table};
+use toml_edit::{Document, Item, Table, TomlError};
 
 /// A project represented by a pixi.toml file.
 #[derive(Debug)]
@@ -49,8 +52,31 @@ impl Project {
 
     /// Loads a project manifest.
     pub fn from_manifest_str(root: &Path, contents: &str) -> anyhow::Result<Self> {
-        let manifest = toml_edit::de::from_str(contents)?;
-        let doc = contents.parse::<Document>()?;
+        let (manifest, doc) = match toml_edit::de::from_str::<ProjectManifest>(contents)
+            .map_err(TomlError::from)
+            .and_then(|manifest| contents.parse::<Document>().map(|doc| (manifest, doc)))
+        {
+            Ok(result) => result,
+            Err(e) => {
+                if let Some(span) = e.span() {
+                    return Err(ReportError {
+                        source: (PROJECT_MANIFEST, Source::from(contents)),
+                        report: Report::build(ReportKind::Error, PROJECT_MANIFEST, span.start)
+                            .with_message("failed to parse project manifest")
+                            .with_label(
+                                Label::new((PROJECT_MANIFEST, span)).with_message(e.message()),
+                            )
+                            .finish(),
+                    }
+                    .into());
+                } else {
+                    return Err(e.into());
+                }
+            }
+        };
+
+        // Validate the contents of the manifest
+        manifest.validate(contents)?;
 
         Ok(Self {
             root: root.to_path_buf(),
@@ -91,7 +117,7 @@ impl Project {
         self.manifest
             .target
             .iter()
-            .filter_map(move |(selector, manifest)| match selector {
+            .filter_map(move |(selector, manifest)| match selector.as_ref() {
                 TargetSelector::Platform(p) if p == &platform => Some(manifest),
                 _ => None,
             })
@@ -173,7 +199,7 @@ impl Project {
 
     /// Returns the platforms this project targets
     pub fn platforms(&self) -> &[Platform] {
-        &self.manifest.project.platforms
+        self.manifest.project.platforms.as_ref().as_slice()
     }
 
     /// Get the command with the specified name or `None` if no such command exists.

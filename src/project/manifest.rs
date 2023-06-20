@@ -1,11 +1,17 @@
 use crate::command::Command;
+use crate::consts::PROJECT_MANIFEST;
+use crate::report_error::ReportError;
 use ::serde::Deserialize;
+use ariadne::{ColorGenerator, Fmt, Label, Report, ReportKind, Source};
 use indexmap::IndexMap;
 use rattler_conda_types::{Channel, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Deserializer;
+use serde_spanned::Spanned;
+use serde_with::de::DeserializeAsWrap;
 use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
 use std::collections::HashMap;
+use std::ops::Range;
 
 /// Describes the contents of a project manifest.
 #[serde_as]
@@ -35,11 +41,33 @@ pub struct ProjectManifest {
     /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
     /// manifest.
     #[serde(default)]
-    #[serde_as(as = "IndexMap<PickFirst<(PlatformTargetSelector, )>, _>")]
-    pub target: IndexMap<TargetSelector, TargetMetadata>,
+    pub target: IndexMap<Spanned<TargetSelector>, TargetMetadata>,
 }
 
-#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Hash)]
+impl ProjectManifest {
+    /// Validate the
+    pub fn validate(&self, contents: &str) -> anyhow::Result<()> {
+        // Check if the targets are defined for existing platforms
+        for target_sel in self.target.keys() {
+            match target_sel.as_ref() {
+                TargetSelector::Platform(p) => {
+                    if !self.project.platforms.as_ref().contains(p) {
+                        return Err(create_unsupported_platform_report(
+                            contents,
+                            target_sel.span(),
+                            p,
+                        )
+                        .into());
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum TargetSelector {
     // Platform specific configuration
     Platform(Platform),
@@ -56,6 +84,20 @@ impl<'de> DeserializeAs<'de, TargetSelector> for PlatformTargetSelector {
         Ok(TargetSelector::Platform(Platform::deserialize(
             deserializer,
         )?))
+    }
+}
+
+impl<'de> Deserialize<'de> for TargetSelector {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(
+            DeserializeAsWrap::<Self, PickFirst<(PlatformTargetSelector,)>>::deserialize(
+                deserializer,
+            )?
+            .into_inner(),
+        )
     }
 }
 
@@ -93,7 +135,7 @@ pub struct ProjectMetadata {
     /// The platforms this project supports
     // TODO: This is actually slightly different from the rattler_conda_types::Platform because it
     //     should not include noarch.
-    pub platforms: Vec<Platform>,
+    pub platforms: Spanned<Vec<Platform>>,
 }
 
 #[serde_as]
@@ -188,6 +230,34 @@ impl From<LibCFamilyAndVersion> for LibC {
             version: value.version,
             family: value.family.unwrap_or_else(|| String::from("glibc")),
         }
+    }
+}
+
+// Create an error report for usign a platform that is not supported by the project.
+fn create_unsupported_platform_report(
+    source: &str,
+    span: Range<usize>,
+    p: &Platform,
+) -> ReportError {
+    let mut color_generator = ColorGenerator::new();
+    let platform = color_generator.next();
+
+    let report = Report::build(ReportKind::Error, PROJECT_MANIFEST, span.start)
+        .with_message("Targeting a platform that this project does not support")
+        .with_label(
+            Label::new((PROJECT_MANIFEST, span))
+                .with_message(format!("'{}' is not a supported platform", p.fg(platform)))
+                .with_color(platform),
+        )
+        .with_help(format!(
+            "Add '{}' to the `project.platforms` array of the {PROJECT_MANIFEST} manifest.",
+            p.fg(platform)
+        ))
+        .finish();
+
+    ReportError {
+        report,
+        source: (PROJECT_MANIFEST, Source::from(source)),
     }
 }
 
