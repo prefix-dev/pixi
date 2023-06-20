@@ -1,3 +1,4 @@
+use crate::report_error::ReportError;
 use crate::{
     consts,
     prefix::Prefix,
@@ -8,6 +9,7 @@ use crate::{
     Project,
 };
 use anyhow::Context;
+use ariadne::{ Label, Report, ReportKind, Source};
 use futures::future::ready;
 use futures::{stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use indicatif::ProgressBar;
@@ -41,7 +43,18 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
     // Make sure the project supports the current platform
     let platform = Platform::current();
     if !project.platforms().contains(&platform) {
-        anyhow::bail!("the project is not configured for your current platform. Add '{}' to the 'platforms' key in project's {} to include it", platform, consts::PROJECT_MANIFEST)
+        let span = project.manifest.project.platforms.span();
+        let report = Report::build(ReportKind::Error, consts::PROJECT_MANIFEST, span.start)
+            .with_message("the project is not configured for your current platform")
+            .with_label(Label::new((consts::PROJECT_MANIFEST, span)).with_message(format!("add '{platform}' here")))
+            .with_help(format!("The project needs to be configured to support your platform ({platform})."))
+            .finish();
+
+        return Err(ReportError {
+            source: (consts::PROJECT_MANIFEST, Source::from(&project.source)),
+            report,
+        }
+        .into());
     }
 
     // Make sure the system requirements are met

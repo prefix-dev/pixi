@@ -20,8 +20,9 @@ use toml_edit::{Document, Item, Table, TomlError};
 #[derive(Debug)]
 pub struct Project {
     root: PathBuf,
+    pub(crate) source: String,
     doc: Document,
-    manifest: ProjectManifest,
+    pub(crate) manifest: ProjectManifest,
 }
 
 impl Project {
@@ -41,7 +42,7 @@ impl Project {
         let root = filename.parent().unwrap_or(Path::new("."));
 
         // Load the TOML document
-        Self::from_manifest_str(root, &fs::read_to_string(filename)?).with_context(|| {
+        Self::from_manifest_str(root, fs::read_to_string(filename)?).with_context(|| {
             format!(
                 "failed to parse {} from {}",
                 consts::PROJECT_MANIFEST,
@@ -51,8 +52,9 @@ impl Project {
     }
 
     /// Loads a project manifest.
-    pub fn from_manifest_str(root: &Path, contents: &str) -> anyhow::Result<Self> {
-        let (manifest, doc) = match toml_edit::de::from_str::<ProjectManifest>(contents)
+    pub fn from_manifest_str(root: &Path, contents: impl Into<String>) -> anyhow::Result<Self> {
+        let contents = contents.into();
+        let (manifest, doc) = match toml_edit::de::from_str::<ProjectManifest>(&contents)
             .map_err(TomlError::from)
             .and_then(|manifest| contents.parse::<Document>().map(|doc| (manifest, doc)))
         {
@@ -60,7 +62,7 @@ impl Project {
             Err(e) => {
                 if let Some(span) = e.span() {
                     return Err(ReportError {
-                        source: (PROJECT_MANIFEST, Source::from(contents)),
+                        source: (PROJECT_MANIFEST, Source::from(&contents)),
                         report: Report::build(ReportKind::Error, PROJECT_MANIFEST, span.start)
                             .with_message("failed to parse project manifest")
                             .with_label(
@@ -76,10 +78,11 @@ impl Project {
         };
 
         // Validate the contents of the manifest
-        manifest.validate(contents)?;
+        manifest.validate(&contents)?;
 
         Ok(Self {
             root: root.to_path_buf(),
+            source: contents,
             doc,
             manifest,
         })
