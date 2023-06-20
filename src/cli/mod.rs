@@ -1,10 +1,12 @@
+use super::util::IndicatifWriter;
 use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
 use clap_verbosity_flag::Verbosity;
 
-use crate::environment::get_up_to_date_prefix;
 use crate::Project;
+use crate::{environment::get_up_to_date_prefix, progress};
 use anyhow::Error;
+use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
 mod add;
 mod global;
@@ -71,9 +73,28 @@ async fn default() -> Result<(), Error> {
 pub async fn execute() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    env_logger::Builder::new()
-        .filter_level(args.verbose.log_level_filter())
-        .init();
+    let level_filter = match args.verbose.log_level_filter() {
+        clap_verbosity_flag::LevelFilter::Off => LevelFilter::OFF,
+        clap_verbosity_flag::LevelFilter::Error => LevelFilter::ERROR,
+        clap_verbosity_flag::LevelFilter::Warn => LevelFilter::WARN,
+        clap_verbosity_flag::LevelFilter::Info => LevelFilter::INFO,
+        clap_verbosity_flag::LevelFilter::Debug => LevelFilter::DEBUG,
+        clap_verbosity_flag::LevelFilter::Trace => LevelFilter::TRACE,
+    };
+
+    let env_filter = EnvFilter::builder()
+        .with_default_directive(level_filter.into())
+        .from_env()?
+        // filter logs from apple codesign because they are very noisy
+        .add_directive("apple_codesign=off".parse()?);
+
+    // Setup the tracing subscriber
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_writer(IndicatifWriter::new(progress::global_multi_progress()))
+        .without_time()
+        .finish()
+        .try_init()?;
 
     match args.command {
         Some(Command::Completion(cmd)) => completion(cmd),

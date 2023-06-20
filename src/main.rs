@@ -9,6 +9,7 @@ mod prefix;
 mod progress;
 mod project;
 mod repodata;
+mod util;
 mod virtual_packages;
 
 pub use project::Project;
