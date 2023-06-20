@@ -6,8 +6,8 @@ use crate::Project;
 use anyhow::Error;
 
 mod add;
+mod global;
 mod init;
-mod install;
 mod run;
 mod shell;
 
@@ -30,13 +30,14 @@ pub struct CompletionCommand {
 enum Command {
     Completion(CompletionCommand),
     Init(init::Args),
+    #[clap(alias = "a")]
     Add(add::Args),
     #[clap(alias = "r")]
     Run(run::Args),
     #[clap(alias = "s")]
     Shell(shell::Args),
-    #[clap(alias = "i")]
-    Install(install::Args),
+    #[clap(alias = "g")]
+    Global(global::Args),
 }
 
 fn completion(args: CompletionCommand) -> Result<(), Error> {
@@ -73,7 +74,7 @@ pub async fn execute() -> anyhow::Result<()> {
         Some(Command::Add(cmd)) => add::execute(cmd).await,
         Some(Command::Run(cmd)) => run::execute(cmd).await,
         Some(Command::Shell(cmd)) => shell::execute(cmd).await,
-        Some(Command::Install(cmd)) => install::execute(cmd).await,
+        Some(Command::Global(cmd)) => global::execute(cmd).await,
         None => default().await,
     }
 }

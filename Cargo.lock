@@ -2520,6 +2520,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ntapi"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8a3895c6391c39d7fe7ebc444a87eb2991b2a0bc718fdabd071eec617fc68e4"
+dependencies = [
+ "winapi",
+]
+
+[[package]]
 name = "num"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3099,7 +3108,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a1a131a455a63b2c3f69adf2e5ada3dc66af51c2"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f1ee61aa8665cc7b2d8a7452dd6f283a83c9c1ff"
 dependencies = [
  "anyhow",
  "apple-codesign",
@@ -3140,7 +3149,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a1a131a455a63b2c3f69adf2e5ada3dc66af51c2"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f1ee61aa8665cc7b2d8a7452dd6f283a83c9c1ff"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3168,7 +3177,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a1a131a455a63b2c3f69adf2e5ada3dc66af51c2"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f1ee61aa8665cc7b2d8a7452dd6f283a83c9c1ff"
 dependencies = [
  "blake2",
  "digest 0.10.7",
@@ -3183,7 +3192,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a1a131a455a63b2c3f69adf2e5ada3dc66af51c2"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f1ee61aa8665cc7b2d8a7452dd6f283a83c9c1ff"
 dependencies = [
  "quote",
  "syn 2.0.18",
@@ -3192,7 +3201,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a1a131a455a63b2c3f69adf2e5ada3dc66af51c2"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f1ee61aa8665cc7b2d8a7452dd6f283a83c9c1ff"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
@@ -3209,7 +3218,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a1a131a455a63b2c3f69adf2e5ada3dc66af51c2"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f1ee61aa8665cc7b2d8a7452dd6f283a83c9c1ff"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3232,7 +3241,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a1a131a455a63b2c3f69adf2e5ada3dc66af51c2"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f1ee61aa8665cc7b2d8a7452dd6f283a83c9c1ff"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3270,13 +3279,14 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a1a131a455a63b2c3f69adf2e5ada3dc66af51c2"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f1ee61aa8665cc7b2d8a7452dd6f283a83c9c1ff"
 dependencies = [
  "enum_dispatch",
  "indexmap",
  "itertools",
  "rattler_conda_types",
  "serde_json",
+ "sysinfo",
  "thiserror",
  "tracing",
 ]
@@ -3284,7 +3294,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a1a131a455a63b2c3f69adf2e5ada3dc66af51c2"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f1ee61aa8665cc7b2d8a7452dd6f283a83c9c1ff"
 dependencies = [
  "anyhow",
  "cc",
@@ -3305,7 +3315,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a1a131a455a63b2c3f69adf2e5ada3dc66af51c2"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f1ee61aa8665cc7b2d8a7452dd6f283a83c9c1ff"
 dependencies = [
  "cfg-if",
  "libloading",
@@ -4057,6 +4067,21 @@ dependencies = [
  "quote",
  "syn 1.0.109",
  "unicode-xid",
+]
+
+[[package]]
+name = "sysinfo"
+version = "0.29.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9557d0845b86eea8182f7b10dff120214fb6cd9fd937b6f4917714e546a38695"
+dependencies = [
+ "cfg-if",
+ "core-foundation-sys",
+ "libc",
+ "ntapi",
+ "once_cell",
+ "rayon",
+ "winapi",
 ]
 
 [[package]]
