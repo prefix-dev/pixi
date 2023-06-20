@@ -9,6 +9,7 @@ use anyhow::Error;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
 mod add;
+mod auth;
 mod global;
 mod init;
 mod run;
@@ -46,6 +47,7 @@ enum Command {
     Shell(shell::Args),
     #[clap(alias = "g")]
     Global(global::Args),
+    Auth(auth::Args),
 }
 
 fn completion(args: CompletionCommand) -> Result<(), Error> {
@@ -106,6 +108,7 @@ pub async fn execute() -> anyhow::Result<()> {
         Some(Command::Run(cmd)) => run::execute(cmd).await,
         Some(Command::Shell(cmd)) => shell::execute(cmd).await,
         Some(Command::Global(cmd)) => global::execute(cmd).await,
+        Some(Command::Auth(cmd)) => auth::execute(cmd).await,
         None => default().await,
     }
 }
