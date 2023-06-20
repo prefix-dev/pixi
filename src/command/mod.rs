@@ -19,6 +19,7 @@ pub struct ProcessCmd {
     pub cmd: CmdArgs,
 
     /// A list of commands that should be run before this one
+    #[serde(default)]
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<String>,
 }
