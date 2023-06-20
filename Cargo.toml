@@ -31,7 +31,7 @@ once_cell = "1.17.1"
 rattler = { version = "0.3.0", default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_conda_types = { version = "0.3.0", default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_repodata_gateway = { version = "0.3.0", default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["sparse"] }
-rattler_shell = { version = "0.3.0", default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_shell = { version = "0.3.0", default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["sysinfo"] }
 rattler_solve = { version = "0.3.0", default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_virtual_packages = { version = "0.3.0", default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_networking = { version = "0.3.0", default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
