@@ -17,6 +17,7 @@ rustls-tls = ["reqwest/rustls-tls", "rattler_repodata_gateway/rustls-tls", "ratt
 [dependencies]
 anyhow = "1.0.70"
 clap = { version = "4.2.4", default-features = false, features = ["derive", "usage", "wrap_help", "std", "color", "error-context"] }
+clap-verbosity-flag = "2.0.1"
 clap_complete = "4.2.1"
 console = { version = "0.15.5", features = ["windows-console-colors"] }
 dirs = "5.0.1"
@@ -49,7 +50,6 @@ tempfile = "3.5.0"
 tokio = { version = "1.27.0", features = ["macros", "rt-multi-thread"] }
 toml_edit = { version = "0.19.8", features = ["serde"] }
 tracing = "0.1.37"
-clap-verbosity-flag = "2.0.1"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 
 [profile.release-lto]
