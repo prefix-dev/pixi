@@ -1049,6 +1049,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap-verbosity-flag"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1eef05769009513df2eb1c3b4613e7fad873a14c600ff025b08f250f59fee7de"
+dependencies = [
+ "clap",
+ "log",
+]
+
+[[package]]
 name = "clap_builder"
 version = "4.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2866,10 +2876,12 @@ version = "0.0.3"
 dependencies = [
  "anyhow",
  "clap",
+ "clap-verbosity-flag",
  "clap_complete",
  "console",
  "dirs 5.0.1",
  "dunce",
+ "env_logger",
  "futures 0.3.28",
  "indicatif",
  "insta",

@@ -1,5 +1,6 @@
 use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
+use clap_verbosity_flag::Verbosity;
 
 use crate::environment::get_up_to_date_prefix;
 use crate::Project;
@@ -15,6 +16,11 @@ mod run;
 struct Args {
     #[command(subcommand)]
     command: Option<Command>,
+
+    /// The verbosity level
+    /// (-v for verbose, -vv for debug, -vvv for trace, -q for quiet)
+    #[command(flatten)]
+    verbose: Verbosity,
 }
 
 /// Generates a completion script for a shell.
@@ -64,6 +70,10 @@ async fn default() -> Result<(), Error> {
 
 pub async fn execute() -> anyhow::Result<()> {
     let args = Args::parse();
+
+    env_logger::Builder::new()
+        .filter_level(args.verbose.log_level_filter())
+        .init();
 
     match args.command {
         Some(Command::Completion(cmd)) => completion(cmd),
