@@ -111,6 +111,8 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         command.write_invoke_script(&mut script, &shell, &project, &activator_result)?;
     }
 
+    tracing::debug!("Activation script:\n{}", script);
+
     // Write the contents of the script to a temporary file that we can execute with the shell.
     let mut temp_file = tempfile::Builder::new()
         .suffix(&format!(".{}", shell.extension()))
