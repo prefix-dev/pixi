@@ -1,0 +1,89 @@
+---
+source: src/project/manifest.rs
+assertion_line: 290
+expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\")"
+---
+ProjectManifest {
+    project: ProjectMetadata {
+        name: "foo",
+        version: Version {
+            norm: "0.1.0",
+            version: [[0], [0], [1], [0]],
+            local: [],
+        },
+        description: None,
+        authors: [],
+        channels: [],
+        platforms: Spanned {
+            span: 117..119,
+            value: [],
+        },
+    },
+    commands: {},
+    system_requirements: SystemRequirements {
+        windows: None,
+        unix: None,
+        macos: None,
+        linux: None,
+        cuda: None,
+        libc: None,
+        archspec: None,
+    },
+    dependencies: {},
+    target: {
+        Spanned {
+            span: 146..152,
+            value: Platform(
+                Win64,
+            ),
+        }: TargetMetadata {
+            dependencies: {
+                "foo": NamelessMatchSpec {
+                    version: Some(
+                        Operator(
+                            Equals,
+                            Version {
+                                norm: "3.4.5",
+                                version: [[0], [3], [4], [5]],
+                                local: [],
+                            },
+                        ),
+                    ),
+                    build: None,
+                    build_number: None,
+                    file_name: None,
+                    channel: None,
+                    subdir: None,
+                    namespace: None,
+                },
+            },
+        },
+        Spanned {
+            span: 206..212,
+            value: Platform(
+                Osx64,
+            ),
+        }: TargetMetadata {
+            dependencies: {
+                "foo": NamelessMatchSpec {
+                    version: Some(
+                        Operator(
+                            Equals,
+                            Version {
+                                norm: "1.2.3",
+                                version: [[0], [1], [2], [3]],
+                                local: [],
+                            },
+                        ),
+                    ),
+                    build: None,
+                    build_number: None,
+                    file_name: None,
+                    channel: None,
+                    subdir: None,
+                    namespace: None,
+                },
+            },
+        },
+    },
+}

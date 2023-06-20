@@ -279,6 +279,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ariadne"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72fe02fc62033df9ba41cba57ee19acf5e742511a140c7dbc3a873e19a19a1bd"
+dependencies = [
+ "unicode-width",
+ "yansi",
+]
+
+[[package]]
 name = "asn1-rs"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2124,6 +2134,7 @@ dependencies = [
  "console",
  "lazy_static",
  "linked-hash-map",
+ "serde",
  "similar",
  "yaml-rust",
 ]
@@ -2900,6 +2911,7 @@ name = "pixi"
 version = "0.0.3"
 dependencies = [
  "anyhow",
+ "ariadne",
  "clap",
  "clap-verbosity-flag",
  "clap_complete",
@@ -2907,6 +2919,7 @@ dependencies = [
  "dirs 5.0.1",
  "dunce",
  "futures 0.3.28",
+ "indexmap",
  "indicatif",
  "insta",
  "is_executable",
@@ -2922,6 +2935,7 @@ dependencies = [
  "rattler_virtual_packages",
  "reqwest",
  "serde",
+ "serde_spanned",
  "serde_with",
  "shlex",
  "tempfile",
@@ -5084,6 +5098,12 @@ checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
 dependencies = [
  "linked-hash-map",
 ]
+
+[[package]]
+name = "yansi"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
 
 [[package]]
 name = "yasna"

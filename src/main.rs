@@ -9,6 +9,7 @@ mod prefix;
 mod progress;
 mod project;
 mod repodata;
+mod report_error;
 mod util;
 mod virtual_packages;
 
@@ -17,7 +18,12 @@ pub use project::Project;
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = cli::execute().await {
-        eprintln!("{}: {:?}", style("error").bold().red(), err);
+        match err.downcast::<report_error::ReportError>() {
+            Ok(report) => report.eprint(),
+            Err(err) => {
+                eprintln!("{}: {:?}", style("error").bold().red(), err);
+            }
+        }
         std::process::exit(1);
     }
 }

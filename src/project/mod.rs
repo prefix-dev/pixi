@@ -2,24 +2,27 @@ mod manifest;
 mod serde;
 
 use crate::consts;
-use crate::project::manifest::ProjectManifest;
+use crate::consts::PROJECT_MANIFEST;
+use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
+use crate::report_error::ReportError;
 use anyhow::Context;
+use ariadne::{Label, Report, ReportKind, Source};
 use rattler_conda_types::{Channel, MatchSpec, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::VirtualPackage;
 use std::{
     collections::HashMap,
     env, fs,
     path::{Path, PathBuf},
-    str::FromStr,
 };
-use toml_edit::{Document, Item, Table};
+use toml_edit::{Document, Item, Table, TomlError};
 
 /// A project represented by a pixi.toml file.
 #[derive(Debug)]
 pub struct Project {
     root: PathBuf,
+    pub(crate) source: String,
     doc: Document,
-    manifest: ProjectManifest,
+    pub(crate) manifest: ProjectManifest,
 }
 
 impl Project {
@@ -39,7 +42,7 @@ impl Project {
         let root = filename.parent().unwrap_or(Path::new("."));
 
         // Load the TOML document
-        Self::from_manifest_str(root, &fs::read_to_string(filename)?).with_context(|| {
+        Self::from_manifest_str(root, fs::read_to_string(filename)?).with_context(|| {
             format!(
                 "failed to parse {} from {}",
                 consts::PROJECT_MANIFEST,
@@ -49,44 +52,78 @@ impl Project {
     }
 
     /// Loads a project manifest.
-    pub fn from_manifest_str(root: &Path, contents: &str) -> anyhow::Result<Self> {
-        let manifest = toml_edit::de::from_str(contents)?;
-        let doc = contents.parse::<Document>()?;
+    pub fn from_manifest_str(root: &Path, contents: impl Into<String>) -> anyhow::Result<Self> {
+        let contents = contents.into();
+        let (manifest, doc) = match toml_edit::de::from_str::<ProjectManifest>(&contents)
+            .map_err(TomlError::from)
+            .and_then(|manifest| contents.parse::<Document>().map(|doc| (manifest, doc)))
+        {
+            Ok(result) => result,
+            Err(e) => {
+                if let Some(span) = e.span() {
+                    return Err(ReportError {
+                        source: (PROJECT_MANIFEST, Source::from(&contents)),
+                        report: Report::build(ReportKind::Error, PROJECT_MANIFEST, span.start)
+                            .with_message("failed to parse project manifest")
+                            .with_label(
+                                Label::new((PROJECT_MANIFEST, span)).with_message(e.message()),
+                            )
+                            .finish(),
+                    }
+                    .into());
+                } else {
+                    return Err(e.into());
+                }
+            }
+        };
+
+        // Validate the contents of the manifest
+        manifest.validate(&contents)?;
 
         Ok(Self {
             root: root.to_path_buf(),
+            source: contents,
             doc,
             manifest,
         })
     }
 
-    pub fn dependencies(&self) -> anyhow::Result<HashMap<String, NamelessMatchSpec>> {
-        let deps = self
-            .doc
-            .get("dependencies")
-            .ok_or_else(|| {
-                anyhow::anyhow!("No dependencies found in {}", consts::PROJECT_MANIFEST)
-            })?
-            .as_table_like()
-            .ok_or_else(|| {
-                anyhow::anyhow!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
-            })?;
+    /// Returns the dependencies of the project.
+    pub fn dependencies(
+        &self,
+        platform: Platform,
+    ) -> anyhow::Result<HashMap<String, NamelessMatchSpec>> {
+        // Get the base dependencies (defined in the `[dependencies]` section)
+        let base_dependencies = self.manifest.dependencies.iter();
 
-        let mut result = HashMap::with_capacity(deps.len());
-        for (name, value) in deps.iter() {
-            let match_spec = value
-                .as_str()
-                .map(|str| NamelessMatchSpec::from_str(str).map_err(Into::into))
-                .unwrap_or_else(|| {
-                    Err(anyhow::anyhow!(
-                        "dependencies in {} are malformed",
-                        consts::PROJECT_MANIFEST
-                    ))
-                })?;
-            result.insert(name.to_owned(), match_spec);
-        }
+        // Get the platform specific dependencies in the order they were defined.
+        let platform_specific = self
+            .target_specific_metadata(platform)
+            .flat_map(|target| target.dependencies.iter());
 
-        Ok(result)
+        // Combine the specs.
+        //
+        // Note that if a dependency was specified twice the platform specific one "wins".
+        Ok(base_dependencies
+            .chain(platform_specific)
+            .map(|(name, spec)| (name.clone(), spec.clone()))
+            .collect())
+    }
+
+    /// Returns all the targets specific metadata that apply with the given context.
+    /// TODO: Add more context here?
+    /// TODO: Should we return the selector too to provide better diagnostics later?
+    pub fn target_specific_metadata(
+        &self,
+        platform: Platform,
+    ) -> impl Iterator<Item = &'_ TargetMetadata> + '_ {
+        self.manifest
+            .target
+            .iter()
+            .filter_map(move |(selector, manifest)| match selector.as_ref() {
+                TargetSelector::Platform(p) if p == &platform => Some(manifest),
+                _ => None,
+            })
     }
 
     /// Returns the name of the project
@@ -165,7 +202,7 @@ impl Project {
 
     /// Returns the platforms this project targets
     pub fn platforms(&self) -> &[Platform] {
-        &self.manifest.project.platforms
+        self.manifest.project.platforms.as_ref().as_slice()
     }
 
     /// Get the command with the specified name or `None` if no such command exists.
@@ -196,6 +233,7 @@ mod tests {
     use crate::project::manifest::SystemRequirements;
     use rattler_conda_types::ChannelConfig;
     use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
+    use std::str::FromStr;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -215,7 +253,7 @@ mod tests {
             platforms = ["linux-64", "win-64"]
         "#;
 
-        let project = Project::from_manifest_str(Path::new(""), &file_content).unwrap();
+        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
 
         assert_eq!(project.name(), "pixi");
         assert_eq!(project.version(), &Version::from_str("0.0.2").unwrap());
