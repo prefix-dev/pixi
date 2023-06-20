@@ -67,7 +67,7 @@ If this directory does not already exist, the script will create it.
 ## macOS and Linux
 To install Pixi on macOS and Linux, open a terminal and run the following command:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/prefix-dev/pixi/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/prefix-dev/pixi/main/install/install.sh | bash
 ```
 The script will also update your ~/.bash_profile to include ~/.pixi/bin in your PATH, allowing you to invoke the pixi command from anywhere.
 You might need to restart your terminal or source your shell for the changes to take effect.
@@ -76,7 +76,7 @@ You might need to restart your terminal or source your shell for the changes to 
 To install Pixi on Windows, open a PowerShell terminal (you may need to run it as an administrator) and run the following command:
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/prefix-dev/pixi/main/scripts/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/prefix-dev/pixi/main/install/install.ps1 | iex
 ```
 The script will inform you once the installation is successful and add the ~/.pixi/bin directory to your PATH, which will allow you to run the pixi command from any location.
 
@@ -147,7 +147,7 @@ Commands:
   init        Creates a new project
   add         Adds a dependency to the project
   run         Runs command in project
-  install     Installs the defined package in a global accessible location
+  global      Global is the main entry point for the part of pixi that executes on the global(system) level
   help        Print this message or the help of the given subcommand(s)
 
 Options:
@@ -183,7 +183,7 @@ You can also globally install conda packages into their own environment.
 This behavior is similar to [`pipx`](https://github.com/pypa/pipx).
 
 ```bash
-pixi install cowpy
+pixi global add cowpy
 ```
 
 For more examples

@@ -10,6 +10,7 @@ mod progress;
 mod project;
 mod repodata;
 mod report_error;
+mod util;
 mod virtual_packages;
 
 pub use project::Project;

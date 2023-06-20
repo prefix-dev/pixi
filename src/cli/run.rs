@@ -46,8 +46,9 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         });
 
     // Determine the current shell
-    let shell: ShellEnum = ShellEnum::detect_from_environment()
-        .ok_or_else(|| anyhow::anyhow!("could not detect the current shell"))?;
+    let shell: ShellEnum = ShellEnum::from_env()
+        .or_else(ShellEnum::from_parent_process)
+        .unwrap_or_default();
 
     // Construct an activator so we can run commands from the environment
     let prefix = get_up_to_date_prefix(&project).await?;
@@ -108,6 +109,8 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         // Write the invocation of the command into the script.
         command.write_invoke_script(&mut script, &shell, &project, &activator_result)?;
     }
+
+    tracing::debug!("Activation script:\n{}", script);
 
     // Write the contents of the script to a temporary file that we can execute with the shell.
     let mut temp_file = tempfile::Builder::new()

@@ -36,7 +36,7 @@ pub struct Args {
     ///
     /// When specifying a channel, it is common that the selected channel also
     /// depends on the `conda-forge` channel.
-    /// For example: `pixi install --channel conda-forge --channel bioconda`.
+    /// For example: `pixi global add --channel conda-forge --channel bioconda`.
     ///
     /// By default, if no channel is provided, `conda-forge` is used.
     #[clap(short, long, default_values = ["conda-forge"])]

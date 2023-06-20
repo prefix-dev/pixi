@@ -60,30 +60,44 @@ fi
 mkdir -p "$INSTALL_DIR"
 tar -xzf "$TEMP_FILE" -C "$INSTALL_DIR"
 
-# bash: add line to config such that pixi is in the path
-LINE="export PATH=\$PATH:${INSTALL_DIR}"
-if ! grep -Fxq "$LINE" ~/.bash_profile
-then
-    echo "$LINE" >> ~/.bash_profile
-fi
+update_shell() {
+    FILE=$1
+    LINE=$2
 
-# fish: if config.fish exists, add pixi to the path
-if [[ -f ~/.config/fish/config.fish ]]; then
-  LINE="fish_add_path ${INSTALL_DIR}"
-  if ! grep -Fxq "$LINE" ~/.config/fish/config.fish
-  then
-      echo "$LINE" >> ~/.config/fish/config.fish
-  fi
-fi
+    if [ -f "$FILE" ]; then
+        if ! grep -Fxq "$LINE" "$FILE"
+        then
+            echo "Updating '${FILE}'"
+            echo "$LINE" >> "$FILE"
+        fi
+    fi
+}
+case "$(basename "$SHELL")" in
+    bash)
+        if [ -f ~/.bash_profile ]; then
+            BASH_FILE=~/.bash_profile
+        else
+            # Default to bashrc as that is used in non login shells instead of the profile.
+            BASH_FILE=~/.bashrc
+        fi
+        LINE="export PATH=\$PATH:${INSTALL_DIR}"
+        update_shell $BASH_FILE "$LINE"
+        ;;
 
-# zsh: if zshrc exists, add pixi to the path
-if [[ -f ~/.zshrc ]]; then
-  LINE="export PATH=\$PATH:${INSTALL_DIR}"
-  if ! grep -Fxq "$LINE" ~/.zshrc
-  then
-      echo "$LINE" >> ~/.zshrc
-  fi
-fi
+    fish)
+        LINE="fish_add_path ${INSTALL_DIR}"
+        update_shell ~/.config/fish/config.fish "$LINE"
+        ;;
+
+    zsh)
+        LINE="export PATH=\$PATH:${INSTALL_DIR}"
+        update_shell ~/.zshrc "$LINE"
+        ;;
+
+    *)
+        echo "Unsupported shell: $(basename "$0")"
+        ;;
+esac
 
 chmod +x "$INSTALL_DIR/pixi"
 
