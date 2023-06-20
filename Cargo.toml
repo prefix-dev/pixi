@@ -49,6 +49,8 @@ tempfile = "3.5.0"
 tokio = { version = "1.27.0", features = ["macros", "rt-multi-thread"] }
 toml_edit = { version = "0.19.8", features = ["serde"] }
 tracing = "0.1.37"
+clap-verbosity-flag = "2.0.1"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 
 [profile.release-lto]
 inherits = "release"
