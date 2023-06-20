@@ -13,9 +13,7 @@ pub async fn execute(_args: Args) -> anyhow::Result<()> {
     let project = Project::discover()?;
 
     // Determine the current shell
-    let shell: ShellEnum = ShellEnum::from_env()
-        .or_else(ShellEnum::from_parent_process)
-        .unwrap_or_default();
+    let shell: ShellEnum = ShellEnum::default();
 
     // Construct an activator so we can run commands from the environment
     let prefix = get_up_to_date_prefix(&project).await?;
