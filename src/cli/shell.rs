@@ -1,4 +1,5 @@
 use crate::environment::get_up_to_date_prefix;
+use crate::project::environment::add_metadata_as_env_vars;
 use crate::Project;
 use clap::Parser;
 use rattler_conda_types::Platform;
@@ -31,8 +32,13 @@ pub async fn execute(_args: Args) -> anyhow::Result<()> {
     // environment.
     let mut script = format!("{}\n", activator_result.script.trim());
 
+    // Add meta data env variables to help user interact with there configuration.
+    add_metadata_as_env_vars(&mut script, &shell, &project)?;
+
+    // Add the conda default env variable so that the tools that use this know it exists.
     shell.set_env_var(&mut script, "CONDA_DEFAULT_ENV", project.name())?;
 
+    // Start the shell as the last part of the activation script based on the default shell.
     script.push_str("$SHELL");
 
     // Write the contents of the script to a temporary file that we can execute with the shell.

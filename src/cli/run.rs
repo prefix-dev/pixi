@@ -9,6 +9,7 @@ use rattler_conda_types::Platform;
 
 use crate::command::{CmdArgs, Command, ProcessCmd};
 use crate::environment::get_up_to_date_prefix;
+use crate::project::environment::add_metadata_as_env_vars;
 use rattler_shell::activation::ActivationResult;
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
@@ -188,45 +189,6 @@ fn find_canonical_executable_path(path: &Path) -> Option<PathBuf> {
     }
 
     None
-}
-
-// Add pixi meta data into the environment as environment variables.
-fn add_metadata_as_env_vars(
-    script: &mut impl Write,
-    shell: &ShellEnum,
-    project: &Project,
-) -> anyhow::Result<()> {
-    // Setting a base prefix for the pixi package
-    const PREFIX: &str = "PIXI_PACKAGE_";
-
-    shell.set_env_var(
-        script,
-        &format!("{PREFIX}ROOT"),
-        &(project.root().to_string_lossy()),
-    )?;
-    shell.set_env_var(
-        script,
-        &format!("{PREFIX}MANIFEST"),
-        &(project.manifest_path().to_string_lossy()),
-    )?;
-    shell.set_env_var(
-        script,
-        &format!("{PREFIX}PLATFORMS"),
-        &(project
-            .platforms()
-            .iter()
-            .map(|plat| plat.as_str())
-            .collect::<Vec<&str>>()
-            .join(",")),
-    )?;
-    shell.set_env_var(script, &format!("{PREFIX}NAME"), project.name())?;
-    shell.set_env_var(
-        script,
-        &format!("{PREFIX}VERSION"),
-        &project.version().to_string(),
-    )?;
-
-    Ok(())
 }
 
 /// Returns all file extensions that are considered for executable files.
