@@ -262,12 +262,12 @@ jobs:
             *) tar czf "${PKG_NAME}" ./* ;;
           esac;
           popd >/dev/null
-          
+
           cp "${{ steps.bin.outputs.BIN_PATH }}" "$PKG_STAGING/pixi-${{ matrix.job.target }}${{ steps.bin.outputs.EXE_SUFFIX }}"
 
           # Let subsequent steps know where to find the compressed package
           echo "PKG_PATH=${PKG_STAGING}/${PKG_NAME}" >> $GITHUB_OUTPUT
-          echo "BIN_PATH=$PKG_STAGING/pixi-${{ matrix.job.target }}${{ steps.bin.outputs.EXE_SUFFIX }}" >> $GITHUB_OUTPUT 
+          echo "BIN_PATH=$PKG_STAGING/pixi-${{ matrix.job.target }}${{ steps.bin.outputs.EXE_SUFFIX }}" >> $GITHUB_OUTPUT
 
       - name: "Artifact upload: tarball"
         uses: actions/upload-artifact@master
