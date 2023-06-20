@@ -2943,6 +2943,7 @@ dependencies = [
  "toml_edit",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
