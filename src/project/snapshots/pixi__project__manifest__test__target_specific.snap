@@ -1,6 +1,6 @@
 ---
 source: src/project/manifest.rs
-assertion_line: 204
+assertion_line: 290
 expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\")"
 ---
 ProjectManifest {
@@ -14,7 +14,10 @@ ProjectManifest {
         description: None,
         authors: [],
         channels: [],
-        platforms: [],
+        platforms: Spanned {
+            span: 117..119,
+            value: [],
+        },
     },
     commands: {},
     system_requirements: SystemRequirements {
@@ -28,9 +31,12 @@ ProjectManifest {
     },
     dependencies: {},
     target: {
-        Platform(
-            Win64,
-        ): TargetMetadata {
+        Spanned {
+            span: 146..152,
+            value: Platform(
+                Win64,
+            ),
+        }: TargetMetadata {
             dependencies: {
                 "foo": NamelessMatchSpec {
                     version: Some(
@@ -52,9 +58,12 @@ ProjectManifest {
                 },
             },
         },
-        Platform(
-            Osx64,
-        ): TargetMetadata {
+        Spanned {
+            span: 206..212,
+            value: Platform(
+                Osx64,
+            ),
+        }: TargetMetadata {
             dependencies: {
                 "foo": NamelessMatchSpec {
                     version: Some(

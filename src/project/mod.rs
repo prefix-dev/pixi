@@ -253,7 +253,7 @@ mod tests {
             platforms = ["linux-64", "win-64"]
         "#;
 
-        let project = Project::from_manifest_str(Path::new(""), &file_content).unwrap();
+        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
 
         assert_eq!(project.name(), "pixi");
         assert_eq!(project.version(), &Version::from_str("0.0.2").unwrap());
