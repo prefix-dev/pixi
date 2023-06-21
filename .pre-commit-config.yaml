@@ -5,9 +5,16 @@ repos:
         -   id: check-yaml
         -   id: end-of-file-fixer
         -   id: trailing-whitespace
+  # Use ruff for python examples
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.0.274
+    hooks:
+      - id: ruff
+        args: [ --fix, --exit-non-zero-on-fix ]
   # Copied from Mozilla https://github.com/mozilla/grcov/blob/master/.pre-commit-config.yaml
   -   repo: https://github.com/DevinR528/cargo-sort
-      rev: v1.0.7
+      rev: v1.0.9
       hooks:
         -   id: cargo-sort
   -   repo: local

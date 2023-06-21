@@ -1,0 +1,17 @@
+name: pre-commit
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+      - uses: pre-commit/action@v3.0.0
+        env:
+          # As the rust GitHub action is better at the rust jobs it can be skipped in this job.
+          SKIP: clippy,fmt
