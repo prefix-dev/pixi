@@ -163,7 +163,7 @@ python = "3.11"
 python = "3.10"
 ```
 
-In the case above, we specify a specific dependency to OSX. 
+In the case above, we specify a specific dependency to OSX.
 This overwrites the generic python dependency specified in the dependencies block.
 
 ### Resolution order
@@ -195,4 +195,3 @@ This commands feature makes it straightforward and efficient to execute commonly
 The `depends_on` will run the specified command in there to be run before the command itself.
 So in the example `build` will be run before `test`.
 `depends_on` can be a string or a list of strings e.g.: `depends_on="build"` or `depends_on=["build", "anything"]`
-
