@@ -183,7 +183,7 @@ You can also globally install conda packages into their own environment.
 This behavior is similar to [`pipx`](https://github.com/pypa/pipx).
 
 ```bash
-pixi global add cowpy
+pixi global install cowpy
 ```
 
 For more examples
