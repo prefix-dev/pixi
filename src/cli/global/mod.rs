@@ -1,10 +1,10 @@
 use clap::Parser;
-mod add;
+mod install;
 
 #[derive(Debug, Parser)]
 pub enum Command {
     #[clap(alias = "a")]
-    Add(add::Args),
+    Install(install::Args),
 }
 
 /// Global is the main entry point for the part of pixi that executes on the global(system) level.
@@ -18,7 +18,7 @@ pub struct Args {
 
 pub async fn execute(cmd: Args) -> anyhow::Result<()> {
     match cmd.command {
-        Command::Add(args) => add::execute(args).await?,
+        Command::Install(args) => install::execute(args).await?,
     };
     Ok(())
 }
