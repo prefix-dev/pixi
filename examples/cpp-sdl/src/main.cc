@@ -69,7 +69,7 @@ int main( int argc, char* args[] ) {
 
         // Draw a rectangle
         SDL_RenderFillRect(renderer, &squareRect);
-        
+
         // Update screen
         SDL_RenderPresent(renderer);
     }
