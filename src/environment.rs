@@ -1,3 +1,4 @@
+use crate::report_error::ReportError;
 use crate::{
     consts,
     prefix::Prefix,
@@ -8,6 +9,7 @@ use crate::{
     Project,
 };
 use anyhow::Context;
+use ariadne::{Label, Report, ReportKind, Source};
 use futures::future::ready;
 use futures::{stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use indicatif::ProgressBar;
@@ -41,7 +43,23 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
     // Make sure the project supports the current platform
     let platform = Platform::current();
     if !project.platforms().contains(&platform) {
-        anyhow::bail!("the project is not configured for your current platform. Add '{}' to the 'platforms' key in project's {} to include it", platform, consts::PROJECT_MANIFEST)
+        let span = project.manifest.project.platforms.span();
+        let report = Report::build(ReportKind::Error, consts::PROJECT_MANIFEST, span.start)
+            .with_message("the project is not configured for your current platform")
+            .with_label(
+                Label::new((consts::PROJECT_MANIFEST, span))
+                    .with_message(format!("add '{platform}' here")),
+            )
+            .with_help(format!(
+                "The project needs to be configured to support your platform ({platform})."
+            ))
+            .finish();
+
+        return Err(ReportError {
+            source: (consts::PROJECT_MANIFEST, Source::from(&project.source)),
+            report,
+        }
+        .into());
     }
 
     // Make sure the system requirements are met
@@ -126,11 +144,14 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
         return Ok(false);
     }
 
-    // Check if all dependencies exist in the lock-file.
-    let dependencies = project.dependencies()?.into_iter().collect::<VecDeque<_>>();
-
     // For each platform,
     for platform in platforms.iter().cloned() {
+        // Check if all dependencies exist in the lock-file.
+        let dependencies = project
+            .dependencies(platform)?
+            .into_iter()
+            .collect::<VecDeque<_>>();
+
         // Construct a queue of dependencies that we wanna find in the lock file
         let mut queue = dependencies.clone();
 
@@ -258,10 +279,6 @@ pub async fn update_lock_file(
     repodata: Option<Vec<SparseRepoData>>,
 ) -> anyhow::Result<CondaLock> {
     let platforms = project.platforms();
-    let dependencies = project.dependencies()?;
-
-    // Extract the package names from the dependencies
-    let package_names = dependencies.keys().collect_vec();
 
     // Get the repodata for the project
     let sparse_repo_data = if let Some(sparse_repo_data) = repodata {
@@ -276,14 +293,20 @@ pub async fn update_lock_file(
         .iter()
         .map(|channel| conda_lock::Channel::from(channel.base_url().to_string()));
 
-    let match_specs = dependencies
-        .iter()
-        .map(|(name, constraint)| MatchSpec::from_nameless(constraint.clone(), Some(name.clone())))
-        .collect_vec();
-
-    let mut builder =
-        LockFileBuilder::new(channels, platforms.iter().cloned(), match_specs.clone());
+    // Empty match-specs because these differ per platform
+    let mut builder = LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
     for platform in platforms.iter().cloned() {
+        let dependencies = project.dependencies(platform)?;
+        let match_specs = dependencies
+            .iter()
+            .map(|(name, constraint)| {
+                MatchSpec::from_nameless(constraint.clone(), Some(name.clone()))
+            })
+            .collect_vec();
+
+        // Extract the package names from the dependencies
+        let package_names = dependencies.keys().collect_vec();
+
         // Get the repodata for the current platform and for NoArch
         let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
             sparse.subdir() == platform.as_str() || sparse.subdir() == Platform::NoArch.as_str()
