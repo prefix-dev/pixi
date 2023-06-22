@@ -3,7 +3,7 @@ use crate::Project;
 use clap::Parser;
 use std::path::PathBuf;
 
-/// Install all the dependencies
+/// Install the dependencies of the project
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The path to a pixi project
