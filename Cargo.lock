@@ -2928,6 +2928,7 @@ dependencies = [
  "once_cell",
  "rattler",
  "rattler_conda_types",
+ "rattler_digest",
  "rattler_networking",
  "rattler_repodata_gateway",
  "rattler_shell",

@@ -13,6 +13,7 @@ mod auth;
 mod global;
 mod init;
 mod run;
+mod upload;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -45,6 +46,7 @@ enum Command {
     #[clap(alias = "g")]
     Global(global::Args),
     Auth(auth::Args),
+    Upload(upload::Args)
 }
 
 fn completion(args: CompletionCommand) -> Result<(), Error> {
@@ -105,6 +107,7 @@ pub async fn execute() -> anyhow::Result<()> {
         Some(Command::Run(cmd)) => run::execute(cmd).await,
         Some(Command::Global(cmd)) => global::execute(cmd).await,
         Some(Command::Auth(cmd)) => auth::execute(cmd).await,
+        Some(Command::Upload(cmd)) => upload::execute(cmd).await,
         None => default().await,
     }
 }
