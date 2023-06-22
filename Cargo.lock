@@ -2079,6 +2079,7 @@ dependencies = [
  "shlex",
  "tempfile",
  "tokio",
+ "tokio-util",
  "toml_edit",
  "tracing",
  "tracing-subscriber",

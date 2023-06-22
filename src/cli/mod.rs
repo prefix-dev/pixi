@@ -16,6 +16,7 @@ pub mod install;
 pub mod run;
 pub mod shell;
 pub mod task;
+pub mod upload;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -55,6 +56,7 @@ pub enum Command {
     Install(install::Args),
     Task(task::Args),
     Info(info::Args),
+    Upload(upload::Args),
 }
 
 fn completion(args: CompletionCommand) -> miette::Result<()> {
@@ -113,5 +115,6 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Shell(cmd) => shell::execute(cmd).await,
         Command::Task(cmd) => task::execute(cmd),
         Command::Info(cmd) => info::execute(cmd).await,
+        Command::Upload(cmd) => upload::execute(cmd).await,
     }
 }
