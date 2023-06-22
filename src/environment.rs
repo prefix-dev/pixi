@@ -331,7 +331,7 @@ pub async fn update_lock_file(
             // TODO: All these things.
             locked_packages: existing_lock_file
                 .packages_for_platform(platform)
-                .map(|locked| RepoDataRecord::try_from(locked))
+                .map(RepoDataRecord::try_from)
                 .collect::<Result<Vec<_>, _>>()?,
             pinned_packages: vec![],
             virtual_packages,
