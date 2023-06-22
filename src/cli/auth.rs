@@ -41,7 +41,7 @@ enum Subcommand {
     Logout(LogoutArgs),
 }
 
-/// Adds a dependency to the project
+/// Login to prefix.dev or anaconda.org servers to access private channels
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(subcommand)]
