@@ -21,10 +21,14 @@ use rattler_shell::{
 pub struct Args {
     /// The command you want to run in the projects environment.
     command: Vec<String>,
+
+    /// The path to the pixi project
+    #[arg(long)]
+    project_path: Option<PathBuf>,
 }
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
-    let project = Project::discover()?;
+    let project = Project::discover(args.project_path)?;
 
     // Get the script to execute from the command line.
     let (command_name, command) = args

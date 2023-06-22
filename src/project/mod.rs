@@ -28,8 +28,8 @@ pub struct Project {
 impl Project {
     /// Discovers the project manifest file in the current directory or any of the parent
     /// directories.
-    pub fn discover() -> anyhow::Result<Self> {
-        let project_toml = match find_project_root() {
+    pub fn discover(project_path: Option<PathBuf>) -> anyhow::Result<Self> {
+        let project_toml = match find_project_root(project_path) {
             Some(root) => root.join(consts::PROJECT_MANIFEST),
             None => anyhow::bail!("could not find {}", consts::PROJECT_MANIFEST),
         };
@@ -220,9 +220,9 @@ impl Project {
 
 /// Iterates over the current directory and all its parent directories and returns the first
 /// directory path that contains the [`consts::PROJECT_MANIFEST`].
-pub fn find_project_root() -> Option<PathBuf> {
-    let current_dir = env::current_dir().ok()?;
-    std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent())
+pub fn find_project_root(project_path: Option<PathBuf>) -> Option<PathBuf> {
+    let search_path = project_path.unwrap_or(env::current_dir().ok()?);
+    std::iter::successors(Some(search_path.as_path()), |prev| prev.parent())
         .find(|dir| dir.join(consts::PROJECT_MANIFEST).is_file())
         .map(Path::to_path_buf)
 }
