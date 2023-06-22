@@ -2,7 +2,6 @@ mod manifest;
 mod serde;
 
 use crate::consts;
-use crate::consts::PROJECT_MANIFEST;
 use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
 use crate::report_error::ReportError;
 use anyhow::Context;
@@ -60,19 +59,22 @@ impl Project {
         {
             Ok(result) => result,
             Err(e) => {
-                if let Some(span) = e.span() {
-                    return Err(ReportError {
-                        source: (PROJECT_MANIFEST, Source::from(&contents)),
-                        report: Report::build(ReportKind::Error, PROJECT_MANIFEST, span.start)
-                            .with_message("failed to parse project manifest")
-                            .with_label(
-                                Label::new((PROJECT_MANIFEST, span)).with_message(e.message()),
-                            )
-                            .finish(),
+                return match e.span() {
+                    Some(span) => Err(ReportError {
+                        source: (consts::PROJECT_MANIFEST, Source::from(&contents)),
+                        report: Report::build(
+                            ReportKind::Error,
+                            consts::PROJECT_MANIFEST,
+                            span.start,
+                        )
+                        .with_message("failed to parse project manifest")
+                        .with_label(
+                            Label::new((consts::PROJECT_MANIFEST, span)).with_message(e.message()),
+                        )
+                        .finish(),
                     }
-                    .into());
-                } else {
-                    return Err(e.into());
+                    .into()),
+                    None => Err(e.into()),
                 }
             }
         };
