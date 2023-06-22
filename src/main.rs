@@ -1,19 +1,6 @@
 use console::style;
-
-mod cli;
-mod command;
-mod config;
-mod consts;
-mod environment;
-mod prefix;
-mod progress;
-mod project;
-mod repodata;
-mod report_error;
-mod util;
-mod virtual_packages;
-
-pub use project::Project;
+use pixi::cli;
+use pixi::report_error;
 
 #[tokio::main]
 pub async fn main() {

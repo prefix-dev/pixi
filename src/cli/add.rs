@@ -33,16 +33,21 @@ pub struct Args {
     /// Adding multiple dependencies at once is also supported:
     ///
     /// - `pixi add python pytest`: This will add both `python` and `pytest` to the project's dependencies.
-    specs: Vec<MatchSpec>,
+    pub specs: Vec<MatchSpec>,
 }
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
     // Determine the location and metadata of the current project
     let mut project = Project::discover()?;
+    add_specs_to_project(&mut project, args.specs).await
+}
 
+pub async fn add_specs_to_project(
+    project: &mut Project,
+    specs: Vec<MatchSpec>,
+) -> anyhow::Result<()> {
     // Split the specs into package name and version specifier
-    let new_specs = args
-        .specs
+    let new_specs = specs
         .into_iter()
         .map(|spec| match &spec.name {
             Some(name) => Ok((name.clone(), spec.into())),
@@ -112,6 +117,10 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         added_specs.push(spec);
     }
 
+    // TODO why is this only needed in the test?
+    project.save()?;
+    project.reload()?;
+
     // Update the lock file and write to disk
     update_lock_file(
         &project,
@@ -128,7 +137,6 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
             spec
         );
     }
-
     Ok(())
 }
 

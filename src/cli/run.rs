@@ -20,15 +20,15 @@ use rattler_shell::{
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
     /// The command you want to run in the projects environment.
-    command: Vec<String>,
+    pub command: Vec<String>,
 }
 
-pub async fn execute(args: Args) -> anyhow::Result<()> {
-    let project = Project::discover()?;
-
-    // Get the script to execute from the command line.
-    let (command_name, command) = args
-        .command
+pub async fn execute_in_project(
+    project: &Project,
+    command: Vec<String>,
+    exit_on_end: bool,
+) -> anyhow::Result<()> {
+    let (command_name, command) = command
         .first()
         .and_then(|cmd_name| {
             project
@@ -39,7 +39,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
             (
                 None,
                 Command::Process(ProcessCmd {
-                    cmd: CmdArgs::Multiple(args.command),
+                    cmd: CmdArgs::Multiple(command),
                     depends_on: vec![],
                 }),
             )
@@ -122,7 +122,16 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         .spawn()
         .expect("failed to execute process");
 
-    std::process::exit(command.wait()?.code().unwrap_or(1));
+    if exit_on_end {
+        std::process::exit(command.wait()?.code().unwrap_or(1));
+    } else {
+        Ok(())
+    }
+}
+
+pub async fn execute(args: Args) -> anyhow::Result<()> {
+    let project = Project::discover()?;
+    execute_in_project(&project, args.command, true).await
 }
 
 /// Given a command and arguments to invoke it, format it so that it is as generalized as possible.

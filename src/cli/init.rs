@@ -9,7 +9,7 @@ use std::{env, fs, path::PathBuf};
 pub struct Args {
     /// Where to place the project (defaults to current path)
     #[arg(default_value = ".")]
-    path: PathBuf,
+    pub path: PathBuf,
 }
 
 /// The pixi.toml template
