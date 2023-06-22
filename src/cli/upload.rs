@@ -38,11 +38,17 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         .await?
     ;
 
-    println!("Response: {:?}", response);
+    if response.status().is_success() {
+        println!("Upload successful!");
+    } else {
+        println!("Upload failed!");
 
+        if response.status() == 401 {
+            println!("Authentication failed! Did you run `pixi auth login {}`?", args.host);
+        }
 
-
-    println!("Done!");
+        std::process::exit(1);
+    }
 
     Ok(())
 }
