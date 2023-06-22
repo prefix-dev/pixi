@@ -48,12 +48,12 @@ pub struct Args {
     subcommand: Subcommand,
 }
 
-fn login(args: LoginArgs, storage: AuthenticationStorage) -> anyhow::Result<()> {
+fn get_url(url: &str) -> anyhow::Result<String> {
     // parse as url and extract host without scheme or port
-    let host = if args.host.contains("://") {
-        url::Url::parse(&args.host)?.host_str().unwrap().to_string()
+    let host = if url.contains("://") {
+        url::Url::parse(url)?.host_str().unwrap().to_string()
     } else {
-        args.host
+        url.to_string()
     };
 
     let host = if host == "prefix.dev" {
@@ -64,6 +64,11 @@ fn login(args: LoginArgs, storage: AuthenticationStorage) -> anyhow::Result<()> 
         &host
     };
 
+    Ok(host.to_string())
+}
+
+fn login(args: LoginArgs, storage: AuthenticationStorage) -> anyhow::Result<()> {
+    let host = get_url(&args.host)?;
     println!("Authenticating with {}", host);
 
     let auth = if let Some(conda_token) = args.conda_token {
@@ -90,13 +95,12 @@ fn login(args: LoginArgs, storage: AuthenticationStorage) -> anyhow::Result<()> 
         anyhow::bail!("Authentication with anaconda.org requires a conda token. Use `--conda-token` to provide one.");
     }
 
-    storage.store(host, &auth)?;
+    storage.store(&host, &auth)?;
     Ok(())
 }
 
 fn logout(args: LogoutArgs, storage: AuthenticationStorage) -> anyhow::Result<()> {
-    // parse as url and extract host without scheme or port
-    let host = url::Url::parse(&args.host)?.host_str().unwrap().to_string();
+    let host = get_url(&args.host)?;
 
     println!("Removing authentication for {}", host);
 
