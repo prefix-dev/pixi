@@ -7,8 +7,6 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The path to a projects manifest path. Default is `pixi.toml`.
-    ///
-    /// The pixi.toml is searched for in the current dir or lower in the directory tree.
     #[arg(long)]
     manifest_path: Option<PathBuf>,
 }
