@@ -11,23 +11,23 @@ Except for very low level drivers like Cuda and platform libraries.
 
 Examples of such installations, which automatically fetch the tools from the `conda-forge` channel, are:
 ```shell
-pixi install starship
-pixi install ruff
+pixi global install starship
+pixi global install ruff
 ```
 After running the above commands (and adding the binary folder to your path) the tools are directly available from the command line.
 
 If you wish to install packages from a different channel, the `--channel` or `-c` option can be used:
 ```shell
-pixi install --channel conda-forge --channel bioconda trackplot
+pixi global install --channel conda-forge --channel bioconda trackplot
 # Or in a more concise form
-pixi install -c conda-forge -c bioconda trackplot
+pixi global install -c conda-forge -c bioconda trackplot
 ```
 
 The `install` command in pixi can take a matchspec, providing you with the flexibility to specify the exact version of a package you want to install.
 You can fine-tune the version down to the build:
 ```shell
-pixi install python=3.9.*
-pixi install "python [version="3.11.0", build_number=1]"
-pixi install "python [version="3.11.0", build=he550d4f_1_cpython]"
-pixi install python=3.11.0=h10a6764_1_cpython
+pixi global install python=3.9.*
+pixi global install "python [version="3.11.0", build_number=1]"
+pixi global install "python [version="3.11.0", build=he550d4f_1_cpython]"
+pixi global install python=3.11.0=h10a6764_1_cpython
 ```
