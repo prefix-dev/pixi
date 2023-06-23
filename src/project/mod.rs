@@ -166,7 +166,9 @@ impl Project {
         // Store (or replace) in the document
         deps_table.insert(name, Item::Value(nameless.to_string().into()));
 
-        self.manifest.dependencies.insert(name.to_string(), nameless);
+        self.manifest
+            .dependencies
+            .insert(name.to_string(), nameless);
 
         Ok(())
     }
