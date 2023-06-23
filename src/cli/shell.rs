@@ -38,10 +38,10 @@ pub async fn execute(_args: Args) -> anyhow::Result<()> {
     shell.set_env_var(&mut script, "CONDA_DEFAULT_ENV", project.name())?;
 
     // Start the shell as the last part of the activation script based on the default shell.
-    let shell: ShellEnum = ShellEnum::from_env()
-        .or_else(ShellEnum::from_parent_process)
+    let interactive_shell: ShellEnum = ShellEnum::from_parent_process()
+        .or_else(ShellEnum::from_env)
         .unwrap_or_default();
-    script.push_str(shell.executable());
+    script.push_str(interactive_shell.executable());
 
     // Write the contents of the script to a temporary file that we can execute with the shell.
     let mut temp_file = tempfile::Builder::new()
