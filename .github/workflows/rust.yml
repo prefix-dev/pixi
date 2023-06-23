@@ -238,7 +238,7 @@ jobs:
           --output target/wix/pixi-${{ matrix.job.target }}.msi
 
       - name: Notarize binary
-        if: matrix.job.os == 'macOS-latest' && matrix.job.target == 'x86_64-apple-darwin'
+        if: matrix.job.os == 'macOS-latest'
         env:
           APPLEID_TEAMID: ${{ secrets.APPLEID_TEAMID }}
           APPLEID_USERNAME: ${{ secrets.APPLEID_USERNAME }}
@@ -246,8 +246,6 @@ jobs:
           DEVELOPER_ID_CERTIFICATE: ${{ secrets.DEVELOPER_ID_CERTIFICATE }}
           DEVELOPER_ID_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE }}
           KEYCHAIN_FILENAME: app-signing.keychain-db
-          KEYCHAIN_ENTRY: AC_PASSWORD
-
         run: |
           export KEYCHAIN_ENTRY="AC_PASSWORD"
           INSTALL_CERTIFICATE_PATH="$RUNNER_TEMP/install_certificate.p12"
