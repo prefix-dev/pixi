@@ -1,11 +1,11 @@
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
     branches:
       - main
     paths-ignore:
-      - 'docs/**'
+      - "docs/**"
   workflow_dispatch:
   pull_request:
 
@@ -76,7 +76,7 @@ jobs:
   build:
     name: ${{ matrix.job.name }}
     runs-on: ${{ matrix.job.os }}
-    needs: [ crate_metadata, clippy ]
+    needs: [crate_metadata, clippy]
     strategy:
       fail-fast: false
       matrix:
@@ -91,7 +91,7 @@ jobs:
           - os: windows-latest
             rustflags: -C target-feature=+crt-static
     env:
-      BUILD_CMD: cargo  # The build and test command to use if not overwritten
+      BUILD_CMD: cargo # The build and test command to use if not overwritten
       RUSTFLAGS: ${{ matrix.rustflags || '' }} -D warnings
     steps:
       - name: Checkout source code
@@ -231,11 +231,54 @@ jobs:
 
       - name: Build Installer
         continue-on-error: true
-        if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
+        if: matrix.job.os == 'windows-latest' && matrix.job.target != 'aarch64-pc-windows-msvc'
         run: >
           cargo wix -v --no-build --nocapture -I install/windows/main.wxs
           --target ${{ matrix.job.target }}
           --output target/wix/pixi-${{ matrix.job.target }}.msi
+
+      - name: Notarize binary
+        if: matrix.job.os == 'macOS-latest' && matrix.job.target == 'x86_64-apple-darwin'
+        env:
+          APPLEID_TEAMID: ${{ secrets.APPLEID_TEAMID }}
+          APPLEID_USERNAME: ${{ secrets.APPLEID_USERNAME }}
+          APPLEID_PASSWORD: ${{ secrets.APPLEID_PASSWORD }}
+          DEVELOPER_ID_CERTIFICATE: ${{ secrets.DEVELOPER_ID_CERTIFICATE }}
+          DEVELOPER_ID_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE }}
+          KEYCHAIN_FILENAME: app-signing.keychain-db
+          KEYCHAIN_ENTRY: AC_PASSWORD
+
+        run: |
+          export KEYCHAIN_ENTRY="AC_PASSWORD"
+          INSTALL_CERTIFICATE_PATH="$RUNNER_TEMP/install_certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/$KEYCHAIN_FILENAME"
+
+          # create temporary keychain
+          export KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo -n "$DEVELOPER_ID_CERTIFICATE" | base64 --decode --output $INSTALL_CERTIFICATE_PATH
+          security import $INSTALL_CERTIFICATE_PATH -P "$DEVELOPER_ID_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Add Apple Developer ID credentials to keychain
+          xcrun notarytool store-credentials "$KEYCHAIN_ENTRY" \
+              --team-id "$APPLEID_TEAMID" \
+              --apple-id "$APPLEID_USERNAME" \
+              --password "$APPLEID_PASSWORD" \
+              --keychain "$KEYCHAIN_PATH"
+
+          # codesign binary
+          xcrun codesign --force --options=runtime --keychain "$KEYCHAIN_PATH" \
+            --timestamp --sign "APPLICATION_KEY_IDENT" --verbose "$BIN_PATH" \
+            --identifier "dev.prefix.pixi"
+
+          zip pixi.zip ${BIN_PATH}
+
+          # notarize binary
+          xcrun notarytool submit pixi.zip --keychain-profile "$KEYCHAIN_ENTRY" --wait
 
       - name: Create tarball
         id: package
