@@ -24,10 +24,17 @@ pub struct Args {
     pub command: Vec<String>,
 }
 
+struct RunScriptCommand {
+    /// The command to execute
+    command: std::process::Command,
+    /// Tempfile to keep a handle on, otherwise it is dropped and deleted
+    _script: tempfile::NamedTempFile,
+}
+
 async fn create_command(
     project: &Project,
     command: Vec<String>,
-) -> anyhow::Result<std::process::Command> {
+) -> anyhow::Result<RunScriptCommand> {
     let (command_name, command) = command
         .first()
         .and_then(|cmd_name| {
@@ -119,25 +126,34 @@ async fn create_command(
     // Execute the script with the shell
     let command = shell.create_run_script_command(temp_file.path());
 
-    Ok(command)
+    Ok(RunScriptCommand {
+        command,
+        _script: temp_file,
+    })
 }
 
-/// Execute project command with output
+/// Execute project command and capture output
 pub async fn execute_in_project_with_output(
     project: &Project,
     command: Vec<String>,
 ) -> anyhow::Result<std::process::Output> {
-    let mut command = create_command(project, command).await?;
-    let output = command.stdout(Stdio::piped()).spawn()?.wait_with_output()?;
+    let mut script_command = create_command(project, command).await?;
+    let output = script_command
+        .command
+        .stdout(Stdio::piped())
+        .spawn()?
+        .wait_with_output()?;
     Ok(output)
 }
 
+/// Execute project command
 pub async fn execute_in_project(project: &Project, command: Vec<String>) -> anyhow::Result<()> {
-    let mut command = create_command(project, command).await?;
-    let status = command.spawn()?.wait()?.code().unwrap_or(1);
+    let mut script_command = create_command(project, command).await?;
+    let status = script_command.command.spawn()?.wait()?.code().unwrap_or(1);
     std::process::exit(status);
 }
 
+/// CLI entry point for `pixi run`
 pub async fn execute(args: Args) -> anyhow::Result<()> {
     let project = Project::discover()?;
     execute_in_project(&project, args.command).await

@@ -13,6 +13,7 @@ readme = "docs/README.md"
 default = ["native-tls"]
 native-tls = ["reqwest/native-tls", "rattler_repodata_gateway/native-tls", "rattler/native-tls"]
 rustls-tls = ["reqwest/rustls-tls", "rattler_repodata_gateway/rustls-tls", "rattler/rustls-tls"]
+slow_integration_tests = []
 
 [dependencies]
 anyhow = "1.0.70"

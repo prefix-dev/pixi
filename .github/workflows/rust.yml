@@ -21,6 +21,7 @@ env:
   RUSTFLAGS: "-D warnings"
   CARGO_TERM_COLOR: always
   CICD_INTERMEDIATES_DIR: "_cicd-intermediates"
+  TEST_FEATURES: "slow_integration_tests"
 
 jobs:
   check-rustdoc-links:
@@ -219,6 +220,7 @@ jobs:
           # test only library unit tests and binary for arm-type targets
           unset CARGO_TEST_OPTIONS
           unset CARGO_TEST_OPTIONS ; case ${{ matrix.job.target }} in arm-* | aarch64-*) CARGO_TEST_OPTIONS="--bin ${{ needs.crate_metadata.outputs.name }}" ;; esac;
+          CARGO_TEST_OPTIONS="${CARGO_TEST_OPTIONS} --feature ${{ env.TEST_FEATURES }}"
           echo "CARGO_TEST_OPTIONS=${CARGO_TEST_OPTIONS}" >> $GITHUB_OUTPUT
 
       - name: Run tests

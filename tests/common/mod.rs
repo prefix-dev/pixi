@@ -29,11 +29,6 @@ impl RunResult {
     pub fn stdout(&self) -> &str {
         std::str::from_utf8(&self.output.stdout).expect("could not get output")
     }
-
-    /// Check if it matches specific output
-    pub fn matches_output(&self, str: impl AsRef<str>) -> bool {
-        self.stdout() == str.as_ref()
-    }
 }
 
 pub trait LockFileExt {
