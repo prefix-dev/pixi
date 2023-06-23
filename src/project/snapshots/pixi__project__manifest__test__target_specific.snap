@@ -6,7 +6,9 @@ ProjectManifest {
     project: ProjectMetadata {
         name: "foo",
         version: Version {
-            norm: "0.1.0",
+            norm: Some(
+                "0.1.0",
+            ),
             version: "[[0], [0], [1], [0]]",
             local: "[]",
         },
@@ -42,7 +44,9 @@ ProjectManifest {
                         Operator(
                             Equals,
                             Version {
-                                norm: "3.4.5",
+                                norm: Some(
+                                    "3.4.5",
+                                ),
                                 version: "[[0], [3], [4], [5]]",
                                 local: "[]",
                             },
@@ -69,7 +73,9 @@ ProjectManifest {
                         Operator(
                             Equals,
                             Version {
-                                norm: "1.2.3",
+                                norm: Some(
+                                    "1.2.3",
+                                ),
                                 version: "[[0], [1], [2], [3]]",
                                 local: "[]",
                             },
