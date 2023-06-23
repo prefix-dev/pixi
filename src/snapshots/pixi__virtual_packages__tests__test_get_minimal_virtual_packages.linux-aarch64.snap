@@ -7,9 +7,11 @@ expression: packages
     Linux(
         Linux {
             version: Version {
-                norm: "5.10",
-                version: [[0], [5], [10]],
-                local: [],
+                norm: Some(
+                    "5.10",
+                ),
+                version: "[[0], [5], [10]]",
+                local: "[]",
             },
         },
     ),
@@ -17,9 +19,11 @@ expression: packages
         LibC {
             family: "glibc",
             version: Version {
-                norm: "2.17",
-                version: [[0], [2], [17]],
-                local: [],
+                norm: Some(
+                    "2.17",
+                ),
+                version: "[[0], [2], [17]]",
+                local: "[]",
             },
         },
     ),

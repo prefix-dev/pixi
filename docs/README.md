@@ -137,10 +137,10 @@ And then restart the shell or source the shell config file.
 The cli looks as follows:
 
 ```bash
-➜ pixi -h
+➜ pixi
 A package management and workflow tool
 
-Usage: pixi [COMMAND]
+Usage: pixi [OPTIONS] <COMMAND>
 
 Commands:
   completion  Generates a completion script for a shell
@@ -148,6 +148,8 @@ Commands:
   add         Adds a dependency to the project
   run         Runs command in project
   global      Global is the main entry point for the part of pixi that executes on the global(system) level
+  auth        Login to prefix.dev or anaconda.org servers to access private channels
+  install     Install all dependencies
   help        Print this message or the help of the given subcommand(s)
 
 Options:
@@ -155,6 +157,7 @@ Options:
   -q, --quiet...    Less output per occurrence
   -h, --help        Print help
   -V, --version     Print version
+
 ```
 
 ## Creating a pixi project
@@ -175,6 +178,12 @@ Run the installed package in its environment
 
 ```bash
 pixi run cowpy "Thanks for using pixi"
+```
+
+Activate a shell in the environment
+```shell
+pixi shell
+cowpy "Thanks for using pixi"
 ```
 
 For more information check [the documentation](getting_started.md#basics-of-the-configuration-file)

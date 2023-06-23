@@ -3,15 +3,18 @@ use std::path::Path;
 use std::process::Stdio;
 use std::{fmt::Write, path::PathBuf};
 
-use crate::Project;
 use clap::Parser;
 use is_executable::IsExecutable;
 use rattler_conda_types::Platform;
 
-use crate::command::{CmdArgs, Command, ProcessCmd};
-use crate::environment::get_up_to_date_prefix;
-use rattler_shell::activation::ActivationResult;
+use crate::{
+    command::{CmdArgs, Command, ProcessCmd},
+    environment::get_up_to_date_prefix,
+    project::environment::add_metadata_as_env_vars,
+    Project,
+};
 use rattler_shell::{
+    activation::ActivationResult,
     activation::{ActivationVariables, Activator},
     shell::{Shell, ShellEnum},
 };
@@ -22,6 +25,10 @@ use rattler_shell::{
 pub struct Args {
     /// The command you want to run in the projects environment.
     pub command: Vec<String>,
+
+    /// The path to 'pixi.toml'
+    #[arg(long)]
+    pub manifest_path: Option<PathBuf>,
 }
 
 struct RunScriptCommand {
@@ -155,7 +162,10 @@ pub async fn execute_in_project(project: &Project, command: Vec<String>) -> anyh
 
 /// CLI entry point for `pixi run`
 pub async fn execute(args: Args) -> anyhow::Result<()> {
-    let project = Project::discover()?;
+    let project = match args.manifest_path {
+        Some(path) => Project::load(path.as_path())?,
+        None => Project::discover()?,
+    };
     execute_in_project(&project, args.command).await
 }
 
@@ -223,45 +233,6 @@ fn find_canonical_executable_path(path: &Path) -> Option<PathBuf> {
     }
 
     None
-}
-
-// Add pixi meta data into the environment as environment variables.
-fn add_metadata_as_env_vars(
-    script: &mut impl Write,
-    shell: &ShellEnum,
-    project: &Project,
-) -> anyhow::Result<()> {
-    // Setting a base prefix for the pixi package
-    const PREFIX: &str = "PIXI_PACKAGE_";
-
-    shell.set_env_var(
-        script,
-        &format!("{PREFIX}ROOT"),
-        &(project.root().to_string_lossy()),
-    )?;
-    shell.set_env_var(
-        script,
-        &format!("{PREFIX}MANIFEST"),
-        &(project.manifest_path().to_string_lossy()),
-    )?;
-    shell.set_env_var(
-        script,
-        &format!("{PREFIX}PLATFORMS"),
-        &(project
-            .platforms()
-            .iter()
-            .map(|plat| plat.as_str())
-            .collect::<Vec<&str>>()
-            .join(",")),
-    )?;
-    shell.set_env_var(script, &format!("{PREFIX}NAME"), project.name())?;
-    shell.set_env_var(
-        script,
-        &format!("{PREFIX}VERSION"),
-        &project.version().to_string(),
-    )?;
-
-    Ok(())
 }
 
 /// Returns all file extensions that are considered for executable files.

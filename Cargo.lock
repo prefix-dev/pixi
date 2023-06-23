@@ -28,9 +28,9 @@ dependencies = [
 
 [[package]]
 name = "aes"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "433cfd6710c9986c576a25ca913c39d66a6474107b406f34f91d4a8923395241"
+checksum = "ac1f845298e95f983ff1944b728ae08b8cebab80d684f0a832ed0fc74dfa27e2"
 dependencies = [
  "cfg-if",
  "cipher 0.4.4",
@@ -84,15 +84,15 @@ dependencies = [
 
 [[package]]
 name = "anstyle"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41ed9a86bf92ae6580e0a31281f65a1b1d867c0cc68d5346e2ae128dddfa6a7d"
+checksum = "3a30da5c5f2d5e72842e00bcb57657162cdabef0931f40e2deb9b4140440cecd"
 
 [[package]]
 name = "anstyle-parse"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e765fd216e48e067936442276d1d57399e37bce53c264d6fefbe298080cb57ee"
+checksum = "938874ff5980b03a87c5524b3ae5b59cf99b1d6bc836848df7bc5ada9643c333"
 dependencies = [
  "utf8parse",
 ]
@@ -1049,9 +1049,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.3"
+version = "4.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca8f255e4b8027970e78db75e78831229c9815fdbfa67eb1a1b777a62e24b4a0"
+checksum = "2686c4115cb0810d9a984776e197823d08ec94f176549a89a9efded477c456dc"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -1070,9 +1070,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.3.3"
+version = "4.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acd4f3c17c83b0ba34ffbc4f8bbd74f079413f747f84a6f89292f138057e36ab"
+checksum = "2e53afce1efce6ed1f633cf0e57612fe51db54a1ee4fd8f8503d078fe02d69ae"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1194,9 +1194,9 @@ dependencies = [
 
 [[package]]
 name = "cpufeatures"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e4c1eaa2012c47becbbad2ab175484c2a84d1185b566fb2cc5b8707343dfe58"
+checksum = "03e69e28e9f7f77debdedbaafa2866e1de9ba56df55a8bd7cfc724c25a09987c"
 dependencies = [
  "libc",
 ]
@@ -2034,7 +2034,7 @@ checksum = "0646026eb1b3eea4cd9ba47912ea5ce9cc07713d105b1a14698f4e6433d348b7"
 dependencies = [
  "http",
  "hyper",
- "rustls 0.21.1",
+ "rustls 0.21.2",
  "tokio",
  "tokio-rustls 0.24.1",
 ]
@@ -2127,9 +2127,9 @@ dependencies = [
 
 [[package]]
 name = "insta"
-version = "1.29.0"
+version = "1.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a28d25139df397cbca21408bb742cf6837e04cdbebf1b07b760caf971d6a972"
+checksum = "28491f7753051e5704d4d0ae7860d45fae3238d7d235bc4289dcd45c48d3cec3"
 dependencies = [
  "console",
  "lazy_static",
@@ -2256,9 +2256,9 @@ dependencies = [
 
 [[package]]
 name = "keyring"
-version = "2.0.3"
+version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e319fe0cb5b29a55cdb228df3f651b6c8cdc5b19520f3e62c8f111dc2582026c"
+checksum = "04ac4b8b0884cdf23c4619d139acf43839eac4f0739b92980c2a6d460d9c84f5"
 dependencies = [
  "byteorder",
  "lazy_static",
@@ -2701,9 +2701,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openssl"
-version = "0.10.54"
+version = "0.10.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69b3f656a17a6cbc115b5c7a40c616947d213ba182135b014d6051b73ab6f019"
+checksum = "345df152bc43501c5eb9e4654ff05f794effb78d4efe3d53abc158baddc0703d"
 dependencies = [
  "bitflags",
  "cfg-if",
@@ -2733,9 +2733,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.88"
+version = "0.9.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2ce0f250f34a308dcfdbb351f511359857d4ed2134ba715a4eadd46e1ffd617"
+checksum = "374533b0e45f3a7ced10fcaeccca020e66656bc03dac384f852e4e5a7a8104a6"
 dependencies = [
  "cc",
  "libc",
@@ -3159,8 +3159,8 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a08f0ec4f6fc16a54ebbecda8ce1dfad3fdfca47"
+version = "0.4.0"
+source = "git+https://github.com/mamba-org/rattler?branch=main#bb834bcca8a58411cdca20f2bc8f4711380c6bd7"
 dependencies = [
  "anyhow",
  "apple-codesign",
@@ -3200,8 +3200,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a08f0ec4f6fc16a54ebbecda8ce1dfad3fdfca47"
+version = "0.4.0"
+source = "git+https://github.com/mamba-org/rattler?branch=main#bb834bcca8a58411cdca20f2bc8f4711380c6bd7"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3228,8 +3228,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_digest"
-version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a08f0ec4f6fc16a54ebbecda8ce1dfad3fdfca47"
+version = "0.4.0"
+source = "git+https://github.com/mamba-org/rattler?branch=main#bb834bcca8a58411cdca20f2bc8f4711380c6bd7"
 dependencies = [
  "blake2",
  "digest 0.10.7",
@@ -3243,8 +3243,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_macros"
-version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a08f0ec4f6fc16a54ebbecda8ce1dfad3fdfca47"
+version = "0.4.0"
+source = "git+https://github.com/mamba-org/rattler?branch=main#bb834bcca8a58411cdca20f2bc8f4711380c6bd7"
 dependencies = [
  "quote",
  "syn 2.0.18",
@@ -3252,8 +3252,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a08f0ec4f6fc16a54ebbecda8ce1dfad3fdfca47"
+version = "0.4.0"
+source = "git+https://github.com/mamba-org/rattler?branch=main#bb834bcca8a58411cdca20f2bc8f4711380c6bd7"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
@@ -3269,8 +3269,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a08f0ec4f6fc16a54ebbecda8ce1dfad3fdfca47"
+version = "0.4.0"
+source = "git+https://github.com/mamba-org/rattler?branch=main#bb834bcca8a58411cdca20f2bc8f4711380c6bd7"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3292,8 +3292,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a08f0ec4f6fc16a54ebbecda8ce1dfad3fdfca47"
+version = "0.4.0"
+source = "git+https://github.com/mamba-org/rattler?branch=main#bb834bcca8a58411cdca20f2bc8f4711380c6bd7"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3330,8 +3330,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a08f0ec4f6fc16a54ebbecda8ce1dfad3fdfca47"
+version = "0.4.0"
+source = "git+https://github.com/mamba-org/rattler?branch=main#bb834bcca8a58411cdca20f2bc8f4711380c6bd7"
 dependencies = [
  "enum_dispatch",
  "indexmap",
@@ -3345,8 +3345,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a08f0ec4f6fc16a54ebbecda8ce1dfad3fdfca47"
+version = "0.4.0"
+source = "git+https://github.com/mamba-org/rattler?branch=main#bb834bcca8a58411cdca20f2bc8f4711380c6bd7"
 dependencies = [
  "anyhow",
  "cc",
@@ -3366,8 +3366,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "0.3.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#a08f0ec4f6fc16a54ebbecda8ce1dfad3fdfca47"
+version = "0.4.0"
+source = "git+https://github.com/mamba-org/rattler?branch=main#bb834bcca8a58411cdca20f2bc8f4711380c6bd7"
 dependencies = [
  "cfg-if",
  "libloading",
@@ -3499,7 +3499,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
- "rustls 0.21.1",
+ "rustls 0.21.2",
  "rustls-pemfile",
  "serde",
  "serde_json",
@@ -3600,9 +3600,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.21.1"
+version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c911ba11bc8433e811ce56fde130ccf32f5127cab0e0194e9c68c5a5b671791e"
+checksum = "e32ca28af694bc1bbf399c33a516dbdf1c90090b8ab23c2bc24f834aa2247f5f"
 dependencies = [
  "log",
  "ring",
@@ -3612,9 +3612,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-native-certs"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0167bac7a9f490495f3c33013e7722b53cb087ecbe082fb0c6387c96f634ea50"
+checksum = "a9aace74cb666635c918e9c12bc0d348266037aa8eb599b5cba565709a8dff00"
 dependencies = [
  "openssl-probe",
  "rustls-pemfile",
@@ -3694,13 +3694,13 @@ dependencies = [
 
 [[package]]
 name = "scroll_derive"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bdbda6ac5cd1321e724fa9cee216f3a61885889b896f073b8f82322789c5250e"
+checksum = "1db149f81d46d2deba7cd3c50772474707729550221e69588478ebf9ada425ae"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.18",
 ]
 
 [[package]]
@@ -3818,9 +3818,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.96"
+version = "1.0.97"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "057d394a50403bcac12672b2b18fb387ab6d289d957dab67dd201875391e52f1"
+checksum = "bdf3bf93142acad5821c99197022e170842cdbc1c30482b98750c688c640842a"
 dependencies = [
  "indexmap",
  "itoa",
@@ -3914,9 +3914,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.6"
+version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82e6b795fe2e3b1e845bafcb27aa35405c4d47cdfc92af5fc8d3002f76cebdc0"
+checksum = "479fb9d862239e610720565ca91403019f2f00410f1864c5aa7479b950a76ed8"
 dependencies = [
  "cfg-if",
  "cpufeatures",
@@ -4359,7 +4359,7 @@ version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c28327cf380ac148141087fbfb9de9d7bd4e84ab5d2c28fbc911d753de8a7081"
 dependencies = [
- "rustls 0.21.1",
+ "rustls 0.21.2",
  "tokio",
 ]
 
@@ -4453,9 +4453,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-attributes"
-version = "0.1.24"
+version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f57e3ca2a01450b1a921183a9c9cbfda207fd822cef4ccb00a65402cbba7a74"
+checksum = "5f4f31f56159e98206da9efd823404b79b6ef3143b4a7ab76e67b1751b25a4ab"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4675,11 +4675,10 @@ dependencies = [
 
 [[package]]
 name = "want"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ce8a968cb1cd110d136ff8b819a556d6fb6d919363c61534f6860c7eb172ba0"
+checksum = "bfa7760aed19e106de2c7c0b581b509f2f25d3dacaf737cb82ac61bc6d760b0e"
 dependencies = [
- "log",
  "try-lock",
 ]
 
@@ -4998,9 +4997,9 @@ checksum = "1a515f5799fe4961cb532f983ce2b23082366b898e52ffbce459c86f67c8378a"
 
 [[package]]
 name = "winnow"
-version = "0.4.6"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61de7bac303dc551fe038e2b3cef0f571087a47571ea6e79a87692ac99b99699"
+checksum = "ca0ace3845f0d96209f0375e6d367e3eb87eb65d27d445bdc9f1843a26f39448"
 dependencies = [
  "memchr",
 ]
@@ -5202,7 +5201,7 @@ version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "760394e246e4c28189f19d488c058bf16f564016aefac5d32bb1f3b51d5e9261"
 dependencies = [
- "aes 0.8.2",
+ "aes 0.8.3",
  "byteorder",
  "bzip2",
  "constant_time_eq",

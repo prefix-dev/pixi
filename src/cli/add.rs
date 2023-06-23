@@ -12,6 +12,7 @@ use rattler_conda_types::{
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{LibsolvRepoData, SolverBackend};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Adds a dependency to the project
 #[derive(Parser, Debug)]
@@ -33,12 +34,18 @@ pub struct Args {
     /// Adding multiple dependencies at once is also supported:
     ///
     /// - `pixi add python pytest`: This will add both `python` and `pytest` to the project's dependencies.
-    pub specs: Vec<MatchSpec>,
+    specs: Vec<MatchSpec>,
+
+    /// The path to 'pixi.toml'
+    #[arg(long)]
+    manifest_path: Option<PathBuf>,
 }
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
-    // Determine the location and metadata of the current project
-    let mut project = Project::discover()?;
+    let mut project = match args.manifest_path {
+        Some(path) => Project::load(path.as_path())?,
+        None => Project::discover()?,
+    };
     add_specs_to_project(&mut project, args.specs).await
 }
 

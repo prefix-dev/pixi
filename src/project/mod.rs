@@ -1,3 +1,4 @@
+pub mod environment;
 mod manifest;
 mod serde;
 
