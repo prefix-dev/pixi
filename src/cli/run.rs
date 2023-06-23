@@ -1,5 +1,6 @@
 use std::collections::{HashSet, VecDeque};
 use std::path::Path;
+use std::process::Stdio;
 use std::{fmt::Write, path::PathBuf};
 
 use crate::Project;
@@ -23,11 +24,10 @@ pub struct Args {
     pub command: Vec<String>,
 }
 
-pub async fn execute_in_project(
+async fn create_command(
     project: &Project,
     command: Vec<String>,
-    exit_on_end: bool,
-) -> anyhow::Result<i32> {
+) -> anyhow::Result<std::process::Command> {
     let (command_name, command) = command
         .first()
         .and_then(|cmd_name| {
@@ -49,7 +49,7 @@ pub async fn execute_in_project(
     let shell: ShellEnum = ShellEnum::default();
 
     // Construct an activator so we can run commands from the environment
-    let prefix = get_up_to_date_prefix(&project).await?;
+    let prefix = get_up_to_date_prefix(project).await?;
     let activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())?;
 
     let activator_result = activator.activation(ActivationVariables {
@@ -65,7 +65,7 @@ pub async fn execute_in_project(
     let mut script = format!("{}\n", activator_result.script.trim());
 
     // Add meta data env variables to help user interact with there configuration.
-    add_metadata_as_env_vars(&mut script, &shell, &project)?;
+    add_metadata_as_env_vars(&mut script, &shell, project)?;
 
     // Perform post order traversal of the commands and their `depends_on` to make sure they are
     // executed in the right order.
@@ -105,7 +105,7 @@ pub async fn execute_in_project(
 
     while let Some(command) = s2.pop_back() {
         // Write the invocation of the command into the script.
-        command.write_invoke_script(&mut script, &shell, &project, &activator_result)?;
+        command.write_invoke_script(&mut script, &shell, project, &activator_result)?;
     }
 
     tracing::debug!("Activation script:\n{}", script);
@@ -117,22 +117,30 @@ pub async fn execute_in_project(
     std::io::Write::write_all(&mut temp_file, script.as_bytes())?;
 
     // Execute the script with the shell
-    let mut command = shell
-        .create_run_script_command(temp_file.path())
-        .spawn()
-        .expect("failed to execute process");
+    let command = shell.create_run_script_command(temp_file.path());
 
-    let status = command.wait()?.code().unwrap_or(1);
-    if exit_on_end {
-        std::process::exit(status);
-    } else {
-        Ok(status)
-    }
+    Ok(command)
 }
 
-pub async fn execute(args: Args) -> anyhow::Result<i32> {
+/// Execute project command with output
+pub async fn execute_in_project_with_output(
+    project: &Project,
+    command: Vec<String>,
+) -> anyhow::Result<std::process::Output> {
+    let mut command = create_command(project, command).await?;
+    let output = command.stdout(Stdio::piped()).spawn()?.wait_with_output()?;
+    Ok(output)
+}
+
+pub async fn execute_in_project(project: &Project, command: Vec<String>) -> anyhow::Result<()> {
+    let mut command = create_command(project, command).await?;
+    let status = command.spawn()?.wait()?.code().unwrap_or(1);
+    std::process::exit(status);
+}
+
+pub async fn execute(args: Args) -> anyhow::Result<()> {
     let project = Project::discover()?;
-    execute_in_project(&project, args.command, true).await
+    execute_in_project(&project, args.command).await
 }
 
 /// Given a command and arguments to invoke it, format it so that it is as generalized as possible.

@@ -15,6 +15,56 @@ pub struct PixiControl {
     project: Option<Project>,
 }
 
+pub struct RunResult {
+    output: std::process::Output,
+}
+
+impl RunResult {
+    /// Was the output successful
+    pub fn success(&self) -> bool {
+        self.output.status.success()
+    }
+
+    /// Get the output
+    pub fn stdout(&self) -> &str {
+        std::str::from_utf8(&self.output.stdout).expect("could not get output")
+    }
+
+    /// Check if it matches specific output
+    pub fn matches_output(&self, str: impl AsRef<str>) -> bool {
+        self.stdout() == str.as_ref()
+    }
+}
+
+pub trait LockFileExt {
+    fn contains_package(&self, name: impl AsRef<str>) -> bool;
+    fn contains_matchspec(&self, matchspec: impl AsRef<str>) -> bool;
+}
+
+impl LockFileExt for CondaLock {
+    fn contains_package(&self, name: impl AsRef<str>) -> bool {
+        self.package
+            .iter()
+            .any(|locked_dep| locked_dep.name == name.as_ref())
+    }
+
+    fn contains_matchspec(&self, matchspec: impl AsRef<str>) -> bool {
+        let matchspec = MatchSpec::from_str(matchspec.as_ref()).expect("could not parse matchspec");
+        let name = matchspec.name.expect("expected matchspec to have a name");
+        let version = matchspec
+            .version
+            .expect("expected versionspec to have a name");
+        self.package
+            .iter()
+            .find(|locked_dep| {
+                let package_version =
+                    Version::from_str(&locked_dep.version).expect("could not parse version");
+                locked_dep.name == name && version.matches(&package_version)
+            })
+            .is_some()
+    }
+}
+
 impl PixiControl {
     /// Create a new PixiControl instance
     pub fn new() -> anyhow::Result<PixiControl> {
@@ -25,14 +75,17 @@ impl PixiControl {
         })
     }
 
+    /// Access to the project
     pub fn project(&self) -> &Project {
         self.project.as_ref().expect("should call .init() first")
     }
 
+    /// Mutable access to the project
     pub fn project_mut(&mut self) -> &mut Project {
         self.project.as_mut().expect("should call .init() first")
     }
 
+    /// Get the path to the project
     pub fn project_path(&self) -> &Path {
         self.tmpdir.path()
     }
@@ -68,51 +121,21 @@ impl PixiControl {
     pub async fn run(
         &self,
         command: impl IntoIterator<Item = impl AsRef<str>>,
-    ) -> anyhow::Result<i32> {
+    ) -> anyhow::Result<RunResult> {
         std::env::set_current_dir(self.project_path()).unwrap();
-        run::execute_in_project(
+        let output = run::execute_in_project_with_output(
             self.project(),
             command
                 .into_iter()
                 .map(|s| s.as_ref().to_string())
                 .collect(),
-            true,
         )
-        .await
+        .await?;
+        Ok(RunResult { output })
     }
 
     /// Get the associated lock file
     pub async fn lock_file(&self) -> anyhow::Result<CondaLock> {
         pixi::environment::load_lock_file(self.project()).await
-    }
-}
-
-pub trait LockFileExt {
-    fn contains_package(&self, name: impl AsRef<str>) -> bool;
-    fn contains_matchspec(&self, matchspec: impl AsRef<str>) -> bool;
-}
-
-impl LockFileExt for CondaLock {
-    fn contains_package(&self, name: impl AsRef<str>) -> bool {
-        self.package
-            .iter()
-            .find(|locked_dep| locked_dep.name == name.as_ref())
-            .is_some()
-    }
-
-    fn contains_matchspec(&self, matchspec: impl AsRef<str>) -> bool {
-        let matchspec = MatchSpec::from_str(matchspec.as_ref()).expect("could not parse matchspec");
-        let name = matchspec.name.expect("expected matchspec to have a name");
-        let version = matchspec
-            .version
-            .expect("expected versionspec to have a name");
-        self.package
-            .iter()
-            .find(|locked_dep| {
-                let package_version =
-                    Version::from_str(&locked_dep.version).expect("could not parse version");
-                locked_dep.name == name && version.matches(&package_version)
-            })
-            .is_some()
     }
 }

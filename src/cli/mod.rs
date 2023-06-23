@@ -109,7 +109,7 @@ pub async fn execute_command(command: Option<Command>) -> Result<(), Error> {
         Some(Command::Run(cmd)) => {
             run::execute(cmd).await?;
             Ok(())
-        },
+        }
         Some(Command::Global(cmd)) => global::execute(cmd).await,
         None => default().await,
     }

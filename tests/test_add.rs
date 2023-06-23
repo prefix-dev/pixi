@@ -10,5 +10,7 @@ async fn add_python() {
     pixi.add(["python==3.11.0"]).await.unwrap();
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_matchspec("python==3.11.0"));
-    pixi.run(["python", "--version"]).await.unwrap();
+    let result = pixi.run(["python", "--version"]).await.unwrap();
+    assert!(result.success());
+    assert!(result.matches_output("Python 3.11.0"));
 }

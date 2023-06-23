@@ -123,8 +123,8 @@ pub async fn add_specs_to_project(
 
     // Update the lock file and write to disk
     update_lock_file(
-        &project,
-        load_lock_file(&project).await?,
+        project,
+        load_lock_file(project).await?,
         Some(sparse_repo_data),
     )
     .await?;
