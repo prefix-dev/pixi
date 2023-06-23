@@ -12,7 +12,9 @@ expression: packages
     Osx(
         Osx {
             version: Version {
-                norm: "11.0",
+                norm: Some(
+                    "11.0",
+                ),
                 version: "[[0], [11], [0]]",
                 local: "[]",
             },
