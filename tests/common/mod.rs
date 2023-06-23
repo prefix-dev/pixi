@@ -37,7 +37,9 @@ impl RunResult {
 }
 
 pub trait LockFileExt {
+    /// Check if this package is contained in the lockfile
     fn contains_package(&self, name: impl AsRef<str>) -> bool;
+    /// Check if this matchspec is contained in the lockfile
     fn contains_matchspec(&self, matchspec: impl AsRef<str>) -> bool;
 }
 
