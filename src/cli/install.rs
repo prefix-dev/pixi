@@ -6,7 +6,7 @@ use std::path::PathBuf;
 /// Install all dependencies
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// The path to a projects manifest path. Default is `pixi.toml`.
+    /// The path to 'pixi.toml'
     #[arg(long)]
     manifest_path: Option<PathBuf>,
 }

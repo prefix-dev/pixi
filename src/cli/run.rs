@@ -22,7 +22,7 @@ pub struct Args {
     /// The command you want to run in the projects environment.
     command: Vec<String>,
 
-    /// The path to a projects manifest path. Default is `pixi.toml`.
+    /// The path to 'pixi.toml'
     #[arg(long)]
     manifest_path: Option<PathBuf>,
 }
