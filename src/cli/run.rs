@@ -21,10 +21,19 @@ use rattler_shell::{
 pub struct Args {
     /// The command you want to run in the projects environment.
     command: Vec<String>,
+
+    /// The path to a projects manifest path. Default is `pixi.toml`.
+    ///
+    /// The pixi.toml is searched for in the current dir or lower in the directory tree.
+    #[arg(long)]
+    manifest_path: Option<PathBuf>,
 }
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
-    let project = Project::discover()?;
+    let project = match args.manifest_path {
+        Some(path) => Project::load(path.as_path())?,
+        None => Project::discover()?,
+    };
 
     // Get the script to execute from the command line.
     let (command_name, command) = args
