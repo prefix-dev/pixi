@@ -1,3 +1,6 @@
+pub mod repodata;
+
+use crate::common::repodata::ChannelBuilder;
 use pixi::cli::{add, init, run};
 use pixi::Project;
 use rattler_conda_types::conda_lock::CondaLock;
@@ -5,6 +8,7 @@ use rattler_conda_types::{MatchSpec, Version};
 use std::path::Path;
 use std::str::FromStr;
 use tempfile::TempDir;
+use url::Url;
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -13,6 +17,9 @@ pub struct PixiControl {
 
     /// The project that could be worked on
     project: Option<Project>,
+
+    /// Additional temporary directories to release when this is dropped.
+    extra_temp_dirs: Vec<TempDir>,
 }
 
 pub struct RunResult {
@@ -69,6 +76,7 @@ impl PixiControl {
         Ok(PixiControl {
             tmpdir: tempdir,
             project: None,
+            extra_temp_dirs: Vec::new(),
         })
     }
 
@@ -134,5 +142,20 @@ impl PixiControl {
     /// Get the associated lock file
     pub async fn lock_file(&self) -> anyhow::Result<CondaLock> {
         pixi::environment::load_lock_file(self.project()).await
+    }
+
+    /// Set the project to use a specific channel
+    pub async fn set_channel(&mut self, builder: ChannelBuilder) -> anyhow::Result<()> {
+        // Construct the fake channel
+        let channel_dir = builder.write_to_disk().await?;
+
+        let url =
+            Url::from_directory_path(channel_dir.path()).expect("failed to create directory URL");
+
+        self.project_mut().set_channels([url.as_str()])?;
+
+        self.extra_temp_dirs.push(channel_dir);
+
+        Ok(())
     }
 }
