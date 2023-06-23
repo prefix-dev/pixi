@@ -160,11 +160,12 @@ impl Project {
         // TODO: Do this smarter. E.g.:
         //  - split this into an object if exotic properties (like channel) are specified.
         //  - split the name from the rest of the requirement.
-        let spec_string = spec.to_string();
-        let requirement = spec_string.split_once(' ').unwrap_or(("", "*")).1;
+        let nameless = NamelessMatchSpec::from(spec.to_owned());
 
         // Store (or replace) in the document
-        deps_table.insert(name, Item::Value(requirement.into()));
+        deps_table.insert(name, Item::Value(nameless.to_string().into()));
+
+        self.manifest.dependencies.insert(name.to_string(), nameless);
 
         Ok(())
     }
