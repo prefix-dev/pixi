@@ -1,15 +1,16 @@
 ---
 source: src/project/manifest.rs
-assertion_line: 290
 expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\")"
 ---
 ProjectManifest {
     project: ProjectMetadata {
         name: "foo",
         version: Version {
-            norm: "0.1.0",
-            version: [[0], [0], [1], [0]],
-            local: [],
+            norm: Some(
+                "0.1.0",
+            ),
+            version: "[[0], [0], [1], [0]]",
+            local: "[]",
         },
         description: None,
         authors: [],
@@ -43,9 +44,11 @@ ProjectManifest {
                         Operator(
                             Equals,
                             Version {
-                                norm: "3.4.5",
-                                version: [[0], [3], [4], [5]],
-                                local: [],
+                                norm: Some(
+                                    "3.4.5",
+                                ),
+                                version: "[[0], [3], [4], [5]]",
+                                local: "[]",
                             },
                         ),
                     ),
@@ -70,9 +73,11 @@ ProjectManifest {
                         Operator(
                             Equals,
                             Version {
-                                norm: "1.2.3",
-                                version: [[0], [1], [2], [3]],
-                                local: [],
+                                norm: Some(
+                                    "1.2.3",
+                                ),
+                                version: "[[0], [1], [2], [3]]",
+                                local: "[]",
                             },
                         ),
                     ),

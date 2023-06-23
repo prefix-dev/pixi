@@ -180,6 +180,12 @@ Run the installed package in its environment
 pixi run cowpy "Thanks for using pixi"
 ```
 
+Activate a shell in the environment
+```shell
+pixi shell
+cowpy "Thanks for using pixi"
+```
+
 For more information check [the documentation](getting_started.md#basics-of-the-configuration-file)
 
 ## Installing a conda package globally

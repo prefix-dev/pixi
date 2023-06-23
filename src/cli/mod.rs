@@ -13,6 +13,7 @@ mod global;
 mod init;
 mod install;
 mod run;
+mod shell;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -43,6 +44,8 @@ enum Command {
     Add(add::Args),
     #[clap(alias = "r")]
     Run(run::Args),
+    #[clap(alias = "s")]
+    Shell(shell::Args),
     #[clap(alias = "g")]
     Global(global::Args),
     Auth(auth::Args),
@@ -94,5 +97,6 @@ pub async fn execute() -> anyhow::Result<()> {
         Command::Global(cmd) => global::execute(cmd).await,
         Command::Auth(cmd) => auth::execute(cmd).await,
         Command::Install(cmd) => install::execute(cmd).await,
+        Command::Shell(cmd) => shell::execute(cmd).await,
     }
 }
