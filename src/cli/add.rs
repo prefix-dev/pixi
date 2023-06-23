@@ -118,8 +118,8 @@ pub async fn add_specs_to_project(
     }
 
     // TODO why is this only needed in the test?
-    project.save()?;
-    project.reload()?;
+    // project.save()?;
+    // project.reload()?;
 
     // Update the lock file and write to disk
     update_lock_file(

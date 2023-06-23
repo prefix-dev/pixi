@@ -27,7 +27,7 @@ pub async fn execute_in_project(
     project: &Project,
     command: Vec<String>,
     exit_on_end: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<i32> {
     let (command_name, command) = command
         .first()
         .and_then(|cmd_name| {
@@ -122,14 +122,15 @@ pub async fn execute_in_project(
         .spawn()
         .expect("failed to execute process");
 
+    let status = command.wait()?.code().unwrap_or(1);
     if exit_on_end {
-        std::process::exit(command.wait()?.code().unwrap_or(1));
+        std::process::exit(status);
     } else {
-        Ok(())
+        Ok(status)
     }
 }
 
-pub async fn execute(args: Args) -> anyhow::Result<()> {
+pub async fn execute(args: Args) -> anyhow::Result<i32> {
     let project = Project::discover()?;
     execute_in_project(&project, args.command, true).await
 }

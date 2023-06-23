@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use pixi::cli::{add, init, run};
 use pixi::Project;
 use rattler_conda_types::conda_lock::CondaLock;
@@ -54,6 +53,7 @@ impl PixiControl {
         &mut self,
         specs: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> anyhow::Result<()> {
+        std::env::set_current_dir(self.project_path()).unwrap();
         add::add_specs_to_project(
             self.project_mut(),
             specs
@@ -68,7 +68,7 @@ impl PixiControl {
     pub async fn run(
         &self,
         command: impl IntoIterator<Item = impl AsRef<str>>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<i32> {
         std::env::set_current_dir(self.project_path()).unwrap();
         run::execute_in_project(
             self.project(),
@@ -76,7 +76,7 @@ impl PixiControl {
                 .into_iter()
                 .map(|s| s.as_ref().to_string())
                 .collect(),
-            false,
+            true,
         )
         .await
     }
