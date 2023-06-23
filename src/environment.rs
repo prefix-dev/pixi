@@ -275,7 +275,7 @@ fn locked_dependency_satisfies(
 /// Updates the lock file for a project.
 pub async fn update_lock_file(
     project: &Project,
-    _existing_lock_file: CondaLock,
+    existing_lock_file: CondaLock,
     repodata: Option<Vec<SparseRepoData>>,
 ) -> anyhow::Result<CondaLock> {
     let platforms = project.platforms();
@@ -329,7 +329,10 @@ pub async fn update_lock_file(
                 .map(|records| LibsolvRepoData::from_records(records)),
 
             // TODO: All these things.
-            locked_packages: vec![],
+            locked_packages: existing_lock_file
+                .packages_for_platform(platform)
+                .map(RepoDataRecord::try_from)
+                .collect::<Result<Vec<_>, _>>()?,
             pinned_packages: vec![],
             virtual_packages,
         };
@@ -337,39 +340,11 @@ pub async fn update_lock_file(
         // Solve the task
         let records = rattler_solve::LibsolvBackend.solve(task)?;
 
+        // Update lock file
         let mut locked_packages = LockedPackages::new(platform);
         for record in records {
-            locked_packages = locked_packages.add_locked_package(LockedPackage {
-                name: record.package_record.name,
-                version: record.package_record.version.to_string(),
-                build_string: record.package_record.build.to_string(),
-                url: record.url,
-                package_hashes: match (record.package_record.sha256, record.package_record.md5) {
-                    (Some(sha256), Some(md5)) => PackageHashes::Md5Sha256(md5, sha256),
-                    (Some(sha256), None) => PackageHashes::Sha256(sha256),
-                    (None, Some(md5)) => PackageHashes::Md5(md5),
-                    _ => unreachable!("package without any hash??"),
-                },
-                dependency_list: record
-                    .package_record
-                    .depends
-                    .iter()
-                    .map(|dep| {
-                        MatchSpec::from_str(dep)
-                            .map_err(anyhow::Error::from)
-                            .and_then(|spec| match &spec.name {
-                                Some(name) => {
-                                    Ok((name.to_owned(), NamelessMatchSpec::from(spec).into()))
-                                }
-                                None => Err(anyhow::anyhow!(
-                                    "dependency MatchSpec missing a name '{}'",
-                                    dep
-                                )),
-                            })
-                    })
-                    .collect::<Result<_, _>>()?,
-                optional: None,
-            });
+            let locked_package = LockedPackage::try_from(record)?;
+            locked_packages = locked_packages.add_locked_package(locked_package);
         }
 
         builder = builder.add_locked_packages(locked_packages);
