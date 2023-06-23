@@ -26,4 +26,3 @@ After that press `ESC` which will start the calibration.
 When the calibration is done the camera will be used again to find the distance to the checkerboard.
 
 ![callibrated camera result](https://github.com/ruben-arts/pixi/assets/12893423/f42825d7-5010-4805-9f6b-b02075395413)
-
