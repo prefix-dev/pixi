@@ -3,7 +3,7 @@ The central philosophy of pixi revolves around maintaining a separate conda envi
 The `pixi` tool achieves this by organizing environments and installations within unique directories.
 
 When you use pixi to install a standalone tool, for example `cowpy`, it creates a distinct structure in your home directory.
-To illustrate, running the command `pixi install cowpy` would yield the following directory structure:
+To illustrate, running the command `pixi global install cowpy` would yield the following directory structure:
 ```shell
 $HOME
 └── .pixi
