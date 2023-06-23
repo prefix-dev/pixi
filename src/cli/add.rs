@@ -36,7 +36,7 @@ pub struct Args {
     /// - `pixi add python pytest`: This will add both `python` and `pytest` to the project's dependencies.
     specs: Vec<MatchSpec>,
 
-    /// The path to a projects manifest path. Default is `pixi.toml`.
+    /// The path to 'pixi.toml'
     #[arg(long)]
     manifest_path: Option<PathBuf>,
 }
