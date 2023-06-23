@@ -3,8 +3,7 @@ use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
 use clap_verbosity_flag::Verbosity;
 
-use crate::Project;
-use crate::{environment::get_up_to_date_prefix, progress};
+use crate::progress;
 use anyhow::Error;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
@@ -12,14 +11,16 @@ mod add;
 mod auth;
 mod global;
 mod init;
+mod install;
 mod run;
 mod shell;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
+#[clap(arg_required_else_help = true)]
 struct Args {
     #[command(subcommand)]
-    command: Option<Command>,
+    command: Command,
 
     /// The verbosity level
     /// (-v for verbose, -vv for debug, -vvv for trace, -q for quiet)
@@ -48,6 +49,7 @@ enum Command {
     #[clap(alias = "g")]
     Global(global::Args),
     Auth(auth::Args),
+    Install(install::Args),
 }
 
 fn completion(args: CompletionCommand) -> Result<(), Error> {
@@ -58,20 +60,6 @@ fn completion(args: CompletionCommand) -> Result<(), Error> {
         &mut std::io::stdout(),
     );
 
-    Ok(())
-}
-
-/// Run the project initialization when there is a manifest available.
-/// This is run when only running `pixi`, which aligns with yarns implementation.
-async fn default() -> Result<(), Error> {
-    let project = Project::discover()?;
-    get_up_to_date_prefix(&project).await?;
-    // Emit success
-    eprintln!(
-        "{}Project in {} is ready to use!",
-        console::style(console::Emoji("✔ ", "")).green(),
-        project.root().display()
-    );
     Ok(())
 }
 
@@ -102,13 +90,13 @@ pub async fn execute() -> anyhow::Result<()> {
         .try_init()?;
 
     match args.command {
-        Some(Command::Completion(cmd)) => completion(cmd),
-        Some(Command::Init(cmd)) => init::execute(cmd).await,
-        Some(Command::Add(cmd)) => add::execute(cmd).await,
-        Some(Command::Run(cmd)) => run::execute(cmd).await,
-        Some(Command::Shell(cmd)) => shell::execute(cmd).await,
-        Some(Command::Global(cmd)) => global::execute(cmd).await,
-        Some(Command::Auth(cmd)) => auth::execute(cmd).await,
-        None => default().await,
+        Command::Completion(cmd) => completion(cmd),
+        Command::Init(cmd) => init::execute(cmd).await,
+        Command::Add(cmd) => add::execute(cmd).await,
+        Command::Run(cmd) => run::execute(cmd).await,
+        Command::Global(cmd) => global::execute(cmd).await,
+        Command::Auth(cmd) => auth::execute(cmd).await,
+        Command::Install(cmd) => install::execute(cmd).await,
+        Command::Shell(cmd) => shell::execute(cmd).await,
     }
 }
