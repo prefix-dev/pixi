@@ -81,12 +81,12 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - { name: "Linux-x86_64",   target: x86_64-unknown-linux-musl,  os: ubuntu-20.04, use-cross: true }
+          # - { name: "Linux-x86_64",   target: x86_64-unknown-linux-musl,  os: ubuntu-20.04, use-cross: true }
 
           - { name: "macOS-x86_64",   target: x86_64-apple-darwin,        os: macOS-latest }
           - { name: "macOS-aarch64",  target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
 
-          - { name: "Windows-x86_64", target: x86_64-pc-windows-msvc,     os: windows-latest }
+          # - { name: "Windows-x86_64", target: x86_64-pc-windows-msvc,     os: windows-latest }
         include:
           - os: windows-latest
             rustflags: -C target-feature=+crt-static
@@ -258,7 +258,7 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
           echo -n "$DEVELOPER_ID_CERTIFICATE" | base64 --decode --output $INSTALL_CERTIFICATE_PATH
-          security import $INSTALL_CERTIFICATE_PATH -P "$DEVELOPER_ID_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security import $INSTALL_CERTIFICATE_PATH -P "$DEVELOPER_ID_PASSWORD" -A -t priv -f pkcs12 -k $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
           # Add Apple Developer ID credentials to keychain
