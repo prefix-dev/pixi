@@ -13,8 +13,8 @@ expression: packages
         Osx {
             version: Version {
                 norm: "10.15",
-                version: [[0], [10], [15]],
-                local: [],
+                version: "[[0], [10], [15]]",
+                local: "[]",
             },
         },
     ),

@@ -1,6 +1,5 @@
 ---
 source: src/project/manifest.rs
-assertion_line: 290
 expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\")"
 ---
 ProjectManifest {
@@ -8,8 +7,8 @@ ProjectManifest {
         name: "foo",
         version: Version {
             norm: "0.1.0",
-            version: [[0], [0], [1], [0]],
-            local: [],
+            version: "[[0], [0], [1], [0]]",
+            local: "[]",
         },
         description: None,
         authors: [],
@@ -44,8 +43,8 @@ ProjectManifest {
                             Equals,
                             Version {
                                 norm: "3.4.5",
-                                version: [[0], [3], [4], [5]],
-                                local: [],
+                                version: "[[0], [3], [4], [5]]",
+                                local: "[]",
                             },
                         ),
                     ),
@@ -71,8 +70,8 @@ ProjectManifest {
                             Equals,
                             Version {
                                 norm: "1.2.3",
-                                version: [[0], [1], [2], [3]],
-                                local: [],
+                                version: "[[0], [1], [2], [3]]",
+                                local: "[]",
                             },
                         ),
                     ),

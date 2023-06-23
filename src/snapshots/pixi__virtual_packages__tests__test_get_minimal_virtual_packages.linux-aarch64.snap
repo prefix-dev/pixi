@@ -8,8 +8,8 @@ expression: packages
         Linux {
             version: Version {
                 norm: "5.10",
-                version: [[0], [5], [10]],
-                local: [],
+                version: "[[0], [5], [10]]",
+                local: "[]",
             },
         },
     ),
@@ -18,8 +18,8 @@ expression: packages
             family: "glibc",
             version: Version {
                 norm: "2.17",
-                version: [[0], [2], [17]],
-                local: [],
+                version: "[[0], [2], [17]]",
+                local: "[]",
             },
         },
     ),
