@@ -2,7 +2,7 @@ use crate::{config::get_default_author, consts};
 use clap::Parser;
 use minijinja::{context, Environment};
 use rattler_conda_types::Platform;
-use std::{env, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 /// Creates a new project
 #[derive(Parser, Debug)]
@@ -36,7 +36,7 @@ const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
     let env = Environment::new();
-    let dir = env::current_dir()?.join(args.path);
+    let dir = args.path;
     let manifest_path = dir.join(consts::PROJECT_MANIFEST);
     let gitignore_path = dir.join(".gitignore");
 
@@ -49,7 +49,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     fs::create_dir_all(&dir).ok();
 
     // Write pixi.toml
-    let name = dir.file_name().unwrap().to_string_lossy();
+    let name = manifest_path.file_name().unwrap().to_string_lossy();
     let version = "0.1.0";
     let author = get_default_author();
     let channel = "conda-forge";
