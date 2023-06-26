@@ -18,5 +18,5 @@ async fn install_run_python() {
     // Check if python is installed and can be run
     let result = pixi.run(["python", "--version"]).await.unwrap();
     assert!(result.success());
-    assert_eq!(result.stdout(), "Python 3.11.0\n");
+    assert_eq!(result.stdout().trim(), "Python 3.11.0");
 }
