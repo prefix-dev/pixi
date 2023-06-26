@@ -103,15 +103,15 @@ impl PixiControl {
         &mut self,
         specs: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> anyhow::Result<()> {
-        std::env::set_current_dir(self.project_path()).unwrap();
-        add::add_specs_to_project(
-            self.project_mut(),
-            specs
-                .into_iter()
-                .map(|s| s.as_ref().parse())
-                .collect::<Result<Vec<_>, _>>()?,
-        )
-        .await
+        let specs = specs
+            .into_iter()
+            .map(|s| s.as_ref().parse())
+            .collect::<Result<Vec<_>, _>>()?;
+        let args = add::Args {
+            specs,
+            manifest_path: Some(self.project_path().to_path_buf()),
+        };
+        add::execute(args).await
     }
 
     /// Run a command
@@ -119,7 +119,13 @@ impl PixiControl {
         &self,
         command: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> anyhow::Result<RunResult> {
-        std::env::set_current_dir(self.project_path()).unwrap();
+        let args = run::Args {
+            command: command
+                .into_iter()
+                .map(|s| s.as_ref().to_string())
+                .collect(),
+            manifest_path: Some(self.project_path().to_path_buf()),
+        };
         let output = run::execute_in_project_with_output(
             self.project(),
             command

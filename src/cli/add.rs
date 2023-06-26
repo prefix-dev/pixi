@@ -34,11 +34,11 @@ pub struct Args {
     /// Adding multiple dependencies at once is also supported:
     ///
     /// - `pixi add python pytest`: This will add both `python` and `pytest` to the project's dependencies.
-    specs: Vec<MatchSpec>,
+    pub specs: Vec<MatchSpec>,
 
     /// The path to 'pixi.toml'
     #[arg(long)]
-    manifest_path: Option<PathBuf>,
+    pub manifest_path: Option<PathBuf>,
 }
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
