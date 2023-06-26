@@ -89,7 +89,7 @@ jobs:
           - { name: "Windows-x86_64", target: x86_64-pc-windows-msvc,     os: windows-latest, rustflags: -C target-feature=+crt-static }
     env:
       BUILD_CMD: cargo # The build and test command to use if not overwritten
-      RUSTFLAGS: ${{ matrix.rustflags || '' }} -D warnings
+      RUSTFLAGS: ${{ matrix.job.rustflags || '' }} -D warnings
     steps:
       - name: Checkout source code
         uses: actions/checkout@v3
