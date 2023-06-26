@@ -2,7 +2,7 @@
 name = "sdl_example"
 version = "0.1.0"
 description = "Showcases how to create a simple C++ executable with Pixi"
-authors = ["Bas Zalmstra <zalmstra.bas@gmail.com>"]
+authors = ["Bas Zalmstra <bas@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
