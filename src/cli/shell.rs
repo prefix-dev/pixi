@@ -5,12 +5,20 @@ use clap::Parser;
 use rattler_conda_types::Platform;
 use rattler_shell::activation::{ActivationVariables, Activator};
 use rattler_shell::shell::{Shell, ShellEnum};
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-pub struct Args {}
+pub struct Args {
+    /// The path to 'pixi.toml'
+    #[arg(long)]
+    manifest_path: Option<PathBuf>,
+}
 
-pub async fn execute(_args: Args) -> anyhow::Result<()> {
-    let project = Project::discover()?;
+pub async fn execute(args: Args) -> anyhow::Result<()> {
+    let project = match args.manifest_path {
+        Some(path) => Project::load(path.as_path())?,
+        None => Project::discover()?,
+    };
 
     // Determine the current shell
     let shell: ShellEnum = ShellEnum::default();
