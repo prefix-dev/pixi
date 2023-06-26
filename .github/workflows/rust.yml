@@ -161,6 +161,13 @@ jobs:
           unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true' ; fi
           echo "IS_RELEASE=${IS_RELEASE}" >> $GITHUB_OUTPUT
 
+      - name: Set release specific compilation flags
+        if: steps.is-release.outputs.IS_RELEASE
+        shell: bash
+        run: |
+          echo "CARGO_PROFILE_RELEASE_LTO=true" >> $GITHUB_ENV
+          echo "CARGO_PROFILE_RELEASE_STRIP=true" >> $GITHUB_ENV
+
       - name: Set build options
         id: build-options
         shell: bash
@@ -171,25 +178,14 @@ jobs:
             *) CARGO_BUILD_OPTIONS=""  ;;
           esac
 
-          if [[ '${{ steps.is-release.outputs.IS_RELEASE }}' == 'true' ]]; then
-            CARGO_BUILD_OPTIONS="${CARGO_BUILD_OPTIONS} --profile=release-lto"
-            BUILD_TARGET_FOLDER="release-lto"
-          else
-            CARGO_BUILD_OPTIONS="${CARGO_BUILD_OPTIONS} --release"
-            BUILD_TARGET_FOLDER="release"
-          fi
-
-          echo "BUILD_TARGET_FOLDER=${BUILD_TARGET_FOLDER}" >> $GITHUB_OUTPUT
           echo "CARGO_BUILD_OPTIONS=${CARGO_BUILD_OPTIONS}" >> $GITHUB_OUTPUT
 
       - name: Build
         uses: actions-rs/cargo@v1
-        env:
-          BUILD_PROFILE: ${{ steps.is-release.outputs.IS_RELEASE && '--profile release-lto' || '--release' }}
         with:
           use-cross: ${{ matrix.job.use-cross }}
           command: build
-          args: --locked --target=${{ matrix.job.target }} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+          args: --locked --release --target=${{ matrix.job.target }} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 
       - name: Set binary name & path
         id: bin
@@ -202,9 +198,8 @@ jobs:
           esac;
 
           # Setup paths
-          BUILD_TARGET_FOLDER="${{ steps.build-options.outputs.BUILD_TARGET_FOLDER }}"
           BIN_NAME="${{ needs.crate_metadata.outputs.name }}${EXE_SUFFIX}"
-          BIN_PATH="target/${{ matrix.job.target }}/${BUILD_TARGET_FOLDER}/${BIN_NAME}"
+          BIN_PATH="target/${{ matrix.job.target }}/release/${BIN_NAME}"
 
           # Let subsequent steps know where to find the binary
           echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
