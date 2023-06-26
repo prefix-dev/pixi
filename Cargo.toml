@@ -1,6 +1,6 @@
 [package]
 name = "pixi"
-version = "0.0.4"
+version = "0.0.5"
 description = "A package management and workflow tool"
 edition = "2021"
 authors = ["pixi contributors <hi@prefix.dev>"]
@@ -57,8 +57,3 @@ toml_edit = { version = "0.19.10", features = ["serde"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 url = "2.4.0"
-
-[profile.release-lto]
-inherits = "release"
-lto = true
-strip = true
