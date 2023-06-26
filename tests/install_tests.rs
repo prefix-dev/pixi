@@ -1,14 +1,14 @@
 mod common;
 
 use crate::common::package_database::{Package, PackageDatabase};
+use crate::common::{matchspec_from_iter, string_from_iter};
 use common::{LockFileExt, PixiControl};
+use pixi::cli::{add, run};
 use pixi::Project;
 use rattler_conda_types::Version;
 use std::str::FromStr;
 use tempfile::TempDir;
 use url::Url;
-use pixi::cli::{add, run};
-use crate::common::{matchspec_from_iter, string_from_iter};
 
 /// Should add a python version to the environment and lock file that matches the specified version
 /// and run it
@@ -103,8 +103,8 @@ async fn test_incremental_lock_file() {
         specs: matchspec_from_iter(["foo"]),
         ..Default::default()
     })
-        .await
-        .unwrap();
+    .await
+    .unwrap();
 
     // Get the created lock-file
     let lock = pixi.lock_file().await.unwrap();
@@ -129,8 +129,8 @@ async fn test_incremental_lock_file() {
         specs: matchspec_from_iter(["foo"]),
         ..Default::default()
     })
-        .await
-        .unwrap();
+    .await
+    .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
     assert!(
