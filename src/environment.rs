@@ -106,6 +106,11 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
 }
 
 /// Loads the lockfile for the specified project or returns a dummy one if none could be found.
+pub async fn load_lock_for_manifest_path(path: &Path) -> anyhow::Result<CondaLock> {
+    load_lock_file(&Project::load(path)?).await
+}
+
+/// Loads the lockfile for the specified project or returns a dummy one if none could be found.
 pub async fn load_lock_file(project: &Project) -> anyhow::Result<CondaLock> {
     let lock_file_path = project.lock_file_path();
     tokio::task::spawn_blocking(move || {

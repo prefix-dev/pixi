@@ -52,6 +52,14 @@ impl Project {
         })
     }
 
+    pub fn reload(&mut self) -> anyhow::Result<()> {
+        let project = Self::load(self.root().join(consts::PROJECT_MANIFEST).as_path())?;
+        self.root = project.root;
+        self.doc = project.doc;
+        self.manifest = project.manifest;
+        Ok(())
+    }
+
     /// Loads a project manifest.
     pub fn from_manifest_str(root: &Path, contents: impl Into<String>) -> anyhow::Result<Self> {
         let contents = contents.into();

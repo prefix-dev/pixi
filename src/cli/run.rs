@@ -1,42 +1,51 @@
 use std::collections::{HashSet, VecDeque};
 use std::path::Path;
+use std::string::String;
 use std::{fmt::Write, path::PathBuf};
 
-use crate::Project;
 use clap::Parser;
 use is_executable::IsExecutable;
 use rattler_conda_types::Platform;
 
-use crate::command::{CmdArgs, Command, ProcessCmd};
-use crate::environment::get_up_to_date_prefix;
-use crate::project::environment::add_metadata_as_env_vars;
-use rattler_shell::activation::ActivationResult;
+use crate::{
+    command::{CmdArgs, Command, ProcessCmd},
+    environment::get_up_to_date_prefix,
+    project::environment::add_metadata_as_env_vars,
+    Project,
+};
 use rattler_shell::{
+    activation::ActivationResult,
     activation::{ActivationVariables, Activator},
     shell::{Shell, ShellEnum},
 };
 
 /// Runs command in project.
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
     /// The command you want to run in the projects environment.
-    command: Vec<String>,
+    pub command: Vec<String>,
 
     /// The path to 'pixi.toml'
     #[arg(long)]
-    manifest_path: Option<PathBuf>,
+    pub manifest_path: Option<PathBuf>,
 }
 
-pub async fn execute(args: Args) -> anyhow::Result<()> {
+pub struct RunScriptCommand {
+    /// The command to execute
+    pub command: std::process::Command,
+    /// Tempfile to keep a handle on, otherwise it is dropped and deleted
+    _script: tempfile::NamedTempFile,
+}
+
+pub async fn create_command(args: Args) -> anyhow::Result<RunScriptCommand> {
+    let command: Vec<_> = args.command.iter().map(|c| c.to_string()).collect();
     let project = match args.manifest_path {
         Some(path) => Project::load(path.as_path())?,
         None => Project::discover()?,
     };
 
-    // Get the script to execute from the command line.
-    let (command_name, command) = args
-        .command
+    let (command_name, command) = command
         .first()
         .and_then(|cmd_name| {
             project
@@ -125,12 +134,19 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     std::io::Write::write_all(&mut temp_file, script.as_bytes())?;
 
     // Execute the script with the shell
-    let mut command = shell
-        .create_run_script_command(temp_file.path())
-        .spawn()
-        .expect("failed to execute process");
+    let command = shell.create_run_script_command(temp_file.path());
 
-    std::process::exit(command.wait()?.code().unwrap_or(1));
+    Ok(RunScriptCommand {
+        command,
+        _script: temp_file,
+    })
+}
+
+/// CLI entry point for `pixi run`
+pub async fn execute(args: Args) -> anyhow::Result<()> {
+    let mut script_command = create_command(args).await?;
+    let status = script_command.command.spawn()?.wait()?.code().unwrap_or(1);
+    std::process::exit(status);
 }
 
 /// Given a command and arguments to invoke it, format it so that it is as generalized as possible.
