@@ -7,6 +7,7 @@ use rattler_shell::activation::{ActivationVariables, Activator};
 use rattler_shell::shell::{Shell, ShellEnum};
 use std::path::PathBuf;
 
+/// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The path to 'pixi.toml'
