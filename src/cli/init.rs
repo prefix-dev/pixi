@@ -47,7 +47,6 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 
     // Fail silently if it already exists or cannot be created.
     fs::create_dir_all(&dir).ok();
-    dbg!(&dir);
 
     // Write pixi.toml
     let name = manifest_path.file_name().unwrap().to_string_lossy();
