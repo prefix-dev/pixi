@@ -22,6 +22,7 @@ env:
   CARGO_TERM_COLOR: always
   CICD_INTERMEDIATES_DIR: "_cicd-intermediates"
   TEST_FEATURES: "slow_integration_tests"
+  XDG_CACHE_HOME: ${{ github.workspace }}/.cache
 
 jobs:
   check-rustdoc-links:
