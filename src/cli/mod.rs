@@ -11,9 +11,9 @@ pub mod add;
 pub mod auth;
 pub mod global;
 pub mod init;
+pub mod install;
 pub mod run;
 pub mod shell;
-pub mod install;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

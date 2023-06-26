@@ -6,7 +6,7 @@ use crate::consts;
 use crate::consts::PROJECT_MANIFEST;
 use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
 use crate::report_error::ReportError;
-use anyhow::{Context};
+use anyhow::Context;
 use ariadne::{Label, Report, ReportKind, Source};
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, Platform, Version,
