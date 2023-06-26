@@ -78,7 +78,7 @@ jobs:
   build:
     name: ${{ matrix.job.name }}
     runs-on: ${{ matrix.job.os }}
-    needs: [crate_metadata, clippy]
+    needs: [ crate_metadata, clippy ]
     strategy:
       fail-fast: false
       matrix:
@@ -134,6 +134,12 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cross
+
+      - name: Ensure cache directory exists
+        shell: bash
+        if: matrix.os == 'ubuntu-20.04' && matrix.job.use-cross
+        run: |
+          mkdir -p ${XDG_CACHE_HOME}
 
       - name: Overwrite build command env variable
         if: matrix.job.use-cross
