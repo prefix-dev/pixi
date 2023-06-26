@@ -1,6 +1,6 @@
 [package]
 name = "pixi"
-version = "0.0.4"
+version = "0.0.5"
 description = "A package management and workflow tool"
 edition = "2021"
 authors = ["pixi contributors <hi@prefix.dev>"]
@@ -61,8 +61,3 @@ url = "2.4.0"
 [dev-dependencies]
 rattler_digest = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
 serde_json = "1.0.96"
-
-[profile.release-lto]
-inherits = "release"
-lto = true
-strip = true
