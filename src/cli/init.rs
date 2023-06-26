@@ -49,7 +49,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     fs::create_dir_all(&dir).ok();
 
     // Write pixi.toml
-    let name = manifest_path.file_name().unwrap().to_string_lossy();
+    let name = dir.file_name().unwrap().to_string_lossy();
     let version = "0.1.0";
     let author = get_default_author();
     let channel = "conda-forge";
