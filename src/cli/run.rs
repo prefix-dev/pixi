@@ -12,7 +12,7 @@ use crate::environment::get_up_to_date_prefix;
 use crate::project::environment::add_metadata_as_env_vars;
 use rattler_shell::activation::ActivationResult;
 use rattler_shell::{
-    activation::{ActivationVariables, Activator},
+    activation::{ActivationVariables, Activator, PathModificationBehaviour},
     shell::{Shell, ShellEnum},
 };
 
@@ -66,6 +66,9 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 
         // Start from an empty prefix
         conda_prefix: None,
+
+        // Prepending environment paths so they get found first.
+        path_modification_behaviour: PathModificationBehaviour::Prepend,
     })?;
 
     // Generate a temporary file with the script to execute. This includes the activation of the

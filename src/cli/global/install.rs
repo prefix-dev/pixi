@@ -11,7 +11,7 @@ use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform, PrefixRec
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
-    activation::{ActivationVariables, Activator},
+    activation::{ActivationVariables, Activator, PathModificationBehaviour},
     shell::Shell,
     shell::ShellEnum,
 };
@@ -97,6 +97,7 @@ fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> anyhow::Result
     let result = activator.activation(ActivationVariables {
         conda_prefix: None,
         path: None,
+        path_modification_behaviour: PathModificationBehaviour::Prepend,
     })?;
     Ok(result.script)
 }
