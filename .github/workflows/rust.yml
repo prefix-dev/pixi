@@ -123,7 +123,7 @@ jobs:
       - name: Setup | Install cargo-wix [Windows]
         continue-on-error: true
         # aarch64 is only supported in wix 4.0 development builds
-        if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
+        if: matrix.job.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
         run: cargo install --version 0.3.4 cargo-wix
         env:
           # cargo-wix does not require static crt
@@ -137,7 +137,7 @@ jobs:
 
       - name: Ensure cache directory exists
         shell: bash
-        if: matrix.os == 'ubuntu-20.04' && matrix.job.use-cross
+        if: matrix.job.os == 'ubuntu-20.04' && matrix.job.use-cross
         run: |
           mkdir -p ${XDG_CACHE_HOME}
 
@@ -350,7 +350,7 @@ jobs:
 
       - name: "Artifact upload: windows installer"
         continue-on-error: true
-        if: matrix.os == 'windows-latest' && matrix.job.target != 'aarch64-pc-windows-msvc'
+        if: matrix.job.os == 'windows-latest' && matrix.job.target != 'aarch64-pc-windows-msvc'
         uses: actions/upload-artifact@v3
         with:
           name: pixi-${{ matrix.job.target }}.msi
