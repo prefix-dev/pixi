@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Adds a dependency to the project
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
     /// Specify the dependencies you wish to add to the project.
