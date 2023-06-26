@@ -266,7 +266,7 @@ impl Project {
             *project = Item::Table(Table::new());
         }
 
-        let channels = &mut project["chanels"];
+        let channels = &mut project["channels"];
         if channels.is_none() {
             *channels = Item::Value(Value::Array(Array::new()))
         }

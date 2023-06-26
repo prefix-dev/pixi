@@ -1,10 +1,12 @@
 pub mod package_database;
 
+use pixi::cli::run::create_command;
 use pixi::cli::{add, init, run};
-use pixi::Project;
+use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
 use rattler_conda_types::{MatchSpec, Version};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::str::FromStr;
 use tempfile::TempDir;
 
@@ -12,9 +14,6 @@ use tempfile::TempDir;
 pub struct PixiControl {
     /// The path to the project working file
     tmpdir: TempDir,
-
-    /// The project that could be worked on
-    project: Option<Project>,
 }
 
 pub struct RunResult {
@@ -31,6 +30,18 @@ impl RunResult {
     pub fn stdout(&self) -> &str {
         std::str::from_utf8(&self.output.stdout).expect("could not get output")
     }
+}
+
+/// MatchSpecs from an iterator
+pub fn matchspec_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<MatchSpec> {
+    iter.into_iter()
+        .map(|s| MatchSpec::from_str(s.as_ref()).expect("could not parse matchspec"))
+        .collect()
+}
+
+/// MatchSpecs from an iterator
+pub fn string_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<String> {
+    iter.into_iter().map(|s| s.as_ref().to_string()).collect()
 }
 
 pub trait LockFileExt {
@@ -68,20 +79,7 @@ impl PixiControl {
     /// Create a new PixiControl instance
     pub fn new() -> anyhow::Result<PixiControl> {
         let tempdir = tempfile::tempdir()?;
-        Ok(PixiControl {
-            tmpdir: tempdir,
-            project: None,
-        })
-    }
-
-    /// Access to the project
-    pub fn project(&self) -> &Project {
-        self.project.as_ref().expect("should call .init() first")
-    }
-
-    /// Mutable access to the project
-    pub fn project_mut(&mut self) -> &mut Project {
-        self.project.as_mut().expect("should call .init() first")
+        Ok(PixiControl { tmpdir: tempdir })
     }
 
     /// Get the path to the project
@@ -89,58 +87,45 @@ impl PixiControl {
         self.tmpdir.path()
     }
 
+    pub fn manifest_path(&self) -> PathBuf {
+        self.project_path().join(consts::PROJECT_MANIFEST)
+    }
+
     /// Initialize pixi inside a tempdir and set the tempdir as the current working directory.
-    pub async fn init(&mut self) -> anyhow::Result<()> {
-        std::env::set_current_dir(self.project_path()).unwrap();
+    pub async fn init(&self) -> anyhow::Result<()> {
         let args = init::Args {
             path: self.project_path().to_path_buf(),
         };
         init::execute(args).await?;
-        self.project = Some(Project::discover()?);
         Ok(())
     }
 
     /// Add a dependency to the project
-    pub async fn add(
-        &mut self,
-        specs: impl IntoIterator<Item = impl AsRef<str>>,
-    ) -> anyhow::Result<()> {
-        std::env::set_current_dir(self.project_path()).unwrap();
-        add::add_specs_to_project(
-            self.project_mut(),
-            specs
-                .into_iter()
-                .map(|s| s.as_ref().parse())
-                .collect::<Result<Vec<_>, _>>()?,
-        )
-        .await
+    pub async fn add(&mut self, mut args: add::Args) -> anyhow::Result<()> {
+        args.manifest_path = Some(self.manifest_path());
+        add::execute(args).await
     }
 
     /// Run a command
-    pub async fn run(
-        &self,
-        command: impl IntoIterator<Item = impl AsRef<str>>,
-    ) -> anyhow::Result<RunResult> {
-        std::env::set_current_dir(self.project_path()).unwrap();
-        let output = run::execute_in_project_with_output(
-            self.project(),
-            command
-                .into_iter()
-                .map(|s| s.as_ref().to_string())
-                .collect(),
-        )
-        .await?;
+    pub async fn run(&self, mut args: run::Args) -> anyhow::Result<RunResult> {
+        args.manifest_path = Some(self.manifest_path());
+        let mut script_command = create_command(args).await?;
+        let output = script_command
+            .command
+            .stdout(Stdio::piped())
+            .spawn()?
+            .wait_with_output()?;
         Ok(RunResult { output })
     }
 
     /// Get the associated lock file
     pub async fn lock_file(&self) -> anyhow::Result<CondaLock> {
-        pixi::environment::load_lock_file(self.project()).await
+        pixi::environment::load_lock_for_manifest_path(&self.manifest_path()).await
     }
 
     /// Set the project to use a specific channel
     pub async fn set_channel(&mut self, channel: impl ToString) -> anyhow::Result<()> {
-        let project = self.project_mut();
+        let mut project = Project::load(&self.manifest_path()).unwrap();
         project.set_channels(&[channel.to_string()])?;
         project.save()?;
         Ok(())

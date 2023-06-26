@@ -2,7 +2,7 @@ use crate::{config::get_default_author, consts};
 use clap::Parser;
 use minijinja::{context, Environment};
 use rattler_conda_types::Platform;
-use std::{env, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 /// Creates a new project
 #[derive(Parser, Debug)]
@@ -36,7 +36,7 @@ const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
     let env = Environment::new();
-    let dir = env::current_dir()?.join(args.path);
+    let dir = args.path;
     let manifest_path = dir.join(consts::PROJECT_MANIFEST);
     let gitignore_path = dir.join(".gitignore");
 

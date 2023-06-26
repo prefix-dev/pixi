@@ -147,6 +147,7 @@ Commands:
   init        Creates a new project
   add         Adds a dependency to the project
   run         Runs command in project
+  shell       Start a shell in the pixi environment of the project
   global      Global is the main entry point for the part of pixi that executes on the global(system) level
   auth        Login to prefix.dev or anaconda.org servers to access private channels
   install     Install all dependencies

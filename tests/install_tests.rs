@@ -7,6 +7,8 @@ use rattler_conda_types::Version;
 use std::str::FromStr;
 use tempfile::TempDir;
 use url::Url;
+use pixi::cli::{add, run};
+use crate::common::{matchspec_from_iter, string_from_iter};
 
 /// Should add a python version to the environment and lock file that matches the specified version
 /// and run it
@@ -15,16 +17,27 @@ use url::Url;
 async fn install_run_python() {
     let mut pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
-    pixi.add(["python==3.11.0"]).await.unwrap();
+    pixi.add(add::Args {
+        specs: matchspec_from_iter(["python==3.11.0"]),
+        ..Default::default()
+    })
+    .await
+    .unwrap();
 
     // Check if lock has python version
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_matchspec("python==3.11.0"));
 
     // Check if python is installed and can be run
-    let result = pixi.run(["python", "--version"]).await.unwrap();
+    let result = pixi
+        .run(run::Args {
+            command: string_from_iter(["python", "--version"]),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
     assert!(result.success());
-    assert_eq!(result.stdout(), "Python 3.11.0\n");
+    assert_eq!(result.stdout().trim(), "Python 3.11.0");
 }
 
 #[tokio::test]
@@ -86,7 +99,12 @@ async fn test_incremental_lock_file() {
         .unwrap();
 
     // Add a dependency on `foo`
-    pixi.add(["foo"]).await.unwrap();
+    pixi.add(add::Args {
+        specs: matchspec_from_iter(["foo"]),
+        ..Default::default()
+    })
+        .await
+        .unwrap();
 
     // Get the created lock-file
     let lock = pixi.lock_file().await.unwrap();
@@ -107,7 +125,12 @@ async fn test_incremental_lock_file() {
 
     // Force using version 2 of `foo`. This should force `foo` to version `2` but `bar` should still
     // remaing on `1` because it was previously locked
-    pixi.add(["foo >=2"]).await.unwrap();
+    pixi.add(add::Args {
+        specs: matchspec_from_iter(["foo"]),
+        ..Default::default()
+    })
+        .await
+        .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
     assert!(
