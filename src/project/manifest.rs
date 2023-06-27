@@ -36,6 +36,22 @@ pub struct ProjectManifest {
     #[serde_as(as = "IndexMap<_, DisplayFromStr>")]
     pub dependencies: IndexMap<String, NamelessMatchSpec>,
 
+    /// The host-dependencies of the project.
+    ///
+    /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
+    /// manifest.
+    #[serde(default, rename = "host-dependencies")]
+    #[serde_as(as = "Option<IndexMap<_, DisplayFromStr>>")]
+    pub host_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
+
+    /// The build-dependencies of the project.
+    ///
+    /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
+    /// manifest.
+    #[serde(default, rename = "build-dependencies")]
+    #[serde_as(as = "Option<IndexMap<_, DisplayFromStr>>")]
+    pub build_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
+
     /// Target specific configuration.
     ///
     /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
@@ -108,6 +124,16 @@ pub struct TargetMetadata {
     #[serde(default)]
     #[serde_as(as = "IndexMap<_, DisplayFromStr>")]
     pub dependencies: IndexMap<String, NamelessMatchSpec>,
+
+    /// The host-dependencies of the project.
+    #[serde(default, rename = "host-dependencies")]
+    #[serde_as(as = "Option<IndexMap<_, DisplayFromStr>>")]
+    pub host_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
+
+    /// The build-dependencies of the project.
+    #[serde(default, rename = "build-dependencies")]
+    #[serde_as(as = "Option<IndexMap<_, DisplayFromStr>>")]
+    pub build_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
 }
 
 /// Describes the contents of the `[package]` section of the project manifest.
@@ -287,6 +313,27 @@ mod test {
         foo = "1.2.3"
         "#
         );
+        assert_debug_snapshot!(
+            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
+        );
+    }
+
+    #[test]
+    fn test_dependency_types() {
+        let contents = format!(
+            r#"
+            {PROJECT_BOILERPLATE}
+            [dependencies]
+            my-game = "1.0.0"
+
+            [build-dependencies]
+            cmake = "*"
+
+            [host-dependencies]
+            sdl2 = "*"
+            "#
+        );
+
         assert_debug_snapshot!(
             toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
         );

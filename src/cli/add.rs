@@ -5,6 +5,7 @@ use crate::{
 };
 use anyhow::Context;
 use clap::Parser;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use rattler_conda_types::{
     version_spec::VersionOperator, MatchSpec, NamelessMatchSpec, Platform, Version, VersionSpec,
@@ -150,7 +151,7 @@ pub async fn add_specs_to_project(
 /// Given several specs determines the highest installable version for them.
 pub fn determine_best_version(
     new_specs: &HashMap<String, NamelessMatchSpec>,
-    current_specs: &HashMap<String, NamelessMatchSpec>,
+    current_specs: &IndexMap<String, NamelessMatchSpec>,
     sparse_repo_data: &[SparseRepoData],
     platform: Platform,
 ) -> anyhow::Result<HashMap<String, Version>> {

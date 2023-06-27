@@ -1,0 +1,126 @@
+---
+source: src/project/mod.rs
+expression: "project.all_dependencies(Platform::Linux64).unwrap()"
+---
+{
+    "foo": NamelessMatchSpec {
+        version: Some(
+            Operator(
+                Equals,
+                Version {
+                    norm: Some(
+                        "1.0",
+                    ),
+                    version: "[[0], [1], [0]]",
+                    local: "[]",
+                },
+            ),
+        ),
+        build: None,
+        build_number: None,
+        file_name: None,
+        channel: None,
+        subdir: None,
+        namespace: None,
+    },
+    "wolflib": NamelessMatchSpec {
+        version: Some(
+            Operator(
+                Equals,
+                Version {
+                    norm: Some(
+                        "1.0",
+                    ),
+                    version: "[[0], [1], [0]]",
+                    local: "[]",
+                },
+            ),
+        ),
+        build: None,
+        build_number: None,
+        file_name: None,
+        channel: None,
+        subdir: None,
+        namespace: None,
+    },
+    "libc": NamelessMatchSpec {
+        version: Some(
+            Operator(
+                Equals,
+                Version {
+                    norm: Some(
+                        "2.12",
+                    ),
+                    version: "[[0], [2], [12]]",
+                    local: "[]",
+                },
+            ),
+        ),
+        build: None,
+        build_number: None,
+        file_name: None,
+        channel: None,
+        subdir: None,
+        namespace: None,
+    },
+    "banksy": NamelessMatchSpec {
+        version: Some(
+            Operator(
+                Equals,
+                Version {
+                    norm: Some(
+                        "1.0",
+                    ),
+                    version: "[[0], [1], [0]]",
+                    local: "[]",
+                },
+            ),
+        ),
+        build: None,
+        build_number: None,
+        file_name: None,
+        channel: None,
+        subdir: None,
+        namespace: None,
+    },
+    "bar": NamelessMatchSpec {
+        version: Some(
+            Operator(
+                Equals,
+                Version {
+                    norm: Some(
+                        "1.0",
+                    ),
+                    version: "[[0], [1], [0]]",
+                    local: "[]",
+                },
+            ),
+        ),
+        build: None,
+        build_number: None,
+        file_name: None,
+        channel: None,
+        subdir: None,
+        namespace: None,
+    },
+    "baz": NamelessMatchSpec {
+        version: Some(
+            Operator(
+                Equals,
+                Version {
+                    norm: Some(
+                        "1.0",
+                    ),
+                    version: "[[0], [1], [0]]",
+                    local: "[]",
+                },
+            ),
+        ),
+        build: None,
+        build_number: None,
+        file_name: None,
+        channel: None,
+        subdir: None,
+        namespace: None,
+    },
+}
