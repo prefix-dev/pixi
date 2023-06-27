@@ -12,7 +12,7 @@ pub struct Args {
     pub path: PathBuf,
 
     /// Channels to use in the project.
-    #[arg(short)]
+    #[arg(short, long = "channel", id = "channel")]
     pub channels: Vec<String>,
 }
 
