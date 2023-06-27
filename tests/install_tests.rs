@@ -62,7 +62,11 @@ async fn specific_channel() {
     let pixi = PixiControl::new().unwrap();
 
     // Init with a custom channel
-    pixi.init().with_channel("random").await.unwrap();
+    pixi.init()
+        .with_channel("random")
+        .with_channel("foobar")
+        .await
+        .unwrap();
 
     // Load the project
     let project = pixi.project().unwrap();
@@ -71,7 +75,10 @@ async fn specific_channel() {
     let channels = project.channels();
     assert_eq!(
         channels,
-        &[Channel::from_str("random", &ChannelConfig::default()).unwrap()]
+        &[
+            Channel::from_str("random", &ChannelConfig::default()).unwrap(),
+            Channel::from_str("foobar", &ChannelConfig::default()).unwrap()
+        ]
     )
 }
 
