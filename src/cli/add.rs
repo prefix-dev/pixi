@@ -40,19 +40,45 @@ pub struct Args {
     /// The path to 'pixi.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
+
+    /// This is a host dependency
+    #[arg(long, conflicts_with = "build")]
+    pub host: bool,
+
+    /// This is a build dependency
+    #[arg(long, conflicts_with = "host")]
+    pub build: bool,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum SpecType {
+    Host,
+    Build,
+    Run,
+}
+
+impl SpecType {
+    pub fn from_args(args: &Args) -> Self {
+        if args.host {
+            Self::Host
+        } else if args.build {
+            Self::Build
+        } else {
+            Self::Run
+        }
+    }
 }
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
-    let mut project = match args.manifest_path {
-        Some(path) => Project::load(path.as_path())?,
-        None => Project::discover()?,
-    };
-    add_specs_to_project(&mut project, args.specs).await
+    let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let spec_type = SpecType::from_args(&args);
+    add_specs_to_project(&mut project, args.specs, spec_type).await
 }
 
 pub async fn add_specs_to_project(
     project: &mut Project,
     specs: Vec<MatchSpec>,
+    spec_type: SpecType,
 ) -> anyhow::Result<()> {
     // Split the specs into package name and version specifier
     let new_specs = specs
@@ -71,7 +97,11 @@ pub async fn add_specs_to_project(
     // Determine the best version per platform
     let mut best_versions = HashMap::new();
     for platform in project.platforms() {
-        let current_specs = project.dependencies(*platform)?;
+        let current_specs = match spec_type {
+            SpecType::Host => project.host_dependencies(*platform)?,
+            SpecType::Build => project.build_dependencies(*platform)?,
+            SpecType::Run => project.dependencies(*platform)?,
+        };
         // Solve the environment with the new specs added
         let solved_versions = match determine_best_version(
             &new_specs,
@@ -121,7 +151,11 @@ pub async fn add_specs_to_project(
             spec
         };
         let spec = MatchSpec::from_nameless(updated_spec, Some(name));
-        project.add_dependency(&spec)?;
+        match spec_type {
+            SpecType::Host => project.add_host_dependency(&spec)?,
+            SpecType::Build => project.add_build_dependency(&spec)?,
+            SpecType::Run => project.add_dependency(&spec)?,
+        }
         added_specs.push(spec);
     }
 

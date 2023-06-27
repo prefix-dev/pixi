@@ -210,17 +210,17 @@ impl Project {
         &self.manifest.project.version
     }
 
-    pub fn add_dependency(&mut self, spec: &MatchSpec) -> anyhow::Result<()> {
-        // Find the dependencies table
-        let deps = &mut self.doc["dependencies"];
-
+    fn add_to_deps_table(
+        deps_table: &mut Item,
+        spec: &MatchSpec,
+    ) -> anyhow::Result<(String, NamelessMatchSpec)> {
         // If it doesnt exist create a proper table
-        if deps.is_none() {
-            *deps = Item::Table(Table::new());
+        if deps_table.is_none() {
+            *deps_table = Item::Table(Table::new());
         }
 
         // Cast the item into a table
-        let deps_table = deps.as_table_like_mut().ok_or_else(|| {
+        let deps_table = deps_table.as_table_like_mut().ok_or_else(|| {
             anyhow::anyhow!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
         })?;
 
@@ -239,9 +239,48 @@ impl Project {
         // Store (or replace) in the document
         deps_table.insert(name, Item::Value(nameless.to_string().into()));
 
-        self.manifest
-            .dependencies
-            .insert(name.to_string(), nameless);
+        Ok((name.to_string(), nameless))
+    }
+
+    pub fn add_dependency(&mut self, spec: &MatchSpec) -> anyhow::Result<()> {
+        // Find the dependencies table
+        let deps = &mut self.doc["dependencies"];
+        let (name, nameless) = Project::add_to_deps_table(deps, spec)?;
+
+        self.manifest.dependencies.insert(name, nameless);
+
+        Ok(())
+    }
+
+    pub fn add_host_dependency(&mut self, spec: &MatchSpec) -> anyhow::Result<()> {
+        // Find the dependencies table
+        let deps = &mut self.doc["host-dependencies"];
+        let (name, nameless) = Project::add_to_deps_table(deps, spec)?;
+
+        let host_deps = if let Some(ref mut host_dependencies) = self.manifest.host_dependencies {
+            host_dependencies
+        } else {
+            self.manifest.host_dependencies.insert(IndexMap::new())
+        };
+
+        host_deps.insert(name, nameless);
+
+        Ok(())
+    }
+
+    pub fn add_build_dependency(&mut self, spec: &MatchSpec) -> anyhow::Result<()> {
+        // Find the dependencies table
+        let deps = &mut self.doc["build-dependencies"];
+        let (name, nameless) = Project::add_to_deps_table(deps, spec)?;
+
+        let build_deps = if let Some(ref mut build_dependencies) = self.manifest.build_dependencies
+        {
+            build_dependencies
+        } else {
+            self.manifest.build_dependencies.insert(IndexMap::new())
+        };
+
+        build_deps.insert(name, nameless);
 
         Ok(())
     }
