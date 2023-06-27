@@ -40,10 +40,7 @@ pub struct RunScriptCommand {
 
 pub async fn create_command(args: Args) -> anyhow::Result<RunScriptCommand> {
     let command: Vec<_> = args.command.iter().map(|c| c.to_string()).collect();
-    let project = match args.manifest_path {
-        Some(path) => Project::load(path.as_path())?,
-        None => Project::discover()?,
-    };
+    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     let (command_name, command) = command
         .first()
