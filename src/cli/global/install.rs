@@ -99,7 +99,8 @@ fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> anyhow::Result
         path: None,
         path_modification_behaviour: PathModificationBehaviour::Prepend,
     })?;
-    Ok(result.script)
+    let script = format!("#!/bin/sh\n{}", result.script);
+    Ok(script)
 }
 
 fn is_executable(prefix: &Prefix, relative_path: &Path) -> bool {
