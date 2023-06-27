@@ -1,28 +1,21 @@
 mod common;
 
 use crate::common::package_database::{Package, PackageDatabase};
-use crate::common::{matchspec_from_iter, string_from_iter};
+use crate::common::string_from_iter;
 use common::{LockFileExt, PixiControl};
-use pixi::cli::{add, run};
-use pixi::Project;
+use pixi::cli::run;
 use rattler_conda_types::Version;
 use std::str::FromStr;
 use tempfile::TempDir;
-use url::Url;
 
 /// Should add a python version to the environment and lock file that matches the specified version
 /// and run it
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_run_python() {
-    let mut pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
-    pixi.add(add::Args {
-        specs: matchspec_from_iter(["python==3.11.0"]),
-        ..Default::default()
-    })
-    .await
-    .unwrap();
+    pixi.add("python==3.11.0").await.unwrap();
 
     // Check if lock has python version
     let lock = pixi.lock_file().await.unwrap();
@@ -42,20 +35,24 @@ async fn install_run_python() {
 
 #[tokio::test]
 async fn init_creates_project_manifest() {
-    let tmp_dir = TempDir::new().unwrap();
-
     // Run the init command
-    pixi::cli::init::execute(pixi::cli::init::Args {
-        path: tmp_dir.path().to_path_buf(),
-    })
-    .await
-    .unwrap();
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
 
     // There should be a loadable project manifest in the directory
-    let project = Project::load(&tmp_dir.path().join(pixi::consts::PROJECT_MANIFEST)).unwrap();
+    let project = pixi.project().unwrap();
 
     // Default configuration should be present in the file
     assert!(!project.name().is_empty());
+    assert_eq!(
+        project.name(),
+        pixi.project_path()
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .as_ref(),
+        "project name should match the directory name"
+    );
     assert_eq!(project.version(), &Version::from_str("0.1.0").unwrap());
 }
 
@@ -88,23 +85,16 @@ async fn test_incremental_lock_file() {
         .await
         .unwrap();
 
-    let mut pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap();
 
-    // Create a new project
-    pixi.init().await.unwrap();
-
-    // Set the channel to something we created
-    pixi.set_channel(Url::from_directory_path(channel_dir.path()).unwrap())
+    // Create a new project using our package database.
+    pixi.init()
+        .with_local_channel(channel_dir.path())
         .await
         .unwrap();
 
     // Add a dependency on `foo`
-    pixi.add(add::Args {
-        specs: matchspec_from_iter(["foo"]),
-        ..Default::default()
-    })
-    .await
-    .unwrap();
+    pixi.add("foo").await.unwrap();
 
     // Get the created lock-file
     let lock = pixi.lock_file().await.unwrap();
@@ -125,12 +115,7 @@ async fn test_incremental_lock_file() {
 
     // Force using version 2 of `foo`. This should force `foo` to version `2` but `bar` should still
     // remaing on `1` because it was previously locked
-    pixi.add(add::Args {
-        specs: matchspec_from_iter(["foo"]),
-        ..Default::default()
-    })
-    .await
-    .unwrap();
+    pixi.add("foo >=2").await.unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
     assert!(

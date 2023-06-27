@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod package_database;
 
 use pixi::cli::run::create_command;
@@ -5,10 +7,13 @@ use pixi::cli::{add, init, run};
 use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
 use rattler_conda_types::{MatchSpec, Version};
+use std::future::{Future, IntoFuture};
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::process::Stdio;
 use std::str::FromStr;
 use tempfile::TempDir;
+use url::Url;
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -30,13 +35,6 @@ impl RunResult {
     pub fn stdout(&self) -> &str {
         std::str::from_utf8(&self.output.stdout).expect("could not get output")
     }
-}
-
-/// MatchSpecs from an iterator
-pub fn matchspec_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<MatchSpec> {
-    iter.into_iter()
-        .map(|s| MatchSpec::from_str(s.as_ref()).expect("could not parse matchspec"))
-        .collect()
 }
 
 /// MatchSpecs from an iterator
@@ -82,6 +80,11 @@ impl PixiControl {
         Ok(PixiControl { tmpdir: tempdir })
     }
 
+    /// Loads the project manifest and returns it.
+    pub fn project(&self) -> anyhow::Result<Project> {
+        Project::load(&self.manifest_path())
+    }
+
     /// Get the path to the project
     pub fn project_path(&self) -> &Path {
         self.tmpdir.path()
@@ -91,24 +94,29 @@ impl PixiControl {
         self.project_path().join(consts::PROJECT_MANIFEST)
     }
 
-    /// Initialize pixi inside a tempdir and set the tempdir as the current working directory.
-    pub async fn init(&self) -> anyhow::Result<()> {
-        let args = init::Args {
-            path: self.project_path().to_path_buf(),
-        };
-        init::execute(args).await?;
-        Ok(())
+    /// Initialize pixi project inside a temporary directory.
+    pub fn init(&self) -> InitBuilder {
+        InitBuilder {
+            args: init::Args {
+                path: self.project_path().to_path_buf(),
+                channels: Vec::new(),
+            },
+        }
     }
 
     /// Add a dependency to the project
-    pub async fn add(&mut self, mut args: add::Args) -> anyhow::Result<()> {
-        args.manifest_path = Some(self.manifest_path());
-        add::execute(args).await
+    pub fn add(&self, spec: impl IntoMatchSpec) -> AddBuilder {
+        AddBuilder {
+            args: add::Args {
+                manifest_path: Some(self.manifest_path()),
+                specs: vec![spec.into()],
+            },
+        }
     }
 
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> anyhow::Result<RunResult> {
-        args.manifest_path = Some(self.manifest_path());
+        args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
         let mut script_command = create_command(args).await?;
         let output = script_command
             .command
@@ -122,12 +130,70 @@ impl PixiControl {
     pub async fn lock_file(&self) -> anyhow::Result<CondaLock> {
         pixi::environment::load_lock_for_manifest_path(&self.manifest_path()).await
     }
+}
 
-    /// Set the project to use a specific channel
-    pub async fn set_channel(&mut self, channel: impl ToString) -> anyhow::Result<()> {
-        let mut project = Project::load(&self.manifest_path()).unwrap();
-        project.set_channels(&[channel.to_string()])?;
-        project.save()?;
-        Ok(())
+pub struct InitBuilder {
+    args: init::Args,
+}
+
+impl InitBuilder {
+    pub fn with_channel(mut self, channel: impl ToString) -> Self {
+        self.args.channels.push(channel.to_string());
+        self
+    }
+
+    pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
+        self.with_channel(Url::from_directory_path(channel).unwrap())
+    }
+}
+
+impl IntoFuture for InitBuilder {
+    type Output = anyhow::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(init::execute(self.args))
+    }
+}
+
+pub struct AddBuilder {
+    args: add::Args,
+}
+
+impl AddBuilder {
+    pub fn with_spec(mut self, spec: impl IntoMatchSpec) -> Self {
+        self.args.specs.push(spec.into());
+        self
+    }
+}
+
+impl IntoFuture for AddBuilder {
+    type Output = anyhow::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(add::execute(self.args))
+    }
+}
+
+pub trait IntoMatchSpec {
+    fn into(self) -> MatchSpec;
+}
+
+impl IntoMatchSpec for &str {
+    fn into(self) -> MatchSpec {
+        MatchSpec::from_str(self).unwrap()
+    }
+}
+
+impl IntoMatchSpec for String {
+    fn into(self) -> MatchSpec {
+        MatchSpec::from_str(&self).unwrap()
+    }
+}
+
+impl IntoMatchSpec for MatchSpec {
+    fn into(self) -> MatchSpec {
+        self
     }
 }
