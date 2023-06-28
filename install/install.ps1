@@ -48,5 +48,5 @@ try {
     Write-Host "Error: '$DOWNLOAD_URL' is not available or failed to download"
     exit 1
 } finally {
-    Remove-Item -Path $TEMP_FILE
+    Remove-Item -Path $ZIP_FILE
 }
