@@ -30,8 +30,11 @@ try {
         New-Item -ItemType directory -Path $PIXI_DIR
     }
 
+    $ZIP_FILE = $TEMP_FILE + ".zip"
+    Rename-Item -Path $TEMP_FILE -NewName $ZIP_FILE
+
     # Extract pixi from the downloaded zip file
-    Expand-Archive -Path $TEMP_FILE -DestinationPath $PIXI_DIR -Force
+    Expand-Archive -Path $ZIP_FILE -DestinationPath $PIXI_DIR -Force
 
     # Add pixi to PATH if the folder is not already in the PATH variable
     $PATH = [Environment]::GetEnvironmentVariable("Path", "User")
