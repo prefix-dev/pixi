@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Adds a dependency to the project
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
     /// Specify the dependencies you wish to add to the project.
@@ -34,11 +34,11 @@ pub struct Args {
     /// Adding multiple dependencies at once is also supported:
     ///
     /// - `pixi add python pytest`: This will add both `python` and `pytest` to the project's dependencies.
-    specs: Vec<MatchSpec>,
+    pub specs: Vec<MatchSpec>,
 
     /// The path to 'pixi.toml'
     #[arg(long)]
-    manifest_path: Option<PathBuf>,
+    pub manifest_path: Option<PathBuf>,
 }
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
@@ -46,10 +46,15 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         Some(path) => Project::load(path.as_path())?,
         None => Project::discover()?,
     };
+    add_specs_to_project(&mut project, args.specs).await
+}
 
+pub async fn add_specs_to_project(
+    project: &mut Project,
+    specs: Vec<MatchSpec>,
+) -> anyhow::Result<()> {
     // Split the specs into package name and version specifier
-    let new_specs = args
-        .specs
+    let new_specs = specs
         .into_iter()
         .map(|spec| match &spec.name {
             Some(name) => Ok((name.clone(), spec.into())),
@@ -119,10 +124,14 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         added_specs.push(spec);
     }
 
+    // TODO why is this only needed in the test?
+    // project.save()?;
+    // project.reload()?;
+
     // Update the lock file and write to disk
     update_lock_file(
-        &project,
-        load_lock_file(&project).await?,
+        project,
+        load_lock_file(project).await?,
         Some(sparse_repo_data),
     )
     .await?;
@@ -135,7 +144,6 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
             spec
         );
     }
-
     Ok(())
 }
 

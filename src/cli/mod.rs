@@ -7,13 +7,13 @@ use crate::progress;
 use anyhow::Error;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
-mod add;
-mod auth;
-mod global;
-mod init;
-mod install;
-mod run;
-mod shell;
+pub mod add;
+pub mod auth;
+pub mod global;
+pub mod init;
+pub mod install;
+pub mod run;
+pub mod shell;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -37,7 +37,7 @@ pub struct CompletionCommand {
 }
 
 #[derive(Parser, Debug)]
-enum Command {
+pub enum Command {
     Completion(CompletionCommand),
     Init(init::Args),
     #[clap(alias = "a")]
@@ -89,7 +89,13 @@ pub async fn execute() -> anyhow::Result<()> {
         .finish()
         .try_init()?;
 
-    match args.command {
+    // Execute the command
+    execute_command(args.command).await
+}
+
+/// Execute the actual command
+pub async fn execute_command(command: Command) -> Result<(), Error> {
+    match command {
         Command::Completion(cmd) => completion(cmd),
         Command::Init(cmd) => init::execute(cmd).await,
         Command::Add(cmd) => add::execute(cmd).await,
