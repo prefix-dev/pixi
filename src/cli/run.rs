@@ -15,7 +15,7 @@ use crate::{
 };
 use rattler_shell::{
     activation::ActivationResult,
-    activation::{ActivationVariables, Activator},
+    activation::{ActivationVariables, Activator, PathModificationBehaviour},
     shell::{Shell, ShellEnum},
 };
 
@@ -72,6 +72,9 @@ pub async fn create_command(args: Args) -> anyhow::Result<RunScriptCommand> {
 
         // Start from an empty prefix
         conda_prefix: None,
+
+        // Prepending environment paths so they get found first.
+        path_modification_behaviour: PathModificationBehaviour::Prepend,
     })?;
 
     // Generate a temporary file with the script to execute. This includes the activation of the
