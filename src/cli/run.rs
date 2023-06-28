@@ -14,8 +14,8 @@ use crate::{
     Project,
 };
 use rattler_shell::{
-    activation::{ActivationVariables, Activator, PathModificationBehaviour},
     activation::ActivationResult,
+    activation::{ActivationVariables, Activator, PathModificationBehaviour},
     shell::{Shell, ShellEnum},
 };
 
