@@ -8,12 +8,12 @@ use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
 use crate::report_error::ReportError;
 use anyhow::Context;
 use ariadne::{Label, Report, ReportKind, Source};
+use indexmap::IndexMap;
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, Platform, Version,
 };
 use rattler_virtual_packages::VirtualPackage;
 use std::{
-    collections::HashMap,
     env, fs,
     path::{Path, PathBuf},
 };
@@ -111,7 +111,7 @@ impl Project {
     pub fn dependencies(
         &self,
         platform: Platform,
-    ) -> anyhow::Result<HashMap<String, NamelessMatchSpec>> {
+    ) -> anyhow::Result<IndexMap<String, NamelessMatchSpec>> {
         // Get the base dependencies (defined in the `[dependencies]` section)
         let base_dependencies = self.manifest.dependencies.iter();
 
@@ -127,6 +127,63 @@ impl Project {
             .chain(platform_specific)
             .map(|(name, spec)| (name.clone(), spec.clone()))
             .collect())
+    }
+
+    /// Returns the build dependencies of the project.
+    pub fn build_dependencies(
+        &self,
+        platform: Platform,
+    ) -> anyhow::Result<IndexMap<String, NamelessMatchSpec>> {
+        // Get the base dependencies (defined in the `[build-dependencies]` section)
+        let base_dependencies = self.manifest.build_dependencies.iter();
+
+        // Get the platform specific dependencies in the order they were defined.
+        let platform_specific = self
+            .target_specific_metadata(platform)
+            .flat_map(|target| target.build_dependencies.iter());
+
+        // Combine the specs.
+        //
+        // Note that if a dependency was specified twice the platform specific one "wins".
+        Ok(base_dependencies
+            .chain(platform_specific)
+            .flatten()
+            .map(|(name, spec)| (name.clone(), spec.clone()))
+            .collect())
+    }
+
+    /// Returns the host dependencies of the project.
+    pub fn host_dependencies(
+        &self,
+        platform: Platform,
+    ) -> anyhow::Result<IndexMap<String, NamelessMatchSpec>> {
+        // Get the base dependencies (defined in the `[host-dependencies]` section)
+        let base_dependencies = self.manifest.host_dependencies.iter();
+
+        // Get the platform specific dependencies in the order they were defined.
+        let platform_specific = self
+            .target_specific_metadata(platform)
+            .flat_map(|target| target.host_dependencies.iter());
+
+        // Combine the specs.
+        //
+        // Note that if a dependency was specified twice the platform specific one "wins".
+        Ok(base_dependencies
+            .chain(platform_specific)
+            .flatten()
+            .map(|(name, spec)| (name.clone(), spec.clone()))
+            .collect())
+    }
+
+    /// Returns all dependencies of the project. These are the run, host, build dependency sets combined.
+    pub fn all_dependencies(
+        &self,
+        platform: Platform,
+    ) -> anyhow::Result<IndexMap<String, NamelessMatchSpec>> {
+        let mut dependencies = self.dependencies(platform)?;
+        dependencies.extend(self.host_dependencies(platform)?);
+        dependencies.extend(self.build_dependencies(platform)?);
+        Ok(dependencies)
     }
 
     /// Returns all the targets specific metadata that apply with the given context.
@@ -155,17 +212,17 @@ impl Project {
         &self.manifest.project.version
     }
 
-    pub fn add_dependency(&mut self, spec: &MatchSpec) -> anyhow::Result<()> {
-        // Find the dependencies table
-        let deps = &mut self.doc["dependencies"];
-
+    fn add_to_deps_table(
+        deps_table: &mut Item,
+        spec: &MatchSpec,
+    ) -> anyhow::Result<(String, NamelessMatchSpec)> {
         // If it doesnt exist create a proper table
-        if deps.is_none() {
-            *deps = Item::Table(Table::new());
+        if deps_table.is_none() {
+            *deps_table = Item::Table(Table::new());
         }
 
         // Cast the item into a table
-        let deps_table = deps.as_table_like_mut().ok_or_else(|| {
+        let deps_table = deps_table.as_table_like_mut().ok_or_else(|| {
             anyhow::anyhow!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
         })?;
 
@@ -184,9 +241,48 @@ impl Project {
         // Store (or replace) in the document
         deps_table.insert(name, Item::Value(nameless.to_string().into()));
 
-        self.manifest
-            .dependencies
-            .insert(name.to_string(), nameless);
+        Ok((name.to_string(), nameless))
+    }
+
+    pub fn add_dependency(&mut self, spec: &MatchSpec) -> anyhow::Result<()> {
+        // Find the dependencies table
+        let deps = &mut self.doc["dependencies"];
+        let (name, nameless) = Project::add_to_deps_table(deps, spec)?;
+
+        self.manifest.dependencies.insert(name, nameless);
+
+        Ok(())
+    }
+
+    pub fn add_host_dependency(&mut self, spec: &MatchSpec) -> anyhow::Result<()> {
+        // Find the dependencies table
+        let deps = &mut self.doc["host-dependencies"];
+        let (name, nameless) = Project::add_to_deps_table(deps, spec)?;
+
+        let host_deps = if let Some(ref mut host_dependencies) = self.manifest.host_dependencies {
+            host_dependencies
+        } else {
+            self.manifest.host_dependencies.insert(IndexMap::new())
+        };
+
+        host_deps.insert(name, nameless);
+
+        Ok(())
+    }
+
+    pub fn add_build_dependency(&mut self, spec: &MatchSpec) -> anyhow::Result<()> {
+        // Find the dependencies table
+        let deps = &mut self.doc["build-dependencies"];
+        let (name, nameless) = Project::add_to_deps_table(deps, spec)?;
+
+        let build_deps = if let Some(ref mut build_dependencies) = self.manifest.build_dependencies
+        {
+            build_dependencies
+        } else {
+            self.manifest.build_dependencies.insert(IndexMap::new())
+        };
+
+        build_deps.insert(name, nameless);
 
         Ok(())
     }
@@ -315,6 +411,7 @@ pub fn find_project_root() -> Option<PathBuf> {
 mod tests {
     use super::*;
     use crate::project::manifest::SystemRequirements;
+    use insta::assert_debug_snapshot;
     use rattler_conda_types::ChannelConfig;
     use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
     use std::str::FromStr;
@@ -463,5 +560,68 @@ mod tests {
             let file_content = format!("{PROJECT_BOILERPLATE}\n{file_content}");
             assert!(toml_edit::de::from_str::<ProjectManifest>(&file_content).is_err());
         }
+    }
+
+    #[test]
+    fn test_dependency_sets() {
+        let file_contents = r#"
+        [dependencies]
+        foo = "1.0"
+
+        [host-dependencies]
+        libc = "2.12"
+
+        [build-dependencies]
+        bar = "1.0"
+        "#;
+
+        let manifest = toml_edit::de::from_str::<ProjectManifest>(&format!(
+            "{PROJECT_BOILERPLATE}\n{file_contents}"
+        ))
+        .unwrap();
+        let project = Project {
+            root: Default::default(),
+            source: "".to_string(),
+            doc: Default::default(),
+            manifest,
+        };
+
+        assert_debug_snapshot!(project.all_dependencies(Platform::Linux64).unwrap());
+    }
+
+    #[test]
+    fn test_dependency_target_sets() {
+        let file_contents = r#"
+        [dependencies]
+        foo = "1.0"
+
+        [host-dependencies]
+        libc = "2.12"
+
+        [build-dependencies]
+        bar = "1.0"
+
+        [target.linux-64.build-dependencies]
+        baz = "1.0"
+
+        [target.linux-64.host-dependencies]
+        banksy = "1.0"
+
+        [target.linux-64.dependencies]
+        wolflib = "1.0"
+        "#;
+
+        let manifest = toml_edit::de::from_str::<ProjectManifest>(&format!(
+            "{PROJECT_BOILERPLATE}\n{file_contents}"
+        ))
+        .unwrap();
+        let project = Project {
+            root: Default::default(),
+            source: "".to_string(),
+            doc: Default::default(),
+            manifest,
+        };
+
+        assert_debug_snapshot!(project.all_dependencies(Platform::Linux64).unwrap());
     }
 }

@@ -153,7 +153,7 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
     for platform in platforms.iter().cloned() {
         // Check if all dependencies exist in the lock-file.
         let dependencies = project
-            .dependencies(platform)?
+            .all_dependencies(platform)?
             .into_iter()
             .collect::<VecDeque<_>>();
 
@@ -301,7 +301,7 @@ pub async fn update_lock_file(
     // Empty match-specs because these differ per platform
     let mut builder = LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
     for platform in platforms.iter().cloned() {
-        let dependencies = project.dependencies(platform)?;
+        let dependencies = project.all_dependencies(platform)?;
         let match_specs = dependencies
             .iter()
             .map(|(name, constraint)| {

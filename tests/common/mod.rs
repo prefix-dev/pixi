@@ -2,6 +2,8 @@
 
 pub mod package_database;
 
+use pixi::cli::add::SpecType;
+use pixi::cli::install::Args;
 use pixi::cli::run::create_command;
 use pixi::cli::{add, init, run};
 use pixi::{consts, Project};
@@ -111,7 +113,9 @@ impl PixiControl {
         AddBuilder {
             args: add::Args {
                 manifest_path: Some(self.manifest_path()),
+                host: false,
                 specs: vec![spec.into()],
+                build: false,
             },
         }
     }
@@ -126,6 +130,14 @@ impl PixiControl {
             .spawn()?
             .wait_with_output()?;
         Ok(RunResult { output })
+    }
+
+    /// Create an installed environment. I.e a resolved and installed prefix
+    pub async fn install(&self) -> anyhow::Result<()> {
+        pixi::cli::install::execute(Args {
+            manifest_path: Some(self.manifest_path()),
+        })
+        .await
     }
 
     /// Get the associated lock file
@@ -174,6 +186,25 @@ pub struct AddBuilder {
 impl AddBuilder {
     pub fn with_spec(mut self, spec: impl IntoMatchSpec) -> Self {
         self.args.specs.push(spec.into());
+        self
+    }
+
+    /// Set as a host
+    pub fn set_type(mut self, t: SpecType) -> Self {
+        match t {
+            SpecType::Host => {
+                self.args.host = true;
+                self.args.build = false;
+            }
+            SpecType::Build => {
+                self.args.host = false;
+                self.args.build = true;
+            }
+            SpecType::Run => {
+                self.args.host = false;
+                self.args.build = false;
+            }
+        }
         self
     }
 }

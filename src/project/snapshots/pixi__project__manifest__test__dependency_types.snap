@@ -1,0 +1,86 @@
+---
+source: src/project/manifest.rs
+expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\")"
+---
+ProjectManifest {
+    project: ProjectMetadata {
+        name: "foo",
+        version: Version {
+            norm: Some(
+                "0.1.0",
+            ),
+            version: "[[0], [0], [1], [0]]",
+            local: "[]",
+        },
+        description: None,
+        authors: [],
+        channels: [],
+        platforms: Spanned {
+            span: 121..123,
+            value: [],
+        },
+    },
+    commands: {},
+    system_requirements: SystemRequirements {
+        windows: None,
+        unix: None,
+        macos: None,
+        linux: None,
+        cuda: None,
+        libc: None,
+        archspec: None,
+    },
+    dependencies: {
+        "my-game": NamelessMatchSpec {
+            version: Some(
+                Operator(
+                    Equals,
+                    Version {
+                        norm: Some(
+                            "1.0.0",
+                        ),
+                        version: "[[0], [1], [0], [0]]",
+                        local: "[]",
+                    },
+                ),
+            ),
+            build: None,
+            build_number: None,
+            file_name: None,
+            channel: None,
+            subdir: None,
+            namespace: None,
+        },
+    },
+    host_dependencies: Some(
+        {
+            "sdl2": NamelessMatchSpec {
+                version: Some(
+                    Any,
+                ),
+                build: None,
+                build_number: None,
+                file_name: None,
+                channel: None,
+                subdir: None,
+                namespace: None,
+            },
+        },
+    ),
+    build_dependencies: Some(
+        {
+            "cmake": NamelessMatchSpec {
+                version: Some(
+                    Any,
+                ),
+                build: None,
+                build_number: None,
+                file_name: None,
+                channel: None,
+                subdir: None,
+                namespace: None,
+            },
+        },
+    ),
+    target: {},
+}

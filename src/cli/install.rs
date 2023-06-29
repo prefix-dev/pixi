@@ -8,7 +8,7 @@ use std::path::PathBuf;
 pub struct Args {
     /// The path to 'pixi.toml'
     #[arg(long)]
-    manifest_path: Option<PathBuf>,
+    pub manifest_path: Option<PathBuf>,
 }
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
