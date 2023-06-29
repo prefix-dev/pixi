@@ -3,7 +3,9 @@ use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
 use pixi::cli::add::SpecType;
+use pixi::project::manifest::ProjectManifest;
 use tempfile::TempDir;
+use tokio::fs::read_to_string;
 
 /// Test add functionality for different types of packages.
 /// Run, dev, build
@@ -78,6 +80,21 @@ async fn add_functionality_union() {
         .await
         .unwrap();
     pixi.add("libidk").set_type(SpecType::Build).await.unwrap();
+
+    // Toml should contain the correct sections
+    let manifest = toml_edit::de::from_str::<ProjectManifest>(
+        &read_to_string(pixi.manifest_path()).await.unwrap(),
+    )
+    .expect("parsing should succeed!");
+
+    let (name, _) = manifest.dependencies.first().unwrap();
+    assert_eq!(name, "rattler");
+    let host_deps = manifest.host_dependencies.unwrap();
+    let (name, _) = host_deps.first().unwrap();
+    assert_eq!(name, "libcomputer");
+    let build_deps = manifest.build_dependencies.unwrap();
+    let (name, _) = build_deps.first().unwrap();
+    assert_eq!(name, "libidk");
 
     // Lock file should contain all packages
     let lock = pixi.lock_file().await.unwrap();

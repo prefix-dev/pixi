@@ -1,5 +1,5 @@
 pub mod environment;
-mod manifest;
+pub mod manifest;
 mod serde;
 
 use crate::consts;
