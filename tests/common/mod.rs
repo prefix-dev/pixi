@@ -94,7 +94,8 @@ impl PixiControl {
         self.project_path().join(consts::PROJECT_MANIFEST)
     }
 
-    /// Initialize pixi project inside a temporary directory.
+    /// Initialize pixi project inside a temporary directory. Returns a [`InitBuilder`]. To execute
+    /// the command and await the result call `.await` on the return value.
     pub fn init(&self) -> InitBuilder {
         InitBuilder {
             args: init::Args {
@@ -104,7 +105,8 @@ impl PixiControl {
         }
     }
 
-    /// Add a dependency to the project
+    /// Initialize pixi project inside a temporary directory. Returns a [`AddBuilder`]. To execute
+    /// the command and await the result call `.await` on the return value.
     pub fn add(&self, spec: impl IntoMatchSpec) -> AddBuilder {
         AddBuilder {
             args: add::Args {
@@ -132,6 +134,8 @@ impl PixiControl {
     }
 }
 
+/// Contains the arguments to pass to `init::execute()`. Call `.await` to call the CLI execute
+/// method and await the result at the same time.
 pub struct InitBuilder {
     args: init::Args,
 }
@@ -147,6 +151,11 @@ impl InitBuilder {
     }
 }
 
+// When `.await` is called on an object that is not a `Future` the compiler will first check if the
+// type implements `IntoFuture`. If it does it will call the `IntoFuture::into_future()` method and
+// await the resulting `Future`. We can abuse this behavior in builder patterns because the
+// `into_future` method can also be used as a `finish` function. This allows you to reduce the
+// required code.
 impl IntoFuture for InitBuilder {
     type Output = anyhow::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
@@ -156,6 +165,8 @@ impl IntoFuture for InitBuilder {
     }
 }
 
+/// Contains the arguments to pass to `add::execute()`. Call `.await` to call the CLI execute method
+/// and await the result at the same time.
 pub struct AddBuilder {
     args: add::Args,
 }
@@ -167,6 +178,11 @@ impl AddBuilder {
     }
 }
 
+// When `.await` is called on an object that is not a `Future` the compiler will first check if the
+// type implements `IntoFuture`. If it does it will call the `IntoFuture::into_future()` method and
+// await the resulting `Future`. We can abuse this behavior in builder patterns because the
+// `into_future` method can also be used as a `finish` function. This allows you to reduce the
+// required code.
 impl IntoFuture for AddBuilder {
     type Output = anyhow::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
@@ -176,6 +192,8 @@ impl IntoFuture for AddBuilder {
     }
 }
 
+/// A helper trait to convert from different types into a [`MatchSpec`] to make it simpler to
+/// use them in tests.
 pub trait IntoMatchSpec {
     fn into(self) -> MatchSpec;
 }
