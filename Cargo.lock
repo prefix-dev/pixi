@@ -2527,9 +2527,9 @@ dependencies = [
 
 [[package]]
 name = "minijinja"
-version = "0.32.1"
+version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e813a9b613280e7d9e5be27ab556530d7c5562d26e5e6ef586e2c4512d34550d"
+checksum = "75aa91cba87dcad6af3e53bc7adb9c99755eba2d49b6c5f10dbcc79d4727c1bd"
 dependencies = [
  "serde",
 ]
@@ -2998,6 +2998,7 @@ dependencies = [
  "once_cell",
  "rattler",
  "rattler_conda_types",
+ "rattler_digest",
  "rattler_networking",
  "rattler_repodata_gateway",
  "rattler_shell",
@@ -3005,6 +3006,7 @@ dependencies = [
  "rattler_virtual_packages",
  "reqwest",
  "serde",
+ "serde_json",
  "serde_spanned",
  "serde_with",
  "shlex",

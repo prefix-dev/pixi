@@ -1,12 +1,19 @@
+#![allow(dead_code)]
+
+pub mod package_database;
+
 use pixi::cli::run::create_command;
 use pixi::cli::{add, init, run};
-use pixi::consts;
+use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
 use rattler_conda_types::{MatchSpec, Version};
+use std::future::{Future, IntoFuture};
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::process::Stdio;
 use std::str::FromStr;
 use tempfile::TempDir;
+use url::Url;
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -28,13 +35,6 @@ impl RunResult {
     pub fn stdout(&self) -> &str {
         std::str::from_utf8(&self.output.stdout).expect("could not get output")
     }
-}
-
-/// MatchSpecs from an iterator
-pub fn matchspec_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<MatchSpec> {
-    iter.into_iter()
-        .map(|s| MatchSpec::from_str(s.as_ref()).expect("could not parse matchspec"))
-        .collect()
 }
 
 /// MatchSpecs from an iterator
@@ -80,6 +80,11 @@ impl PixiControl {
         Ok(PixiControl { tmpdir: tempdir })
     }
 
+    /// Loads the project manifest and returns it.
+    pub fn project(&self) -> anyhow::Result<Project> {
+        Project::load(&self.manifest_path())
+    }
+
     /// Get the path to the project
     pub fn project_path(&self) -> &Path {
         self.tmpdir.path()
@@ -89,24 +94,31 @@ impl PixiControl {
         self.project_path().join(consts::PROJECT_MANIFEST)
     }
 
-    /// Initialize pixi inside a tempdir and set the tempdir as the current working directory.
-    pub async fn init(&self) -> anyhow::Result<()> {
-        let args = init::Args {
-            path: self.project_path().to_path_buf(),
-        };
-        init::execute(args).await?;
-        Ok(())
+    /// Initialize pixi project inside a temporary directory. Returns a [`InitBuilder`]. To execute
+    /// the command and await the result call `.await` on the return value.
+    pub fn init(&self) -> InitBuilder {
+        InitBuilder {
+            args: init::Args {
+                path: self.project_path().to_path_buf(),
+                channels: Vec::new(),
+            },
+        }
     }
 
-    /// Add a dependency to the project
-    pub async fn add(&mut self, mut args: add::Args) -> anyhow::Result<()> {
-        args.manifest_path = Some(self.manifest_path());
-        add::execute(args).await
+    /// Initialize pixi project inside a temporary directory. Returns a [`AddBuilder`]. To execute
+    /// the command and await the result call `.await` on the return value.
+    pub fn add(&self, spec: impl IntoMatchSpec) -> AddBuilder {
+        AddBuilder {
+            args: add::Args {
+                manifest_path: Some(self.manifest_path()),
+                specs: vec![spec.into()],
+            },
+        }
     }
 
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> anyhow::Result<RunResult> {
-        args.manifest_path = Some(self.manifest_path());
+        args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
         let mut script_command = create_command(args).await?;
         let output = script_command
             .command
@@ -119,5 +131,87 @@ impl PixiControl {
     /// Get the associated lock file
     pub async fn lock_file(&self) -> anyhow::Result<CondaLock> {
         pixi::environment::load_lock_for_manifest_path(&self.manifest_path()).await
+    }
+}
+
+/// Contains the arguments to pass to `init::execute()`. Call `.await` to call the CLI execute
+/// method and await the result at the same time.
+pub struct InitBuilder {
+    args: init::Args,
+}
+
+impl InitBuilder {
+    pub fn with_channel(mut self, channel: impl ToString) -> Self {
+        self.args.channels.push(channel.to_string());
+        self
+    }
+
+    pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
+        self.with_channel(Url::from_directory_path(channel).unwrap())
+    }
+}
+
+// When `.await` is called on an object that is not a `Future` the compiler will first check if the
+// type implements `IntoFuture`. If it does it will call the `IntoFuture::into_future()` method and
+// await the resulting `Future`. We can abuse this behavior in builder patterns because the
+// `into_future` method can also be used as a `finish` function. This allows you to reduce the
+// required code.
+impl IntoFuture for InitBuilder {
+    type Output = anyhow::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(init::execute(self.args))
+    }
+}
+
+/// Contains the arguments to pass to `add::execute()`. Call `.await` to call the CLI execute method
+/// and await the result at the same time.
+pub struct AddBuilder {
+    args: add::Args,
+}
+
+impl AddBuilder {
+    pub fn with_spec(mut self, spec: impl IntoMatchSpec) -> Self {
+        self.args.specs.push(spec.into());
+        self
+    }
+}
+
+// When `.await` is called on an object that is not a `Future` the compiler will first check if the
+// type implements `IntoFuture`. If it does it will call the `IntoFuture::into_future()` method and
+// await the resulting `Future`. We can abuse this behavior in builder patterns because the
+// `into_future` method can also be used as a `finish` function. This allows you to reduce the
+// required code.
+impl IntoFuture for AddBuilder {
+    type Output = anyhow::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(add::execute(self.args))
+    }
+}
+
+/// A helper trait to convert from different types into a [`MatchSpec`] to make it simpler to
+/// use them in tests.
+pub trait IntoMatchSpec {
+    fn into(self) -> MatchSpec;
+}
+
+impl IntoMatchSpec for &str {
+    fn into(self) -> MatchSpec {
+        MatchSpec::from_str(self).unwrap()
+    }
+}
+
+impl IntoMatchSpec for String {
+    fn into(self) -> MatchSpec {
+        MatchSpec::from_str(&self).unwrap()
+    }
+}
+
+impl IntoMatchSpec for MatchSpec {
+    fn into(self) -> MatchSpec {
+        self
     }
 }
