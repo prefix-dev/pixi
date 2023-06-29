@@ -12,10 +12,7 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> anyhow::Result<()> {
-    let project = match args.manifest_path {
-        Some(path) => Project::load(path.as_path())?,
-        None => Project::discover()?,
-    };
+    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     get_up_to_date_prefix(&project).await?;
 

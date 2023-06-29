@@ -15,7 +15,7 @@ use crate::{
 };
 use rattler_shell::{
     activation::ActivationResult,
-    activation::{ActivationVariables, Activator},
+    activation::{ActivationVariables, Activator, PathModificationBehaviour},
     shell::{Shell, ShellEnum},
 };
 
@@ -40,10 +40,7 @@ pub struct RunScriptCommand {
 
 pub async fn create_command(args: Args) -> anyhow::Result<RunScriptCommand> {
     let command: Vec<_> = args.command.iter().map(|c| c.to_string()).collect();
-    let project = match args.manifest_path {
-        Some(path) => Project::load(path.as_path())?,
-        None => Project::discover()?,
-    };
+    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     let (command_name, command) = command
         .first()
@@ -75,6 +72,9 @@ pub async fn create_command(args: Args) -> anyhow::Result<RunScriptCommand> {
 
         // Start from an empty prefix
         conda_prefix: None,
+
+        // Prepending environment paths so they get found first.
+        path_modification_behaviour: PathModificationBehaviour::Prepend,
     })?;
 
     // Generate a temporary file with the script to execute. This includes the activation of the
