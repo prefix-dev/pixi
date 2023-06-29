@@ -82,11 +82,16 @@ async fn add_functionality_union() {
     pixi.add("libidk").set_type(SpecType::Build).await.unwrap();
 
     // Toml should contain the correct sections
+    // We test if the toml file that is saved is correct
+    // by checking if we get the correct values back in the manifest
+    // We know this works because we test the manifest in another test
+    // Where we check if the sections are put in the correct variables
     let manifest = toml_edit::de::from_str::<ProjectManifest>(
         &read_to_string(pixi.manifest_path()).await.unwrap(),
     )
     .expect("parsing should succeed!");
 
+    // Should contain all added dependencies
     let (name, _) = manifest.dependencies.first().unwrap();
     assert_eq!(name, "rattler");
     let host_deps = manifest.host_dependencies.unwrap();
@@ -96,7 +101,7 @@ async fn add_functionality_union() {
     let (name, _) = build_deps.first().unwrap();
     assert_eq!(name, "libidk");
 
-    // Lock file should contain all packages
+    // Lock file should contain all packages as well
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_matchspec("rattler==1"));
     assert!(lock.contains_matchspec("libcomputer==1.2"));
