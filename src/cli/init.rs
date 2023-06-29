@@ -10,6 +10,10 @@ pub struct Args {
     /// Where to place the project (defaults to current path)
     #[arg(default_value = ".")]
     pub path: PathBuf,
+
+    /// Channels to use in the project.
+    #[arg(short, long = "channel", id = "channel")]
+    pub channels: Vec<String>,
 }
 
 /// The pixi.toml template
@@ -22,7 +26,7 @@ description = "Add a short description here"
 {%- if author %}
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
-channels = ["{{ channel }}"]
+channels = ["{{ channels|join("\", \"") }}"]
 platforms = ["{{ platform }}"]
 
 [commands]
@@ -52,7 +56,11 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     let name = dir.file_name().unwrap().to_string_lossy();
     let version = "0.1.0";
     let author = get_default_author();
-    let channel = "conda-forge";
+    let channels = if args.channels.is_empty() {
+        vec![String::from("conda-forge")]
+    } else {
+        args.channels
+    };
     let platform = Platform::current();
 
     let rv = env
@@ -63,7 +71,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
                 name,
                 version,
                 author,
-                channel,
+                channels,
                 platform
             },
         )
