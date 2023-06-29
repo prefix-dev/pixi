@@ -23,9 +23,9 @@ use toml_edit::{Array, Document, Item, Table, TomlError, Value};
 #[derive(Debug)]
 pub struct Project {
     root: PathBuf,
-    pub(crate) source: String,
+    pub source: String,
     doc: Document,
-    pub(crate) manifest: ProjectManifest,
+    pub manifest: ProjectManifest,
 }
 
 impl Project {
