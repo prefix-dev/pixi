@@ -9,13 +9,15 @@ use crate::report_error::ReportError;
 use anyhow::Context;
 use ariadne::{Label, Report, ReportKind, Source};
 use indexmap::IndexMap;
-use rattler_conda_types::{Channel, MatchSpec, NamelessMatchSpec, Platform, Version};
+use rattler_conda_types::{
+    Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, Platform, Version,
+};
 use rattler_virtual_packages::VirtualPackage;
 use std::{
     env, fs,
     path::{Path, PathBuf},
 };
-use toml_edit::{Document, Item, Table, TomlError};
+use toml_edit::{Array, Document, Item, Table, TomlError, Value};
 
 /// A project represented by a pixi.toml file.
 #[derive(Debug)]
@@ -314,6 +316,68 @@ impl Project {
     /// Returns the channels used by this project
     pub fn channels(&self) -> &[Channel] {
         &self.manifest.project.channels
+    }
+
+    /// Adds the specified channels to the project.
+    pub fn add_channels(
+        &mut self,
+        channels: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> anyhow::Result<()> {
+        let mut stored_channels = Vec::new();
+        for channel in channels {
+            self.manifest.project.channels.push(Channel::from_str(
+                channel.as_ref(),
+                &ChannelConfig::default(),
+            )?);
+            stored_channels.push(channel.as_ref().to_owned());
+        }
+
+        let channels_array = self.channels_array_mut()?;
+        for channel in stored_channels {
+            channels_array.push(channel);
+        }
+
+        Ok(())
+    }
+
+    /// Replaces all the channels in the project with the specified channels.
+    pub fn set_channels(
+        &mut self,
+        channels: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> anyhow::Result<()> {
+        self.manifest.project.channels.clear();
+        let mut stored_channels = Vec::new();
+        for channel in channels {
+            self.manifest.project.channels.push(Channel::from_str(
+                channel.as_ref(),
+                &ChannelConfig::default(),
+            )?);
+            stored_channels.push(channel.as_ref().to_owned());
+        }
+
+        let channels_array = self.channels_array_mut()?;
+        channels_array.clear();
+        for channel in stored_channels {
+            channels_array.push(channel);
+        }
+        Ok(())
+    }
+
+    /// Returns a mutable reference to the channels array.
+    fn channels_array_mut(&mut self) -> anyhow::Result<&mut Array> {
+        let project = &mut self.doc["project"];
+        if project.is_none() {
+            *project = Item::Table(Table::new());
+        }
+
+        let channels = &mut project["channels"];
+        if channels.is_none() {
+            *channels = Item::Value(Value::Array(Array::new()))
+        }
+
+        channels
+            .as_array_mut()
+            .ok_or_else(|| anyhow::anyhow!("malformed channels array"))
     }
 
     /// Returns the platforms this project targets

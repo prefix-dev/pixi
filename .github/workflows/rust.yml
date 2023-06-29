@@ -247,8 +247,8 @@ jobs:
       # The apple id password is a app specific password that you can get on the apple website (https://support.apple.com/en-us/HT204397) (usually a UUID looking string)
       # The team id is the team id of the Apple Developer Team.
       - name: Notarize binary
-        # only execute this step when on main branch and on macOS
-        if: matrix.job.os == 'macOS-latest' && github.ref == 'refs/heads/main'
+        # only execute this step when releasing, or on main branch and on macOS
+        if: startsWith(matrix.job.os, 'macOS-') && (github.ref == 'refs/heads/main' || steps.is-release.outputs.IS_RELEASE)
         env:
           APPLEID_TEAMID: ${{ secrets.APPLEID_TEAMID }}
           APPLEID_USERNAME: ${{ secrets.APPLEID_USERNAME }}
