@@ -92,7 +92,7 @@ pixi auth logout anaconda.org
 ### Add the completion scripts for your shell
 This command generates the shell completion scripts to enable tab completion. The completion command outputs the scripts to the command line, and with an eval in the config file of your shell, it retrieves the latest version each time you source your shell.
 ```bash
-# On unix (MacOS or Linux), pick your shell (use `echo $SHELL` to find the shell you are using.):
+# On unix (macOS or Linux), pick your shell (use `echo $SHELL` to find the shell you are using.):
 echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
 echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
 echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
