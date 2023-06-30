@@ -27,6 +27,7 @@ To visualize this, running the following set of commands:
 pixi init my_project
 cd my_project
 pixi add python
+pixi install
 ```
 ...results in a unique project structure:
 ```shell
