@@ -199,7 +199,7 @@ pixi global install cowpy
 ```
 
 For more examples
-check [the documentation](./examples.md#global-package-installation-in-isolation)
+check [the documentation](./cli.md)
 
 <a name="contributing"></a>
 # Contributing 😍
