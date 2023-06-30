@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.6] - 2023-06-30
+
+### Highlights
+Improving the reliability is important to us, so we added an integration testing framework, we can now test as close as possible to the CLI level using `cargo`.
+
+### Details
+
+#### Added
+- An integration test harness, to test as close as possible to the user experience but in rust. ([#138](https://github.com/prefix-dev/pixi/pull/138), [#140](https://github.com/prefix-dev/pixi/pull/140), [#156](https://github.com/prefix-dev/pixi/pull/156))
+- Add different levels of dependencies in preparation for `pixi build`, allowing `host-` and `build-` `dependencies` ([#149](https://github.com/prefix-dev/pixi/pull/149))
+
+#### Fixed
+- Use correct folder name on pixi init ([#144](https://github.com/prefix-dev/pixi/pull/144))
+- Fix windows cli installer ([#152](https://github.com/prefix-dev/pixi/pull/152))
+- Fix global install path variable ([#147](https://github.com/prefix-dev/pixi/pull/147))
+- Fix macOS binary notarization ([#153](https://github.com/prefix-dev/pixi/pull/153))
+
 ## [0.0.5] - 2023-06-26
 
 Fixing Windows installer build in CI. ([#145](https://github.com/prefix-dev/pixi/pull/145))
@@ -24,7 +41,7 @@ helped a lot.
 
 #### Added
 
-- Platform specific dependencies and helpfull error reporting on `pixi.toml` issues([#111](https://github.com/prefix-dev/pixi/pull/111))
+- Platform specific dependencies and helpful error reporting on `pixi.toml` issues([#111](https://github.com/prefix-dev/pixi/pull/111))
 - Windows installer, which is very useful for users that want to start using pixi on windows. ([#114](https://github.com/prefix-dev/pixi/pull/114))
 - `shell` command to use the pixi environment without `pixi run`. ([#116](https://github.com/prefix-dev/pixi/pull/116))
 - Verbosity options using `-v, -vv, -vvv` ([#118](https://github.com/prefix-dev/pixi/pull/118))
