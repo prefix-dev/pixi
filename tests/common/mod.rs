@@ -4,7 +4,7 @@ pub mod package_database;
 
 use pixi::cli::add::SpecType;
 use pixi::cli::install::Args;
-use pixi::cli::run::create_command;
+use pixi::cli::run::{create_command, order_commands};
 use pixi::cli::{add, init, run};
 use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
@@ -12,9 +12,11 @@ use rattler_conda_types::{MatchSpec, Version};
 use std::future::{Future, IntoFuture};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::process::Stdio;
+use std::process::{Output, Stdio};
 use std::str::FromStr;
 use tempfile::TempDir;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::task::spawn_blocking;
 use url::Url;
 
 /// To control the pixi process
@@ -24,7 +26,7 @@ pub struct PixiControl {
 }
 
 pub struct RunResult {
-    output: std::process::Output,
+    output: Output,
 }
 
 impl RunResult {
@@ -121,15 +123,36 @@ impl PixiControl {
     }
 
     /// Run a command
-    pub async fn run(&self, mut args: run::Args) -> anyhow::Result<RunResult> {
+    pub async fn run(&self, mut args: run::Args) -> anyhow::Result<UnboundedReceiver<RunResult>> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
-        let mut script_command = create_command(args).await?;
-        let output = script_command
-            .command
-            .stdout(Stdio::piped())
-            .spawn()?
-            .wait_with_output()?;
-        Ok(RunResult { output })
+        let mut commands = order_commands(args.command, &self.project().unwrap()).await?;
+
+        let project = self.project().unwrap();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+        tokio::spawn(async move {
+            while let Some(command) = commands.pop_back() {
+                let mut command = create_command(command, &project)
+                    .await
+                    .expect("could not create command");
+                let tx = tx.clone();
+                spawn_blocking(move || {
+                    let output = command
+                        .command
+                        .stdout(Stdio::piped())
+                        .spawn()
+                        .expect("could not spawn task")
+                        .wait_with_output()
+                        .expect("could not run command");
+                    tx.send(RunResult { output })
+                        .expect("could not send output");
+                })
+                .await
+                .unwrap();
+            }
+        });
+
+        Ok(rx)
     }
 
     /// Create an installed environment. I.e a resolved and installed prefix
