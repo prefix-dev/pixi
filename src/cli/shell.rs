@@ -58,6 +58,12 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         .tempfile()?;
     std::io::Write::write_all(&mut temp_file, script.as_bytes())?;
 
+    println!(
+        "=== Staring a '{}' shell in the '{}' project ===",
+        interactive_shell.executable(),
+        project.name()
+    );
+
     // Execute the script with the shell
     let mut command = shell
         .create_run_script_command(temp_file.path())
