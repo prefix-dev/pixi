@@ -10,6 +10,7 @@ use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter
 pub mod add;
 pub mod auth;
 pub mod global;
+pub mod info;
 pub mod init;
 pub mod install;
 pub mod run;
@@ -53,6 +54,7 @@ pub enum Command {
     #[clap(alias = "i")]
     Install(install::Args),
     Task(task::Args),
+    Info(info::Args),
 }
 
 fn completion(args: CompletionCommand) -> Result<(), Error> {
@@ -108,5 +110,6 @@ pub async fn execute_command(command: Command) -> Result<(), Error> {
         Command::Install(cmd) => install::execute(cmd).await,
         Command::Shell(cmd) => shell::execute(cmd).await,
         Command::Task(cmd) => task::execute(cmd),
+        Command::Info(cmd) => info::execute(cmd).await,
     }
 }

@@ -50,6 +50,7 @@ rattler_virtual_packages = { default-features = false, git = "https://github.com
 #rattler_networking = { default-features = false, path="../rattler/crates/rattler_networking" }
 reqwest = { version = "0.11.16", default-features = false }
 serde = "1.0.163"
+serde_json = "1.0.96"
 serde_spanned = "0.6.2"
 serde_with = { version = "3.0.0", features = ["indexmap"] }
 shlex = "1.1.0"
