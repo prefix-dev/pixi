@@ -3,13 +3,13 @@ With `pixi` you can install packages in global space or local to the environment
 
 ## Pixi Project Commands
 
-|  Command | Use case  |
-|--|--|
-| `init` | Creates a new project by initializing a `pixi.toml` file. |
-| `add`  | Adds a dependency to the project file.|
-| `install` | Installs all dependencies of the project in its environment|
-| `run`	| Runs the given command in a project's environment |
-| `shell` | Starts a shell in the project's environment |
+| Command   | Use case                                                    |
+|-----------|-------------------------------------------------------------|
+| `init`    | Creates a new project by initializing a `pixi.toml` file.   |
+| `add`     | Adds a dependency to the project file.                      |
+| `install` | Installs all dependencies of the project in its environment |
+| `run`     | Runs the given command in a project's environment           |
+| `shell`   | Starts a shell in the project's environment                 |
 
 ### Initialize a new project
 This command is used to create a new project.
@@ -72,10 +72,10 @@ exit
 
 ## Pixi Global Commands
 
-|  Command | Use case  |
-|--|--|
-| `auth` | Authenticate on user level the access to remote hosts like `prefix.dev` or `anaconda.org` for the use of private channels.|
-| `completion` | Generates the shell completion scripts to enable tab completion. |
+| Command          | Use case                                                                                                                            |
+|------------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| `auth`           | Authenticate on user level the access to remote hosts like `prefix.dev` or `anaconda.org` for the use of private channels.          |
+| `completion`     | Generates the shell completion scripts to enable tab completion.                                                                    |
 | `global install` | Installs a package into its own environment and adds the binary to `PATH` so it can be accessed without activating the environment. |
 
 ### Authenticate pixi to access package repository hosts
