@@ -4,7 +4,7 @@ pub mod package_database;
 
 use pixi::cli::add::SpecType;
 use pixi::cli::install::Args;
-use pixi::cli::run::{create_command, get_command_env, order_commands};
+use pixi::cli::run::{execute_command, get_command_env, order_commands};
 use pixi::cli::{add, init, run};
 use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
@@ -133,8 +133,8 @@ impl PixiControl {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
         tokio::spawn(async move {
-            while let Some(command) = commands.pop_back() {
-                let command = create_command(command, &project, &command_env)
+            while let Some((command, args)) = commands.pop_back() {
+                let command = execute_command(command, &project, &command_env, args)
                     .await
                     .expect("could not create command");
                 if let Some(mut command) = command {

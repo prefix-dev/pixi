@@ -22,6 +22,7 @@ clap = { version = "4.2.4", default-features = false, features = ["derive", "usa
 clap-verbosity-flag = "2.0.1"
 clap_complete = "4.2.1"
 console = { version = "0.15.5", features = ["windows-console-colors"] }
+deno_task_shell = "0.12.0"
 dirs = "5.0.1"
 dunce = "1.0.4"
 futures = "0.3.28"
