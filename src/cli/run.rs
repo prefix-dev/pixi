@@ -33,7 +33,7 @@ pub struct Args {
     pub manifest_path: Option<PathBuf>,
 }
 
-pub async fn order_commands(
+pub fn order_commands(
     commands: Vec<String>,
     project: &Project,
 ) -> anyhow::Result<VecDeque<Command>> {
@@ -144,21 +144,10 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     // Get the correctly ordered commands
-    let mut ordered_commands = order_commands(args.command, &project).await?;
+    let mut ordered_commands = order_commands(args.command, &project)?;
 
-    // Get environment variables from the activation
-    let activation_env = await_in_progress("activating environment", run_activation(&project))
-        .await
-        .context("failed to activate environment")?;
-
-    // Get environment variables from the manifest
-    let manifest_env = get_metadata_env(&project);
-
-    // Construct command environment
-    let command_env = activation_env
-        .into_iter()
-        .chain(manifest_env.into_iter())
-        .collect();
+    // Get the environment to run the commands in.
+    let command_env = get_command_env(&project).await?;
 
     // Execute the commands in the correct order
     while let Some(command) = ordered_commands.pop_back() {
@@ -171,6 +160,23 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Determine the environment variables to use when executing a command.
+pub async fn get_command_env(project: &Project) -> anyhow::Result<HashMap<String, String>> {
+    // Get environment variables from the activation
+    let activation_env = await_in_progress("activating environment", run_activation(project))
+        .await
+        .context("failed to activate environment")?;
+
+    // Get environment variables from the manifest
+    let manifest_env = get_metadata_env(project);
+
+    // Construct command environment by concatenating the environments
+    Ok(activation_env
+        .into_iter()
+        .chain(manifest_env.into_iter())
+        .collect())
 }
 
 /// Runs and caches the activation script.

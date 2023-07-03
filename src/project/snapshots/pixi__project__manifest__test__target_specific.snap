@@ -1,5 +1,6 @@
 ---
 source: src/project/manifest.rs
+assertion_line: 316
 expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\")"
 ---
 ProjectManifest {
@@ -60,6 +61,8 @@ ProjectManifest {
                     channel: None,
                     subdir: None,
                     namespace: None,
+                    md5: None,
+                    sha256: None,
                 },
             },
             host_dependencies: None,
@@ -91,6 +94,8 @@ ProjectManifest {
                     channel: None,
                     subdir: None,
                     namespace: None,
+                    md5: None,
+                    sha256: None,
                 },
             },
             host_dependencies: None,
