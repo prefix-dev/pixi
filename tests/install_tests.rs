@@ -1,7 +1,7 @@
 mod common;
 
+use crate::common::builders::string_from_iter;
 use crate::common::package_database::{Package, PackageDatabase};
-use crate::common::string_from_iter;
 use common::{LockFileExt, PixiControl};
 use pixi::cli::run;
 use tempfile::TempDir;

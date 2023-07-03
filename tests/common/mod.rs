@@ -1,21 +1,22 @@
 #![allow(dead_code)]
 
+pub mod builders;
 pub mod package_database;
 
-use pixi::cli::add::SpecType;
+use crate::common::builders::{AddBuilder, CommandAddBuilder, CommandAliasBuilder, InitBuilder};
+use pixi::cli::command::{AddArgs, AliasArgs};
 use pixi::cli::install::Args;
 use pixi::cli::run::create_command;
-use pixi::cli::{add, init, run};
+use pixi::cli::{add, command, init, run};
 use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
 use rattler_conda_types::{MatchSpec, Version};
-use std::future::{Future, IntoFuture};
+
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
+
 use std::process::Stdio;
 use std::str::FromStr;
 use tempfile::TempDir;
-use url::Url;
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -37,11 +38,6 @@ impl RunResult {
     pub fn stdout(&self) -> &str {
         std::str::from_utf8(&self.output.stdout).expect("could not get output")
     }
-}
-
-/// MatchSpecs from an iterator
-pub fn string_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<String> {
-    iter.into_iter().map(|s| s.as_ref().to_string()).collect()
 }
 
 pub trait LockFileExt {
@@ -120,6 +116,11 @@ impl PixiControl {
         }
     }
 
+    /// Access the command control, which allows to add and remove commands
+    pub fn command(&self) -> CommandControl {
+        CommandControl { pixi: self }
+    }
+
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> anyhow::Result<RunResult> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
@@ -146,80 +147,43 @@ impl PixiControl {
     }
 }
 
-/// Contains the arguments to pass to `init::execute()`. Call `.await` to call the CLI execute
-/// method and await the result at the same time.
-pub struct InitBuilder {
-    args: init::Args,
+pub struct CommandControl<'a> {
+    /// Reference to the pixi control
+    pixi: &'a PixiControl,
 }
 
-impl InitBuilder {
-    pub fn with_channel(mut self, channel: impl ToString) -> Self {
-        self.args.channels.push(channel.to_string());
-        self
-    }
-
-    pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
-        self.with_channel(Url::from_directory_path(channel).unwrap())
-    }
-}
-
-// When `.await` is called on an object that is not a `Future` the compiler will first check if the
-// type implements `IntoFuture`. If it does it will call the `IntoFuture::into_future()` method and
-// await the resulting `Future`. We can abuse this behavior in builder patterns because the
-// `into_future` method can also be used as a `finish` function. This allows you to reduce the
-// required code.
-impl IntoFuture for InitBuilder {
-    type Output = anyhow::Result<()>;
-    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
-
-    fn into_future(self) -> Self::IntoFuture {
-        Box::pin(init::execute(self.args))
-    }
-}
-
-/// Contains the arguments to pass to `add::execute()`. Call `.await` to call the CLI execute method
-/// and await the result at the same time.
-pub struct AddBuilder {
-    args: add::Args,
-}
-
-impl AddBuilder {
-    pub fn with_spec(mut self, spec: impl IntoMatchSpec) -> Self {
-        self.args.specs.push(spec.into());
-        self
-    }
-
-    /// Set as a host
-    pub fn set_type(mut self, t: SpecType) -> Self {
-        match t {
-            SpecType::Host => {
-                self.args.host = true;
-                self.args.build = false;
-            }
-            SpecType::Build => {
-                self.args.host = false;
-                self.args.build = true;
-            }
-            SpecType::Run => {
-                self.args.host = false;
-                self.args.build = false;
-            }
+impl CommandControl<'_> {
+    /// Add a command
+    pub fn add(&self, name: impl ToString) -> CommandAddBuilder {
+        CommandAddBuilder {
+            manifest_path: Some(self.pixi.manifest_path()),
+            args: AddArgs {
+                name: name.to_string(),
+                commands: vec![],
+                depends_on: None,
+            },
         }
-        self
     }
-}
 
-// When `.await` is called on an object that is not a `Future` the compiler will first check if the
-// type implements `IntoFuture`. If it does it will call the `IntoFuture::into_future()` method and
-// await the resulting `Future`. We can abuse this behavior in builder patterns because the
-// `into_future` method can also be used as a `finish` function. This allows you to reduce the
-// required code.
-impl IntoFuture for AddBuilder {
-    type Output = anyhow::Result<()>;
-    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+    /// Remove a command
+    pub async fn remove(&self, name: impl ToString) -> anyhow::Result<()> {
+        command::execute(command::Args {
+            manifest_path: Some(self.pixi.manifest_path()),
+            operation: command::Operation::Remove(command::RemoveArgs {
+                name: name.to_string(),
+            }),
+        })
+    }
 
-    fn into_future(self) -> Self::IntoFuture {
-        Box::pin(add::execute(self.args))
+    /// Alias a command
+    pub fn alias(&self, name: impl ToString) -> CommandAliasBuilder {
+        CommandAliasBuilder {
+            manifest_path: Some(self.pixi.manifest_path()),
+            args: AliasArgs {
+                name: name.to_string(),
+                depends_on: vec![],
+            },
+        }
     }
 }
 

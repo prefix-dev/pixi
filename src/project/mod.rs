@@ -2,6 +2,7 @@ pub mod environment;
 pub mod manifest;
 mod serde;
 
+use crate::command::{CmdArgs, Command as PixiCommand, Command};
 use crate::consts;
 use crate::consts::PROJECT_MANIFEST;
 use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
@@ -28,6 +29,37 @@ pub struct Project {
     pub manifest: ProjectManifest,
 }
 
+/// Returns a command a a toml item
+fn command_as_toml(command: PixiCommand) -> Item {
+    match command {
+        Command::Plain(str) => Item::Value(str.into()),
+        Command::Process(process) => {
+            let mut table = Table::new().into_inline_table();
+            match process.cmd {
+                CmdArgs::Single(cmd_str) => {
+                    table.insert("cmd", cmd_str.into());
+                }
+                CmdArgs::Multiple(cmd_strs) => {
+                    table.insert("cmd", Value::Array(Array::from_iter(cmd_strs.into_iter())));
+                }
+            }
+            table.insert(
+                "depends_on",
+                Value::Array(Array::from_iter(process.depends_on.into_iter())),
+            );
+            Item::Value(Value::InlineTable(table))
+        }
+        Command::Alias(alias) => {
+            let mut table = Table::new().into_inline_table();
+            table.insert(
+                "depends_on",
+                Value::Array(Array::from_iter(alias.depends_on.into_iter())),
+            );
+            Item::Value(Value::InlineTable(table))
+        }
+    }
+}
+
 impl Project {
     /// Discovers the project manifest file in the current directory or any of the parent
     /// directories.
@@ -52,6 +84,61 @@ impl Project {
                 root.display()
             )
         })
+    }
+
+    /// Add a command to the project
+    pub fn add_command(
+        &mut self,
+        name: impl AsRef<str>,
+        command: PixiCommand,
+    ) -> anyhow::Result<()> {
+        if self.manifest.commands.contains_key(name.as_ref()) {
+            anyhow::bail!("command {} already exists", name.as_ref());
+        };
+
+        let commands_table = &mut self.doc["commands"];
+        // If it doesnt exist create a proper table
+        if commands_table.is_none() {
+            *commands_table = Item::Table(Table::new());
+        }
+
+        // Cast the item into a table
+        let commands_table = commands_table.as_table_like_mut().ok_or_else(|| {
+            anyhow::anyhow!("commands in {} are malformed", consts::PROJECT_MANIFEST)
+        })?;
+
+        // Add the command to the table
+        commands_table.insert(name.as_ref(), command_as_toml(command.clone()));
+
+        self.manifest
+            .commands
+            .insert(name.as_ref().to_string(), command);
+
+        self.save()?;
+
+        Ok(())
+    }
+
+    /// Remove a command from the project
+    pub fn remove_command(&mut self, name: impl AsRef<str>) -> anyhow::Result<()> {
+        match self.manifest.commands.remove(name.as_ref()) {
+            None => anyhow::bail!("command {} does not exist", name.as_ref()),
+            Some(_) => {}
+        }
+        let commands_table = &mut self.doc["commands"];
+        if commands_table.is_none() {
+            anyhow::bail!("internal data-structure inconsistent with toml");
+        }
+        let commands_table = commands_table.as_table_like_mut().ok_or_else(|| {
+            anyhow::anyhow!("commands in {} are malformed", consts::PROJECT_MANIFEST)
+        })?;
+
+        // If it does not exist in toml, consider this ok as we want to remove it anyways
+        commands_table.remove(name.as_ref());
+
+        self.save()?;
+
+        Ok(())
     }
 
     pub fn load_or_else_discover(manifest_path: Option<&Path>) -> anyhow::Result<Self> {
