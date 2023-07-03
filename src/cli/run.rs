@@ -113,7 +113,7 @@ pub async fn create_command(
 
     let activator_result = activator.activation(ActivationVariables {
         // Get the current PATH variable
-        path: std::env::var_os("PATH").map(|path_var| std::env::split_paths(&path_var).collect()),
+        path: Default::default(),
 
         // Start from an empty prefix
         conda_prefix: None,
