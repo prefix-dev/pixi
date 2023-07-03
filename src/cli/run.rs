@@ -38,9 +38,11 @@ pub struct RunScriptCommand {
     _script: tempfile::NamedTempFile,
 }
 
-pub async fn create_command(args: Args) -> anyhow::Result<RunScriptCommand> {
-    let command: Vec<_> = args.command.iter().map(|c| c.to_string()).collect();
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+pub async fn order_commands(
+    commands: Vec<String>,
+    project: &Project,
+) -> anyhow::Result<VecDeque<Command>> {
+    let command: Vec<_> = commands.iter().map(|c| c.to_string()).collect();
 
     let (command_name, command) = command
         .first()
@@ -53,36 +55,11 @@ pub async fn create_command(args: Args) -> anyhow::Result<RunScriptCommand> {
             (
                 None,
                 Command::Process(ProcessCmd {
-                    cmd: CmdArgs::Multiple(args.command),
+                    cmd: CmdArgs::Multiple(commands),
                     depends_on: vec![],
                 }),
             )
         });
-
-    // Determine the current shell
-    let shell: ShellEnum = ShellEnum::default();
-
-    // Construct an activator so we can run commands from the environment
-    let prefix = get_up_to_date_prefix(&project).await?;
-    let activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())?;
-
-    let activator_result = activator.activation(ActivationVariables {
-        // Get the current PATH variable
-        path: Default::default(),
-
-        // Start from an empty prefix
-        conda_prefix: None,
-
-        // Prepending environment paths so they get found first.
-        path_modification_behaviour: PathModificationBehaviour::Prepend,
-    })?;
-
-    // Generate a temporary file with the script to execute. This includes the activation of the
-    // environment.
-    let mut script = format!("{}\n", activator_result.script.trim());
-
-    // Add meta data env variables to help user interact with there configuration.
-    add_metadata_as_env_vars(&mut script, &shell, &project)?;
 
     // Perform post order traversal of the commands and their `depends_on` to make sure they are
     // executed in the right order.
@@ -120,10 +97,39 @@ pub async fn create_command(args: Args) -> anyhow::Result<RunScriptCommand> {
         s2.push_back(command)
     }
 
-    while let Some(command) = s2.pop_back() {
-        // Write the invocation of the command into the script.
-        command.write_invoke_script(&mut script, &shell, &project, &activator_result)?;
-    }
+    Ok(s2)
+}
+
+pub async fn create_command(
+    command: Command,
+    project: &Project,
+) -> anyhow::Result<RunScriptCommand> {
+    // Determine the current shell
+    let shell: ShellEnum = ShellEnum::default();
+
+    // Construct an activator so we can run commands from the environment
+    let prefix = get_up_to_date_prefix(project).await?;
+    let activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())?;
+
+    let activator_result = activator.activation(ActivationVariables {
+        // Get the current PATH variable
+        path: Default::default(),
+
+        // Start from an empty prefix
+        conda_prefix: None,
+
+        // Prepending environment paths so they get found first.
+        path_modification_behaviour: PathModificationBehaviour::Prepend,
+    })?;
+
+    // Generate a temporary file with the script to execute. This includes the activation of the
+    // environment.
+    let mut script = format!("{}\n", activator_result.script.trim());
+
+    // Add meta data env variables to help user interact with there configuration.
+    add_metadata_as_env_vars(&mut script, &shell, project)?;
+
+    command.write_invoke_script(&mut script, &shell, project, &activator_result)?;
 
     tracing::debug!("Activation script:\n{}", script);
 
@@ -144,9 +150,20 @@ pub async fn create_command(args: Args) -> anyhow::Result<RunScriptCommand> {
 
 /// CLI entry point for `pixi run`
 pub async fn execute(args: Args) -> anyhow::Result<()> {
-    let mut script_command = create_command(args).await?;
-    let status = script_command.command.spawn()?.wait()?.code().unwrap_or(1);
-    std::process::exit(status);
+    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    // Get the correctly ordered commands
+    let mut ordered_commands = order_commands(args.command, &project).await?;
+
+    // Execute the commands in the correct order
+    while let Some(command) = ordered_commands.pop_back() {
+        let mut script_command = create_command(command, &project).await?;
+        let status = script_command.command.spawn()?.wait()?.code().unwrap_or(1);
+        if status != 0 {
+            std::process::exit(status);
+        }
+    }
+
+    Ok(())
 }
 
 /// Given a command and arguments to invoke it, format it so that it is as generalized as possible.
