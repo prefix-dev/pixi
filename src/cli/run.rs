@@ -9,6 +9,7 @@ use is_executable::IsExecutable;
 use itertools::Itertools;
 use rattler_conda_types::Platform;
 
+use crate::prefix::Prefix;
 use crate::progress::await_in_progress;
 use crate::project::environment::get_metadata_env;
 use crate::{
@@ -164,8 +165,11 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 
 /// Determine the environment variables to use when executing a command.
 pub async fn get_command_env(project: &Project) -> anyhow::Result<HashMap<String, String>> {
+    // Get the prefix which we can then activate.
+    let prefix = get_up_to_date_prefix(project).await?;
+
     // Get environment variables from the activation
-    let activation_env = await_in_progress("activating environment", run_activation(project))
+    let activation_env = await_in_progress("activating environment", run_activation(prefix))
         .await
         .context("failed to activate environment")?;
 
@@ -180,10 +184,7 @@ pub async fn get_command_env(project: &Project) -> anyhow::Result<HashMap<String
 }
 
 /// Runs and caches the activation script.
-async fn run_activation(project: &Project) -> anyhow::Result<HashMap<String, String>> {
-    // Construct an activator so we can run commands from the environment
-    let prefix = get_up_to_date_prefix(project).await?;
-
+async fn run_activation(prefix: Prefix) -> anyhow::Result<HashMap<String, String>> {
     let activator_result = tokio::task::spawn_blocking(move || {
         // Run and cache the activation script
         let shell: ShellEnum = ShellEnum::default();
