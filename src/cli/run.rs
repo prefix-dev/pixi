@@ -1,22 +1,25 @@
-use std::collections::{HashSet, VecDeque};
+use anyhow::Context;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
+use std::path::PathBuf;
 use std::string::String;
-use std::{fmt::Write, path::PathBuf};
 
 use clap::Parser;
 use is_executable::IsExecutable;
+use itertools::Itertools;
 use rattler_conda_types::Platform;
 
+use crate::prefix::Prefix;
+use crate::progress::await_in_progress;
+use crate::project::environment::get_metadata_env;
 use crate::{
     command::{CmdArgs, Command, ProcessCmd},
     environment::get_up_to_date_prefix,
-    project::environment::add_metadata_as_env_vars,
     Project,
 };
 use rattler_shell::{
-    activation::ActivationResult,
     activation::{ActivationVariables, Activator, PathModificationBehaviour},
-    shell::{Shell, ShellEnum},
+    shell::ShellEnum,
 };
 
 /// Runs command in project.
@@ -31,14 +34,7 @@ pub struct Args {
     pub manifest_path: Option<PathBuf>,
 }
 
-pub struct RunScriptCommand {
-    /// The command to execute
-    pub command: std::process::Command,
-    /// Tempfile to keep a handle on, otherwise it is dropped and deleted
-    _script: tempfile::NamedTempFile,
-}
-
-pub async fn order_commands(
+pub fn order_commands(
     commands: Vec<String>,
     project: &Project,
 ) -> anyhow::Result<VecDeque<Command>> {
@@ -103,67 +99,114 @@ pub async fn order_commands(
 pub async fn create_command(
     command: Command,
     project: &Project,
-) -> anyhow::Result<RunScriptCommand> {
-    // Determine the current shell
-    let shell: ShellEnum = ShellEnum::default();
+    command_env: &HashMap<String, String>,
+) -> anyhow::Result<Option<std::process::Command>> {
+    // Command arguments
+    let args = match command {
+        Command::Process(ProcessCmd {
+            cmd: CmdArgs::Single(cmd),
+            ..
+        })
+        | Command::Plain(cmd) => {
+            shlex::split(&cmd).ok_or_else(|| anyhow::anyhow!("invalid quoted command arguments"))?
+        }
+        Command::Process(ProcessCmd {
+            cmd: CmdArgs::Multiple(cmd),
+            ..
+        }) => cmd,
+        _ => {
+            // Nothing to do
+            return Ok(None);
+        }
+    };
 
-    // Construct an activator so we can run commands from the environment
-    let prefix = get_up_to_date_prefix(project).await?;
-    let activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())?;
+    // Format the arguments
+    let (cmd, formatted_args) = format_execute_command(
+        project,
+        &command_env
+            .get("PATH")
+            .or_else(|| command_env.get("Path"))
+            .into_iter()
+            .flat_map(std::env::split_paths)
+            .collect_vec(),
+        &args,
+    )?;
 
-    let activator_result = activator.activation(ActivationVariables {
-        // Get the current PATH variable
-        path: Default::default(),
+    // Construct a command to execute
+    let mut cmd = std::process::Command::new(cmd);
+    cmd.args(formatted_args);
+    cmd.envs(command_env);
 
-        // Start from an empty prefix
-        conda_prefix: None,
-
-        // Prepending environment paths so they get found first.
-        path_modification_behaviour: PathModificationBehaviour::Prepend,
-    })?;
-
-    // Generate a temporary file with the script to execute. This includes the activation of the
-    // environment.
-    let mut script = format!("{}\n", activator_result.script.trim());
-
-    // Add meta data env variables to help user interact with there configuration.
-    add_metadata_as_env_vars(&mut script, &shell, project)?;
-
-    command.write_invoke_script(&mut script, &shell, project, &activator_result)?;
-
-    tracing::debug!("Activation script:\n{}", script);
-
-    // Write the contents of the script to a temporary file that we can execute with the shell.
-    let mut temp_file = tempfile::Builder::new()
-        .suffix(&format!(".{}", shell.extension()))
-        .tempfile()?;
-    std::io::Write::write_all(&mut temp_file, script.as_bytes())?;
-
-    // Execute the script with the shell
-    let command = shell.create_run_script_command(temp_file.path());
-
-    Ok(RunScriptCommand {
-        command,
-        _script: temp_file,
-    })
+    Ok(Some(cmd))
 }
 
 /// CLI entry point for `pixi run`
 pub async fn execute(args: Args) -> anyhow::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+
     // Get the correctly ordered commands
-    let mut ordered_commands = order_commands(args.command, &project).await?;
+    let mut ordered_commands = order_commands(args.command, &project)?;
+
+    // Get the environment to run the commands in.
+    let command_env = get_command_env(&project).await?;
 
     // Execute the commands in the correct order
     while let Some(command) = ordered_commands.pop_back() {
-        let mut script_command = create_command(command, &project).await?;
-        let status = script_command.command.spawn()?.wait()?.code().unwrap_or(1);
-        if status != 0 {
-            std::process::exit(status);
+        if let Some(mut command) = create_command(command, &project, &command_env).await? {
+            let status = command.spawn()?.wait()?.code().unwrap_or(1);
+            if status != 0 {
+                std::process::exit(status);
+            }
         }
     }
 
     Ok(())
+}
+
+/// Determine the environment variables to use when executing a command.
+pub async fn get_command_env(project: &Project) -> anyhow::Result<HashMap<String, String>> {
+    // Get the prefix which we can then activate.
+    let prefix = get_up_to_date_prefix(project).await?;
+
+    // Get environment variables from the activation
+    let activation_env = await_in_progress("activating environment", run_activation(prefix))
+        .await
+        .context("failed to activate environment")?;
+
+    // Get environment variables from the manifest
+    let manifest_env = get_metadata_env(project);
+
+    // Construct command environment by concatenating the environments
+    Ok(activation_env
+        .into_iter()
+        .chain(manifest_env.into_iter())
+        .collect())
+}
+
+/// Runs and caches the activation script.
+async fn run_activation(prefix: Prefix) -> anyhow::Result<HashMap<String, String>> {
+    let activator_result = tokio::task::spawn_blocking(move || {
+        // Run and cache the activation script
+        let shell: ShellEnum = ShellEnum::default();
+
+        // Construct an activator for the script
+        let activator = Activator::from_path(prefix.root(), shell, Platform::current())?;
+
+        // Run the activation
+        activator.run_activation(ActivationVariables {
+            // Get the current PATH variable
+            path: Default::default(),
+
+            // Start from an empty prefix
+            conda_prefix: None,
+
+            // Prepending environment paths so they get found first.
+            path_modification_behaviour: PathModificationBehaviour::Prepend,
+        })
+    })
+    .await??;
+
+    Ok(activator_result)
 }
 
 /// Given a command and arguments to invoke it, format it so that it is as generalized as possible.
@@ -174,7 +217,7 @@ fn format_execute_command(
     project: &Project,
     path: &[PathBuf],
     args: &[String],
-) -> anyhow::Result<Vec<String>> {
+) -> anyhow::Result<(PathBuf, Vec<String>)> {
     // Determine the command location
     let command = args
         .first()
@@ -183,11 +226,13 @@ fn format_execute_command(
         .ok_or_else(|| anyhow::anyhow!("could not find executable '{command}'"))?;
 
     // Format all the commands and quote them properly.
-    Ok([command_path.to_string_lossy().as_ref()]
-        .into_iter()
-        .chain(args.iter().skip(1).map(|x| x.as_ref()))
-        .map(|arg| shlex::quote(arg).into_owned())
-        .collect())
+    Ok((
+        command_path,
+        args.iter()
+            .skip(1)
+            .map(|arg| shlex::quote(arg).into_owned())
+            .collect(),
+    ))
 }
 
 // Locate the specified command name in the project or environment
@@ -257,50 +302,4 @@ fn executable_extensions() -> &'static [String] {
 #[cfg(not(windows))]
 fn executable_extensions() -> &'static [String] {
     &[]
-}
-
-impl Command {
-    /// Write the invocation of this command to the specified script.
-    pub fn write_invoke_script(
-        &self,
-        contents: &mut String,
-        shell: &ShellEnum,
-        project: &Project,
-        activation_result: &ActivationResult,
-    ) -> anyhow::Result<()> {
-        let args = match self {
-            Command::Plain(cmd) => {
-                let args = shlex::split(cmd)
-                    .ok_or_else(|| anyhow::anyhow!("invalid quoted command arguments"))?;
-                Some(format_execute_command(
-                    project,
-                    &activation_result.path,
-                    &args,
-                )?)
-            }
-            Command::Process(cmd) => {
-                let args = match &cmd.cmd {
-                    CmdArgs::Single(str) => shlex::split(str)
-                        .ok_or_else(|| anyhow::anyhow!("invalid quoted command arguments"))?,
-                    CmdArgs::Multiple(args) => args.to_vec(),
-                };
-                Some(format_execute_command(
-                    project,
-                    &activation_result.path,
-                    &args,
-                )?)
-            }
-            _ => None,
-        };
-
-        // If we have a command to execute, add it to the script.
-        if let Some(args) = args {
-            shell
-                .run_command(contents, args.iter().map(|arg| arg.as_ref()))
-                .expect("failed to write script");
-            writeln!(contents).expect("failed to write script");
-        }
-
-        Ok(())
-    }
 }

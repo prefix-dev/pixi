@@ -4,7 +4,7 @@ pub mod package_database;
 
 use pixi::cli::add::SpecType;
 use pixi::cli::install::Args;
-use pixi::cli::run::{create_command, order_commands};
+use pixi::cli::run::{create_command, get_command_env, order_commands};
 use pixi::cli::{add, init, run};
 use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
@@ -125,30 +125,33 @@ impl PixiControl {
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> anyhow::Result<UnboundedReceiver<RunResult>> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
-        let mut commands = order_commands(args.command, &self.project().unwrap()).await?;
+        let mut commands = order_commands(args.command, &self.project().unwrap())?;
 
         let project = self.project().unwrap();
+        let command_env = get_command_env(&project).await.unwrap();
+
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
         tokio::spawn(async move {
             while let Some(command) = commands.pop_back() {
-                let mut command = create_command(command, &project)
+                let command = create_command(command, &project, &command_env)
                     .await
                     .expect("could not create command");
-                let tx = tx.clone();
-                spawn_blocking(move || {
-                    let output = command
-                        .command
-                        .stdout(Stdio::piped())
-                        .spawn()
-                        .expect("could not spawn task")
-                        .wait_with_output()
-                        .expect("could not run command");
-                    tx.send(RunResult { output })
-                        .expect("could not send output");
-                })
-                .await
-                .unwrap();
+                if let Some(mut command) = command {
+                    let tx = tx.clone();
+                    spawn_blocking(move || {
+                        let output = command
+                            .stdout(Stdio::piped())
+                            .spawn()
+                            .expect("could not spawn task")
+                            .wait_with_output()
+                            .expect("could not run command");
+                        tx.send(RunResult { output })
+                            .expect("could not send output");
+                    })
+                    .await
+                    .unwrap();
+                }
             }
         });
 
