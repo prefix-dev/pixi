@@ -1,5 +1,6 @@
 ---
 source: src/project/mod.rs
+assertion_line: 625
 expression: "project.all_dependencies(Platform::Linux64).unwrap()"
 ---
 {
@@ -22,6 +23,8 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         channel: None,
         subdir: None,
         namespace: None,
+        md5: None,
+        sha256: None,
     },
     "wolflib": NamelessMatchSpec {
         version: Some(
@@ -42,6 +45,8 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         channel: None,
         subdir: None,
         namespace: None,
+        md5: None,
+        sha256: None,
     },
     "libc": NamelessMatchSpec {
         version: Some(
@@ -62,6 +67,8 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         channel: None,
         subdir: None,
         namespace: None,
+        md5: None,
+        sha256: None,
     },
     "banksy": NamelessMatchSpec {
         version: Some(
@@ -82,6 +89,8 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         channel: None,
         subdir: None,
         namespace: None,
+        md5: None,
+        sha256: None,
     },
     "bar": NamelessMatchSpec {
         version: Some(
@@ -102,6 +111,8 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         channel: None,
         subdir: None,
         namespace: None,
+        md5: None,
+        sha256: None,
     },
     "baz": NamelessMatchSpec {
         version: Some(
@@ -122,5 +133,7 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         channel: None,
         subdir: None,
         namespace: None,
+        md5: None,
+        sha256: None,
     },
 }

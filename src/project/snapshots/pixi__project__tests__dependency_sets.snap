@@ -1,5 +1,6 @@
 ---
 source: src/project/mod.rs
+assertion_line: 589
 expression: "project.all_dependencies(Platform::Linux64).unwrap()"
 ---
 {
@@ -22,6 +23,8 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         channel: None,
         subdir: None,
         namespace: None,
+        md5: None,
+        sha256: None,
     },
     "libc": NamelessMatchSpec {
         version: Some(
@@ -42,6 +45,8 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         channel: None,
         subdir: None,
         namespace: None,
+        md5: None,
+        sha256: None,
     },
     "bar": NamelessMatchSpec {
         version: Some(
@@ -62,5 +67,7 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         channel: None,
         subdir: None,
         namespace: None,
+        md5: None,
+        sha256: None,
     },
 }
