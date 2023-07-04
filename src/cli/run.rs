@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::string::String;
 
 use clap::Parser;
+use deno_task_shell::parser::SequentialList;
 use itertools::Itertools;
 use rattler_conda_types::Platform;
 
@@ -100,13 +101,7 @@ pub fn order_commands(
     Ok(s2)
 }
 
-/// Executes the given command withing the specified project and with the given environment.
-pub async fn execute_command(
-    command: Command,
-    project: &Project,
-    command_env: &HashMap<String, String>,
-    args: Vec<String>,
-) -> anyhow::Result<i32> {
+pub async fn create_command(command: Command, args: Vec<String>) -> anyhow::Result<SequentialList> {
     // Construct the script from the command
     let command = match command {
         Command::Process(ProcessCmd {
@@ -119,8 +114,7 @@ pub async fn execute_command(
             ..
         }) => quote_arguments(args),
         _ => {
-            // Nothing to do
-            return Ok(0);
+            return Err(anyhow::anyhow!("No command given"));
         }
     };
 
@@ -129,7 +123,16 @@ pub async fn execute_command(
     let full_script = format!("{command} {cli_args}");
 
     // Parse the shell command
-    let script = deno_task_shell::parser::parse(full_script.trim())?;
+    deno_task_shell::parser::parse(full_script.trim())
+}
+/// Executes the given command withing the specified project and with the given environment.
+pub async fn execute_command(
+    command: Command,
+    project: &Project,
+    command_env: &HashMap<String, String>,
+    args: Vec<String>,
+) -> anyhow::Result<i32> {
+    let script = create_command(command, args).await?;
 
     // Execute the shell command
     Ok(deno_task_shell::execute(
@@ -145,12 +148,7 @@ fn quote_arguments(args: impl IntoIterator<Item = impl AsRef<str>>) -> String {
     args.into_iter()
         // surround all the additional arguments in double quotes and santize any command
         // substitution
-        .map(|a| {
-            format!(
-                "\"{}\"",
-                a.as_ref().replace('"', "\\\"").replace('$', "\\$")
-            )
-        })
+        .map(|a| format!("\"{}\"", a.as_ref().replace('"', "\\\"")))
         .join(" ")
 }
 
