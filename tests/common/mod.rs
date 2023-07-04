@@ -205,7 +205,7 @@ impl CommandControl<'_> {
         CommandAliasBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AliasArgs {
-                name: name.to_string(),
+                alias: name.to_string(),
                 depends_on: vec![],
             },
         }

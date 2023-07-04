@@ -37,7 +37,7 @@ pub struct AddArgs {
 #[derive(Parser, Debug)]
 pub struct AliasArgs {
     /// Alias name
-    pub name: String,
+    pub alias: String,
 
     /// Depends on these commands to execute
     pub depends_on: Vec<String>,
@@ -86,9 +86,27 @@ pub struct Args {
 
 pub fn execute(args: Args) -> anyhow::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    match args.operation {
-        Operation::Add(args) => project.add_command(&args.name.clone(), args.into()),
-        Operation::Remove(args) => project.remove_command(&args.name),
-        Operation::Alias(args) => project.add_command(&args.name.clone(), args.into()),
-    }
+    let name = match args.operation {
+        Operation::Add(args) => {
+            let name = args.name.clone();
+            project.add_command(&name, args.into())?;
+            name
+        }
+        Operation::Remove(args) => {
+            project.remove_command(&args.name)?;
+            args.name
+        }
+        Operation::Alias(args) => {
+            let name = args.alias.clone();
+            project.add_command(&name, args.into())?;
+            name
+        }
+    };
+
+    eprintln!(
+        "{}Added command {}",
+        console::style(console::Emoji("✔ ", "")).green(),
+        &name,
+    );
+    Ok(())
 }

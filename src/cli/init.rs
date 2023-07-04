@@ -141,7 +141,7 @@ mod tests {
         );
         assert_eq!(
             get_dir(std::env::current_dir().unwrap()).unwrap(),
-            PathBuf::from(std::env::current_dir().unwrap().canonicalize().unwrap())
+            std::env::current_dir().unwrap().canonicalize().unwrap()
         );
     }
 

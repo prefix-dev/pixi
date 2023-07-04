@@ -18,6 +18,7 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
 };
+
 use toml_edit::{Array, Document, Item, Table, TomlError, Value};
 
 /// A project represented by a pixi.toml file.
@@ -106,6 +107,22 @@ impl Project {
         let commands_table = commands_table.as_table_like_mut().ok_or_else(|| {
             anyhow::anyhow!("commands in {} are malformed", consts::PROJECT_MANIFEST)
         })?;
+
+        let depends_on = match &command {
+            Command::Process(cmd) => cmd.depends_on.iter().collect(),
+            Command::Alias(alias) => alias.depends_on.iter().collect(),
+            _ => vec![],
+        };
+
+        for depends in depends_on {
+            if !self.manifest.commands.contains_key(depends) {
+                anyhow::bail!(
+                    "depends_on {} for {} does not exist",
+                    name.as_ref(),
+                    depends
+                );
+            }
+        }
 
         // Add the command to the table
         commands_table.insert(name.as_ref(), command_as_toml(command.clone()));
