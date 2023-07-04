@@ -89,6 +89,21 @@ impl Project {
         })
     }
 
+    /// Get a specific command
+    pub fn commands_depend_on(&self, name: impl AsRef<str>) -> Vec<&String> {
+        let command = self.manifest.commands.get(name.as_ref());
+        if command.is_some() {
+            self.manifest
+                .commands
+                .iter()
+                .filter(|(_, c)| c.depends_on().contains(&name.as_ref().to_string()))
+                .map(|(name, _)| name)
+                .collect()
+        } else {
+            vec![]
+        }
+    }
+
     /// Add a command to the project
     pub fn add_command(
         &mut self,
@@ -110,11 +125,7 @@ impl Project {
             anyhow::anyhow!("commands in {} are malformed", consts::PROJECT_MANIFEST)
         })?;
 
-        let depends_on = match &command {
-            Command::Process(cmd) => cmd.depends_on.iter().collect(),
-            Command::Alias(alias) => alias.depends_on.iter().collect(),
-            _ => vec![],
-        };
+        let depends_on = command.depends_on();
 
         for depends in depends_on {
             if !self.manifest.commands.contains_key(depends) {
@@ -138,12 +149,13 @@ impl Project {
         Ok(())
     }
 
-    /// Remove a command from the project
+    /// Remove a command from the project, and the commands it depends on
     pub fn remove_command(&mut self, name: impl AsRef<str>) -> anyhow::Result<()> {
-        match self.manifest.commands.remove(name.as_ref()) {
-            None => anyhow::bail!("command {} does not exist", name.as_ref()),
-            Some(_) => {}
-        }
+        self.manifest
+            .commands
+            .get(name.as_ref())
+            .ok_or_else(|| anyhow::anyhow!("command {} does not exist", name.as_ref()))?;
+
         let commands_table = &mut self.doc["commands"];
         if commands_table.is_none() {
             anyhow::bail!("internal data-structure inconsistent with toml");

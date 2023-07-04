@@ -1,6 +1,7 @@
-use crate::command::{AliasCmd, CmdArgs, ProcessCmd};
+use crate::command::{AliasCmd, CmdArgs, Command as PixiCommand, ProcessCmd};
 use crate::Project;
 use clap::Parser;
+use itertools::Itertools;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -48,10 +49,18 @@ impl From<AddArgs> for crate::command::Command {
         let depends_on = value.depends_on.unwrap_or_default();
 
         if depends_on.is_empty() {
-            Self::Plain(shlex::join(value.commands.iter().map(AsRef::as_ref)))
+            Self::Plain(if value.commands.len() == 1 {
+                value.commands[0].clone()
+            } else {
+                shlex::join(value.commands.iter().map(AsRef::as_ref))
+            })
         } else {
             Self::Process(ProcessCmd {
-                cmd: CmdArgs::Single(shlex::join(value.commands.iter().map(AsRef::as_ref))),
+                cmd: CmdArgs::Single(if value.commands.len() == 1 {
+                    value.commands[0].clone()
+                } else {
+                    shlex::join(value.commands.iter().map(AsRef::as_ref))
+                }),
                 depends_on,
             })
         }
@@ -81,28 +90,53 @@ pub struct Args {
 
 pub fn execute(args: Args) -> anyhow::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let (op, name) = match args.operation {
+    match args.operation {
         Operation::Add(args) => {
             let name = args.name.clone();
-            project.add_command(&name, args.into())?;
-            ("Added", name)
+            let command: PixiCommand = args.into();
+            project.add_command(&name, command.clone())?;
+            eprintln!(
+                "{}Added command {}: {}",
+                console::style(console::Emoji("✔ ", "+")).green(),
+                console::style(&name).bold(),
+                command,
+            );
         }
         Operation::Remove(args) => {
-            project.remove_command(&args.name)?;
-            ("Added alias", args.name)
+            let name = args.name;
+            project.remove_command(&name)?;
+            let depends_on = project.commands_depend_on(&name);
+            if !depends_on.is_empty() {
+                eprintln!(
+                    "{}: {}",
+                    console::style("Warning, the following commands depend on this command/s")
+                        .yellow(),
+                    console::style(depends_on.iter().to_owned().join(", ")).bold()
+                );
+                eprintln!(
+                    "{}",
+                    console::style("Be sure to modify these after the removal\n").yellow()
+                );
+            }
+
+            eprintln!(
+                "{}Removed command {} ",
+                console::style(console::Emoji("❌ ", "X")).yellow(),
+                console::style(&name).bold(),
+            );
         }
         Operation::Alias(args) => {
             let name = args.alias.clone();
-            project.add_command(&name, args.into())?;
-            ("Removed", name)
+            let command: PixiCommand = args.into();
+            project.add_command(&name, command.clone())?;
+            eprintln!(
+                "{} Added alias {}: {}",
+                console::style("@").blue(),
+                console::style(&name).bold(),
+                command,
+            );
         }
     };
 
-    eprintln!(
-        "{}{} command {}",
-        console::style(console::Emoji("✔ ", "")).green(),
-        op,
-        &name,
-    );
     Ok(())
 }

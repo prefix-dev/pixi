@@ -44,7 +44,7 @@ pub async fn add_command_types() {
     let project = pixi.project().unwrap();
     let cmd = project.manifest.commands.get("test2").unwrap();
     assert!(
-        matches!(cmd, pixi::command::Command::Process(cmd) if matches!(cmd.cmd, pixi::command::CmdArgs::Multiple(ref vec) if vec.len() == 2))
+        matches!(cmd, pixi::command::Command::Process(cmd) if matches!(cmd.cmd, pixi::command::CmdArgs::Single(_)))
     );
     assert!(matches!(cmd, pixi::command::Command::Process(cmd) if !cmd.depends_on.is_empty()));
 

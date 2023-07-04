@@ -1,5 +1,7 @@
+use itertools::Itertools;
 use serde::Deserialize;
 use serde_with::{formats::PreferMany, serde_as, OneOrMany};
+use std::fmt::{Display, Formatter};
 
 /// Represents different types of scripts
 #[derive(Debug, Clone, Deserialize)]
@@ -8,6 +10,16 @@ pub enum Command {
     Plain(String),
     Process(ProcessCmd),
     Alias(AliasCmd),
+}
+
+impl Command {
+    pub fn depends_on(&self) -> &[String] {
+        match self {
+            Command::Plain(_) => &[],
+            Command::Process(cmd) => &cmd.depends_on,
+            Command::Alias(cmd) => &cmd.depends_on,
+        }
+    }
 }
 
 /// A command script executes a single command from the environment
@@ -38,4 +50,35 @@ pub struct AliasCmd {
     /// A list of commands that should be run before this one
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<String>,
+}
+
+impl Display for Command {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Command::Plain(cmd) => {
+                write!(f, "{}", cmd)?;
+            }
+            Command::Process(cmd) => {
+                match &cmd.cmd {
+                    CmdArgs::Single(cmd) => write!(f, "{}", cmd)?,
+                    CmdArgs::Multiple(mult) => write!(f, "{}", mult.join(" "))?,
+                };
+                if !cmd.depends_on.is_empty() {
+                    write!(f, ", ")?;
+                }
+            }
+            _ => {}
+        };
+
+        let depends_on = self.depends_on();
+        if !depends_on.is_empty() {
+            if depends_on.len() == 1 {
+                write!(f, "depends_on = '{}'", depends_on.iter().join(","))
+            } else {
+                write!(f, "depends_on = [{}]", depends_on.iter().join(","))
+            }
+        } else {
+            Ok(())
+        }
+    }
 }
