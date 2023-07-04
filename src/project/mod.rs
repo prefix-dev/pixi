@@ -44,10 +44,12 @@ fn command_as_toml(command: PixiCommand) -> Item {
                     table.insert("cmd", Value::Array(Array::from_iter(cmd_strs.into_iter())));
                 }
             }
-            table.insert(
-                "depends_on",
-                Value::Array(Array::from_iter(process.depends_on.into_iter())),
-            );
+            if !process.depends_on.is_empty() {
+                table.insert(
+                    "depends_on",
+                    Value::Array(Array::from_iter(process.depends_on.into_iter())),
+                );
+            }
             Item::Value(Value::InlineTable(table))
         }
         Command::Alias(alias) => {
@@ -117,7 +119,7 @@ impl Project {
         for depends in depends_on {
             if !self.manifest.commands.contains_key(depends) {
                 anyhow::bail!(
-                    "depends_on {} for {} does not exist",
+                    "depends_on '{}' for '{}' does not exist",
                     name.as_ref(),
                     depends
                 );

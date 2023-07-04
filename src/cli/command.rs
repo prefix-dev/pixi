@@ -45,21 +45,16 @@ pub struct AliasArgs {
 
 impl From<AddArgs> for crate::command::Command {
     fn from(value: AddArgs) -> Self {
-        let first_command = value.commands.get(0).cloned().unwrap_or_default();
         let depends_on = value.depends_on.unwrap_or_default();
 
-        if value.commands.len() < 2 && depends_on.is_empty() {
-            return Self::Plain(first_command);
+        if depends_on.is_empty() {
+            Self::Plain(shlex::join(value.commands.iter().map(AsRef::as_ref)))
+        } else {
+            Self::Process(ProcessCmd {
+                cmd: CmdArgs::Single(shlex::join(value.commands.iter().map(AsRef::as_ref))),
+                depends_on,
+            })
         }
-
-        Self::Process(ProcessCmd {
-            cmd: if value.commands.len() == 1 {
-                CmdArgs::Single(first_command)
-            } else {
-                CmdArgs::Multiple(value.commands)
-            },
-            depends_on,
-        })
     }
 }
 
@@ -86,26 +81,27 @@ pub struct Args {
 
 pub fn execute(args: Args) -> anyhow::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let name = match args.operation {
+    let (op, name) = match args.operation {
         Operation::Add(args) => {
             let name = args.name.clone();
             project.add_command(&name, args.into())?;
-            name
+            ("Added", name)
         }
         Operation::Remove(args) => {
             project.remove_command(&args.name)?;
-            args.name
+            ("Added alias", args.name)
         }
         Operation::Alias(args) => {
             let name = args.alias.clone();
             project.add_command(&name, args.into())?;
-            name
+            ("Removed", name)
         }
     };
 
     eprintln!(
-        "{}Added command {}",
+        "{}{} command {}",
         console::style(console::Emoji("✔ ", "")).green(),
+        op,
         &name,
     );
     Ok(())
