@@ -15,17 +15,17 @@ configure = { cmd = [
     "Ninja",
     # The source is in the root directory
     "-S",
-    "$PIXI_PACKAGE_ROOT",
+    ".",
     # We wanna build in the .build directory
     "-B",
-    "$PIXI_PACKAGE_ROOT/.build",
+    ".build",
 ] }
 
 # Build the executable but make sure CMake is configured first.
-build = { cmd = ["ninja", "-C", "$PIXI_PACKAGE_ROOT/.build"], depends_on = ["configure"] }
+build = { cmd = ["ninja", "-C", ".build"], depends_on = ["configure"] }
 
 # Start the built executable
-start = { cmd = "$PIXI_PACKAGE_ROOT/.build/bin/sdl_example", depends_on = ["build"] }
+start = { cmd = ".build/bin/sdl_example", depends_on = ["build"] }
 
 [dependencies]
 cmake = "3.26.4.*"
