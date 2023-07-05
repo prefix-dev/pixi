@@ -5,6 +5,7 @@ use std::string::String;
 
 use clap::Parser;
 use deno_task_shell::parser::SequentialList;
+use deno_task_shell::{execute_with_pipes, get_output_writer_and_handle, pipe, ShellState};
 use itertools::Itertools;
 use rattler_conda_types::Platform;
 
@@ -20,6 +21,14 @@ use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehaviour},
     shell::ShellEnum,
 };
+
+// Run output which includes the information gotten from the deno task shell run.
+#[derive(Default)]
+pub struct RunOutput {
+    pub exit_code: i32,
+    pub stdout: String,
+    pub stderr: String,
+}
 
 /// Runs command in project.
 #[derive(Parser, Debug, Default)]
@@ -101,7 +110,7 @@ pub fn order_commands(
     Ok(s2)
 }
 
-pub async fn create_command(command: Command, args: Vec<String>) -> anyhow::Result<SequentialList> {
+pub async fn create_script(command: Command, args: Vec<String>) -> anyhow::Result<SequentialList> {
     // Construct the script from the command
     let command = match command {
         Command::Process(ProcessCmd {
@@ -126,14 +135,11 @@ pub async fn create_command(command: Command, args: Vec<String>) -> anyhow::Resu
     deno_task_shell::parser::parse(full_script.trim())
 }
 /// Executes the given command withing the specified project and with the given environment.
-pub async fn execute_command(
-    command: Command,
+pub async fn execute_script(
+    script: SequentialList,
     project: &Project,
     command_env: &HashMap<String, String>,
-    args: Vec<String>,
 ) -> anyhow::Result<i32> {
-    let script = create_command(command, args).await?;
-
     // Execute the shell command
     Ok(deno_task_shell::execute(
         script,
@@ -142,6 +148,28 @@ pub async fn execute_command(
         Default::default(),
     )
     .await)
+}
+
+pub async fn execute_script_with_output(
+    script: SequentialList,
+    project: &Project,
+    command_env: &HashMap<String, String>,
+    input: Option<&[u8]>,
+) -> RunOutput {
+    let (stdin, mut stdin_writer) = pipe();
+    if let Some(stdin) = input {
+        stdin_writer.write_all(stdin).unwrap();
+    }
+    drop(stdin_writer); // prevent a deadlock by dropping the writer
+    let (stdout, stdout_handle) = get_output_writer_and_handle();
+    let (stderr, stderr_handle) = get_output_writer_and_handle();
+    let state = ShellState::new(command_env.clone(), project.root(), Default::default());
+    let code = execute_with_pipes(script, state, stdin, stdout, stderr).await;
+    RunOutput {
+        exit_code: code,
+        stdout: stdout_handle.await.unwrap(),
+        stderr: stderr_handle.await.unwrap(),
+    }
 }
 
 fn quote_arguments(args: impl IntoIterator<Item = impl AsRef<str>>) -> String {
@@ -164,7 +192,8 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 
     // Execute the commands in the correct order
     while let Some((command, args)) = ordered_commands.pop_back() {
-        let status_code = execute_command(command, &project, &command_env, args).await?;
+        let script = create_script(command, args).await?;
+        let status_code = execute_script(script, &project, &command_env).await?;
         if status_code != 0 {
             std::process::exit(status_code);
         }
