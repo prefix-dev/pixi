@@ -186,6 +186,7 @@ Activate a shell in the environment
 ```shell
 pixi shell
 cowpy "Thanks for using pixi"
+exit
 ```
 
 For more information check [the documentation](getting_started.md#basics-of-the-configuration-file)
