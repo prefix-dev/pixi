@@ -166,7 +166,8 @@ Options:
 Initialize a new project and navigate to the project directory
 
 ```
-pixi init myproject && cd myproject
+pixi init myproject
+cd myproject
 ```
 
 Add the dependencies you want to use
