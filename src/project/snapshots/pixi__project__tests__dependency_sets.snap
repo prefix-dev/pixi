@@ -9,11 +9,8 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
             Operator(
                 Equals,
                 Version {
-                    norm: Some(
-                        "1.0",
-                    ),
-                    version: "[[0], [1], [0]]",
-                    local: "[]",
+                    version: [[0], [1], [0]],
+                    local: [],
                 },
             ),
         ),
@@ -31,11 +28,8 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
             Operator(
                 Equals,
                 Version {
-                    norm: Some(
-                        "2.12",
-                    ),
-                    version: "[[0], [2], [12]]",
-                    local: "[]",
+                    version: [[0], [2], [12]],
+                    local: [],
                 },
             ),
         ),
@@ -53,11 +47,8 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
             Operator(
                 Equals,
                 Version {
-                    norm: Some(
-                        "1.0",
-                    ),
-                    version: "[[0], [1], [0]]",
-                    local: "[]",
+                    version: [[0], [1], [0]],
+                    local: [],
                 },
             ),
         ),

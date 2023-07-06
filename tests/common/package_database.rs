@@ -6,7 +6,8 @@
 
 use itertools::Itertools;
 use rattler_conda_types::{
-    package::ArchiveType, ChannelInfo, PackageRecord, Platform, RepoData, Version,
+    package::ArchiveType, ChannelInfo, PackageRecord, Platform, RepoData,
+    VersionWithSource,
 };
 use std::{collections::HashSet, path::Path};
 
@@ -109,7 +110,7 @@ impl AsRef<PackageRecord> for Package {
 /// A builder for a [`Package`]
 pub struct PackageBuilder {
     name: String,
-    version: Version,
+    version: VersionWithSource,
     build: Option<String>,
     build_number: Option<u64>,
     depends: Vec<String>,
