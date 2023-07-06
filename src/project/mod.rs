@@ -126,9 +126,9 @@ impl Project {
         for depends in depends_on {
             if !self.manifest.tasks.contains_key(depends) {
                 anyhow::bail!(
-                    "depends_on '{}' for '{}' does not exist",
+                    "task '{}' for the depends on for '{}' does not exist",
+                    depends,
                     name.as_ref(),
-                    depends
                 );
             }
         }

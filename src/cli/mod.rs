@@ -52,8 +52,7 @@ pub enum Command {
     Auth(auth::Args),
     #[clap(alias = "i")]
     Install(install::Args),
-    #[clap(alias = "c")]
-    Command(task::Args),
+    Task(task::Args),
 }
 
 fn completion(args: CompletionCommand) -> Result<(), Error> {
@@ -108,6 +107,6 @@ pub async fn execute_command(command: Command) -> Result<(), Error> {
         Command::Auth(cmd) => auth::execute(cmd).await,
         Command::Install(cmd) => install::execute(cmd).await,
         Command::Shell(cmd) => shell::execute(cmd).await,
-        Command::Command(cmd) => task::execute(cmd),
+        Command::Task(cmd) => task::execute(cmd),
     }
 }

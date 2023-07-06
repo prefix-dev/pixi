@@ -26,8 +26,8 @@ impl Task {
 #[serde_as]
 #[derive(Debug, Clone, Deserialize)]
 pub struct Execute {
-    // A list of arguments, the first argument denotes the command to run. When deserializing both
-    // an array of strings and a single string are supported.
+    /// A list of arguments, the first argument denotes the command to run. When deserializing both
+    /// an array of strings and a single string are supported.
     pub cmd: CmdArgs,
 
     /// A list of commands that should be run before this one

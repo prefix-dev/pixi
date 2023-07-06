@@ -31,7 +31,7 @@ authors = ["{{ author[0] }} <{{ author[1] }}>"]
 channels = ["{{ channels|join("\", \"") }}"]
 platforms = ["{{ platform }}"]
 
-[commands]
+[tasks]
 
 [dependencies]
 "#;

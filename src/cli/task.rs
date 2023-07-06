@@ -17,30 +17,36 @@ pub enum Operation {
 }
 
 #[derive(Parser, Debug)]
+#[clap(arg_required_else_help = true)]
 pub struct RemoveArgs {
-    /// Command name
+    /// Task name
     pub name: String,
 }
 
 #[derive(Parser, Debug)]
+#[clap(arg_required_else_help = true)]
 pub struct AddArgs {
-    /// Command name
+    /// Task name
     pub name: String,
 
     /// One or more commands to actually execute
+    #[clap(required = true, num_args = 1..)]
     pub commands: Vec<String>,
 
     /// Depends on these other commands
     #[clap(long)]
+    #[clap(num_args = 1..)]
     pub depends_on: Option<Vec<String>>,
 }
 
 #[derive(Parser, Debug)]
+#[clap(arg_required_else_help = true)]
 pub struct AliasArgs {
     /// Alias name
     pub alias: String,
 
-    /// Depends on these commands to execute
+    /// Depends on these tasks to execute
+    #[clap(required = true, num_args = 1..)]
     pub depends_on: Vec<String>,
 }
 
