@@ -26,7 +26,7 @@ use rattler_conda_types::{
 };
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{LibsolvRepoData, SolverBackend};
+use rattler_solve::{libsolv_sys, SolverImpl};
 use std::collections::HashMap;
 use std::{
     collections::{HashSet, VecDeque},
@@ -329,9 +329,7 @@ pub async fn update_lock_file(
         // Construct a solver task that we can start solving.
         let task = rattler_solve::SolverTask {
             specs: match_specs.clone(),
-            available_packages: available_packages
-                .iter()
-                .map(|records| LibsolvRepoData::from_records(records)),
+            available_packages: &available_packages,
 
             // TODO: All these things.
             locked_packages: existing_lock_file
@@ -343,7 +341,7 @@ pub async fn update_lock_file(
         };
 
         // Solve the task
-        let records = rattler_solve::LibsolvBackend.solve(task)?;
+        let records = libsolv_sys::Solver.solve(task)?;
 
         // Update lock file
         let mut locked_packages = LockedPackages::new(platform);
@@ -415,7 +413,7 @@ pub fn get_required_packages(
                     subdir: "".to_string(),
                     timestamp: None,
                     track_features: vec![],
-                    version: Version::from_str(&pkg.version)?,
+                    version: Version::from_str(&pkg.version)?.into(),
                 },
             })
         })

@@ -1,5 +1,6 @@
 ---
 source: src/virtual_packages.rs
+assertion_line: 186
 expression: packages
 ---
 [
@@ -7,11 +8,8 @@ expression: packages
     Linux(
         Linux {
             version: Version {
-                norm: Some(
-                    "5.10",
-                ),
-                version: "[[0], [5], [10]]",
-                local: "[]",
+                version: [[0], [5], [10]],
+                local: [],
             },
         },
     ),
@@ -19,11 +17,8 @@ expression: packages
         LibC {
             family: "glibc",
             version: Version {
-                norm: Some(
-                    "2.17",
-                ),
-                version: "[[0], [2], [17]]",
-                local: "[]",
+                version: [[0], [2], [17]],
+                local: [],
             },
         },
     ),
