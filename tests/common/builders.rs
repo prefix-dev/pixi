@@ -25,7 +25,7 @@
 
 use crate::common::IntoMatchSpec;
 use pixi::cli::add::SpecType;
-use pixi::cli::{add, command, init};
+use pixi::cli::{add, init, task};
 use std::future::{Future, IntoFuture};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -103,12 +103,12 @@ impl IntoFuture for AddBuilder {
     }
 }
 
-pub struct CommandAddBuilder {
+pub struct TaskAddBuilder {
     pub manifest_path: Option<PathBuf>,
-    pub args: command::AddArgs,
+    pub args: task::AddArgs,
 }
 
-impl CommandAddBuilder {
+impl TaskAddBuilder {
     /// Execute these commands
     pub fn with_commands(mut self, commands: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
         self.args.commands = string_from_iter(commands);
@@ -123,19 +123,19 @@ impl CommandAddBuilder {
 
     /// Execute the CLI command
     pub fn execute(self) -> anyhow::Result<()> {
-        command::execute(command::Args {
-            operation: command::Operation::Add(self.args),
+        task::execute(task::Args {
+            operation: task::Operation::Add(self.args),
             manifest_path: self.manifest_path,
         })
     }
 }
 
-pub struct CommandAliasBuilder {
+pub struct TaskAliasBuilder {
     pub manifest_path: Option<PathBuf>,
-    pub args: command::AliasArgs,
+    pub args: task::AliasArgs,
 }
 
-impl CommandAliasBuilder {
+impl TaskAliasBuilder {
     /// Depends on these commands
     pub fn with_depends_on(mut self, depends: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
         self.args.depends_on = string_from_iter(depends);
@@ -144,8 +144,8 @@ impl CommandAliasBuilder {
 
     /// Execute the CLI command
     pub fn execute(self) -> anyhow::Result<()> {
-        command::execute(command::Args {
-            operation: command::Operation::Alias(self.args),
+        task::execute(task::Args {
+            operation: task::Operation::Alias(self.args),
             manifest_path: self.manifest_path,
         })
     }

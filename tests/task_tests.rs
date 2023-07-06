@@ -1,26 +1,27 @@
 use crate::common::PixiControl;
+use pixi::task::{CmdArgs, Task};
 
 mod common;
 
 #[tokio::test]
-pub async fn add_remove_command() {
+pub async fn add_remove_task() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
-    // Simple command
-    pixi.command()
+    // Simple task
+    pixi.tasks()
         .add("test")
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
 
     let project = pixi.project().unwrap();
-    let cmd = project.manifest.commands.get("test").unwrap();
-    assert!(matches!(cmd, pixi::command::Command::Plain(s) if s == "echo hello"));
+    let task = project.manifest.tasks.get("test").unwrap();
+    assert!(matches!(task, Task::Plain(s) if s == "echo hello"));
 
-    // Remove the command
-    pixi.command().remove("test").await.unwrap();
-    assert_eq!(pixi.project().unwrap().manifest.commands.len(), 0);
+    // Remove the task
+    pixi.tasks().remove("test").await.unwrap();
+    assert_eq!(pixi.project().unwrap().manifest.tasks.len(), 0);
 }
 
 #[tokio::test]
@@ -29,12 +30,12 @@ pub async fn add_command_types() {
     pixi.init().await.unwrap();
 
     // Add a command with dependencies
-    pixi.command()
+    pixi.tasks()
         .add("test")
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
-    pixi.command()
+    pixi.tasks()
         .add("test2")
         .with_commands(["echo hello", "echo bonjour"])
         .with_depends_on(["test"])
@@ -42,21 +43,17 @@ pub async fn add_command_types() {
         .unwrap();
 
     let project = pixi.project().unwrap();
-    let cmd = project.manifest.commands.get("test2").unwrap();
-    assert!(
-        matches!(cmd, pixi::command::Command::Process(cmd) if matches!(cmd.cmd, pixi::command::CmdArgs::Single(_)))
-    );
-    assert!(matches!(cmd, pixi::command::Command::Process(cmd) if !cmd.depends_on.is_empty()));
+    let task = project.manifest.tasks.get("test2").unwrap();
+    assert!(matches!(task, Task::Execute(cmd) if matches!(cmd.cmd, CmdArgs::Single(_))));
+    assert!(matches!(task, Task::Execute(cmd) if !cmd.depends_on.is_empty()));
 
     // Create an alias
-    pixi.command()
+    pixi.tasks()
         .alias("testing")
         .with_depends_on(["test"])
         .execute()
         .unwrap();
     let project = pixi.project().unwrap();
-    let cmd = project.manifest.commands.get("testing").unwrap();
-    assert!(
-        matches!(cmd, pixi::command::Command::Alias(a) if a.depends_on.get(0).unwrap() == "test")
-    );
+    let task = project.manifest.tasks.get("testing").unwrap();
+    assert!(matches!(task, Task::Alias(a) if a.depends_on.get(0).unwrap() == "test"));
 }

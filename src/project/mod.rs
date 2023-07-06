@@ -2,11 +2,11 @@ pub mod environment;
 pub mod manifest;
 mod serde;
 
-use crate::command::{CmdArgs, Command as PixiCommand, Command};
 use crate::consts;
 use crate::consts::PROJECT_MANIFEST;
 use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
 use crate::report_error::ReportError;
+use crate::task::{CmdArgs, Task};
 use anyhow::Context;
 use ariadne::{Label, Report, ReportKind, Source};
 use indexmap::IndexMap;
@@ -30,11 +30,11 @@ pub struct Project {
     pub manifest: ProjectManifest,
 }
 
-/// Returns a command a a toml item
-fn command_as_toml(command: PixiCommand) -> Item {
-    match command {
-        Command::Plain(str) => Item::Value(str.into()),
-        Command::Process(process) => {
+/// Returns a task a a toml item
+fn task_as_toml(task: Task) -> Item {
+    match task {
+        Task::Plain(str) => Item::Value(str.into()),
+        Task::Execute(process) => {
             let mut table = Table::new().into_inline_table();
             match process.cmd {
                 CmdArgs::Single(cmd_str) => {
@@ -52,7 +52,7 @@ fn command_as_toml(command: PixiCommand) -> Item {
             }
             Item::Value(Value::InlineTable(table))
         }
-        Command::Alias(alias) => {
+        Task::Alias(alias) => {
             let mut table = Table::new().into_inline_table();
             table.insert(
                 "depends_on",
@@ -89,12 +89,12 @@ impl Project {
         })
     }
 
-    /// Get a specific command
-    pub fn commands_depend_on(&self, name: impl AsRef<str>) -> Vec<&String> {
-        let command = self.manifest.commands.get(name.as_ref());
-        if command.is_some() {
+    /// Find task dependencies
+    pub fn task_depends_on(&self, name: impl AsRef<str>) -> Vec<&String> {
+        let task = self.manifest.tasks.get(name.as_ref());
+        if task.is_some() {
             self.manifest
-                .commands
+                .tasks
                 .iter()
                 .filter(|(_, c)| c.depends_on().contains(&name.as_ref().to_string()))
                 .map(|(name, _)| name)
@@ -104,31 +104,27 @@ impl Project {
         }
     }
 
-    /// Add a command to the project
-    pub fn add_command(
-        &mut self,
-        name: impl AsRef<str>,
-        command: PixiCommand,
-    ) -> anyhow::Result<()> {
-        if self.manifest.commands.contains_key(name.as_ref()) {
-            anyhow::bail!("command {} already exists", name.as_ref());
+    /// Add a task to the project
+    pub fn add_task(&mut self, name: impl AsRef<str>, task: Task) -> anyhow::Result<()> {
+        if self.manifest.tasks.contains_key(name.as_ref()) {
+            anyhow::bail!("task {} already exists", name.as_ref());
         };
 
-        let commands_table = &mut self.doc["commands"];
+        let tasks_table = &mut self.doc["tasks"];
         // If it doesnt exist create a proper table
-        if commands_table.is_none() {
-            *commands_table = Item::Table(Table::new());
+        if tasks_table.is_none() {
+            *tasks_table = Item::Table(Table::new());
         }
 
         // Cast the item into a table
-        let commands_table = commands_table.as_table_like_mut().ok_or_else(|| {
-            anyhow::anyhow!("commands in {} are malformed", consts::PROJECT_MANIFEST)
+        let tasks_table = tasks_table.as_table_like_mut().ok_or_else(|| {
+            anyhow::anyhow!("tasks in {} are malformed", consts::PROJECT_MANIFEST)
         })?;
 
-        let depends_on = command.depends_on();
+        let depends_on = task.depends_on();
 
         for depends in depends_on {
-            if !self.manifest.commands.contains_key(depends) {
+            if !self.manifest.tasks.contains_key(depends) {
                 anyhow::bail!(
                     "depends_on '{}' for '{}' does not exist",
                     name.as_ref(),
@@ -137,35 +133,33 @@ impl Project {
             }
         }
 
-        // Add the command to the table
-        commands_table.insert(name.as_ref(), command_as_toml(command.clone()));
+        // Add the task to the table
+        tasks_table.insert(name.as_ref(), task_as_toml(task.clone()));
 
-        self.manifest
-            .commands
-            .insert(name.as_ref().to_string(), command);
+        self.manifest.tasks.insert(name.as_ref().to_string(), task);
 
         self.save()?;
 
         Ok(())
     }
 
-    /// Remove a command from the project, and the commands it depends on
-    pub fn remove_command(&mut self, name: impl AsRef<str>) -> anyhow::Result<()> {
+    /// Remove a task from the project, and the tasks that depend on it
+    pub fn remove_task(&mut self, name: impl AsRef<str>) -> anyhow::Result<()> {
         self.manifest
-            .commands
+            .tasks
             .get(name.as_ref())
-            .ok_or_else(|| anyhow::anyhow!("command {} does not exist", name.as_ref()))?;
+            .ok_or_else(|| anyhow::anyhow!("task {} does not exist", name.as_ref()))?;
 
-        let commands_table = &mut self.doc["commands"];
-        if commands_table.is_none() {
+        let tasks_table = &mut self.doc["tasks"];
+        if tasks_table.is_none() {
             anyhow::bail!("internal data-structure inconsistent with toml");
         }
-        let commands_table = commands_table.as_table_like_mut().ok_or_else(|| {
-            anyhow::anyhow!("commands in {} are malformed", consts::PROJECT_MANIFEST)
+        let tasks_table = tasks_table.as_table_like_mut().ok_or_else(|| {
+            anyhow::anyhow!("tasks in {} are malformed", consts::PROJECT_MANIFEST)
         })?;
 
         // If it does not exist in toml, consider this ok as we want to remove it anyways
-        commands_table.remove(name.as_ref());
+        tasks_table.remove(name.as_ref());
 
         self.save()?;
 
@@ -503,9 +497,9 @@ impl Project {
         self.manifest.project.platforms.as_ref().as_slice()
     }
 
-    /// Get the command with the specified name or `None` if no such command exists.
-    pub fn command_opt(&self, name: &str) -> Option<&crate::command::Command> {
-        self.manifest.commands.get(name)
+    /// Get the task with the specified name or `None` if no such task exists.
+    pub fn task_opt(&self, name: &str) -> Option<&Task> {
+        self.manifest.tasks.get(name)
     }
 
     /// Get the system requirements defined under the `system-requirements` section of the project manifest.

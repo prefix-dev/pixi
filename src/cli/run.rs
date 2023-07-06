@@ -12,68 +12,62 @@ use rattler_conda_types::Platform;
 use crate::prefix::Prefix;
 use crate::progress::await_in_progress;
 use crate::project::environment::get_metadata_env;
-use crate::{
-    command::{CmdArgs, Command, ProcessCmd},
-    environment::get_up_to_date_prefix,
-    Project,
-};
+use crate::task::{CmdArgs, Execute, Task};
+use crate::{environment::get_up_to_date_prefix, Project};
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehaviour},
     shell::ShellEnum,
 };
 
-/// Runs command in project.
+/// Runs task in project.
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
-    /// The command you want to run in the projects environment.
-    pub command: Vec<String>,
+    /// The task you want to run in the projects environment.
+    pub task: Vec<String>,
 
     /// The path to 'pixi.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 }
 
-pub fn order_commands(
-    commands: Vec<String>,
-    project: &Project,
-) -> anyhow::Result<VecDeque<Command>> {
-    let command: Vec<_> = commands.iter().map(|c| c.to_string()).collect();
+pub fn order_tasks(tasks: Vec<String>, project: &Project) -> anyhow::Result<VecDeque<Task>> {
+    let tasks: Vec<_> = tasks.iter().map(|c| c.to_string()).collect();
 
-    let (command_name, command) = command
+    let (task_name, task) = tasks
         .first()
         .and_then(|cmd_name| {
             project
-                .command_opt(cmd_name)
+                .task_opt(cmd_name)
                 .map(|cmd| (Some(cmd_name.clone()), cmd.clone()))
         })
         .unwrap_or_else(|| {
             (
                 None,
-                Command::Process(ProcessCmd {
-                    cmd: CmdArgs::Multiple(commands),
+                Task::Execute(Execute {
+                    cmd: CmdArgs::Multiple(tasks),
                     depends_on: vec![],
                 }),
             )
         });
 
-    // Perform post order traversal of the commands and their `depends_on` to make sure they are
+    // Perform post order traversal of the tasks and their `depends_on` to make sure they are
     // executed in the right order.
     let mut s1 = VecDeque::new();
     let mut s2 = VecDeque::new();
     let mut added = HashSet::new();
 
-    // Add the command specified on the command line first
-    s1.push_back(command);
-    if let Some(command_name) = command_name {
+    // Add the task specified on the command line first
+    s1.push_back(task);
+    if let Some(command_name) = task_name {
         added.insert(command_name);
     }
 
-    while let Some(command) = s1.pop_back() {
+    while let Some(task) = s1.pop_back() {
         // Get the dependencies of the command
-        let depends_on = match &command {
-            Command::Process(process) => process.depends_on.as_slice(),
-            Command::Alias(alias) => &alias.depends_on,
+        let depends_on = match &task {
+            Task::Execute(process) => process.depends_on.as_slice(),
+            Task::Alias(alias) => &alias.depends_on,
             _ => &[],
         };
 
@@ -81,7 +75,7 @@ pub fn order_commands(
         for dependency in depends_on.iter() {
             if !added.contains(dependency) {
                 let cmd = project
-                    .command_opt(dependency)
+                    .task_opt(dependency)
                     .ok_or_else(|| anyhow::anyhow!("failed to find dependency {}", dependency))?
                     .clone();
 
@@ -90,27 +84,27 @@ pub fn order_commands(
             }
         }
 
-        s2.push_back(command)
+        s2.push_back(task)
     }
 
     Ok(s2)
 }
 
-pub async fn create_command(
-    command: Command,
+pub async fn create_task(
+    command: Task,
     project: &Project,
     command_env: &HashMap<String, String>,
 ) -> anyhow::Result<Option<std::process::Command>> {
     // Command arguments
     let args = match command {
-        Command::Process(ProcessCmd {
+        Task::Execute(Execute {
             cmd: CmdArgs::Single(cmd),
             ..
         })
-        | Command::Plain(cmd) => {
+        | Task::Plain(cmd) => {
             shlex::split(&cmd).ok_or_else(|| anyhow::anyhow!("invalid quoted command arguments"))?
         }
-        Command::Process(ProcessCmd {
+        Task::Execute(Execute {
             cmd: CmdArgs::Multiple(cmd),
             ..
         }) => cmd,
@@ -145,14 +139,14 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     // Get the correctly ordered commands
-    let mut ordered_commands = order_commands(args.command, &project)?;
+    let mut ordered_commands = order_tasks(args.task, &project)?;
 
     // Get the environment to run the commands in.
-    let command_env = get_command_env(&project).await?;
+    let command_env = get_task_env(&project).await?;
 
     // Execute the commands in the correct order
     while let Some(command) = ordered_commands.pop_back() {
-        if let Some(mut command) = create_command(command, &project, &command_env).await? {
+        if let Some(mut command) = create_task(command, &project, &command_env).await? {
             let status = command.spawn()?.wait()?.code().unwrap_or(1);
             if status != 0 {
                 std::process::exit(status);
@@ -164,7 +158,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 }
 
 /// Determine the environment variables to use when executing a command.
-pub async fn get_command_env(project: &Project) -> anyhow::Result<HashMap<String, String>> {
+pub async fn get_task_env(project: &Project) -> anyhow::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
     let prefix = get_up_to_date_prefix(project).await?;
 

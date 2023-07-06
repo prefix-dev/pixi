@@ -6,18 +6,18 @@ use std::fmt::{Display, Formatter};
 /// Represents different types of scripts
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
-pub enum Command {
+pub enum Task {
     Plain(String),
-    Process(ProcessCmd),
-    Alias(AliasCmd),
+    Execute(Execute),
+    Alias(Alias),
 }
 
-impl Command {
+impl Task {
     pub fn depends_on(&self) -> &[String] {
         match self {
-            Command::Plain(_) => &[],
-            Command::Process(cmd) => &cmd.depends_on,
-            Command::Alias(cmd) => &cmd.depends_on,
+            Task::Plain(_) => &[],
+            Task::Execute(cmd) => &cmd.depends_on,
+            Task::Alias(cmd) => &cmd.depends_on,
         }
     }
 }
@@ -25,7 +25,7 @@ impl Command {
 /// A command script executes a single command from the environment
 #[serde_as]
 #[derive(Debug, Clone, Deserialize)]
-pub struct ProcessCmd {
+pub struct Execute {
     // A list of arguments, the first argument denotes the command to run. When deserializing both
     // an array of strings and a single string are supported.
     pub cmd: CmdArgs,
@@ -46,19 +46,19 @@ pub enum CmdArgs {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde_as]
-pub struct AliasCmd {
+pub struct Alias {
     /// A list of commands that should be run before this one
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<String>,
 }
 
-impl Display for Command {
+impl Display for Task {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Command::Plain(cmd) => {
+            Task::Plain(cmd) => {
                 write!(f, "{}", cmd)?;
             }
-            Command::Process(cmd) => {
+            Task::Execute(cmd) => {
                 match &cmd.cmd {
                     CmdArgs::Single(cmd) => write!(f, "{}", cmd)?,
                     CmdArgs::Multiple(mult) => write!(f, "{}", mult.join(" "))?,

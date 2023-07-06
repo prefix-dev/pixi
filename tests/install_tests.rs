@@ -22,7 +22,7 @@ async fn install_run_python() {
     // Check if python is installed and can be run
     let mut result = pixi
         .run(run::Args {
-            command: string_from_iter(["python", "--version"]),
+            task: string_from_iter(["python", "--version"]),
             ..Default::default()
         })
         .await

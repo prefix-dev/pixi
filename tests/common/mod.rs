@@ -3,11 +3,11 @@
 pub mod builders;
 pub mod package_database;
 
-use crate::common::builders::{AddBuilder, CommandAddBuilder, CommandAliasBuilder, InitBuilder};
-use pixi::cli::command::{AddArgs, AliasArgs};
+use crate::common::builders::{AddBuilder, InitBuilder, TaskAddBuilder, TaskAliasBuilder};
 use pixi::cli::install::Args;
-use pixi::cli::run::{create_command, get_command_env, order_commands};
-use pixi::cli::{add, command, init, run};
+use pixi::cli::run::{create_task, get_task_env, order_tasks};
+use pixi::cli::task::{AddArgs, AliasArgs};
+use pixi::cli::{add, init, run, task};
 use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
 use rattler_conda_types::{MatchSpec, Version};
@@ -117,30 +117,30 @@ impl PixiControl {
         }
     }
 
-    /// Access the command control, which allows to add and remove commands
-    pub fn command(&self) -> CommandControl {
-        CommandControl { pixi: self }
+    /// Access the tasks control, which allows to add and remove tasks
+    pub fn tasks(&self) -> TasksControl {
+        TasksControl { pixi: self }
     }
 
-    /// Run a command
+    /// Run a tasks
     pub async fn run(&self, mut args: run::Args) -> anyhow::Result<UnboundedReceiver<RunResult>> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
-        let mut commands = order_commands(args.command, &self.project().unwrap())?;
+        let mut tasks = order_tasks(args.task, &self.project().unwrap())?;
 
         let project = self.project().unwrap();
-        let command_env = get_command_env(&project).await.unwrap();
+        let task_env = get_task_env(&project).await.unwrap();
 
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
         tokio::spawn(async move {
-            while let Some(command) = commands.pop_back() {
-                let command = create_command(command, &project, &command_env)
+            while let Some(task) = tasks.pop_back() {
+                let task = create_task(task, &project, &task_env)
                     .await
                     .expect("could not create command");
-                if let Some(mut command) = command {
+                if let Some(mut task) = task {
                     let tx = tx.clone();
                     spawn_blocking(move || {
-                        let output = command
+                        let output = task
                             .stdout(Stdio::piped())
                             .spawn()
                             .expect("could not spawn task")
@@ -172,15 +172,15 @@ impl PixiControl {
     }
 }
 
-pub struct CommandControl<'a> {
+pub struct TasksControl<'a> {
     /// Reference to the pixi control
     pixi: &'a PixiControl,
 }
 
-impl CommandControl<'_> {
-    /// Add a command
-    pub fn add(&self, name: impl ToString) -> CommandAddBuilder {
-        CommandAddBuilder {
+impl TasksControl<'_> {
+    /// Add a task
+    pub fn add(&self, name: impl ToString) -> TaskAddBuilder {
+        TaskAddBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AddArgs {
                 name: name.to_string(),
@@ -190,19 +190,19 @@ impl CommandControl<'_> {
         }
     }
 
-    /// Remove a command
+    /// Remove a task
     pub async fn remove(&self, name: impl ToString) -> anyhow::Result<()> {
-        command::execute(command::Args {
+        task::execute(task::Args {
             manifest_path: Some(self.pixi.manifest_path()),
-            operation: command::Operation::Remove(command::RemoveArgs {
+            operation: task::Operation::Remove(task::RemoveArgs {
                 name: name.to_string(),
             }),
         })
     }
 
-    /// Alias a command
-    pub fn alias(&self, name: impl ToString) -> CommandAliasBuilder {
-        CommandAliasBuilder {
+    /// Alias one or multiple tasks
+    pub fn alias(&self, name: impl ToString) -> TaskAliasBuilder {
+        TaskAliasBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AliasArgs {
                 alias: name.to_string(),

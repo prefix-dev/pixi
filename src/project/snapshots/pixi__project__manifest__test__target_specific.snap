@@ -1,6 +1,5 @@
 ---
 source: src/project/manifest.rs
-assertion_line: 316
 expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\")"
 ---
 ProjectManifest {
@@ -21,7 +20,7 @@ ProjectManifest {
             value: [],
         },
     },
-    commands: {},
+    tasks: {},
     system_requirements: SystemRequirements {
         windows: None,
         unix: None,
