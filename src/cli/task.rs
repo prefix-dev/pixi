@@ -7,20 +7,23 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 pub enum Operation {
     /// Add a command to the project
+    #[clap(alias = "a")]
     Add(AddArgs),
 
     /// Remove a command from the project
+    #[clap(alias = "r")]
     Remove(RemoveArgs),
 
     /// Alias another specific command
+    #[clap(alias = "@")]
     Alias(AliasArgs),
 }
 
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true)]
 pub struct RemoveArgs {
-    /// Task name
-    pub name: String,
+    /// Task names to remove
+    pub names: Vec<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -109,26 +112,42 @@ pub fn execute(args: Args) -> anyhow::Result<()> {
             );
         }
         Operation::Remove(args) => {
-            let name = args.name;
-            project.remove_task(&name)?;
-            let depends_on = project.task_depends_on(&name);
-            if !depends_on.is_empty() {
-                eprintln!(
-                    "{}: {}",
-                    console::style("Warning, the following task/s depend on this task").yellow(),
-                    console::style(depends_on.iter().to_owned().join(", ")).bold()
-                );
-                eprintln!(
-                    "{}",
-                    console::style("Be sure to modify these after the removal\n").yellow()
-                );
+            let mut to_remove = Vec::new();
+            for name in args.names.iter() {
+                if project.task_opt(name).is_none() {
+                    eprintln!(
+                        "{}Task {} does not exist",
+                        console::style(console::Emoji("❌ ", "X")).red(),
+                        console::style(&name).bold(),
+                    );
+                    continue;
+                }
+                // Check if task has dependencies
+                let depends_on = project.task_depends_on(name);
+                if !depends_on.is_empty() && !args.names.contains(name) {
+                    eprintln!(
+                        "{}: {}",
+                        console::style("Warning, the following task/s depend on this task")
+                            .yellow(),
+                        console::style(depends_on.iter().to_owned().join(", ")).bold()
+                    );
+                    eprintln!(
+                        "{}",
+                        console::style("Be sure to modify these after the removal\n").yellow()
+                    );
+                }
+                // Safe to remove
+                to_remove.push(name);
             }
 
-            eprintln!(
-                "{}Removed task {} ",
-                console::style(console::Emoji("❌ ", "X")).yellow(),
-                console::style(&name).bold(),
-            );
+            for name in to_remove {
+                project.remove_task(name)?;
+                eprintln!(
+                    "{}Removed task {} ",
+                    console::style(console::Emoji("❌ ", "X")).yellow(),
+                    console::style(&name).bold(),
+                );
+            }
         }
         Operation::Alias(args) => {
             let name = args.alias.clone();

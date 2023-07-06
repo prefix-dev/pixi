@@ -195,7 +195,7 @@ impl TasksControl<'_> {
         task::execute(task::Args {
             manifest_path: Some(self.pixi.manifest_path()),
             operation: task::Operation::Remove(task::RemoveArgs {
-                name: name.to_string(),
+                names: vec![name.to_string()],
             }),
         })
     }

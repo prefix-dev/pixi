@@ -10,6 +10,7 @@ With `pixi` you can install packages in global space or local to the environment
 | `install` | Installs all dependencies of the project in its environment |
 | `run`     | Runs the given command in a project's environment           |
 | `shell`   | Starts a shell in the project's environment                 |
+| `tasks`   | Manage tasks in your `pixi.toml` file                       |
 
 ### Initialize a new project
 This command is used to create a new project.
