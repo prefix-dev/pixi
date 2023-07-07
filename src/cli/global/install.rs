@@ -15,7 +15,7 @@ use rattler_shell::{
     shell::Shell,
     shell::ShellEnum,
 };
-use rattler_solve::{libsolv_sys, SolverImpl};
+use rattler_solve::{libsolv_c, SolverImpl};
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -213,6 +213,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     let available_packages = SparseRepoData::load_records_recursive(
         platform_sparse_repodata.iter(),
         vec![package_name.clone()],
+        None,
     )?;
 
     // Solve for environment
@@ -232,7 +233,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     };
 
     // Solve it
-    let records = libsolv_sys::Solver.solve(task)?;
+    let records = libsolv_c::Solver.solve(task)?;
 
     // Create the binary environment prefix where we install or update the package
     let bin_prefix = BinEnvDir::create(&package_name).await?;

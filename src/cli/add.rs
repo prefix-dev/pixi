@@ -11,7 +11,7 @@ use rattler_conda_types::{
     version_spec::VersionOperator, MatchSpec, NamelessMatchSpec, Platform, Version, VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{libsolv_sys, SolverImpl};
+use rattler_solve::{libsolv_c, SolverImpl};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -203,6 +203,7 @@ pub fn determine_best_version(
     let available_packages = SparseRepoData::load_records_recursive(
         platform_sparse_repo_data,
         package_names.iter().cloned(),
+        None,
     )?;
 
     // Construct a solver task to start solving.
@@ -225,7 +226,7 @@ pub fn determine_best_version(
         pinned_packages: vec![],
     };
 
-    let records = libsolv_sys::Solver.solve(task)?;
+    let records = libsolv_c::Solver.solve(task)?;
 
     // Determine the versions of the new packages
     Ok(records
