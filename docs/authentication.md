@@ -21,7 +21,7 @@ Options:
 
 The different options are "token", "conda-token" and "username + password".
 
-The token variant implements a standard "Bearer Token" authentication as is used on the prefix.dev platform. 
+The token variant implements a standard "Bearer Token" authentication as is used on the prefix.dev platform.
 A Bearer Token is sent with every request as an additional header of the form `Authentication: Bearer <TOKEN>`.
 
 The conda-token option is used on anaconda.org and can be used with a quetz server. With this option, the token is sent as part of the URL following this scheme: `conda.anaconda.org/t/<TOKEN>/conda-forge/linux-64/...`.
@@ -39,7 +39,7 @@ pixi auth login prefix.dev --token pfx_jj8WDzvnuTEHGdAhwRZMC1Ag8gSto8
 Login to anaconda.org:
 
 ```sh
-pixi auth login anaconda.org --conda-token xy-72b914cc-c105-4ec7-a969-ab21d23480ed 
+pixi auth login anaconda.org --conda-token xy-72b914cc-c105-4ec7-a969-ab21d23480ed
 ```
 
 Login to a basic HTTP secured server:
