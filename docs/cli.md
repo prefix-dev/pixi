@@ -60,6 +60,30 @@ pixi run --manifest-path ~/myproject python
 pixi run build
 ```
 
+### Create a task from a command
+If you want to make a shorthand for a specific command you can add a task for it
+```bash
+pixi task add cow cowpy "Hello User"
+```
+
+This adds the following to the `pixi.toml`:
+
+```toml
+[tasks]
+cow = "cowpy \"Hello User\""
+```
+Which you can then run with the `run` command:
+
+```bash
+pixi run cow
+```
+
+To remove a task you can use the `task remove` command:
+
+```bash
+pixi task remove cow
+```
+
 ### Start a shell in the environment
 This command starts a new shell in the project's environment.
 To exit the pixi shell, simply run exit
