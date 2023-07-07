@@ -11,7 +11,7 @@ use rattler_conda_types::{
     version_spec::VersionOperator, MatchSpec, NamelessMatchSpec, Platform, Version, VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{LibsolvRepoData, SolverBackend};
+use rattler_solve::{libsolv_sys, SolverImpl};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -212,9 +212,7 @@ pub fn determine_best_version(
             .map(|(name, spec)| MatchSpec::from_nameless(spec.clone(), Some(name.clone())))
             .collect(),
 
-        available_packages: available_packages
-            .iter()
-            .map(|records| LibsolvRepoData::from_records(records)),
+        available_packages: &available_packages,
 
         virtual_packages: get_minimal_virtual_packages(platform)
             .into_iter()
@@ -227,12 +225,17 @@ pub fn determine_best_version(
         pinned_packages: vec![],
     };
 
-    let records = rattler_solve::LibsolvBackend.solve(task)?;
+    let records = libsolv_sys::Solver.solve(task)?;
 
     // Determine the versions of the new packages
     Ok(records
         .into_iter()
         .filter(|record| new_specs.contains_key(&record.package_record.name))
-        .map(|record| (record.package_record.name, record.package_record.version))
+        .map(|record| {
+            (
+                record.package_record.name,
+                record.package_record.version.into(),
+            )
+        })
         .collect())
 }

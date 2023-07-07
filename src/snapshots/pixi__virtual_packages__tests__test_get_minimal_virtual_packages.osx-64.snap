@@ -1,5 +1,6 @@
 ---
 source: src/virtual_packages.rs
+assertion_line: 186
 expression: packages
 ---
 [
@@ -12,11 +13,8 @@ expression: packages
     Osx(
         Osx {
             version: Version {
-                norm: Some(
-                    "10.15",
-                ),
-                version: "[[0], [10], [15]]",
-                local: "[]",
+                version: [[0], [10], [15]],
+                local: [],
             },
         },
     ),

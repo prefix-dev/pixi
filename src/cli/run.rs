@@ -1,11 +1,11 @@
 use anyhow::Context;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::path::Path;
 use std::path::PathBuf;
 use std::string::String;
 
 use clap::Parser;
-use is_executable::IsExecutable;
+use deno_task_shell::parser::SequentialList;
+use deno_task_shell::{execute_with_pipes, get_output_writer_and_handle, pipe, ShellState};
 use itertools::Itertools;
 use rattler_conda_types::Platform;
 
@@ -20,6 +20,14 @@ use rattler_shell::{
 };
 
 /// Runs task in project.
+#[derive(Default)]
+pub struct RunOutput {
+    pub exit_code: i32,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+/// Runs task in project.
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
@@ -31,15 +39,23 @@ pub struct Args {
     pub manifest_path: Option<PathBuf>,
 }
 
-pub fn order_tasks(tasks: Vec<String>, project: &Project) -> anyhow::Result<VecDeque<Task>> {
+pub fn order_tasks(
+    tasks: Vec<String>,
+    project: &Project,
+) -> anyhow::Result<VecDeque<(Task, Vec<String>)>> {
     let tasks: Vec<_> = tasks.iter().map(|c| c.to_string()).collect();
 
-    let (task_name, task) = tasks
+    // Find the command in the project.
+    let (task_name, task, additional_args) = tasks
         .first()
         .and_then(|cmd_name| {
-            project
-                .task_opt(cmd_name)
-                .map(|cmd| (Some(cmd_name.clone()), cmd.clone()))
+            project.task_opt(cmd_name).map(|cmd| {
+                (
+                    Some(cmd_name.clone()),
+                    cmd.clone(),
+                    tasks[1..].iter().cloned().collect_vec(),
+                )
+            })
         })
         .unwrap_or_else(|| {
             (
@@ -48,6 +64,7 @@ pub fn order_tasks(tasks: Vec<String>, project: &Project) -> anyhow::Result<VecD
                     cmd: CmdArgs::Multiple(tasks),
                     depends_on: vec![],
                 }),
+                Vec::new(),
             )
         });
 
@@ -57,13 +74,13 @@ pub fn order_tasks(tasks: Vec<String>, project: &Project) -> anyhow::Result<VecD
     let mut s2 = VecDeque::new();
     let mut added = HashSet::new();
 
-    // Add the task specified on the command line first
-    s1.push_back(task);
-    if let Some(command_name) = task_name {
-        added.insert(command_name);
+    // Add the command specified on the command line first
+    s1.push_back((task, additional_args));
+    if let Some(task_name) = task_name {
+        added.insert(task_name);
     }
 
-    while let Some(task) = s1.pop_back() {
+    while let Some((task, additional_args)) = s1.pop_back() {
         // Get the dependencies of the command
         let depends_on = match &task {
             Task::Execute(process) => process.depends_on.as_slice(),
@@ -79,59 +96,86 @@ pub fn order_tasks(tasks: Vec<String>, project: &Project) -> anyhow::Result<VecD
                     .ok_or_else(|| anyhow::anyhow!("failed to find dependency {}", dependency))?
                     .clone();
 
-                s1.push_back(cmd);
+                s1.push_back((cmd, Vec::new()));
                 added.insert(dependency.clone());
             }
         }
 
-        s2.push_back(task)
+        s2.push_back((task, additional_args))
     }
 
     Ok(s2)
 }
 
-pub async fn create_task(
-    command: Task,
-    project: &Project,
-    command_env: &HashMap<String, String>,
-) -> anyhow::Result<Option<std::process::Command>> {
-    // Command arguments
-    let args = match command {
+pub async fn create_script(task: Task, args: Vec<String>) -> anyhow::Result<SequentialList> {
+    // Construct the script from the task
+    let task = match task {
         Task::Execute(Execute {
             cmd: CmdArgs::Single(cmd),
             ..
         })
-        | Task::Plain(cmd) => {
-            shlex::split(&cmd).ok_or_else(|| anyhow::anyhow!("invalid quoted command arguments"))?
-        }
+        | Task::Plain(cmd) => cmd,
         Task::Execute(Execute {
-            cmd: CmdArgs::Multiple(cmd),
+            cmd: CmdArgs::Multiple(args),
             ..
-        }) => cmd,
+        }) => quote_arguments(args),
         _ => {
-            // Nothing to do
-            return Ok(None);
+            return Err(anyhow::anyhow!("No command given"));
         }
     };
 
-    // Format the arguments
-    let (cmd, formatted_args) = format_execute_command(
-        project,
-        &command_env
-            .get("PATH")
-            .or_else(|| command_env.get("Path"))
-            .into_iter()
-            .flat_map(std::env::split_paths)
-            .collect_vec(),
-        &args,
-    )?;
+    // Append the command line arguments
+    let cli_args = quote_arguments(args);
+    let full_script = format!("{task} {cli_args}");
 
-    // Construct a command to execute
-    let mut cmd = std::process::Command::new(cmd);
-    cmd.args(formatted_args);
-    cmd.envs(command_env);
+    // Parse the shell command
+    deno_task_shell::parser::parse(full_script.trim())
+}
 
-    Ok(Some(cmd))
+/// Executes the given command withing the specified project and with the given environment.
+pub async fn execute_script(
+    script: SequentialList,
+    project: &Project,
+    command_env: &HashMap<String, String>,
+) -> anyhow::Result<i32> {
+    // Execute the shell command
+    Ok(deno_task_shell::execute(
+        script,
+        command_env.clone(),
+        project.root(),
+        Default::default(),
+    )
+    .await)
+}
+
+pub async fn execute_script_with_output(
+    script: SequentialList,
+    project: &Project,
+    command_env: &HashMap<String, String>,
+    input: Option<&[u8]>,
+) -> RunOutput {
+    let (stdin, mut stdin_writer) = pipe();
+    if let Some(stdin) = input {
+        stdin_writer.write_all(stdin).unwrap();
+    }
+    drop(stdin_writer); // prevent a deadlock by dropping the writer
+    let (stdout, stdout_handle) = get_output_writer_and_handle();
+    let (stderr, stderr_handle) = get_output_writer_and_handle();
+    let state = ShellState::new(command_env.clone(), project.root(), Default::default());
+    let code = execute_with_pipes(script, state, stdin, stdout, stderr).await;
+    RunOutput {
+        exit_code: code,
+        stdout: stdout_handle.await.unwrap(),
+        stderr: stderr_handle.await.unwrap(),
+    }
+}
+
+fn quote_arguments(args: impl IntoIterator<Item = impl AsRef<str>>) -> String {
+    args.into_iter()
+        // surround all the additional arguments in double quotes and santize any command
+        // substitution
+        .map(|a| format!("\"{}\"", a.as_ref().replace('"', "\\\"")))
+        .join(" ")
 }
 
 /// CLI entry point for `pixi run`
@@ -145,19 +189,21 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     let command_env = get_task_env(&project).await?;
 
     // Execute the commands in the correct order
-    while let Some(command) = ordered_commands.pop_back() {
-        if let Some(mut command) = create_task(command, &project, &command_env).await? {
-            let status = command.spawn()?.wait()?.code().unwrap_or(1);
-            if status != 0 {
-                std::process::exit(status);
-            }
+    while let Some((command, args)) = ordered_commands.pop_back() {
+        let script = create_script(command, args).await?;
+        let status_code = execute_script(script, &project, &command_env).await?;
+        if status_code != 0 {
+            std::process::exit(status_code);
         }
     }
 
     Ok(())
 }
 
-/// Determine the environment variables to use when executing a command.
+/// Determine the environment variables to use when executing a command. This method runs the
+/// activation scripts from the environment and stores the environment variables it added, it adds
+/// environment variables set by the project and merges all of that with the system environment
+/// variables.
 pub async fn get_task_env(project: &Project) -> anyhow::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
     let prefix = get_up_to_date_prefix(project).await?;
@@ -171,8 +217,8 @@ pub async fn get_task_env(project: &Project) -> anyhow::Result<HashMap<String, S
     let manifest_env = get_metadata_env(project);
 
     // Construct command environment by concatenating the environments
-    Ok(activation_env
-        .into_iter()
+    Ok(std::env::vars()
+        .chain(activation_env.into_iter())
         .chain(manifest_env.into_iter())
         .collect())
 }
@@ -201,99 +247,4 @@ async fn run_activation(prefix: Prefix) -> anyhow::Result<HashMap<String, String
     .await??;
 
     Ok(activator_result)
-}
-
-/// Given a command and arguments to invoke it, format it so that it is as generalized as possible.
-///
-/// The executable is also canonicalized. This means the executable path is looked up. If the
-/// executable is not found either in the environment or in the project root an error is returned.
-fn format_execute_command(
-    project: &Project,
-    path: &[PathBuf],
-    args: &[String],
-) -> anyhow::Result<(PathBuf, Vec<String>)> {
-    // Determine the command location
-    let command = args
-        .first()
-        .ok_or_else(|| anyhow::anyhow!("empty command"))?;
-    let command_path = find_command(command, project.root(), path.iter().map(|p| p.as_path()))
-        .ok_or_else(|| anyhow::anyhow!("could not find executable '{command}'"))?;
-
-    // Format all the commands and quote them properly.
-    Ok((
-        command_path,
-        args.iter()
-            .skip(1)
-            .map(|arg| shlex::quote(arg).into_owned())
-            .collect(),
-    ))
-}
-
-// Locate the specified command name in the project or environment
-fn find_command<'a>(
-    executable_name: &str,
-    project_root: &'a Path,
-    prefix_paths: impl IntoIterator<Item = &'a Path>,
-) -> Option<PathBuf> {
-    let executable_path = Path::new(executable_name);
-
-    // Iterate over all search paths
-    for search_path in [project_root].into_iter().chain(prefix_paths) {
-        let absolute_executable_path = search_path.join(executable_path);
-
-        // Try to locate an executable at this location
-        if let Some(executable_path) = find_canonical_executable_path(&absolute_executable_path) {
-            return Some(executable_path);
-        }
-    }
-
-    None
-}
-
-// Given a relative executable path, try to find the canonical path
-fn find_canonical_executable_path(path: &Path) -> Option<PathBuf> {
-    // If the path already points to an existing executable there is nothing to do.
-    match dunce::canonicalize(path) {
-        Ok(path) if path.is_executable() => return Some(path),
-        _ => {}
-    }
-
-    // Get executable extensions and see if by adding the extension we can turn it into a valid
-    // path.
-    for ext in executable_extensions() {
-        let with_ext = path.with_extension(ext);
-        match dunce::canonicalize(with_ext) {
-            Ok(path) if path.is_executable() => return Some(path),
-            _ => {}
-        }
-    }
-
-    None
-}
-
-/// Returns all file extensions that are considered for executable files.
-#[cfg(windows)]
-fn executable_extensions() -> &'static [String] {
-    use once_cell::sync::Lazy;
-    static PATHEXT: Lazy<Vec<String>> = Lazy::new(|| {
-        if let Some(pathext) = std::env::var_os("PATHEXT") {
-            pathext
-                .to_string_lossy()
-                .split(';')
-                // Filter out empty tokens and ';' at the end
-                .filter(|f| f.len() > 1)
-                // Cut off the leading '.' character
-                .map(|ext| ext[1..].to_string())
-                .collect::<Vec<_>>()
-        } else {
-            Vec::new()
-        }
-    });
-    PATHEXT.as_slice()
-}
-
-/// Returns all file extensions that are considered for executable files.
-#[cfg(not(windows))]
-fn executable_extensions() -> &'static [String] {
-    &[]
 }

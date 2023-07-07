@@ -166,7 +166,8 @@ Options:
 Initialize a new project and navigate to the project directory
 
 ```
-pixi init myproject && cd myproject
+pixi init myproject
+cd myproject
 ```
 
 Add the dependencies you want to use
@@ -185,6 +186,7 @@ Activate a shell in the environment
 ```shell
 pixi shell
 cowpy "Thanks for using pixi"
+exit
 ```
 
 For more information check [the documentation](getting_started.md#basics-of-the-configuration-file)

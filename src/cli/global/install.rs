@@ -15,7 +15,7 @@ use rattler_shell::{
     shell::Shell,
     shell::ShellEnum,
 };
-use rattler_solve::{LibsolvRepoData, SolverBackend};
+use rattler_solve::{libsolv_sys, SolverImpl};
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -219,9 +219,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     // Construct a solver task that we can start solving.
     let task = rattler_solve::SolverTask {
         specs: vec![package_matchspec],
-        available_packages: available_packages
-            .iter()
-            .map(|records| LibsolvRepoData::from_records(records)),
+        available_packages: &available_packages,
 
         virtual_packages: rattler_virtual_packages::VirtualPackage::current()?
             .iter()
@@ -234,7 +232,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     };
 
     // Solve it
-    let records = rattler_solve::LibsolvBackend.solve(task)?;
+    let records = libsolv_sys::Solver.solve(task)?;
 
     // Create the binary environment prefix where we install or update the package
     let bin_prefix = BinEnvDir::create(&package_name).await?;

@@ -22,6 +22,7 @@ clap = { version = "4.2.4", default-features = false, features = ["derive", "usa
 clap-verbosity-flag = "2.0.1"
 clap_complete = "4.2.1"
 console = { version = "0.15.5", features = ["windows-console-colors"] }
+deno_task_shell = { git = "https://github.com/prefix-dev/deno_task_shell" }
 dirs = "5.0.1"
 dunce = "1.0.4"
 futures = "0.3.28"
@@ -37,7 +38,7 @@ rattler_conda_types = { default-features = false, git = "https://github.com/mamb
 rattler_networking = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_repodata_gateway = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["sparse"] }
 rattler_shell = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["sysinfo"] }
-rattler_solve = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_solve = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["libsolv-sys"] }
 rattler_virtual_packages = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
 #rattler = { default-features = false, path="../rattler/crates/rattler" }
 #rattler_conda_types = { default-features = false, path="../rattler/crates/rattler_conda_types" }

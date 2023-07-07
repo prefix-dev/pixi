@@ -1374,6 +1374,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "deno_task_shell"
+version = "0.12.0"
+source = "git+https://github.com/prefix-dev/deno_task_shell#d534256b8874efc4f4bf6a1193994e14e5d67aeb"
+dependencies = [
+ "anyhow",
+ "futures 0.3.28",
+ "glob",
+ "monch",
+ "os_pipe",
+ "path-dedot",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "der"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2390,6 +2405,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7012b1bbb0719e1097c47611d3898568c546d597c2e74d66f6087edd5233ff4"
 
 [[package]]
+name = "libsolv-sys"
+version = "0.1.0"
+source = "git+https://github.com/mamba-org/rattler?branch=main#dfaf4b0ba99b2d4c37a2bde5333f3c64866adb09"
+dependencies = [
+ "anyhow",
+ "cc",
+ "cfg-if",
+ "cmake",
+ "libc",
+ "libz-sys",
+]
+
+[[package]]
 name = "libz-sys"
 version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2568,6 +2596,12 @@ dependencies = [
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.48.0",
 ]
+
+[[package]]
+name = "monch"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb73e1dc7d232e1ab47ef27f45fa1d173a0979b370e763a9d0584556011150e0"
 
 [[package]]
 name = "native-tls"
@@ -2830,6 +2864,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "os_pipe"
+version = "1.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ae859aa07428ca9a929b936690f8b12dc5f11dd8c6992a18ca93919f28bc177"
+dependencies = [
+ "libc",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "ouroboros"
 version = "0.15.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2906,6 +2950,15 @@ dependencies = [
  "base64ct",
  "rand_core 0.6.4",
  "subtle",
+]
+
+[[package]]
+name = "path-dedot"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d55e486337acb9973cdea3ec5638c1b3bcb22e573b2b7b41969e0c744d5a15e"
+dependencies = [
+ "once_cell",
 ]
 
 [[package]]
@@ -2986,6 +3039,7 @@ dependencies = [
  "clap-verbosity-flag",
  "clap_complete",
  "console",
+ "deno_task_shell",
  "dirs 5.0.1",
  "dunce",
  "futures 0.3.28",
@@ -3232,7 +3286,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#f3eddf019fdace8f3c0d46d36130481ebe06e970"
+source = "git+https://github.com/mamba-org/rattler?branch=main#dfaf4b0ba99b2d4c37a2bde5333f3c64866adb09"
 dependencies = [
  "anyhow",
  "apple-codesign",
@@ -3273,7 +3327,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#f3eddf019fdace8f3c0d46d36130481ebe06e970"
+source = "git+https://github.com/mamba-org/rattler?branch=main#dfaf4b0ba99b2d4c37a2bde5333f3c64866adb09"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3301,7 +3355,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#f3eddf019fdace8f3c0d46d36130481ebe06e970"
+source = "git+https://github.com/mamba-org/rattler?branch=main#dfaf4b0ba99b2d4c37a2bde5333f3c64866adb09"
 dependencies = [
  "blake2",
  "digest 0.10.7",
@@ -3316,7 +3370,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#f3eddf019fdace8f3c0d46d36130481ebe06e970"
+source = "git+https://github.com/mamba-org/rattler?branch=main#dfaf4b0ba99b2d4c37a2bde5333f3c64866adb09"
 dependencies = [
  "quote",
  "syn 2.0.22",
@@ -3325,7 +3379,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#f3eddf019fdace8f3c0d46d36130481ebe06e970"
+source = "git+https://github.com/mamba-org/rattler?branch=main#dfaf4b0ba99b2d4c37a2bde5333f3c64866adb09"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
@@ -3342,7 +3396,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#f3eddf019fdace8f3c0d46d36130481ebe06e970"
+source = "git+https://github.com/mamba-org/rattler?branch=main#dfaf4b0ba99b2d4c37a2bde5333f3c64866adb09"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3365,7 +3419,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#f3eddf019fdace8f3c0d46d36130481ebe06e970"
+source = "git+https://github.com/mamba-org/rattler?branch=main#dfaf4b0ba99b2d4c37a2bde5333f3c64866adb09"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3403,7 +3457,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#f3eddf019fdace8f3c0d46d36130481ebe06e970"
+source = "git+https://github.com/mamba-org/rattler?branch=main#dfaf4b0ba99b2d4c37a2bde5333f3c64866adb09"
 dependencies = [
  "enum_dispatch",
  "indexmap 1.9.3",
@@ -3420,15 +3474,12 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#f3eddf019fdace8f3c0d46d36130481ebe06e970"
+source = "git+https://github.com/mamba-org/rattler?branch=main#dfaf4b0ba99b2d4c37a2bde5333f3c64866adb09"
 dependencies = [
  "anyhow",
- "cc",
- "cfg-if",
- "cmake",
  "hex",
  "libc",
- "libz-sys",
+ "libsolv-sys",
  "rattler_conda_types",
  "rattler_digest",
  "serde",
@@ -3441,7 +3492,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#f3eddf019fdace8f3c0d46d36130481ebe06e970"
+source = "git+https://github.com/mamba-org/rattler?branch=main#dfaf4b0ba99b2d4c37a2bde5333f3c64866adb09"
 dependencies = [
  "cfg-if",
  "libloading",
@@ -4025,6 +4076,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43b2853a4d09f215c24cc5489c992ce46052d359b5109343cbafbf26bc62f8a3"
 
 [[package]]
+name = "signal-hook-registry"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8229b473baa5980ac72ef434c4415e70c4b5e71b423043adb4ba059f89c99a1"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "signature"
 version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4386,6 +4446,7 @@ dependencies = [
  "mio",
  "num_cpus",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.48.0",

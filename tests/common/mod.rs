@@ -5,7 +5,9 @@ pub mod package_database;
 
 use crate::common::builders::{AddBuilder, InitBuilder, TaskAddBuilder, TaskAliasBuilder};
 use pixi::cli::install::Args;
-use pixi::cli::run::{create_task, get_task_env, order_tasks};
+use pixi::cli::run::{
+    create_script, execute_script_with_output, get_task_env, order_tasks, RunOutput,
+};
 use pixi::cli::task::{AddArgs, AliasArgs};
 use pixi::cli::{add, init, run, task};
 use pixi::{consts, Project};
@@ -13,11 +15,9 @@ use rattler_conda_types::conda_lock::CondaLock;
 use rattler_conda_types::{MatchSpec, Version};
 
 use std::path::{Path, PathBuf};
-use std::process::{Output, Stdio};
+use std::process::Output;
 use std::str::FromStr;
 use tempfile::TempDir;
-use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::task::spawn_blocking;
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -39,6 +39,11 @@ impl RunResult {
     pub fn stdout(&self) -> &str {
         std::str::from_utf8(&self.output.stdout).expect("could not get output")
     }
+}
+
+/// MatchSpecs from an iterator
+pub fn string_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<String> {
+    iter.into_iter().map(|s| s.as_ref().to_string()).collect()
 }
 
 pub trait LockFileExt {
@@ -117,45 +122,24 @@ impl PixiControl {
         }
     }
 
-    /// Access the tasks control, which allows to add and remove tasks
-    pub fn tasks(&self) -> TasksControl {
-        TasksControl { pixi: self }
-    }
-
-    /// Run a tasks
-    pub async fn run(&self, mut args: run::Args) -> anyhow::Result<UnboundedReceiver<RunResult>> {
+    /// Run a command
+    pub async fn run(&self, mut args: run::Args) -> anyhow::Result<RunOutput> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
         let mut tasks = order_tasks(args.task, &self.project().unwrap())?;
 
         let project = self.project().unwrap();
         let task_env = get_task_env(&project).await.unwrap();
 
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-
-        tokio::spawn(async move {
-            while let Some(task) = tasks.pop_back() {
-                let task = create_task(task, &project, &task_env)
-                    .await
-                    .expect("could not create command");
-                if let Some(mut task) = task {
-                    let tx = tx.clone();
-                    spawn_blocking(move || {
-                        let output = task
-                            .stdout(Stdio::piped())
-                            .spawn()
-                            .expect("could not spawn task")
-                            .wait_with_output()
-                            .expect("could not run command");
-                        tx.send(RunResult { output })
-                            .expect("could not send output");
-                    })
-                    .await
-                    .unwrap();
+        while let Some((command, args)) = tasks.pop_back() {
+            let script = create_script(command, args).await;
+            if let Ok(script) = script {
+                let output = execute_script_with_output(script, &project, &task_env, None).await;
+                if tasks.is_empty() {
+                    return Ok(output);
                 }
             }
-        });
-
-        Ok(rx)
+        }
+        Ok(RunOutput::default())
     }
 
     /// Create an installed environment. I.e a resolved and installed prefix
@@ -169,6 +153,10 @@ impl PixiControl {
     /// Get the associated lock file
     pub async fn lock_file(&self) -> anyhow::Result<CondaLock> {
         pixi::environment::load_lock_for_manifest_path(&self.manifest_path()).await
+    }
+
+    pub fn tasks(&self) -> TasksControl {
+        TasksControl { pixi: self }
     }
 }
 
