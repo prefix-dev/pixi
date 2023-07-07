@@ -20,16 +20,16 @@ async fn install_run_python() {
     assert!(lock.contains_matchspec("python==3.11.0"));
 
     // Check if python is installed and can be run
-    let mut result = pixi
+    let result = pixi
         .run(run::Args {
             command: string_from_iter(["python", "--version"]),
             ..Default::default()
         })
         .await
         .unwrap();
-    let run_result = result.recv().await.unwrap();
-    assert!(run_result.success());
-    assert_eq!(run_result.stdout().trim(), "Python 3.11.0");
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.stdout.trim(), "Python 3.11.0");
+    assert!(result.stderr.is_empty());
 }
 
 /// This is a test to check that creating incremental lock files works.
