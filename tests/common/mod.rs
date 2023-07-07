@@ -1,27 +1,44 @@
 #![allow(dead_code)]
 
+pub mod builders;
 pub mod package_database;
 
-use pixi::cli::add::SpecType;
+use crate::common::builders::{AddBuilder, InitBuilder, TaskAddBuilder, TaskAliasBuilder};
 use pixi::cli::install::Args;
 use pixi::cli::run::{
-    create_script, execute_script_with_output, get_command_env, order_commands, RunOutput,
+    create_script, execute_script_with_output, get_task_env, order_tasks, RunOutput,
 };
-use pixi::cli::{add, init, run};
+use pixi::cli::task::{AddArgs, AliasArgs};
+use pixi::cli::{add, init, run, task};
 use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
 use rattler_conda_types::{MatchSpec, Version};
-use std::future::{Future, IntoFuture};
+
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
+use std::process::Output;
 use std::str::FromStr;
 use tempfile::TempDir;
-use url::Url;
 
 /// To control the pixi process
 pub struct PixiControl {
     /// The path to the project working file
     tmpdir: TempDir,
+}
+
+pub struct RunResult {
+    output: Output,
+}
+
+impl RunResult {
+    /// Was the output successful
+    pub fn success(&self) -> bool {
+        self.output.status.success()
+    }
+
+    /// Get the output
+    pub fn stdout(&self) -> &str {
+        std::str::from_utf8(&self.output.stdout).expect("could not get output")
+    }
 }
 
 /// MatchSpecs from an iterator
@@ -108,16 +125,16 @@ impl PixiControl {
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> anyhow::Result<RunOutput> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
-        let mut commands = order_commands(args.command, &self.project().unwrap())?;
+        let mut tasks = order_tasks(args.task, &self.project().unwrap())?;
 
         let project = self.project().unwrap();
-        let command_env = get_command_env(&project).await.unwrap();
+        let task_env = get_task_env(&project).await.unwrap();
 
-        while let Some((command, args)) = commands.pop_back() {
+        while let Some((command, args)) = tasks.pop_back() {
             let script = create_script(command, args).await;
             if let Ok(script) = script {
-                let output = execute_script_with_output(script, &project, &command_env, None).await;
-                if commands.is_empty() {
+                let output = execute_script_with_output(script, &project, &task_env, None).await;
+                if tasks.is_empty() {
                     return Ok(output);
                 }
             }
@@ -137,82 +154,49 @@ impl PixiControl {
     pub async fn lock_file(&self) -> anyhow::Result<CondaLock> {
         pixi::environment::load_lock_for_manifest_path(&self.manifest_path()).await
     }
-}
 
-/// Contains the arguments to pass to `init::execute()`. Call `.await` to call the CLI execute
-/// method and await the result at the same time.
-pub struct InitBuilder {
-    args: init::Args,
-}
-
-impl InitBuilder {
-    pub fn with_channel(mut self, channel: impl ToString) -> Self {
-        self.args.channels.push(channel.to_string());
-        self
-    }
-
-    pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
-        self.with_channel(Url::from_directory_path(channel).unwrap())
+    pub fn tasks(&self) -> TasksControl {
+        TasksControl { pixi: self }
     }
 }
 
-// When `.await` is called on an object that is not a `Future` the compiler will first check if the
-// type implements `IntoFuture`. If it does it will call the `IntoFuture::into_future()` method and
-// await the resulting `Future`. We can abuse this behavior in builder patterns because the
-// `into_future` method can also be used as a `finish` function. This allows you to reduce the
-// required code.
-impl IntoFuture for InitBuilder {
-    type Output = anyhow::Result<()>;
-    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
-
-    fn into_future(self) -> Self::IntoFuture {
-        Box::pin(init::execute(self.args))
-    }
+pub struct TasksControl<'a> {
+    /// Reference to the pixi control
+    pixi: &'a PixiControl,
 }
 
-/// Contains the arguments to pass to `add::execute()`. Call `.await` to call the CLI execute method
-/// and await the result at the same time.
-pub struct AddBuilder {
-    args: add::Args,
-}
-
-impl AddBuilder {
-    pub fn with_spec(mut self, spec: impl IntoMatchSpec) -> Self {
-        self.args.specs.push(spec.into());
-        self
-    }
-
-    /// Set as a host
-    pub fn set_type(mut self, t: SpecType) -> Self {
-        match t {
-            SpecType::Host => {
-                self.args.host = true;
-                self.args.build = false;
-            }
-            SpecType::Build => {
-                self.args.host = false;
-                self.args.build = true;
-            }
-            SpecType::Run => {
-                self.args.host = false;
-                self.args.build = false;
-            }
+impl TasksControl<'_> {
+    /// Add a task
+    pub fn add(&self, name: impl ToString) -> TaskAddBuilder {
+        TaskAddBuilder {
+            manifest_path: Some(self.pixi.manifest_path()),
+            args: AddArgs {
+                name: name.to_string(),
+                commands: vec![],
+                depends_on: None,
+            },
         }
-        self
     }
-}
 
-// When `.await` is called on an object that is not a `Future` the compiler will first check if the
-// type implements `IntoFuture`. If it does it will call the `IntoFuture::into_future()` method and
-// await the resulting `Future`. We can abuse this behavior in builder patterns because the
-// `into_future` method can also be used as a `finish` function. This allows you to reduce the
-// required code.
-impl IntoFuture for AddBuilder {
-    type Output = anyhow::Result<()>;
-    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+    /// Remove a task
+    pub async fn remove(&self, name: impl ToString) -> anyhow::Result<()> {
+        task::execute(task::Args {
+            manifest_path: Some(self.pixi.manifest_path()),
+            operation: task::Operation::Remove(task::RemoveArgs {
+                names: vec![name.to_string()],
+            }),
+        })
+    }
 
-    fn into_future(self) -> Self::IntoFuture {
-        Box::pin(add::execute(self.args))
+    /// Alias one or multiple tasks
+    pub fn alias(&self, name: impl ToString) -> TaskAliasBuilder {
+        TaskAliasBuilder {
+            manifest_path: Some(self.pixi.manifest_path()),
+            args: AliasArgs {
+                alias: name.to_string(),
+                depends_on: vec![],
+            },
+        }
     }
 }
 

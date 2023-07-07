@@ -10,6 +10,7 @@ With `pixi` you can install packages in global space or local to the environment
 | `install` | Installs all dependencies of the project in its environment |
 | `run`     | Runs the given command in a project's environment           |
 | `shell`   | Starts a shell in the project's environment                 |
+| `tasks`   | Manage tasks in your `pixi.toml` file                       |
 
 ### Initialize a new project
 This command is used to create a new project.
@@ -57,6 +58,30 @@ pixi run cowpy "Hey pixi user"
 pixi run --manifest-path ~/myproject python
 # If you have specified a custom command in the pixi.toml you can run it with run aswell
 pixi run build
+```
+
+### Create a task from a command
+If you want to make a shorthand for a specific command you can add a task for it
+```bash
+pixi task add cow cowpy "Hello User"
+```
+
+This adds the following to the `pixi.toml`:
+
+```toml
+[tasks]
+cow = "cowpy \"Hello User\""
+```
+Which you can then run with the `run` command:
+
+```bash
+pixi run cow
+```
+
+To remove a task you can use the `task remove` command:
+
+```bash
+pixi task remove cow
 ```
 
 ### Start a shell in the environment

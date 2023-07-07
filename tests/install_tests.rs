@@ -1,7 +1,7 @@
 mod common;
 
+use crate::common::builders::string_from_iter;
 use crate::common::package_database::{Package, PackageDatabase};
-use crate::common::string_from_iter;
 use common::{LockFileExt, PixiControl};
 use pixi::cli::run;
 use tempfile::TempDir;
@@ -22,7 +22,7 @@ async fn install_run_python() {
     // Check if python is installed and can be run
     let result = pixi
         .run(run::Args {
-            command: string_from_iter(["python", "--version"]),
+            task: string_from_iter(["python", "--version"]),
             ..Default::default()
         })
         .await

@@ -14,6 +14,7 @@ pub mod init;
 pub mod install;
 pub mod run;
 pub mod shell;
+pub mod task;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -49,7 +50,9 @@ pub enum Command {
     #[clap(alias = "g")]
     Global(global::Args),
     Auth(auth::Args),
+    #[clap(alias = "i")]
     Install(install::Args),
+    Task(task::Args),
 }
 
 fn completion(args: CompletionCommand) -> Result<(), Error> {
@@ -104,5 +107,6 @@ pub async fn execute_command(command: Command) -> Result<(), Error> {
         Command::Auth(cmd) => auth::execute(cmd).await,
         Command::Install(cmd) => install::execute(cmd).await,
         Command::Shell(cmd) => shell::execute(cmd).await,
+        Command::Task(cmd) => task::execute(cmd),
     }
 }

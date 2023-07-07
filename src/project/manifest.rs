@@ -1,6 +1,6 @@
-use crate::command::Command;
 use crate::consts::PROJECT_MANIFEST;
 use crate::report_error::ReportError;
+use crate::task::Task;
 use ::serde::Deserialize;
 use ariadne::{ColorGenerator, Fmt, Label, Report, ReportKind, Source};
 use indexmap::IndexMap;
@@ -20,9 +20,9 @@ pub struct ProjectManifest {
     /// Information about the project
     pub project: ProjectMetadata,
 
-    /// Commands defined in the project
+    /// Tasks defined in the project
     #[serde(default)]
-    pub commands: HashMap<String, Command>,
+    pub tasks: HashMap<String, Task>,
 
     /// Additional system requirements
     #[serde(default, rename = "system-requirements")]

@@ -31,7 +31,7 @@ authors = ["{{ author[0] }} <{{ author[1] }}>"]
 channels = ["{{ channels|join("\", \"") }}"]
 platforms = ["{{ platform }}"]
 
-[commands]
+[tasks]
 
 [dependencies]
 "#;
@@ -141,7 +141,7 @@ mod tests {
         );
         assert_eq!(
             get_dir(std::env::current_dir().unwrap()).unwrap(),
-            PathBuf::from(std::env::current_dir().unwrap().canonicalize().unwrap())
+            std::env::current_dir().unwrap().canonicalize().unwrap()
         );
     }
 
