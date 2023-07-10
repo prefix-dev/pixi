@@ -179,6 +179,7 @@ fn quote_arguments(args: impl IntoIterator<Item = impl AsRef<str>>) -> String {
 }
 
 /// CLI entry point for `pixi run`
+/// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> anyhow::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
@@ -190,8 +191,19 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 
     // Execute the commands in the correct order
     while let Some((command, args)) = ordered_commands.pop_back() {
+        // Ignore CTRL+C
+        // Specifically so that the child is responsible for its own signal handling
+        // NOTE: one CTRL+C is registered it will always stay registered for the rest of the runtime of the program
+        // which is fine when using run in isolation, however if we start to use run in conjunction with
+        // some other command we might want to revaluate this.
+        let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
         let script = create_script(command, args).await?;
-        let status_code = execute_script(script, &project, &command_env).await?;
+        let status_code = tokio::select! {
+            code = execute_script(script, &project, &command_env) => code?,
+            // This should never exit
+            _ = ctrl_c => { unreachable!("Ctrl+C should not be triggered") }
+        };
+
         if status_code != 0 {
             std::process::exit(status_code);
         }
