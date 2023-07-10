@@ -4,7 +4,6 @@ use indicatif::ProgressBar;
 use rattler_conda_types::{Channel, Platform};
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::{fetch, sparse::SparseRepoData};
-use reqwest::StatusCode;
 use std::{path::Path, time::Duration};
 
 impl Project {
