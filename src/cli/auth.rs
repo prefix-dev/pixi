@@ -56,15 +56,14 @@ fn get_url(url: &str) -> anyhow::Result<String> {
         url.to_string()
     };
 
-    let host = if host == "prefix.dev" {
-        "repo.prefix.dev"
-    } else if host == "anaconda.org" {
-        "conda.anaconda.org"
+    let host = if host.matches('.').count() == 1 {
+        // use wildcard for top-level domains
+        format!("*.{}", host)
     } else {
-        &host
+        host
     };
 
-    Ok(host.to_string())
+    Ok(host)
 }
 
 fn login(args: LoginArgs, storage: AuthenticationStorage) -> anyhow::Result<()> {
