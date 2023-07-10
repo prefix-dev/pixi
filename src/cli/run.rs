@@ -190,8 +190,15 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 
     // Execute the commands in the correct order
     while let Some((command, args)) = ordered_commands.pop_back() {
+        // Ignore CTRL+C
+        let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
         let script = create_script(command, args).await?;
-        let status_code = execute_script(script, &project, &command_env).await?;
+        let status_code = tokio::select! {
+            code = execute_script(script, &project, &command_env) => code?,
+            // This should never exit
+            _ = ctrl_c => { 0 }
+        };
+
         if status_code != 0 {
             std::process::exit(status_code);
         }

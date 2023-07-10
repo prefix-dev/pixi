@@ -1376,12 +1376,12 @@ dependencies = [
 [[package]]
 name = "deno_task_shell"
 version = "0.12.0"
+source = "git+https://github.com/prefix-dev/deno_task_shell#d534256b8874efc4f4bf6a1193994e14e5d67aeb"
 dependencies = [
  "anyhow",
  "futures 0.3.28",
  "glob",
  "monch",
- "nix",
  "os_pipe",
  "path-dedot",
  "tokio",
@@ -2631,7 +2631,6 @@ dependencies = [
  "cfg-if",
  "libc",
  "memoffset 0.7.1",
- "pin-utils",
  "static_assertions",
 ]
 
