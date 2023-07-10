@@ -21,8 +21,8 @@ use rattler::{
 use rattler_conda_types::{
     conda_lock,
     conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
-    conda_lock::{CondaLock, PackageHashes},
-    MatchSpec, NamelessMatchSpec, PackageRecord, Platform, PrefixRecord, RepoDataRecord, Version,
+    conda_lock::CondaLock,
+    MatchSpec, NamelessMatchSpec, Platform, PrefixRecord, RepoDataRecord, Version,
 };
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
@@ -30,7 +30,6 @@ use rattler_solve::{libsolv_c, SolverImpl};
 use std::collections::HashMap;
 use std::{
     collections::{HashSet, VecDeque},
-    ffi::OsStr,
     io::ErrorKind,
     path::{Path, PathBuf},
     str::FromStr,
@@ -207,16 +206,16 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow:
                     return Ok(false);
                 }
                 Some(package) => {
-                    for (depends_name, depends_constriant) in package.dependencies.iter() {
+                    for (depends_name, depends_constraint) in package.dependencies.iter() {
                         if !seen.contains(depends_name) {
                             // Parse the constraint
-                            match NamelessMatchSpec::from_str(&depends_constriant.to_string()) {
+                            match NamelessMatchSpec::from_str(&depends_constraint.to_string()) {
                                 Ok(spec) => {
                                     queue.push_back((depends_name.clone(), spec));
                                     seen.insert(depends_name.clone());
                                 }
                                 Err(_) => {
-                                    tracing::warn!("failed to parse spec '{}', assuming the lock file is corrupt.", depends_constriant);
+                                    tracing::warn!("failed to parse spec '{}', assuming the lock file is corrupt.", depends_constraint);
                                     return Ok(false);
                                 }
                             }
@@ -331,8 +330,6 @@ pub async fn update_lock_file(
         let task = rattler_solve::SolverTask {
             specs: match_specs.clone(),
             available_packages: &available_packages,
-
-            // TODO: All these things.
             locked_packages: existing_lock_file
                 .packages_for_platform(platform)
                 .map(RepoDataRecord::try_from)
@@ -371,53 +368,7 @@ pub fn get_required_packages(
         .package
         .iter()
         .filter(|pkg| pkg.platform == platform)
-        .map(|pkg| {
-            Ok(RepoDataRecord {
-                channel: String::new(),
-                file_name: Path::new(pkg.url.path())
-                    .file_name()
-                    .and_then(OsStr::to_str)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("failed to determine file name from {}", &pkg.url)
-                    })?
-                    .to_owned(),
-                url: pkg.url.clone(),
-                package_record: PackageRecord {
-                    arch: None,
-                    build: pkg.build.clone().unwrap_or_default(),
-                    build_number: 0,
-                    constrains: vec![],
-                    depends: pkg
-                        .dependencies
-                        .iter()
-                        .map(|(pkg_name, spec)| format!("{} {}", pkg_name, spec))
-                        .collect(),
-                    features: None,
-                    legacy_bz2_md5: None,
-                    legacy_bz2_size: None,
-                    license: None,
-                    license_family: None,
-                    md5: match &pkg.hash {
-                        PackageHashes::Md5(md5) => Some(*md5),
-                        PackageHashes::Sha256(_) => None,
-                        PackageHashes::Md5Sha256(md5, _) => Some(*md5),
-                    },
-                    name: pkg.name.clone(),
-                    noarch: Default::default(),
-                    platform: None,
-                    sha256: match &pkg.hash {
-                        PackageHashes::Md5(_) => None,
-                        PackageHashes::Sha256(sha256) => Some(*sha256),
-                        PackageHashes::Md5Sha256(_, sha256) => Some(*sha256),
-                    },
-                    size: None,
-                    subdir: "".to_string(),
-                    timestamp: None,
-                    track_features: vec![],
-                    version: Version::from_str(&pkg.version)?.into(),
-                },
-            })
-        })
+        .map(|pkg| pkg.clone().try_into().map_err(anyhow::Error::from))
         .collect()
 }
 
