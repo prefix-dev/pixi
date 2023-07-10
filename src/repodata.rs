@@ -4,7 +4,6 @@ use indicatif::ProgressBar;
 use rattler_conda_types::{Channel, Platform};
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::{fetch, sparse::SparseRepoData};
-use reqwest::StatusCode;
 use std::{path::Path, time::Duration};
 
 impl Project {
@@ -138,10 +137,7 @@ async fn fetch_repo_data_records_with_progress(
     // Error out if an error occurred, but also update the progress bar
     let result = match result {
         Err(e) => {
-            let not_found = matches!(&e,
-                fetch::FetchRepoDataError::HttpError(e) if e.status() == Some(StatusCode::NOT_FOUND)
-            );
-            if not_found && allow_not_found {
+            if matches!(&e, fetch::FetchRepoDataError::NotFound(_)) && allow_not_found {
                 progress_bar.set_style(progress::finished_progress_style());
                 progress_bar.finish_with_message("Not Found");
                 return Ok(None);
