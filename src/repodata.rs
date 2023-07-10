@@ -162,7 +162,7 @@ async fn fetch_repo_data_records_with_progress(
     // task.
     let repo_data_json_path = result.repo_data_json_path.clone();
     match tokio::task::spawn_blocking(move || {
-        SparseRepoData::new(channel, platform.to_string(), repo_data_json_path)
+        SparseRepoData::new(channel, platform.to_string(), repo_data_json_path, None)
     })
     .await
     {
