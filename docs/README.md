@@ -204,7 +204,8 @@ For more examples
 check [the documentation](./cli.md)
 
 <a name="contributing"></a>
-# Contributing 😍
+
+## Contributing 😍
 
 We would absolutely love for you to contribute to `pixi`!
 Whether you want to start an issue, fix a bug you encountered, or suggest an
@@ -221,3 +222,7 @@ Got questions or ideas, or just want to chat? Join our lively conversations on
 Discord.
 We're very active and would be happy to welcome you to our
 community. [Join our discord server today!][chat-url]
+
+## Built using pixi
+
+To see whats being built with `pixi` check out the [Community](Community.md) page.
