@@ -179,6 +179,7 @@ fn quote_arguments(args: impl IntoIterator<Item = impl AsRef<str>>) -> String {
 }
 
 /// CLI entry point for `pixi run`
+/// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> anyhow::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
