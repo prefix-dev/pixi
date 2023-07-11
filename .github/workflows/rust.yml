@@ -352,6 +352,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: steps.is-release.outputs.IS_RELEASE
         with:
+          draft: true
           files: |
             ${{ steps.package.outputs.PKG_PATH }}
             ${{ steps.package.outputs.BIN_PATH }}
