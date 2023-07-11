@@ -28,11 +28,10 @@ Adds dependencies to the `pixi.toml` before it does that it check if it is possi
 It will only add if the package with its version constraint is able to work with rest of the dependencies in the project.
 ```bash
 pixi add numpy
-pixi add numpy=1.24
-pixi add numpy pandas pytorch==1.8
+pixi add numpy pandas pytorch>=1.8
 pixi add "numpy>=1.22,<1.24"
-pixi add --manifest-path ~/myproject numpy
-pixi add --host python==3.9.0
+pixi add --manifest-path ~/myproject/pixi.toml numpy
+pixi add --host python>=3.9.0
 pixi add --build cmake
 ```
 
@@ -41,7 +40,7 @@ Installs all dependencies specified in the lockfile `pixi.lock`.
 Which gets generated on `pixi add` or when you manually change the `pixi.toml` file and run `pixi install`.
 ```bash
 pixi install
-pixi install --manifest-path ~/myproject
+pixi install --manifest-path ~/myproject/pixi.toml
 ```
 
 ### Run commands in the environment
@@ -58,7 +57,7 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 ```bash
 pixi run python
 pixi run cowpy "Hey pixi user"
-pixi run --manifest-path ~/myproject python
+pixi run --manifest-path ~/myproject/pixi.toml python
 # If you have specified a custom task in the pixi.toml you can run it with run as well
 pixi run build
 ```
@@ -97,7 +96,7 @@ To exit the pixi shell, simply run exit
 ```bash
 pixi shell
 exit
-pixi shell --manifest-path ~/myproject
+pixi shell --manifest-path ~/myproject/pixi.toml
 exit
 ```
 
