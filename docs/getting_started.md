@@ -62,7 +62,7 @@ authors = ["John Doe <john@prefix.dev>"]      # Gets the information from you cu
 channels = ["conda-forge"]                    # Defaults to conda-forge, add in vector style more channels if needed.
 platforms = ["linux-64"]                      # Defaults to the platform you are currently on but add the platform you want to support as needed.
 
-[commands]
+[tasks]
 
 [dependencies]
 ```
@@ -171,27 +171,27 @@ This overwrites the generic python dependency specified in the dependencies bloc
 As a rule the target specific dependencies take precedence over generic ones
 in the order that they are specified, so should multiple targets match the last specification is used.
 
-## The `commands` part
-In addition to managing dependencies, `pixi` aims to provide a user-friendly interface that simplifies the execution of repetitive, complex commands.
-The commands section in your `pixi` configuration serves this purpose.
-Here, you can specify any commands that you frequently use in your project's environment.
+## The `tasks` part
+In addition to managing dependencies, `pixi` aims to provide a user-friendly interface that simplifies the execution of repetitive, complex tasks.
+The tasks section in your `pixi` configuration serves this purpose.
+Here, you can specify any tasks that you frequently use in your project's environment.
 
 Here are a few examples:
 ```toml
-[commands]
+[tasks]
 build = "cargo build --release"
 test = {cmd = "pytest /tests", depends_on=["build"]}
 
-[commands.check]
+[tasks.check]
 cmd = "ruff check path/to/code/*.py"
 ```
-With these commands specified in the configuration, you can easily execute them using `pixi run`:
+With these tasks specified in the configuration, you can easily execute them using `pixi run`:
 ```shell
 pixi run build
 pixi run test
 pixi run check
 ```
-This commands feature makes it straightforward and efficient to execute commonly-used commands, further enhancing `pixi` as a versatile tool for project management.
+This tasks feature makes it straightforward and efficient to execute commonly-used tasks, further enhancing `pixi` as a versatile tool for project management.
 
 The `depends_on` will run the specified command in there to be run before the command itself.
 So in the example `build` will be run before `test`.
