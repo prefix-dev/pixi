@@ -45,23 +45,29 @@ pixi install --manifest-path ~/myproject
 ```
 
 ### Run commands in the environment
-The `run` commands first checks if the environment is ready to use. When you didn't run `pixi install` the run command will do that for you. The custom commands defined in the `pixi.toml` are also available through the run command.
+The `run` commands first checks if the environment is ready to use.
+When you didn't run `pixi install` the run command will do that for you.
+The custom tasks defined in the `pixi.toml` are also available through the run command.
 
-The run command will search for the given executable and run that in the pixi environment.
+**NOTE:** In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the run command.
+Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
+This is done so that the run commands can be run across all platforms.
 
-You cannot run `pixi run source setup.bash` as `source` is a shell commando and not an executable.
-
-You cannot run `pixi run echo hello_world && echo hello` as the shell will split it up in `pixi run echo hello_world` and `echo hello`.
+You cannot run `pixi run source setup.bash` as `source` is not available in the `deno_task_shell` commandos and not an executable.
 
 ```bash
 pixi run python
 pixi run cowpy "Hey pixi user"
 pixi run --manifest-path ~/myproject python
-# If you have specified a custom command in the pixi.toml you can run it with run aswell
+# If you have specified a custom task in the pixi.toml you can run it with run as well
 pixi run build
 ```
 
 ### Create a task from a command
+**NOTE:** In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the tasks.
+Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
+This is done so that the tasks defined can be run across all platforms.
+
 If you want to make a shorthand for a specific command you can add a task for it
 ```bash
 pixi task add cow cowpy "Hello User"

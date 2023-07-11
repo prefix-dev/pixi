@@ -172,6 +172,10 @@ As a rule the target specific dependencies take precedence over generic ones
 in the order that they are specified, so should multiple targets match the last specification is used.
 
 ## The `tasks` part
+**NOTE:** In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the tasks.
+Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
+This is done so that the tasks defined can be run across all platforms.
+
 In addition to managing dependencies, `pixi` aims to provide a user-friendly interface that simplifies the execution of repetitive, complex tasks.
 The tasks section in your `pixi` configuration serves this purpose.
 Here, you can specify any tasks that you frequently use in your project's environment.
