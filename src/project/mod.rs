@@ -77,7 +77,10 @@ impl Project {
     /// Loads a project manifest file.
     pub fn load(filename: &Path) -> anyhow::Result<Self> {
         // Determine the parent directory of the manifest file
-        let root = filename.parent().unwrap_or(Path::new("."));
+        let full_path = dunce::canonicalize(filename)?;
+        let root = full_path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("can not find parent of {}", filename.display()))?;
 
         // Load the TOML document
         Self::from_manifest_str(root, fs::read_to_string(filename)?).with_context(|| {
