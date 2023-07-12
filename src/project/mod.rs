@@ -500,6 +500,21 @@ impl Project {
         self.manifest.project.platforms.as_ref().as_slice()
     }
 
+    pub fn activation_scripts(&self) -> Vec<PathBuf> {
+        let mut full_paths = vec![];
+        match &self.manifest.project.activation_scripts {
+            None => full_paths,
+            Some(scripts) => {
+                if !scripts.is_empty() {
+                    for path in scripts {
+                        full_paths.push(self.root.join(path));
+                    }
+                }
+                full_paths
+            }
+        }
+    }
+
     /// Get the task with the specified name or `None` if no such task exists.
     pub fn task_opt(&self, name: &str) -> Option<&Task> {
         self.manifest.tasks.get(name)

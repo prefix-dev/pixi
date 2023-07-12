@@ -12,6 +12,7 @@ use serde_with::de::DeserializeAsWrap;
 use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
 use std::collections::HashMap;
 use std::ops::Range;
+use std::path::PathBuf;
 
 /// Describes the contents of a project manifest.
 #[serde_as]
@@ -162,6 +163,8 @@ pub struct ProjectMetadata {
     // TODO: This is actually slightly different from the rattler_conda_types::Platform because it
     //     should not include noarch.
     pub platforms: Spanned<Vec<Platform>>,
+
+    pub activation_scripts: Option<Vec<PathBuf>>,
 }
 
 #[serde_as]

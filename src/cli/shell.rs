@@ -23,6 +23,11 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 
     // Construct an activator so we can run commands from the environment
     let prefix = get_up_to_date_prefix(&project).await?;
+    let activation_scripts = project
+        .activation_scripts()
+        .into_iter()
+        .map(|p| p.clone())
+        .collect();
     let activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())?;
 
     let activator_result = activator.activation(ActivationVariables {
@@ -34,6 +39,8 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 
         // Prepending environment paths so they get found first.
         path_modification_behaviour: PathModificationBehaviour::Prepend,
+
+        additional_activation_scripts: Some(activation_scripts),
     })?;
 
     // Generate a temporary file with the script to execute. This includes the activation of the

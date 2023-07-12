@@ -221,9 +221,19 @@ pub async fn get_task_env(project: &Project) -> anyhow::Result<HashMap<String, S
     let prefix = get_up_to_date_prefix(project).await?;
 
     // Get environment variables from the activation
-    let activation_env = await_in_progress("activating environment", run_activation(prefix))
-        .await
-        .context("failed to activate environment")?;
+    let additional_activation_scripts = project.activation_scripts();
+    let activation_env = await_in_progress(
+        "activating environment",
+        run_activation(
+            prefix,
+            additional_activation_scripts
+                .into_iter()
+                .map(|p| p.clone())
+                .collect(),
+        ),
+    )
+    .await
+    .context("failed to activate environment")?;
 
     // Get environment variables from the manifest
     let manifest_env = get_metadata_env(project);
@@ -236,7 +246,10 @@ pub async fn get_task_env(project: &Project) -> anyhow::Result<HashMap<String, S
 }
 
 /// Runs and caches the activation script.
-async fn run_activation(prefix: Prefix) -> anyhow::Result<HashMap<String, String>> {
+async fn run_activation(
+    prefix: Prefix,
+    additional_activation_scripts: Vec<PathBuf>,
+) -> anyhow::Result<HashMap<String, String>> {
     let activator_result = tokio::task::spawn_blocking(move || {
         // Run and cache the activation script
         let shell: ShellEnum = ShellEnum::default();
@@ -254,6 +267,8 @@ async fn run_activation(prefix: Prefix) -> anyhow::Result<HashMap<String, String
 
             // Prepending environment paths so they get found first.
             path_modification_behaviour: PathModificationBehaviour::Prepend,
+
+            additional_activation_scripts: Some(additional_activation_scripts),
         })
     })
     .await??;

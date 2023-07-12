@@ -98,6 +98,7 @@ fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> anyhow::Result
         conda_prefix: None,
         path: None,
         path_modification_behaviour: PathModificationBehaviour::Prepend,
+        additional_activation_scripts: None,
     })?;
     let script = format!("#!/bin/sh\n{}", result.script);
     Ok(script)
