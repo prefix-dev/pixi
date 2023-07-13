@@ -73,7 +73,7 @@ pub async fn execute(_args: Args) -> anyhow::Result<()> {
         host_platform: Platform::current(),
         build_platform: Platform::current(),
         variant: Default::default(),
-        hash: "123123".to_string(),
+        hash: "0".to_string(),
         no_clean: false,
         directories,
         channels: channels.iter().map(|c| c.canonical_name()).collect(),
@@ -94,7 +94,7 @@ pub async fn execute(_args: Args) -> anyhow::Result<()> {
         })
         .collect();
 
-    let _build_dependencies: Vec<Dependency> = project
+    let build_dependencies: Vec<Dependency> = project
         .build_dependencies(target_platform)?
         .into_iter()
         .map(|dep| {
@@ -103,7 +103,7 @@ pub async fn execute(_args: Args) -> anyhow::Result<()> {
         })
         .collect();
 
-    let _dependencies: Vec<Dependency> = project
+    let dependencies: Vec<Dependency> = project
         .dependencies(target_platform)?
         .into_iter()
         .map(|dep| {
@@ -130,9 +130,9 @@ pub async fn execute(_args: Args) -> anyhow::Result<()> {
             entry_points: Vec::default(),
         },
         requirements: Requirements {
-            build: Vec::default(),
+            build: build_dependencies,
             host: host_dependencies,
-            run: Vec::default(),
+            run: dependencies,
             run_constrained: Vec::default(),
         },
         about: About {
