@@ -171,7 +171,7 @@ async fn create_executable_scripts(
             executable_script_path.set_extension("bat");
         };
 
-        tokio::fs::write(&executable_script_path, script).await?;
+        tokio::fs::write(&executable_script_path, format!("{}\n", script)).await?;
 
         #[cfg(unix)]
         {
