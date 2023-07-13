@@ -34,10 +34,12 @@ platforms = ["{{ platform }}"]
 [tasks]
 
 [dependencies]
+
 "#;
 
 const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
 .pixi
+
 "#;
 
 pub async fn execute(args: Args) -> miette::Result<()> {
