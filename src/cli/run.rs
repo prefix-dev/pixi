@@ -221,7 +221,7 @@ pub async fn get_task_env(project: &Project) -> anyhow::Result<HashMap<String, S
     let prefix = get_up_to_date_prefix(project).await?;
 
     // Get environment variables from the activation
-    let additional_activation_scripts = project.activation_scripts();
+    let additional_activation_scripts = project.activation_scripts()?;
     let activation_env = await_in_progress(
         "activating environment",
         run_activation(

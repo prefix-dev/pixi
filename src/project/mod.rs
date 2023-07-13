@@ -7,7 +7,7 @@ use crate::consts::PROJECT_MANIFEST;
 use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
 use crate::report_error::ReportError;
 use crate::task::{CmdArgs, Task};
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use ariadne::{Label, Report, ReportKind, Source};
 use indexmap::IndexMap;
 use rattler_conda_types::{
