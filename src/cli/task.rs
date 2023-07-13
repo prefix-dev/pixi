@@ -97,7 +97,7 @@ pub struct Args {
     pub manifest_path: Option<PathBuf>,
 }
 
-pub fn execute(args: Args) -> anyhow::Result<()> {
+pub fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     match args.operation {
         Operation::Add(args) => {
