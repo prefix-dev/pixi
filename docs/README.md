@@ -40,9 +40,10 @@ https://github.com/prefix-dev/pixi/assets/885054/64666dee-841d-4680-9a61-7927913
 ## Getting Started
 
 * ⚡ [Installation](#installation)
-* ⚙️ [Examples](../examples)
+* ⚙️  [Examples](../examples)
 * 📚 [Documentation](./getting_started.md)
 * 😍 [Contributing](#contributing)
+* 🔨 [Built using Pixi](#pixibuilt)
 
 # Status
 
@@ -68,6 +69,8 @@ If this directory does not already exist, the script will create it.
 To install Pixi on macOS and Linux, open a terminal and run the following command:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/prefix-dev/pixi/main/install/install.sh | bash
+# or with brew
+brew install pixi
 ```
 The script will also update your ~/.bash_profile to include ~/.pixi/bin in your PATH, allowing you to invoke the pixi command from anywhere.
 You might need to restart your terminal or source your shell for the changes to take effect.
@@ -223,6 +226,7 @@ Discord.
 We're very active and would be happy to welcome you to our
 community. [Join our discord server today!][chat-url]
 
+<a name="pixibuilt"></a>
 ## Built using pixi
 
 To see whats being built with `pixi` check out the [Community](Community.md) page.

@@ -6,18 +6,18 @@ use crate::{
     project::Project,
     virtual_packages::get_minimal_virtual_packages,
 };
-use anyhow::Context;
 use clap::Parser;
 use console::style;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rattler::install::Transaction;
+use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{
     version_spec::VersionOperator, MatchSpec, NamelessMatchSpec, Platform, Version, VersionSpec,
 };
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{libsolv_c, SolverImpl};
+use rattler_solve::{libsolv_rs, SolverImpl};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -79,7 +79,7 @@ impl SpecType {
     }
 }
 
-pub async fn execute(args: Args) -> anyhow::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let spec_type = SpecType::from_args(&args);
     add_specs_to_project(&mut project, args.specs, spec_type, args.no_install).await
@@ -90,15 +90,15 @@ pub async fn add_specs_to_project(
     specs: Vec<MatchSpec>,
     spec_type: SpecType,
     no_install: bool,
-) -> anyhow::Result<()> {
+) -> miette::Result<()> {
     // Split the specs into package name and version specifier
     let new_specs = specs
         .into_iter()
         .map(|spec| match &spec.name {
             Some(name) => Ok((name.clone(), spec.into())),
-            None => Err(anyhow::anyhow!("missing package name for spec '{spec}'")),
+            None => Err(miette::miette!("missing package name for spec '{spec}'")),
         })
-        .collect::<anyhow::Result<HashMap<String, NamelessMatchSpec>>>()?;
+        .collect::<miette::Result<HashMap<String, NamelessMatchSpec>>>()?;
 
     // Get the current specs
 
@@ -122,7 +122,7 @@ pub async fn add_specs_to_project(
         ) {
             Ok(versions) => versions,
             Err(err) => {
-                return Err(err).context(anyhow::anyhow!(
+                return Err(err).wrap_err_with(||miette::miette!(
                         "could not determine any available versions for {} on {platform}. Either the package could not be found or version constraints on other dependencies result in a conflict.",
                         new_specs.keys().join(", ")
                     ));
@@ -228,7 +228,7 @@ pub fn determine_best_version(
     current_specs: &IndexMap<String, NamelessMatchSpec>,
     sparse_repo_data: &[SparseRepoData],
     platform: Platform,
-) -> anyhow::Result<HashMap<String, Version>> {
+) -> miette::Result<HashMap<String, Version>> {
     let combined_specs = current_specs
         .iter()
         .chain(new_specs.iter())
@@ -248,7 +248,8 @@ pub fn determine_best_version(
         platform_sparse_repo_data,
         package_names.iter().cloned(),
         None,
-    )?;
+    )
+    .into_diagnostic()?;
 
     // Construct a solver task to start solving.
     let task = rattler_solve::SolverTask {
@@ -270,7 +271,7 @@ pub fn determine_best_version(
         pinned_packages: vec![],
     };
 
-    let records = libsolv_c::Solver.solve(task)?;
+    let records = libsolv_rs::Solver.solve(task).into_diagnostic()?;
 
     // Determine the versions of the new packages
     Ok(records

@@ -6,6 +6,7 @@ use crate::{
 use clap::Parser;
 use dirs::home_dir;
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 use rattler::install::Transaction;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform, PrefixRecord};
 use rattler_networking::AuthenticatedClient;
@@ -15,7 +16,7 @@ use rattler_shell::{
     shell::Shell,
     shell::ShellEnum,
 };
-use rattler_solve::{libsolv_c, SolverImpl};
+use rattler_solve::{libsolv_rs, SolverImpl};
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -47,17 +48,19 @@ struct BinDir(pub PathBuf);
 
 impl BinDir {
     /// Create the Binary Executable directory
-    pub async fn create() -> anyhow::Result<Self> {
+    pub async fn create() -> miette::Result<Self> {
         let bin_dir = bin_dir()?;
-        tokio::fs::create_dir_all(&bin_dir).await?;
+        tokio::fs::create_dir_all(&bin_dir)
+            .await
+            .into_diagnostic()?;
         Ok(Self(bin_dir))
     }
 }
 
 /// Binaries are installed in ~/.pixi/bin
-fn bin_dir() -> anyhow::Result<PathBuf> {
+fn bin_dir() -> miette::Result<PathBuf> {
     Ok(home_dir()
-        .ok_or_else(|| anyhow::anyhow!("could not find home directory"))?
+        .ok_or_else(|| miette::miette!("could not find home directory"))?
         .join(BIN_DIR))
 }
 
@@ -65,17 +68,19 @@ struct BinEnvDir(pub PathBuf);
 
 impl BinEnvDir {
     /// Create the Binary Environment directory
-    pub async fn create(package_name: &str) -> anyhow::Result<Self> {
+    pub async fn create(package_name: &str) -> miette::Result<Self> {
         let bin_env_dir = bin_env_dir()?.join(package_name);
-        tokio::fs::create_dir_all(&bin_env_dir).await?;
+        tokio::fs::create_dir_all(&bin_env_dir)
+            .await
+            .into_diagnostic()?;
         Ok(Self(bin_env_dir))
     }
 }
 
 /// Binary environments are installed in ~/.pixi/envs
-fn bin_env_dir() -> anyhow::Result<PathBuf> {
+fn bin_env_dir() -> miette::Result<PathBuf> {
     Ok(home_dir()
-        .ok_or_else(|| anyhow::anyhow!("could not find home directory"))?
+        .ok_or_else(|| miette::miette!("could not find home directory"))?
         .join(BIN_ENVS_DIR))
 }
 
@@ -83,22 +88,25 @@ fn bin_env_dir() -> anyhow::Result<PathBuf> {
 async fn find_designated_package(
     prefix: &Prefix,
     package_name: &str,
-) -> anyhow::Result<PrefixRecord> {
+) -> miette::Result<PrefixRecord> {
     let prefix_records = prefix.find_installed_packages(None).await?;
     prefix_records
         .into_iter()
         .find(|r| r.repodata_record.package_record.name == package_name)
-        .ok_or_else(|| anyhow::anyhow!("could not find {} in prefix", package_name))
+        .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name))
 }
 
 /// Create the environment activation script
-fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> anyhow::Result<String> {
-    let activator = Activator::from_path(prefix.root(), shell, Platform::Osx64)?;
-    let result = activator.activation(ActivationVariables {
-        conda_prefix: None,
-        path: None,
-        path_modification_behaviour: PathModificationBehaviour::Prepend,
-    })?;
+fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result<String> {
+    let activator =
+        Activator::from_path(prefix.root(), shell, Platform::Osx64).into_diagnostic()?;
+    let result = activator
+        .activation(ActivationVariables {
+            conda_prefix: None,
+            path: None,
+            path_modification_behaviour: PathModificationBehaviour::Prepend,
+        })
+        .into_diagnostic()?;
     let script = format!("#!/bin/sh\n{}", result.script);
     Ok(script)
 }
@@ -142,7 +150,7 @@ async fn create_executable_scripts(
     prefix_package: &PrefixRecord,
     shell: &ShellEnum,
     activation_script: String,
-) -> anyhow::Result<Vec<String>> {
+) -> miette::Result<Vec<String>> {
     let executables = prefix_package
         .files
         .iter()
@@ -164,14 +172,16 @@ async fn create_executable_scripts(
 
         let file_name = exec
             .file_stem()
-            .ok_or_else(|| anyhow::anyhow!("could not get filename from {}", exec.display()))?;
+            .ok_or_else(|| miette::miette!("could not get filename from {}", exec.display()))?;
         let mut executable_script_path = bin_dir.0.join(file_name);
 
         if cfg!(windows) {
             executable_script_path.set_extension("bat");
         };
 
-        tokio::fs::write(&executable_script_path, script).await?;
+        tokio::fs::write(&executable_script_path, script)
+            .await
+            .into_diagnostic()?;
 
         #[cfg(unix)]
         {
@@ -179,7 +189,8 @@ async fn create_executable_scripts(
             std::fs::set_permissions(
                 executable_script_path,
                 std::fs::Permissions::from_mode(0o744),
-            )?;
+            )
+            .into_diagnostic()?;
         }
 
         scripts.push(file_name.to_string_lossy().into_owned());
@@ -188,19 +199,20 @@ async fn create_executable_scripts(
 }
 
 /// Install a global command
-pub async fn execute(args: Args) -> anyhow::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<()> {
     // Figure out what channels we are using
     let channel_config = ChannelConfig::default();
     let channels = args
         .channel
         .iter()
         .map(|c| Channel::from_str(c, &channel_config))
-        .collect::<Result<Vec<Channel>, _>>()?;
+        .collect::<Result<Vec<Channel>, _>>()
+        .into_diagnostic()?;
 
     // Find the MatchSpec we want to install
-    let package_matchspec = MatchSpec::from_str(&args.package)?;
+    let package_matchspec = MatchSpec::from_str(&args.package).into_diagnostic()?;
     let package_name = package_matchspec.name.clone().ok_or_else(|| {
-        anyhow::anyhow!(
+        miette::miette!(
             "could not find package name in MatchSpec {}",
             package_matchspec
         )
@@ -214,7 +226,8 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         platform_sparse_repodata.iter(),
         vec![package_name.clone()],
         None,
-    )?;
+    )
+    .into_diagnostic()?;
 
     // Solve for environment
     // Construct a solver task that we can start solving.
@@ -222,7 +235,8 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         specs: vec![package_matchspec],
         available_packages: &available_packages,
 
-        virtual_packages: rattler_virtual_packages::VirtualPackage::current()?
+        virtual_packages: rattler_virtual_packages::VirtualPackage::current()
+            .into_diagnostic()?
             .iter()
             .cloned()
             .map(Into::into)
@@ -233,7 +247,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     };
 
     // Solve it
-    let records = libsolv_c::Solver.solve(task)?;
+    let records = libsolv_rs::Solver.solve(task).into_diagnostic()?;
 
     // Create the binary environment prefix where we install or update the package
     let bin_prefix = BinEnvDir::create(&package_name).await?;
@@ -242,7 +256,8 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 
     // Create the transaction that we need
     let transaction =
-        Transaction::from_current_and_desired(prefix_records, records.iter().cloned(), platform)?;
+        Transaction::from_current_and_desired(prefix_records, records.iter().cloned(), platform)
+            .into_diagnostic()?;
 
     // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
@@ -252,7 +267,8 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
             execute_transaction(
                 transaction,
                 prefix.root().to_path_buf(),
-                rattler::default_cache_dir()?,
+                rattler::default_cache_dir()
+                    .map_err(|_| miette::miette!("could not determine default cache directory"))?,
                 AuthenticatedClient::default(),
             ),
         )
@@ -280,7 +296,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 
     // Check if the bin path is on the path
     if script_names.is_empty() {
-        anyhow::bail!(
+        miette::bail!(
             "could not find an executable entrypoint in package {} {} {} from {}, are you sure it exists?",
             console::style(prefix_package.repodata_record.package_record.name).bold(),
             console::style(prefix_package.repodata_record.package_record.version).bold(),

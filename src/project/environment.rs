@@ -1,5 +1,6 @@
 use crate::Project;
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 use rattler_shell::shell::{Shell, ShellEnum};
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -12,9 +13,9 @@ pub fn add_metadata_as_env_vars(
     script: &mut impl Write,
     shell: &ShellEnum,
     project: &Project,
-) -> anyhow::Result<()> {
+) -> miette::Result<()> {
     for (key, value) in get_metadata_env(project) {
-        shell.set_env_var(script, &key, &value)?;
+        shell.set_env_var(script, &key, &value).into_diagnostic()?;
     }
 
     Ok(())

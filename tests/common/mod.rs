@@ -14,6 +14,7 @@ use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
 use rattler_conda_types::{MatchSpec, Version};
 
+use miette::IntoDiagnostic;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 use std::str::FromStr;
@@ -79,13 +80,13 @@ impl LockFileExt for CondaLock {
 
 impl PixiControl {
     /// Create a new PixiControl instance
-    pub fn new() -> anyhow::Result<PixiControl> {
-        let tempdir = tempfile::tempdir()?;
+    pub fn new() -> miette::Result<PixiControl> {
+        let tempdir = tempfile::tempdir().into_diagnostic()?;
         Ok(PixiControl { tmpdir: tempdir })
     }
 
     /// Loads the project manifest and returns it.
-    pub fn project(&self) -> anyhow::Result<Project> {
+    pub fn project(&self) -> miette::Result<Project> {
         Project::load(&self.manifest_path())
     }
 
@@ -124,7 +125,7 @@ impl PixiControl {
     }
 
     /// Run a command
-    pub async fn run(&self, mut args: run::Args) -> anyhow::Result<RunOutput> {
+    pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
         let mut tasks = order_tasks(args.task, &self.project().unwrap())?;
 
@@ -144,7 +145,7 @@ impl PixiControl {
     }
 
     /// Create an installed environment. I.e a resolved and installed prefix
-    pub async fn install(&self) -> anyhow::Result<()> {
+    pub async fn install(&self) -> miette::Result<()> {
         pixi::cli::install::execute(Args {
             manifest_path: Some(self.manifest_path()),
         })
@@ -152,7 +153,7 @@ impl PixiControl {
     }
 
     /// Get the associated lock file
-    pub async fn lock_file(&self) -> anyhow::Result<CondaLock> {
+    pub async fn lock_file(&self) -> miette::Result<CondaLock> {
         pixi::environment::load_lock_for_manifest_path(&self.manifest_path()).await
     }
 
@@ -180,7 +181,7 @@ impl TasksControl<'_> {
     }
 
     /// Remove a task
-    pub async fn remove(&self, name: impl ToString) -> anyhow::Result<()> {
+    pub async fn remove(&self, name: impl ToString) -> miette::Result<()> {
         task::execute(task::Args {
             manifest_path: Some(self.pixi.manifest_path()),
             operation: task::Operation::Remove(task::RemoveArgs {

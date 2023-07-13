@@ -2,9 +2,9 @@ use super::util::IndicatifWriter;
 use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
 use clap_verbosity_flag::Verbosity;
+use miette::IntoDiagnostic;
 
 use crate::progress;
-use anyhow::Error;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
 pub mod add;
@@ -57,7 +57,7 @@ pub enum Command {
     Info(info::Args),
 }
 
-fn completion(args: CompletionCommand) -> Result<(), Error> {
+fn completion(args: CompletionCommand) -> miette::Result<()> {
     clap_complete::generate(
         args.shell.or(Shell::from_env()).unwrap_or(Shell::Bash),
         &mut Args::command(),
@@ -68,7 +68,7 @@ fn completion(args: CompletionCommand) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn execute() -> anyhow::Result<()> {
+pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
 
     let level_filter = match args.verbose.log_level_filter() {
@@ -82,9 +82,10 @@ pub async fn execute() -> anyhow::Result<()> {
 
     let env_filter = EnvFilter::builder()
         .with_default_directive(level_filter.into())
-        .from_env()?
+        .from_env()
+        .into_diagnostic()?
         // filter logs from apple codesign because they are very noisy
-        .add_directive("apple_codesign=off".parse()?);
+        .add_directive("apple_codesign=off".parse().into_diagnostic()?);
 
     // Setup the tracing subscriber
     tracing_subscriber::fmt()
@@ -92,14 +93,15 @@ pub async fn execute() -> anyhow::Result<()> {
         .with_writer(IndicatifWriter::new(progress::global_multi_progress()))
         .without_time()
         .finish()
-        .try_init()?;
+        .try_init()
+        .into_diagnostic()?;
 
     // Execute the command
     execute_command(args.command).await
 }
 
 /// Execute the actual command
-pub async fn execute_command(command: Command) -> Result<(), Error> {
+pub async fn execute_command(command: Command) -> miette::Result<()> {
     match command {
         Command::Completion(cmd) => completion(cmd),
         Command::Init(cmd) => init::execute(cmd).await,

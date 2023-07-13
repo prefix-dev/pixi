@@ -1,4 +1,3 @@
-use anyhow::Context;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::string::String;
@@ -7,6 +6,7 @@ use clap::Parser;
 use deno_task_shell::parser::SequentialList;
 use deno_task_shell::{execute_with_pipes, get_output_writer_and_handle, pipe, ShellState};
 use itertools::Itertools;
+use miette::{miette, Context, IntoDiagnostic};
 use rattler_conda_types::Platform;
 
 use crate::prefix::Prefix;
@@ -42,7 +42,7 @@ pub struct Args {
 pub fn order_tasks(
     tasks: Vec<String>,
     project: &Project,
-) -> anyhow::Result<VecDeque<(Task, Vec<String>)>> {
+) -> miette::Result<VecDeque<(Task, Vec<String>)>> {
     let tasks: Vec<_> = tasks.iter().map(|c| c.to_string()).collect();
 
     // Find the command in the project.
@@ -93,7 +93,7 @@ pub fn order_tasks(
             if !added.contains(dependency) {
                 let cmd = project
                     .task_opt(dependency)
-                    .ok_or_else(|| anyhow::anyhow!("failed to find dependency {}", dependency))?
+                    .ok_or_else(|| miette::miette!("failed to find dependency {}", dependency))?
                     .clone();
 
                 s1.push_back((cmd, Vec::new()));
@@ -107,7 +107,7 @@ pub fn order_tasks(
     Ok(s2)
 }
 
-pub async fn create_script(task: Task, args: Vec<String>) -> anyhow::Result<SequentialList> {
+pub async fn create_script(task: Task, args: Vec<String>) -> miette::Result<SequentialList> {
     // Construct the script from the task
     let task = match task {
         Task::Execute(Execute {
@@ -120,7 +120,7 @@ pub async fn create_script(task: Task, args: Vec<String>) -> anyhow::Result<Sequ
             ..
         }) => quote_arguments(args),
         _ => {
-            return Err(anyhow::anyhow!("No command given"));
+            return Err(miette::miette!("No command given"));
         }
     };
 
@@ -129,7 +129,7 @@ pub async fn create_script(task: Task, args: Vec<String>) -> anyhow::Result<Sequ
     let full_script = format!("{task} {cli_args}");
 
     // Parse the shell command
-    deno_task_shell::parser::parse(full_script.trim())
+    deno_task_shell::parser::parse(full_script.trim()).map_err(|e| miette!("{e}"))
 }
 
 /// Executes the given command withing the specified project and with the given environment.
@@ -137,7 +137,7 @@ pub async fn execute_script(
     script: SequentialList,
     project: &Project,
     command_env: &HashMap<String, String>,
-) -> anyhow::Result<i32> {
+) -> miette::Result<i32> {
     // Execute the shell command
     Ok(deno_task_shell::execute(
         script,
@@ -180,7 +180,7 @@ fn quote_arguments(args: impl IntoIterator<Item = impl AsRef<str>>) -> String {
 
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it pleases.
-pub async fn execute(args: Args) -> anyhow::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     // Get the correctly ordered commands
@@ -216,14 +216,14 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
 /// activation scripts from the environment and stores the environment variables it added, it adds
 /// environment variables set by the project and merges all of that with the system environment
 /// variables.
-pub async fn get_task_env(project: &Project) -> anyhow::Result<HashMap<String, String>> {
+pub async fn get_task_env(project: &Project) -> miette::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
     let prefix = get_up_to_date_prefix(project).await?;
 
     // Get environment variables from the activation
     let activation_env = await_in_progress("activating environment", run_activation(prefix))
         .await
-        .context("failed to activate environment")?;
+        .wrap_err("failed to activate environment")?;
 
     // Get environment variables from the manifest
     let manifest_env = get_metadata_env(project);
@@ -236,7 +236,7 @@ pub async fn get_task_env(project: &Project) -> anyhow::Result<HashMap<String, S
 }
 
 /// Runs and caches the activation script.
-async fn run_activation(prefix: Prefix) -> anyhow::Result<HashMap<String, String>> {
+async fn run_activation(prefix: Prefix) -> miette::Result<HashMap<String, String>> {
     let activator_result = tokio::task::spawn_blocking(move || {
         // Run and cache the activation script
         let shell: ShellEnum = ShellEnum::default();
@@ -256,7 +256,9 @@ async fn run_activation(prefix: Prefix) -> anyhow::Result<HashMap<String, String
             path_modification_behaviour: PathModificationBehaviour::Prepend,
         })
     })
-    .await??;
+    .await
+    .into_diagnostic()?
+    .into_diagnostic()?;
 
     Ok(activator_result)
 }
