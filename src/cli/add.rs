@@ -10,8 +10,8 @@ use clap::Parser;
 use console::style;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use rattler::install::Transaction;
 use miette::{IntoDiagnostic, WrapErr};
+use rattler::install::Transaction;
 use rattler_conda_types::{
     version_spec::VersionOperator, MatchSpec, NamelessMatchSpec, Platform, Version, VersionSpec,
 };
@@ -191,7 +191,8 @@ pub async fn add_specs_to_project(
                 installed_packages,
                 get_required_packages(&lock_file, platform)?,
                 platform,
-            )?;
+            )
+            .into_diagnostic()?;
 
             // Execute the transaction if there is work to do
             if !transaction.operations.is_empty() {
@@ -201,7 +202,9 @@ pub async fn add_specs_to_project(
                     execute_transaction(
                         transaction,
                         prefix.root().to_path_buf(),
-                        rattler::default_cache_dir()?,
+                        rattler::default_cache_dir().map_err(|_| {
+                            miette::miette!("could not determine default cache directory")
+                        })?,
                         AuthenticatedClient::default(),
                     ),
                 )
