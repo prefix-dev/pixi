@@ -7,7 +7,7 @@ use crate::consts::PROJECT_MANIFEST;
 use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
 use crate::report_error::ReportError;
 use crate::task::{CmdArgs, Task};
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use ariadne::{Label, Report, ReportKind, Source};
 use indexmap::IndexMap;
 use rattler_conda_types::{
@@ -500,17 +500,21 @@ impl Project {
         self.manifest.project.platforms.as_ref().as_slice()
     }
 
-    pub fn activation_scripts(&self) -> Vec<PathBuf> {
+    pub fn activation_scripts(&self) -> anyhow::Result<Vec<PathBuf>> {
         let mut full_paths = vec![];
         match &self.manifest.project.activation_scripts {
-            None => full_paths,
+            None => Ok(full_paths),
             Some(scripts) => {
                 if !scripts.is_empty() {
                     for path in scripts {
-                        full_paths.push(self.root.join(path));
+                        if self.root().join(path).exists() {
+                            println!("{:?} exists", path);
+                            full_paths.push(self.root.join(path));
+                        } else {
+                        }
                     }
                 }
-                full_paths
+                Ok(full_paths)
             }
         }
     }
