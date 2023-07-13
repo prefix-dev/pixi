@@ -15,7 +15,7 @@ use rattler_shell::{
     shell::Shell,
     shell::ShellEnum,
 };
-use rattler_solve::{libsolv_c, SolverImpl};
+use rattler_solve::{libsolv_rs, SolverImpl};
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -233,7 +233,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     };
 
     // Solve it
-    let records = libsolv_c::Solver.solve(task)?;
+    let records = libsolv_rs::Solver.solve(task)?;
 
     // Create the binary environment prefix where we install or update the package
     let bin_prefix = BinEnvDir::create(&package_name).await?;
