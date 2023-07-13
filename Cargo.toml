@@ -41,6 +41,7 @@ rattler_repodata_gateway = { default-features = false, git = "https://github.com
 rattler_shell = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["sysinfo"] }
 rattler_solve = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["libsolv_rs"] }
 rattler_virtual_packages = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler-build = { version = "0.2.0", default-features = false, path = "../rattler-build" }
 #rattler = { default-features = false, path="../rattler/crates/rattler" }
 #rattler_conda_types = { default-features = false, path="../rattler/crates/rattler_conda_types" }
 #rattler_repodata_gateway = { default-features = false, path="../rattler/crates/rattler_repodata_gateway", features = ["sparse"] }
@@ -62,6 +63,7 @@ toml_edit = { version = "0.19.14", features = ["serde"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 url = "2.4.0"
+chrono = "0.4.26"
 
 [dev-dependencies]
 rattler_digest = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
