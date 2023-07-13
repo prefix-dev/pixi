@@ -1,6 +1,7 @@
 use std::{fmt::Display, path::PathBuf};
 
 use clap::Parser;
+use miette::IntoDiagnostic;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_virtual_packages::VirtualPackage;
 use serde::Serialize;
@@ -77,7 +78,7 @@ impl Display for Info {
     }
 }
 
-pub async fn execute(args: Args) -> anyhow::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
 
     let project_info = project.map(|p| ProjectInfo {
@@ -85,7 +86,8 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         tasks: p.manifest.tasks.keys().cloned().collect(),
     });
 
-    let virtual_packages = VirtualPackage::current()?
+    let virtual_packages = VirtualPackage::current()
+        .into_diagnostic()?
         .iter()
         .cloned()
         .map(GenericVirtualPackage::from)
@@ -100,7 +102,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     };
 
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&info)?);
+        println!("{}", serde_json::to_string_pretty(&info).into_diagnostic()?);
         Ok(())
     } else {
         println!("{}", info);

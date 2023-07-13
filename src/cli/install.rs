@@ -11,7 +11,7 @@ pub struct Args {
     pub manifest_path: Option<PathBuf>,
 }
 
-pub async fn execute(args: Args) -> anyhow::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     get_up_to_date_prefix(&project).await?;

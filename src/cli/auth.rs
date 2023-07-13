@@ -1,4 +1,5 @@
 use clap::Parser;
+use miette::IntoDiagnostic;
 use rattler_networking::{Authentication, AuthenticationStorage};
 
 fn default_authentication_storage() -> AuthenticationStorage {
@@ -48,10 +49,14 @@ pub struct Args {
     subcommand: Subcommand,
 }
 
-fn get_url(url: &str) -> anyhow::Result<String> {
+fn get_url(url: &str) -> miette::Result<String> {
     // parse as url and extract host without scheme or port
     let host = if url.contains("://") {
-        url::Url::parse(url)?.host_str().unwrap().to_string()
+        url::Url::parse(url)
+            .into_diagnostic()?
+            .host_str()
+            .unwrap()
+            .to_string()
     } else {
         url.to_string()
     };
@@ -66,7 +71,7 @@ fn get_url(url: &str) -> anyhow::Result<String> {
     Ok(host)
 }
 
-fn login(args: LoginArgs, storage: AuthenticationStorage) -> anyhow::Result<()> {
+fn login(args: LoginArgs, storage: AuthenticationStorage) -> miette::Result<()> {
     let host = get_url(&args.host)?;
     println!("Authenticating with {}", host);
 
@@ -74,40 +79,40 @@ fn login(args: LoginArgs, storage: AuthenticationStorage) -> anyhow::Result<()> 
         Authentication::CondaToken(conda_token)
     } else if let Some(username) = args.username {
         if args.password.is_none() {
-            anyhow::bail!("Password must be provided when using basic authentication");
+            miette::bail!("Password must be provided when using basic authentication");
         }
         let password = args.password.unwrap();
         Authentication::BasicHTTP { username, password }
     } else if let Some(token) = args.token {
         Authentication::BearerToken(token)
     } else {
-        anyhow::bail!("No authentication method provided");
+        miette::bail!("No authentication method provided");
     };
 
     if host.contains("prefix.dev") && !matches!(auth, Authentication::BearerToken(_)) {
-        anyhow::bail!(
+        miette::bail!(
             "Authentication with prefix.dev requires a token. Use `--token` to provide one."
         );
     }
 
     if host.contains("anaconda.org") && !matches!(auth, Authentication::CondaToken(_)) {
-        anyhow::bail!("Authentication with anaconda.org requires a conda token. Use `--conda-token` to provide one.");
+        miette::bail!("Authentication with anaconda.org requires a conda token. Use `--conda-token` to provide one.");
     }
 
-    storage.store(&host, &auth)?;
+    storage.store(&host, &auth).into_diagnostic()?;
     Ok(())
 }
 
-fn logout(args: LogoutArgs, storage: AuthenticationStorage) -> anyhow::Result<()> {
+fn logout(args: LogoutArgs, storage: AuthenticationStorage) -> miette::Result<()> {
     let host = get_url(&args.host)?;
 
     println!("Removing authentication for {}", host);
 
-    storage.delete(&host)?;
+    storage.delete(&host).into_diagnostic()?;
     Ok(())
 }
 
-pub async fn execute(args: Args) -> anyhow::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<()> {
     let storage = default_authentication_storage();
 
     match args.subcommand {

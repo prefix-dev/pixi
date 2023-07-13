@@ -3,13 +3,10 @@ pub mod manifest;
 mod serde;
 
 use crate::consts;
-use crate::consts::PROJECT_MANIFEST;
 use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
-use crate::report_error::ReportError;
 use crate::task::{CmdArgs, Task};
-use anyhow::Context;
-use ariadne::{Label, Report, ReportKind, Source};
 use indexmap::IndexMap;
+use miette::{IntoDiagnostic, LabeledSpan, NamedSource, WrapErr};
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, Platform, Version,
 };
@@ -25,7 +22,7 @@ use toml_edit::{Array, Document, Item, Table, TomlError, Value};
 #[derive(Debug)]
 pub struct Project {
     root: PathBuf,
-    pub source: String,
+    source: String,
     doc: Document,
     pub manifest: ProjectManifest,
 }
@@ -66,30 +63,38 @@ fn task_as_toml(task: Task) -> Item {
 impl Project {
     /// Discovers the project manifest file in the current directory or any of the parent
     /// directories.
-    pub fn discover() -> anyhow::Result<Self> {
+    pub fn discover() -> miette::Result<Self> {
         let project_toml = match find_project_root() {
             Some(root) => root.join(consts::PROJECT_MANIFEST),
-            None => anyhow::bail!("could not find {}", consts::PROJECT_MANIFEST),
+            None => miette::bail!("could not find {}", consts::PROJECT_MANIFEST),
         };
         Self::load(&project_toml)
     }
 
+    /// Returns the source code of the project as [`NamedSource`].
+    pub fn source(&self) -> NamedSource {
+        NamedSource::new(consts::PROJECT_MANIFEST, self.source.clone())
+    }
+
     /// Loads a project manifest file.
-    pub fn load(filename: &Path) -> anyhow::Result<Self> {
+    pub fn load(filename: &Path) -> miette::Result<Self> {
         // Determine the parent directory of the manifest file
-        let full_path = dunce::canonicalize(filename)?;
+        let full_path = dunce::canonicalize(filename).into_diagnostic()?;
         let root = full_path
             .parent()
-            .ok_or_else(|| anyhow::anyhow!("can not find parent of {}", filename.display()))?;
+            .ok_or_else(|| miette::miette!("can not find parent of {}", filename.display()))?;
 
         // Load the TOML document
-        Self::from_manifest_str(root, fs::read_to_string(filename)?).with_context(|| {
-            format!(
-                "failed to parse {} from {}",
-                consts::PROJECT_MANIFEST,
-                root.display()
-            )
-        })
+        fs::read_to_string(filename)
+            .into_diagnostic()
+            .and_then(|content| Self::from_manifest_str(root, content))
+            .wrap_err_with(|| {
+                format!(
+                    "failed to parse {} from {}",
+                    consts::PROJECT_MANIFEST,
+                    root.display()
+                )
+            })
     }
 
     /// Find task dependencies
@@ -108,9 +113,9 @@ impl Project {
     }
 
     /// Add a task to the project
-    pub fn add_task(&mut self, name: impl AsRef<str>, task: Task) -> anyhow::Result<()> {
+    pub fn add_task(&mut self, name: impl AsRef<str>, task: Task) -> miette::Result<()> {
         if self.manifest.tasks.contains_key(name.as_ref()) {
-            anyhow::bail!("task {} already exists", name.as_ref());
+            miette::bail!("task {} already exists", name.as_ref());
         };
 
         let tasks_table = &mut self.doc["tasks"];
@@ -121,14 +126,14 @@ impl Project {
 
         // Cast the item into a table
         let tasks_table = tasks_table.as_table_like_mut().ok_or_else(|| {
-            anyhow::anyhow!("tasks in {} are malformed", consts::PROJECT_MANIFEST)
+            miette::miette!("tasks in {} are malformed", consts::PROJECT_MANIFEST)
         })?;
 
         let depends_on = task.depends_on();
 
         for depends in depends_on {
             if !self.manifest.tasks.contains_key(depends) {
-                anyhow::bail!(
+                miette::bail!(
                     "task '{}' for the depends on for '{}' does not exist",
                     depends,
                     name.as_ref(),
@@ -147,18 +152,18 @@ impl Project {
     }
 
     /// Remove a task from the project, and the tasks that depend on it
-    pub fn remove_task(&mut self, name: impl AsRef<str>) -> anyhow::Result<()> {
+    pub fn remove_task(&mut self, name: impl AsRef<str>) -> miette::Result<()> {
         self.manifest
             .tasks
             .get(name.as_ref())
-            .ok_or_else(|| anyhow::anyhow!("task {} does not exist", name.as_ref()))?;
+            .ok_or_else(|| miette::miette!("task {} does not exist", name.as_ref()))?;
 
         let tasks_table = &mut self.doc["tasks"];
         if tasks_table.is_none() {
-            anyhow::bail!("internal data-structure inconsistent with toml");
+            miette::bail!("internal data-structure inconsistent with toml");
         }
         let tasks_table = tasks_table.as_table_like_mut().ok_or_else(|| {
-            anyhow::anyhow!("tasks in {} are malformed", consts::PROJECT_MANIFEST)
+            miette::miette!("tasks in {} are malformed", consts::PROJECT_MANIFEST)
         })?;
 
         // If it does not exist in toml, consider this ok as we want to remove it anyways
@@ -169,7 +174,7 @@ impl Project {
         Ok(())
     }
 
-    pub fn load_or_else_discover(manifest_path: Option<&Path>) -> anyhow::Result<Self> {
+    pub fn load_or_else_discover(manifest_path: Option<&Path>) -> miette::Result<Self> {
         let project = match manifest_path {
             Some(path) => Project::load(path)?,
             None => Project::discover()?,
@@ -177,7 +182,7 @@ impl Project {
         Ok(project)
     }
 
-    pub fn reload(&mut self) -> anyhow::Result<()> {
+    pub fn reload(&mut self) -> miette::Result<()> {
         let project = Self::load(self.root().join(consts::PROJECT_MANIFEST).as_path())?;
         self.root = project.root;
         self.doc = project.doc;
@@ -186,7 +191,7 @@ impl Project {
     }
 
     /// Loads a project manifest.
-    pub fn from_manifest_str(root: &Path, contents: impl Into<String>) -> anyhow::Result<Self> {
+    pub fn from_manifest_str(root: &Path, contents: impl Into<String>) -> miette::Result<Self> {
         let contents = contents.into();
         let (manifest, doc) = match toml_edit::de::from_str::<ProjectManifest>(&contents)
             .map_err(TomlError::from)
@@ -195,24 +200,32 @@ impl Project {
             Ok(result) => result,
             Err(e) => {
                 if let Some(span) = e.span() {
-                    return Err(ReportError {
-                        source: (PROJECT_MANIFEST, Source::from(&contents)),
-                        report: Report::build(ReportKind::Error, PROJECT_MANIFEST, span.start)
-                            .with_message("failed to parse project manifest")
-                            .with_label(
-                                Label::new((PROJECT_MANIFEST, span)).with_message(e.message()),
-                            )
-                            .finish(),
-                    }
-                    .into());
+                    return Err(miette::miette!(
+                        labels = vec![LabeledSpan::at(span, e.message())],
+                        "failed to parse project manifest"
+                    )
+                    .with_source_code(contents));
+                    //     ReportError {
+                    //     source: (PROJECT_MANIFEST, Source::from(&contents)),
+                    //     report: Report::build(ReportKind::Error, PROJECT_MANIFEST, span.start)
+                    //         .with_message("failed to parse project manifest")
+                    //         .with_label(
+                    //             Label::new((PROJECT_MANIFEST, span)).with_message(e.message()),
+                    //         )
+                    //         .finish(),
+                    // })
+                    // .into_diagnostic();
                 } else {
-                    return Err(e.into());
+                    return Err(e).into_diagnostic();
                 }
             }
         };
 
         // Validate the contents of the manifest
-        manifest.validate(&contents)?;
+        manifest.validate(NamedSource::new(
+            consts::PROJECT_MANIFEST,
+            contents.to_owned(),
+        ))?;
 
         Ok(Self {
             root: root.to_path_buf(),
@@ -226,7 +239,7 @@ impl Project {
     pub fn dependencies(
         &self,
         platform: Platform,
-    ) -> anyhow::Result<IndexMap<String, NamelessMatchSpec>> {
+    ) -> miette::Result<IndexMap<String, NamelessMatchSpec>> {
         // Get the base dependencies (defined in the `[dependencies]` section)
         let base_dependencies = self.manifest.dependencies.iter();
 
@@ -248,7 +261,7 @@ impl Project {
     pub fn build_dependencies(
         &self,
         platform: Platform,
-    ) -> anyhow::Result<IndexMap<String, NamelessMatchSpec>> {
+    ) -> miette::Result<IndexMap<String, NamelessMatchSpec>> {
         // Get the base dependencies (defined in the `[build-dependencies]` section)
         let base_dependencies = self.manifest.build_dependencies.iter();
 
@@ -271,7 +284,7 @@ impl Project {
     pub fn host_dependencies(
         &self,
         platform: Platform,
-    ) -> anyhow::Result<IndexMap<String, NamelessMatchSpec>> {
+    ) -> miette::Result<IndexMap<String, NamelessMatchSpec>> {
         // Get the base dependencies (defined in the `[host-dependencies]` section)
         let base_dependencies = self.manifest.host_dependencies.iter();
 
@@ -294,7 +307,7 @@ impl Project {
     pub fn all_dependencies(
         &self,
         platform: Platform,
-    ) -> anyhow::Result<IndexMap<String, NamelessMatchSpec>> {
+    ) -> miette::Result<IndexMap<String, NamelessMatchSpec>> {
         let mut dependencies = self.dependencies(platform)?;
         dependencies.extend(self.host_dependencies(platform)?);
         dependencies.extend(self.build_dependencies(platform)?);
@@ -330,7 +343,7 @@ impl Project {
     fn add_to_deps_table(
         deps_table: &mut Item,
         spec: &MatchSpec,
-    ) -> anyhow::Result<(String, NamelessMatchSpec)> {
+    ) -> miette::Result<(String, NamelessMatchSpec)> {
         // If it doesnt exist create a proper table
         if deps_table.is_none() {
             *deps_table = Item::Table(Table::new());
@@ -338,14 +351,14 @@ impl Project {
 
         // Cast the item into a table
         let deps_table = deps_table.as_table_like_mut().ok_or_else(|| {
-            anyhow::anyhow!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
+            miette::miette!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
         })?;
 
         // Determine the name of the package to add
         let name = spec
             .name
             .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("* package specifier is not supported"))?;
+            .ok_or_else(|| miette::miette!("* package specifier is not supported"))?;
 
         // Format the requirement
         // TODO: Do this smarter. E.g.:
@@ -359,7 +372,7 @@ impl Project {
         Ok((name.to_string(), nameless))
     }
 
-    pub fn add_dependency(&mut self, spec: &MatchSpec) -> anyhow::Result<()> {
+    pub fn add_dependency(&mut self, spec: &MatchSpec) -> miette::Result<()> {
         // Find the dependencies table
         let deps = &mut self.doc["dependencies"];
         let (name, nameless) = Project::add_to_deps_table(deps, spec)?;
@@ -369,7 +382,7 @@ impl Project {
         Ok(())
     }
 
-    pub fn add_host_dependency(&mut self, spec: &MatchSpec) -> anyhow::Result<()> {
+    pub fn add_host_dependency(&mut self, spec: &MatchSpec) -> miette::Result<()> {
         // Find the dependencies table
         let deps = &mut self.doc["host-dependencies"];
         let (name, nameless) = Project::add_to_deps_table(deps, spec)?;
@@ -385,7 +398,7 @@ impl Project {
         Ok(())
     }
 
-    pub fn add_build_dependency(&mut self, spec: &MatchSpec) -> anyhow::Result<()> {
+    pub fn add_build_dependency(&mut self, spec: &MatchSpec) -> miette::Result<()> {
         // Find the dependencies table
         let deps = &mut self.doc["build-dependencies"];
         let (name, nameless) = Project::add_to_deps_table(deps, spec)?;
@@ -418,13 +431,15 @@ impl Project {
     }
 
     /// Save back changes
-    pub fn save(&self) -> anyhow::Result<()> {
-        fs::write(self.manifest_path(), self.doc.to_string()).with_context(|| {
-            format!(
-                "unable to write changes to {}",
-                self.manifest_path().display()
-            )
-        })?;
+    pub fn save(&self) -> miette::Result<()> {
+        fs::write(self.manifest_path(), self.doc.to_string())
+            .into_diagnostic()
+            .wrap_err_with(|| {
+                format!(
+                    "unable to write changes to {}",
+                    self.manifest_path().display()
+                )
+            })?;
         Ok(())
     }
 
@@ -437,13 +452,12 @@ impl Project {
     pub fn add_channels(
         &mut self,
         channels: impl IntoIterator<Item = impl AsRef<str>>,
-    ) -> anyhow::Result<()> {
+    ) -> miette::Result<()> {
         let mut stored_channels = Vec::new();
         for channel in channels {
-            self.manifest.project.channels.push(Channel::from_str(
-                channel.as_ref(),
-                &ChannelConfig::default(),
-            )?);
+            self.manifest.project.channels.push(
+                Channel::from_str(channel.as_ref(), &ChannelConfig::default()).into_diagnostic()?,
+            );
             stored_channels.push(channel.as_ref().to_owned());
         }
 
@@ -459,14 +473,13 @@ impl Project {
     pub fn set_channels(
         &mut self,
         channels: impl IntoIterator<Item = impl AsRef<str>>,
-    ) -> anyhow::Result<()> {
+    ) -> miette::Result<()> {
         self.manifest.project.channels.clear();
         let mut stored_channels = Vec::new();
         for channel in channels {
-            self.manifest.project.channels.push(Channel::from_str(
-                channel.as_ref(),
-                &ChannelConfig::default(),
-            )?);
+            self.manifest.project.channels.push(
+                Channel::from_str(channel.as_ref(), &ChannelConfig::default()).into_diagnostic()?,
+            );
             stored_channels.push(channel.as_ref().to_owned());
         }
 
@@ -479,7 +492,7 @@ impl Project {
     }
 
     /// Returns a mutable reference to the channels array.
-    fn channels_array_mut(&mut self) -> anyhow::Result<&mut Array> {
+    fn channels_array_mut(&mut self) -> miette::Result<&mut Array> {
         let project = &mut self.doc["project"];
         if project.is_none() {
             *project = Item::Table(Table::new());
@@ -492,7 +505,7 @@ impl Project {
 
         channels
             .as_array_mut()
-            .ok_or_else(|| anyhow::anyhow!("malformed channels array"))
+            .ok_or_else(|| miette::miette!("malformed channels array"))
     }
 
     /// Returns the platforms this project targets
