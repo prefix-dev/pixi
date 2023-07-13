@@ -25,9 +25,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Construct an activator so we can run commands from the environment
     let prefix = get_up_to_date_prefix(&project).await?;
     let activation_scripts = project
-        .activation_scripts()?
+        .activation_scripts(Platform::current())?
         .into_iter()
-        .map(|p| p.clone())
         .collect();
     let activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())
         .into_diagnostic()?;

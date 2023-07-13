@@ -221,16 +221,10 @@ pub async fn get_task_env(project: &Project) -> miette::Result<HashMap<String, S
     let prefix = get_up_to_date_prefix(project).await?;
 
     // Get environment variables from the activation
-    let additional_activation_scripts = project.activation_scripts()?;
+    let additional_activation_scripts = project.activation_scripts(Platform::current())?;
     let activation_env = await_in_progress(
         "activating environment",
-        run_activation(
-            prefix,
-            additional_activation_scripts
-                .into_iter()
-                .map(|p| p.clone())
-                .collect(),
-        ),
+        run_activation(prefix, additional_activation_scripts.into_iter().collect()),
     )
     .await
     .wrap_err("failed to activate environment")?;
