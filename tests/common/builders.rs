@@ -13,7 +13,7 @@
 //!
 //! ```rust
 //! impl IntoFuture for InitBuilder {
-//!     type Output = anyhow::Result<()>;
+//!     type Output = miette::Result<()>;
 //!     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
 //!
 //!     fn into_future(self) -> Self::IntoFuture {
@@ -54,7 +54,7 @@ impl InitBuilder {
 }
 
 impl IntoFuture for InitBuilder {
-    type Output = anyhow::Result<()>;
+    type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
@@ -95,7 +95,7 @@ impl AddBuilder {
 }
 
 impl IntoFuture for AddBuilder {
-    type Output = anyhow::Result<()>;
+    type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
@@ -122,7 +122,7 @@ impl TaskAddBuilder {
     }
 
     /// Execute the CLI command
-    pub fn execute(self) -> anyhow::Result<()> {
+    pub fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
             operation: task::Operation::Add(self.args),
             manifest_path: self.manifest_path,
@@ -143,7 +143,7 @@ impl TaskAliasBuilder {
     }
 
     /// Execute the CLI command
-    pub fn execute(self) -> anyhow::Result<()> {
+    pub fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
             operation: task::Operation::Alias(self.args),
             manifest_path: self.manifest_path,

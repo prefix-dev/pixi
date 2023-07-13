@@ -1,9 +1,7 @@
-use crate::consts::PROJECT_MANIFEST;
-use crate::report_error::ReportError;
-use crate::task::Task;
+use crate::{consts, task::Task};
 use ::serde::Deserialize;
-use ariadne::{ColorGenerator, Fmt, Label, Report, ReportKind, Source};
 use indexmap::IndexMap;
+use miette::{LabeledSpan, NamedSource, Report};
 use rattler_conda_types::{Channel, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Deserializer;
@@ -62,18 +60,17 @@ pub struct ProjectManifest {
 
 impl ProjectManifest {
     /// Validate the
-    pub fn validate(&self, contents: &str) -> anyhow::Result<()> {
+    pub fn validate(&self, source: NamedSource) -> miette::Result<()> {
         // Check if the targets are defined for existing platforms
         for target_sel in self.target.keys() {
             match target_sel.as_ref() {
                 TargetSelector::Platform(p) => {
                     if !self.project.platforms.as_ref().contains(p) {
                         return Err(create_unsupported_platform_report(
-                            contents,
+                            source,
                             target_sel.span(),
                             p,
-                        )
-                        .into());
+                        ));
                     }
                 }
             }
@@ -261,30 +258,22 @@ impl From<LibCFamilyAndVersion> for LibC {
 
 // Create an error report for usign a platform that is not supported by the project.
 fn create_unsupported_platform_report(
-    source: &str,
+    source: NamedSource,
     span: Range<usize>,
-    p: &Platform,
-) -> ReportError {
-    let mut color_generator = ColorGenerator::new();
-    let platform = color_generator.next();
-
-    let report = Report::build(ReportKind::Error, PROJECT_MANIFEST, span.start)
-        .with_message("Targeting a platform that this project does not support")
-        .with_label(
-            Label::new((PROJECT_MANIFEST, span))
-                .with_message(format!("'{}' is not a supported platform", p.fg(platform)))
-                .with_color(platform),
-        )
-        .with_help(format!(
-            "Add '{}' to the `project.platforms` array of the {PROJECT_MANIFEST} manifest.",
-            p.fg(platform)
-        ))
-        .finish();
-
-    ReportError {
-        report,
-        source: (PROJECT_MANIFEST, Source::from(source)),
-    }
+    platform: &Platform,
+) -> Report {
+    miette::miette!(
+        labels = vec![LabeledSpan::at(
+            span,
+            format!("'{}' is not a supported platform", platform)
+        )],
+        help = format!(
+            "Add '{platform}' to the `project.platforms` array of the {} manifest.",
+            consts::PROJECT_MANIFEST
+        ),
+        "targeting a platform that this project does not support"
+    )
+    .with_source_code(source)
 }
 
 #[cfg(test)]

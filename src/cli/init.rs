@@ -1,6 +1,6 @@
 use crate::{config::get_default_author, consts};
-use anyhow::anyhow;
 use clap::Parser;
+use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use rattler_conda_types::Platform;
 use std::io::{Error, ErrorKind};
@@ -40,15 +40,15 @@ const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
 .pixi
 "#;
 
-pub async fn execute(args: Args) -> anyhow::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<()> {
     let env = Environment::new();
-    let dir = get_dir(args.path)?;
+    let dir = get_dir(args.path).into_diagnostic()?;
     let manifest_path = dir.join(consts::PROJECT_MANIFEST);
     let gitignore_path = dir.join(".gitignore");
 
     // Check if the project file doesnt already exist. We don't want to overwrite it.
     if fs::metadata(&manifest_path).map_or(false, |x| x.is_file()) {
-        anyhow::bail!("{} already exists", consts::PROJECT_MANIFEST);
+        miette::bail!("{} already exists", consts::PROJECT_MANIFEST);
     }
 
     // Fail silently if it already exists or cannot be created.
@@ -58,7 +58,7 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     let name = dir
         .file_name()
         .ok_or_else(|| {
-            anyhow!(
+            miette::miette!(
                 "Cannot get file or directory name from the path: {}",
                 dir.to_string_lossy()
             )
@@ -86,12 +86,14 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
             },
         )
         .unwrap();
-    fs::write(&manifest_path, rv)?;
+    fs::write(&manifest_path, rv).into_diagnostic()?;
 
     // create a .gitignore if one is missing
     if !gitignore_path.is_file() {
-        let rv = env.render_named_str("gitignore.txt", GITIGNORE_TEMPLATE, ())?;
-        fs::write(&gitignore_path, rv)?;
+        let rv = env
+            .render_named_str("gitignore.txt", GITIGNORE_TEMPLATE, ())
+            .into_diagnostic()?;
+        fs::write(&gitignore_path, rv).into_diagnostic()?;
     }
 
     // Emit success

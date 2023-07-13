@@ -1,5 +1,5 @@
 use crate::Project;
-use anyhow::bail;
+use miette::IntoDiagnostic;
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Deserialize;
@@ -109,7 +109,7 @@ impl Project {
     pub fn virtual_packages(
         &self,
         platform: Platform,
-    ) -> anyhow::Result<Vec<GenericVirtualPackage>> {
+    ) -> miette::Result<Vec<GenericVirtualPackage>> {
         // Start with the minimal virtual packages
         let reference_packages = get_minimal_virtual_packages(platform);
 
@@ -132,10 +132,11 @@ impl Project {
 /// Verifies if the current platform satisfies the minimal virtual package requirements.
 pub fn verify_current_platform_has_required_virtual_packages(
     project: &Project,
-) -> Result<(), anyhow::Error> {
+) -> miette::Result<()> {
     let current_platform = Platform::current();
 
-    let system_virtual_packages = VirtualPackage::current()?
+    let system_virtual_packages = VirtualPackage::current()
+        .into_diagnostic()?
         .iter()
         .cloned()
         .map(GenericVirtualPackage::from)
@@ -147,14 +148,14 @@ pub fn verify_current_platform_has_required_virtual_packages(
     for req_pkg in required_pkgs {
         if let Some(local_vpkg) = system_virtual_packages.get(&req_pkg.name) {
             if req_pkg.build_string != local_vpkg.build_string {
-                bail!("The current system has a mismatching virtual package. The project requires '{}' to be on build '{}' but the system has build '{}'", req_pkg.name, req_pkg.build_string, local_vpkg.build_string);
+                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be on build '{}' but the system has build '{}'", req_pkg.name, req_pkg.build_string, local_vpkg.build_string);
             }
 
             if req_pkg.version > local_vpkg.version {
-                bail!("The current system has a mismatching virtual package. The project requires '{}' to be at least version '{}' but the system has version '{}'", req_pkg.name, req_pkg.version, local_vpkg.version);
+                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be at least version '{}' but the system has version '{}'", req_pkg.name, req_pkg.version, local_vpkg.version);
             }
         } else {
-            bail!("The platform you are running on should at least have the virtual package {} on version {}, build_string: {}", req_pkg.name, req_pkg.version, req_pkg.build_string)
+            miette::bail!("The platform you are running on should at least have the virtual package {} on version {}, build_string: {}", req_pkg.name, req_pkg.version, req_pkg.build_string)
         }
     }
 

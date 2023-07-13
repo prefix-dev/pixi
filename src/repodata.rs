@@ -1,13 +1,13 @@
 use crate::{progress, project::Project};
-use anyhow::Context;
 use indicatif::ProgressBar;
+use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, Platform};
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::{fetch, sparse::SparseRepoData};
 use std::{path::Path, time::Duration};
 
 impl Project {
-    pub async fn fetch_sparse_repodata(&self) -> anyhow::Result<Vec<SparseRepoData>> {
+    pub async fn fetch_sparse_repodata(&self) -> miette::Result<Vec<SparseRepoData>> {
         let channels = self.channels();
         let platforms = self.platforms();
         fetch_sparse_repodata(channels, platforms).await
@@ -17,7 +17,7 @@ impl Project {
 pub async fn fetch_sparse_repodata(
     channels: &[Channel],
     target_platforms: &[Platform],
-) -> anyhow::Result<Vec<SparseRepoData>> {
+) -> miette::Result<Vec<SparseRepoData>> {
     // Determine all the repodata that requires fetching.
     let mut fetch_targets = Vec::with_capacity(channels.len() * target_platforms.len());
     for channel in channels {
@@ -41,11 +41,13 @@ pub async fn fetch_sparse_repodata(
     top_level_progress.set_message("fetching latest repodata");
     top_level_progress.enable_steady_tick(Duration::from_millis(50));
 
-    let repodata_cache_path = rattler::default_cache_dir()?.join("repodata");
+    let repodata_cache_path = rattler::default_cache_dir()
+        .map_err(|_| miette::miette!("could not determine default cache directory"))?
+        .join("repodata");
     let repodata_download_client = AuthenticatedClient::default();
     let multi_progress = progress::global_multi_progress();
     let (tx, mut rx) =
-        tokio::sync::mpsc::channel::<anyhow::Result<Option<SparseRepoData>>>(fetch_targets.len());
+        tokio::sync::mpsc::channel::<miette::Result<Option<SparseRepoData>>>(fetch_targets.len());
     let mut progress_bars = Vec::new();
     for (channel, platform) in fetch_targets {
         // Construct a progress bar for the fetch
@@ -102,7 +104,7 @@ pub async fn fetch_sparse_repodata(
 
     // If there was an error, report it.
     if let Some(error) = error {
-        return Err(error).context("failed to fetch repodata from channels");
+        return Err(error).wrap_err("failed to fetch repodata from channels");
     }
 
     Ok(result)
@@ -117,7 +119,7 @@ async fn fetch_repo_data_records_with_progress(
     client: AuthenticatedClient,
     progress_bar: indicatif::ProgressBar,
     allow_not_found: bool,
-) -> anyhow::Result<Option<SparseRepoData>> {
+) -> miette::Result<Option<SparseRepoData>> {
     // Download the repodata.json
     let download_progress_progress_bar = progress_bar.clone();
     let result = fetch::fetch_repo_data(
@@ -145,7 +147,7 @@ async fn fetch_repo_data_records_with_progress(
 
             progress_bar.set_style(progress::errored_progress_style());
             progress_bar.finish_with_message("404 not found");
-            return Err(e.into());
+            return Err(e).into_diagnostic();
         }
         Ok(result) => result,
     };
@@ -174,7 +176,7 @@ async fn fetch_repo_data_records_with_progress(
         Ok(Err(err)) => {
             progress_bar.set_style(progress::errored_progress_style());
             progress_bar.finish_with_message("Error");
-            Err(err.into())
+            Err(err).into_diagnostic()
         }
         Err(err) => match err.try_into_panic() {
             Ok(panic) => {
@@ -184,7 +186,7 @@ async fn fetch_repo_data_records_with_progress(
                 progress_bar.set_style(progress::errored_progress_style());
                 progress_bar.finish_with_message("Cancelled..");
                 // Since the task was cancelled most likely the whole async stack is being cancelled.
-                Err(anyhow::anyhow!("cancelled"))
+                Err(miette::miette!("cancelled"))
             }
         },
     }

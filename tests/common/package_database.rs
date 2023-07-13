@@ -5,6 +5,7 @@
 #![allow(dead_code)]
 
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 use rattler_conda_types::{
     package::ArchiveType, ChannelInfo, PackageRecord, Platform, RepoData, VersionWithSource,
 };
@@ -29,7 +30,7 @@ impl PackageDatabase {
     }
 
     /// Writes the repodata of this instance to the specified channel directory
-    pub async fn write_repodata(&self, channel_path: &Path) -> anyhow::Result<()> {
+    pub async fn write_repodata(&self, channel_path: &Path) -> miette::Result<()> {
         let mut platforms = self.platforms();
 
         // Make sure NoArch is always included
@@ -65,10 +66,14 @@ impl PackageDatabase {
                 removed: Default::default(),
                 version: Some(1),
             };
-            let repodata_str = serde_json::to_string_pretty(&repodata)?;
+            let repodata_str = serde_json::to_string_pretty(&repodata).into_diagnostic()?;
 
-            tokio::fs::create_dir_all(&subdir_path).await?;
-            tokio::fs::write(subdir_path.join("repodata.json"), repodata_str).await?;
+            tokio::fs::create_dir_all(&subdir_path)
+                .await
+                .into_diagnostic()?;
+            tokio::fs::write(subdir_path.join("repodata.json"), repodata_str)
+                .await
+                .into_diagnostic()?;
         }
 
         Ok(())

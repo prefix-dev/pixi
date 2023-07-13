@@ -1,6 +1,4 @@
-use crate::report_error::ReportError;
 use crate::{
-    consts,
     prefix::Prefix,
     progress::{
         await_in_progress, default_progress_style, finished_progress_style, global_multi_progress,
@@ -8,12 +6,11 @@ use crate::{
     virtual_packages::verify_current_platform_has_required_virtual_packages,
     Project,
 };
-use anyhow::Context;
-use ariadne::{Label, Report, ReportKind, Source};
 use futures::future::ready;
 use futures::{stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use indicatif::ProgressBar;
 use itertools::Itertools;
+use miette::{Context, IntoDiagnostic, LabeledSpan};
 use rattler::{
     install::{link_package, InstallDriver, InstallOptions, Transaction, TransactionOperation},
     package_cache::PackageCache,
@@ -26,7 +23,7 @@ use rattler_conda_types::{
 };
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{libsolv_c, SolverImpl};
+use rattler_solve::{libsolv_rs, SolverImpl};
 use std::collections::HashMap;
 use std::{
     collections::{HashSet, VecDeque},
@@ -38,27 +35,19 @@ use std::{
 
 /// Returns the prefix associated with the given environment. If the prefix doesnt exist or is not
 /// up to date it is updated.
-pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> {
+pub async fn get_up_to_date_prefix(project: &Project) -> miette::Result<Prefix> {
     // Make sure the project supports the current platform
     let platform = Platform::current();
     if !project.platforms().contains(&platform) {
         let span = project.manifest.project.platforms.span();
-        let report = Report::build(ReportKind::Error, consts::PROJECT_MANIFEST, span.start)
-            .with_message("the project is not configured for your current platform")
-            .with_label(
-                Label::new((consts::PROJECT_MANIFEST, span))
-                    .with_message(format!("add '{platform}' here")),
-            )
-            .with_help(format!(
+        return Err(miette::miette!(
+            help = format!(
                 "The project needs to be configured to support your platform ({platform})."
-            ))
-            .finish();
-
-        return Err(ReportError {
-            source: (consts::PROJECT_MANIFEST, Source::from(&project.source)),
-            report,
-        }
-        .into());
+            ),
+            labels = vec![LabeledSpan::at(span, format!("add '{platform}' here"),)],
+            "the project is not configured for your current platform"
+        )
+        .with_source_code(project.source()));
     }
 
     // Make sure the system requirements are met
@@ -81,10 +70,11 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
 
     // Construct a transaction to bring the environment up to date with the lock-file content
     let transaction = Transaction::from_current_and_desired(
-        installed_packages_future.await??,
+        installed_packages_future.await.into_diagnostic()??,
         get_required_packages(&lock_file, platform)?,
         platform,
-    )?;
+    )
+    .into_diagnostic()?;
 
     // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
@@ -94,7 +84,8 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
             execute_transaction(
                 transaction,
                 prefix.root().to_path_buf(),
-                rattler::default_cache_dir()?,
+                rattler::default_cache_dir()
+                    .map_err(|_| miette::miette!("could not determine default cache directory"))?,
                 AuthenticatedClient::default(),
             ),
         )
@@ -105,28 +96,26 @@ pub async fn get_up_to_date_prefix(project: &Project) -> anyhow::Result<Prefix> 
 }
 
 /// Loads the lockfile for the specified project or returns a dummy one if none could be found.
-pub async fn load_lock_for_manifest_path(path: &Path) -> anyhow::Result<CondaLock> {
+pub async fn load_lock_for_manifest_path(path: &Path) -> miette::Result<CondaLock> {
     load_lock_file(&Project::load(path)?).await
 }
 
 /// Loads the lockfile for the specified project or returns a dummy one if none could be found.
-pub async fn load_lock_file(project: &Project) -> anyhow::Result<CondaLock> {
+pub async fn load_lock_file(project: &Project) -> miette::Result<CondaLock> {
     let lock_file_path = project.lock_file_path();
     tokio::task::spawn_blocking(move || {
         if lock_file_path.is_file() {
-            CondaLock::from_path(&lock_file_path).map_err(anyhow::Error::from)
+            CondaLock::from_path(&lock_file_path).into_diagnostic()
         } else {
-            LockFileBuilder::default()
-                .build()
-                .map_err(anyhow::Error::from)
+            LockFileBuilder::default().build().into_diagnostic()
         }
     })
     .await
-    .unwrap_or_else(|e| Err(e.into()))
+    .unwrap_or_else(|e| Err(e).into_diagnostic())
 }
 
 /// Returns true if the locked packages match the dependencies in the project.
-pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> anyhow::Result<bool> {
+pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette::Result<bool> {
     let platforms = project.platforms();
 
     // If a platform is missing from the lock file the lock file is completely out-of-date.
@@ -281,7 +270,7 @@ pub async fn update_lock_file(
     project: &Project,
     existing_lock_file: CondaLock,
     repodata: Option<Vec<SparseRepoData>>,
-) -> anyhow::Result<CondaLock> {
+) -> miette::Result<CondaLock> {
     let platforms = project.platforms();
 
     // Get the repodata for the project
@@ -321,7 +310,8 @@ pub async fn update_lock_file(
             platform_sparse_repo_data,
             package_names.iter().copied(),
             None,
-        )?;
+        )
+        .into_diagnostic()?;
 
         // Get the virtual packages for this platform
         let virtual_packages = project.virtual_packages(platform)?;
@@ -333,28 +323,31 @@ pub async fn update_lock_file(
             locked_packages: existing_lock_file
                 .packages_for_platform(platform)
                 .map(RepoDataRecord::try_from)
-                .collect::<Result<Vec<_>, _>>()?,
+                .collect::<Result<Vec<_>, _>>()
+                .into_diagnostic()?,
             pinned_packages: vec![],
             virtual_packages,
         };
 
         // Solve the task
-        let records = libsolv_c::Solver.solve(task)?;
+        let records = libsolv_rs::Solver.solve(task).into_diagnostic()?;
 
         // Update lock file
         let mut locked_packages = LockedPackages::new(platform);
         for record in records {
-            let locked_package = LockedPackage::try_from(record)?;
+            let locked_package = LockedPackage::try_from(record).into_diagnostic()?;
             locked_packages = locked_packages.add_locked_package(locked_package);
         }
 
         builder = builder.add_locked_packages(locked_packages);
     }
 
-    let conda_lock = builder.build()?;
+    let conda_lock = builder.build().into_diagnostic()?;
 
     // Write the conda lock to disk
-    conda_lock.to_path(&project.lock_file_path())?;
+    conda_lock
+        .to_path(&project.lock_file_path())
+        .into_diagnostic()?;
 
     Ok(conda_lock)
 }
@@ -363,12 +356,12 @@ pub async fn update_lock_file(
 pub fn get_required_packages(
     lock_file: &CondaLock,
     platform: Platform,
-) -> anyhow::Result<Vec<RepoDataRecord>> {
+) -> miette::Result<Vec<RepoDataRecord>> {
     lock_file
         .package
         .iter()
         .filter(|pkg| pkg.platform == platform)
-        .map(|pkg| pkg.clone().try_into().map_err(anyhow::Error::from))
+        .map(|pkg| pkg.clone().try_into().into_diagnostic())
         .collect()
 }
 
@@ -378,7 +371,7 @@ pub async fn execute_transaction(
     target_prefix: PathBuf,
     cache_dir: PathBuf,
     download_client: AuthenticatedClient,
-) -> anyhow::Result<()> {
+) -> miette::Result<()> {
     // Open the package cache
     let package_cache = PackageCache::new(cache_dir.join("pkgs"));
 
@@ -470,7 +463,7 @@ async fn execute_operation(
     link_pb: &ProgressBar,
     op: TransactionOperation<PrefixRecord, RepoDataRecord>,
     install_options: &InstallOptions,
-) -> anyhow::Result<()> {
+) -> miette::Result<()> {
     // Determine the package to install
     let install_record = op.record_to_install();
     let remove_record = op.record_to_remove();
@@ -493,8 +486,8 @@ async fn execute_operation(
                     download_client.clone(),
                 )
                 .map_ok(|cache_dir| Some((install_record.clone(), cache_dir)))
-                .map_err(anyhow::Error::from)
-                .await;
+                .await
+                .into_diagnostic();
 
             // Increment the download progress bar.
             if let Some(pb) = download_pb {
@@ -543,7 +536,7 @@ async fn install_package_to_environment(
     repodata_record: RepoDataRecord,
     install_driver: &InstallDriver,
     install_options: &InstallOptions,
-) -> anyhow::Result<()> {
+) -> miette::Result<()> {
     // Link the contents of the package into our environment. This returns all the paths that were
     // linked.
     let paths = link_package(
@@ -552,7 +545,8 @@ async fn install_package_to_environment(
         install_driver,
         install_options.clone(),
     )
-    .await?;
+    .await
+    .into_diagnostic()?;
 
     // Construct a PrefixRecord for the package
     let prefix_record = PrefixRecord {
@@ -587,7 +581,7 @@ async fn install_package_to_environment(
     })
     .await
     {
-        Ok(result) => Ok(result?),
+        Ok(result) => Ok(result.into_diagnostic()?),
         Err(err) => {
             if let Ok(panic) = err.try_into_panic() {
                 std::panic::resume_unwind(panic);
@@ -602,7 +596,7 @@ async fn install_package_to_environment(
 async fn remove_package_from_environment(
     target_prefix: &Path,
     package: &PrefixRecord,
-) -> anyhow::Result<()> {
+) -> miette::Result<()> {
     // TODO: Take into account any clobbered files, they need to be restored.
     // TODO: Can we also delete empty directories?
 
@@ -614,8 +608,10 @@ async fn remove_package_from_environment(
                 // Simply ignore if the file is already gone.
             }
             Err(e) => {
-                return Err(e)
-                    .with_context(|| format!("failed to delete {}", paths.relative_path.display()))
+                return Err(e).into_diagnostic().wrap_err(format!(
+                    "failed to delete {}",
+                    paths.relative_path.display()
+                ))
             }
         }
     }
@@ -627,7 +623,9 @@ async fn remove_package_from_environment(
         package.repodata_record.package_record.version,
         package.repodata_record.package_record.build
     ));
-    tokio::fs::remove_file(conda_meta_path).await?;
+    tokio::fs::remove_file(conda_meta_path)
+        .await
+        .into_diagnostic()?;
 
     Ok(())
 }

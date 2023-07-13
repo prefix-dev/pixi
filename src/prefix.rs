@@ -1,5 +1,6 @@
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use miette::IntoDiagnostic;
 use rattler_conda_types::PrefixRecord;
 use std::path::{Path, PathBuf};
 use tokio::task::JoinHandle;
@@ -12,7 +13,7 @@ pub struct Prefix {
 
 impl Prefix {
     /// Constructs a new instance. Returns an error if the directory doesnt exist.
-    pub fn new(path: impl Into<PathBuf>) -> anyhow::Result<Self> {
+    pub fn new(path: impl Into<PathBuf>) -> miette::Result<Self> {
         let root = path.into();
         Ok(Self { root })
     }
@@ -27,7 +28,7 @@ impl Prefix {
     pub async fn find_installed_packages(
         &self,
         concurrency_limit: Option<usize>,
-    ) -> anyhow::Result<Vec<PrefixRecord>> {
+    ) -> miette::Result<Vec<PrefixRecord>> {
         let concurrency_limit = concurrency_limit.unwrap_or(100);
         let mut meta_futures =
             FuturesUnordered::<JoinHandle<Result<PrefixRecord, std::io::Error>>>::new();
@@ -36,7 +37,7 @@ impl Prefix {
             .into_iter()
             .flatten()
         {
-            let entry = entry?;
+            let entry = entry.into_diagnostic()?;
             let path = entry.path();
             if path.ends_with(".json") {
                 continue;
@@ -49,7 +50,7 @@ impl Prefix {
                     .await
                     .expect("we know there are pending futures")
                 {
-                    Ok(record) => result.push(record?),
+                    Ok(record) => result.push(record.into_diagnostic()?),
                     Err(e) => {
                         if let Ok(panic) = e.try_into_panic() {
                             std::panic::resume_unwind(panic);
@@ -67,7 +68,7 @@ impl Prefix {
 
         while let Some(record) = meta_futures.next().await {
             match record {
-                Ok(record) => result.push(record?),
+                Ok(record) => result.push(record.into_diagnostic()?),
                 Err(e) => {
                     if let Ok(panic) = e.try_into_panic() {
                         std::panic::resume_unwind(panic);

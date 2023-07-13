@@ -16,7 +16,7 @@ pub struct Args {
     command: Command,
 }
 
-pub async fn execute(cmd: Args) -> anyhow::Result<()> {
+pub async fn execute(cmd: Args) -> miette::Result<()> {
     match cmd.command {
         Command::Install(args) => install::execute(args).await?,
     };
