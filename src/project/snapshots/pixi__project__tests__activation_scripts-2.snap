@@ -1,0 +1,7 @@
+---
+source: src/project/mod.rs
+expression: "project.activation_scripts(Platform::Win64).unwrap()"
+---
+[
+    "Cargo.lock",
+]
