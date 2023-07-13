@@ -2,6 +2,7 @@ use crate::environment::get_up_to_date_prefix;
 use crate::project::environment::add_metadata_as_env_vars;
 use crate::Project;
 use clap::Parser;
+use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
 use rattler_shell::activation::{ActivationVariables, Activator, PathModificationBehaviour};
 use rattler_shell::shell::{Shell, ShellEnum};
@@ -15,7 +16,7 @@ pub struct Args {
     manifest_path: Option<PathBuf>,
 }
 
-pub async fn execute(args: Args) -> anyhow::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     // Determine the current shell
@@ -28,20 +29,23 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         .into_iter()
         .map(|p| p.clone())
         .collect();
-    let activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())?;
+    let activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())
+        .into_diagnostic()?;
 
-    let activator_result = activator.activation(ActivationVariables {
-        // Get the current PATH variable
-        path: Default::default(),
+    let activator_result = activator
+        .activation(ActivationVariables {
+            // Get the current PATH variable
+            path: Default::default(),
 
-        // Start from an empty prefix
-        conda_prefix: None,
+            // Start from an empty prefix
+            conda_prefix: None,
 
-        // Prepending environment paths so they get found first.
-        path_modification_behaviour: PathModificationBehaviour::Prepend,
+            // Prepending environment paths so they get found first.
+            path_modification_behaviour: PathModificationBehaviour::Prepend,
 
-        additional_activation_scripts: Some(activation_scripts),
-    })?;
+            additional_activation_scripts: Some(activation_scripts),
+        })
+        .into_diagnostic()?;
 
     // Generate a temporary file with the script to execute. This includes the activation of the
     // environment.
@@ -51,7 +55,9 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     add_metadata_as_env_vars(&mut script, &shell, &project)?;
 
     // Add the conda default env variable so that the tools that use this know it exists.
-    shell.set_env_var(&mut script, "CONDA_DEFAULT_ENV", project.name())?;
+    shell
+        .set_env_var(&mut script, "CONDA_DEFAULT_ENV", project.name())
+        .into_diagnostic()?;
 
     // Start the shell as the last part of the activation script based on the default shell.
     let interactive_shell: ShellEnum = ShellEnum::from_parent_process()
@@ -62,8 +68,9 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
     // Write the contents of the script to a temporary file that we can execute with the shell.
     let mut temp_file = tempfile::Builder::new()
         .suffix(&format!(".{}", shell.extension()))
-        .tempfile()?;
-    std::io::Write::write_all(&mut temp_file, script.as_bytes())?;
+        .tempfile()
+        .into_diagnostic()?;
+    std::io::Write::write_all(&mut temp_file, script.as_bytes()).into_diagnostic()?;
 
     // Execute the script with the shell
     let mut command = shell
@@ -71,5 +78,5 @@ pub async fn execute(args: Args) -> anyhow::Result<()> {
         .spawn()
         .expect("failed to execute process");
 
-    std::process::exit(command.wait()?.code().unwrap_or(1));
+    std::process::exit(command.wait().into_diagnostic()?.code().unwrap_or(1));
 }
