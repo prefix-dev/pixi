@@ -119,6 +119,7 @@ impl PixiControl {
                 host: false,
                 specs: vec![spec.into()],
                 build: false,
+                no_install: true,
             },
         }
     }

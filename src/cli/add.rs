@@ -1,9 +1,12 @@
+use crate::environment::update_prefix;
+use crate::prefix::Prefix;
 use crate::{
     environment::{load_lock_file, update_lock_file},
     project::Project,
     virtual_packages::get_minimal_virtual_packages,
 };
 use clap::Parser;
+use console::style;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
@@ -48,6 +51,10 @@ pub struct Args {
     /// This is a build dependency
     #[arg(long, conflicts_with = "host")]
     pub build: bool,
+
+    /// Don't install the package to the environment, only add the package to the lock-file.
+    #[arg(long)]
+    pub no_install: bool,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -72,13 +79,14 @@ impl SpecType {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let spec_type = SpecType::from_args(&args);
-    add_specs_to_project(&mut project, args.specs, spec_type).await
+    add_specs_to_project(&mut project, args.specs, spec_type, args.no_install).await
 }
 
 pub async fn add_specs_to_project(
     project: &mut Project,
     specs: Vec<MatchSpec>,
     spec_type: SpecType,
+    no_install: bool,
 ) -> miette::Result<()> {
     // Split the specs into package name and version specifier
     let new_specs = specs
@@ -160,13 +168,27 @@ pub async fn add_specs_to_project(
     }
 
     // Update the lock file and write to disk
-    update_lock_file(
+    let lock_file = update_lock_file(
         project,
         load_lock_file(project).await?,
         Some(sparse_repo_data),
     )
     .await?;
     project.save()?;
+
+    if !no_install {
+        let platform = Platform::current();
+        if project.platforms().contains(&platform) {
+            // Get the currently installed packages
+            let prefix = Prefix::new(project.root().join(".pixi/env"))?;
+            let installed_packages = prefix.find_installed_packages(None).await?;
+
+            // Update the prefix
+            update_prefix(&prefix, installed_packages, &lock_file, platform).await?;
+        } else {
+            eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", style("!").yellow().bold())
+        }
+    }
 
     for spec in added_specs {
         eprintln!(

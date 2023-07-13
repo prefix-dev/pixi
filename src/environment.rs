@@ -68,10 +68,29 @@ pub async fn get_up_to_date_prefix(project: &Project) -> miette::Result<Prefix> 
         lock_file
     };
 
+    // Update the environment
+    update_prefix(
+        &prefix,
+        installed_packages_future.await.into_diagnostic()??,
+        &lock_file,
+        platform,
+    )
+    .await?;
+
+    Ok(prefix)
+}
+
+/// Updates the environment to contain the packages from the specified lock-file
+pub async fn update_prefix(
+    prefix: &Prefix,
+    installed_packages: Vec<PrefixRecord>,
+    lock_file: &CondaLock,
+    platform: Platform,
+) -> miette::Result<()> {
     // Construct a transaction to bring the environment up to date with the lock-file content
     let transaction = Transaction::from_current_and_desired(
-        installed_packages_future.await.into_diagnostic()??,
-        get_required_packages(&lock_file, platform)?,
+        installed_packages,
+        get_required_packages(lock_file, platform)?,
         platform,
     )
     .into_diagnostic()?;
@@ -91,8 +110,7 @@ pub async fn get_up_to_date_prefix(project: &Project) -> miette::Result<Prefix> 
         )
         .await?;
     }
-
-    Ok(prefix)
+    Ok(())
 }
 
 /// Loads the lockfile for the specified project or returns a dummy one if none could be found.
