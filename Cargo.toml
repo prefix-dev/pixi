@@ -38,13 +38,13 @@ rattler_conda_types = { default-features = false, git = "https://github.com/mamb
 rattler_networking = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_repodata_gateway = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["sparse"] }
 rattler_shell = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["sysinfo"] }
-rattler_solve = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["libsolv_c"] }
+rattler_solve = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["libsolv_rs"] }
 rattler_virtual_packages = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
 #rattler = { default-features = false, path="../rattler/crates/rattler" }
 #rattler_conda_types = { default-features = false, path="../rattler/crates/rattler_conda_types" }
 #rattler_repodata_gateway = { default-features = false, path="../rattler/crates/rattler_repodata_gateway", features = ["sparse"] }
 #rattler_shell = { default-features = false, path="../rattler/crates/rattler_shell", features = ["sysinfo"] }
-#rattler_solve = { default-features = false, path="../rattler/crates/rattler_solve" }
+#rattler_solve = { default-features = false, path="../rattler/crates/rattler_solve", features = ["libsolv_rs"] }
 #rattler_virtual_packages = { default-features = false, path="../rattler/crates/rattler_virtual_packages" }
 #rattler_networking = { default-features = false, path="../rattler/crates/rattler_networking" }
 reqwest = { version = "0.11.16", default-features = false }
