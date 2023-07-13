@@ -204,17 +204,7 @@ impl Project {
                         labels = vec![LabeledSpan::at(span, e.message())],
                         "failed to parse project manifest"
                     )
-                    .with_source_code(contents));
-                    //     ReportError {
-                    //     source: (PROJECT_MANIFEST, Source::from(&contents)),
-                    //     report: Report::build(ReportKind::Error, PROJECT_MANIFEST, span.start)
-                    //         .with_message("failed to parse project manifest")
-                    //         .with_label(
-                    //             Label::new((PROJECT_MANIFEST, span)).with_message(e.message()),
-                    //         )
-                    //         .finish(),
-                    // })
-                    // .into_diagnostic();
+                    .with_source_code(NamedSource::new(consts::PROJECT_MANIFEST, contents)));
                 } else {
                     return Err(e).into_diagnostic();
                 }
