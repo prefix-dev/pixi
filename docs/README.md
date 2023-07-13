@@ -194,14 +194,14 @@ For more information check [the documentation](getting_started.md#basics-of-the-
 ## Installing a conda package globally
 
 You can also globally install conda packages into their own environment.
-This behavior is similar to [`pipx`](https://github.com/pypa/pipx).
+This behavior is similar to [`pipx`](https://github.com/pypa/pipx) or [`condax`](https://github.com/mariusvniekerk/condax).
 
 ```bash
 pixi global install cowpy
 ```
 
 For more examples
-check [the documentation](./cli.md)
+check [the documentation](./cli.md).
 
 <a name="contributing"></a>
 
