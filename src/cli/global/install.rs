@@ -189,7 +189,8 @@ async fn create_executable_scripts(
             std::fs::set_permissions(
                 executable_script_path,
                 std::fs::Permissions::from_mode(0o744),
-            )?;
+            )
+            .into_diagnostic()?;
         }
 
         scripts.push(file_name.to_string_lossy().into_owned());
