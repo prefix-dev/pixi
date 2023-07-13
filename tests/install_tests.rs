@@ -13,7 +13,7 @@ use tempfile::TempDir;
 async fn install_run_python() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
-    pixi.add("python==3.11.0").await.unwrap();
+    pixi.add("python==3.11.0").with_install(true).await.unwrap();
 
     // Check if lock has python version
     let lock = pixi.lock_file().await.unwrap();

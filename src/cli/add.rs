@@ -1,3 +1,6 @@
+use crate::environment::{execute_transaction, get_required_packages};
+use crate::prefix::Prefix;
+use crate::progress::await_in_progress;
 use crate::{
     environment::{load_lock_file, update_lock_file},
     project::Project,
@@ -5,11 +8,14 @@ use crate::{
 };
 use anyhow::Context;
 use clap::Parser;
+use console::style;
 use indexmap::IndexMap;
 use itertools::Itertools;
+use rattler::install::Transaction;
 use rattler_conda_types::{
     version_spec::VersionOperator, MatchSpec, NamelessMatchSpec, Platform, Version, VersionSpec,
 };
+use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{libsolv_c, SolverImpl};
 use std::collections::HashMap;
@@ -48,6 +54,10 @@ pub struct Args {
     /// This is a build dependency
     #[arg(long, conflicts_with = "host")]
     pub build: bool,
+
+    /// Don't install the package to the environment, only add the package to the lock-file.
+    #[arg(long)]
+    pub no_install: bool,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -72,13 +82,14 @@ impl SpecType {
 pub async fn execute(args: Args) -> anyhow::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let spec_type = SpecType::from_args(&args);
-    add_specs_to_project(&mut project, args.specs, spec_type).await
+    add_specs_to_project(&mut project, args.specs, spec_type, args.no_install).await
 }
 
 pub async fn add_specs_to_project(
     project: &mut Project,
     specs: Vec<MatchSpec>,
     spec_type: SpecType,
+    no_install: bool,
 ) -> anyhow::Result<()> {
     // Split the specs into package name and version specifier
     let new_specs = specs
@@ -160,13 +171,46 @@ pub async fn add_specs_to_project(
     }
 
     // Update the lock file and write to disk
-    update_lock_file(
+    let lock_file = update_lock_file(
         project,
         load_lock_file(project).await?,
         Some(sparse_repo_data),
     )
     .await?;
     project.save()?;
+
+    if !no_install {
+        let platform = Platform::current();
+        if project.platforms().contains(&platform) {
+            // Get the currently installed packages
+            let prefix = Prefix::new(project.root().join(".pixi/env"))?;
+            let installed_packages = prefix.find_installed_packages(None).await?;
+
+            // Construct a transaction to bring the environment up to date with the lock-file content
+            let transaction = Transaction::from_current_and_desired(
+                installed_packages,
+                get_required_packages(&lock_file, platform)?,
+                platform,
+            )?;
+
+            // Execute the transaction if there is work to do
+            if !transaction.operations.is_empty() {
+                // Execute the operations that are returned by the solver.
+                await_in_progress(
+                    "updating environment",
+                    execute_transaction(
+                        transaction,
+                        prefix.root().to_path_buf(),
+                        rattler::default_cache_dir()?,
+                        AuthenticatedClient::default(),
+                    ),
+                )
+                .await?;
+            }
+        } else {
+            eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", style("!").yellow().bold())
+        }
+    }
 
     for spec in added_specs {
         eprintln!(
