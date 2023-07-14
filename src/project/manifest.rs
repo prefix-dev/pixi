@@ -106,7 +106,7 @@ impl ProjectManifest {
                     ));
                 }
             }
-            return Ok(());
+            Ok(())
         };
 
         check_file_existence(&self.project.license_file)?;
