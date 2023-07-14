@@ -92,6 +92,13 @@ impl AddBuilder {
         }
         self
     }
+
+    /// Set whether or not to also install the environment. By default the environment is NOT
+    /// installed to reduce test times.
+    pub fn with_install(mut self, install: bool) -> Self {
+        self.args.no_install = !install;
+        self
+    }
 }
 
 impl IntoFuture for AddBuilder {
