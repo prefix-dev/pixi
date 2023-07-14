@@ -10,7 +10,7 @@ use serde_with::de::DeserializeAsWrap;
 use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
 use std::collections::HashMap;
 use std::ops::Range;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use url::Url;
 
 /// Describes the contents of a project manifest.
@@ -68,7 +68,7 @@ pub struct ProjectManifest {
 
 impl ProjectManifest {
     /// Validate the
-    pub fn validate(&self, source: NamedSource) -> miette::Result<()> {
+    pub fn validate(&self, source: NamedSource, root_folder: &Path) -> miette::Result<()> {
         // Check if the targets are defined for existing platforms
         for target_sel in self.target.keys() {
             match target_sel.as_ref() {
@@ -98,10 +98,11 @@ impl ProjectManifest {
 
         let check_file_existence = |x: &Option<PathBuf>| {
             if let Some(path) = x {
-                if !path.exists() {
+                let full_path = root_folder.join(path);
+                if !full_path.exists() {
                     return Err(miette::miette!(
                         "the file '{}' does not exist",
-                        path.display()
+                        full_path.display()
                     ));
                 }
             }

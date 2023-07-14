@@ -69,8 +69,6 @@ impl Project {
             Some(root) => root.join(consts::PROJECT_MANIFEST),
             None => miette::bail!("could not find {}", consts::PROJECT_MANIFEST),
         };
-        // set the current directory to the project root
-        env::set_current_dir(project_toml.parent().unwrap()).into_diagnostic()?;
         Self::load(&project_toml)
     }
 
@@ -215,10 +213,10 @@ impl Project {
         };
 
         // Validate the contents of the manifest
-        manifest.validate(NamedSource::new(
-            consts::PROJECT_MANIFEST,
-            contents.to_owned(),
-        ))?;
+        manifest.validate(
+            NamedSource::new(consts::PROJECT_MANIFEST, contents.to_owned()),
+            root,
+        )?;
 
         Ok(Self {
             root: root.to_path_buf(),
