@@ -85,7 +85,9 @@ pub async fn execute() -> miette::Result<()> {
         .from_env()
         .into_diagnostic()?
         // filter logs from apple codesign because they are very noisy
-        .add_directive("apple_codesign=off".parse().into_diagnostic()?);
+        .add_directive("apple_codesign=off".parse().into_diagnostic()?)
+        // set pixi's tracing level to warn
+        .add_directive("pixi=warn".parse().into_diagnostic()?);
 
     // Setup the tracing subscriber
     tracing_subscriber::fmt()
