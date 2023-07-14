@@ -72,6 +72,7 @@ fn completion(args: CompletionCommand) -> miette::Result<()> {
     );
 
     // Create PS1 overwrite command
+    // TODO: Also make this work for non bourne shells.
     let mut script = String::new();
     let shell = ShellEnum::from_str(clap_shell.to_string().as_str()).into_diagnostic()?;
     // Generate a shell agnostic command to add the PIXI_PROMPT to the PS1 variable.
