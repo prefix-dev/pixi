@@ -1,7 +1,7 @@
 use crate::{consts, task::Task};
 use ::serde::Deserialize;
 use indexmap::IndexMap;
-use miette::{LabeledSpan, NamedSource, Report};
+use miette::{Context, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use rattler_conda_types::{Channel, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Deserializer;
@@ -10,6 +10,8 @@ use serde_with::de::DeserializeAsWrap;
 use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
 use std::collections::HashMap;
 use std::ops::Range;
+use std::path::PathBuf;
+use url::Url;
 
 /// Describes the contents of a project manifest.
 #[serde_as]
@@ -81,6 +83,33 @@ impl ProjectManifest {
                 }
             }
         }
+
+        // parse the SPDX license expression to make sure that it is a valid expression.
+        if let Some(spdx_expr) = &self.project.license {
+            spdx::Expression::parse(spdx_expr)
+                .into_diagnostic()
+                .with_context(|| {
+                    format!(
+                        "failed to parse the SPDX license expression '{}'",
+                        spdx_expr
+                    )
+                })?;
+        }
+
+        let check_file_existence = |x: &Option<PathBuf>| {
+            if let Some(path) = x {
+                if !path.exists() {
+                    return Err(miette::miette!(
+                        "the file '{}' does not exist",
+                        path.display()
+                    ));
+                }
+            }
+            return Ok(());
+        };
+
+        check_file_existence(&self.project.license_file)?;
+        check_file_existence(&self.project.readme)?;
 
         Ok(())
     }
@@ -169,6 +198,24 @@ pub struct ProjectMetadata {
     // TODO: This is actually slightly different from the rattler_conda_types::Platform because it
     //     should not include noarch.
     pub platforms: Spanned<Vec<Platform>>,
+
+    /// The license as a valid SPDX string (e.g. MIT AND Apache-2.0)
+    pub license: Option<String>,
+
+    /// The license file
+    pub license_file: Option<PathBuf>,
+
+    /// Path to the README file of the projectcarg
+    pub readme: Option<PathBuf>,
+
+    /// The url of the project homepage
+    pub homepage: Option<Url>,
+
+    /// Url of the repository of the project
+    pub repository: Option<Url>,
+
+    /// Url of the documentation
+    pub documentation: Option<Url>,
 }
 
 #[serde_as]
