@@ -56,6 +56,12 @@ pub struct ProjectManifest {
     /// manifest.
     #[serde(default)]
     pub target: IndexMap<Spanned<TargetSelector>, TargetMetadata>,
+
+    /// Environment activation information.
+    ///
+    /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
+    /// manifest.
+    pub activation: Option<Activation>,
 }
 
 impl ProjectManifest {
@@ -131,6 +137,10 @@ pub struct TargetMetadata {
     #[serde(default, rename = "build-dependencies")]
     #[serde_as(as = "Option<IndexMap<_, DisplayFromStr>>")]
     pub build_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
+
+    /// Additional information to activate an environment.
+    #[serde(default)]
+    pub activation: Option<Activation>,
 }
 
 /// Describes the contents of the `[package]` section of the project manifest.
@@ -255,6 +265,11 @@ impl From<LibCFamilyAndVersion> for LibC {
         }
     }
 }
+#[derive(Default, Clone, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct Activation {
+    pub scripts: Option<Vec<String>>,
+}
 
 // Create an error report for usign a platform that is not supported by the project.
 fn create_unsupported_platform_report(
@@ -344,5 +359,26 @@ mod test {
             )
             .collect::<Vec<_>>()
             .join("\n"))
+    }
+
+    #[test]
+    fn test_activation_scripts() {
+        let contents = format!(
+            r#"
+            {PROJECT_BOILERPLATE}
+            [activation]
+            scripts = [".pixi/install/setup.sh"]
+
+            [target.win-64.activation]
+            scripts = [".pixi/install/setup.ps1"]
+
+            [target.linux-64.activation]
+            scripts = [".pixi/install/setup.sh", "test"]
+            "#
+        );
+
+        assert_debug_snapshot!(
+            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
+        );
     }
 }

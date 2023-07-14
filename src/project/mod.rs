@@ -503,6 +503,48 @@ impl Project {
         self.manifest.project.platforms.as_ref().as_slice()
     }
 
+    /// Returns the all specified activation scripts that are used in the current platform.
+    pub fn activation_scripts(&self, platform: Platform) -> miette::Result<Vec<PathBuf>> {
+        let mut full_paths = Vec::new();
+        let mut all_scripts = Vec::new();
+
+        // Gather platform-specific activation scripts
+        for target_metadata in self.target_specific_metadata(platform) {
+            if let Some(activation) = &target_metadata.activation {
+                if let Some(scripts) = &activation.scripts {
+                    all_scripts.extend(scripts.clone());
+                }
+            }
+        }
+
+        // Gather the main activation scripts if there are no target scripts defined.
+        if all_scripts.is_empty() {
+            if let Some(activation) = &self.manifest.activation {
+                if let Some(scripts) = &activation.scripts {
+                    all_scripts.extend(scripts.clone());
+                }
+            }
+        }
+
+        // Check if scripts exist
+        let mut missing_scripts = Vec::new();
+        for script_name in &all_scripts {
+            let script_path = self.root().join(script_name);
+            if script_path.exists() {
+                full_paths.push(script_path);
+                tracing::debug!("Found activation script: {:?}", script_name);
+            } else {
+                missing_scripts.push(script_name);
+            }
+        }
+
+        if !missing_scripts.is_empty() {
+            tracing::warn!("can't find activation scripts: {:?}", missing_scripts);
+        }
+
+        Ok(full_paths)
+    }
+
     /// Get the task with the specified name or `None` if no such task exists.
     pub fn task_opt(&self, name: &str) -> Option<&Task> {
         self.manifest.tasks.get(name)
@@ -741,5 +783,34 @@ mod tests {
         };
 
         assert_debug_snapshot!(project.all_dependencies(Platform::Linux64).unwrap());
+    }
+    #[test]
+    fn test_activation_scripts() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [target.linux-64.activation]
+            scripts = ["Cargo.toml"]
+
+            [target.win-64.activation]
+            scripts = ["Cargo.lock"]
+
+            [activation]
+            scripts = ["pixi.toml", "pixi.lock"]
+            "#;
+
+        let manifest = toml_edit::de::from_str::<ProjectManifest>(&format!(
+            "{PROJECT_BOILERPLATE}\n{file_contents}"
+        ))
+        .unwrap();
+        let project = Project {
+            root: Default::default(),
+            source: "".to_string(),
+            doc: Default::default(),
+            manifest,
+        };
+
+        assert_debug_snapshot!(project.activation_scripts(Platform::Linux64).unwrap());
+        assert_debug_snapshot!(project.activation_scripts(Platform::Win64).unwrap());
+        assert_debug_snapshot!(project.activation_scripts(Platform::OsxArm64).unwrap());
     }
 }

@@ -60,6 +60,7 @@ ProjectManifest {
             },
             host_dependencies: None,
             build_dependencies: None,
+            activation: None,
         },
         Spanned {
             span: 206..212,
@@ -90,6 +91,8 @@ ProjectManifest {
             },
             host_dependencies: None,
             build_dependencies: None,
+            activation: None,
         },
     },
+    activation: None,
 }

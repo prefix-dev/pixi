@@ -24,8 +24,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Construct an activator so we can run commands from the environment
     let prefix = get_up_to_date_prefix(&project).await?;
-    let activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())
+    let activation_scripts: Vec<_> = project
+        .activation_scripts(Platform::current())?
+        .into_iter()
+        .collect();
+    let mut activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())
         .into_diagnostic()?;
+
+    activator.activation_scripts.extend(activation_scripts);
 
     let activator_result = activator
         .activation(ActivationVariables {

@@ -221,9 +221,13 @@ pub async fn get_task_env(project: &Project) -> miette::Result<HashMap<String, S
     let prefix = get_up_to_date_prefix(project).await?;
 
     // Get environment variables from the activation
-    let activation_env = await_in_progress("activating environment", run_activation(prefix))
-        .await
-        .wrap_err("failed to activate environment")?;
+    let additional_activation_scripts = project.activation_scripts(Platform::current())?;
+    let activation_env = await_in_progress(
+        "activating environment",
+        run_activation(prefix, additional_activation_scripts.into_iter().collect()),
+    )
+    .await
+    .wrap_err("failed to activate environment")?;
 
     // Get environment variables from the manifest
     let manifest_env = get_metadata_env(project);
@@ -236,13 +240,19 @@ pub async fn get_task_env(project: &Project) -> miette::Result<HashMap<String, S
 }
 
 /// Runs and caches the activation script.
-async fn run_activation(prefix: Prefix) -> miette::Result<HashMap<String, String>> {
+async fn run_activation(
+    prefix: Prefix,
+    additional_activation_scripts: Vec<PathBuf>,
+) -> miette::Result<HashMap<String, String>> {
     let activator_result = tokio::task::spawn_blocking(move || {
         // Run and cache the activation script
         let shell: ShellEnum = ShellEnum::default();
 
         // Construct an activator for the script
-        let activator = Activator::from_path(prefix.root(), shell, Platform::current())?;
+        let mut activator = Activator::from_path(prefix.root(), shell, Platform::current())?;
+        activator
+            .activation_scripts
+            .extend(additional_activation_scripts);
 
         // Run the activation
         activator.run_activation(ActivationVariables {
