@@ -63,6 +63,7 @@ fn task_as_toml(task: Task) -> Item {
 impl Project {
     /// Discovers the project manifest file in the current directory or any of the parent
     /// directories.
+    /// This will also set the current working directory to the project root.
     pub fn discover() -> miette::Result<Self> {
         let project_toml = match find_project_root() {
             Some(root) => root.join(consts::PROJECT_MANIFEST),
@@ -212,10 +213,10 @@ impl Project {
         };
 
         // Validate the contents of the manifest
-        manifest.validate(NamedSource::new(
-            consts::PROJECT_MANIFEST,
-            contents.to_owned(),
-        ))?;
+        manifest.validate(
+            NamedSource::new(consts::PROJECT_MANIFEST, contents.to_owned()),
+            root,
+        )?;
 
         Ok(Self {
             root: root.to_path_buf(),

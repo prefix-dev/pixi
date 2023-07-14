@@ -16,6 +16,12 @@ ProjectManifest {
             span: 117..119,
             value: [],
         },
+        license: None,
+        license_file: None,
+        readme: None,
+        homepage: None,
+        repository: None,
+        documentation: None,
     },
     tasks: {},
     system_requirements: SystemRequirements {
