@@ -539,7 +539,7 @@ impl Project {
         }
 
         if !missing_scripts.is_empty() {
-            miette::bail!("Can't find activation scripts: {:?}", missing_scripts);
+            tracing::warn!("can't find activation scripts: {:?}", missing_scripts);
         }
 
         Ok(full_paths)
