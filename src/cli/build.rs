@@ -63,7 +63,8 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
         project.name(),
         project.root(),
         &PathBuf::from("target"),
-    ).into_diagnostic()?;
+    )
+    .into_diagnostic()?;
 
     let channels = project.manifest.project.channels.clone();
 
@@ -137,14 +138,30 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
             run_constrained: Vec::default(),
         },
         about: About {
-            home: None,
-            license: None,
-            license_file: None,
+            home: project.manifest.project.homepage.clone().map(|x| vec![x]),
+            license: project.manifest.project.license.clone(),
+            license_file: project
+                .manifest
+                .project
+                .license_file
+                .clone()
+                .map(|x| vec![x.to_string_lossy().to_string()]),
             license_family: None,
-            summary: None,
-            description: project.manifest.project.description.clone(),
-            doc_url: None,
-            dev_url: None,
+            summary: project.manifest.project.description.clone(),
+            // read README file
+            description: project
+                .manifest
+                .project
+                .readme
+                .clone()
+                .map(|x| std::fs::read_to_string(x).unwrap()),
+            doc_url: project
+                .manifest
+                .project
+                .documentation
+                .clone()
+                .map(|x| vec![x]),
+            dev_url: project.manifest.project.repository.clone().map(|x| vec![x]),
         },
         package: Package {
             name: project.name().to_string(),
@@ -161,9 +178,9 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
 
     let configuration = Configuration::default();
 
-    run_build(&output, configuration).await.map_err(|e| {
-        miette::miette!(format!("Error building package: {}", e))
-    })?;
+    run_build(&output, configuration)
+        .await
+        .map_err(|e| miette::miette!(format!("Error building package: {}", e)))?;
 
     Ok(())
 }
