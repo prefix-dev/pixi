@@ -24,8 +24,9 @@
 //! ```
 
 use crate::common::IntoMatchSpec;
-use pixi::cli::add::SpecType;
 use pixi::cli::{add, init, task};
+use pixi::project::SpecType;
+use rattler_conda_types::Platform;
 use std::future::{Future, IntoFuture};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -97,6 +98,14 @@ impl AddBuilder {
     /// installed to reduce test times.
     pub fn with_install(mut self, install: bool) -> Self {
         self.args.no_install = !install;
+        self
+    }
+
+    pub fn set_platforms(mut self, platforms: &[Platform]) -> Self {
+        self.args
+            .platforms
+            .get_or_insert(Vec::new())
+            .extend(platforms.iter());
         self
     }
 }

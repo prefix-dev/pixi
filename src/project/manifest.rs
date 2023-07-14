@@ -1,3 +1,5 @@
+use crate::project::SpecType;
+use crate::utils::spanned::PixiSpanned;
 use crate::{consts, task::Task};
 use ::serde::Deserialize;
 use indexmap::IndexMap;
@@ -55,7 +57,7 @@ pub struct ProjectManifest {
     /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
     /// manifest.
     #[serde(default)]
-    pub target: IndexMap<Spanned<TargetSelector>, TargetMetadata>,
+    pub target: IndexMap<PixiSpanned<TargetSelector>, TargetMetadata>,
 }
 
 impl ProjectManifest {
@@ -68,7 +70,7 @@ impl ProjectManifest {
                     if !self.project.platforms.as_ref().contains(p) {
                         return Err(create_unsupported_platform_report(
                             source,
-                            target_sel.span(),
+                            target_sel.span().unwrap_or_default(),
                             p,
                         ));
                     }
@@ -77,6 +79,30 @@ impl ProjectManifest {
         }
 
         Ok(())
+    }
+
+    /// Get the map of dependencies for a given spec type.
+    pub fn create_or_get_dependencies(
+        &mut self,
+        spec_type: SpecType,
+    ) -> &'_ mut IndexMap<String, NamelessMatchSpec> {
+        match spec_type {
+            SpecType::Run => &mut self.dependencies,
+            SpecType::Host => {
+                if let Some(ref mut deps) = self.host_dependencies {
+                    deps
+                } else {
+                    self.host_dependencies.insert(IndexMap::new())
+                }
+            }
+            SpecType::Build => {
+                if let Some(ref mut deps) = self.build_dependencies {
+                    deps
+                } else {
+                    self.build_dependencies.insert(IndexMap::new())
+                }
+            }
+        }
     }
 }
 
@@ -115,7 +141,7 @@ impl<'de> Deserialize<'de> for TargetSelector {
 }
 
 #[serde_as]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct TargetMetadata {
     /// Target specific dependencies
     #[serde(default)]

@@ -18,6 +18,28 @@ use std::{
 
 use toml_edit::{Array, Document, Item, Table, TomlError, Value};
 
+#[derive(Debug, Copy, Clone)]
+/// What kind of dependency spec do we have
+pub enum SpecType {
+    /// Host dependencies are used that are needed by the host environment when running the project
+    Host,
+    /// Build dependencies are used when we need to build the project, may not be required at runtime
+    Build,
+    /// Regular dependencies that are used when we need to run the project
+    Run,
+}
+
+impl SpecType {
+    /// Convert to a name used in the manifest
+    pub fn to_name(&self) -> &'static str {
+        match self {
+            SpecType::Host => "host-dependencies",
+            SpecType::Build => "build-dependencies",
+            SpecType::Run => "dependencies",
+        }
+    }
+}
+
 /// A project represented by a pixi.toml file.
 #[derive(Debug)]
 pub struct Project {
@@ -362,45 +384,115 @@ impl Project {
         Ok((name.to_string(), nameless))
     }
 
-    pub fn add_dependency(&mut self, spec: &MatchSpec) -> miette::Result<()> {
-        // Find the dependencies table
-        let deps = &mut self.doc["dependencies"];
-        let (name, nameless) = Project::add_to_deps_table(deps, spec)?;
+    fn add_dep_to_target_table(
+        &mut self,
+        platform: Platform,
+        dep_type: String,
+        spec: &MatchSpec,
+    ) -> miette::Result<(String, NamelessMatchSpec)> {
+        // let target_table = &mut self.doc["target"];
 
-        self.manifest.dependencies.insert(name, nameless);
+        // // Create target table if it doesnt exist
+        // if target_table.is_none() {
+        //     *target_table = Item::Table(Table::new());
+        // }
+        //
+        // let mut target_table = target_table.as_inline_table_mut().ok_or_else(|| {
+        //     miette::miette!("target table in {} is malformed", consts::PROJECT_MANIFEST)
+        // })?;
+        //
+        // // Check if platform table exists inside target table
+        // let platform_table = &mut target_table[platform.as_str()];
+        // if platform_table.is_none() {
+        //     *platform_table = Value::InlineTable(Table::new());
+        // }
+        //
+        // // Check if dependencies exist
+        //
+        // if deps_table.is_none() {
+        //     *deps_table = Item::Table(Table::new());
+        // }
+        //
+        // // Cast the item into a table
+        // let deps_table = deps_table.as_table_like_mut().ok_or_else(|| {
+        //     miette::miette!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
+        // })?;
 
+        let target = self.doc["target"]
+            .or_insert(Item::Table(Table::new()))
+            .as_table_mut()
+            .ok_or_else(|| {
+                miette::miette!("target table in {} is malformed", consts::PROJECT_MANIFEST)
+            })?;
+        target.set_dotted(true);
+        let platform_table = self.doc["target"][platform.as_str()]
+            .or_insert(Item::Table(Table::new()))
+            .as_table_mut()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "platform table in {} is malformed",
+                    consts::PROJECT_MANIFEST
+                )
+            })?;
+        platform_table.set_dotted(true);
+
+        let dependencies = platform_table[dep_type.as_str()]
+            .or_insert(Item::Table(Table::new()))
+            .as_table_mut()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "platform table in {} is malformed",
+                    consts::PROJECT_MANIFEST
+                )
+            })?;
+        dependencies.set_dotted(true);
+
+        // Determine the name of the package to add
+        let name = spec
+            .name
+            .as_deref()
+            .ok_or_else(|| miette::miette!("* package specifier is not supported"))?;
+
+        // Format the requirement
+        // TODO: Do this smarter. E.g.:
+        //  - split this into an object if exotic properties (like channel) are specified.
+        //  - split the name from the rest of the requirement.
+        let nameless = NamelessMatchSpec::from(spec.to_owned());
+
+        // Store (or replace) in the document
+        dependencies.insert(name, Item::Value(nameless.to_string().into()));
+
+        Ok((name.to_string(), nameless))
+    }
+
+    pub fn add_target_dependency(
+        &mut self,
+        platform: Platform,
+        spec: &MatchSpec,
+        spec_type: SpecType,
+    ) -> miette::Result<()> {
+        let toml_name = spec_type.to_name();
+        // Add to target table toml
+        let (name, nameless) =
+            self.add_dep_to_target_table(platform, toml_name.to_string(), spec)?;
+        // Add to manifest
+        self.manifest
+            .target
+            .entry(TargetSelector::Platform(platform).into())
+            .or_insert(TargetMetadata::default())
+            .dependencies
+            .insert(name, nameless);
         Ok(())
     }
 
-    pub fn add_host_dependency(&mut self, spec: &MatchSpec) -> miette::Result<()> {
+    pub fn add_dependency(&mut self, spec: &MatchSpec, spec_type: SpecType) -> miette::Result<()> {
         // Find the dependencies table
-        let deps = &mut self.doc["host-dependencies"];
+        let deps = &mut self.doc[spec_type.to_name()];
         let (name, nameless) = Project::add_to_deps_table(deps, spec)?;
 
-        let host_deps = if let Some(ref mut host_dependencies) = self.manifest.host_dependencies {
-            host_dependencies
-        } else {
-            self.manifest.host_dependencies.insert(IndexMap::new())
-        };
-
-        host_deps.insert(name, nameless);
-
-        Ok(())
-    }
-
-    pub fn add_build_dependency(&mut self, spec: &MatchSpec) -> miette::Result<()> {
-        // Find the dependencies table
-        let deps = &mut self.doc["build-dependencies"];
-        let (name, nameless) = Project::add_to_deps_table(deps, spec)?;
-
-        let build_deps = if let Some(ref mut build_dependencies) = self.manifest.build_dependencies
-        {
-            build_dependencies
-        } else {
-            self.manifest.build_dependencies.insert(IndexMap::new())
-        };
-
-        build_deps.insert(name, nameless);
+        self.manifest
+            .create_or_get_dependencies(spec_type)
+            .insert(name, nameless);
 
         Ok(())
     }

@@ -2,7 +2,7 @@ mod common;
 use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
-use pixi::cli::add::SpecType;
+use pixi::project::SpecType;
 use tempfile::TempDir;
 
 /// Test add functionality for different types of packages.

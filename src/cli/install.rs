@@ -8,6 +8,7 @@ use std::path::PathBuf;
 pub struct Args {
     /// The path to 'pixi.toml'
     #[arg(long)]
+    #[clap(num_args = 1..)]
     pub manifest_path: Option<PathBuf>,
 }
 

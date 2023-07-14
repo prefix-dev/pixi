@@ -64,3 +64,4 @@ url = "2.4.0"
 rattler_digest = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
 serde_json = "1.0.96"
 tokio = { version = "1.27.0", features = ["rt"] }
+toml = "0.7.6"

@@ -8,6 +8,7 @@ pub mod project;
 pub mod repodata;
 pub mod task;
 pub mod util;
+pub mod utils;
 pub mod virtual_packages;
 
 pub use project::Project;

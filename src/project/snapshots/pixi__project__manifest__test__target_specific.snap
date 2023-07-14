@@ -31,8 +31,10 @@ ProjectManifest {
     host_dependencies: None,
     build_dependencies: None,
     target: {
-        Spanned {
-            span: 146..152,
+        PixiSpanned {
+            span: Some(
+                146..152,
+            ),
             value: Platform(
                 Win64,
             ),
@@ -61,8 +63,10 @@ ProjectManifest {
             host_dependencies: None,
             build_dependencies: None,
         },
-        Spanned {
-            span: 206..212,
+        PixiSpanned {
+            span: Some(
+                206..212,
+            ),
             value: Platform(
                 Osx64,
             ),
