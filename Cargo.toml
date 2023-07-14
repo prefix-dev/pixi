@@ -41,7 +41,7 @@ rattler_repodata_gateway = { default-features = false, git = "https://github.com
 rattler_shell = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["sysinfo"] }
 rattler_solve = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main", features = ["libsolv_rs"] }
 rattler_virtual_packages = { default-features = false, git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler-build = { version = "0.2.0", default-features = false, path = "../rattler-build" }
+rattler-build = { default-features = false, git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
 #rattler = { default-features = false, path="../rattler/crates/rattler" }
 #rattler_conda_types = { default-features = false, path="../rattler/crates/rattler_conda_types" }
 #rattler_repodata_gateway = { default-features = false, path="../rattler/crates/rattler_repodata_gateway", features = ["sparse"] }

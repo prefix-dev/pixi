@@ -1,6 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use clap::Parser;
+use miette::IntoDiagnostic;
 use rattler_build::{
     build::run_build,
     metadata::{About, BuildOptions, Output, Package, PathSrc, RenderedRecipe, Requirements},
@@ -55,14 +56,14 @@ fn get_script(project: &Project) -> String {
     script.join("\n")
 }
 
-pub async fn execute(_args: Args) -> anyhow::Result<()> {
+pub async fn execute(_args: Args) -> miette::Result<()> {
     let project = Project::discover()?;
 
     let directories = rattler_build::metadata::Directories::create(
         project.name(),
         project.root(),
         &PathBuf::from("target"),
-    )?;
+    ).into_diagnostic()?;
 
     let channels = project.manifest.project.channels.clone();
 
@@ -160,7 +161,9 @@ pub async fn execute(_args: Args) -> anyhow::Result<()> {
 
     let configuration = Configuration::default();
 
-    run_build(&output, configuration).await?;
+    run_build(&output, configuration).await.map_err(|e| {
+        miette::miette!(format!("Error building package: {}", e))
+    })?;
 
     Ok(())
 }
