@@ -203,19 +203,19 @@ pub struct ProjectMetadata {
     /// The license as a valid SPDX string (e.g. MIT AND Apache-2.0)
     pub license: Option<String>,
 
-    /// The license file
+    /// The license file (relative to the project root)
     pub license_file: Option<PathBuf>,
 
-    /// Path to the README file of the projectcarg
+    /// Path to the README file of the project (relative to the project root)
     pub readme: Option<PathBuf>,
 
-    /// The url of the project homepage
+    /// URL of the project homepage
     pub homepage: Option<Url>,
 
-    /// Url of the repository of the project
+    /// URL of the project source repository
     pub repository: Option<Url>,
 
-    /// Url of the documentation
+    /// URL of the project documentation
     pub documentation: Option<Url>,
 }
 
