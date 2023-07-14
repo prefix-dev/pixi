@@ -24,12 +24,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Construct an activator so we can run commands from the environment
     let prefix = get_up_to_date_prefix(&project).await?;
-    let activation_scripts = project
+    let activation_scripts: Vec<_> = project
         .activation_scripts(Platform::current())?
         .into_iter()
         .collect();
-    let activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())
+    let mut activator = Activator::from_path(prefix.root(), shell.clone(), Platform::current())
         .into_diagnostic()?;
+
+    activator.activation_scripts.extend(activation_scripts);
 
     let activator_result = activator
         .activation(ActivationVariables {
@@ -41,8 +43,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             // Prepending environment paths so they get found first.
             path_modification_behaviour: PathModificationBehaviour::Prepend,
-
-            additional_activation_scripts: Some(activation_scripts),
         })
         .into_diagnostic()?;
 

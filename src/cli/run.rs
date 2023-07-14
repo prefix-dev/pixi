@@ -249,7 +249,10 @@ async fn run_activation(
         let shell: ShellEnum = ShellEnum::default();
 
         // Construct an activator for the script
-        let activator = Activator::from_path(prefix.root(), shell, Platform::current())?;
+        let mut activator = Activator::from_path(prefix.root(), shell, Platform::current())?;
+        activator
+            .activation_scripts
+            .extend(additional_activation_scripts);
 
         // Run the activation
         activator.run_activation(ActivationVariables {
@@ -261,8 +264,6 @@ async fn run_activation(
 
             // Prepending environment paths so they get found first.
             path_modification_behaviour: PathModificationBehaviour::Prepend,
-
-            additional_activation_scripts: Some(additional_activation_scripts),
         })
     })
     .await

@@ -105,7 +105,6 @@ fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result
             conda_prefix: None,
             path: None,
             path_modification_behaviour: PathModificationBehaviour::Prepend,
-            additional_activation_scripts: None,
         })
         .into_diagnostic()?;
     let script = format!("#!/bin/sh\n{}", result.script);
