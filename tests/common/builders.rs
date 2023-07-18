@@ -103,7 +103,7 @@ impl AddBuilder {
 
     pub fn set_platforms(mut self, platforms: &[Platform]) -> Self {
         self.args
-            .platforms
+            .platform
             .get_or_insert(Vec::new())
             .extend(platforms.iter());
         self

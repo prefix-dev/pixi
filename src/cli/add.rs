@@ -58,8 +58,8 @@ pub struct Args {
     pub no_install: bool,
 
     /// The platform(s) for which the dependency should be added
-    #[arg(long)]
-    pub platforms: Option<Vec<Platform>>,
+    #[arg(long, short)]
+    pub platform: Vec<Platform>,
 }
 
 impl SpecType {
@@ -77,17 +77,15 @@ impl SpecType {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let spec_type = SpecType::from_args(&args);
-    let spec_platforms = args.platforms;
+    let spec_platforms = args.platform;
 
-    if let Some(platforms) = &spec_platforms {
-        // Add the platform if it is not already present
-        let platforms_to_add = platforms
-            .iter()
-            .filter(|p| !project.platforms().contains(p))
-            .cloned()
-            .collect::<Vec<Platform>>();
-        project.add_platforms(platforms_to_add.iter())?;
-    }
+    // Add the platform if it is not already present
+    let platforms_to_add = spec_platforms
+        .iter()
+        .filter(|p| !project.platforms().contains(p))
+        .cloned()
+        .collect::<Vec<Platform>>();
+    project.add_platforms(platforms_to_add.iter())?;
 
     add_specs_to_project(
         &mut project,
@@ -104,7 +102,7 @@ pub async fn add_specs_to_project(
     specs: Vec<MatchSpec>,
     spec_type: SpecType,
     no_install: bool,
-    specs_platforms: Option<Vec<Platform>>,
+    specs_platforms: Vec<Platform>,
 ) -> miette::Result<()> {
     // Split the specs into package name and version specifier
     let new_specs = specs
@@ -123,9 +121,7 @@ pub async fn add_specs_to_project(
     // Determine the best version per platform
     let mut best_versions = HashMap::new();
 
-    let platforms = specs_platforms
-        .clone()
-        .unwrap_or_else(|| project.platforms().to_vec());
+    let platforms = specs_platforms.clone();
     for platform in platforms {
         let current_specs = match spec_type {
             SpecType::Host => project.host_dependencies(platform)?,
@@ -164,7 +160,6 @@ pub async fn add_specs_to_project(
     }
 
     // Update the specs passed on the command line with the best available versions.
-    let specified_platforms = specs_platforms.unwrap_or_default();
     let mut added_specs = Vec::new();
     for (name, spec) in new_specs {
         let best_version = best_versions
@@ -184,10 +179,10 @@ pub async fn add_specs_to_project(
         let spec = MatchSpec::from_nameless(updated_spec, Some(name));
 
         // Add the dependency to the project
-        if specified_platforms.is_empty() {
+        if specs_platforms.is_empty() {
             project.add_dependency(&spec, spec_type)?;
         } else {
-            for platform in specified_platforms.iter() {
+            for platform in specs_platforms.iter() {
                 project.add_target_dependency(*platform, &spec, spec_type)?;
             }
         }
@@ -222,9 +217,25 @@ pub async fn add_specs_to_project(
         eprintln!(
             "{}Added {}",
             console::style(console::Emoji("✔ ", "")).green(),
-            spec
+            spec,
         );
     }
+
+    // Print if it is something different from host and dep
+    match spec_type {
+        SpecType::Host => eprintln!("Added these as host dependencies."),
+        SpecType::Build => eprintln!("Added these as build dependencies."),
+        SpecType::Run => {}
+    };
+
+    // Print something if we've added for platforms
+    if !specs_platforms.is_empty() {
+        eprintln!(
+            "Added these only for platform(s): {}",
+            specs_platforms.iter().join(", ")
+        )
+    }
+
     Ok(())
 }
 
