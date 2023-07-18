@@ -31,7 +31,7 @@ pub enum SpecType {
 
 impl SpecType {
     /// Convert to a name used in the manifest
-    pub fn to_name(&self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         match self {
             SpecType::Host => "host-dependencies",
             SpecType::Build => "build-dependencies",
@@ -466,7 +466,7 @@ impl Project {
         spec: &MatchSpec,
         spec_type: SpecType,
     ) -> miette::Result<()> {
-        let toml_name = spec_type.to_name();
+        let toml_name = spec_type.name();
         // Add to target table toml
         let (name, nameless) =
             self.add_dep_to_target_table(platform, toml_name.to_string(), spec)?;
@@ -482,7 +482,7 @@ impl Project {
 
     pub fn add_dependency(&mut self, spec: &MatchSpec, spec_type: SpecType) -> miette::Result<()> {
         // Find the dependencies table
-        let deps = &mut self.doc[spec_type.to_name()];
+        let deps = &mut self.doc[spec_type.name()];
         let (name, nameless) = Project::add_to_deps_table(deps, spec)?;
 
         self.manifest
