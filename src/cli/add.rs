@@ -1,5 +1,6 @@
 use crate::environment::update_prefix;
 use crate::prefix::Prefix;
+use crate::project::SpecType;
 use crate::{
     environment::{load_lock_file, update_lock_file},
     project::Project,
@@ -38,6 +39,16 @@ pub struct Args {
     /// Adding multiple dependencies at once is also supported:
     ///
     /// - `pixi add python pytest`: This will add both `python` and `pytest` to the project's dependencies.
+    ///
+    /// The `--platform` and `--build/--host` flags make the dependency target specific.
+    ///
+    /// - `pixi add python --platform linux-64 --platform osx-arm64`: Will add the latest version of python for linux-64 and osx-arm64 platforms.
+    ///
+    /// - `pixi add python --build`: Will add the latest version of python for as a build dependency.
+    ///
+    /// Mixing `--platform` and `--build`/`--host` flags is supported
+    ///
+    #[arg(required = true)]
     pub specs: Vec<MatchSpec>,
 
     /// The path to 'pixi.toml'
@@ -55,13 +66,10 @@ pub struct Args {
     /// Don't install the package to the environment, only add the package to the lock-file.
     #[arg(long)]
     pub no_install: bool,
-}
 
-#[derive(Debug, Copy, Clone)]
-pub enum SpecType {
-    Host,
-    Build,
-    Run,
+    /// The platform(s) for which the dependency should be added
+    #[arg(long, short)]
+    pub platform: Vec<Platform>,
 }
 
 impl SpecType {
@@ -79,7 +87,24 @@ impl SpecType {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let spec_type = SpecType::from_args(&args);
-    add_specs_to_project(&mut project, args.specs, spec_type, args.no_install).await
+    let spec_platforms = args.platform;
+
+    // Add the platform if it is not already present
+    let platforms_to_add = spec_platforms
+        .iter()
+        .filter(|p| !project.platforms().contains(p))
+        .cloned()
+        .collect::<Vec<Platform>>();
+    project.add_platforms(platforms_to_add.iter())?;
+
+    add_specs_to_project(
+        &mut project,
+        args.specs,
+        spec_type,
+        args.no_install,
+        spec_platforms,
+    )
+    .await
 }
 
 pub async fn add_specs_to_project(
@@ -87,6 +112,7 @@ pub async fn add_specs_to_project(
     specs: Vec<MatchSpec>,
     spec_type: SpecType,
     no_install: bool,
+    specs_platforms: Vec<Platform>,
 ) -> miette::Result<()> {
     // Split the specs into package name and version specifier
     let new_specs = specs
@@ -104,18 +130,25 @@ pub async fn add_specs_to_project(
 
     // Determine the best version per platform
     let mut best_versions = HashMap::new();
-    for platform in project.platforms() {
+
+    let platforms = if specs_platforms.is_empty() {
+        project.platforms()
+    } else {
+        &specs_platforms
+    }
+    .to_vec();
+    for platform in platforms {
         let current_specs = match spec_type {
-            SpecType::Host => project.host_dependencies(*platform)?,
-            SpecType::Build => project.build_dependencies(*platform)?,
-            SpecType::Run => project.dependencies(*platform)?,
+            SpecType::Host => project.host_dependencies(platform)?,
+            SpecType::Build => project.build_dependencies(platform)?,
+            SpecType::Run => project.dependencies(platform)?,
         };
         // Solve the environment with the new specs added
         let solved_versions = match determine_best_version(
             &new_specs,
             &current_specs,
             &sparse_repo_data,
-            *platform,
+            platform,
         ) {
             Ok(versions) => versions,
             Err(err) => {
@@ -159,11 +192,16 @@ pub async fn add_specs_to_project(
             spec
         };
         let spec = MatchSpec::from_nameless(updated_spec, Some(name));
-        match spec_type {
-            SpecType::Host => project.add_host_dependency(&spec)?,
-            SpecType::Build => project.add_build_dependency(&spec)?,
-            SpecType::Run => project.add_dependency(&spec)?,
+
+        // Add the dependency to the project
+        if specs_platforms.is_empty() {
+            project.add_dependency(&spec, spec_type)?;
+        } else {
+            for platform in specs_platforms.iter() {
+                project.add_target_dependency(*platform, &spec, spec_type)?;
+            }
         }
+
         added_specs.push(spec);
     }
 
@@ -194,9 +232,25 @@ pub async fn add_specs_to_project(
         eprintln!(
             "{}Added {}",
             console::style(console::Emoji("✔ ", "")).green(),
-            spec
+            spec,
         );
     }
+
+    // Print if it is something different from host and dep
+    match spec_type {
+        SpecType::Host => eprintln!("Added these as host dependencies."),
+        SpecType::Build => eprintln!("Added these as build dependencies."),
+        SpecType::Run => {}
+    };
+
+    // Print something if we've added for platforms
+    if !specs_platforms.is_empty() {
+        eprintln!(
+            "Added these only for platform(s): {}",
+            specs_platforms.iter().join(", ")
+        )
+    }
+
     Ok(())
 }
 

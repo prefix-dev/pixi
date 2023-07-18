@@ -1,3 +1,5 @@
+use crate::project::SpecType;
+use crate::utils::spanned::PixiSpanned;
 use crate::{consts, task::Task};
 use ::serde::Deserialize;
 use indexmap::IndexMap;
@@ -5,7 +7,6 @@ use miette::{Context, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use rattler_conda_types::{Channel, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Deserializer;
-use serde_spanned::Spanned;
 use serde_with::de::DeserializeAsWrap;
 use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
 use std::collections::HashMap;
@@ -57,7 +58,7 @@ pub struct ProjectManifest {
     /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
     /// manifest.
     #[serde(default)]
-    pub target: IndexMap<Spanned<TargetSelector>, TargetMetadata>,
+    pub target: IndexMap<PixiSpanned<TargetSelector>, TargetMetadata>,
 
     /// Environment activation information.
     ///
@@ -76,7 +77,7 @@ impl ProjectManifest {
                     if !self.project.platforms.as_ref().contains(p) {
                         return Err(create_unsupported_platform_report(
                             source,
-                            target_sel.span(),
+                            target_sel.span().unwrap_or_default(),
                             p,
                         ));
                     }
@@ -113,6 +114,30 @@ impl ProjectManifest {
         check_file_existence(&self.project.readme)?;
 
         Ok(())
+    }
+
+    /// Get the map of dependencies for a given spec type.
+    pub fn create_or_get_dependencies(
+        &mut self,
+        spec_type: SpecType,
+    ) -> &'_ mut IndexMap<String, NamelessMatchSpec> {
+        match spec_type {
+            SpecType::Run => &mut self.dependencies,
+            SpecType::Host => {
+                if let Some(ref mut deps) = self.host_dependencies {
+                    deps
+                } else {
+                    self.host_dependencies.insert(IndexMap::new())
+                }
+            }
+            SpecType::Build => {
+                if let Some(ref mut deps) = self.build_dependencies {
+                    deps
+                } else {
+                    self.build_dependencies.insert(IndexMap::new())
+                }
+            }
+        }
     }
 }
 
@@ -151,7 +176,7 @@ impl<'de> Deserialize<'de> for TargetSelector {
 }
 
 #[serde_as]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct TargetMetadata {
     /// Target specific dependencies
     #[serde(default)]
@@ -199,7 +224,7 @@ pub struct ProjectMetadata {
     /// The platforms this project supports
     // TODO: This is actually slightly different from the rattler_conda_types::Platform because it
     //     should not include noarch.
-    pub platforms: Spanned<Vec<Platform>>,
+    pub platforms: PixiSpanned<Vec<Platform>>,
 
     /// The license as a valid SPDX string (e.g. MIT AND Apache-2.0)
     pub license: Option<String>,

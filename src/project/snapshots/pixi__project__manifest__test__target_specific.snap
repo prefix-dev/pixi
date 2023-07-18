@@ -12,8 +12,10 @@ ProjectManifest {
         description: None,
         authors: [],
         channels: [],
-        platforms: Spanned {
-            span: 117..119,
+        platforms: PixiSpanned {
+            span: Some(
+                117..119,
+            ),
             value: [],
         },
         license: None,
@@ -37,8 +39,10 @@ ProjectManifest {
     host_dependencies: None,
     build_dependencies: None,
     target: {
-        Spanned {
-            span: 146..152,
+        PixiSpanned {
+            span: Some(
+                146..152,
+            ),
             value: Platform(
                 Win64,
             ),
@@ -68,8 +72,10 @@ ProjectManifest {
             build_dependencies: None,
             activation: None,
         },
-        Spanned {
-            span: 206..212,
+        PixiSpanned {
+            span: Some(
+                206..212,
+            ),
             value: Platform(
                 Osx64,
             ),
