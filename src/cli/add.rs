@@ -39,6 +39,13 @@ pub struct Args {
     /// Adding multiple dependencies at once is also supported:
     ///
     /// - `pixi add python pytest`: This will add both `python` and `pytest` to the project's dependencies.
+    ///
+    /// - `pixi add python --platform linux-64 --platform osx-arm64`: Will add the latest version of python for linux-64 and osx-arm64 platforms.
+    ///
+    /// - `pixi add python --build`: Will add the latest version of python for as a build dependency.
+    ///
+    /// Mixing `--platform` and `--build`/`--host` is supported
+    ///
     pub specs: Vec<MatchSpec>,
 
     /// The path to 'pixi.toml'
