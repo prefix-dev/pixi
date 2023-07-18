@@ -36,6 +36,10 @@ pub struct Args {
     /// - `pixi add python`: In absence of a specified version, the latest version will be chosen.
     ///   For instance, this could resolve to python version 3.11.3.* at the time of writing.
     ///
+    /// - `pixi add python --platform linux-64`: This will select the latest version of python only for the linux-64 platform.
+    ///
+    /// - `pixi add python --build`: This will select the latest version as a build dependency.
+    ///
     /// Adding multiple dependencies at once is also supported:
     ///
     /// - `pixi add python pytest`: This will add both `python` and `pytest` to the project's dependencies.
@@ -57,9 +61,9 @@ pub struct Args {
     #[arg(long)]
     pub no_install: bool,
 
-    /// The platform(s) for which the dependency should be added
+    /// The platform for which the dependency should be added this can be mixed with `--host` and `--build`.
     #[arg(long)]
-    pub platforms: Option<Vec<Platform>>,
+    pub platform: Option<Platform>,
 }
 
 impl SpecType {
@@ -77,16 +81,12 @@ impl SpecType {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let spec_type = SpecType::from_args(&args);
-    let spec_platforms = args.platforms;
+    let spec_platforms = args.platform;
 
-    if let Some(platforms) = &spec_platforms {
-        // Add the platform if it is not already present
-        let platforms_to_add = platforms
-            .iter()
-            .filter(|p| !project.platforms().contains(p))
-            .cloned()
-            .collect::<Vec<Platform>>();
-        project.add_platforms(platforms_to_add.iter())?;
+    if let Some(platform) = &spec_platforms {
+        if !project.platforms().contains(platform) {
+            project.add_platforms(std::iter::once(platform))?;
+        }
     }
 
     add_specs_to_project(
@@ -104,7 +104,7 @@ pub async fn add_specs_to_project(
     specs: Vec<MatchSpec>,
     spec_type: SpecType,
     no_install: bool,
-    specs_platforms: Option<Vec<Platform>>,
+    specs_platform: Option<Platform>,
 ) -> miette::Result<()> {
     // Split the specs into package name and version specifier
     let new_specs = specs
@@ -123,8 +123,8 @@ pub async fn add_specs_to_project(
     // Determine the best version per platform
     let mut best_versions = HashMap::new();
 
-    let platforms = specs_platforms
-        .clone()
+    let platforms = specs_platform
+        .map(|p| vec![p])
         .unwrap_or_else(|| project.platforms().to_vec());
     for platform in platforms {
         let current_specs = match spec_type {
@@ -164,7 +164,7 @@ pub async fn add_specs_to_project(
     }
 
     // Update the specs passed on the command line with the best available versions.
-    let specified_platforms = specs_platforms.unwrap_or_default();
+    let specified_platforms = specs_platform;
     let mut added_specs = Vec::new();
     for (name, spec) in new_specs {
         let best_version = best_versions
@@ -184,11 +184,11 @@ pub async fn add_specs_to_project(
         let spec = MatchSpec::from_nameless(updated_spec, Some(name));
 
         // Add the dependency to the project
-        if specified_platforms.is_empty() {
-            project.add_dependency(&spec, spec_type)?;
-        } else {
-            for platform in specified_platforms.iter() {
-                project.add_target_dependency(*platform, &spec, spec_type)?;
+        match specified_platforms {
+            None => project.add_dependency(&spec, spec_type)?,
+            Some(specified_platform) => {
+                // Add it to a specific platform if required
+                project.add_target_dependency(specified_platform, &spec, spec_type)?
             }
         }
 
