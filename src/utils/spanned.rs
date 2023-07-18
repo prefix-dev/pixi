@@ -1,4 +1,4 @@
-//! Taken from: https://docs.rs/serde_spanned/latest/serde_spanned/struct.Spanned.html
+//! Taken from: <https://docs.rs/serde_spanned/latest/serde_spanned/struct.Spanned.html>
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 
