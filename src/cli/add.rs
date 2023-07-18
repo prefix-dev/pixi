@@ -130,7 +130,12 @@ pub async fn add_specs_to_project(
     // Determine the best version per platform
     let mut best_versions = HashMap::new();
 
-    let platforms = specs_platforms.clone();
+    let platforms = if specs_platforms.is_empty() {
+        project.platforms()
+    } else {
+        &specs_platforms
+    }
+    .to_vec();
     for platform in platforms {
         let current_specs = match spec_type {
             SpecType::Host => project.host_dependencies(platform)?,

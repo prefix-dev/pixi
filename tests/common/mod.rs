@@ -51,11 +51,11 @@ pub trait LockFileExt {
     /// Check if this package is contained in the lockfile
     fn contains_package(&self, name: impl AsRef<str>) -> bool;
     /// Check if this matchspec is contained in the lockfile
-    fn contains_matchspec(&self, matchspec: impl AsRef<str>) -> bool;
+    fn contains_matchspec(&self, matchspec: impl IntoMatchSpec) -> bool;
     /// Check if this matchspec is contained in the lockfile for this platform
     fn contains_matchspec_for_platform(
         &self,
-        matchspec: impl AsRef<str>,
+        matchspec: impl IntoMatchSpec,
         platform: impl Into<Platform>,
     ) -> bool;
 }
@@ -67,8 +67,8 @@ impl LockFileExt for CondaLock {
             .any(|locked_dep| locked_dep.name == name.as_ref())
     }
 
-    fn contains_matchspec(&self, matchspec: impl AsRef<str>) -> bool {
-        let matchspec = MatchSpec::from_str(matchspec.as_ref()).expect("could not parse matchspec");
+    fn contains_matchspec(&self, matchspec: impl IntoMatchSpec) -> bool {
+        let matchspec = matchspec.into();
         let name = matchspec.name.expect("expected matchspec to have a name");
         let version = matchspec
             .version
@@ -82,10 +82,10 @@ impl LockFileExt for CondaLock {
 
     fn contains_matchspec_for_platform(
         &self,
-        matchspec: impl AsRef<str>,
+        matchspec: impl IntoMatchSpec,
         platform: impl Into<Platform>,
     ) -> bool {
-        let matchspec = MatchSpec::from_str(matchspec.as_ref()).expect("could not parse matchspec");
+        let matchspec = matchspec.into();
         let name = matchspec.name.expect("expected matchspec to have a name");
         let version = matchspec
             .version
@@ -143,7 +143,7 @@ impl PixiControl {
                 specs: vec![spec.into()],
                 build: false,
                 no_install: true,
-                platform: None,
+                platform: Default::default(),
             },
         }
     }

@@ -255,12 +255,9 @@ impl Project {
     ) -> miette::Result<()> {
         // Add to platform table
         let platform_array = &mut self.doc["project"]["platforms"];
-        let platform_array = platform_array.as_array_mut().ok_or_else(|| {
-            miette::miette!(
-                "platforms in {} should be an array",
-                consts::PROJECT_MANIFEST
-            )
-        })?;
+        let platform_array = platform_array
+            .as_array_mut()
+            .expect("platforms should be an array");
 
         for platform in platforms.clone() {
             platform_array.push(platform.to_string());
