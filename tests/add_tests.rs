@@ -133,7 +133,7 @@ async fn add_functionality_os() {
 
     // Add a package
     pixi.add("rattler==1")
-        .set_platform(Platform::LinuxS390X)
+        .set_platforms(&[Platform::LinuxS390X])
         .set_type(SpecType::Host)
         .await
         .unwrap();

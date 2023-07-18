@@ -101,8 +101,11 @@ impl AddBuilder {
         self
     }
 
-    pub fn set_platform(mut self, platform: Platform) -> Self {
-        let _ = self.args.platform.insert(platform);
+    pub fn set_platforms(mut self, platforms: &[Platform]) -> Self {
+        self.args
+            .platforms
+            .get_or_insert(Vec::new())
+            .extend(platforms.iter());
         self
     }
 }
