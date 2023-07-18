@@ -12,8 +12,10 @@ ProjectManifest {
         description: None,
         authors: [],
         channels: [],
-        platforms: Spanned {
-            span: 117..119,
+        platforms: PixiSpanned {
+            span: Some(
+                117..119,
+            ),
             value: [],
         },
     },

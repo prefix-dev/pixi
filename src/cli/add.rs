@@ -79,14 +79,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let spec_type = SpecType::from_args(&args);
     let spec_platforms = args.platforms;
 
-    // Add the platform if it is not already present
-    for platform in spec_platforms.clone().unwrap_or_default().iter() {
-        if !project.platforms().contains(platform) {
-            miette::bail!(
-                "platform '{}' is not specified in platforms section",
-                platform
-            );
-        }
+    if let Some(platforms) = &spec_platforms {
+        // Add the platform if it is not already present
+        let platforms_to_add = platforms
+            .iter()
+            .filter(|p| !project.platforms().contains(p))
+            .cloned()
+            .collect::<Vec<Platform>>();
+        project.add_platforms(platforms_to_add.iter())?;
     }
 
     add_specs_to_project(

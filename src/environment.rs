@@ -44,7 +44,10 @@ pub async fn get_up_to_date_prefix(project: &Project) -> miette::Result<Prefix> 
             help = format!(
                 "The project needs to be configured to support your platform ({platform})."
             ),
-            labels = vec![LabeledSpan::at(span, format!("add '{platform}' here"),)],
+            labels = vec![LabeledSpan::at(
+                span.unwrap_or_default(),
+                format!("add '{platform}' here"),
+            )],
             "the project is not configured for your current platform"
         )
         .with_source_code(project.source()));

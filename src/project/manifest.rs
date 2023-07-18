@@ -7,7 +7,6 @@ use miette::{LabeledSpan, NamedSource, Report};
 use rattler_conda_types::{Channel, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Deserializer;
-use serde_spanned::Spanned;
 use serde_with::de::DeserializeAsWrap;
 use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
 use std::collections::HashMap;
@@ -184,7 +183,7 @@ pub struct ProjectMetadata {
     /// The platforms this project supports
     // TODO: This is actually slightly different from the rattler_conda_types::Platform because it
     //     should not include noarch.
-    pub platforms: Spanned<Vec<Platform>>,
+    pub platforms: PixiSpanned<Vec<Platform>>,
 }
 
 #[serde_as]

@@ -247,6 +247,29 @@ impl Project {
         })
     }
 
+    /// Add a platform to the project
+    pub fn add_platforms<'a>(
+        &mut self,
+        platforms: impl Iterator<Item = &'a Platform> + Clone,
+    ) -> miette::Result<()> {
+        // Add to platform table
+        let platform_array = &mut self.doc["project"]["platforms"];
+        let platform_array = platform_array.as_array_mut().ok_or_else(|| {
+            miette::miette!(
+                "platforms in {} should be an array",
+                consts::PROJECT_MANIFEST
+            )
+        })?;
+
+        for platform in platforms.clone() {
+            platform_array.push(platform.to_string());
+        }
+
+        // Add to manifest
+        self.manifest.project.platforms.value.extend(platforms);
+        Ok(())
+    }
+
     /// Returns the dependencies of the project.
     pub fn dependencies(
         &self,
@@ -390,34 +413,6 @@ impl Project {
         dep_type: String,
         spec: &MatchSpec,
     ) -> miette::Result<(String, NamelessMatchSpec)> {
-        // let target_table = &mut self.doc["target"];
-
-        // // Create target table if it doesnt exist
-        // if target_table.is_none() {
-        //     *target_table = Item::Table(Table::new());
-        // }
-        //
-        // let mut target_table = target_table.as_inline_table_mut().ok_or_else(|| {
-        //     miette::miette!("target table in {} is malformed", consts::PROJECT_MANIFEST)
-        // })?;
-        //
-        // // Check if platform table exists inside target table
-        // let platform_table = &mut target_table[platform.as_str()];
-        // if platform_table.is_none() {
-        //     *platform_table = Value::InlineTable(Table::new());
-        // }
-        //
-        // // Check if dependencies exist
-        //
-        // if deps_table.is_none() {
-        //     *deps_table = Item::Table(Table::new());
-        // }
-        //
-        // // Cast the item into a table
-        // let deps_table = deps_table.as_table_like_mut().ok_or_else(|| {
-        //     miette::miette!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
-        // })?;
-
         let target = self.doc["target"]
             .or_insert(Item::Table(Table::new()))
             .as_table_mut()
@@ -445,7 +440,6 @@ impl Project {
                     consts::PROJECT_MANIFEST
                 )
             })?;
-        dependencies.set_dotted(true);
 
         // Determine the name of the package to add
         let name = spec
@@ -679,25 +673,26 @@ mod tests {
         let system_requirements: SystemRequirements =
             toml_edit::de::from_str(file_content).unwrap();
 
-        let mut expected_requirements: Vec<VirtualPackage> = vec![];
-        expected_requirements.push(VirtualPackage::Win);
-        expected_requirements.push(VirtualPackage::Unix);
-        expected_requirements.push(VirtualPackage::Linux(Linux {
-            version: Version::from_str("5.11").unwrap(),
-        }));
-        expected_requirements.push(VirtualPackage::Cuda(Cuda {
-            version: Version::from_str("12.2").unwrap(),
-        }));
-        expected_requirements.push(VirtualPackage::Osx(Osx {
-            version: Version::from_str("10.15").unwrap(),
-        }));
-        expected_requirements.push(VirtualPackage::Archspec(Archspec {
-            spec: "arm64".to_string(),
-        }));
-        expected_requirements.push(VirtualPackage::LibC(LibC {
-            version: Version::from_str("2.12").unwrap(),
-            family: "glibc".to_string(),
-        }));
+        let expected_requirements: Vec<VirtualPackage> = vec![
+            VirtualPackage::Win,
+            VirtualPackage::Unix,
+            VirtualPackage::Linux(Linux {
+                version: Version::from_str("5.11").unwrap(),
+            }),
+            VirtualPackage::Cuda(Cuda {
+                version: Version::from_str("12.2").unwrap(),
+            }),
+            VirtualPackage::Osx(Osx {
+                version: Version::from_str("10.15").unwrap(),
+            }),
+            VirtualPackage::Archspec(Archspec {
+                spec: "arm64".to_string(),
+            }),
+            VirtualPackage::LibC(LibC {
+                version: Version::from_str("2.12").unwrap(),
+                family: "glibc".to_string(),
+            }),
+        ];
 
         assert_eq!(
             system_requirements.virtual_packages(),

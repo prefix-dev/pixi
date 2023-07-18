@@ -12,7 +12,7 @@ use pixi::cli::task::{AddArgs, AliasArgs};
 use pixi::cli::{add, init, run, task};
 use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
-use rattler_conda_types::{MatchSpec, Version};
+use rattler_conda_types::{MatchSpec, Platform, Version};
 
 use miette::IntoDiagnostic;
 use std::path::{Path, PathBuf};
@@ -52,6 +52,12 @@ pub trait LockFileExt {
     fn contains_package(&self, name: impl AsRef<str>) -> bool;
     /// Check if this matchspec is contained in the lockfile
     fn contains_matchspec(&self, matchspec: impl AsRef<str>) -> bool;
+    /// Check if this matchspec is contained in the lockfile for this platform
+    fn contains_matchspec_for_platform(
+        &self,
+        matchspec: impl AsRef<str>,
+        platform: impl Into<Platform>,
+    ) -> bool;
 }
 
 impl LockFileExt for CondaLock {
@@ -67,14 +73,31 @@ impl LockFileExt for CondaLock {
         let version = matchspec
             .version
             .expect("expected versionspec to have a name");
-        self.package
-            .iter()
-            .find(|locked_dep| {
-                let package_version =
-                    Version::from_str(&locked_dep.version).expect("could not parse version");
-                locked_dep.name == name && version.matches(&package_version)
-            })
-            .is_some()
+        self.package.iter().any(|locked_dep| {
+            let package_version =
+                Version::from_str(&locked_dep.version).expect("could not parse version");
+            locked_dep.name == name && version.matches(&package_version)
+        })
+    }
+
+    fn contains_matchspec_for_platform(
+        &self,
+        matchspec: impl AsRef<str>,
+        platform: impl Into<Platform>,
+    ) -> bool {
+        let matchspec = MatchSpec::from_str(matchspec.as_ref()).expect("could not parse matchspec");
+        let name = matchspec.name.expect("expected matchspec to have a name");
+        let version = matchspec
+            .version
+            .expect("expected versionspec to have a name");
+        let platform = platform.into();
+        self.package.iter().any(|locked_dep| {
+            let package_version =
+                Version::from_str(&locked_dep.version).expect("could not parse version");
+            locked_dep.name == name
+                && version.matches(&package_version)
+                && locked_dep.platform == platform
+        })
     }
 }
 

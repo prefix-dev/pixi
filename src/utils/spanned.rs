@@ -25,9 +25,9 @@ pub fn is_spanned(name: &'static str, fields: &'static [&'static str]) -> bool {
 #[derive(Clone, Debug)]
 pub struct PixiSpanned<T> {
     /// Byte range
-    span: Option<std::ops::Range<usize>>,
+    pub span: Option<std::ops::Range<usize>>,
     /// The spanned value.
-    value: T,
+    pub value: T,
 }
 
 impl<T> From<T> for PixiSpanned<T> {
