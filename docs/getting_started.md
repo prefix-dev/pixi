@@ -167,6 +167,12 @@ python = "3.10"
 In the case above, we specify a specific dependency to OSX.
 This overwrites the generic python dependency specified in the dependencies block.
 
+These can also be added with the command-line flag `--platforms` that can be used with the **add** command e.g.:
+
+```shell
+pixi add python --platforms osx-arm64
+```
+
 ### Resolution order
 As a rule the target specific dependencies take precedence over generic ones
 in the order that they are specified, so should multiple targets match the last specification is used.
