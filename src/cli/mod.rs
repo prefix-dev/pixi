@@ -1,10 +1,12 @@
 use super::util::IndicatifWriter;
+use crate::progress;
 use clap::{CommandFactory, Parser};
-use clap_complete::Shell;
+use clap_complete;
 use clap_verbosity_flag::Verbosity;
 use miette::IntoDiagnostic;
-
-use crate::progress;
+use rattler_shell::shell::{Shell, ShellEnum};
+use std::io::Write;
+use std::str::FromStr;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
 pub mod add;
@@ -16,6 +18,7 @@ pub mod install;
 pub mod run;
 pub mod shell;
 pub mod task;
+pub mod upload;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -35,7 +38,7 @@ struct Args {
 pub struct CompletionCommand {
     /// The shell to generate a completion script for (defaults to 'bash').
     #[arg(short, long)]
-    shell: Option<Shell>,
+    shell: Option<clap_complete::Shell>,
 }
 
 #[derive(Parser, Debug)]
@@ -55,15 +58,42 @@ pub enum Command {
     Install(install::Args),
     Task(task::Args),
     Info(info::Args),
+    Upload(upload::Args),
 }
 
 fn completion(args: CompletionCommand) -> miette::Result<()> {
+    let clap_shell = args
+        .shell
+        .or(clap_complete::Shell::from_env())
+        .unwrap_or(clap_complete::Shell::Bash);
     clap_complete::generate(
-        args.shell.or(Shell::from_env()).unwrap_or(Shell::Bash),
+        clap_shell,
         &mut Args::command(),
         "pixi",
         &mut std::io::stdout(),
     );
+
+    // Create PS1 overwrite command
+    // TODO: Also make this work for non bourne shells.
+    let mut script = String::new();
+    let shell = ShellEnum::from_str(clap_shell.to_string().as_str()).into_diagnostic()?;
+    // Generate a shell agnostic command to add the PIXI_PROMPT to the PS1 variable.
+    shell
+        .set_env_var(
+            &mut script,
+            "PS1",
+            format!(
+                "{}{}",
+                shell.format_env_var("PIXI_PROMPT"),
+                shell.format_env_var("PS1")
+            )
+            .as_str(),
+        )
+        .unwrap();
+    // Just like the clap autocompletion code write directly to the stdout
+    std::io::stdout()
+        .write_all(script.as_bytes())
+        .into_diagnostic()?;
 
     Ok(())
 }
@@ -85,7 +115,9 @@ pub async fn execute() -> miette::Result<()> {
         .from_env()
         .into_diagnostic()?
         // filter logs from apple codesign because they are very noisy
-        .add_directive("apple_codesign=off".parse().into_diagnostic()?);
+        .add_directive("apple_codesign=off".parse().into_diagnostic()?)
+        // set pixi's tracing level to warn
+        .add_directive("pixi=warn".parse().into_diagnostic()?);
 
     // Setup the tracing subscriber
     tracing_subscriber::fmt()
@@ -113,5 +145,6 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Shell(cmd) => shell::execute(cmd).await,
         Command::Task(cmd) => task::execute(cmd),
         Command::Info(cmd) => info::execute(cmd).await,
+        Command::Upload(cmd) => upload::execute(cmd).await,
     }
 }

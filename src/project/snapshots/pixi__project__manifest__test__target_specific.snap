@@ -18,6 +18,12 @@ ProjectManifest {
             ),
             value: [],
         },
+        license: None,
+        license_file: None,
+        readme: None,
+        homepage: None,
+        repository: None,
+        documentation: None,
     },
     tasks: {},
     system_requirements: SystemRequirements {
@@ -64,6 +70,7 @@ ProjectManifest {
             },
             host_dependencies: None,
             build_dependencies: None,
+            activation: None,
         },
         PixiSpanned {
             span: Some(
@@ -96,6 +103,8 @@ ProjectManifest {
             },
             host_dependencies: None,
             build_dependencies: None,
+            activation: None,
         },
     },
+    activation: None,
 }

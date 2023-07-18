@@ -1,0 +1,8 @@
+---
+source: src/project/mod.rs
+expression: "project.activation_scripts(Platform::OsxArm64).unwrap()"
+---
+[
+    "pixi.toml",
+    "pixi.lock",
+]

@@ -1,0 +1,89 @@
+---
+source: src/project/manifest.rs
+expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\")"
+---
+ProjectManifest {
+    project: ProjectMetadata {
+        name: "foo",
+        version: Version {
+            version: [[0], [0], [1], [0]],
+            local: [],
+        },
+        description: None,
+        authors: [],
+        channels: [],
+        platforms: Spanned {
+            span: 121..123,
+            value: [],
+        },
+        license: None,
+        license_file: None,
+        readme: None,
+        homepage: None,
+        repository: None,
+        documentation: None,
+    },
+    tasks: {},
+    system_requirements: SystemRequirements {
+        windows: None,
+        unix: None,
+        macos: None,
+        linux: None,
+        cuda: None,
+        libc: None,
+        archspec: None,
+    },
+    dependencies: {},
+    host_dependencies: None,
+    build_dependencies: None,
+    target: {
+        Spanned {
+            span: 228..234,
+            value: Platform(
+                Win64,
+            ),
+        }: TargetMetadata {
+            dependencies: {},
+            host_dependencies: None,
+            build_dependencies: None,
+            activation: Some(
+                Activation {
+                    scripts: Some(
+                        [
+                            ".pixi/install/setup.ps1",
+                        ],
+                    ),
+                },
+            ),
+        },
+        Spanned {
+            span: 318..326,
+            value: Platform(
+                Linux64,
+            ),
+        }: TargetMetadata {
+            dependencies: {},
+            host_dependencies: None,
+            build_dependencies: None,
+            activation: Some(
+                Activation {
+                    scripts: Some(
+                        [
+                            ".pixi/install/setup.sh",
+                            "test",
+                        ],
+                    ),
+                },
+            ),
+        },
+    },
+    activation: Some(
+        Activation {
+            scripts: Some(
+                [
+                    ".pixi/install/setup.sh",
+                ],
+            ),
+        },
+    ),
+}

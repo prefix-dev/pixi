@@ -3,7 +3,7 @@ use crate::utils::spanned::PixiSpanned;
 use crate::{consts, task::Task};
 use ::serde::Deserialize;
 use indexmap::IndexMap;
-use miette::{LabeledSpan, NamedSource, Report};
+use miette::{Context, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use rattler_conda_types::{Channel, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Deserializer;
@@ -11,6 +11,8 @@ use serde_with::de::DeserializeAsWrap;
 use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
 use std::collections::HashMap;
 use std::ops::Range;
+use std::path::{Path, PathBuf};
+use url::Url;
 
 /// Describes the contents of a project manifest.
 #[serde_as]
@@ -57,11 +59,17 @@ pub struct ProjectManifest {
     /// manifest.
     #[serde(default)]
     pub target: IndexMap<PixiSpanned<TargetSelector>, TargetMetadata>,
+
+    /// Environment activation information.
+    ///
+    /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
+    /// manifest.
+    pub activation: Option<Activation>,
 }
 
 impl ProjectManifest {
     /// Validate the
-    pub fn validate(&self, source: NamedSource) -> miette::Result<()> {
+    pub fn validate(&self, source: NamedSource, root_folder: &Path) -> miette::Result<()> {
         // Check if the targets are defined for existing platforms
         for target_sel in self.target.keys() {
             match target_sel.as_ref() {
@@ -76,6 +84,34 @@ impl ProjectManifest {
                 }
             }
         }
+
+        // parse the SPDX license expression to make sure that it is a valid expression.
+        if let Some(spdx_expr) = &self.project.license {
+            spdx::Expression::parse(spdx_expr)
+                .into_diagnostic()
+                .with_context(|| {
+                    format!(
+                        "failed to parse the SPDX license expression '{}'",
+                        spdx_expr
+                    )
+                })?;
+        }
+
+        let check_file_existence = |x: &Option<PathBuf>| {
+            if let Some(path) = x {
+                let full_path = root_folder.join(path);
+                if !full_path.exists() {
+                    return Err(miette::miette!(
+                        "the file '{}' does not exist",
+                        full_path.display()
+                    ));
+                }
+            }
+            Ok(())
+        };
+
+        check_file_existence(&self.project.license_file)?;
+        check_file_existence(&self.project.readme)?;
 
         Ok(())
     }
@@ -156,11 +192,16 @@ pub struct TargetMetadata {
     #[serde(default, rename = "build-dependencies")]
     #[serde_as(as = "Option<IndexMap<_, DisplayFromStr>>")]
     pub build_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
+
+    /// Additional information to activate an environment.
+    #[serde(default)]
+    pub activation: Option<Activation>,
 }
 
 /// Describes the contents of the `[package]` section of the project manifest.
 #[serde_as]
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ProjectMetadata {
     /// The name of the project
     pub name: String,
@@ -184,6 +225,25 @@ pub struct ProjectMetadata {
     // TODO: This is actually slightly different from the rattler_conda_types::Platform because it
     //     should not include noarch.
     pub platforms: PixiSpanned<Vec<Platform>>,
+
+    /// The license as a valid SPDX string (e.g. MIT AND Apache-2.0)
+    pub license: Option<String>,
+
+    /// The license file (relative to the project root)
+    #[serde(rename = "license-file")]
+    pub license_file: Option<PathBuf>,
+
+    /// Path to the README file of the project (relative to the project root)
+    pub readme: Option<PathBuf>,
+
+    /// URL of the project homepage
+    pub homepage: Option<Url>,
+
+    /// URL of the project source repository
+    pub repository: Option<Url>,
+
+    /// URL of the project documentation
+    pub documentation: Option<Url>,
 }
 
 #[serde_as]
@@ -280,6 +340,11 @@ impl From<LibCFamilyAndVersion> for LibC {
         }
     }
 }
+#[derive(Default, Clone, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct Activation {
+    pub scripts: Option<Vec<String>>,
+}
 
 // Create an error report for usign a platform that is not supported by the project.
 fn create_unsupported_platform_report(
@@ -369,5 +434,26 @@ mod test {
             )
             .collect::<Vec<_>>()
             .join("\n"))
+    }
+
+    #[test]
+    fn test_activation_scripts() {
+        let contents = format!(
+            r#"
+            {PROJECT_BOILERPLATE}
+            [activation]
+            scripts = [".pixi/install/setup.sh"]
+
+            [target.win-64.activation]
+            scripts = [".pixi/install/setup.ps1"]
+
+            [target.linux-64.activation]
+            scripts = [".pixi/install/setup.sh", "test"]
+            "#
+        );
+
+        assert_debug_snapshot!(
+            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
+        );
     }
 }
