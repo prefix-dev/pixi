@@ -1,4 +1,4 @@
-# Simple ROS2 NAV2 Example (Unsupported on Windows)
+# Simple ROS2 NAV2 Example (Unsupported on Windows, but works in [WSL](https://learn.microsoft.com/en-us/windows/wsl/install))
 
 The `start` task in PIXI runs the entire ROS2 launch command:
 ```shell
