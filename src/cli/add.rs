@@ -48,6 +48,7 @@ pub struct Args {
     ///
     /// Mixing `--platform` and `--build`/`--host` flags is supported
     ///
+    #[arg(required = true)]
     pub specs: Vec<MatchSpec>,
 
     /// The path to 'pixi.toml'
