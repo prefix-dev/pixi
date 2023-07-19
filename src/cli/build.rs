@@ -1,10 +1,16 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    str::FromStr,
+};
 
 use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_build::{
     build::run_build,
-    metadata::{About, BuildOptions, Output, Package, PathSrc, RenderedRecipe, Requirements},
+    metadata::{
+        About, BuildOptions, Output, Package, PathSrc, RenderedRecipe, Requirements, ScriptEnv,
+    },
     render::dependency_list::Dependency,
     tool_configuration::Configuration,
 };
@@ -114,6 +120,29 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
         })
         .collect();
 
+    let mut env_vars = BTreeMap::<String, String>::new();
+    env_vars.insert(
+        "PIXI_BUILD_FOLDER".to_string(),
+        build_configuration
+            .directories
+            .work_dir
+            .join("pixi-build")
+            .to_string_lossy()
+            .to_string(),
+    );
+
+    #[cfg(target_os = "windows")]
+    let install_prefix = build_configuration.directories.host_prefix.join("Library");
+    #[cfg(not(target_os = "windows"))]
+    let install_prefix = build_configuration.directories.host_prefix.clone();
+
+    env_vars.insert(
+        "PIXI_INSTALL_PREFIX".to_string(),
+        install_prefix.to_string_lossy().to_string(),
+    );
+
+    println!("Env vars: {:?}", env_vars);
+
     let recipe = RenderedRecipe {
         source: Some(vec![rattler_build::metadata::Source::Path(PathSrc {
             path: project.root().to_path_buf(),
@@ -125,6 +154,11 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
             // todo - how do we compute the build hash?
             string: Some("0".to_string()),
             script: Some(vec![script]),
+            script_env: ScriptEnv {
+                env: env_vars,
+                secrets: Default::default(),
+                passthrough: Default::default(),
+            },
             ignore_run_exports: None,
             ignore_run_exports_from: None,
             run_exports: None,
