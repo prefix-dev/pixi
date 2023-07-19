@@ -1408,15 +1408,6 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
@@ -1659,9 +1650,9 @@ checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
 name = "minijinja"
-version = "0.34.0"
+version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75aa91cba87dcad6af3e53bc7adb9c99755eba2d49b6c5f10dbcc79d4727c1bd"
+checksum = "1f75e6f2b03d9292f6e18aaeeda21d58c91f6943a58ea19a2e8672dcf9d91d5b"
 dependencies = [
  "serde",
 ]
@@ -2059,7 +2050,7 @@ dependencies = [
  "indicatif",
  "insta",
  "is_executable",
- "itertools 0.10.5",
+ "itertools",
  "miette",
  "minijinja",
  "once_cell",
@@ -2241,7 +2232,7 @@ dependencies = [
  "futures 0.3.28",
  "fxhash",
  "hex",
- "itertools 0.11.0",
+ "itertools",
  "memchr",
  "memmap2",
  "nom",
@@ -2276,7 +2267,7 @@ dependencies = [
  "fxhash",
  "glob",
  "hex",
- "itertools 0.11.0",
+ "itertools",
  "lazy-regex",
  "nom",
  "rattler_digest",
@@ -2315,7 +2306,7 @@ name = "rattler_libsolv_rs"
 version = "0.5.0"
 source = "git+https://github.com/mamba-org/rattler?branch=main#145373f284aa61180aa37618b1c9c01ca6809617"
 dependencies = [
- "itertools 0.11.0",
+ "itertools",
  "petgraph",
  "rattler_conda_types",
  "tracing",
@@ -2355,7 +2346,7 @@ dependencies = [
  "bzip2",
  "chrono",
  "futures-util",
- "itertools 0.11.0",
+ "itertools",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
@@ -2384,7 +2375,7 @@ dependencies = [
  "hex",
  "humansize",
  "humantime",
- "itertools 0.11.0",
+ "itertools",
  "json-patch",
  "libc",
  "md-5",
@@ -2415,7 +2406,7 @@ source = "git+https://github.com/mamba-org/rattler?branch=main#145373f284aa61180
 dependencies = [
  "enum_dispatch",
  "indexmap 2.0.0",
- "itertools 0.11.0",
+ "itertools",
  "rattler_conda_types",
  "serde_json",
  "shlex",
