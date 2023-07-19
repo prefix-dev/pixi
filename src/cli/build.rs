@@ -1,8 +1,4 @@
-use std::{
-    collections::BTreeMap,
-    path::PathBuf,
-    str::FromStr,
-};
+use std::{collections::BTreeMap, path::PathBuf, str::FromStr};
 
 use clap::Parser;
 use miette::IntoDiagnostic;

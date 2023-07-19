@@ -23,7 +23,6 @@ pub fn add_metadata_as_env_vars(
 
 /// Returns environment variables and their values that should be injected when running a command.
 pub fn get_metadata_env(project: &Project) -> HashMap<String, String> {
-
     #[cfg(target_os = "windows")]
     let install_prefix = project.root().join(".pixi/env/Library");
     #[cfg(not(target_os = "windows"))]
@@ -53,7 +52,11 @@ pub fn get_metadata_env(project: &Project) -> HashMap<String, String> {
         ),
         (
             "PIXI_BUILD_FOLDER".to_string(),
-            project.root().join("pixi-build").to_string_lossy().into_owned(),
+            project
+                .root()
+                .join("pixi-build")
+                .to_string_lossy()
+                .into_owned(),
         ),
         (
             "PIXI_INSTALL_PREFIX".to_string(),
