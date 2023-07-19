@@ -85,7 +85,7 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
 
     let script = get_script(&project);
 
-    println!("Script: {}", script);
+    tracing::info!("Assembled build script:\n{}", script);
 
     let host_dependencies: Vec<Dependency> = project
         .host_dependencies(target_platform)?
