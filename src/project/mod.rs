@@ -120,6 +120,11 @@ impl Project {
             })
     }
 
+    /// Get all tasks defined in the project
+    pub fn tasks(&self) -> Vec<&String> {
+        self.manifest.tasks.keys().collect()
+    }
+
     /// Find task dependencies
     pub fn task_depends_on(&self, name: impl AsRef<str>) -> Vec<&String> {
         let task = self.manifest.tasks.get(name.as_ref());
