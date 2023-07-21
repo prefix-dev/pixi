@@ -28,7 +28,7 @@ pub struct ProjectInfo {
     tasks: Vec<String>,
     manifest_path: PathBuf,
     package_count: Option<u64>,
-    cache_size: Option<String>,
+    environment_size: Option<String>,
     last_updated: Option<String>,
     platforms: Vec<Platform>,
 }
@@ -74,7 +74,7 @@ impl Display for Info {
             f,
             "{:20}: {}",
             "Auth storage",
-            self.auth_dir.to_string_lossy().to_string()
+            self.auth_dir.to_string_lossy()
         )?;
 
         if let Some(pi) = self.project_info.as_ref() {
@@ -91,15 +91,15 @@ impl Display for Info {
                 writeln!(f, "{:20}: {}", "Dependency count", count)?;
             }
 
-            if let Some(size) = &pi.cache_size {
-                writeln!(f, "{:20}: {}", "Cache size", size)?;
+            if let Some(size) = &pi.environment_size {
+                writeln!(f, "{:20}: {}", "Environment size", size)?;
             }
 
             if let Some(update_time) = &pi.last_updated {
                 writeln!(f, "{:20}: {}", "Last updated", update_time)?;
             }
 
-            if pi.platforms.len() > 0 {
+            if !pi.platforms.is_empty() {
                 for (i, p) in pi.platforms.iter().enumerate() {
                     if i == 0 {
                         writeln!(f, "{:20}: {}", "Target platforms", p)?;
@@ -109,7 +109,7 @@ impl Display for Info {
                 }
             }
 
-            if pi.tasks.len() > 0 {
+            if !pi.tasks.is_empty() {
                 for (i, t) in pi.tasks.iter().enumerate() {
                     if i == 0 {
                         writeln!(f, "{:20}: {}", "Tasks", t)?;
@@ -124,7 +124,7 @@ impl Display for Info {
     }
 }
 
-// Returns the size of a directory
+/// Returns the size of a directory
 fn dir_size(path: impl Into<PathBuf>) -> miette::Result<String> {
     fn dir_size(mut dir: fs::ReadDir) -> miette::Result<u64> {
         dir.try_fold(0, |acc, file| {
@@ -141,7 +141,7 @@ fn dir_size(path: impl Into<PathBuf>) -> miette::Result<String> {
     Ok(format!("{} MiB", size / 1024 / 1024))
 }
 
-// Returns last update time of file, formatted: DD-MM-YYYY H:M:S
+/// Returns last update time of file, formatted: DD-MM-YYYY H:M:S
 fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
     let time = fs::metadata(path.into())
         .into_diagnostic()?
@@ -154,7 +154,7 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
     Ok(formated_time)
 }
 
-// Returns number of dependencies on current platform
+/// Returns number of dependencies on current platform
 fn dependency_count(project: &Project) -> miette::Result<u64> {
     let dep_count = project
         .all_dependencies(Platform::current())?
@@ -172,7 +172,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         manifest_path: p.root().to_path_buf().join("pixi.toml"),
         tasks: p.manifest.tasks.keys().cloned().collect(),
         package_count: dependency_count(&p).ok(),
-        cache_size: dir_size(p.root().join(".pixi")).ok(),
+        environment_size: dir_size(p.root().join(".pixi")).ok(),
         last_updated: last_updated(p.lock_file_path()).ok(),
         platforms: p.platforms().to_vec(),
     });
@@ -195,8 +195,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         platform: Platform::current().to_string(),
         virtual_packages,
         version: env!("CARGO_PKG_VERSION").to_string(),
-        cache_dir: cache_dir,
-        cache_size: cache_size,
+        cache_dir,
+        cache_size,
         auth_dir: get_default_auth_store_location(),
         project_info,
     };
