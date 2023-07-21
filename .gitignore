@@ -1,5 +1,6 @@
 /target
 .idea
+.vscode
 .test-projects
 __pycache__
 **/**/.pixi

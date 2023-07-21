@@ -1,9 +1,16 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_networking::{Authentication, AuthenticationStorage};
 
 fn default_authentication_storage() -> AuthenticationStorage {
-    AuthenticationStorage::new("rattler", &dirs::home_dir().unwrap().join(".rattler"))
+    AuthenticationStorage::new("rattler", &get_default_auth_store_location())
+}
+
+// moved into seperate function to access from info command
+pub fn get_default_auth_store_location() -> PathBuf {
+    dirs::home_dir().unwrap().join(".rattler")
 }
 
 #[derive(Parser, Debug)]
