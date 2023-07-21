@@ -17,6 +17,10 @@ pub enum Operation {
     /// Alias another specific command
     #[clap(alias = "@")]
     Alias(AliasArgs),
+
+    /// List all tasks
+    #[clap(alias = "l")]
+    List,
 }
 
 #[derive(Parser, Debug)]
@@ -159,6 +163,18 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 console::style(&name).bold(),
                 task,
             );
+        }
+        Operation::List => {
+            let tasks = project.tasks();
+            if tasks.is_empty() {
+                eprintln!("No tasks found",);
+            } else {
+                let mut formatted = String::new();
+                for name in tasks {
+                    formatted.push_str(&format!("* {}\n", console::style(name).bold(),));
+                }
+                eprintln!("{}", formatted);
+            }
         }
     };
 
