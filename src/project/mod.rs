@@ -41,7 +41,7 @@ impl SpecType {
 }
 
 /// A project represented by a pixi.toml file.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Project {
     root: PathBuf,
     source: String,

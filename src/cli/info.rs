@@ -8,12 +8,18 @@ use rattler_virtual_packages::VirtualPackage;
 use serde::Serialize;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+use tokio::task::spawn_blocking;
 
+use crate::progress::await_in_progress;
 use crate::{cli::auth::get_default_auth_store_location, Project};
 
 /// Information about the system and project
 #[derive(Parser, Debug)]
 pub struct Args {
+    /// Show cache and environment size
+    #[arg(long)]
+    extended: bool,
+
     /// Whether to show the output as JSON or not
     #[arg(long)]
     json: bool,
@@ -168,11 +174,31 @@ fn dependency_count(project: &Project) -> miette::Result<u64> {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
 
+    let project_clone = project.clone().unwrap();
+    let env_path = project_clone.root().join(".pixi");
+    let cache_dir = rattler::default_cache_dir().ok();
+    let cache_dir_clone = cache_dir.clone();
+
+    let (environment_size, cache_size) = if args.extended {
+        await_in_progress(
+            "fetching cache",
+            spawn_blocking(|| {
+                let env_size = dir_size(env_path).ok();
+                let cache_size = dir_size(cache_dir_clone.unwrap()).ok();
+                (env_size, cache_size)
+            }),
+        )
+        .await
+        .into_diagnostic()?
+    } else {
+        (None, None)
+    };
+
     let project_info = project.map(|p| ProjectInfo {
         manifest_path: p.root().to_path_buf().join("pixi.toml"),
         tasks: p.manifest.tasks.keys().cloned().collect(),
         package_count: dependency_count(&p).ok(),
-        environment_size: dir_size(p.root().join(".pixi")).ok(),
+        environment_size,
         last_updated: last_updated(p.lock_file_path()).ok(),
         platforms: p.platforms().to_vec(),
     });
@@ -183,13 +209,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .cloned()
         .map(GenericVirtualPackage::from)
         .collect::<Vec<_>>();
-
-    let cache_dir = rattler::default_cache_dir().ok();
-    let cache_size = if let Some(dir) = &cache_dir {
-        dir_size(dir).ok()
-    } else {
-        None
-    };
 
     let info = Info {
         platform: Platform::current().to_string(),
