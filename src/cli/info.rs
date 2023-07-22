@@ -174,17 +174,16 @@ fn dependency_count(project: &Project) -> miette::Result<u64> {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
 
-    let project_clone = project.clone().unwrap();
-    let env_path = project_clone.root().join(".pixi");
-    let cache_dir = rattler::default_cache_dir().ok();
-    let cache_dir_clone = cache_dir.clone();
-
+    let cache_dir = rattler::default_cache_dir()
+        .map_err(|_| miette::miette!("Could not determine default cache directory"))?;
     let (environment_size, cache_size) = if args.extended {
+        let cache_dir = cache_dir.clone();
+        let env_dir = project.as_ref().map(|p| p.root().join(".pixi"));
         await_in_progress(
             "fetching cache",
-            spawn_blocking(|| {
-                let env_size = dir_size(env_path).ok();
-                let cache_size = dir_size(cache_dir_clone.unwrap()).ok();
+            spawn_blocking(move || {
+                let env_size = env_dir.and_then(|env| dir_size(env).ok());
+                let cache_size = dir_size(cache_dir).ok();
                 (env_size, cache_size)
             }),
         )
@@ -214,7 +213,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         platform: Platform::current().to_string(),
         virtual_packages,
         version: env!("CARGO_PKG_VERSION").to_string(),
-        cache_dir,
+        cache_dir: Some(cache_dir),
         cache_size,
         auth_dir: get_default_auth_store_location(),
         project_info,
