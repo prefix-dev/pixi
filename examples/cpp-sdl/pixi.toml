@@ -18,17 +18,24 @@ configure = { cmd = [
     ".",
     # We wanna build in the .build directory
     "-B",
-    ".build",
+    "$PIXI_BUILD_FOLDER",
+    # We want to install into the right prefix directory
+    "-DCMAKE_INSTALL_PREFIX=$PIXI_INSTALL_PREFIX",
 ] }
 
 # Build the executable but make sure CMake is configured first.
-build = { cmd = ["ninja", "-C", ".build"], depends_on = ["configure"] }
+build = { cmd = ["ninja", "-C", "$PIXI_BUILD_FOLDER"], depends_on = ["configure"] }
+
+install = { cmd = ["ninja", "-C", "$PIXI_BUILD_FOLDER", "install"], depends_on = ["build"] }
 
 # Start the built executable
-start = { cmd = ".build/bin/sdl_example", depends_on = ["build"] }
+start = { cmd = "$PIXI_BUILD_FOLDER/bin/sdl_example", depends_on = ["build"] }
 
-[dependencies]
+[build-dependencies]
 cmake = "3.26.4.*"
 cxx-compiler = "1.5.2.*"
-sdl2 = "2.26.5.*"
 ninja = "1.11.1.*"
+
+[host-dependencies]
+sdl2 = "2.26.5.*"
+
