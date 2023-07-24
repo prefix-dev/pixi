@@ -1,0 +1,52 @@
+---
+part: pixi
+title: Getting Started
+description: Learn how to make your first steps with pixi
+---
+
+Initialize a new project and navigate to the project directory
+
+```shell
+pixi init myproject
+cd myproject
+```
+
+Add the dependencies you want to use
+
+```shell
+pixi add cowpy
+```
+
+Run the installed package in its environment
+
+```shell
+pixi run cowpy "Thanks for using pixi"
+```
+
+Activate a shell in the environment
+
+```shell
+pixi shell
+cowpy "Thanks for using pixi"
+exit
+```
+
+## Use pixi as an installation tool
+
+Use pixi to install tools on your machine.
+
+Some notable examples:
+
+```shell
+# Awesome cross shell prompt, huge tip when using pixi!
+pixi global install starship
+
+# Want to try a different shell?
+pixi global install fish
+
+# Install other prefix.dev tools
+pixi global install rattler-build
+
+# Install a linter you want to use in multiple projects.
+pixi global install ruff
+```
