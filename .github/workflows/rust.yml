@@ -117,6 +117,7 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: ${{ matrix.job.target }}
+          cache: false
 
       - name: Setup | Install cargo-wix [Windows]
         continue-on-error: true
