@@ -29,8 +29,9 @@ pixi init --channel conda-forge --channel bioconda myproject
 
 ## `add`
 
-Adds dependencies to the `pixi.toml` before it does that it check if it is possible to solve the environment.
+Adds dependencies to the `pixi.toml`.
 It will only add if the package with its version constraint is able to work with rest of the dependencies in the project.
+[More info](./advanced/multi_platform_configuration) on multi platform configuration.
 
 #### Options
 
@@ -159,6 +160,21 @@ pixi shell
 exit
 pixi shell --manifest-path ~/myproject/pixi.toml
 exit
+```
+
+## `info`
+
+Shows helpful information about the pixi installation, cache directories, disk usage, and more.
+More information [here](./advanced/explain_info_command).
+
+#### Options
+
+- `--extended`: extend the information with more slow queries to the system, like directory sizes.
+- `--json`: Get a machine-readable version of the information as output.
+
+```shell
+pixi info
+pixi info --json --extended
 ```
 
 ## `upload`
