@@ -1,0 +1,16 @@
+[project]
+name = "rerun"
+version = "0.1.0"
+description = "Example package to run the rerun-sdk"
+authors = ["Ruben Arts <ruben@prefix.dev>"]
+channels = ["conda-forge"]
+platforms = ["linux-64", "win-64", "osx-64"]
+
+[tasks]
+start = "pixi run python dna_exmaple.py "
+
+[dependencies]
+rerun-sdk = "0.7.0.*"
+scipy = "1.11.1.*"
+numpy = "1.25.1.*"
+python = "3.10.12.*"
