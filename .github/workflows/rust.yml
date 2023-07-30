@@ -150,9 +150,9 @@ jobs:
 
       - name: Build
         run: >
-          cargo build 
-          --locked 
-          --release 
+          cargo build
+          --locked
+          --release
           ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 
       - name: Set binary name & path
@@ -189,10 +189,10 @@ jobs:
         if: ${{ !matrix.skip-tests }}
         run: >
           cargo test
-          --locked 
+          --locked
           --release
           ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
-          ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}} 
+          ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
 
       - name: Build Installer
         continue-on-error: true
