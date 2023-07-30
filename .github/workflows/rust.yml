@@ -99,6 +99,7 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Use static CRT on Windows
+        shell: bash
         run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static" >> "${GITHUB_ENV}"
         if: endsWith(matrix.target, 'windows-msvc')
 
