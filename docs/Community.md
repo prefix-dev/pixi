@@ -2,4 +2,4 @@
 
 ## Built using Pixi
 
-Make a PR to add your project to the list!
+- [quantco/polarify](https://github.com/quantco/polarify): Simplifying conditional Polars Expressions with Python 🐍 🐻‍❄️
