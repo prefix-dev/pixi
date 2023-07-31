@@ -32,7 +32,6 @@ fn search_package_by_similarity(
         .flat_map(|repo| {
             repo.package_names()
                 .filter(|&name| jaro(name, package) > similarity)
-                .unique()
         })
         .collect::<Vec<&str>>();
 
@@ -41,7 +40,7 @@ fn search_package_by_similarity(
     for repo in repo_data {
         for package in &similar_packages {
             let mut records = repo.load_records(package).into_diagnostic()?;
-            records.sort();
+            records.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
             let latest_package = records.last().cloned();
             if let Some(latest_package) = latest_package {
                 latest_packages.push(latest_package);
@@ -58,6 +57,11 @@ fn search_package_by_similarity(
             Ordering::Equal
         }
     });
+
+    latest_packages = latest_packages
+        .into_iter()
+        .unique_by(|record| record.package_record.name.clone())
+        .collect::<Vec<_>>();
 
     Ok(latest_packages)
 }
