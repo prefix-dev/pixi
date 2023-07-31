@@ -56,6 +56,7 @@ serde_spanned = "0.6.3"
 serde_with = { version = "3.1.0", features = ["indexmap"] }
 shlex = "1.1.0"
 spdx = "0.10.2"
+strsim = "0.10.0"
 tempfile = "3.6.0"
 tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread", "signal"] }
 tokio-util = "0.7.8"

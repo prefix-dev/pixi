@@ -2070,6 +2070,7 @@ dependencies = [
  "serde_with",
  "shlex",
  "spdx",
+ "strsim",
  "tempfile",
  "tokio",
  "tokio-util",
