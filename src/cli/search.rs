@@ -10,12 +10,15 @@ use tokio::task::spawn_blocking;
 
 use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata};
 
+/// Search a package, output will list the latest version of package
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
+    /// Name of package to search
     #[arg(required = true)]
     pub package: String,
 
+    /// Channel to specifically search package
     #[clap(short, long, default_values = ["conda-forge"])]
     channel: Vec<String>,
 }
