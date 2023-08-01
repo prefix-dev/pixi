@@ -88,7 +88,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             jaro(pn, n) > similarity
                         });
                     }
-                    return Ok(packages);
+                    Ok(packages)
                 }
                 Err(e) => Err(e),
             }
