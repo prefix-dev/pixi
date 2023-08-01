@@ -115,6 +115,10 @@ pub async fn execute() -> miette::Result<()> {
         )
     }))?;
 
+    // Enable disable colors for the colors crate
+    console::set_colors_enabled(use_colors);
+    console::set_colors_enabled_stderr(use_colors);
+
     let level_filter = match args.verbose.log_level_filter() {
         clap_verbosity_flag::LevelFilter::Off => LevelFilter::OFF,
         clap_verbosity_flag::LevelFilter::Error => LevelFilter::ERROR,
