@@ -24,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 #### Fixed
 - Add trailing newline to `pixi.toml` and `.gitignore`, by @pavelzw. ([#216](https://github.com/prefix-dev/pixi/pull/216))
-- Deny unknown fields and rename license-file in `pixi.toml`, by @wolf. ([#220](https://github.com/prefix-dev/pixi/pull/220))
+- Deny unknown fields and rename license-file in `pixi.toml`, by @wolfv. ([#220](https://github.com/prefix-dev/pixi/pull/220))
 - Overwrite `PS1` variable when going into a `pixi shell`, by @rarts. ([#201](https://github.com/prefix-dev/pixi/pull/201))
 
 #### Changed
