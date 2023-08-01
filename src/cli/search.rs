@@ -50,9 +50,12 @@ where
 
     let mut latest_packages = Vec::new();
 
+    // search for `similar_packages` in all platform's repodata
+    // add the latest version of the fetched package to latest_packages vector
     for repo in repo_data {
         for package in &similar_packages {
             let mut records = repo.load_records(package).into_diagnostic()?;
+            // sort records by version, get the latest one
             records.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
             let latest_package = records.last().cloned();
             if let Some(latest_package) = latest_package {
@@ -130,7 +133,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     println!(
-        "{:40} {:20} {:20}",
+        "{:40} {:19} {:19}",
         console::style("Package").bold(),
         console::style("Version").bold(),
         console::style("Channel").bold(),
@@ -146,7 +149,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let version = package.package_record.version.as_str();
 
         println!(
-            "{:40} {:20} {:20}",
+            "{:40} {:19} {:19}",
             console::style(package_name).cyan().bright(),
             console::style(version),
             console::style(channel_name),
