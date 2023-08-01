@@ -70,7 +70,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect::<Result<Vec<Channel>, _>>()
         .into_diagnostic()?;
 
-    // let similarity = 0.8;
     let package_name = args.package;
     let platforms = [Platform::current()];
     let repo_data = fetch_sparse_repodata(&channels, &platforms).await?;
@@ -83,7 +82,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             match packages {
                 Ok(packages) => {
                     if packages.is_empty() {
-                        let similarity = 0.8;
+                        let similarity = 0.6;
                         return search_package_by_filter(&p, &repo_data, |pn, n| {
                             jaro(pn, n) > similarity
                         });
@@ -108,10 +107,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     });
 
     if packages.is_empty() {
-        // don't know if this is the best way to do it
         return Err(miette::miette!("Could not find {package_name}"));
     }
 
+    println!(
+        "{:40} {:20} {:20}",
+        console::style("Package").bold(),
+        console::style("Version").bold(),
+        console::style("Channel").bold(),
+    );
     for package in packages {
         // TODO: change channel fetch logic to be more robust
         // currently it relies on channel field being a url with trailing slash
@@ -122,8 +126,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let package_name = package.package_record.name;
         let version = package.package_record.version.as_str();
 
-        // TODO: prettify stdout
-        println!("{channel_name}/{package_name}: {version}");
+        println!(
+            "{:40} {:20} {:20}",
+            console::style(package_name).cyan().bright(),
+            console::style(version),
+            console::style(channel_name),
+        );
     }
 
     Ok(())
