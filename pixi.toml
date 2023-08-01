@@ -1,6 +1,6 @@
 [project]
 name = "pixi"
-version = "0.0.7"
+version = "0.0.8"
 description = "Package management made easy!"
 authors = ["Wolf Vollprecht <wolf@prefix.dev>", "Bas Zalmstra <bas@prefix.dev>", "Tim de Jager <tim@prefix.dev>", "Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge"]
