@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, path::PathBuf};
 
 use clap::Parser;
 use itertools::Itertools;
@@ -8,7 +8,7 @@ use rattler_repodata_gateway::sparse::SparseRepoData;
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
-use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata};
+use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata, Project};
 
 /// Search a package, output will list the latest version of package
 #[derive(Debug, Parser)]
@@ -21,6 +21,10 @@ pub struct Args {
     /// Channel to specifically search package
     #[clap(short, long, default_values = ["conda-forge"])]
     channel: Vec<String>,
+
+    /// The path to 'pixi.toml'
+    #[arg(long)]
+    pub manifest_path: Option<PathBuf>,
 }
 
 /// fetch packages from `repo_data` based on `filter_func`
@@ -62,13 +66,18 @@ where
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let channel_config = ChannelConfig::default();
-    let channels = args
-        .channel
-        .iter()
-        .map(|c| Channel::from_str(c, &channel_config))
-        .collect::<Result<Vec<Channel>, _>>()
-        .into_diagnostic()?;
+    let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
+
+    let channels = if let Some(project) = project {
+        project.channels().to_owned()
+    } else {
+        let channel_config = ChannelConfig::default();
+        args.channel
+            .iter()
+            .map(|c| Channel::from_str(c, &channel_config))
+            .collect::<Result<Vec<Channel>, _>>()
+            .into_diagnostic()?
+    };
 
     let package_name = args.package;
     let platforms = [Platform::current()];
