@@ -25,6 +25,10 @@ pub struct Args {
     /// The path to 'pixi.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
+
+    /// Limit the number of search results
+    #[clap(short, long, default_value_t = 15)]
+    limit: usize,
 }
 
 /// fetch packages from `repo_data` based on `filter_func`
@@ -79,6 +83,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_diagnostic()?
     };
 
+    let limit = args.limit;
     let package_name = args.package;
     let platforms = [Platform::current()];
     let repo_data = fetch_sparse_repodata(&channels, &platforms).await?;
@@ -117,6 +122,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if packages.is_empty() {
         return Err(miette::miette!("Could not find {package_name}"));
+    }
+
+    // split off at `limit`, discard the second half
+    if packages.len() > limit {
+        let _ = packages.split_off(limit);
     }
 
     println!(
