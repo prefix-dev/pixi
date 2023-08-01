@@ -23,18 +23,20 @@ pub struct Args {
     channel: Vec<String>,
 }
 
-/// fetch packages with names similar to the queried package from the `&[SparseRepoData]`
-/// provided given a similarity between 0.0 to 1.0
-fn search_package_by_similarity(
+/// fetch packages from `repo_data` based on `filter_func`
+fn search_package_by_filter<F>(
     package: &str,
     repo_data: &[SparseRepoData],
-    similarity: f64,
-) -> miette::Result<Vec<RepoDataRecord>> {
+    filter_func: F,
+) -> miette::Result<Vec<RepoDataRecord>>
+where
+    F: Fn(&str, &str) -> bool,
+{
     let similar_packages = repo_data
         .iter()
         .flat_map(|repo| {
             repo.package_names()
-                .filter(|&name| jaro(name, package) > similarity)
+                .filter(|&name| filter_func(name, package))
         })
         .collect::<Vec<&str>>();
 
@@ -50,16 +52,6 @@ fn search_package_by_similarity(
             }
         }
     }
-
-    latest_packages.sort_by(|a, b| {
-        let ord = jaro(&a.package_record.name, package)
-            .partial_cmp(&jaro(&b.package_record.name, package));
-        if let Some(ord) = ord {
-            ord
-        } else {
-            Ordering::Equal
-        }
-    });
 
     latest_packages = latest_packages
         .into_iter()
@@ -78,18 +70,42 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect::<Result<Vec<Channel>, _>>()
         .into_diagnostic()?;
 
-    let similarity = 0.8;
+    // let similarity = 0.8;
     let package_name = args.package;
     let platforms = [Platform::current()];
     let repo_data = fetch_sparse_repodata(&channels, &platforms).await?;
 
     let p = package_name.clone();
-    let packages = await_in_progress(
+    let mut packages = await_in_progress(
         "searching packages",
-        spawn_blocking(move || search_package_by_similarity(&p, &repo_data, similarity)),
+        spawn_blocking(move || {
+            let packages = search_package_by_filter(&p, &repo_data, |pn, n| pn.contains(n));
+            match packages {
+                Ok(packages) => {
+                    if packages.is_empty() {
+                        let similarity = 0.8;
+                        return search_package_by_filter(&p, &repo_data, |pn, n| {
+                            jaro(pn, n) > similarity
+                        });
+                    }
+                    return Ok(packages);
+                }
+                Err(e) => Err(e),
+            }
+        }),
     )
     .await
     .into_diagnostic()??;
+
+    packages.sort_by(|a, b| {
+        let ord = jaro(&b.package_record.name, &package_name)
+            .partial_cmp(&jaro(&a.package_record.name, &package_name));
+        if let Some(ord) = ord {
+            ord
+        } else {
+            Ordering::Equal
+        }
+    });
 
     if packages.is_empty() {
         // don't know if this is the best way to do it
