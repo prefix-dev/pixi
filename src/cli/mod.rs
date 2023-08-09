@@ -31,6 +31,10 @@ struct Args {
     /// (-v for verbose, -vv for debug, -vvv for trace, -q for quiet)
     #[command(flatten)]
     verbose: Verbosity,
+
+    /// Whether the log needs to be colored.
+    #[clap(long, default_value = "auto", global = true)]
+    color: ColorOutput,
 }
 
 /// Generates a completion script for a shell.
@@ -100,6 +104,20 @@ fn completion(args: CompletionCommand) -> miette::Result<()> {
 
 pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
+    let use_colors = use_color_output(&args);
+
+    // Setup the default miette handler based on whether or not we want colors or not.
+    miette::set_hook(Box::new(move |_| {
+        Box::new(
+            miette::MietteHandlerOpts::default()
+                .color(use_colors)
+                .build(),
+        )
+    }))?;
+
+    // Enable disable colors for the colors crate
+    console::set_colors_enabled(use_colors);
+    console::set_colors_enabled_stderr(use_colors);
 
     let level_filter = match args.verbose.log_level_filter() {
         clap_verbosity_flag::LevelFilter::Off => LevelFilter::OFF,
@@ -121,6 +139,7 @@ pub async fn execute() -> miette::Result<()> {
 
     // Setup the tracing subscriber
     tracing_subscriber::fmt()
+        .with_ansi(use_colors)
         .with_env_filter(env_filter)
         .with_writer(IndicatifWriter::new(progress::global_multi_progress()))
         .without_time()
@@ -146,5 +165,32 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Task(cmd) => task::execute(cmd),
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
+    }
+}
+
+/// Whether to use colored log format.
+/// Option `Auto` enables color output only if the logging is done to a terminal and  `NO_COLOR`
+/// environment variable is not set.
+#[derive(clap::ValueEnum, Debug, Clone, Default)]
+pub enum ColorOutput {
+    Always,
+    Never,
+
+    #[default]
+    Auto,
+}
+
+/// Returns true if the output is considered to be a terminal.
+fn is_terminal() -> bool {
+    // Crate `atty` provides a platform-independent way of checking whether the output is a tty.
+    atty::is(atty::Stream::Stderr)
+}
+
+/// Returns true if the log outputs should be colored or not.
+fn use_color_output(args: &Args) -> bool {
+    match args.color {
+        ColorOutput::Always => true,
+        ColorOutput::Never => false,
+        ColorOutput::Auto => std::env::var_os("NO_COLOR").is_none() && is_terminal(),
     }
 }

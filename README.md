@@ -40,8 +40,8 @@ https://github.com/prefix-dev/pixi/assets/885054/64666dee-841d-4680-9a61-7927913
 ## Getting Started
 
 * ⚡ [Installation](#installation)
-* ⚙️  [Examples](../examples)
-* 📚 [Documentation](./getting_started.md)
+* ⚙️ [Examples](/examples)
+* 📚 [Documentation](https://prefix.dev/docs/pixi/overview)
 * 😍 [Contributing](#contributing)
 * 🔨 [Built using Pixi](#pixibuilt)
 
@@ -85,8 +85,7 @@ The script will inform you once the installation is successful and add the ~/.pi
 
 ## Install from source
 
-`pixi` is 100% written in Rust and therefor it can be installed, build and
-tested with cargo.
+`pixi` is 100% written in Rust and therefor it can be installed, build and tested with cargo.
 To start using `pixi` from a source build run:
 
 ```shell
@@ -192,8 +191,6 @@ cowpy "Thanks for using pixi"
 exit
 ```
 
-For more information check [the documentation](getting_started.md#basics-of-the-configuration-file)
-
 ## Installing a conda package globally
 
 You can also globally install conda packages into their own environment.
@@ -202,9 +199,6 @@ This behavior is similar to [`pipx`](https://github.com/pypa/pipx) or [`condax`]
 ```bash
 pixi global install cowpy
 ```
-
-For more examples
-check [the documentation](./cli.md).
 
 <a name="contributing"></a>
 
@@ -229,4 +223,4 @@ community. [Join our discord server today!][chat-url]
 <a name="pixibuilt"></a>
 ## Built using pixi
 
-To see whats being built with `pixi` check out the [Community](Community.md) page.
+To see whats being built with `pixi` check out the [Community](/docs/Community.md) page.
