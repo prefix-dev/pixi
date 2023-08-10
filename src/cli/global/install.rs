@@ -107,7 +107,14 @@ fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result
             path_modification_behaviour: PathModificationBehaviour::Prepend,
         })
         .into_diagnostic()?;
-    let script = format!("#!/bin/sh\n{}", result.script);
+
+    // Add a shebang on unix based platforms
+    let script = if cfg!(unix) {
+        format!("#!/bin/sh\n{}", result.script)
+    } else {
+        result.script
+    };
+
     Ok(script)
 }
 
