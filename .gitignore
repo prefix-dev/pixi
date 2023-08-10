@@ -4,3 +4,4 @@
 .test-projects
 __pycache__
 **/**/.pixi
+**/**/.build

@@ -11,11 +11,6 @@ build = "cargo build --release"
 
 [dependencies]
 # Needed for building rattler
-rust = ">=1.65.0"
+rust = "~=1.70.0"
 openssl = "3.*"
 pkg-config = "0.29.*"
-
-# Needed for building libsolv
-cxx-compiler = "*"
-cmake = "*"
-make = "*"
