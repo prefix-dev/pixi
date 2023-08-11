@@ -10,7 +10,7 @@ use rattler_conda_types::{Channel, ChannelConfig, Platform};
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     /// The channel name or URL
-    #[clap(num_args=1..)]
+    #[clap(required = true, num_args=1..)]
     pub channel: Vec<String>,
 
     /// Don't update the environment, only add changed packages to the lock-file.
