@@ -1,15 +1,14 @@
 metadata:
   content_hash:
-    osx-arm64: '"29c73898d537a9f5f6772ccd2258c2432102551f88e944e62836f266015cfeb2"'
-    linux-64: '"29c73898d537a9f5f6772ccd2258c2432102551f88e944e62836f266015cfeb2"'
-    osx-64: '"29c73898d537a9f5f6772ccd2258c2432102551f88e944e62836f266015cfeb2"'
+    osx-arm64: 29c73898d537a9f5f6772ccd2258c2432102551f88e944e62836f266015cfeb2
+    linux-64: 29c73898d537a9f5f6772ccd2258c2432102551f88e944e62836f266015cfeb2
+    osx-64: 29c73898d537a9f5f6772ccd2258c2432102551f88e944e62836f266015cfeb2
   channels:
   - url: https://conda.anaconda.org/conda-forge/
     used_env_vars: []
   - url: https://conda.anaconda.org/robostack-staging/
     used_env_vars: []
   platforms:
-  - linux-64
   - osx-64
   - osx-arm64
   sources: []
