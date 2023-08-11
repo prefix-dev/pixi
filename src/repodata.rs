@@ -70,7 +70,7 @@ pub async fn fetch_sparse_repodata(
                 &repodata_cache,
                 download_client,
                 progress_bar.clone(),
-                platform == Platform::NoArch,
+                platform != Platform::NoArch,
             )
             .await;
 

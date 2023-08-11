@@ -11,6 +11,7 @@ use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter
 
 pub mod add;
 pub mod auth;
+pub mod channel;
 pub mod global;
 pub mod info;
 pub mod init;
@@ -63,6 +64,7 @@ pub enum Command {
     Task(task::Args),
     Info(info::Args),
     Upload(upload::Args),
+    Channel(channel::Args),
 }
 
 fn completion(args: CompletionCommand) -> miette::Result<()> {
@@ -165,6 +167,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Task(cmd) => task::execute(cmd),
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
+        Command::Channel(cmd) => channel::execute(cmd).await,
     }
 }
 
