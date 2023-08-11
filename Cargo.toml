@@ -7,7 +7,7 @@ authors = ["pixi contributors <hi@prefix.dev>"]
 homepage = "https://github.com/prefix-dev/pixi"
 repository = "https://github.com/prefix-dev/pixi"
 license = "BSD-3-Clause"
-readme = "docs/README.md"
+readme = "README.md"
 
 [features]
 default = ["native-tls"]
