@@ -4,7 +4,7 @@ use std::string::String;
 
 use clap::Parser;
 use deno_task_shell::parser::SequentialList;
-use deno_task_shell::{execute_with_pipes, get_output_writer_and_handle, pipe, ShellState};
+use deno_task_shell::{execute_with_pipes, pipe, ShellPipeWriter, ShellState};
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
 use rattler_conda_types::Platform;
@@ -18,6 +18,7 @@ use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehaviour},
     shell::ShellEnum,
 };
+use tokio::task::JoinHandle;
 
 /// Runs task in project.
 #[derive(Default)]
@@ -271,4 +272,11 @@ async fn run_activation(
     .into_diagnostic()?;
 
     Ok(activator_result)
+}
+
+/// Helper function to create a pipe that we can get the output from.
+fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
+    let (reader, writer) = pipe();
+    let handle = reader.pipe_to_string_handle();
+    (writer, handle)
 }
