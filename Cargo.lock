@@ -719,8 +719,9 @@ dependencies = [
 
 [[package]]
 name = "deno_task_shell"
-version = "0.12.0"
-source = "git+https://github.com/prefix-dev/deno_task_shell#d534256b8874efc4f4bf6a1193994e14e5d67aeb"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dbbad0a7ba06a961df3cd638ab117f5d67787607f627defa65629a4ef29d576"
 dependencies = [
  "anyhow",
  "futures 0.3.28",
@@ -2242,8 +2243,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#166cb91364ecc272505726d23342b3c712c5ab7c"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8383a3f4a20a844087dd0d83dbe68a5cfa2524d56b75b236413a3679a3488b7"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2282,8 +2284,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#166cb91364ecc272505726d23342b3c712c5ab7c"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f08f408a6e12ba91911b4d46e89558007490abd6f3cae9390cce7a5fb51c63f9"
 dependencies = [
  "chrono",
  "fxhash",
@@ -2310,8 +2313,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_digest"
-version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#166cb91364ecc272505726d23342b3c712c5ab7c"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60896b227ef140b4b6a32fd128975c1aa05bf69981983acda2817479dfeb10f9"
 dependencies = [
  "blake2",
  "digest",
@@ -2325,8 +2329,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_libsolv_rs"
-version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#166cb91364ecc272505726d23342b3c712c5ab7c"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "101b8062ed0634d013b8450c263f894aa2e9cc509f115e5b11050f08e6f0062e"
 dependencies = [
  "itertools",
  "petgraph",
@@ -2336,8 +2341,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_macros"
-version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#166cb91364ecc272505726d23342b3c712c5ab7c"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35dd5131cfabe7773fad1b4534972c06f2b5260c0b203bf8ed90ca5875dab84e"
 dependencies = [
  "quote",
  "syn 2.0.26",
@@ -2345,8 +2351,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#166cb91364ecc272505726d23342b3c712c5ab7c"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ae820ef06d7227ca6038f5a2d77bd2c54557f107a0087d2aa14d37a75d37fbd"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2362,8 +2369,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#166cb91364ecc272505726d23342b3c712c5ab7c"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71fac9521f0994973b839a4290f4b4ce7107af78b04333534fe62f0c68b8f183"
 dependencies = [
  "bzip2",
  "chrono",
@@ -2385,8 +2393,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#166cb91364ecc272505726d23342b3c712c5ab7c"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5044e06058c149082d5a0f4db2278b7e815c1b3a00e8293a0bde1c4061661675"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2423,8 +2432,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#166cb91364ecc272505726d23342b3c712c5ab7c"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b20eebc358911adfc6b3baaf797ead242a0b9fc06f13d287a45ff4e53afe8932"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.0.0",
@@ -2440,8 +2450,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#166cb91364ecc272505726d23342b3c712c5ab7c"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06bcad9b4fd059ceb359c26afcbcede36dbb7977edd1f85346bfb33df23cb04f"
 dependencies = [
  "anyhow",
  "hex",
@@ -2457,8 +2468,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "0.5.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#166cb91364ecc272505726d23342b3c712c5ab7c"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c60fa37473636acae757e3b4d98b692a8fd4a38d43ed7ba6433e4d0a2e9320f0"
 dependencies = [
  "cfg-if",
  "libloading",
