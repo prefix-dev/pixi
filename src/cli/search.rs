@@ -18,9 +18,10 @@ pub struct Args {
     #[arg(required = true)]
     pub package: String,
 
-    /// Channel to specifically search package
-    #[clap(short, long, default_values = ["conda-forge"])]
-    channel: Vec<String>,
+    /// Channel to specifically search package, defaults to
+    /// project channels or conda-forge
+    #[clap(short, long)]
+    channel: Option<Vec<String>>,
 
     /// The path to 'pixi.toml'
     #[arg(long)]
@@ -75,15 +76,19 @@ where
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
 
-    let channels = if let Some(project) = project {
-        project.channels().to_owned()
-    } else {
-        let channel_config = ChannelConfig::default();
-        args.channel
+    let channel_config = ChannelConfig::default();
+
+    let channels = match (args.channel, project) {
+        // if user passes channels through the channel flag
+        (Some(c), _) => c
             .iter()
             .map(|c| Channel::from_str(c, &channel_config))
             .collect::<Result<Vec<Channel>, _>>()
-            .into_diagnostic()?
+            .into_diagnostic()?,
+        // if user doesn't pass channels and we are in a project
+        (None, Some(p)) => p.channels().to_owned(),
+        // if user doesn't pass channels and we are not in project
+        (None, None) => vec![Channel::from_str("conda-forge", &channel_config).into_diagnostic()?],
     };
 
     let limit = args.limit;
