@@ -16,6 +16,7 @@ pub mod info;
 pub mod init;
 pub mod install;
 pub mod run;
+pub mod search;
 pub mod shell;
 pub mod task;
 pub mod upload;
@@ -63,6 +64,7 @@ pub enum Command {
     Task(task::Args),
     Info(info::Args),
     Upload(upload::Args),
+    Search(search::Args),
 }
 
 fn completion(args: CompletionCommand) -> miette::Result<()> {
@@ -165,6 +167,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Task(cmd) => task::execute(cmd),
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
+        Command::Search(cmd) => search::execute(cmd).await,
     }
 }
 
