@@ -1,6 +1,10 @@
 <h1>
   <a href="https://github.com/prefix-dev/pixi/">
-    <img alt="banner" src="https://github.com/prefix-dev/pixi/assets/4995967/2f45b4a8-2976-4f06-bc88-9825c282df84">
+    <picture>
+      <source srcset="https://github.com/prefix-dev/pixi/assets/4995967/a3f9ff01-c9fb-4893-83c0-2a3f924df63e" type="image/webp">
+      <source srcset="https://github.com/prefix-dev/pixi/assets/4995967/e42739c4-4cd9-49bb-9d0a-45f8088494b5" type="image/png">
+      <img src="https://github.com/prefix-dev/pixi/assets/4995967/e42739c4-4cd9-49bb-9d0a-45f8088494b5" alt="banner">
+    </picture>
   </a>
 </h1>
 
