@@ -4,7 +4,10 @@ use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use rattler_conda_types::Platform;
 use std::io::{Error, ErrorKind};
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 /// Creates a new project
 #[derive(Parser, Debug)]
@@ -103,7 +106,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // create a .gitattributes if one is missing
     if !gitattributes_path.is_file() {
-        write_contextless_file(&env, gitattributes_path, "gitattributes.txt", GITATTRIBUTES_TEMPLATE)?;
+        write_contextless_file(
+            &env,
+            gitattributes_path,
+            "gitattributes.txt",
+            GITATTRIBUTES_TEMPLATE,
+        )?;
     }
 
     // Emit success
@@ -136,10 +144,13 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
     }
 }
 
-fn write_contextless_file<P: AsRef<Path>>(env: &Environment, path: P, name: &str, template: &str) -> miette::Result<()> {
-        let rv = env
-        .render_named_str(name, template, ())
-        .into_diagnostic()?;
+fn write_contextless_file<P: AsRef<Path>>(
+    env: &Environment,
+    path: P,
+    name: &str,
+    template: &str,
+) -> miette::Result<()> {
+    let rv = env.render_named_str(name, template, ()).into_diagnostic()?;
     fs::write(&path, rv).into_diagnostic()?;
     Ok(())
 }
