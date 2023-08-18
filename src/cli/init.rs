@@ -4,7 +4,7 @@ use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use rattler_conda_types::Platform;
 use std::io::{Error, ErrorKind};
-use std::{fs, path::PathBuf};
+use std::{fs, path::{Path, PathBuf}};
 
 /// Creates a new project
 #[derive(Parser, Debug)]
@@ -42,11 +42,17 @@ const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
 
 "#;
 
+const GITATTRIBUTES_TEMPLATE: &str = r#"# GitHub syntax highlighting and stats
+pixi.lock linguist-generated linguist-language=YAML
+
+"#;
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let env = Environment::new();
     let dir = get_dir(args.path).into_diagnostic()?;
     let manifest_path = dir.join(consts::PROJECT_MANIFEST);
     let gitignore_path = dir.join(".gitignore");
+    let gitattributes_path = dir.join(".gitattributes");
 
     // Check if the project file doesnt already exist. We don't want to overwrite it.
     if fs::metadata(&manifest_path).map_or(false, |x| x.is_file()) {
@@ -92,10 +98,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // create a .gitignore if one is missing
     if !gitignore_path.is_file() {
-        let rv = env
-            .render_named_str("gitignore.txt", GITIGNORE_TEMPLATE, ())
-            .into_diagnostic()?;
-        fs::write(&gitignore_path, rv).into_diagnostic()?;
+        write_contextless_file(&env, gitignore_path, "gitignore.txt", GITIGNORE_TEMPLATE)?;
+    }
+
+    // create a .gitattributes if one is missing
+    if !gitattributes_path.is_file() {
+        write_contextless_file(&env, gitattributes_path, "gitattributes.txt", GITATTRIBUTES_TEMPLATE)?;
     }
 
     // Emit success
@@ -126,6 +134,14 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
             ),
         })
     }
+}
+
+fn write_contextless_file<P: AsRef<Path>>(env: &Environment, path: P, name: &str, template: &str) -> miette::Result<()> {
+        let rv = env
+        .render_named_str(name, template, ())
+        .into_diagnostic()?;
+    fs::write(&path, rv).into_diagnostic()?;
+    Ok(())
 }
 
 #[cfg(test)]
