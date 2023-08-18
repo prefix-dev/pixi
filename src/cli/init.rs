@@ -42,8 +42,8 @@ const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
 
 "#;
 
-const GITATTRIBUTES_TEMPLATE: &str = r#"# GitHub syntax highlighting and stats
-pixi.lock linguist-generated linguist-language=YAML
+const GITATTRIBUTES_TEMPLATE: &str = r#"# GitHub syntax highlighting
+pixi.lock linguist-language=YAML
 
 "#;
 
