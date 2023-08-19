@@ -121,7 +121,7 @@ impl Project {
             })
     }
 
-    /// Get all tasks defined in the project for the specified platform
+    /// Returns all tasks defined in the project for the given platform
     pub fn task_names(&self, platform: Platform) -> Vec<&String> {
         let mut all_tasks = HashSet::new();
 
@@ -135,6 +135,7 @@ impl Project {
         Vec::from_iter(all_tasks)
     }
 
+    /// Returns a hashmap of the tasks that should run on the given platform.
     pub fn tasks(&self, platform: Platform) -> HashMap<&str, &Task> {
         let mut all_tasks = HashMap::default();
 
@@ -149,7 +150,7 @@ impl Project {
         all_tasks
     }
 
-    /// Find task dependencies
+    /// Returns names of the tasks that depend on the given task.
     pub fn task_names_depending_on(&self, name: impl AsRef<str>) -> Vec<&str> {
         let mut tasks = self.tasks(Platform::current());
         let task = tasks.remove(name.as_ref());
