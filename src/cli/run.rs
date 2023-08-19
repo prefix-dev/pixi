@@ -21,7 +21,7 @@ use rattler_shell::{
 use tokio::task::JoinHandle;
 
 /// Runs task in project.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct RunOutput {
     pub exit_code: i32,
     pub stdout: String,

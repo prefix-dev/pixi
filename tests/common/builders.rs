@@ -45,12 +45,20 @@ pub struct InitBuilder {
 
 impl InitBuilder {
     pub fn with_channel(mut self, channel: impl ToString) -> Self {
-        self.args.channels.push(channel.to_string());
+        self.args
+            .channels
+            .get_or_insert_with(Default::default)
+            .push(channel.to_string());
         self
     }
 
     pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
         self.with_channel(Url::from_directory_path(channel).unwrap())
+    }
+
+    pub fn without_channels(mut self) -> Self {
+        self.args.channels = Some(vec![]);
+        self
     }
 }
 

@@ -1,4 +1,5 @@
 use crate::common::PixiControl;
+use pixi::cli::run::Args;
 use pixi::task::{CmdArgs, Task};
 
 mod common;
@@ -56,4 +57,39 @@ pub async fn add_command_types() {
     let project = pixi.project().unwrap();
     let task = project.manifest.tasks.get("testing").unwrap();
     assert!(matches!(task, Task::Alias(a) if a.depends_on.get(0).unwrap() == "test"));
+}
+
+#[tokio::test]
+async fn test_alias() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().without_channels().await.unwrap();
+
+    pixi.tasks()
+        .add("hello")
+        .with_commands(["echo hello"])
+        .execute()
+        .unwrap();
+
+    pixi.tasks()
+        .add("world")
+        .with_commands(["echo world"])
+        .execute()
+        .unwrap();
+
+    pixi.tasks()
+        .add("helloworld")
+        .with_depends_on(["hello", "world"])
+        .execute()
+        .unwrap();
+
+    let result = pixi
+        .run(Args {
+            task: vec!["helloworld".to_string()],
+            manifest_path: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.stdout, "hello\nworld\n");
 }
