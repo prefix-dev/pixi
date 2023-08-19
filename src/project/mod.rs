@@ -11,6 +11,7 @@ use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, Platform, Version,
 };
 use rattler_virtual_packages::VirtualPackage;
+use std::collections::{HashMap, HashSet};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -120,18 +121,41 @@ impl Project {
             })
     }
 
-    /// Get all tasks defined in the project
-    pub fn tasks(&self) -> Vec<&String> {
-        self.manifest.tasks.keys().collect()
+    /// Get all tasks defined in the project for the specified platform
+    pub fn task_names(&self, platform: Platform) -> Vec<&String> {
+        let mut all_tasks = HashSet::new();
+
+        // Get all non-target specific tasks
+        all_tasks.extend(self.manifest.tasks.keys());
+
+        // Gather platform-specific tasks and overwrite the keys if they're double.
+        for target_metadata in self.target_specific_metadata(platform) {
+            all_tasks.extend(target_metadata.tasks.keys());
+        }
+        Vec::from_iter(all_tasks)
+    }
+
+    pub fn tasks(&self, platform: Platform) -> HashMap<&str, &Task> {
+        let mut all_tasks = HashMap::default();
+
+        // Gather non-target specific tasks
+        all_tasks.extend(self.manifest.tasks.iter().map(|(k, v)| (k.as_str(), v)));
+
+        // Gather platform-specific tasks and overwrite them if they're double.
+        for target_metadata in self.target_specific_metadata(platform) {
+            all_tasks.extend(target_metadata.tasks.iter().map(|(k, v)| (k.as_str(), v)));
+        }
+
+        all_tasks
     }
 
     /// Find task dependencies
-    pub fn task_depends_on(&self, name: impl AsRef<str>) -> Vec<&String> {
-        let task = self.manifest.tasks.get(name.as_ref());
+    pub fn task_names_depending_on(&self, name: impl AsRef<str>) -> Vec<&str> {
+        let mut tasks = self.tasks(Platform::current());
+        let task = tasks.remove(name.as_ref());
         if task.is_some() {
-            self.manifest
-                .tasks
-                .iter()
+            tasks
+                .into_iter()
                 .filter(|(_, c)| c.depends_on().contains(&name.as_ref().to_string()))
                 .map(|(name, _)| name)
                 .collect()
@@ -142,7 +166,7 @@ impl Project {
 
     /// Add a task to the project
     pub fn add_task(&mut self, name: impl AsRef<str>, task: Task) -> miette::Result<()> {
-        if self.manifest.tasks.contains_key(name.as_ref()) {
+        if self.tasks(Platform::current()).contains_key(name.as_ref()) {
             miette::bail!("task {} already exists", name.as_ref());
         };
 
@@ -902,5 +926,36 @@ mod tests {
         assert_debug_snapshot!(project.activation_scripts(Platform::Linux64).unwrap());
         assert_debug_snapshot!(project.activation_scripts(Platform::Win64).unwrap());
         assert_debug_snapshot!(project.activation_scripts(Platform::OsxArm64).unwrap());
+    }
+    #[test]
+    fn test_target_specific_tasks() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [tasks]
+            test = "test multi"
+
+            [target.win-64.tasks]
+            test = "test win"
+
+            [target.linux-64.tasks]
+            test = "test linux"
+            "#;
+
+        let manifest = toml_edit::de::from_str::<ProjectManifest>(&format!(
+            "{PROJECT_BOILERPLATE}\n{file_contents}"
+        ))
+        .unwrap();
+        let project = Project {
+            root: Default::default(),
+            source: "".to_string(),
+            doc: Default::default(),
+            manifest,
+        };
+
+        let win_tasks = project.tasks(Platform::Win64);
+
+        assert_debug_snapshot!(project.tasks(Platform::Osx64));
+        assert_debug_snapshot!(project.tasks(Platform::Win64));
+        assert_debug_snapshot!(project.tasks(Platform::Linux64));
     }
 }

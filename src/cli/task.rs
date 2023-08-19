@@ -2,6 +2,7 @@ use crate::task::{Alias, CmdArgs, Execute, Task};
 use crate::Project;
 use clap::Parser;
 use itertools::Itertools;
+use rattler_conda_types::Platform;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -127,7 +128,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     continue;
                 }
                 // Check if task has dependencies
-                let depends_on = project.task_depends_on(name);
+                let depends_on = project.task_names_depending_on(name);
                 if !depends_on.is_empty() && !args.names.contains(name) {
                     eprintln!(
                         "{}: {}",
@@ -165,7 +166,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
             );
         }
         Operation::List => {
-            let tasks = project.tasks();
+            let tasks = project.task_names(Platform::current());
             if tasks.is_empty() {
                 eprintln!("No tasks found",);
             } else {
