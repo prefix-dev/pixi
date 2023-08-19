@@ -952,8 +952,6 @@ mod tests {
             manifest,
         };
 
-        let win_tasks = project.tasks(Platform::Win64);
-
         assert_debug_snapshot!(project.tasks(Platform::Osx64));
         assert_debug_snapshot!(project.tasks(Platform::Win64));
         assert_debug_snapshot!(project.tasks(Platform::Linux64));
