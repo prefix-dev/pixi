@@ -102,7 +102,9 @@ pub fn order_tasks(
             }
         }
 
-        s2.push_back((task, additional_args))
+        if task.is_executable() {
+            s2.push_back((task, additional_args))
+        }
     }
 
     Ok(s2)

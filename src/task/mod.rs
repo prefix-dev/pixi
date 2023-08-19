@@ -20,6 +20,38 @@ impl Task {
             Task::Alias(cmd) => &cmd.depends_on,
         }
     }
+
+    /// If this task is a plain task, returns the task string
+    pub fn as_plain(&self) -> Option<&String> {
+        match self {
+            Task::Plain(str) => Some(str),
+            _ => None,
+        }
+    }
+
+    // If this command is an execute command, returns the [`Execute`] task.
+    pub fn as_execute(&self) -> Option<&Execute> {
+        match self {
+            Task::Execute(execute) => Some(execute),
+            _ => None,
+        }
+    }
+
+    /// If this command is an alias, returns the [`Alias`] task.
+    pub fn as_alias(&self) -> Option<&Alias> {
+        match self {
+            Task::Alias(alias) => Some(alias),
+            _ => None,
+        }
+    }
+
+    /// Returns true if this task is directly executable
+    pub fn is_executable(&self) -> bool {
+        match self {
+            Task::Plain(_) | Task::Execute(_) => true,
+            Task::Alias(_) => false,
+        }
+    }
 }
 
 /// A command script executes a single command from the environment
