@@ -30,11 +30,13 @@ build on the shoulders of the conda ecosystem.
 `pixi` provides all developers the exceptional experience that is usually found
 with package managers like `cargo` or `yarn` but for any language.
 
+`pixi` is made with ❤️ at [prefix.dev](https://prefix.dev)
+
 https://github.com/prefix-dev/pixi/assets/885054/64666dee-841d-4680-9a61-7927913bc4e2
 
 ## Highlights
 
-- Support for **multiple languages** like Python, C++ and R using Conda packages
+- Support for **multiple languages** like Python, C++ and R using Conda packages. Search for available packages on: [prefix.dev](https://prefix.dev)
 - **All OS's**: Linux, Windows, macOS (including Apple Silicon)
 - A **lockfile** is always included and always up-to-date.
 - A clean and simple Cargo-like **command-line interface**.
