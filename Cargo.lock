@@ -2079,7 +2079,7 @@ dependencies = [
  "once_cell",
  "rattler",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rattler_networking",
  "rattler_repodata_gateway",
  "rattler_shell",
@@ -2245,8 +2245,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8383a3f4a20a844087dd0d83dbe68a5cfa2524d56b75b236413a3679a3488b7"
+source = "git+https://github.com/baszalmstra/rattler.git?branch=feat/add_retry_for_package_cache#e50440e5c2a4b34b1ef50c5e46b900926e9c1777"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2264,7 +2263,7 @@ dependencies = [
  "once_cell",
  "pin-project-lite",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 0.7.0 (git+https://github.com/baszalmstra/rattler.git?branch=feat/add_retry_for_package_cache)",
  "rattler_networking",
  "rattler_package_streaming",
  "regex",
@@ -2286,8 +2285,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f08f408a6e12ba91911b4d46e89558007490abd6f3cae9390cce7a5fb51c63f9"
+source = "git+https://github.com/baszalmstra/rattler.git?branch=feat/add_retry_for_package_cache#e50440e5c2a4b34b1ef50c5e46b900926e9c1777"
 dependencies = [
  "chrono",
  "fxhash",
@@ -2296,7 +2294,7 @@ dependencies = [
  "itertools",
  "lazy-regex",
  "nom",
- "rattler_digest",
+ "rattler_digest 0.7.0 (git+https://github.com/baszalmstra/rattler.git?branch=feat/add_retry_for_package_cache)",
  "rattler_macros",
  "regex",
  "serde",
@@ -2329,6 +2327,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_digest"
+version = "0.7.0"
+source = "git+https://github.com/baszalmstra/rattler.git?branch=feat/add_retry_for_package_cache#e50440e5c2a4b34b1ef50c5e46b900926e9c1777"
+dependencies = [
+ "blake2",
+ "digest",
+ "hex",
+ "md-5",
+ "serde",
+ "serde_with",
+ "sha2",
+]
+
+[[package]]
 name = "rattler_libsolv_rs"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2343,8 +2355,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35dd5131cfabe7773fad1b4534972c06f2b5260c0b203bf8ed90ca5875dab84e"
+source = "git+https://github.com/baszalmstra/rattler.git?branch=feat/add_retry_for_package_cache#e50440e5c2a4b34b1ef50c5e46b900926e9c1777"
 dependencies = [
  "quote",
  "syn 2.0.26",
@@ -2353,8 +2364,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ae820ef06d7227ca6038f5a2d77bd2c54557f107a0087d2aa14d37a75d37fbd"
+source = "git+https://github.com/baszalmstra/rattler.git?branch=feat/add_retry_for_package_cache#e50440e5c2a4b34b1ef50c5e46b900926e9c1777"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2362,6 +2372,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "reqwest",
+ "retry-policies",
  "serde",
  "serde_json",
  "thiserror",
@@ -2371,15 +2382,14 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71fac9521f0994973b839a4290f4b4ce7107af78b04333534fe62f0c68b8f183"
+source = "git+https://github.com/baszalmstra/rattler.git?branch=feat/add_retry_for_package_cache#e50440e5c2a4b34b1ef50c5e46b900926e9c1777"
 dependencies = [
  "bzip2",
  "chrono",
  "futures-util",
  "itertools",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 0.7.0 (git+https://github.com/baszalmstra/rattler.git?branch=feat/add_retry_for_package_cache)",
  "rattler_networking",
  "reqwest",
  "serde_json",
@@ -2415,7 +2425,7 @@ dependencies = [
  "ouroboros",
  "pin-project-lite",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rattler_networking",
  "reqwest",
  "serde",
@@ -2458,7 +2468,7 @@ dependencies = [
  "anyhow",
  "hex",
  "rattler_conda_types",
- "rattler_digest",
+ "rattler_digest 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rattler_libsolv_rs",
  "serde",
  "tempfile",
@@ -2623,6 +2633,17 @@ dependencies = [
  "web-sys",
  "webpki-roots",
  "winreg",
+]
+
+[[package]]
+name = "retry-policies"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a715dc4d0e8aea3085a9a94d76e79c79c7df7c9f6be609da841a6d2489ca3687"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "rand",
 ]
 
 [[package]]

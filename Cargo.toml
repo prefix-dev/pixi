@@ -64,3 +64,8 @@ rattler_digest = "0.7.0"
 serde_json = "1.0.103"
 tokio = { version = "1.29.1", features = ["rt"] }
 toml = "0.7.6"
+
+[patch.crates-io]
+rattler = { git = 'https://github.com/baszalmstra/rattler.git', branch = "feat/add_retry_for_package_cache" }
+rattler_networking = { git = 'https://github.com/baszalmstra/rattler.git', branch = "feat/add_retry_for_package_cache" }
+rattler_conda_types = { git = 'https://github.com/baszalmstra/rattler.git', branch = "feat/add_retry_for_package_cache" }
