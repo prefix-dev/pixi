@@ -11,7 +11,7 @@ git clone https://github.com/prefix-dev/pixi.git
 ```
 
 Because pixi is a [Rust](https://www.rust-lang.org/) project we only need to use `cargo` but keeping it as simple as possible we also made some pixi tasks to help you get started.
-Build the pixi with cargo by yourself.
+Build pixi with cargo by yourself.
 ```
 pixi run build
 ```
