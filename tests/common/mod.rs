@@ -193,32 +193,39 @@ pub struct TasksControl<'a> {
 
 impl TasksControl<'_> {
     /// Add a task
-    pub fn add(&self, name: impl ToString) -> TaskAddBuilder {
+    pub fn add(&self, name: impl ToString, platform: Option<Platform>) -> TaskAddBuilder {
         TaskAddBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AddArgs {
                 name: name.to_string(),
                 commands: vec![],
                 depends_on: None,
+                platform: platform,
             },
         }
     }
 
     /// Remove a task
-    pub async fn remove(&self, name: impl ToString) -> miette::Result<()> {
+    pub async fn remove(
+        &self,
+        name: impl ToString,
+        platform: Option<Platform>,
+    ) -> miette::Result<()> {
         task::execute(task::Args {
             manifest_path: Some(self.pixi.manifest_path()),
             operation: task::Operation::Remove(task::RemoveArgs {
                 names: vec![name.to_string()],
+                platform: platform,
             }),
         })
     }
 
     /// Alias one or multiple tasks
-    pub fn alias(&self, name: impl ToString) -> TaskAliasBuilder {
+    pub fn alias(&self, name: impl ToString, platform: Option<Platform>) -> TaskAliasBuilder {
         TaskAliasBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AliasArgs {
+                platform: platform,
                 alias: name.to_string(),
                 depends_on: vec![],
             },

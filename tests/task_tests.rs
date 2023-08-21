@@ -10,7 +10,7 @@ pub async fn add_remove_task() {
 
     // Simple task
     pixi.tasks()
-        .add("test")
+        .add("test", None)
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
@@ -20,7 +20,7 @@ pub async fn add_remove_task() {
     assert!(matches!(task, Task::Plain(s) if s == "echo hello"));
 
     // Remove the task
-    pixi.tasks().remove("test").await.unwrap();
+    pixi.tasks().remove("test", None).await.unwrap();
     assert_eq!(pixi.project().unwrap().manifest.tasks.len(), 0);
 }
 
@@ -31,12 +31,12 @@ pub async fn add_command_types() {
 
     // Add a command with dependencies
     pixi.tasks()
-        .add("test")
+        .add("test", None)
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
     pixi.tasks()
-        .add("test2")
+        .add("test2", None)
         .with_commands(["echo hello", "echo bonjour"])
         .with_depends_on(["test"])
         .execute()
@@ -49,7 +49,7 @@ pub async fn add_command_types() {
 
     // Create an alias
     pixi.tasks()
-        .alias("testing")
+        .alias("testing", None)
         .with_depends_on(["test"])
         .execute()
         .unwrap();

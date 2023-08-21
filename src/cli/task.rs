@@ -29,9 +29,13 @@ pub enum Operation {
 pub struct RemoveArgs {
     /// Task names to remove
     pub names: Vec<String>,
+
+    /// The platform for which the task should be removed
+    #[arg(long, short)]
+    pub platform: Option<Platform>,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]
 pub struct AddArgs {
     /// Task name
@@ -45,9 +49,13 @@ pub struct AddArgs {
     #[clap(long)]
     #[clap(num_args = 1..)]
     pub depends_on: Option<Vec<String>>,
+
+    /// The platform for which the task should be added
+    #[arg(long, short)]
+    pub platform: Option<Platform>,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]
 pub struct AliasArgs {
     /// Alias name
@@ -56,6 +64,10 @@ pub struct AliasArgs {
     /// Depends on these tasks to execute
     #[clap(required = true, num_args = 1..)]
     pub depends_on: Vec<String>,
+
+    /// The platform for which the alias should be added
+    #[arg(long, short)]
+    pub platform: Option<Platform>,
 }
 
 impl From<AddArgs> for Task {
@@ -106,9 +118,9 @@ pub fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     match args.operation {
         Operation::Add(args) => {
-            let name = args.name.clone();
-            let task: Task = args.into();
-            project.add_task(&name, task.clone())?;
+            let name = &args.name;
+            let task: Task = args.clone().into();
+            project.add_task(name, task.clone(), args.platform)?;
             eprintln!(
                 "{}Added task {}: {}",
                 console::style(console::Emoji("✔ ", "+")).green(),
@@ -119,7 +131,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
         Operation::Remove(args) => {
             let mut to_remove = Vec::new();
             for name in args.names.iter() {
-                if project.task_opt(name).is_none() {
+                if !project.task_names(args.platform).iter().any(|n| *n == name) {
                     eprintln!(
                         "{}Task {} does not exist",
                         console::style(console::Emoji("❌ ", "X")).red(),
@@ -155,9 +167,9 @@ pub fn execute(args: Args) -> miette::Result<()> {
             }
         }
         Operation::Alias(args) => {
-            let name = args.alias.clone();
-            let task: Task = args.into();
-            project.add_task(&name, task.clone())?;
+            let name = &args.alias;
+            let task: Task = args.clone().into();
+            project.add_task(name, task.clone(), args.platform)?;
             eprintln!(
                 "{} Added alias {}: {}",
                 console::style("@").blue(),
@@ -166,7 +178,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
             );
         }
         Operation::List => {
-            let tasks = project.task_names(Platform::current());
+            let tasks = project.task_names(Some(Platform::current()));
             if tasks.is_empty() {
                 eprintln!("No tasks found",);
             } else {

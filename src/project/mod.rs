@@ -122,15 +122,17 @@ impl Project {
     }
 
     /// Returns all tasks defined in the project for the given platform
-    pub fn task_names(&self, platform: Platform) -> Vec<&String> {
+    pub fn task_names(&self, platform: Option<Platform>) -> Vec<&String> {
         let mut all_tasks = HashSet::new();
 
         // Get all non-target specific tasks
         all_tasks.extend(self.manifest.tasks.keys());
 
         // Gather platform-specific tasks and overwrite the keys if they're double.
-        for target_metadata in self.target_specific_metadata(platform) {
-            all_tasks.extend(target_metadata.tasks.keys());
+        if let Some(platform) = platform {
+            for target_metadata in self.target_specific_metadata(platform) {
+                all_tasks.extend(target_metadata.tasks.keys());
+            }
         }
         Vec::from_iter(all_tasks)
     }
@@ -164,24 +166,13 @@ impl Project {
             vec![]
         }
     }
-
-    /// Add a task to the project
-    pub fn add_task(&mut self, name: impl AsRef<str>, task: Task) -> miette::Result<()> {
-        if self.tasks(Platform::current()).contains_key(name.as_ref()) {
-            miette::bail!("task {} already exists", name.as_ref());
-        };
-
-        let tasks_table = &mut self.doc["tasks"];
-        // If it doesnt exist create a proper table
-        if tasks_table.is_none() {
-            *tasks_table = Item::Table(Table::new());
-        }
-
-        // Cast the item into a table
-        let tasks_table = tasks_table.as_table_like_mut().ok_or_else(|| {
-            miette::miette!("tasks in {} are malformed", consts::PROJECT_MANIFEST)
-        })?;
-
+    /// Add given task to a task table in the project manifest
+    pub fn add_task_to_table(
+        &mut self,
+        tasks_table: &mut Table,
+        name: impl AsRef<str>,
+        task: Task,
+    ) -> miette::Result<()> {
         let depends_on = task.depends_on();
 
         for depends in depends_on {
@@ -196,6 +187,48 @@ impl Project {
 
         // Add the task to the table
         tasks_table.insert(name.as_ref(), task_as_toml(task.clone()));
+
+        self.manifest.tasks.insert(name.as_ref().to_string(), task);
+
+        self.save()?;
+
+        Ok(())
+    }
+
+    /// Add a task to the project
+    pub fn add_task(
+        &mut self,
+        name: impl AsRef<str>,
+        task: Task,
+        platform: Option<Platform>,
+    ) -> miette::Result<()> {
+        let table = if let Some(platform) = platform {
+            if self.tasks(platform).contains_key(name.as_ref()) {
+                miette::bail!("task {} already exists", name.as_ref());
+            }
+            ensure_toml_target_table(&mut self.doc, platform, "tasks")?
+        } else {
+            self.doc["tasks"]
+                .or_insert(Item::Table(Table::new()))
+                .as_table_mut()
+                .ok_or_else(|| {
+                    miette::miette!("target table in {} is malformed", consts::PROJECT_MANIFEST)
+                })?
+        };
+        let depends_on = task.depends_on();
+
+        for depends in depends_on {
+            if !self.manifest.tasks.contains_key(depends) {
+                miette::bail!(
+                    "task '{}' for the depends on for '{}' does not exist",
+                    depends,
+                    name.as_ref(),
+                );
+            }
+        }
+
+        // Add the task to the table
+        table.insert(name.as_ref(), task_as_toml(task.clone()));
 
         self.manifest.tasks.insert(name.as_ref().to_string(), task);
 
@@ -679,6 +712,48 @@ pub fn find_project_root() -> Option<PathBuf> {
     std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent())
         .find(|dir| dir.join(consts::PROJECT_MANIFEST).is_file())
         .map(Path::to_path_buf)
+}
+
+/// Ensures that the specified TOML target table exists within a given document,
+/// and inserts it if not.
+/// Returns the final target table (`table_name`) inside the platform-specific table if everything
+/// goes as expected.
+pub fn ensure_toml_target_table<'a>(
+    doc: &'a mut Document,
+    platform: Platform,
+    table_name: &str,
+) -> miette::Result<&'a mut Table> {
+    // Create target table
+    let target = doc["target"]
+        .or_insert(Item::Table(Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| {
+            miette::miette!("target table in {} is malformed", consts::PROJECT_MANIFEST)
+        })?;
+    target.set_dotted(true);
+
+    // Create platform table on target table
+    let platform_table = doc["target"][platform.as_str()]
+        .or_insert(Item::Table(Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| {
+            miette::miette!(
+                "platform table in {} is malformed",
+                consts::PROJECT_MANIFEST
+            )
+        })?;
+    platform_table.set_dotted(true);
+
+    // Return final table on target platform table.
+    platform_table[table_name]
+        .or_insert(Item::Table(Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| {
+            miette::miette!(
+                "platform table in {} is malformed",
+                consts::PROJECT_MANIFEST
+            )
+        })
 }
 
 #[cfg(test)]
