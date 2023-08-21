@@ -31,7 +31,7 @@ description = "Add a short description here"
 {%- if author %}
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
-channels = [{%- if channels.length %}"{{ channels|join("\", \"") }}"{%- endif %}]
+channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
 platforms = ["{{ platform }}"]
 
 [tasks]
@@ -80,6 +80,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .map(ToOwned::to_owned)
             .collect()
     };
+
     let platform = Platform::current();
 
     let rv = env
