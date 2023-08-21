@@ -36,7 +36,7 @@ https://github.com/prefix-dev/pixi/assets/885054/64666dee-841d-4680-9a61-7927913
 
 ## Highlights
 
-- Support for **multiple languages** like Python, C++ and R using Conda packages. Search for available packages at: [prefix.dev](https://prefix.dev)
+- Support for **multiple languages** like Python, C++ and R using Conda packages. Search for available packages on: [prefix.dev](https://prefix.dev)
 - **All OS's**: Linux, Windows, macOS (including Apple Silicon)
 - A **lockfile** is always included and always up-to-date.
 - A clean and simple Cargo-like **command-line interface**.
