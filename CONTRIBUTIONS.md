@@ -4,7 +4,7 @@ We would love for you to contribute to pixi and make it better with every PR mer
 To make contributing as easy as possible we made pixi a pixi project :wink:.
 
 ## Getting started
-Clone our project locally on your machine.
+Clone our project locally on your machine:
 
 ```
 git clone https://github.com/prefix-dev/pixi.git
