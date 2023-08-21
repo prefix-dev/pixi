@@ -21,7 +21,7 @@ After building cargo should have put a binary in the target folder that you can 
 ./target/release/pixi
 ```
 
-Run the tests
+Run the tests:
 
 ```
 pixi run test
