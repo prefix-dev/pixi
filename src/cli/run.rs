@@ -21,7 +21,7 @@ use rattler_shell::{
 use tokio::task::JoinHandle;
 
 /// Runs task in project.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct RunOutput {
     pub exit_code: i32,
     pub stdout: String,
@@ -102,7 +102,9 @@ pub fn order_tasks(
             }
         }
 
-        s2.push_back((task, additional_args))
+        if task.is_executable() {
+            s2.push_back((task, additional_args))
+        }
     }
 
     Ok(s2)

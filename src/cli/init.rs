@@ -18,8 +18,11 @@ pub struct Args {
 
     /// Channels to use in the project.
     #[arg(short, long = "channel", id = "channel")]
-    pub channels: Vec<String>,
+    pub channels: Option<Vec<String>>,
 }
+
+/// The default channels to use for a new project.
+const DEFAULT_CHANNELS: &[&str] = &["conda-forge"];
 
 /// The pixi.toml template
 ///
@@ -31,7 +34,7 @@ description = "Add a short description here"
 {%- if author %}
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
-channels = ["{{ channels|join("\", \"") }}"]
+channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
 platforms = ["{{ platform }}"]
 
 [tasks]
@@ -77,11 +80,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .to_string_lossy();
     let version = "0.1.0";
     let author = get_default_author();
-    let channels = if args.channels.is_empty() {
-        vec![String::from("conda-forge")]
+    let channels = if let Some(channels) = args.channels {
+        channels
     } else {
-        args.channels
+        DEFAULT_CHANNELS
+            .iter()
+            .copied()
+            .map(ToOwned::to_owned)
+            .collect()
     };
+
     let platform = Platform::current();
 
     let rv = env

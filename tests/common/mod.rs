@@ -128,7 +128,7 @@ impl PixiControl {
         InitBuilder {
             args: init::Args {
                 path: self.project_path().to_path_buf(),
-                channels: Vec::new(),
+                channels: None,
             },
         }
     }
@@ -156,16 +156,20 @@ impl PixiControl {
         let project = self.project().unwrap();
         let task_env = get_task_env(&project).await.unwrap();
 
+        let mut result = RunOutput::default();
         while let Some((command, args)) = tasks.pop_back() {
             let script = create_script(command, args).await;
             if let Ok(script) = script {
                 let output = execute_script_with_output(script, &project, &task_env, None).await;
-                if tasks.is_empty() {
-                    return Ok(output);
+                result.stdout.push_str(&output.stdout);
+                result.stderr.push_str(&output.stderr);
+                result.exit_code = output.exit_code;
+                if output.exit_code != 0 {
+                    break;
                 }
             }
         }
-        Ok(RunOutput::default())
+        Ok(result)
     }
 
     /// Create an installed environment. I.e a resolved and installed prefix
