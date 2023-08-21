@@ -16,7 +16,7 @@ Build pixi with cargo by yourself.
 pixi run build
 ```
 
-After building cargo should have put a binary in the target folder that you can run from the command line.
+After building, cargo should have placed a binary in the `target` folder that you can run from the command line.
 ```
 ./target/release/pixi
 ```
@@ -27,23 +27,26 @@ Run the tests:
 pixi run test
 ```
 
-Installing your custom pixi into your machine can be done with.
+Installing your custom built pixi binary into your machine can be done with:
 ```
 pixi run install
 ```
-**Note**: you might need to add the cargo env source to your shells configuration file
+**Note**: you might need to add the `cargo env source` to the configuration file of your shell e.g. `.bashrc`.
 
 ## Get your code ready for a PR
-We use `pre-commit` to run all the formatters and linters we use.
-If you have `pre-commit` on your system you can run `pre-commit install` to run the tools before you commit or push.
+We use `pre-commit` to run all the formatters and linters that we use.
+If you have `pre-commit` installed on your system you can run `pre-commit install` to run the tools before you commit or push.
 If you don't have it on your system either use `pixi global install pre-commit` or use the one in your environment.
 ```shell
 pixi run lint
 ```
 
-When you commit your code try to come up with a good commit message, we (try to) use [conventional-commits](https://www.conventionalcommits.org/en/v1.0.0/).
+When you commit your code, please try to come up with a good commit message.
+The maintainers (try to) use [conventional-commits](https://www.conventionalcommits.org/en/v1.0.0/).
 ```shell
 git add FILES_YOU_CHANGED
+# This is the conventional commit convention:
 git commit -m "<type>[optional scope]: <description>"
+# An example:
 git commit -m "feat: add xxx to the pixi.toml"
 ```
