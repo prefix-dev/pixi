@@ -1,4 +1,5 @@
 use crate::{
+    default_retry_policy,
     prefix::Prefix,
     progress::{
         await_in_progress, default_progress_style, finished_progress_style, global_multi_progress,
@@ -501,10 +502,11 @@ async fn execute_operation(
         async {
             // Make sure the package is available in the package cache.
             let result = package_cache
-                .get_or_fetch_from_url(
+                .get_or_fetch_from_url_with_retry(
                     &install_record.package_record,
                     install_record.url.clone(),
                     download_client.clone(),
+                    default_retry_policy(),
                 )
                 .map_ok(|cache_dir| Some((install_record.clone(), cache_dir)))
                 .await
