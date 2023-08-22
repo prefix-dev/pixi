@@ -46,18 +46,35 @@ pub fn order_tasks(
 ) -> miette::Result<VecDeque<(Task, Vec<String>)>> {
     let tasks: Vec<_> = tasks.iter().map(|c| c.to_string()).collect();
 
-    // Find the command in the project.
+    // Find the command in the tasks.
     let (task_name, task, additional_args) = tasks
         .first()
+        // First search in the target specific tasks
         .and_then(|cmd_name| {
-            project.task_opt(cmd_name).map(|cmd| {
-                (
-                    Some(cmd_name.clone()),
-                    cmd.clone(),
-                    tasks[1..].iter().cloned().collect_vec(),
-                )
+            project
+                .target_specific_tasks(Platform::current())
+                .get(cmd_name.as_str())
+                .map(|&cmd| {
+                    (
+                        Some(cmd_name.clone()),
+                        cmd.clone(),
+                        tasks[1..].iter().cloned().collect_vec(),
+                    )
+                })
+        })
+        // If it isn't found in the target specific tasks try to find it in the default tasks.
+        .or_else(|| {
+            tasks.first().and_then(|cmd_name| {
+                project.task_opt(cmd_name).map(|cmd| {
+                    (
+                        Some(cmd_name.clone()),
+                        cmd.clone(),
+                        tasks[1..].iter().cloned().collect_vec(),
+                    )
+                })
             })
         })
+        // When no task is found, just execute the command.
         .unwrap_or_else(|| {
             (
                 None,
@@ -93,11 +110,14 @@ pub fn order_tasks(
         for dependency in depends_on.iter() {
             if !added.contains(dependency) {
                 let cmd = project
-                    .task_opt(dependency)
-                    .ok_or_else(|| miette::miette!("failed to find dependency {}", dependency))?
-                    .clone();
+                    .target_specific_tasks(Platform::current())
+                    .get(dependency.as_str())
+                    .copied()
+                    // If there is no target specific task try to find it in the default tasks.
+                    .or_else(|| project.task_opt(dependency))
+                    .ok_or_else(|| miette::miette!("failed to find dependency {}", dependency))?;
 
-                s1.push_back((cmd, Vec::new()));
+                s1.push_back((cmd.clone(), Vec::new()));
                 added.insert(dependency.clone());
             }
         }

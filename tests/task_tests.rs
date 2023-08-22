@@ -1,5 +1,6 @@
 use crate::common::PixiControl;
 use pixi::task::{CmdArgs, Task};
+use rattler_conda_types::Platform;
 
 mod common;
 
@@ -56,4 +57,43 @@ pub async fn add_command_types() {
     let project = pixi.project().unwrap();
     let task = project.manifest.tasks.get("testing").unwrap();
     assert!(matches!(task, Task::Alias(a) if a.depends_on.get(0).unwrap() == "test"));
+}
+
+#[tokio::test]
+pub async fn add_remove_target_specific_task() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init_with_platforms(vec!["win-64".to_string()])
+        .await
+        .unwrap();
+
+    // Simple task
+    pixi.tasks()
+        .add("test", Some(Platform::Win64))
+        .with_commands(["echo only_on_windows"])
+        .execute()
+        .unwrap();
+
+    let project = pixi.project().unwrap();
+    let task = *project.tasks(Some(Platform::Win64)).get("test").unwrap();
+    assert!(matches!(task, Task::Plain(s) if s == "echo only_on_windows"));
+
+    // Simple task
+    pixi.tasks()
+        .add("test", None)
+        .with_commands(["echo hello"])
+        .execute()
+        .unwrap();
+
+    // Remove the task
+    pixi.tasks()
+        .remove("test", Some(Platform::Win64))
+        .await
+        .unwrap();
+    assert_eq!(
+        pixi.project()
+            .unwrap()
+            .target_specific_tasks(Platform::Win64)
+            .len(),
+        0
+    );
 }

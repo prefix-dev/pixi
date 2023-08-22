@@ -131,7 +131,20 @@ pub fn execute(args: Args) -> miette::Result<()> {
         Operation::Remove(args) => {
             let mut to_remove = Vec::new();
             for name in args.names.iter() {
-                if !project.task_names(args.platform).iter().any(|n| *n == name) {
+                if let Some(platform) = args.platform {
+                    if !project
+                        .target_specific_tasks(platform)
+                        .contains_key(name.as_str())
+                    {
+                        eprintln!(
+                            "{}Task '{}' does not exist on {}",
+                            console::style(console::Emoji("❌ ", "X")).red(),
+                            console::style(&name).bold(),
+                            console::style(platform.as_str()).bold(),
+                        );
+                        continue;
+                    }
+                } else if !project.tasks(None).contains_key(name.as_str()) {
                     eprintln!(
                         "{}Task {} does not exist",
                         console::style(console::Emoji("❌ ", "X")).red(),
@@ -139,6 +152,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     );
                     continue;
                 }
+
                 // Check if task has dependencies
                 let depends_on = project.task_names_depending_on(name);
                 if !depends_on.is_empty() && !args.names.contains(name) {
@@ -154,11 +168,11 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     );
                 }
                 // Safe to remove
-                to_remove.push(name);
+                to_remove.push((name, args.platform));
             }
 
-            for name in to_remove {
-                project.remove_task(name)?;
+            for (name, platform) in to_remove {
+                project.remove_task(name, platform)?;
                 eprintln!(
                     "{}Removed task {} ",
                     console::style(console::Emoji("❌ ", "X")).yellow(),

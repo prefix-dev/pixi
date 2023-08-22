@@ -138,23 +138,36 @@ impl Project {
     }
 
     /// Returns a hashmap of the tasks that should run on the given platform.
-    pub fn tasks(&self, platform: Platform) -> HashMap<&str, &Task> {
+    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&str, &Task> {
         let mut all_tasks = HashMap::default();
 
         // Gather non-target specific tasks
         all_tasks.extend(self.manifest.tasks.iter().map(|(k, v)| (k.as_str(), v)));
 
         // Gather platform-specific tasks and overwrite them if they're double.
-        for target_metadata in self.target_specific_metadata(platform) {
-            all_tasks.extend(target_metadata.tasks.iter().map(|(k, v)| (k.as_str(), v)));
+        if let Some(platform) = platform {
+            for target_metadata in self.target_specific_metadata(platform) {
+                all_tasks.extend(target_metadata.tasks.iter().map(|(k, v)| (k.as_str(), v)));
+            }
         }
 
         all_tasks
     }
 
+    /// Returns a hashmap of the tasks that should run only the given platform.
+    pub fn target_specific_tasks(&self, platform: Platform) -> HashMap<&str, &Task> {
+        let mut tasks = HashMap::default();
+        // Gather platform-specific tasks and overwrite them if they're double.
+        for target_metadata in self.target_specific_metadata(platform) {
+            tasks.extend(target_metadata.tasks.iter().map(|(k, v)| (k.as_str(), v)));
+        }
+
+        tasks
+    }
+
     /// Returns names of the tasks that depend on the given task.
     pub fn task_names_depending_on(&self, name: impl AsRef<str>) -> Vec<&str> {
-        let mut tasks = self.tasks(Platform::current());
+        let mut tasks = self.tasks(Some(Platform::current()));
         let task = tasks.remove(name.as_ref());
         if task.is_some() {
             tasks
@@ -166,34 +179,6 @@ impl Project {
             vec![]
         }
     }
-    /// Add given task to a task table in the project manifest
-    pub fn add_task_to_table(
-        &mut self,
-        tasks_table: &mut Table,
-        name: impl AsRef<str>,
-        task: Task,
-    ) -> miette::Result<()> {
-        let depends_on = task.depends_on();
-
-        for depends in depends_on {
-            if !self.manifest.tasks.contains_key(depends) {
-                miette::bail!(
-                    "task '{}' for the depends on for '{}' does not exist",
-                    depends,
-                    name.as_ref(),
-                );
-            }
-        }
-
-        // Add the task to the table
-        tasks_table.insert(name.as_ref(), task_as_toml(task.clone()));
-
-        self.manifest.tasks.insert(name.as_ref().to_string(), task);
-
-        self.save()?;
-
-        Ok(())
-    }
 
     /// Add a task to the project
     pub fn add_task(
@@ -203,7 +188,10 @@ impl Project {
         platform: Option<Platform>,
     ) -> miette::Result<()> {
         let table = if let Some(platform) = platform {
-            if self.tasks(platform).contains_key(name.as_ref()) {
+            if self
+                .target_specific_tasks(platform)
+                .contains_key(name.as_ref())
+            {
                 miette::bail!("task {} already exists", name.as_ref());
             }
             ensure_toml_target_table(&mut self.doc, platform, "tasks")?
@@ -238,19 +226,27 @@ impl Project {
     }
 
     /// Remove a task from the project, and the tasks that depend on it
-    pub fn remove_task(&mut self, name: impl AsRef<str>) -> miette::Result<()> {
-        self.manifest
-            .tasks
+    pub fn remove_task(
+        &mut self,
+        name: impl AsRef<str>,
+        platform: Option<Platform>,
+    ) -> miette::Result<()> {
+        self.tasks(platform)
             .get(name.as_ref())
             .ok_or_else(|| miette::miette!("task {} does not exist", name.as_ref()))?;
 
-        let tasks_table = &mut self.doc["tasks"];
-        if tasks_table.is_none() {
-            miette::bail!("internal data-structure inconsistent with toml");
-        }
-        let tasks_table = tasks_table.as_table_like_mut().ok_or_else(|| {
-            miette::miette!("tasks in {} are malformed", consts::PROJECT_MANIFEST)
-        })?;
+        // Get the task table either from the target platform or the default tasks.
+        let tasks_table = if let Some(platform) = platform {
+            ensure_toml_target_table(&mut self.doc, platform, "tasks")?
+        } else {
+            let tasks_table = &mut self.doc["tasks"];
+            if tasks_table.is_none() {
+                miette::bail!("internal data-structure inconsistent with toml");
+            }
+            tasks_table.as_table_like_mut().ok_or_else(|| {
+                miette::miette!("tasks in {} are malformed", consts::PROJECT_MANIFEST)
+            })?
+        };
 
         // If it does not exist in toml, consider this ok as we want to remove it anyways
         tasks_table.remove(name.as_ref());
@@ -692,7 +688,7 @@ impl Project {
         Ok(full_paths)
     }
 
-    /// Get the task with the specified name or `None` if no such task exists.
+    /// Get the default task with the specified name or `None` if no such task exists.
     pub fn task_opt(&self, name: &str) -> Option<&Task> {
         self.manifest.tasks.get(name)
     }
@@ -1028,8 +1024,8 @@ mod tests {
             manifest,
         };
 
-        assert_debug_snapshot!(project.tasks(Platform::Osx64));
-        assert_debug_snapshot!(project.tasks(Platform::Win64));
-        assert_debug_snapshot!(project.tasks(Platform::Linux64));
+        assert_debug_snapshot!(project.tasks(Some(Platform::Osx64)));
+        assert_debug_snapshot!(project.tasks(Some(Platform::Win64)));
+        assert_debug_snapshot!(project.tasks(Some(Platform::Linux64)));
     }
 }

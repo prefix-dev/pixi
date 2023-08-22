@@ -129,6 +129,19 @@ impl PixiControl {
             args: init::Args {
                 path: self.project_path().to_path_buf(),
                 channels: Vec::new(),
+                platforms: Vec::new(),
+            },
+        }
+    }
+
+    /// Initialize pixi project inside a temporary directory. Returns a [`InitBuilder`]. To execute
+    /// the command and await the result call `.await` on the return value.
+    pub fn init_with_platforms(&self, platforms: Vec<String>) -> InitBuilder {
+        InitBuilder {
+            args: init::Args {
+                path: self.project_path().to_path_buf(),
+                channels: Vec::new(),
+                platforms,
             },
         }
     }
@@ -215,7 +228,7 @@ impl TasksControl<'_> {
             manifest_path: Some(self.pixi.manifest_path()),
             operation: task::Operation::Remove(task::RemoveArgs {
                 names: vec![name.to_string()],
-                platform: platform,
+                platform,
             }),
         })
     }
