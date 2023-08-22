@@ -19,6 +19,10 @@ pub struct Args {
     /// Channels to use in the project.
     #[arg(short, long = "channel", id = "channel")]
     pub channels: Option<Vec<String>>,
+
+    /// Platforms that the project supports.
+    #[arg(short, long = "platform", id = "platform")]
+    pub platforms: Vec<String>,
 }
 
 /// The default channels to use for a new project.
@@ -35,7 +39,7 @@ description = "Add a short description here"
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
 channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
-platforms = ["{{ platform }}"]
+platforms = ["{{ platforms|join("\", \"") }}"]
 
 [tasks]
 
@@ -90,7 +94,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .collect()
     };
 
-    let platform = Platform::current();
+    let platforms = if args.platforms.is_empty() {
+        vec![Platform::current().to_string()]
+    } else {
+        args.platforms
+    };
 
     let rv = env
         .render_named_str(
@@ -101,7 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 version,
                 author,
                 channels,
-                platform
+                platforms
             },
         )
         .unwrap();

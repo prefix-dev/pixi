@@ -195,7 +195,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let project_info = project.map(|p| ProjectInfo {
         manifest_path: p.root().to_path_buf().join("pixi.toml"),
-        tasks: p.manifest.tasks.keys().cloned().collect(),
+        tasks: p
+            .tasks(Some(Platform::current()))
+            .into_keys()
+            .map(|k| k.to_string())
+            .collect(),
         package_count: dependency_count(&p).ok(),
         environment_size,
         last_updated: last_updated(p.lock_file_path()).ok(),

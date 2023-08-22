@@ -25,7 +25,11 @@ ProjectManifest {
         repository: None,
         documentation: None,
     },
-    tasks: {},
+    tasks: {
+        "test": Plain(
+            "test multi",
+        ),
+    },
     system_requirements: SystemRequirements {
         windows: None,
         unix: None,
@@ -41,7 +45,7 @@ ProjectManifest {
     target: {
         PixiSpanned {
             span: Some(
-                228..234,
+                206..212,
             ),
             value: Platform(
                 Win64,
@@ -50,20 +54,16 @@ ProjectManifest {
             dependencies: {},
             host_dependencies: None,
             build_dependencies: None,
-            activation: Some(
-                Activation {
-                    scripts: Some(
-                        [
-                            ".pixi/install/setup.ps1",
-                        ],
-                    ),
-                },
-            ),
-            tasks: {},
+            activation: None,
+            tasks: {
+                "test": Plain(
+                    "test win",
+                ),
+            },
         },
         PixiSpanned {
             span: Some(
-                318..326,
+                271..279,
             ),
             value: Platform(
                 Linux64,
@@ -72,26 +72,13 @@ ProjectManifest {
             dependencies: {},
             host_dependencies: None,
             build_dependencies: None,
-            activation: Some(
-                Activation {
-                    scripts: Some(
-                        [
-                            ".pixi/install/setup.sh",
-                            "test",
-                        ],
-                    ),
-                },
-            ),
-            tasks: {},
+            activation: None,
+            tasks: {
+                "test": Plain(
+                    "test linux",
+                ),
+            },
         },
     },
-    activation: Some(
-        Activation {
-            scripts: Some(
-                [
-                    ".pixi/install/setup.sh",
-                ],
-            ),
-        },
-    ),
+    activation: None,
 }

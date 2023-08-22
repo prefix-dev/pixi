@@ -196,6 +196,10 @@ pub struct TargetMetadata {
     /// Additional information to activate an environment.
     #[serde(default)]
     pub activation: Option<Activation>,
+
+    /// Target specific tasks to run in the environment
+    #[serde(default)]
+    pub tasks: HashMap<String, Task>,
 }
 
 /// Describes the contents of the `[package]` section of the project manifest.
@@ -449,6 +453,27 @@ mod test {
 
             [target.linux-64.activation]
             scripts = [".pixi/install/setup.sh", "test"]
+            "#
+        );
+
+        assert_debug_snapshot!(
+            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
+        );
+    }
+
+    #[test]
+    fn test_target_specific_tasks() {
+        let contents = format!(
+            r#"
+            {PROJECT_BOILERPLATE}
+            [tasks]
+            test = "test multi"
+
+            [target.win-64.tasks]
+            test = "test win"
+
+            [target.linux-64.tasks]
+            test = "test linux"
             "#
         );
 
