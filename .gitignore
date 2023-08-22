@@ -5,3 +5,4 @@
 __pycache__
 **/**/.pixi
 **/**/.build
+.DS_store

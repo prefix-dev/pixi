@@ -18,6 +18,10 @@ pub async fn fetch_sparse_repodata(
     channels: &[Channel],
     target_platforms: &[Platform],
 ) -> miette::Result<Vec<SparseRepoData>> {
+    if channels.is_empty() {
+        return Ok(vec![]);
+    }
+
     // Determine all the repodata that requires fetching.
     let mut fetch_targets = Vec::with_capacity(channels.len() * target_platforms.len());
     for channel in channels {
