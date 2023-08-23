@@ -82,15 +82,24 @@ case "$(basename "$SHELL")" in
         fi
         LINE="export PATH=\$PATH:${INSTALL_DIR}"
         update_shell $BASH_FILE "$LINE"
+
+        LINE='eval "$(pixi completion --shell bash)"'
+        update_shell $BASH_FILE "$LINE"
         ;;
 
     fish)
         LINE="fish_add_path ${INSTALL_DIR}"
         update_shell ~/.config/fish/config.fish "$LINE"
+
+        LINE='pixi completion --shell fish | source'
+        update_shell ~/.config/fish/config.fish "$LINE"
         ;;
 
     zsh)
         LINE="export PATH=\$PATH:${INSTALL_DIR}"
+        update_shell ~/.zshrc "$LINE"
+
+        LINE='eval "$(pixi completion --shell zsh)"'
         update_shell ~/.zshrc "$LINE"
         ;;
 
