@@ -103,6 +103,30 @@ pub fn get_minimal_virtual_packages(platform: Platform) -> Vec<VirtualPackage> {
     virtual_packages
 }
 
+/// Determines whether a requirement should be retained based on the reference packages.
+/// This f
+fn should_retain(requirement: &VirtualPackage, reference_packages: &[VirtualPackage]) -> bool {
+    !reference_packages
+        .iter()
+        .any(|package_type| match package_type {
+            VirtualPackage::Linux(_) => {
+                matches!(requirement, VirtualPackage::Win)
+                    || matches!(requirement, VirtualPackage::Osx(_))
+            }
+            VirtualPackage::Osx(_) => {
+                matches!(requirement, VirtualPackage::LibC(_))
+                    || matches!(requirement, VirtualPackage::Win)
+                    || matches!(requirement, VirtualPackage::Linux(_))
+            }
+            VirtualPackage::Win => {
+                matches!(requirement, VirtualPackage::LibC(_))
+                    || matches!(requirement, VirtualPackage::Unix)
+                    || matches!(requirement, VirtualPackage::Osx(_))
+                    || matches!(requirement, VirtualPackage::Linux(_))
+            }
+            _ => false,
+        })
+}
 impl Project {
     /// Returns the set of virtual packages to use for the specified platform according. This method
     /// takes into account the system requirements specified in the project manifest.
@@ -110,17 +134,22 @@ impl Project {
         &self,
         platform: Platform,
     ) -> miette::Result<Vec<GenericVirtualPackage>> {
-        // Start with the minimal virtual packages
-        let reference_packages = get_minimal_virtual_packages(platform);
-
         // Get the system requirements from the project manifest
         let system_requirements = self.system_requirements();
 
+        // Filter system requirements based on the relevant packages for the current OS.
+        let filtered_system_requirement = system_requirements
+            .iter()
+            .filter(|requirement| {
+                should_retain(requirement, &get_minimal_virtual_packages(platform))
+            })
+            .cloned();
+
         // Combine the requirements, allowing the system requirements to overwrite the reference
         // virtual packages.
-        let combined_packages = reference_packages
+        let combined_packages = get_minimal_virtual_packages(platform)
             .into_iter()
-            .chain(system_requirements.into_iter())
+            .chain(filtered_system_requirement)
             .map(GenericVirtualPackage::from)
             .map(|vpkg| (vpkg.name.clone(), vpkg))
             .collect::<HashMap<_, _>>();
@@ -164,9 +193,10 @@ pub fn verify_current_platform_has_required_virtual_packages(
 
 #[cfg(test)]
 mod tests {
-    use crate::virtual_packages::get_minimal_virtual_packages;
+    use crate::virtual_packages::{get_minimal_virtual_packages, should_retain};
     use insta::assert_debug_snapshot;
     use rattler_conda_types::Platform;
+    use rattler_virtual_packages::{Archspec, LibC, Linux, Osx, VirtualPackage};
 
     // Regression test on the virtual packages so there is not accidental changes
     #[test]
@@ -186,5 +216,66 @@ mod tests {
             let snapshot_name = format!("test_get_minimal_virtual_packages.{}", platform);
             assert_debug_snapshot!(snapshot_name, packages);
         }
+    }
+    #[test]
+    fn test_should_retain_of_virtual_packages_on_different_os() {
+        let libc = VirtualPackage::LibC(LibC {
+            family: "".to_string(),
+            version: "2.36".parse().unwrap(),
+        });
+        let win = VirtualPackage::Win;
+        let osx = VirtualPackage::Osx(Osx {
+            version: "11.4".parse().unwrap(),
+        });
+        let unix = VirtualPackage::Unix;
+        let linux = VirtualPackage::Linux(Linux {
+            version: "6.4.7".parse().unwrap(),
+        });
+        let archspec = VirtualPackage::Archspec(Archspec {
+            spec: "x86_64".to_string(),
+        });
+        let system_requirements = vec![libc, linux, win, unix, osx, archspec];
+
+        let linux_system_requirement: Vec<&VirtualPackage> = system_requirements
+            .iter()
+            .filter(|requirement| {
+                should_retain(
+                    requirement,
+                    &get_minimal_virtual_packages(Platform::Linux64),
+                )
+            })
+            .collect();
+        assert!(!linux_system_requirement.iter().any(|r| match r {
+            VirtualPackage::Osx(_) => true,
+            VirtualPackage::Win => true,
+            _ => false,
+        }));
+
+        let windows_system_requirement: Vec<&VirtualPackage> = system_requirements
+            .iter()
+            .filter(|requirement| {
+                should_retain(requirement, &get_minimal_virtual_packages(Platform::Win64))
+            })
+            .collect();
+        assert!(!windows_system_requirement.iter().any(|r| match r {
+            VirtualPackage::Osx(_) => true,
+            VirtualPackage::Linux(_) => true,
+            VirtualPackage::Unix => true,
+            VirtualPackage::LibC(_) => true,
+            _ => false,
+        }));
+
+        let osx_system_requirement: Vec<&VirtualPackage> = system_requirements
+            .iter()
+            .filter(|requirement| {
+                should_retain(requirement, &get_minimal_virtual_packages(Platform::Osx64))
+            })
+            .collect();
+        assert!(!osx_system_requirement.iter().any(|r| match r {
+            VirtualPackage::Linux(_) => true,
+            VirtualPackage::Win => true,
+            VirtualPackage::LibC(_) => true,
+            _ => false,
+        }));
     }
 }
