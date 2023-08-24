@@ -17,6 +17,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::virtual_packages::non_relevant_virtual_packages_for_platform;
 use toml_edit::{Array, Document, Item, Table, TomlError, Value};
 
 #[derive(Debug, Copy, Clone)]
@@ -698,6 +699,21 @@ impl Project {
     /// They will act as the description of a reference machine which is minimally needed for this package to be run.
     pub fn system_requirements(&self) -> Vec<VirtualPackage> {
         self.manifest.system_requirements.virtual_packages()
+    }
+
+    /// Get the system requirements defined under the `system-requirements` section of the project manifest.
+    /// Excluding packages that are not relevant for the specified platform.
+    pub fn system_requirements_for_platform(&self, platform: Platform) -> Vec<VirtualPackage> {
+        // Filter system requirements based on the relevant packages for the current OS.
+        self.manifest
+            .system_requirements
+            .virtual_packages()
+            .iter()
+            .filter(|requirement| {
+                !non_relevant_virtual_packages_for_platform(requirement, platform)
+            })
+            .cloned()
+            .collect()
     }
 }
 
