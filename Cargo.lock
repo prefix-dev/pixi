@@ -2248,8 +2248,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ac9a54414b74e4105bfb7f18f49933b5477015a739305eba5ecbefe2a1bf2fe"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/use_nvidia_smi_to_detect_cuda#7c7c09be8fa9e80eab159d2da70a787c2c3898f0"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2289,8 +2288,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1d42fdcf5173379787b05a3ee53f3d5ef2aaaa87ac545944ce125fbaaed95cf"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/use_nvidia_smi_to_detect_cuda#7c7c09be8fa9e80eab159d2da70a787c2c3898f0"
 dependencies = [
  "chrono",
  "fxhash",
@@ -2318,8 +2316,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecf7df661259e2fe5dc18ae13ffcbb6ae49a5eda43bd0b8c8d4e9640d60c6eb3"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/use_nvidia_smi_to_detect_cuda#7c7c09be8fa9e80eab159d2da70a787c2c3898f0"
 dependencies = [
  "blake2",
  "digest",
@@ -2334,8 +2331,7 @@ dependencies = [
 [[package]]
 name = "rattler_libsolv_rs"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "405c1afa5abcd8d49f96d2c13905c9fbf8e64e97d44cc8c0c8bd03bb9baf4e70"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/use_nvidia_smi_to_detect_cuda#7c7c09be8fa9e80eab159d2da70a787c2c3898f0"
 dependencies = [
  "itertools",
  "petgraph",
@@ -2346,8 +2342,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df9f9de14f6bdad43cd5d1d067578f166f2d30006562f9d0bd9f18ab6c03c983"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/use_nvidia_smi_to_detect_cuda#7c7c09be8fa9e80eab159d2da70a787c2c3898f0"
 dependencies = [
  "quote",
  "syn 2.0.29",
@@ -2356,8 +2351,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33d413af686d3a2cbc52d07cc62c3660c6343bb5c0e8d7bf6410173fd5e1f6c0"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/use_nvidia_smi_to_detect_cuda#7c7c09be8fa9e80eab159d2da70a787c2c3898f0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2375,8 +2369,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27e0eceef6ce658183f2611a99fb8bec16f913d04ed48a7c1e10c03bd833b679"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/use_nvidia_smi_to_detect_cuda#7c7c09be8fa9e80eab159d2da70a787c2c3898f0"
 dependencies = [
  "bzip2",
  "chrono",
@@ -2399,8 +2392,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e586f27612063dc5d74f33cd7d6be98847f2c909ae89a19ac27770460bde2a0b"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/use_nvidia_smi_to_detect_cuda#7c7c09be8fa9e80eab159d2da70a787c2c3898f0"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2438,8 +2430,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9f1e408db9f970b168c22ffa259ea8e5697789dfff59b43fe50d9d102bad4f5"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/use_nvidia_smi_to_detect_cuda#7c7c09be8fa9e80eab159d2da70a787c2c3898f0"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.0.0",
@@ -2456,8 +2447,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0b1f2f7feb11bc1482462ba66a43f93090e8c1fd6aeae2ebd597725549b4809"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/use_nvidia_smi_to_detect_cuda#7c7c09be8fa9e80eab159d2da70a787c2c3898f0"
 dependencies = [
  "anyhow",
  "hex",
@@ -2474,8 +2464,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b101f2baa908da4b48845f116b9d8b985c6d542789854c75402e470a62b0f2e"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/use_nvidia_smi_to_detect_cuda#7c7c09be8fa9e80eab159d2da70a787c2c3898f0"
 dependencies = [
  "cfg-if",
  "libloading",
