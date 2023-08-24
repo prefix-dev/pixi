@@ -45,7 +45,7 @@ try {
         Write-Output "$PIXI_DIR is already in PATH`n"
     }
 
-    # Add the completion script to teh activation of the shell.
+    # Add the completion script to the activation of the shell.
     Add-Content -Path $PROFILE -Value 'Invoke-Expression (&pixi completion --shell powershell)'
 } catch {
     Write-Host "Error: '$DOWNLOAD_URL' is not available or failed to download"
