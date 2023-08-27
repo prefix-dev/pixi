@@ -10,7 +10,6 @@ metadata:
     used_env_vars: []
   platforms:
   - linux-64
-  - osx-64
   - osx-arm64
   sources: []
   time_metadata: null
