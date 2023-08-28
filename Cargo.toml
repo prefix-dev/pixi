@@ -52,6 +52,7 @@ shlex = "1.1.0"
 spdx = "0.10.2"
 strsim = "0.10.0"
 tempfile = "3.6.0"
+thiserror = "1.0.47"
 tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread", "signal"] }
 tokio-util = "0.7.8"
 toml_edit = { version = "0.19.14", features = ["serde"] }
@@ -64,6 +65,10 @@ rattler_digest = "0.8.0"
 serde_json = "1.0.103"
 tokio = { version = "1.29.1", features = ["rt"] }
 toml = "0.7.6"
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.27.1", default-features = false, features = ["fs", "process", "signal", "term"] }
+libc = { version = "0.2.147", default-features = false}
 
 [patch.crates-io]
 rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }

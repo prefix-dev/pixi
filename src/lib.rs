@@ -10,6 +10,8 @@ pub mod task;
 pub mod util;
 pub mod utils;
 pub mod virtual_packages;
+#[cfg(unix)]
+pub mod unix;
 
 pub use project::Project;
 use rattler_networking::retry_policies::ExponentialBackoff;
