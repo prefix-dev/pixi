@@ -74,4 +74,3 @@ rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branc
 rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-
