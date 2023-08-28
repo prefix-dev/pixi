@@ -548,6 +548,40 @@ impl Project {
         Ok(())
     }
 
+    pub fn remove_dependency(
+        &mut self,
+        name: impl AsRef<str>,
+        platform: Option<Platform>,
+    ) -> miette::Result<()> {
+        let removed = match platform {
+            Some(p) => {
+                let t = ensure_toml_target_table(&mut self.doc, p, "dependencies")?;
+                t.remove(name.as_ref())
+            }
+            None => {
+                let dep_types = ["dependencies", "host-dependencies", "build-dependencies"];
+                let mut removed: Option<Item> = None;
+                for dep in dep_types {
+                    if let Item::Table(t) = &mut self.doc[dep] {
+                        if t.contains_key(name.as_ref()) {
+                            removed = t.remove(name.as_ref());
+                            break;
+                        }
+                    }
+                }
+                removed
+            }
+        };
+
+        if removed.is_some() {
+            self.save()?;
+        } else {
+            miette::bail!("Could not remove '{}'", name.as_ref());
+        }
+
+        Ok(())
+    }
+
     /// Returns the root directory of the project
     pub fn root(&self) -> &Path {
         &self.root
