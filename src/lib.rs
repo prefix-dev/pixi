@@ -7,11 +7,11 @@ pub mod progress;
 pub mod project;
 pub mod repodata;
 pub mod task;
+#[cfg(unix)]
+pub mod unix;
 pub mod util;
 pub mod utils;
 pub mod virtual_packages;
-#[cfg(unix)]
-pub mod unix;
 
 pub use project::Project;
 use rattler_networking::retry_policies::ExponentialBackoff;

@@ -1,14 +1,16 @@
 use super::PtyProcess;
 use crate::unix::pty_process::PtyProcessOptions;
 use nix::sys::wait::WaitStatus;
-use std::io;
-use std::io::Write;
-use std::mem::MaybeUninit;
-use std::os::fd::AsRawFd;
-use std::process::Command;
-use tokio::fs::File;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::signal::unix::SignalKind;
+use std::{
+    io,
+    os::fd::{AsRawFd, FromRawFd},
+    process::Command,
+};
+use tokio::{
+    fs::File,
+    io::{AsyncReadExt, AsyncWriteExt},
+    signal::unix::SignalKind,
+};
 
 pub struct PtySession {
     pub process: PtyProcess,
@@ -36,8 +38,8 @@ impl PtySession {
                 ..Default::default()
             },
         )?;
+        let process_stdin = process.get_file_handle()?;
         let process_stdout = process.get_file_handle()?;
-        let process_stdin = process_stdout.try_clone()?;
         Ok(Self {
             process,
             process_stdout: File::from_std(process_stdout),
@@ -76,29 +78,36 @@ impl PtySession {
         // Bind to the SIGWINCH signal
         let mut signal_window_change = tokio::signal::unix::signal(SignalKind::window_change())?;
 
+        // Create file handles from the raw handles, this ensures we can read raw data from them.
+        // `tokio::io::stdout` assumes that we will be writing utf8, in this case we are not so we
+        // need this workaround.
+        let mut parent_stdin = unsafe { File::from_raw_fd(io::stdin().as_raw_fd()) };
+        let mut parent_stdout = unsafe { File::from_raw_fd(io::stdout().as_raw_fd()) };
+
+        // Create some buffer data to read from the different streams.
         let mut stdout_bytes = vec![0u8; 8096];
         let mut stdin_bytes = vec![0u8; 8096];
 
-        let mut parent_stdin = tokio::io::stdin();
         while self.process.status() == Some(WaitStatus::StillAlive) {
             tokio::select! {
-                // Forward any output from stdout to this processes stdout
-                bytes_read = self.process_stdout.read(&mut stdout_bytes) => {
-                    tokio::io::stdout().write_all(&stdout_bytes).await?;
-                    tokio::io::stdout().flush().await?;
-                }
-
                 // Forward any input from this process to the pty process
-                bytes_read = parent_stdin.read(&mut stdin_bytes) => {
-                    self.process_stdin.write_all(&stdin_bytes).await?;
+                Ok(bytes_read) = parent_stdin.read(&mut stdin_bytes) => {
+                    self.process_stdin.write_all(&stdin_bytes[..bytes_read]).await?;
                     self.process_stdin.flush().await?;
                 }
 
+                // Forward any output from stdout to this processes stdout
+                Ok(bytes_read) = self.process_stdout.read(&mut stdout_bytes) => {
+                    // println!("output {:?}", &stdout_bytes[..bytes_read]);
+                    parent_stdout.write_all(&stdout_bytes[..bytes_read]).await?;
+                    parent_stdout.flush().await?;
+                }
+
                 // If the window size changed we also forward that to the sub-process
-                signal = signal_window_change.recv() => {
+                _ = signal_window_change.recv() => {
                     // Query the terminal dimensions
                     let mut size: libc::winsize = unsafe { std::mem::zeroed() };
-                    let res = unsafe { libc::ioctl(io::stdout().as_raw_fd(), nix::libc::TIOCSWINSZ, &mut size) };
+                    let res = unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size) };
                     if res == 0 {
                         self.process.set_window_size(size)?;
                     }

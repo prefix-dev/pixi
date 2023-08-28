@@ -1,12 +1,10 @@
-use nix::pty::Winsize;
-use nix::sys::termios::{InputFlags, Termios};
 pub use nix::sys::{signal, wait};
 use nix::{
     self,
     fcntl::{open, OFlag},
     libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO},
-    pty::ptsname_r,
-    pty::{grantpt, posix_openpt, unlockpt, PtyMaster},
+    pty::{grantpt, posix_openpt, ptsname_r, unlockpt, PtyMaster, Winsize},
+    sys::termios::{InputFlags, Termios},
     sys::{stat, termios},
     unistd::{close, dup, dup2, fork, setsid, ForkResult, Pid},
 };
@@ -79,7 +77,7 @@ impl PtyProcess {
             // find current window size with ioctl
             let mut size: libc::winsize = unsafe { std::mem::zeroed() };
             // Query the terminal dimensions
-            let res = unsafe { libc::ioctl(io::stdout().as_raw_fd(), libc::TIOCGWINSZ, &mut size) };
+            unsafe { libc::ioctl(io::stdout().as_raw_fd(), libc::TIOCGWINSZ, &mut size) };
             size
         });
 
