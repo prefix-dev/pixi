@@ -365,18 +365,6 @@ pub async fn update_lock_file(
 
     let mut conda_lock = builder.build().into_diagnostic()?;
 
-    // Sort the package by platform, name, version to get a consistent ordering. This is different
-    // than conda-lock which sorts packages topologically. However, I (@baszalmstra) feel that this
-    // produces a less stable result than sorting in this way. Because if a dependency is added to
-    // a package that changed the order of the lock-file might also chance.
-    // TODO: Should we move this to rattler?
-    conda_lock.package.sort_by(|a, b| {
-        a.platform
-            .cmp(&b.platform)
-            .then_with(|| a.name.cmp(&b.name))
-            .then_with(|| a.version.cmp(&b.version))
-    });
-
     // Write the conda lock to disk
     conda_lock
         .to_path(&project.lock_file_path())
