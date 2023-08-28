@@ -363,7 +363,7 @@ pub async fn update_lock_file(
         builder = builder.add_locked_packages(locked_packages);
     }
 
-    let mut conda_lock = builder.build().into_diagnostic()?;
+    let conda_lock = builder.build().into_diagnostic()?;
 
     // Write the conda lock to disk
     conda_lock

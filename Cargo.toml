@@ -35,14 +35,14 @@ itertools = "0.11.0"
 miette = { version = "5.10.0", features = ["fancy", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
 minijinja = { version = "1.0.5", features = ["builtins"] }
 once_cell = "1.18.0"
-rattler = { version = "0.7.0", default-features = false }
-rattler_conda_types = { version = "0.7.0", default-features = false }
-rattler_digest = { version = "0.7.0", default-features = false }
-rattler_networking = { version = "0.7.0", default-features = false }
-rattler_repodata_gateway = { version = "0.7.0", default-features = false, features = ["sparse"] }
-rattler_shell = { version = "0.7.0", default-features = false, features = ["sysinfo"] }
-rattler_solve = { version = "0.7.0", default-features = false, features = ["libsolv_rs"] }
-rattler_virtual_packages = { version = "0.7.0", default-features = false }
+rattler = { version = "0.8.0", default-features = false }
+rattler_conda_types = { version = "0.8.0", default-features = false }
+rattler_digest = { version = "0.8.0", default-features = false }
+rattler_networking = { version = "0.8.0", default-features = false }
+rattler_repodata_gateway = { version = "0.8.0", default-features = false, features = ["sparse"] }
+rattler_shell = { version = "0.8.0", default-features = false, features = ["sysinfo"] }
+rattler_solve = { version = "0.8.0", default-features = false, features = ["libsolv_rs"] }
+rattler_virtual_packages = { version = "0.8.0", default-features = false }
 reqwest = { version = "0.11.18", default-features = false }
 serde = "1.0.171"
 serde_json = "1.0.103"
@@ -64,3 +64,14 @@ rattler_digest = "0.7.0"
 serde_json = "1.0.103"
 tokio = { version = "1.29.1", features = ["rt"] }
 toml = "0.7.6"
+
+[patch.crates-io]
+rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+
