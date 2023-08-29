@@ -1,6 +1,4 @@
 use pixi::cli;
-use pixi::unix::PtySession;
-use std::process::Command;
 
 #[tokio::main]
 pub async fn main() {
@@ -8,7 +6,4 @@ pub async fn main() {
         eprintln!("{err:?}");
         std::process::exit(1);
     }
-    // println!("Starting zsh");
-    // let mut process = PtySession::new(Command::new("zsh")).unwrap();
-    // process.interact().await.unwrap();
 }

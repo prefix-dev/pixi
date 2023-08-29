@@ -260,10 +260,8 @@ pub fn set_echo<Fd: AsFd>(fd: Fd, echo: bool) -> nix::Result<()> {
 
 impl Drop for PtyProcess {
     fn drop(&mut self) {
-        println!("Dropping PtyProcess");
         if let Some(wait::WaitStatus::StillAlive) = self.status() {
-            println!("Exiting PYT");
-            // self.exit().expect("cannot exit");
+            self.exit().expect("cannot exit");
         }
     }
 }

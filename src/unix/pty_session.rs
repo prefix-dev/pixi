@@ -90,7 +90,7 @@ impl PtySession {
         fd_set.insert(&stdin_fd);
 
         // Create a buffer for reading from the process
-        let mut buf = [0u8; 1024];
+        let mut buf = [0u8; 2048];
 
         let mut signals = Signals::new(&[SIGWINCH])?;
 
@@ -118,19 +118,22 @@ impl PtySession {
 
             let res = select::select(None, &mut select_set, None, None, &mut select_timeout);
             if res.is_err() {
-                if res.unwrap_err() == Errno::EINTR {
+                if let Err(Errno::EINTR) = res {
+                    // EINTR is not an error, it just means that we got interrupted by a signal (e.g. SIGWINCH)
                     continue;
                 } else {
-                    eprintln!("select error: {:?}", res);
+                    eprintln!("Select error: {:?}.", res);
                     break;
                 }
             } else {
+                // We have new data coming from the process
                 if select_set.contains(&process_stdout_fd) {
                     let bytes_read = self.process_stdout.read(&mut buf)?;
                     std::io::stdout().write_all(&buf[..bytes_read])?;
                     std::io::stdout().flush()?;
                 }
 
+                // or from stdin
                 if select_set.contains(&stdin_fd) {
                     let bytes_read = std::io::stdin().read(&mut buf)?;
                     self.process_stdin.write_all(&buf[..bytes_read])?;
