@@ -45,9 +45,16 @@ pub async fn add_command_types() {
         .unwrap();
 
     let project = pixi.project().unwrap();
-    let task = project.manifest.tasks.get("test2").unwrap();
-    assert!(matches!(task, Task::Execute(cmd) if matches!(cmd.cmd, CmdArgs::Single(_))));
-    assert!(matches!(task, Task::Execute(cmd) if !cmd.depends_on.is_empty()));
+    let task2 = project.manifest.tasks.get("test2").unwrap();
+    let task = project.manifest.tasks.get("test").unwrap();
+    assert!(matches!(task2, Task::Execute(cmd) if matches!(cmd.cmd, CmdArgs::Single(_))));
+    assert!(matches!(task2, Task::Execute(cmd) if !cmd.depends_on.is_empty()));
+
+    assert_eq!(task.as_single_command().as_deref(), Some("echo hello"));
+    assert_eq!(
+        task2.as_single_command().as_deref(),
+        Some("\"echo hello\" \"echo bonjour\"")
+    );
 
     // Create an alias
     pixi.tasks()

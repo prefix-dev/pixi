@@ -1,4 +1,4 @@
-use crate::task::{Alias, CmdArgs, Execute, Task};
+use crate::task::{quote, Alias, CmdArgs, Execute, Task};
 use crate::Project;
 use clap::Parser;
 use itertools::Itertools;
@@ -74,19 +74,25 @@ impl From<AddArgs> for Task {
     fn from(value: AddArgs) -> Self {
         let depends_on = value.depends_on.unwrap_or_default();
 
+        // Convert the arguments into a single string representation
+        let cmd_args = if value.commands.len() == 1 {
+            value.commands.into_iter().next().unwrap()
+        } else {
+            // Simply concatenate all arguments
+            value
+                .commands
+                .into_iter()
+                .map(|arg| quote(&arg).into_owned())
+                .join(" ")
+        };
+
+        // Depending on whether the task should have depends_on or not we create a Plain or complex
+        // command.
         if depends_on.is_empty() {
-            Self::Plain(if value.commands.len() == 1 {
-                value.commands[0].clone()
-            } else {
-                shlex::join(value.commands.iter().map(AsRef::as_ref))
-            })
+            Self::Plain(cmd_args)
         } else {
             Self::Execute(Execute {
-                cmd: CmdArgs::Single(if value.commands.len() == 1 {
-                    value.commands[0].clone()
-                } else {
-                    shlex::join(value.commands.iter().map(AsRef::as_ref))
-                }),
+                cmd: CmdArgs::Single(cmd_args),
                 depends_on,
             })
         }
@@ -175,7 +181,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 project.remove_task(name, platform)?;
                 eprintln!(
                     "{}Removed task {} ",
-                    console::style(console::Emoji("❌ ", "X")).yellow(),
+                    console::style(console::Emoji("✔ ", "+")).green(),
                     console::style(&name).bold(),
                 );
             }
