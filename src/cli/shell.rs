@@ -1,8 +1,10 @@
 use crate::Project;
 use clap::Parser;
-use miette::{bail, IntoDiagnostic};
+use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
-use rattler_shell::shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript, Zsh};
+use rattler_shell::shell::{
+    Bash, CmdExe, Fish, PowerShell, Shell, ShellEnum, ShellScript, Xonsh, Zsh,
+};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
@@ -20,7 +22,7 @@ pub struct Args {
     manifest_path: Option<PathBuf>,
 }
 
-fn start_powershell(task_env: &HashMap<String, String>) -> miette::Result<()> {
+fn start_powershell(task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
         .suffix(".ps1")
@@ -41,11 +43,11 @@ fn start_powershell(task_env: &HashMap<String, String>) -> miette::Result<()> {
     command.arg("-NoExit");
     command.arg("-File");
     command.arg(temp_file.path());
-    command.spawn().into_diagnostic()?;
-    Ok(())
+    let mut process = command.spawn().into_diagnostic()?;
+    Ok(process.wait().into_diagnostic()?.code())
 }
 
-fn start_cmdexe(task_env: &HashMap<String, String>) -> miette::Result<()> {
+fn start_cmdexe(task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
         .suffix(".cmd")
@@ -65,23 +67,26 @@ fn start_cmdexe(task_env: &HashMap<String, String>) -> miette::Result<()> {
     let mut command = std::process::Command::new("cmd.exe");
     command.arg("/K");
     command.arg(temp_file.path());
-    command.spawn().into_diagnostic()?;
-    Ok(())
+    let mut process = command.spawn().into_diagnostic()?;
+    Ok(process.wait().into_diagnostic()?.code())
 }
 
-async fn start_zsh(task_env: &HashMap<String, String>) -> miette::Result<()> {
+async fn start_unix_shell<T: Shell + Copy>(
+    shell: T,
+    task_env: &HashMap<String, String>,
+) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
-        .suffix(".zsh")
+        .suffix(&format!(".{}", shell.extension()))
         .tempfile()
         .into_diagnostic()?;
 
-    let shell = Zsh::default();
     let mut shell_script = ShellScript::new(shell, Platform::current());
     for (key, value) in task_env {
         shell_script.set_env_var(key, value);
     }
-    shell_script.set_env_var("PS1", "pixi>");
+    // TODO - make a good hook to get the users PS1 first
+    shell_script.set_env_var("PS1", "pixi> ");
     temp_file
         .write_all(shell_script.contents.as_bytes())
         .into_diagnostic()?;
@@ -94,9 +99,24 @@ async fn start_zsh(task_env: &HashMap<String, String>) -> miette::Result<()> {
     process
         .send_line(&format!("source {}", temp_file.path().display()))
         .into_diagnostic()?;
-    process.interact().into_diagnostic()?;
-    println!("Its time to quit.");
-    Ok(())
+
+    process.interact().into_diagnostic()
+}
+
+async fn start_zsh(task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
+    start_unix_shell(Zsh::default(), task_env).await
+}
+
+async fn start_bash(task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
+    start_unix_shell(Bash::default(), task_env).await
+}
+
+async fn start_fish(task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
+    start_unix_shell(Fish::default(), task_env).await
+}
+
+async fn start_xonsh(task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
+    start_unix_shell(Xonsh::default(), task_env).await
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -113,39 +133,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ShellEnum::PowerShell(_) => start_powershell(&task_env),
         ShellEnum::CmdExe(_) => start_cmdexe(&task_env),
         ShellEnum::Zsh(_) => start_zsh(&task_env).await,
-        _ => bail!("Unsupported shell: {:?}", interactive_shell),
+        ShellEnum::Bash(_) => start_bash(&task_env).await,
+        ShellEnum::Fish(_) => start_fish(&task_env).await,
+        ShellEnum::Xonsh(_) => start_xonsh(&task_env).await,
     };
-    println!("res: {:?}", res);
 
-    // // Generate a temporary file with the script to execute. This includes the activation of the
-    // // environment.
-    // let mut script = format!("{}\n", activator_result.script.trim());
-
-    // // Add meta data env variables to help user interact with there configuration.
-    // add_metadata_as_env_vars(&mut script, &shell, &project)?;
-
-    // // Add the conda default env variable so that the tools that use this know it exists.
-    // shell
-    //     .set_env_var(&mut script, "CONDA_DEFAULT_ENV", project.name())
-    //     .into_diagnostic()?;
-
-    // // Start the shell as the last part of the activation script based on the default shell.
-    // script.push_str(interactive_shell.executable());
-
-    // // Write the contents of the script to a temporary file that we can execute with the shell.
-    // let mut temp_file = tempfile::Builder::new()
-    //     .suffix(&format!(".{}", shell.extension()))
-    //     .tempfile()
-    //     .into_diagnostic()?;
-    // std::io::Write::write_all(&mut temp_file, script.as_bytes()).into_diagnostic()?;
-
-    // // Execute the script with the shell
-    // let mut command = shell
-    //     .create_run_script_command(temp_file.path())
-    //     .spawn()
-    //     .expect("failed to execute process");
-
-    // std::process::exit(command.wait().into_diagnostic()?.code().unwrap_or(1));
-
-    Ok(())
+    match res {
+        Ok(Some(code)) => std::process::exit(code),
+        Ok(None) => std::process::exit(0),
+        Err(e) => {
+            eprintln!("Error starting shell: {}", e);
+            std::process::exit(1);
+        }
+    }
 }

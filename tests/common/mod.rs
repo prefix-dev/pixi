@@ -217,7 +217,7 @@ impl TasksControl<'_> {
                 name: name.to_string(),
                 commands: vec![],
                 depends_on: None,
-                platform: platform,
+                platform,
             },
         }
     }
@@ -242,7 +242,7 @@ impl TasksControl<'_> {
         TaskAliasBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AliasArgs {
-                platform: platform,
+                platform,
                 alias: name.to_string(),
                 depends_on: vec![],
             },

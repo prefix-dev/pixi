@@ -275,7 +275,14 @@ mod tests {
     #[test]
     /// Open cat, write string, read back string twice, send Ctrl^C and check that cat exited
     fn test_cat() -> std::io::Result<()> {
-        let process = PtyProcess::new(Command::new("cat")).expect("could not execute cat");
+        let process = PtyProcess::new(
+            Command::new("cat"),
+            PtyProcessOptions {
+                echo: false,
+                window_size: Default::default(),
+            },
+        )
+        .expect("could not execute cat");
         let f = process.get_file_handle().unwrap();
         let mut writer = LineWriter::new(&f);
         let mut reader = BufReader::new(&f);

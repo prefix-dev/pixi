@@ -72,7 +72,10 @@ impl PtySession {
         self.process_stdin.flush()
     }
 
-    pub fn interact(&mut self) -> io::Result<()> {
+    /// Interact with the process. This will put the current process into raw mode and
+    /// forward all input from stdin to the process and all output from the process to stdout.
+    /// This will block until the process exits.
+    pub fn interact(&mut self) -> io::Result<Option<i32>> {
         // Make sure anything we have written so far has been flushed.
         self.flush()?;
 
@@ -92,10 +95,18 @@ impl PtySession {
         // Create a buffer for reading from the process
         let mut buf = [0u8; 2048];
 
-        let mut signals = Signals::new(&[SIGWINCH])?;
+        // Catch the SIGWINCH signal to handle window resizing
+        // and forward the new terminal size to the process
+        let mut signals = Signals::new([SIGWINCH])?;
 
         // Call select in a loop and handle incoming data
-        while self.process.status() == Some(WaitStatus::StillAlive) {
+        let exit_status = loop {
+            // Make sure that the process is still alive
+            let status = self.process.status();
+            if status != Some(WaitStatus::StillAlive) {
+                break status;
+            }
+
             // Handle window resizing
             for signal in signals.pending() {
                 match signal {
@@ -114,7 +125,7 @@ impl PtySession {
             }
 
             let mut select_timeout = TimeVal::new(4, 0);
-            let mut select_set = fd_set.clone();
+            let mut select_set = fd_set;
 
             let res = select::select(None, &mut select_set, None, None, &mut select_timeout);
             if res.is_err() {
@@ -123,7 +134,7 @@ impl PtySession {
                     continue;
                 } else {
                     eprintln!("Select error: {:?}.", res);
-                    break;
+                    return Err(std::io::Error::from(res.unwrap_err()));
                 }
             } else {
                 // We have new data coming from the process
@@ -140,9 +151,15 @@ impl PtySession {
                     self.process_stdin.flush()?;
                 }
             }
-        }
+        };
 
+        // Restore the original terminal mode
         self.process.set_mode(original_mode)?;
-        Ok(())
+
+        match exit_status {
+            Some(WaitStatus::Exited(_, code)) => Ok(Some(code)),
+            Some(WaitStatus::Signaled(_, signal, _)) => Ok(Some(128 + signal as i32)),
+            _ => Ok(None),
+        }
     }
 }
