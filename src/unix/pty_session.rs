@@ -133,7 +133,7 @@ impl PtySession {
                     // EINTR is not an error, it just means that we got interrupted by a signal (e.g. SIGWINCH)
                     continue;
                 } else {
-                    eprintln!("Select error: {:?}.", res);
+                    self.process.set_mode(original_mode)?;
                     return Err(std::io::Error::from(res.unwrap_err()));
                 }
             } else {
