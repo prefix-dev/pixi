@@ -1,28 +1,18 @@
 use super::PtyProcess;
 use crate::unix::pty_process::PtyProcessOptions;
-use libc::EINTR;
+use libc::SIGWINCH;
 use nix::sys::select::FdSet;
 use nix::{
     errno::Errno,
-    fcntl::{self, fcntl, FcntlArg, FdFlag},
-    sys::{
-        select,
-        signal::{self, sigaction, SigAction, SigHandler, SigSet, Signal},
-        termios::FlushArg,
-        time::TimeVal,
-        wait::WaitStatus,
-    },
+    sys::{select, time::TimeVal, wait::WaitStatus},
 };
-use std::os::fd::OwnedFd;
+use signal_hook::iterator::Signals;
 use std::{
-    borrow::Borrow,
     fs::File,
     io::{self, Read, Write},
-    os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, RawFd},
+    os::fd::AsFd,
     process::Command,
 };
-
-use nix::unistd::{pipe, read, write};
 
 pub struct PtySession {
     pub process: PtyProcess,
@@ -32,13 +22,6 @@ pub struct PtySession {
 
     /// A file handle of the stdin of the pty process
     pub process_stdin: File,
-}
-
-
-static mut SIGNAL_FD: RawFd = 0;
-
-extern "C" fn signal_handler(_: i32) {
-    write(unsafe { SIGNAL_FD }, &[0u8; 1]).unwrap();
 }
 
 /// ```
@@ -109,40 +92,37 @@ impl PtySession {
         // Create a buffer for reading from the process
         let mut buf = [0u8; 1024];
 
-        // Set up a self-pipe for handling SIGWINCH
-        let (signal_r, signal_w): (RawFd, RawFd) = pipe().unwrap();
-        let signal_r = unsafe { OwnedFd::from_raw_fd(signal_r) };
-        let signal_w = unsafe { OwnedFd::from_raw_fd(signal_w) };
-
-        unsafe {
-            SIGNAL_FD = signal_w.as_raw_fd();
-        }
-
-        fd_set.insert(&signal_r);
-
-        let sig_action = SigAction::new(
-            SigHandler::Handler(signal_handler),
-            nix::sys::signal::SaFlags::SA_RESTART,
-            SigSet::empty(),
-        );
-
-        // Register the action for SIGWINCH
-        unsafe {
-            sigaction(Signal::SIGWINCH, &sig_action).unwrap();
-        }
+        let mut signals = Signals::new(&[SIGWINCH])?;
 
         // Call select in a loop and handle incoming data
         while self.process.status() == Some(WaitStatus::StillAlive) {
+            // Handle window resizing
+            for signal in signals.pending() {
+                match signal {
+                    SIGWINCH => {
+                        // get window size
+                        let mut size: libc::winsize = unsafe { std::mem::zeroed() };
+                        let res = unsafe {
+                            libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size)
+                        };
+                        if res == 0 {
+                            self.process.set_window_size(size)?;
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+
             let mut select_timeout = TimeVal::new(4, 0);
             let mut select_set = fd_set.clone();
 
             let res = select::select(None, &mut select_set, None, None, &mut select_timeout);
             if res.is_err() {
                 if res.unwrap_err() == Errno::EINTR {
-                    println!("INTERUPTED");
                     continue;
                 } else {
                     eprintln!("select error: {:?}", res);
+                    break;
                 }
             } else {
                 if select_set.contains(&process_stdout_fd) {
@@ -156,23 +136,10 @@ impl PtySession {
                     self.process_stdin.write_all(&buf[..bytes_read])?;
                     self.process_stdin.flush()?;
                 }
-
-                if select_set.contains(&signal_r) {
-                    // drain the pipe
-                    read(signal_r.as_raw_fd(), &mut buf)?;
-
-                    // get window size
-                    let mut size: libc::winsize = unsafe { std::mem::zeroed() };
-                    let res =
-                        unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size) };
-                    if res == 0 {
-                        self.process.set_window_size(size)?;
-                    }
-                }
             }
         }
-        self.process.set_mode(original_mode)?;
 
+        self.process.set_mode(original_mode)?;
         Ok(())
     }
 }
