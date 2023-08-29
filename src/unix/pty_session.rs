@@ -1,25 +1,44 @@
 use super::PtyProcess;
 use crate::unix::pty_process::PtyProcessOptions;
-use nix::sys::wait::WaitStatus;
+use libc::EINTR;
+use nix::sys::select::FdSet;
+use nix::{
+    errno::Errno,
+    fcntl::{self, fcntl, FcntlArg, FdFlag},
+    sys::{
+        select,
+        signal::{self, sigaction, SigAction, SigHandler, SigSet, Signal},
+        termios::FlushArg,
+        time::TimeVal,
+        wait::WaitStatus,
+    },
+};
+use std::os::fd::OwnedFd;
 use std::{
-    io,
-    os::fd::{AsRawFd, FromRawFd},
+    borrow::Borrow,
+    fs::File,
+    io::{self, Read, Write},
+    os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, RawFd},
     process::Command,
 };
-use tokio::{
-    fs::File,
-    io::{AsyncReadExt, AsyncWriteExt},
-    signal::unix::SignalKind,
-};
+
+use nix::unistd::{pipe, read, write};
 
 pub struct PtySession {
     pub process: PtyProcess,
 
     /// A file handle of the stdout of the pty process
-    pub process_stdout: tokio::fs::File,
+    pub process_stdout: File,
 
     /// A file handle of the stdin of the pty process
-    pub process_stdin: tokio::fs::File,
+    pub process_stdin: File,
+}
+
+
+static mut SIGNAL_FD: RawFd = 0;
+
+extern "C" fn signal_handler(_: i32) {
+    write(unsafe { SIGNAL_FD }, &[0u8; 1]).unwrap();
 }
 
 /// ```
@@ -38,12 +57,14 @@ impl PtySession {
                 ..Default::default()
             },
         )?;
+
         let process_stdin = process.get_file_handle()?;
         let process_stdout = process.get_file_handle()?;
+
         Ok(Self {
             process,
-            process_stdout: File::from_std(process_stdout),
-            process_stdin: File::from_std(process_stdin),
+            process_stdout,
+            process_stdin,
         })
     }
 
@@ -51,70 +72,105 @@ impl PtySession {
     /// need to call `flush()` after `send()` to make the process actually see your input.
     ///
     /// Returns number of written bytes
-    pub async fn send<B: AsRef<[u8]>>(&mut self, s: B) -> io::Result<usize> {
-        self.process_stdin.write(s.as_ref()).await
+    pub fn send<B: AsRef<[u8]>>(&mut self, s: B) -> io::Result<usize> {
+        self.process_stdin.write(s.as_ref())
     }
 
     /// Sends string and a newline to process. This is guaranteed to be flushed to the process.
     /// Returns number of written bytes.
-    pub async fn send_line(&mut self, line: &str) -> io::Result<usize> {
-        let mut len = self.send(line).await?;
-        len += self.process_stdin.write(&[b'\n']).await?;
+    pub fn send_line(&mut self, line: &str) -> io::Result<usize> {
+        let mut len = self.send(line)?;
+        len += self.process_stdin.write(&[b'\n'])?;
         Ok(len)
     }
 
     /// Make sure all bytes written via `send()` are sent to the process
-    pub async fn flush(&mut self) -> io::Result<()> {
-        self.process_stdin.flush().await
+    pub fn flush(&mut self) -> io::Result<()> {
+        self.process_stdin.flush()
     }
 
-    pub async fn interact(&mut self) -> io::Result<()> {
+    pub fn interact(&mut self) -> io::Result<()> {
         // Make sure anything we have written so far has been flushed.
-        self.flush().await?;
+        self.flush()?;
 
         // Put the process into raw mode
         let original_mode = self.process.set_raw()?;
 
-        // Bind to the SIGWINCH signal
-        let mut signal_window_change = tokio::signal::unix::signal(SignalKind::window_change())?;
+        let process_stdout_clone = self.process_stdout.try_clone()?;
+        let process_stdout_fd = process_stdout_clone.as_fd();
+        let stdin = std::io::stdin();
+        let stdin_fd = stdin.as_fd();
 
-        // Create file handles from the raw handles, this ensures we can read raw data from them.
-        // `tokio::io::stdout` assumes that we will be writing utf8, in this case we are not so we
-        // need this workaround.
-        let mut parent_stdin = unsafe { File::from_raw_fd(io::stdin().as_raw_fd()) };
-        let mut parent_stdout = unsafe { File::from_raw_fd(io::stdout().as_raw_fd()) };
+        // Create a FDSet for the select call
+        let mut fd_set = FdSet::new();
+        fd_set.insert(&process_stdout_fd);
+        fd_set.insert(&stdin_fd);
 
-        // Create some buffer data to read from the different streams.
-        let mut stdout_bytes = vec![0u8; 8096];
-        let mut stdin_bytes = vec![0u8; 8096];
+        // Create a buffer for reading from the process
+        let mut buf = [0u8; 1024];
 
+        // Set up a self-pipe for handling SIGWINCH
+        let (signal_r, signal_w): (RawFd, RawFd) = pipe().unwrap();
+        let signal_r = unsafe { OwnedFd::from_raw_fd(signal_r) };
+        let signal_w = unsafe { OwnedFd::from_raw_fd(signal_w) };
+
+        unsafe {
+            SIGNAL_FD = signal_w.as_raw_fd();
+        }
+
+        fd_set.insert(&signal_r);
+
+        let sig_action = SigAction::new(
+            SigHandler::Handler(signal_handler),
+            nix::sys::signal::SaFlags::SA_RESTART,
+            SigSet::empty(),
+        );
+
+        // Register the action for SIGWINCH
+        unsafe {
+            sigaction(Signal::SIGWINCH, &sig_action).unwrap();
+        }
+
+        // Call select in a loop and handle incoming data
         while self.process.status() == Some(WaitStatus::StillAlive) {
-            tokio::select! {
-                // Forward any input from this process to the pty process
-                Ok(bytes_read) = parent_stdin.read(&mut stdin_bytes) => {
-                    self.process_stdin.write_all(&stdin_bytes[..bytes_read]).await?;
-                    self.process_stdin.flush().await?;
+            let mut select_timeout = TimeVal::new(4, 0);
+            let mut select_set = fd_set.clone();
+
+            let res = select::select(None, &mut select_set, None, None, &mut select_timeout);
+            if res.is_err() {
+                if res.unwrap_err() == Errno::EINTR {
+                    println!("INTERUPTED");
+                    continue;
+                } else {
+                    eprintln!("select error: {:?}", res);
+                }
+            } else {
+                if select_set.contains(&process_stdout_fd) {
+                    let bytes_read = self.process_stdout.read(&mut buf)?;
+                    std::io::stdout().write_all(&buf[..bytes_read])?;
+                    std::io::stdout().flush()?;
                 }
 
-                // Forward any output from stdout to this processes stdout
-                Ok(bytes_read) = self.process_stdout.read(&mut stdout_bytes) => {
-                    // println!("output {:?}", &stdout_bytes[..bytes_read]);
-                    parent_stdout.write_all(&stdout_bytes[..bytes_read]).await?;
-                    parent_stdout.flush().await?;
+                if select_set.contains(&stdin_fd) {
+                    let bytes_read = std::io::stdin().read(&mut buf)?;
+                    self.process_stdin.write_all(&buf[..bytes_read])?;
+                    self.process_stdin.flush()?;
                 }
 
-                // If the window size changed we also forward that to the sub-process
-                _ = signal_window_change.recv() => {
-                    // Query the terminal dimensions
+                if select_set.contains(&signal_r) {
+                    // drain the pipe
+                    read(signal_r.as_raw_fd(), &mut buf)?;
+
+                    // get window size
                     let mut size: libc::winsize = unsafe { std::mem::zeroed() };
-                    let res = unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size) };
+                    let res =
+                        unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size) };
                     if res == 0 {
                         self.process.set_window_size(size)?;
                     }
                 }
             }
         }
-
         self.process.set_mode(original_mode)?;
 
         Ok(())

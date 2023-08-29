@@ -49,6 +49,7 @@ serde_json = "1.0.103"
 serde_spanned = "0.6.3"
 serde_with = { version = "3.1.0", features = ["indexmap"] }
 shlex = "1.1.0"
+signal-hook = "0.3.17"
 spdx = "0.10.2"
 strsim = "0.10.0"
 tempfile = "3.6.0"
@@ -67,7 +68,7 @@ tokio = { version = "1.29.1", features = ["rt"] }
 toml = "0.7.6"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.27.1", default-features = false, features = ["fs", "process", "signal", "term"] }
+nix = { version = "0.27.1", default-features = false, features = ["fs", "process", "signal", "term", "poll"] }
 libc = { version = "0.2.147", default-features = false}
 
 [patch.crates-io]

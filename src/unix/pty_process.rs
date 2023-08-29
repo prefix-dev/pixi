@@ -3,7 +3,7 @@ use nix::{
     self,
     fcntl::{open, OFlag},
     libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO},
-    pty::{grantpt, posix_openpt, ptsname_r, unlockpt, PtyMaster, Winsize},
+    pty::{grantpt, posix_openpt, unlockpt, PtyMaster, Winsize},
     sys::termios::{InputFlags, Termios},
     sys::{stat, termios},
     unistd::{close, dup, dup2, fork, setsid, ForkResult, Pid},
@@ -20,6 +20,9 @@ use std::{
     process::Command,
     thread, time,
 };
+
+#[cfg(target_os = "linux")]
+use nix::pty::ptsname_r;
 
 /// Start a process in a forked tty so you can interact with it the same as you would
 /// within a terminal
@@ -257,8 +260,10 @@ pub fn set_echo<Fd: AsFd>(fd: Fd, echo: bool) -> nix::Result<()> {
 
 impl Drop for PtyProcess {
     fn drop(&mut self) {
+        println!("Dropping PtyProcess");
         if let Some(wait::WaitStatus::StillAlive) = self.status() {
-            self.exit().expect("cannot exit");
+            println!("Exiting PYT");
+            // self.exit().expect("cannot exit");
         }
     }
 }

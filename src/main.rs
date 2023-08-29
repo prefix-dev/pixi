@@ -4,11 +4,11 @@ use std::process::Command;
 
 #[tokio::main]
 pub async fn main() {
-    // if let Err(err) = cli::execute().await {
-    //     eprintln!("{err:?}");
-    //     std::process::exit(1);
-    // }
-
-    let mut process = PtySession::new(Command::new("bash")).unwrap();
-    process.interact().await.unwrap();
+    if let Err(err) = cli::execute().await {
+        eprintln!("{err:?}");
+        std::process::exit(1);
+    }
+    // println!("Starting zsh");
+    // let mut process = PtySession::new(Command::new("zsh")).unwrap();
+    // process.interact().await.unwrap();
 }

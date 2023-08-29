@@ -2044,6 +2044,7 @@ dependencies = [
  "serde_spanned",
  "serde_with",
  "shlex",
+ "signal-hook",
  "spdx",
  "strsim",
  "tempfile",
