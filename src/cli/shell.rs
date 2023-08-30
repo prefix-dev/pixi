@@ -2,15 +2,16 @@ use crate::Project;
 use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
-use rattler_shell::shell::{
-    Bash, CmdExe, Fish, PowerShell, Shell, ShellEnum, ShellScript, Xonsh, Zsh,
-};
+use rattler_shell::shell::{PowerShell, Shell, ShellEnum, ShellScript};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 
 #[cfg(target_family = "unix")]
 use crate::unix::PtySession;
+
+#[cfg(target_family = "windows")]
+use rattler_shell::shell::CmdExe;
 
 use super::run::get_task_env;
 
@@ -22,24 +23,30 @@ pub struct Args {
     manifest_path: Option<PathBuf>,
 }
 
-fn start_powershell(task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
+fn start_powershell(
+    pwsh: PowerShell,
+    task_env: &HashMap<String, String>,
+) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
         .suffix(".ps1")
         .tempfile()
         .into_diagnostic()?;
 
-    let shell = PowerShell::default();
-    let mut shell_script = ShellScript::new(shell, Platform::current());
+    let mut shell_script = ShellScript::new(pwsh.clone(), Platform::current());
     for (key, value) in task_env {
         shell_script.set_env_var(key, value);
     }
-    temp_file
-        .write_all(shell_script.contents.as_bytes())
-        .into_diagnostic()?;
 
-    let mut command = std::process::Command::new("powershell.exe");
+    let mut contents = shell_script.contents;
+    contents.push_str("\n");
+    // TODO: build a better prompt
+    contents.push_str("function prompt {\"PS pixi> \"}");
+    temp_file.write_all(contents.as_bytes()).into_diagnostic()?;
+
+    let mut command = std::process::Command::new(pwsh.executable());
     command.arg("-NoLogo");
+    command.arg("-Interactive");
     command.arg("-NoExit");
     command.arg("-File");
     command.arg(temp_file.path());
@@ -47,7 +54,8 @@ fn start_powershell(task_env: &HashMap<String, String>) -> miette::Result<Option
     Ok(process.wait().into_diagnostic()?.code())
 }
 
-fn start_cmdexe(task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
+#[cfg(target_family = "windows")]
+fn start_cmdexe(cmdexe: CmdExe, task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
         .suffix(".cmd")
@@ -55,8 +63,7 @@ fn start_cmdexe(task_env: &HashMap<String, String>) -> miette::Result<Option<i32
         .into_diagnostic()?;
 
     // TODO: Should we just execute the activation scripts directly for cmd.exe?
-    let shell = CmdExe::default();
-    let mut shell_script = ShellScript::new(shell, Platform::current());
+    let mut shell_script = ShellScript::new(cmdexe, Platform::current());
     for (key, value) in task_env {
         shell_script.set_env_var(key, value);
     }
@@ -64,15 +71,18 @@ fn start_cmdexe(task_env: &HashMap<String, String>) -> miette::Result<Option<i32
         .write_all(shell_script.contents.as_bytes())
         .into_diagnostic()?;
 
-    let mut command = std::process::Command::new("cmd.exe");
+    let mut command = std::process::Command::new(cmdexe.executable());
     command.arg("/K");
     command.arg(temp_file.path());
+
     let mut process = command.spawn().into_diagnostic()?;
     Ok(process.wait().into_diagnostic()?.code())
 }
 
+#[cfg(target_family = "unix")]
 async fn start_unix_shell<T: Shell + Copy>(
     shell: T,
+    args: Vec<&str>,
     task_env: &HashMap<String, String>,
 ) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
@@ -92,8 +102,7 @@ async fn start_unix_shell<T: Shell + Copy>(
         .into_diagnostic()?;
 
     let mut command = std::process::Command::new(shell.executable());
-    command.arg("-l");
-    command.arg("-i");
+    command.args(args);
 
     let mut process = PtySession::new(command).into_diagnostic()?;
     process
@@ -101,22 +110,6 @@ async fn start_unix_shell<T: Shell + Copy>(
         .into_diagnostic()?;
 
     process.interact().into_diagnostic()
-}
-
-async fn start_zsh(task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
-    start_unix_shell(Zsh::default(), task_env).await
-}
-
-async fn start_bash(task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
-    start_unix_shell(Bash::default(), task_env).await
-}
-
-async fn start_fish(task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
-    start_unix_shell(Fish::default(), task_env).await
-}
-
-async fn start_xonsh(task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
-    start_unix_shell(Xonsh::default(), task_env).await
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -129,13 +122,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .or_else(ShellEnum::from_env)
         .unwrap_or_default();
 
+    #[cfg(target_family = "windows")]
     let res = match interactive_shell {
-        ShellEnum::PowerShell(_) => start_powershell(&task_env),
-        ShellEnum::CmdExe(_) => start_cmdexe(&task_env),
-        ShellEnum::Zsh(_) => start_zsh(&task_env).await,
-        ShellEnum::Bash(_) => start_bash(&task_env).await,
-        ShellEnum::Fish(_) => start_fish(&task_env).await,
-        ShellEnum::Xonsh(_) => start_xonsh(&task_env).await,
+        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, &task_env),
+        ShellEnum::CmdExe(cmdexe) => start_cmdexe(cmdexe, &task_env),
+        _ => {
+            miette::bail!("Unsupported shell: {:?}", interactive_shell);
+        }
+    };
+
+    #[cfg(target_family = "unix")]
+    let res = match interactive_shell {
+        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, &task_env),
+        ShellEnum::Bash(bash) => start_unix_shell(bash, vec!["-l", "-i"], &task_env).await,
+        ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], &task_env).await,
+        ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], &task_env).await,
+        ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], &task_env).await,
+        _ => {
+            miette::bail!("Unsupported shell: {:?}", interactive_shell)
+        }
     };
 
     match res {
