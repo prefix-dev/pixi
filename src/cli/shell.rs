@@ -39,9 +39,8 @@ fn start_powershell(
     }
 
     let mut contents = shell_script.contents;
-    contents.push_str("\n");
     // TODO: build a better prompt
-    contents.push_str("function prompt {\"PS pixi> \"}");
+    contents.push_str("\nfunction prompt {\"PS pixi> \"}");
     temp_file.write_all(contents.as_bytes()).into_diagnostic()?;
 
     let mut command = std::process::Command::new(pwsh.executable());
