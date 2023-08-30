@@ -75,6 +75,8 @@ If this directory does not already exist, the script will create it.
 To install Pixi on macOS and Linux, open a terminal and run the following command:
 ```bash
 curl -fsSL https://pixi.sh/install.sh | bash
+# or
+curl -fsSL https://raw.githubusercontent.com/prefix-dev/pixi/main/install/install.sh | bash
 # or with brew
 brew install pixi
 ```
