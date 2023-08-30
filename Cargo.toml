@@ -17,23 +17,23 @@ slow_integration_tests = []
 
 [dependencies]
 atty = "0.2"
-chrono = "0.4.26"
-clap = { version = "4.3.16", default-features = false, features = ["derive", "usage", "wrap_help", "std", "color", "error-context"] }
+chrono = "0.4.27"
+clap = { version = "4.4.1", default-features = false, features = ["derive", "usage", "wrap_help", "std", "color", "error-context"] }
 clap-verbosity-flag = "2.0.1"
-clap_complete = "4.3.2"
+clap_complete = "4.4.0"
 console = { version = "0.15.7", features = ["windows-console-colors"] }
 deno_task_shell = "0.13.2"
 # deno_task_shell = { path = "../deno_task_shell" }
 dirs = "5.0.1"
 dunce = "1.0.4"
 futures = "0.3.28"
-indexmap = { version = "1.9.3", features = ["serde"] }
-indicatif = "0.17.5"
+indexmap = { version = "2.0.0", features = ["serde"] }
+indicatif = "0.17.6"
 insta = { version = "1.31.0", features = ["yaml"] }
 is_executable = "1.0.1"
 itertools = "0.11.0"
 miette = { version = "5.10.0", features = ["fancy", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
-minijinja = { version = "1.0.5", features = ["builtins"] }
+minijinja = { version = "1.0.7", features = ["builtins"] }
 once_cell = "1.18.0"
 rattler = { version = "0.8.0", default-features = false }
 rattler_conda_types = { version = "0.8.0", default-features = false }
@@ -43,33 +43,33 @@ rattler_repodata_gateway = { version = "0.8.0", default-features = false, featur
 rattler_shell = { version = "0.8.0", default-features = false, features = ["sysinfo"] }
 rattler_solve = { version = "0.8.0", default-features = false, features = ["libsolv_rs"] }
 rattler_virtual_packages = { version = "0.8.0", default-features = false }
-reqwest = { version = "0.11.18", default-features = false }
-serde = "1.0.171"
-serde_json = "1.0.103"
+reqwest = { version = "0.11.20", default-features = false }
+serde = "1.0.188"
+serde_json = "1.0.105"
 serde_spanned = "0.6.3"
-serde_with = { version = "3.1.0", features = ["indexmap"] }
+serde_with = { version = "3.3.0", features = ["indexmap"] }
 shlex = "1.1.0"
-signal-hook = "0.3.17"
 spdx = "0.10.2"
 strsim = "0.10.0"
-tempfile = "3.6.0"
+tempfile = "3.8.0"
 thiserror = "1.0.47"
-tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1.32.0", features = ["macros", "rt-multi-thread", "signal"] }
 tokio-util = "0.7.8"
 toml_edit = { version = "0.19.14", features = ["serde"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-url = "2.4.0"
+url = "2.4.1"
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.27.1", default-features = false, features = ["fs", "signal", "term", "poll"] }
+libc = { version = "0.2.147", default-features = false }
+signal-hook = "0.3.17"
 
 [dev-dependencies]
 rattler_digest = "0.8.0"
-serde_json = "1.0.103"
-tokio = { version = "1.29.1", features = ["rt"] }
+serde_json = "1.0.105"
+tokio = { version = "1.32.0", features = ["rt"] }
 toml = "0.7.6"
-
-[target.'cfg(unix)'.dependencies]
-nix = { version = "0.27.1", default-features = false, features = ["fs", "process", "signal", "term", "poll"] }
-libc = { version = "0.2.147", default-features = false}
 
 [patch.crates-io]
 rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }

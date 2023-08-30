@@ -128,13 +128,13 @@ impl PtySession {
             let mut select_set = fd_set;
 
             let res = select::select(None, &mut select_set, None, None, &mut select_timeout);
-            if res.is_err() {
-                if let Err(Errno::EINTR) = res {
+            if let Err(error) = res {
+                if error == Errno::EINTR {
                     // EINTR is not an error, it just means that we got interrupted by a signal (e.g. SIGWINCH)
                     continue;
                 } else {
                     self.process.set_mode(original_mode)?;
-                    return Err(std::io::Error::from(res.unwrap_err()));
+                    return Err(std::io::Error::from(error));
                 }
             } else {
                 // We have new data coming from the process
