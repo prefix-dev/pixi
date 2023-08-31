@@ -45,7 +45,6 @@ fn start_powershell(
 
     let mut command = std::process::Command::new(pwsh.executable());
     command.arg("-NoLogo");
-    command.arg("-Interactive");
     command.arg("-NoExit");
     command.arg("-File");
     command.arg(temp_file.path());
