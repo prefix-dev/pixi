@@ -42,12 +42,15 @@ fn start_powershell(
     // TODO: build a better prompt
     contents.push_str("\nfunction prompt {\"PS pixi> \"}");
     temp_file.write_all(contents.as_bytes()).into_diagnostic()?;
+    // close the file handle, but keep the path (needed for Windows)
+    let temp_path = temp_file.into_temp_path();
 
     let mut command = std::process::Command::new(pwsh.executable());
     command.arg("-NoLogo");
     command.arg("-NoExit");
     command.arg("-File");
-    command.arg(temp_file.path());
+    command.arg(temp_path.to_path_buf().clone());
+
     let mut process = command.spawn().into_diagnostic()?;
     Ok(process.wait().into_diagnostic()?.code())
 }
