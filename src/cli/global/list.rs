@@ -29,7 +29,11 @@ impl Display for InstalledPackageInfo {
             .iter()
             .map(|name| format!("[bin] {}", console::style(name).bold()))
             .join("\n     -  ");
-        write!(f, "  -  [package] {}\n     -  {binaries}", console::style(&self.name).bold())
+        write!(
+            f,
+            "  -  [package] {}\n     -  {binaries}",
+            console::style(&self.name).bold()
+        )
     }
 }
 
@@ -54,7 +58,7 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
     let mut package_info = vec![];
 
     for package_name in packages {
-        let Ok(bin_env_prefix) = BinEnvDir::from_existing(&package_name).await else { 
+        let Ok(bin_env_prefix) = BinEnvDir::from_existing(&package_name).await else {
             print_no_packages_found_message();
             return Ok(());
         };
