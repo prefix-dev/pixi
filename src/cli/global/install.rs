@@ -44,7 +44,7 @@ pub struct Args {
     channel: Vec<String>,
 }
 
-struct BinDir(pub PathBuf);
+pub(crate) struct BinDir(pub PathBuf);
 
 impl BinDir {
     /// Create the Binary Executable directory
@@ -109,7 +109,7 @@ impl BinEnvDir {
 }
 
 /// Binary environments are installed in ~/.pixi/envs
-fn bin_env_dir() -> miette::Result<PathBuf> {
+pub(crate) fn bin_env_dir() -> miette::Result<PathBuf> {
     Ok(home_dir()
         .ok_or_else(|| miette::miette!("could not find home directory"))?
         .join(BIN_ENVS_DIR))
