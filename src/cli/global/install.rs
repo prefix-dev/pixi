@@ -55,6 +55,18 @@ impl BinDir {
             .into_diagnostic()?;
         Ok(Self(bin_dir))
     }
+
+    /// Get the Binary Executable directory, erroring if it doesn't already exist.
+    pub async fn from_existing() -> miette::Result<Self> {
+        let bin_dir = bin_dir()?;
+        if tokio::fs::try_exists(&bin_dir).await.into_diagnostic()? {
+            Ok(Self(bin_dir))
+        } else {
+            Err(miette::miette!(
+                "binary executable directory does not exist"
+            ))
+        }
+    }
 }
 
 /// Binaries are installed in ~/.pixi/bin
@@ -64,12 +76,31 @@ fn bin_dir() -> miette::Result<PathBuf> {
         .join(BIN_DIR))
 }
 
-struct BinEnvDir(pub PathBuf);
+pub(crate) struct BinEnvDir(pub PathBuf);
 
 impl BinEnvDir {
+    fn package_bin_env_dir(package_name: &str) -> miette::Result<PathBuf> {
+        Ok(bin_env_dir()?.join(package_name))
+    }
+
+    /// Get the Binary Environment directory, erroring if it doesn't already exist.
+    pub async fn from_existing(package_name: &str) -> miette::Result<Self> {
+        let bin_env_dir = Self::package_bin_env_dir(package_name)?;
+        if tokio::fs::try_exists(&bin_env_dir)
+            .await
+            .into_diagnostic()?
+        {
+            Ok(Self(bin_env_dir))
+        } else {
+            Err(miette::miette!(
+                "could not find environment for package {package_name}"
+            ))
+        }
+    }
+
     /// Create the Binary Environment directory
     pub async fn create(package_name: &str) -> miette::Result<Self> {
-        let bin_env_dir = bin_env_dir()?.join(package_name);
+        let bin_env_dir = Self::package_bin_env_dir(package_name)?;
         tokio::fs::create_dir_all(&bin_env_dir)
             .await
             .into_diagnostic()?;
@@ -85,7 +116,7 @@ fn bin_env_dir() -> miette::Result<PathBuf> {
 }
 
 /// Find the designated package in the prefix
-async fn find_designated_package(
+pub(crate) async fn find_designated_package(
     prefix: &Prefix,
     package_name: &str,
 ) -> miette::Result<PrefixRecord> {
@@ -97,7 +128,10 @@ async fn find_designated_package(
 }
 
 /// Create the environment activation script
-fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result<String> {
+pub(crate) fn create_activation_script(
+    prefix: &Prefix,
+    shell: ShellEnum,
+) -> miette::Result<String> {
     let activator =
         Activator::from_path(prefix.root(), shell, Platform::Osx64).into_diagnostic()?;
     let result = activator
@@ -151,13 +185,17 @@ fn is_executable(prefix: &Prefix, relative_path: &Path) -> bool {
 }
 
 /// Create the executable scripts by modifying the activation script
-/// to activate the environment and run the executable
-async fn create_executable_scripts(
+/// to activate the environment and run the executable.
+///
+/// If `dry_run` is true, return the filenames of the scripts that would be created but don't
+/// actually write them to disk.
+pub(crate) async fn create_executable_scripts(
     prefix: &Prefix,
     prefix_package: &PrefixRecord,
     shell: &ShellEnum,
     activation_script: String,
-) -> miette::Result<Vec<String>> {
+    dry_run: bool,
+) -> miette::Result<Vec<PathBuf>> {
     let executables = prefix_package
         .files
         .iter()
@@ -186,21 +224,23 @@ async fn create_executable_scripts(
             executable_script_path.set_extension("bat");
         };
 
-        tokio::fs::write(&executable_script_path, script)
-            .await
-            .into_diagnostic()?;
+        if !dry_run {
+            tokio::fs::write(&executable_script_path, script)
+                .await
+                .into_diagnostic()?;
 
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(
-                executable_script_path,
-                std::fs::Permissions::from_mode(0o744),
-            )
-            .into_diagnostic()?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(
+                    &executable_script_path,
+                    std::fs::Permissions::from_mode(0o744),
+                )
+                .into_diagnostic()?;
+            }
         }
 
-        scripts.push(file_name.to_string_lossy().into_owned());
+        scripts.push(executable_script_path);
     }
     Ok(scripts)
 }
@@ -298,11 +338,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Construct the reusable activation script for the shell and generate an invocation script
     // for each executable added by the package to the environment.
     let activation_script = create_activation_script(&prefix, shell.clone())?;
-    let script_names =
-        create_executable_scripts(&prefix, &prefix_package, &shell, activation_script).await?;
+    let scripts =
+        create_executable_scripts(&prefix, &prefix_package, &shell, activation_script, false)
+            .await?;
 
     // Check if the bin path is on the path
-    if script_names.is_empty() {
+    if scripts.is_empty() {
         miette::bail!(
             "could not find an executable entrypoint in package {} {} {} from {}, are you sure it exists?",
             console::style(prefix_package.repodata_record.package_record.name).bold(),
@@ -321,8 +362,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             channel,
         );
 
-        let script_names = script_names
+        let bin_dir = BinDir::from_existing().await?;
+        let script_names = scripts
             .into_iter()
+            .map(|path| {
+                path.strip_prefix(&bin_dir.0)
+                    .expect("script paths were constructed by joining onto BinDir")
+                    .to_string_lossy()
+                    .to_string()
+            })
             .join(&format!("\n{whitespace} -  "));
 
         if is_bin_folder_on_path() {
