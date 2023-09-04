@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+
 use rattler_conda_types::Platform;
 
 use crate::Project;
@@ -30,12 +31,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     for package in packages {
         match project.remove_dependency(package.as_str(), platform) {
             Ok(_) => continue,
-            Err(_) => {
-                eprintln!(
-                    "{}Could not remove '{}'",
-                    console::style(console::Emoji("❌ ", "X")).red(),
-                    console::style(&package).bold(),
-                );
+            Err(e) => {
+                eprintln!("{e}");
             }
         }
     }

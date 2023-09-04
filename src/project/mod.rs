@@ -554,10 +554,13 @@ impl Project {
         name: impl AsRef<str>,
         platform: Option<Platform>,
     ) -> miette::Result<()> {
+        let searched: String;
         let removed = match platform {
             Some(p) => {
-                let t = ensure_toml_target_table(&mut self.doc, p, "dependencies")?;
-                t.remove(name.as_ref())
+                let t = get_toml_target_table(&mut self.doc, p, "dependencies")?;
+                searched = format!("target.{}.dependencies", p.as_str());
+                let removed = t.remove(name.as_ref());
+                removed
             }
             None => {
                 let dep_types = ["dependencies", "host-dependencies", "build-dependencies"];
@@ -570,14 +573,28 @@ impl Project {
                         }
                     }
                 }
+
+                let mut tmp = dep_types
+                    .iter()
+                    .fold(String::from("["), |acc, v| acc + v + ", ");
+                tmp = tmp[..tmp.len() - 2].to_string();
+                tmp.push(']');
+                searched = tmp;
+
                 removed
             }
         };
 
         if removed.is_some() {
             self.save()?;
+            self.reload()?;
         } else {
-            miette::bail!("Could not remove '{}'", name.as_ref());
+            miette::bail!(
+                "{}Could not find '{}' in {}",
+                console::style(console::Emoji("❌ ", "X")).red(),
+                console::style(name.as_ref()).bold(),
+                searched,
+            );
         }
 
         Ok(())
@@ -800,6 +817,36 @@ pub fn ensure_toml_target_table<'a>(
                 consts::PROJECT_MANIFEST
             )
         })
+}
+
+/// Retrieve a target table (`table_name`) inside a platform-specific table if everything
+/// goes as expected.
+pub fn get_toml_target_table<'a>(
+    doc: &'a mut Document,
+    platform: Platform,
+    table_name: &str,
+) -> miette::Result<&'a mut Table> {
+    let platform_table = doc["target"][platform.as_str()]
+        .as_table_mut()
+        .ok_or_else(|| {
+            miette::miette!(
+                "{}Could not find {} table in {}",
+                console::style(console::Emoji("❌ ", "X")).red(),
+                console::style(platform.as_str()).bold(),
+                consts::PROJECT_MANIFEST,
+            )
+        })?;
+    platform_table.set_dotted(true);
+
+    platform_table[table_name].as_table_mut().ok_or_else(|| {
+        miette::miette!(
+            "{}Could not find {}.{} table in {}",
+            console::style(console::Emoji("❌ ", "X")).red(),
+            console::style(platform.as_str()).bold(),
+            console::style(table_name).bold(),
+            consts::PROJECT_MANIFEST,
+        )
+    })
 }
 
 #[cfg(test)]
