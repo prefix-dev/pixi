@@ -59,11 +59,11 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
     let mut package_info = vec![];
 
     for package_name in packages {
-        let Ok(bin_env_prefix) = BinEnvDir::from_existing(&package_name).await else {
+        let Ok(BinEnvDir(bin_env_prefix)) = BinEnvDir::from_existing(&package_name).await else {
             print_no_packages_found_message();
             return Ok(());
         };
-        let prefix = Prefix::new(bin_env_prefix.0)?;
+        let prefix = Prefix::new(bin_env_prefix)?;
 
         let Ok(bin_prefix) = BinDir::from_existing().await else {
             print_no_packages_found_message();

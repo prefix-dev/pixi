@@ -362,11 +362,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             channel,
         );
 
-        let bin_dir = BinDir::from_existing().await?;
+        let BinDir(bin_dir) = BinDir::from_existing().await?;
         let script_names = scripts
             .into_iter()
             .map(|path| {
-                path.strip_prefix(&bin_dir.0)
+                path.strip_prefix(&bin_dir)
                     .expect("script paths were constructed by joining onto BinDir")
                     .to_string_lossy()
                     .to_string()
