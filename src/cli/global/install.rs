@@ -202,7 +202,7 @@ pub(crate) async fn create_executable_scripts(
         .filter(|relative_path| is_executable(prefix, relative_path));
 
     let mut scripts = Vec::new();
-    let bin_dir = BinDir::create().await?;
+    let BinDir(bin_dir) = BinDir::create().await?;
     for exec in executables {
         let mut script = activation_script.clone();
         shell
@@ -218,7 +218,7 @@ pub(crate) async fn create_executable_scripts(
         let file_name = exec
             .file_stem()
             .ok_or_else(|| miette::miette!("could not get filename from {}", exec.display()))?;
-        let mut executable_script_path = bin_dir.0.join(file_name);
+        let mut executable_script_path = bin_dir.join(file_name);
 
         if cfg!(windows) {
             executable_script_path.set_extension("bat");
@@ -297,8 +297,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let records = libsolv_rs::Solver.solve(task).into_diagnostic()?;
 
     // Create the binary environment prefix where we install or update the package
-    let bin_prefix = BinEnvDir::create(&package_name).await?;
-    let prefix = Prefix::new(bin_prefix.0)?;
+    let BinEnvDir(bin_prefix) = BinEnvDir::create(&package_name).await?;
+    let prefix = Prefix::new(bin_prefix)?;
     let prefix_records = prefix.find_installed_packages(None).await?;
 
     // Create the transaction that we need

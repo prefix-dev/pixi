@@ -13,6 +13,7 @@ use crate::cli::global::install::{
 };
 use crate::prefix::Prefix;
 
+/// Removes a package previously installed into a globally accessible location via `pixi global install`.
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
@@ -31,8 +32,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             package_matchspec
         )
     })?;
-    let bin_prefix = BinEnvDir::from_existing(&package_name).await?;
-    let prefix = Prefix::new(bin_prefix.0.clone())?;
+    let BinEnvDir(bin_prefix) = BinEnvDir::from_existing(&package_name).await?;
+    let prefix = Prefix::new(bin_prefix.clone())?;
 
     // Find the installed package in the environment
     let prefix_package = find_designated_package(&prefix, &package_name).await?;
@@ -57,7 +58,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_iter()
             .collect();
 
-    let dirs_to_remove: Vec<_> = vec![bin_prefix.0];
+    let dirs_to_remove: Vec<_> = vec![bin_prefix];
 
     if args.verbose.log_level().unwrap_or(Level::Error) >= Level::Warn {
         let whitespace = console::Emoji("  ", "").to_string();

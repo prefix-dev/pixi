@@ -13,6 +13,7 @@ use crate::prefix::Prefix;
 
 use super::install::{bin_env_dir, BinDir};
 
+/// Lists all packages previously installed into a globally accessible location via `pixi global install`.
 #[derive(Parser, Debug)]
 pub struct Args {}
 
