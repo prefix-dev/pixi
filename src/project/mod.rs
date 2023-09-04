@@ -49,6 +49,7 @@ pub struct Project {
     source: String,
     doc: Document,
     pub manifest: ProjectManifest,
+    pub manifest_path: PathBuf,
 }
 
 /// Returns a task a a toml item
@@ -89,11 +90,14 @@ impl Project {
     /// directories.
     /// This will also set the current working directory to the project root.
     pub fn discover() -> miette::Result<Self> {
+        let project_manifest_path =
+            environment::get_project_manifest_path().map(PathBuf::from);
         let project_toml = match find_project_root() {
             Some(root) => root.join(consts::PROJECT_MANIFEST),
             None => miette::bail!("could not find {}", consts::PROJECT_MANIFEST),
         };
-        Self::load(&project_toml)
+        let project_manifest_path = project_manifest_path.unwrap_or(project_toml);
+        Self::load(&project_manifest_path)
     }
 
     /// Returns the source code of the project as [`NamedSource`].
@@ -105,21 +109,20 @@ impl Project {
     pub fn load(filename: &Path) -> miette::Result<Self> {
         // Determine the parent directory of the manifest file
         let full_path = dunce::canonicalize(filename).into_diagnostic()?;
-        let root = full_path
+        let root: &Path = full_path
             .parent()
             .ok_or_else(|| miette::miette!("can not find parent of {}", filename.display()))?;
+
+        let manifest_name = filename
+            .file_name()
+            .map(|name| name.to_string_lossy())
+            .unwrap_or(std::borrow::Cow::Borrowed(consts::PROJECT_MANIFEST));
 
         // Load the TOML document
         fs::read_to_string(filename)
             .into_diagnostic()
-            .and_then(|content| Self::from_manifest_str(root, content))
-            .wrap_err_with(|| {
-                format!(
-                    "failed to parse {} from {}",
-                    consts::PROJECT_MANIFEST,
-                    root.display()
-                )
-            })
+            .and_then(|content| Self::from_manifest_str(root, full_path.as_path(), content))
+            .wrap_err_with(|| format!("failed to parse {} from {}", manifest_name, root.display()))
     }
 
     /// Returns all tasks defined in the project for the given platform
@@ -274,7 +277,11 @@ impl Project {
     }
 
     /// Loads a project manifest.
-    pub fn from_manifest_str(root: &Path, contents: impl Into<String>) -> miette::Result<Self> {
+    pub fn from_manifest_str(
+        root: &Path,
+        manifest_path: &Path,
+        contents: impl Into<String>,
+    ) -> miette::Result<Self> {
         let contents = contents.into();
         let (manifest, doc) = match toml_edit::de::from_str::<ProjectManifest>(&contents)
             .map_err(TomlError::from)
@@ -305,6 +312,7 @@ impl Project {
             source: contents,
             doc,
             manifest,
+            manifest_path: manifest_path.to_path_buf(),
         })
     }
 
@@ -554,11 +562,6 @@ impl Project {
         &self.root
     }
 
-    /// Returns the path to the manifest file.
-    pub fn manifest_path(&self) -> PathBuf {
-        self.root.join(consts::PROJECT_MANIFEST)
-    }
-
     /// Returns the path to the lock file of the project
     pub fn lock_file_path(&self) -> PathBuf {
         self.root.join(consts::PROJECT_LOCK_FILE)
@@ -566,12 +569,12 @@ impl Project {
 
     /// Save back changes
     pub fn save(&self) -> miette::Result<()> {
-        fs::write(self.manifest_path(), self.doc.to_string())
+        fs::write(self.manifest_path.clone(), self.doc.to_string())
             .into_diagnostic()
             .wrap_err_with(|| {
                 format!(
                     "unable to write changes to {}",
-                    self.manifest_path().display()
+                    self.manifest_path.display()
                 )
             })?;
         Ok(())
@@ -795,7 +798,12 @@ mod tests {
             platforms = ["linux-64", "win-64"]
         "#;
 
-        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
+        let root = Path::new("");
+        let manifest_path = root.join(consts::PROJECT_MANIFEST);
+
+        let project =
+            Project::from_manifest_str(root, manifest_path.as_path(), file_content.to_string())
+                .unwrap();
 
         assert_eq!(project.name(), "pixi");
         assert_eq!(project.version(), &Version::from_str("0.0.2").unwrap());
@@ -882,7 +890,11 @@ mod tests {
         for file_content in file_contents {
             let file_content = format!("{PROJECT_BOILERPLATE}\n{file_content}");
 
-            let project = Project::from_manifest_str(Path::new(""), &file_content).unwrap();
+            let root = Path::new("");
+            let manifest_path = root.join(consts::PROJECT_MANIFEST);
+
+            let project =
+                Project::from_manifest_str(root, manifest_path.as_path(), &file_content).unwrap();
 
             let expected_result = vec![VirtualPackage::LibC(LibC {
                 family: "glibc".to_string(),
@@ -941,8 +953,10 @@ mod tests {
             "{PROJECT_BOILERPLATE}\n{file_contents}"
         ))
         .unwrap();
+        let manifest_path = Path::new(consts::PROJECT_MANIFEST).to_path_buf();
         let project = Project {
             root: Default::default(),
+            manifest_path: manifest_path,
             source: "".to_string(),
             doc: Default::default(),
             manifest,
@@ -977,8 +991,10 @@ mod tests {
             "{PROJECT_BOILERPLATE}\n{file_contents}"
         ))
         .unwrap();
+        let manifest_path = Path::new(consts::PROJECT_MANIFEST).to_path_buf();
         let project = Project {
             root: Default::default(),
+            manifest_path: manifest_path,
             source: "".to_string(),
             doc: Default::default(),
             manifest,
@@ -1004,8 +1020,10 @@ mod tests {
             "{PROJECT_BOILERPLATE}\n{file_contents}"
         ))
         .unwrap();
+        let manifest_path = Path::new(consts::PROJECT_MANIFEST).to_path_buf();
         let project = Project {
             root: Default::default(),
+            manifest_path: manifest_path,
             source: "".to_string(),
             doc: Default::default(),
             manifest,
@@ -1033,8 +1051,10 @@ mod tests {
             "{PROJECT_BOILERPLATE}\n{file_contents}"
         ))
         .unwrap();
+        let manifest_path = Path::new(consts::PROJECT_MANIFEST).to_path_buf();
         let project = Project {
             root: Default::default(),
+            manifest_path: manifest_path,
             source: "".to_string(),
             doc: Default::default(),
             manifest,

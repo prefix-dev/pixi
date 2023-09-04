@@ -3,10 +3,12 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_shell::shell::{Shell, ShellEnum};
 use std::collections::HashMap;
+use std::env;
 use std::fmt::Write;
 
 // Setting a base prefix for the pixi package
 const ENV_PREFIX: &str = "PIXI_PACKAGE_";
+const PROJECT_MANIFEST: &str = "PIXI_PACKAGE_MANIFEST";
 
 // Add pixi meta data into the environment as environment variables.
 pub fn add_metadata_as_env_vars(
@@ -30,8 +32,8 @@ pub fn get_metadata_env(project: &Project) -> HashMap<String, String> {
         ),
         (format!("{ENV_PREFIX}NAME"), project.name().to_string()),
         (
-            format!("{ENV_PREFIX}MANIFEST"),
-            project.manifest_path().to_string_lossy().into_owned(),
+            PROJECT_MANIFEST.to_owned(),
+            project.manifest_path.to_string_lossy().into_owned(),
         ),
         (
             format!("{ENV_PREFIX}PLATFORMS"),
@@ -47,4 +49,8 @@ pub fn get_metadata_env(project: &Project) -> HashMap<String, String> {
         ),
         ("PIXI_PROMPT".to_string(), format!("({}) ", project.name())),
     ])
+}
+
+pub fn get_project_manifest_path() -> Option<String> {
+    env::var(PROJECT_MANIFEST).ok()
 }
