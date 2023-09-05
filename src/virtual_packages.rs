@@ -179,14 +179,14 @@ pub fn verify_current_platform_has_required_virtual_packages(
     for req_pkg in required_pkgs {
         if let Some(local_vpkg) = system_virtual_packages.get(&req_pkg.name) {
             if req_pkg.build_string != local_vpkg.build_string {
-                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be on build '{}' but the system has build '{}'", req_pkg.name, req_pkg.build_string, local_vpkg.build_string);
+                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be on build '{}' but the system has build '{}'", req_pkg.name.as_source(), req_pkg.build_string, local_vpkg.build_string);
             }
 
             if req_pkg.version > local_vpkg.version {
-                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be at least version '{}' but the system has version '{}'", req_pkg.name, req_pkg.version, local_vpkg.version);
+                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be at least version '{}' but the system has version '{}'", req_pkg.name.as_source(), req_pkg.version, local_vpkg.version);
             }
         } else {
-            miette::bail!("The platform you are running on should at least have the virtual package {} on version {}, build_string: {}", req_pkg.name, req_pkg.version, req_pkg.build_string)
+            miette::bail!("The platform you are running on should at least have the virtual package {} on version {}, build_string: {}", req_pkg.name.as_source(), req_pkg.version, req_pkg.build_string)
         }
     }
 

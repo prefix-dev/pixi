@@ -8,7 +8,7 @@ use dirs::home_dir;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform, PrefixRecord};
+use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord};
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
@@ -68,8 +68,8 @@ struct BinEnvDir(pub PathBuf);
 
 impl BinEnvDir {
     /// Create the Binary Environment directory
-    pub async fn create(package_name: &str) -> miette::Result<Self> {
-        let bin_env_dir = bin_env_dir()?.join(package_name);
+    pub async fn create(package_name: &PackageName) -> miette::Result<Self> {
+        let bin_env_dir = bin_env_dir()?.join(package_name.as_normalized());
         tokio::fs::create_dir_all(&bin_env_dir)
             .await
             .into_diagnostic()?;
@@ -87,13 +87,13 @@ fn bin_env_dir() -> miette::Result<PathBuf> {
 /// Find the designated package in the prefix
 async fn find_designated_package(
     prefix: &Prefix,
-    package_name: &str,
+    package_name: &PackageName,
 ) -> miette::Result<PrefixRecord> {
     let prefix_records = prefix.find_installed_packages(None).await?;
     prefix_records
         .into_iter()
-        .find(|r| r.repodata_record.package_record.name == package_name)
-        .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name))
+        .find(|r| r.repodata_record.package_record.name == *package_name)
+        .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
 }
 
 /// Create the environment activation script
@@ -305,7 +305,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if script_names.is_empty() {
         miette::bail!(
             "could not find an executable entrypoint in package {} {} {} from {}, are you sure it exists?",
-            console::style(prefix_package.repodata_record.package_record.name).bold(),
+            console::style(prefix_package.repodata_record.package_record.name.as_source()).bold(),
             console::style(prefix_package.repodata_record.package_record.version).bold(),
             console::style(prefix_package.repodata_record.package_record.build).bold(),
             channel,
@@ -315,7 +315,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         eprintln!(
             "{}Installed package {} {} {} from {}",
             console::style(console::Emoji("✔ ", "")).green(),
-            console::style(prefix_package.repodata_record.package_record.name).bold(),
+            console::style(
+                prefix_package
+                    .repodata_record
+                    .package_record
+                    .name
+                    .as_source()
+            )
+            .bold(),
             console::style(prefix_package.repodata_record.package_record.version).bold(),
             console::style(prefix_package.repodata_record.package_record.build).bold(),
             channel,
