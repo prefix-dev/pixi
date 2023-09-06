@@ -25,7 +25,7 @@
 # pixi: Package management made easy
 
 `pixi` is a cross-platform, multi-language package manager and workflow tool
-build on the shoulders of the conda ecosystem.
+built on the shoulders of the conda ecosystem.
 
 `pixi` provides all developers the exceptional experience that is usually found
 with package managers like `cargo` or `yarn` but for any language.
@@ -75,6 +75,8 @@ If this directory does not already exist, the script will create it.
 To install Pixi on macOS and Linux, open a terminal and run the following command:
 ```bash
 curl -fsSL https://pixi.sh/install.sh | bash
+# or
+curl -fsSL https://raw.githubusercontent.com/prefix-dev/pixi/main/install/install.sh | bash
 # or with brew
 brew install pixi
 ```
