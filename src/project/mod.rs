@@ -2,7 +2,7 @@ pub mod environment;
 pub mod manifest;
 mod serde;
 
-use crate::consts;
+use crate::consts::{self, PROJECT_MANIFEST};
 use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
 use crate::task::{CmdArgs, Task};
 use indexmap::IndexMap;
@@ -12,6 +12,7 @@ use rattler_conda_types::{
 };
 use rattler_virtual_packages::VirtualPackage;
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsStr;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -105,6 +106,10 @@ impl Project {
     pub fn load(filename: &Path) -> miette::Result<Self> {
         // Determine the parent directory of the manifest file
         let full_path = dunce::canonicalize(filename).into_diagnostic()?;
+        if full_path.file_name().and_then(OsStr::to_str) != Some(PROJECT_MANIFEST) {
+            miette::bail!("the manifest-path must point to a {PROJECT_MANIFEST} file");
+        }
+
         let root = full_path
             .parent()
             .ok_or_else(|| miette::miette!("can not find parent of {}", filename.display()))?;
