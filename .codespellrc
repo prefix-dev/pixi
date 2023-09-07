@@ -1,4 +1,5 @@
 [codespell]
-skip = .git,*.pdf,*.svg,Cargo.lock,pixi.lock
-#
-# ignore-words-list =
+skip = .git,*.pdf,*.svg,Cargo.lock,pixi.lock,LICENSE.*
+# all images and other binaries embedded in .ipynb jsons
+ignore-regex = "image/png": ".*|^ *".*data:\S+;base64.*
+ignore-words-list = crate,ser
