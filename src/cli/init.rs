@@ -64,7 +64,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let gitignore_path = dir.join(".gitignore");
     let gitattributes_path = dir.join(".gitattributes");
 
-    // Check if the project file doesnt already exist. We don't want to overwrite it.
+    // Check if the project file doesn't already exist. We don't want to overwrite it.
     if fs::metadata(&manifest_path).map_or(false, |x| x.is_file()) {
         miette::bail!("{} already exists", consts::PROJECT_MANIFEST);
     }

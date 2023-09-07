@@ -34,7 +34,7 @@ use std::{
     time::Duration,
 };
 
-/// Returns the prefix associated with the given environment. If the prefix doesnt exist or is not
+/// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
 /// up to date it is updated.
 pub async fn get_up_to_date_prefix(project: &Project) -> miette::Result<Prefix> {
     // Make sure the project supports the current platform
@@ -587,7 +587,7 @@ async fn install_package_to_environment(
         link: None,
     };
 
-    // Create the conda-meta directory if it doesnt exist yet.
+    // Create the conda-meta directory if it doesn't exist yet.
     let target_prefix = target_prefix.to_path_buf();
     match tokio::task::spawn_blocking(move || {
         let conda_meta_path = target_prefix.join("conda-meta");

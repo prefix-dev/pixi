@@ -445,7 +445,7 @@ impl Project {
         deps_table: &mut Item,
         spec: &MatchSpec,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
-        // If it doesnt exist create a proper table
+        // If it doesn't exist create a proper table
         if deps_table.is_none() {
             *deps_table = Item::Table(Table::new());
         }
