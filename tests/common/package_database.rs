@@ -7,7 +7,8 @@
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
-    package::ArchiveType, ChannelInfo, PackageRecord, Platform, RepoData, VersionWithSource, PackageName,
+    package::ArchiveType, ChannelInfo, PackageName, PackageRecord, Platform, RepoData,
+    VersionWithSource,
 };
 use std::{collections::HashSet, path::Path};
 

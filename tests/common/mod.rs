@@ -12,7 +12,7 @@ use pixi::cli::task::{AddArgs, AliasArgs};
 use pixi::cli::{add, init, run, task};
 use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
-use rattler_conda_types::{MatchSpec, Platform, Version, PackageName};
+use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 
 use miette::IntoDiagnostic;
 use std::path::{Path, PathBuf};
