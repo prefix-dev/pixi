@@ -79,6 +79,7 @@ fn bin_dir() -> miette::Result<PathBuf> {
 pub(crate) struct BinEnvDir(pub PathBuf);
 
 impl BinEnvDir {
+    /// Construct the path to the env directory for the binary package `package_name`.
     fn package_bin_env_dir(package_name: &str) -> miette::Result<PathBuf> {
         Ok(bin_env_dir()?.join(package_name))
     }
@@ -184,26 +185,73 @@ fn is_executable(prefix: &Prefix, relative_path: &Path) -> bool {
     is_executable::is_executable(absolute_path)
 }
 
-/// Create the executable scripts by modifying the activation script
-/// to activate the environment and run the executable.
-///
-/// If `dry_run` is true, return the filenames of the scripts that would be created but don't
-/// actually write them to disk.
-pub(crate) async fn create_executable_scripts(
-    prefix: &Prefix,
-    prefix_package: &PrefixRecord,
-    shell: &ShellEnum,
-    activation_script: String,
-    dry_run: bool,
-) -> miette::Result<Vec<PathBuf>> {
-    let executables = prefix_package
+/// Find the executable scripts within the specified package installed in this conda prefix.
+fn find_executables<'a>(prefix: &Prefix, prefix_package: &'a PrefixRecord) -> Vec<&'a Path> {
+    prefix_package
         .files
         .iter()
-        .filter(|relative_path| is_executable(prefix, relative_path));
+        .filter(|relative_path| is_executable(prefix, relative_path))
+        .map(|buf| buf.as_ref())
+        .collect()
+}
 
-    let mut scripts = Vec::new();
-    let BinDir(bin_dir) = BinDir::create().await?;
-    for exec in executables {
+/// Mapping from an executable in a package environment to its global binary script location.
+#[derive(Debug)]
+pub(crate) struct BinScriptMapping<'a> {
+    pub original_executable: &'a Path,
+    pub global_binary_path: PathBuf,
+}
+
+/// For each executable provided, map it to the installation path for its global binary script.
+async fn map_executables_to_global_bin_scripts<'a>(
+    package_executables: &[&'a Path],
+    bin_dir: &BinDir,
+) -> miette::Result<Vec<BinScriptMapping<'a>>> {
+    let BinDir(bin_dir) = bin_dir;
+    let mut mappings = vec![];
+    for exec in package_executables.iter() {
+        let file_name = exec
+            .file_stem()
+            .ok_or_else(|| miette::miette!("could not get filename from {}", exec.display()))?;
+        let mut executable_script_path = bin_dir.join(file_name);
+
+        if cfg!(windows) {
+            executable_script_path.set_extension("bat");
+        };
+        mappings.push(BinScriptMapping {
+            original_executable: exec,
+            global_binary_path: executable_script_path,
+        });
+    }
+    Ok(mappings)
+}
+
+/// Find all executable scripts in a package and map them to their global install paths.
+///
+/// (Convenience wrapper around `find_executables` and `map_executables_to_global_bin_scripts` which
+/// are generally used together.)
+pub(crate) async fn find_and_map_executable_scripts<'a>(
+    prefix: &Prefix,
+    prefix_package: &'a PrefixRecord,
+    bin_dir: &BinDir,
+) -> miette::Result<Vec<BinScriptMapping<'a>>> {
+    let executables = find_executables(prefix, prefix_package);
+    map_executables_to_global_bin_scripts(&executables, bin_dir).await
+}
+
+/// Create the executable scripts by modifying the activation script
+/// to activate the environment and run the executable.
+pub(crate) async fn create_executable_scripts(
+    mapped_executables: &[BinScriptMapping<'_>],
+    prefix: &Prefix,
+    shell: &ShellEnum,
+    activation_script: String,
+) -> miette::Result<()> {
+    for BinScriptMapping {
+        original_executable: exec,
+        global_binary_path: executable_script_path,
+    } in mapped_executables
+    {
         let mut script = activation_script.clone();
         shell
             .run_command(
@@ -214,35 +262,21 @@ pub(crate) async fn create_executable_scripts(
                 ],
             )
             .expect("should never fail");
+        tokio::fs::write(&executable_script_path, script)
+            .await
+            .into_diagnostic()?;
 
-        let file_name = exec
-            .file_stem()
-            .ok_or_else(|| miette::miette!("could not get filename from {}", exec.display()))?;
-        let mut executable_script_path = bin_dir.join(file_name);
-
-        if cfg!(windows) {
-            executable_script_path.set_extension("bat");
-        };
-
-        if !dry_run {
-            tokio::fs::write(&executable_script_path, script)
-                .await
-                .into_diagnostic()?;
-
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(
-                    &executable_script_path,
-                    std::fs::Permissions::from_mode(0o744),
-                )
-                .into_diagnostic()?;
-            }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(
+                executable_script_path,
+                std::fs::Permissions::from_mode(0o744),
+            )
+            .into_diagnostic()?;
         }
-
-        scripts.push(executable_script_path);
     }
-    Ok(scripts)
+    Ok(())
 }
 
 /// Install a global command
@@ -338,9 +372,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Construct the reusable activation script for the shell and generate an invocation script
     // for each executable added by the package to the environment.
     let activation_script = create_activation_script(&prefix, shell.clone())?;
-    let scripts =
-        create_executable_scripts(&prefix, &prefix_package, &shell, activation_script, false)
-            .await?;
+    let bin_dir = BinDir::create().await?;
+    let script_mapping =
+        find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;
+    create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
+
+    let scripts: Vec<_> = script_mapping
+        .into_iter()
+        .map(
+            |BinScriptMapping {
+                 global_binary_path: path,
+                 ..
+             }| path,
+        )
+        .collect();
 
     // Check if the bin path is on the path
     if scripts.is_empty() {

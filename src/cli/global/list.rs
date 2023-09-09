@@ -4,14 +4,12 @@ use std::fmt::Display;
 use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_shell::shell::ShellEnum;
 
 use crate::cli::global::install::{
-    create_activation_script, create_executable_scripts, find_designated_package, BinEnvDir,
+    bin_env_dir, find_and_map_executable_scripts, find_designated_package, BinDir, BinEnvDir,
+    BinScriptMapping,
 };
 use crate::prefix::Prefix;
-
-use super::install::{bin_env_dir, BinDir};
 
 /// Lists all packages previously installed into a globally accessible location via `pixi global install`.
 #[derive(Parser, Debug)]
@@ -73,25 +71,21 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
         // Find the installed package in the environment
         let prefix_package = find_designated_package(&prefix, &package_name).await?;
 
-        // Determine the shell to use for the invocation script
-        let shell: ShellEnum = if cfg!(windows) {
-            rattler_shell::shell::CmdExe.into()
-        } else {
-            rattler_shell::shell::Bash.into()
-        };
-
-        // Do a dry run creation of the executable scripts to figure out what installed paths we have.
-        let activation_script = create_activation_script(&prefix, shell.clone())?;
         let binaries: Vec<_> =
-            create_executable_scripts(&prefix, &prefix_package, &shell, activation_script, true)
+            find_and_map_executable_scripts(&prefix, &prefix_package, &bin_prefix)
                 .await?
                 .into_iter()
-                .map(|path| {
-                    path.strip_prefix(&bin_prefix.0)
-                        .expect("script paths were constructed by joining onto BinDir")
-                        .to_string_lossy()
-                        .to_string()
-                })
+                .map(
+                    |BinScriptMapping {
+                         global_binary_path: path,
+                         ..
+                     }| {
+                        path.strip_prefix(&bin_prefix.0)
+                            .expect("script paths were constructed by joining onto BinDir")
+                            .to_string_lossy()
+                            .to_string()
+                    },
+                )
                 // Collecting to a HashSet first is a workaround for issue #317 and can be removed
                 // once that is fixed.
                 .collect::<HashSet<_>>()

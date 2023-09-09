@@ -6,10 +6,9 @@ use clap_verbosity_flag::{Level, Verbosity};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::MatchSpec;
-use rattler_shell::shell::ShellEnum;
 
 use crate::cli::global::install::{
-    create_activation_script, create_executable_scripts, find_designated_package, BinEnvDir,
+    find_and_map_executable_scripts, find_designated_package, BinDir, BinEnvDir, BinScriptMapping,
 };
 use crate::prefix::Prefix;
 
@@ -38,22 +37,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Find the installed package in the environment
     let prefix_package = find_designated_package(&prefix, &package_name).await?;
 
-    // Determine the shell to use for the invocation script
-    let shell: ShellEnum = if cfg!(windows) {
-        rattler_shell::shell::CmdExe.into()
-    } else {
-        rattler_shell::shell::Bash.into()
-    };
-
-    // Construct the reusable activation script for the shell and generate an invocation script
-    // for each executable added by the package to the environment.
-    let activation_script = create_activation_script(&prefix, shell.clone())?;
+    // Construct the paths to all the installed package executables, which are what we need to remove.
     let paths_to_remove: Vec<_> =
-        create_executable_scripts(&prefix, &prefix_package, &shell, activation_script, true)
+        find_and_map_executable_scripts(&prefix, &prefix_package, &BinDir::from_existing().await?)
             .await?
+            .into_iter()
+            .map(
+                |BinScriptMapping {
+                     global_binary_path: path,
+                     ..
+                 }| path,
+            )
             // Collecting to a HashSet first is a workaround for issue #317 and can be removed
             // once that is fixed.
-            .into_iter()
             .collect::<HashSet<_>>()
             .into_iter()
             .collect();
