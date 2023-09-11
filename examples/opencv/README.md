@@ -1,5 +1,5 @@
 # OpenCV example
-OpenCV is a powerfull tool to do computer vision and fully opensource.
+OpenCV is a powerful tool to do computer vision and fully opensource.
 
 Here are some example on how to use it with `pixi`.
 
@@ -25,4 +25,4 @@ After that press `ESC` which will start the calibration.
 
 When the calibration is done the camera will be used again to find the distance to the checkerboard.
 
-![callibrated camera result](https://github.com/ruben-arts/pixi/assets/12893423/f42825d7-5010-4805-9f6b-b02075395413)
+![calibrated camera result](https://github.com/ruben-arts/pixi/assets/12893423/f42825d7-5010-4805-9f6b-b02075395413)
