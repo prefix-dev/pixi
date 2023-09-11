@@ -50,6 +50,7 @@ https://github.com/prefix-dev/pixi/assets/885054/64666dee-841d-4680-9a61-7927913
 * 📚 [Documentation](https://prefix.dev/docs/pixi/overview)
 * 😍 [Contributing](#contributing)
 * 🔨 [Built using Pixi](#pixibuilt)
+* 🚀 [GitHub Action](https://github.com/prefix-dev/setup-pixi)
 
 # Status
 
@@ -137,9 +138,12 @@ echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
 echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
 echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
 echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+```
 
-# On Windows:
-Add-Content -Path $PROFILE -Value 'Invoke-Expression (&pixi completion --shell powershell)'
+For PowerShell on Windows:
+
+```pwsh
+Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
 ```
 
 And then restart the shell or source the shell config file.
@@ -208,6 +212,17 @@ This behavior is similar to [`pipx`](https://github.com/pypa/pipx) or [`condax`]
 
 ```bash
 pixi global install cowpy
+```
+
+## Use in GitHub Actions
+
+You can use pixi in GitHub Actions to install dependencies and run commands.
+
+```yml
+- uses: prefix-dev/setup-pixi@v0.2.0
+  with:
+    cache: true
+- run: pixi run cowpy "Thanks for using pixi"
 ```
 
 <a name="contributing"></a>

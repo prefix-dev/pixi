@@ -12,7 +12,7 @@ readme = "README.md"
 [features]
 default = ["native-tls"]
 native-tls = ["reqwest/native-tls", "rattler_repodata_gateway/native-tls", "rattler/native-tls"]
-rustls-tls = ["reqwest/rustls-tls", "rattler_repodata_gateway/rustls-tls", "rattler/rustls-tls"]
+rustls-tls = ["reqwest/rustls-tls", "reqwest/rustls-tls-native-roots", "rattler_repodata_gateway/rustls-tls", "rattler/rustls-tls"]
 slow_integration_tests = []
 
 [dependencies]

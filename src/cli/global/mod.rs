@@ -1,10 +1,16 @@
 use clap::Parser;
 mod install;
+mod list;
+mod remove;
 
 #[derive(Debug, Parser)]
 pub enum Command {
     #[clap(alias = "a")]
     Install(install::Args),
+    #[clap(alias = "r")]
+    Remove(remove::Args),
+    #[clap(alias = "ls")]
+    List(list::Args),
 }
 
 /// Global is the main entry point for the part of pixi that executes on the global(system) level.
@@ -19,6 +25,8 @@ pub struct Args {
 pub async fn execute(cmd: Args) -> miette::Result<()> {
     match cmd.command {
         Command::Install(args) => install::execute(args).await?,
+        Command::Remove(args) => remove::execute(args).await?,
+        Command::List(args) => list::execute(args).await?,
     };
     Ok(())
 }
