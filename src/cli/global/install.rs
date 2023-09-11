@@ -44,7 +44,7 @@ pub struct Args {
     channel: Vec<String>,
 }
 
-struct BinDir(pub PathBuf);
+pub(crate) struct BinDir(pub PathBuf);
 
 impl BinDir {
     /// Create the Binary Executable directory
@@ -55,6 +55,18 @@ impl BinDir {
             .into_diagnostic()?;
         Ok(Self(bin_dir))
     }
+
+    /// Get the Binary Executable directory, erroring if it doesn't already exist.
+    pub async fn from_existing() -> miette::Result<Self> {
+        let bin_dir = bin_dir()?;
+        if tokio::fs::try_exists(&bin_dir).await.into_diagnostic()? {
+            Ok(Self(bin_dir))
+        } else {
+            Err(miette::miette!(
+                "binary executable directory does not exist"
+            ))
+        }
+    }
 }
 
 /// Binaries are installed in ~/.pixi/bin
@@ -64,12 +76,32 @@ fn bin_dir() -> miette::Result<PathBuf> {
         .join(BIN_DIR))
 }
 
-struct BinEnvDir(pub PathBuf);
+pub(crate) struct BinEnvDir(pub PathBuf);
 
 impl BinEnvDir {
+    /// Construct the path to the env directory for the binary package `package_name`.
+    fn package_bin_env_dir(package_name: &str) -> miette::Result<PathBuf> {
+        Ok(bin_env_dir()?.join(package_name))
+    }
+
+    /// Get the Binary Environment directory, erroring if it doesn't already exist.
+    pub async fn from_existing(package_name: &str) -> miette::Result<Self> {
+        let bin_env_dir = Self::package_bin_env_dir(package_name)?;
+        if tokio::fs::try_exists(&bin_env_dir)
+            .await
+            .into_diagnostic()?
+        {
+            Ok(Self(bin_env_dir))
+        } else {
+            Err(miette::miette!(
+                "could not find environment for package {package_name}"
+            ))
+        }
+    }
+
     /// Create the Binary Environment directory
     pub async fn create(package_name: &str) -> miette::Result<Self> {
-        let bin_env_dir = bin_env_dir()?.join(package_name);
+        let bin_env_dir = Self::package_bin_env_dir(package_name)?;
         tokio::fs::create_dir_all(&bin_env_dir)
             .await
             .into_diagnostic()?;
@@ -78,14 +110,14 @@ impl BinEnvDir {
 }
 
 /// Binary environments are installed in ~/.pixi/envs
-fn bin_env_dir() -> miette::Result<PathBuf> {
+pub(crate) fn bin_env_dir() -> miette::Result<PathBuf> {
     Ok(home_dir()
         .ok_or_else(|| miette::miette!("could not find home directory"))?
         .join(BIN_ENVS_DIR))
 }
 
 /// Find the designated package in the prefix
-async fn find_designated_package(
+pub(crate) async fn find_designated_package(
     prefix: &Prefix,
     package_name: &str,
 ) -> miette::Result<PrefixRecord> {
@@ -97,7 +129,10 @@ async fn find_designated_package(
 }
 
 /// Create the environment activation script
-fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result<String> {
+pub(crate) fn create_activation_script(
+    prefix: &Prefix,
+    shell: ShellEnum,
+) -> miette::Result<String> {
     let activator =
         Activator::from_path(prefix.root(), shell, Platform::Osx64).into_diagnostic()?;
     let result = activator
@@ -150,22 +185,73 @@ fn is_executable(prefix: &Prefix, relative_path: &Path) -> bool {
     is_executable::is_executable(absolute_path)
 }
 
-/// Create the executable scripts by modifying the activation script
-/// to activate the environment and run the executable
-async fn create_executable_scripts(
-    prefix: &Prefix,
-    prefix_package: &PrefixRecord,
-    shell: &ShellEnum,
-    activation_script: String,
-) -> miette::Result<Vec<String>> {
-    let executables = prefix_package
+/// Find the executable scripts within the specified package installed in this conda prefix.
+fn find_executables<'a>(prefix: &Prefix, prefix_package: &'a PrefixRecord) -> Vec<&'a Path> {
+    prefix_package
         .files
         .iter()
-        .filter(|relative_path| is_executable(prefix, relative_path));
+        .filter(|relative_path| is_executable(prefix, relative_path))
+        .map(|buf| buf.as_ref())
+        .collect()
+}
 
-    let mut scripts = Vec::new();
-    let bin_dir = BinDir::create().await?;
-    for exec in executables {
+/// Mapping from an executable in a package environment to its global binary script location.
+#[derive(Debug)]
+pub(crate) struct BinScriptMapping<'a> {
+    pub original_executable: &'a Path,
+    pub global_binary_path: PathBuf,
+}
+
+/// For each executable provided, map it to the installation path for its global binary script.
+async fn map_executables_to_global_bin_scripts<'a>(
+    package_executables: &[&'a Path],
+    bin_dir: &BinDir,
+) -> miette::Result<Vec<BinScriptMapping<'a>>> {
+    let BinDir(bin_dir) = bin_dir;
+    let mut mappings = vec![];
+    for exec in package_executables.iter() {
+        let file_name = exec
+            .file_stem()
+            .ok_or_else(|| miette::miette!("could not get filename from {}", exec.display()))?;
+        let mut executable_script_path = bin_dir.join(file_name);
+
+        if cfg!(windows) {
+            executable_script_path.set_extension("bat");
+        };
+        mappings.push(BinScriptMapping {
+            original_executable: exec,
+            global_binary_path: executable_script_path,
+        });
+    }
+    Ok(mappings)
+}
+
+/// Find all executable scripts in a package and map them to their global install paths.
+///
+/// (Convenience wrapper around `find_executables` and `map_executables_to_global_bin_scripts` which
+/// are generally used together.)
+pub(crate) async fn find_and_map_executable_scripts<'a>(
+    prefix: &Prefix,
+    prefix_package: &'a PrefixRecord,
+    bin_dir: &BinDir,
+) -> miette::Result<Vec<BinScriptMapping<'a>>> {
+    let executables = find_executables(prefix, prefix_package);
+    map_executables_to_global_bin_scripts(&executables, bin_dir).await
+}
+
+/// Create the executable scripts by modifying the activation script
+/// to activate the environment and run the executable.
+pub(crate) async fn create_executable_scripts(
+    mapped_executables: &[BinScriptMapping<'_>],
+    prefix: &Prefix,
+    shell: &ShellEnum,
+    activation_script: String,
+) -> miette::Result<()> {
+    for BinScriptMapping {
+        original_executable: exec,
+        global_binary_path: executable_script_path,
+    } in mapped_executables
+    {
         let mut script = activation_script.clone();
         shell
             .run_command(
@@ -176,16 +262,6 @@ async fn create_executable_scripts(
                 ],
             )
             .expect("should never fail");
-
-        let file_name = exec
-            .file_stem()
-            .ok_or_else(|| miette::miette!("could not get filename from {}", exec.display()))?;
-        let mut executable_script_path = bin_dir.0.join(file_name);
-
-        if cfg!(windows) {
-            executable_script_path.set_extension("bat");
-        };
-
         tokio::fs::write(&executable_script_path, script)
             .await
             .into_diagnostic()?;
@@ -199,10 +275,8 @@ async fn create_executable_scripts(
             )
             .into_diagnostic()?;
         }
-
-        scripts.push(file_name.to_string_lossy().into_owned());
     }
-    Ok(scripts)
+    Ok(())
 }
 
 /// Install a global command
@@ -257,8 +331,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let records = libsolv_rs::Solver.solve(task).into_diagnostic()?;
 
     // Create the binary environment prefix where we install or update the package
-    let bin_prefix = BinEnvDir::create(&package_name).await?;
-    let prefix = Prefix::new(bin_prefix.0)?;
+    let BinEnvDir(bin_prefix) = BinEnvDir::create(&package_name).await?;
+    let prefix = Prefix::new(bin_prefix)?;
     let prefix_records = prefix.find_installed_packages(None).await?;
 
     // Create the transaction that we need
@@ -298,11 +372,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Construct the reusable activation script for the shell and generate an invocation script
     // for each executable added by the package to the environment.
     let activation_script = create_activation_script(&prefix, shell.clone())?;
-    let script_names =
-        create_executable_scripts(&prefix, &prefix_package, &shell, activation_script).await?;
+    let bin_dir = BinDir::create().await?;
+    let script_mapping =
+        find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;
+    create_executable_scripts(&script_mapping, &prefix, &shell, activation_script).await?;
+
+    let scripts: Vec<_> = script_mapping
+        .into_iter()
+        .map(
+            |BinScriptMapping {
+                 global_binary_path: path,
+                 ..
+             }| path,
+        )
+        .collect();
 
     // Check if the bin path is on the path
-    if script_names.is_empty() {
+    if scripts.is_empty() {
         miette::bail!(
             "could not find an executable entrypoint in package {} {} {} from {}, are you sure it exists?",
             console::style(prefix_package.repodata_record.package_record.name).bold(),
@@ -321,8 +407,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             channel,
         );
 
-        let script_names = script_names
+        let BinDir(bin_dir) = BinDir::from_existing().await?;
+        let script_names = scripts
             .into_iter()
+            .map(|path| {
+                path.strip_prefix(&bin_dir)
+                    .expect("script paths were constructed by joining onto BinDir")
+                    .to_string_lossy()
+                    .to_string()
+            })
             .join(&format!("\n{whitespace} -  "));
 
         if is_bin_folder_on_path() {
