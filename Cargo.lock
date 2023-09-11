@@ -1423,8 +1423,7 @@ dependencies = [
 [[package]]
 name = "json-patch"
 version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f54898088ccb91df1b492cc80029a6fdf1c48ca0db7c6822a8babad69c94658"
+source = "git+https://github.com/baszalmstra/json-patch?branch=main#f3db28d3c907631c87b7382cebbddc474c8b53ca"
 dependencies = [
  "serde",
  "serde_json",
@@ -1993,7 +1992,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "pixi"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "atty",
  "chrono",

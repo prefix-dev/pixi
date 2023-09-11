@@ -1,6 +1,6 @@
 [package]
 name = "pixi"
-version = "0.2.0"
+version = "0.3.0"
 description = "A package management and workflow tool"
 edition = "2021"
 authors = ["pixi contributors <hi@prefix.dev>"]
@@ -65,6 +65,7 @@ tokio = { version = "1.32.0", features = ["rt"] }
 toml = "0.7.6"
 
 [patch.crates-io]
+# Remove this once we created a new release of rattler (0.9.0).
 rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
@@ -73,3 +74,6 @@ rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branc
 rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+
+# Remove this once https://github.com/idubrov/json-patch/pull/28 is merged and integrated into rattler.
+json-patch = { git = "https://github.com/baszalmstra/json-patch", branch = "main" }
