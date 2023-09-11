@@ -2026,7 +2026,6 @@ dependencies = [
  "serde_json",
  "serde_spanned",
  "serde_with",
- "shlex",
  "spdx",
  "strsim",
  "tempfile",
