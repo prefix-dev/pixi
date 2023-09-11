@@ -88,7 +88,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         eprintln!(
             "{}Successfully removed global package {}",
             console::style(console::Emoji("✔ ", "")).green(),
-            console::style(package_name).bold(),
+            console::style(package_name.as_source()).bold(),
         );
     } else {
         let whitespace = console::Emoji("  ", "").to_string();
@@ -98,7 +98,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .join(&format!("\n{whitespace} -  "));
         miette::bail!(
             "got multiple errors trying to remove global package {}:\n{} -  {}",
-            package_name,
+            package_name.as_source(),
             whitespace,
             error_string,
         );

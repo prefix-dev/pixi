@@ -1,9 +1,11 @@
 use std::collections::HashSet;
 use std::fmt::Display;
+use std::str::FromStr;
 
 use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use rattler_conda_types::PackageName;
 
 use crate::cli::global::install::{
     bin_env_dir, find_and_map_executable_scripts, find_designated_package, BinDir, BinEnvDir,
@@ -17,7 +19,7 @@ pub struct Args {}
 
 #[derive(Debug)]
 struct InstalledPackageInfo {
-    name: String,
+    name: PackageName,
     binaries: Vec<String>,
 }
 
@@ -31,7 +33,7 @@ impl Display for InstalledPackageInfo {
         write!(
             f,
             "  -  [package] {}\n     -  {binaries}",
-            console::style(&self.name).bold()
+            console::style(&self.name.as_source()).bold()
         )
     }
 }
@@ -50,7 +52,8 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
     while let Some(entry) = dir_contents.next_entry().await.into_diagnostic()? {
         if entry.file_type().await.into_diagnostic()?.is_dir() {
-            packages.push(entry.file_name().to_string_lossy().to_string());
+            let Ok(name) = PackageName::from_str(entry.file_name().to_string_lossy().as_ref()) else { continue };
+            packages.push(name);
         }
     }
 

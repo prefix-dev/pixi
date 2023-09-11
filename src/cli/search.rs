@@ -3,7 +3,7 @@ use std::{cmp::Ordering, path::PathBuf};
 use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, ChannelConfig, Platform, RepoDataRecord};
+use rattler_conda_types::{Channel, ChannelConfig, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use strsim::jaro;
 use tokio::task::spawn_blocking;
@@ -34,12 +34,12 @@ pub struct Args {
 
 /// fetch packages from `repo_data` based on `filter_func`
 fn search_package_by_filter<F>(
-    package: &str,
+    package: &PackageName,
     repo_data: &[SparseRepoData],
     filter_func: F,
 ) -> miette::Result<Vec<RepoDataRecord>>
 where
-    F: Fn(&str, &str) -> bool,
+    F: Fn(&str, &PackageName) -> bool,
 {
     let similar_packages = repo_data
         .iter()
@@ -55,7 +55,9 @@ where
     // add the latest version of the fetched package to latest_packages vector
     for repo in repo_data {
         for package in &similar_packages {
-            let mut records = repo.load_records(package).into_diagnostic()?;
+            let mut records = repo
+                .load_records(&PackageName::new_unchecked(*package))
+                .into_diagnostic()?;
             // sort records by version, get the latest one
             records.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
             let latest_package = records.last().cloned();
@@ -96,17 +98,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let platforms = [Platform::current()];
     let repo_data = fetch_sparse_repodata(&channels, &platforms).await?;
 
-    let p = package_name.clone();
+    let p = PackageName::try_from(package_name.clone()).into_diagnostic()?;
     let mut packages = await_in_progress(
         "searching packages",
         spawn_blocking(move || {
-            let packages = search_package_by_filter(&p, &repo_data, |pn, n| pn.contains(n));
+            let packages =
+                search_package_by_filter(&p, &repo_data, |pn, n| pn.contains(n.as_normalized()));
             match packages {
                 Ok(packages) => {
                     if packages.is_empty() {
                         let similarity = 0.6;
                         return search_package_by_filter(&p, &repo_data, |pn, n| {
-                            jaro(pn, n) > similarity
+                            jaro(pn, n.as_normalized()) > similarity
                         });
                     }
                     Ok(packages)
@@ -119,8 +122,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .into_diagnostic()??;
 
     packages.sort_by(|a, b| {
-        let ord = jaro(&b.package_record.name, &package_name)
-            .partial_cmp(&jaro(&a.package_record.name, &package_name));
+        let ord = jaro(b.package_record.name.as_normalized(), &package_name)
+            .partial_cmp(&jaro(a.package_record.name.as_normalized(), &package_name));
         if let Some(ord) = ord {
             ord
         } else {
@@ -155,7 +158,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         println!(
             "{:40} {:19} {:19}",
-            console::style(package_name).cyan().bright(),
+            console::style(package_name.as_source()).cyan().bright(),
             console::style(version),
             console::style(channel_name),
         );

@@ -20,7 +20,7 @@ use rattler_conda_types::{
     conda_lock,
     conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
     conda_lock::CondaLock,
-    MatchSpec, NamelessMatchSpec, Platform, PrefixRecord, RepoDataRecord, Version,
+    MatchSpec, NamelessMatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord, Version,
 };
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
@@ -189,13 +189,13 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
             if let Some(vpkg) = virtual_packages.get(&name) {
                 if let Some(version_spec) = spec.version {
                     if !version_spec.matches(&vpkg.version) {
-                        tracing::info!("found a dependency on virtual package '{}' but the version spec '{}' does not match the expected version of the virtual package '{}'.", &name, &version_spec, &vpkg.version);
+                        tracing::info!("found a dependency on virtual package '{}' but the version spec '{}' does not match the expected version of the virtual package '{}'.", name.as_source(), &version_spec, &vpkg.version);
                         return Ok(false);
                     }
                 }
                 if let Some(build_spec) = spec.build {
                     if !build_spec.matches(&vpkg.build_string) {
-                        tracing::info!("found a dependency on virtual package '{}' but the build spec '{}' does not match the expected build of the virtual package '{}'.", &name, &build_spec, &vpkg.build_string);
+                        tracing::info!("found a dependency on virtual package '{}' but the build spec '{}' does not match the expected build of the virtual package '{}'.", name.as_source(), &build_spec, &vpkg.build_string);
                         return Ok(false);
                     }
                 }
@@ -213,7 +213,7 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
                 None => {
                     // No package found that matches the dependency, the lock file is not in a
                     // consistent state.
-                    tracing::info!("failed to find a locked package for '{} {}', assuming the lock file is out of date.", &name, &spec);
+                    tracing::info!("failed to find a locked package for '{} {}', assuming the lock file is out of date.", name.as_source(), &spec);
                     return Ok(false);
                 }
                 Some(package) => {
@@ -253,11 +253,11 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
 /// TODO: Make this more elaborate to include all properties of MatchSpec
 fn locked_dependency_satisfies(
     locked_package: &conda_lock::LockedDependency,
-    name: &str,
+    name: &PackageName,
     spec: &NamelessMatchSpec,
 ) -> bool {
     // Check if the name of the package matches
-    if locked_package.name.as_str() != name {
+    if locked_package.name != *name {
         return false;
     }
 
@@ -330,7 +330,7 @@ pub async fn update_lock_file(
         // Load only records we need for this platform
         let available_packages = SparseRepoData::load_records_recursive(
             platform_sparse_repo_data,
-            package_names.iter().copied(),
+            package_names.into_iter().cloned(),
             None,
         )
         .into_diagnostic()?;
@@ -596,7 +596,11 @@ async fn install_package_to_environment(
         // Write the conda-meta information
         let pkg_meta_path = conda_meta_path.join(format!(
             "{}-{}-{}.json",
-            prefix_record.repodata_record.package_record.name,
+            prefix_record
+                .repodata_record
+                .package_record
+                .name
+                .as_source(),
             prefix_record.repodata_record.package_record.version,
             prefix_record.repodata_record.package_record.build
         ));
@@ -642,7 +646,7 @@ async fn remove_package_from_environment(
     // Remove the conda-meta file
     let conda_meta_path = target_prefix.join("conda-meta").join(format!(
         "{}-{}-{}.json",
-        package.repodata_record.package_record.name,
+        package.repodata_record.package_record.name.as_normalized(),
         package.repodata_record.package_record.version,
         package.repodata_record.package_record.build
     ));

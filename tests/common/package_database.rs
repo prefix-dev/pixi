@@ -7,7 +7,8 @@
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
-    package::ArchiveType, ChannelInfo, PackageRecord, Platform, RepoData, VersionWithSource,
+    package::ArchiveType, ChannelInfo, PackageName, PackageRecord, Platform, RepoData,
+    VersionWithSource,
 };
 use std::{collections::HashSet, path::Path};
 
@@ -140,7 +141,7 @@ impl Package {
     pub fn file_name(&self) -> String {
         format!(
             "{}-{}-{}{}",
-            self.package_record.name,
+            self.package_record.name.as_normalized(),
             self.package_record.version,
             self.package_record.build,
             self.archive_type.extension()
@@ -206,7 +207,7 @@ impl PackageBuilder {
                 license: None,
                 license_family: None,
                 md5: Some(md5),
-                name: self.name,
+                name: PackageName::new_unchecked(self.name),
                 noarch: Default::default(),
                 platform: None,
                 sha256: Some(sha256),

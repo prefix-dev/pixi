@@ -38,7 +38,7 @@ ProjectManifest {
     dependencies: {
         "my-game": NamelessMatchSpec {
             version: Some(
-                Operator(
+                Exact(
                     Equals,
                     Version {
                         version: [[0], [1], [0], [0]],
