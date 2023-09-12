@@ -350,7 +350,7 @@ pub struct Activation {
     pub scripts: Option<Vec<String>>,
 }
 
-// Create an error report for usign a platform that is not supported by the project.
+// Create an error report for using a platform that is not supported by the project.
 fn create_unsupported_platform_report(
     source: NamedSource,
     span: Range<usize>,

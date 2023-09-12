@@ -94,7 +94,7 @@ The script will inform you once the installation is successful and add the ~/.pi
 
 ## Install from source
 
-`pixi` is 100% written in Rust and therefor it can be installed, build and tested with cargo.
+`pixi` is 100% written in Rust and therefore it can be installed, build and tested with cargo.
 To start using `pixi` from a source build run:
 
 ```shell
@@ -248,4 +248,4 @@ community. [Join our discord server today!][chat-url]
 <a name="pixibuilt"></a>
 ## Built using pixi
 
-To see whats being built with `pixi` check out the [Community](/docs/Community.md) page.
+To see what's being built with `pixi` check out the [Community](/docs/Community.md) page.

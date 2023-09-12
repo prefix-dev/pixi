@@ -141,7 +141,7 @@ pub async fn create_script(task: Task, args: Vec<String>) -> miette::Result<Sequ
     deno_task_shell::parser::parse(full_script.trim()).map_err(|e| miette!("{e}"))
 }
 
-/// Executes the given command withing the specified project and with the given environment.
+/// Executes the given command within the specified project and with the given environment.
 pub async fn execute_script(
     script: SequentialList,
     project: &Project,

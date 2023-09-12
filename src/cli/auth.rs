@@ -8,7 +8,7 @@ fn default_authentication_storage() -> AuthenticationStorage {
     AuthenticationStorage::new("rattler", &get_default_auth_store_location())
 }
 
-// moved into seperate function to access from info command
+// moved into separate function to access from info command
 pub fn get_default_auth_store_location() -> PathBuf {
     dirs::home_dir().unwrap().join(".rattler")
 }
