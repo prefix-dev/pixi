@@ -5,7 +5,7 @@ use clap_complete;
 use clap_verbosity_flag::Verbosity;
 use miette::IntoDiagnostic;
 use rattler_shell::shell::{Shell, ShellEnum};
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::str::FromStr;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
@@ -185,8 +185,7 @@ pub enum ColorOutput {
 
 /// Returns true if the output is considered to be a terminal.
 fn is_terminal() -> bool {
-    // Crate `atty` provides a platform-independent way of checking whether the output is a tty.
-    atty::is(atty::Stream::Stderr)
+    std::io::stderr().is_terminal()
 }
 
 /// Returns true if the log outputs should be colored or not.

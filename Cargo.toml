@@ -16,7 +16,6 @@ rustls-tls = ["reqwest/rustls-tls", "reqwest/rustls-tls-native-roots", "rattler_
 slow_integration_tests = []
 
 [dependencies]
-atty = "0.2"
 chrono = "0.4.28"
 clap = { version = "4.4.2", default-features = false, features = ["derive", "usage", "wrap_help", "std", "color", "error-context"] }
 clap-verbosity-flag = "2.0.1"
