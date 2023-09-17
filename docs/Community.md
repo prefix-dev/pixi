@@ -6,3 +6,4 @@
 - [hex-inc/vegafusion](https://github.com/hex-inc/vegafusion): Serverside scaling of Vega and Altair visualizations in Rust, Python, WASM, and Java
 - [pablovela5620/arxiv-researcher](https://github.com/pablovela5620/arxiv-researcher): Summarize PDF's and Arixv papers with Langchain and Nougat 🦉
 - [HaoZeke/xtsci-dist](https://github.com/HaoZeke/xtsci-dist): Incremental `scipy` port using `xtensor`
+- [Ribasim](https://github.com/Deltares/Ribasim): Water resources model
