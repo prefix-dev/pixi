@@ -7,3 +7,4 @@
 - [pablovela5620/arxiv-researcher](https://github.com/pablovela5620/arxiv-researcher): Summarize PDF's and Arixv papers with Langchain and Nougat 🦉
 - [HaoZeke/xtsci-dist](https://github.com/HaoZeke/xtsci-dist): Incremental `scipy` port using `xtensor`
 - [Ribasim](https://github.com/Deltares/Ribasim): Water resources model
+- [LFortran](https://github.com/lfortran/lfortran): A modern cross-platform Fortran compiler
