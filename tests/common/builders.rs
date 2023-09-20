@@ -24,7 +24,7 @@
 //! ```
 
 use crate::common::IntoMatchSpec;
-use pixi::cli::{add, init, task};
+use pixi::cli::{add, init, project, task};
 use pixi::project::SpecType;
 use rattler_conda_types::Platform;
 use std::future::{Future, IntoFuture};
@@ -169,5 +169,35 @@ impl TaskAliasBuilder {
             operation: task::Operation::Alias(self.args),
             manifest_path: self.manifest_path,
         })
+    }
+}
+
+pub struct ProjectChannelAddBuilder {
+    pub manifest_path: Option<PathBuf>,
+    pub args: project::channel::add::Args,
+}
+
+impl ProjectChannelAddBuilder {
+    /// Adds the specified channel
+    pub fn with_channel(mut self, name: impl Into<String>) -> Self {
+        self.args.channel.push(name.into());
+        self
+    }
+
+    /// Alias to add a local channel.
+    pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
+        self.with_channel(Url::from_directory_path(channel).unwrap())
+    }
+}
+
+impl IntoFuture for ProjectChannelAddBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(project::channel::execute(project::channel::Args {
+            manifest_path: self.manifest_path,
+            command: project::channel::Command::Add(self.args),
+        }))
     }
 }

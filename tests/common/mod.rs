@@ -3,13 +3,15 @@
 pub mod builders;
 pub mod package_database;
 
-use crate::common::builders::{AddBuilder, InitBuilder, TaskAddBuilder, TaskAliasBuilder};
+use crate::common::builders::{
+    AddBuilder, InitBuilder, ProjectChannelAddBuilder, TaskAddBuilder, TaskAliasBuilder,
+};
 use pixi::cli::install::Args;
 use pixi::cli::run::{
     create_script, execute_script_with_output, get_task_env, order_tasks, RunOutput,
 };
 use pixi::cli::task::{AddArgs, AliasArgs};
-use pixi::cli::{add, init, run, task};
+use pixi::cli::{add, init, project, run, task};
 use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
 use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
@@ -157,6 +159,17 @@ impl PixiControl {
                 build: false,
                 no_install: true,
                 platform: Default::default(),
+            },
+        }
+    }
+
+    /// Add a new channel to the project.
+    pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
+        ProjectChannelAddBuilder {
+            manifest_path: Some(self.manifest_path()),
+            args: project::channel::add::Args {
+                channel: vec![],
+                no_install: true,
             },
         }
     }

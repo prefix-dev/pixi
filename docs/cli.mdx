@@ -243,4 +243,30 @@ pixi global install "python [version='3.11.0', build=he550d4f_1_cpython]"
 pixi global install python=3.11.0=h10a6764_1_cpython
 ```
 
-After using global install you can use the package you installed anywhere on your system.
+After using global install, you can use the package you installed anywhere on your system.
+
+## `project`
+
+This subcommand allows you to modify the project configuration through the command line interface.
+
+#### Options
+
+- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--no-install`: do not update the environment, only add changed packages to the lock-file.
+
+### `project channel add`
+
+Add channels to the channel list in the project configuration.
+When you add channels, the channels are tested for existence, added to the lockfile and the environment is reinstalled.
+
+#### Options
+
+- `--no-install`: do not update the environment, only add changed packages to the lock-file.
+
+```
+pixi project channel add robostack
+pixi project channel add bioconda conda-forge robostack
+pixi project channel add file:///home/user/local_channel
+pixi project channel add https://repo.prefix.dev/conda-forge
+pixi project channel add --no-install robostack
+```
