@@ -34,14 +34,14 @@ itertools = "0.11.0"
 miette = { version = "5.10.0", features = ["fancy", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
 minijinja = { version = "1.0.7", features = ["builtins"] }
 once_cell = "1.18.0"
-rattler = { version = "0.8.0", default-features = false }
-rattler_conda_types = { version = "0.8.0", default-features = false }
-rattler_digest = { version = "0.8.0", default-features = false }
-rattler_networking = { version = "0.8.0", default-features = false }
-rattler_repodata_gateway = { version = "0.8.0", default-features = false, features = ["sparse"] }
-rattler_shell = { version = "0.8.0", default-features = false, features = ["sysinfo"] }
-rattler_solve = { version = "0.8.0", default-features = false, features = ["libsolv_rs"] }
-rattler_virtual_packages = { version = "0.8.0", default-features = false }
+rattler = { version = "0.9.0", default-features = false }
+rattler_conda_types = { version = "0.9.0", default-features = false }
+rattler_digest = { version = "0.9.0", default-features = false }
+rattler_networking = { version = "0.9.0", default-features = false }
+rattler_repodata_gateway = { version = "0.9.0", default-features = false, features = ["sparse"] }
+rattler_shell = { version = "0.9.0", default-features = false, features = ["sysinfo"] }
+rattler_solve = { version = "0.9.0", default-features = false, features = ["libsolv_rs"] }
+rattler_virtual_packages = { version = "0.9.0", default-features = false }
 reqwest = { version = "0.11.20", default-features = false }
 serde = "1.0.188"
 serde_json = "1.0.105"
@@ -58,21 +58,17 @@ tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 url = "2.4.1"
 
 [dev-dependencies]
-rattler_digest = "0.8.0"
+rattler_digest = "0.9.0"
 serde_json = "1.0.105"
 tokio = { version = "1.32.0", features = ["rt"] }
 toml = "0.7.6"
 
-[patch.crates-io]
-# Remove this once we created a new release of rattler (0.9.0).
-rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-
-# Remove this once https://github.com/idubrov/json-patch/pull/28 is merged and integrated into rattler.
-json-patch = { git = "https://github.com/baszalmstra/json-patch", branch = "main" }
+#[patch.crates-io]
+#rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }

@@ -133,7 +133,10 @@ pub fn non_relevant_virtual_packages_for_platform(
                 || matches!(requirement, VirtualPackage::Osx(_))
                 || matches!(requirement, VirtualPackage::Linux(_))
         }
-        Platform::NoArch | Platform::Emscripten32 | Platform::Unknown => false,
+        Platform::NoArch
+        | Platform::Unknown
+        | Platform::EmscriptenWasm32
+        | Platform::WasiWasm32 => false,
     }
 }
 
