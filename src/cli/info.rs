@@ -4,7 +4,7 @@ use chrono::{DateTime, Local};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
-use rattler_networking::default_authentication_storage;
+use rattler_networking::AuthenticationStorage;
 use rattler_virtual_packages::VirtualPackage;
 use serde::Serialize;
 use serde_with::serde_as;
@@ -220,7 +220,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         version: env!("CARGO_PKG_VERSION").to_string(),
         cache_dir: Some(cache_dir),
         cache_size,
-        auth_dir: default_authentication_storage().fallback_storage.path,
+        auth_dir: AuthenticationStorage::default().fallback_storage.path,
         project_info,
     };
 
