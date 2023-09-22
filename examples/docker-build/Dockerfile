@@ -6,7 +6,7 @@ ENV INSTALL_DIR=/usr/local/bin
 ENV REPO=prefix-dev/pixi
 ENV PLATFORM=unknown-linux-musl
 ENV ARCH=x86_64
-ENV PROJECT_NAME=docker-build
+ENV PROJECT_NAME=pixi-in-docker
 
 # Install curl and tar
 RUN apt-get update && \
@@ -25,7 +25,7 @@ RUN mkdir -p /root/$PROJECT_NAME
 WORKDIR /root/$PROJECT_NAME
 
 # Copy the project file and lockfile to only reinstall environment if those are changed.
-COPY pixi.lock pixi.toml ./
+COPY ../../pixi.lock ../../pixi.toml ./
 
 # Install the environment
 # The mount is a docker specific cache location so the firstime it will be slow but the second time the cache will be reused.
@@ -33,4 +33,4 @@ COPY pixi.lock pixi.toml ./
 RUN --mount=type=cache,target=/root/.cache/rattler pixi install
 
 # Copy the rest of the project
-COPY . ./
+COPY ../../. ./
