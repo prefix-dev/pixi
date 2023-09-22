@@ -51,6 +51,7 @@ impl PackageDatabase {
             let repodata = RepoData {
                 info: Some(ChannelInfo {
                     subdir: platform.to_string(),
+                    base_url: None,
                 }),
                 packages: self
                     .packages_by_platform(platform)
