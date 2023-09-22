@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.4.0] - 2023-09-22
+
+### Highlights
+
+This release adds the start of a new cli command `pixi project` which will allow users to interact with the project configuration from the command line.
+
+### Details
+
+#### Fixed
+* Align with latest rattler version `0.9.0` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/350
+
+#### Added
+* Add codespell (config, workflow) to catch typos + catch and fix some of those by @yarikoptic in https://github.com/prefix-dev/pixi/pull/329
+* remove atty and use stdlib by @wolfv in https://github.com/prefix-dev/pixi/pull/337
+* `xtsci-dist` to Community.md by @HaoZeke in https://github.com/prefix-dev/pixi/pull/339
+* `ribasim` to Community.md by @Hofer-Julian in https://github.com/prefix-dev/pixi/pull/340
+* `LFortran` to Community.md by @wolfv in https://github.com/prefix-dev/pixi/pull/341
+* Give tip to resolve virtual package issue by @ruben-arts in https://github.com/prefix-dev/pixi/pull/348
+* `pixi project channel add` subcommand by @baszalmstra and @ruben-arts in https://github.com/prefix-dev/pixi/pull/347
+
+## New Contributors
+* @yarikoptic made their first contribution in https://github.com/prefix-dev/pixi/pull/329
+* @HaoZeke made their first contribution in https://github.com/prefix-dev/pixi/pull/339
+
+**Full Changelog**: https://github.com/prefix-dev/pixi/compare/v0.3.0...v0.4.0
+
 ## [0.3.0] - 2023-09-11
 
 ### Highlights
