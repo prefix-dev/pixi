@@ -10,6 +10,7 @@ use std::path::PathBuf;
 #[cfg(target_family = "unix")]
 use crate::unix::PtySession;
 
+use crate::project::environment::get_metadata_env;
 #[cfg(target_family = "windows")]
 use rattler_shell::shell::CmdExe;
 
@@ -56,7 +57,7 @@ fn start_powershell(
 }
 
 #[cfg(target_family = "windows")]
-fn start_cmdexe(cmdexe: CmdExe, task_env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
+fn start_cmdexe(cmdexe: CmdExe, env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
         .suffix(".cmd")
@@ -65,7 +66,7 @@ fn start_cmdexe(cmdexe: CmdExe, task_env: &HashMap<String, String>) -> miette::R
 
     // TODO: Should we just execute the activation scripts directly for cmd.exe?
     let mut shell_script = ShellScript::new(cmdexe, Platform::current());
-    for (key, value) in task_env {
+    for (key, value) in env {
         shell_script.set_env_var(key, value);
     }
     temp_file
@@ -80,11 +81,16 @@ fn start_cmdexe(cmdexe: CmdExe, task_env: &HashMap<String, String>) -> miette::R
     Ok(process.wait().into_diagnostic()?.code())
 }
 
+/// Starts a UNIX shell.
+/// # Arguments
+/// - `shell`: The type of shell to start. Must implement the `Shell` and `Copy` traits.
+/// - `args`: A vector of arguments to pass to the shell.
+/// - `env`: A HashMap containing environment variables to set in the shell.
 #[cfg(target_family = "unix")]
 async fn start_unix_shell<T: Shell + Copy>(
     shell: T,
     args: Vec<&str>,
-    task_env: &HashMap<String, String>,
+    env: &HashMap<String, String>,
 ) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
@@ -93,11 +99,10 @@ async fn start_unix_shell<T: Shell + Copy>(
         .into_diagnostic()?;
 
     let mut shell_script = ShellScript::new(shell, Platform::current());
-    for (key, value) in task_env {
+    for (key, value) in env {
         shell_script.set_env_var(key, value);
     }
-    // TODO - make a good hook to get the users PS1 first
-    shell_script.set_env_var("PS1", "pixi> ");
+
     temp_file
         .write_all(shell_script.contents.as_bytes())
         .into_diagnostic()?;
@@ -116,7 +121,14 @@ async fn start_unix_shell<T: Shell + Copy>(
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
-    let task_env = get_task_env(&project).await?;
+    // Create the environment
+    let mut env = get_task_env(&project).await?;
+
+    // Add pixi specific metadata
+    env.extend(get_metadata_env(&project));
+
+    // Add the conda default env variable so that the existing tools know about the env.
+    env.insert("CONDA_DEFAULT_ENV".to_string(), project.name().to_string());
 
     // Start the shell as the last part of the activation script based on the default shell.
     let interactive_shell: ShellEnum = ShellEnum::from_parent_process()
@@ -134,11 +146,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "unix")]
     let res = match interactive_shell {
-        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, &task_env),
-        ShellEnum::Bash(bash) => start_unix_shell(bash, vec!["-l", "-i"], &task_env).await,
-        ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], &task_env).await,
-        ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], &task_env).await,
-        ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], &task_env).await,
+        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, &env),
+        ShellEnum::Bash(bash) => start_unix_shell(bash, vec!["-l", "-i"], &env).await,
+        ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], &env).await,
+        ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], &env).await,
+        ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], &env).await,
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell)
         }
