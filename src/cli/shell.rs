@@ -26,7 +26,7 @@ pub struct Args {
 
 fn start_powershell(
     pwsh: PowerShell,
-    task_env: &HashMap<String, String>,
+    env: &HashMap<String, String>,
 ) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
@@ -35,7 +35,7 @@ fn start_powershell(
         .into_diagnostic()?;
 
     let mut shell_script = ShellScript::new(pwsh.clone(), Platform::current());
-    for (key, value) in task_env {
+    for (key, value) in env {
         shell_script.set_env_var(key, value);
     }
 
@@ -140,8 +140,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "windows")]
     let res = match interactive_shell {
-        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, &task_env),
-        ShellEnum::CmdExe(cmdexe) => start_cmdexe(cmdexe, &task_env),
+        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, &env),
+        ShellEnum::CmdExe(cmdexe) => start_cmdexe(cmdexe, &env),
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell);
         }
