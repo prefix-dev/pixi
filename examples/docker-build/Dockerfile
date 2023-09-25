@@ -1,15 +1,15 @@
 FROM ubuntu:latest
 
+# Install curl and tar for installing pixi binary
+RUN apt-get update && \
+    apt-get install -y curl tar
+
 # Environment variables
 ENV PIXI_VERSION=latest
 ENV INSTALL_DIR=/usr/local/bin
 ENV REPO=prefix-dev/pixi
 ENV PLATFORM=unknown-linux-musl
 ENV PROJECT_NAME=pixi-in-docker
-
-# Install curl and tar
-RUN apt-get update && \
-    apt-get install -y curl tar
 
 # Download and install pixi
 RUN if [ "$PIXI_VERSION" = "latest" ]; then \
