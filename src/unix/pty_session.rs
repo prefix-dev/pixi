@@ -139,14 +139,16 @@ impl PtySession {
             } else {
                 // We have new data coming from the process
                 if select_set.contains(&process_stdout_fd) {
-                    let bytes_read = self.process_stdout.read(&mut buf)?;
-                    std::io::stdout().write_all(&buf[..bytes_read])?;
-                    std::io::stdout().flush()?;
+                    let bytes_read = self.process_stdout.read(&mut buf).unwrap_or(0);
+                    if bytes_read > 0 {
+                        io::stdout().write_all(&buf[..bytes_read])?;
+                        io::stdout().flush()?;
+                    }
                 }
 
                 // or from stdin
                 if select_set.contains(&stdin_fd) {
-                    let bytes_read = std::io::stdin().read(&mut buf)?;
+                    let bytes_read = io::stdin().read(&mut buf)?;
                     self.process_stdin.write_all(&buf[..bytes_read])?;
                     self.process_stdin.flush()?;
                 }

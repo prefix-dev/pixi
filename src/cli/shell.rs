@@ -94,6 +94,7 @@ async fn start_unix_shell<T: Shell + Copy>(
 ) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
+        .prefix("pixi-env-")
         .suffix(&format!(".{}", shell.extension()))
         .tempfile()
         .into_diagnostic()?;
