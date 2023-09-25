@@ -49,7 +49,7 @@ fn start_powershell(
     command.arg("-NoLogo");
     command.arg("-NoExit");
     command.arg("-File");
-    command.arg(temp_path.to_path_buf().clone());
+    command.arg(&temp_path);
 
     let mut process = command.spawn().into_diagnostic()?;
     Ok(process.wait().into_diagnostic()?.code())

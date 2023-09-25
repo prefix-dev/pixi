@@ -5,7 +5,7 @@ use clap_complete;
 use clap_verbosity_flag::Verbosity;
 use miette::IntoDiagnostic;
 use rattler_shell::shell::{Shell, ShellEnum};
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::str::FromStr;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
@@ -15,6 +15,7 @@ pub mod global;
 pub mod info;
 pub mod init;
 pub mod install;
+pub mod project;
 pub mod run;
 pub mod search;
 pub mod shell;
@@ -65,6 +66,7 @@ pub enum Command {
     Info(info::Args),
     Upload(upload::Args),
     Search(search::Args),
+    Project(project::Args),
 }
 
 fn completion(args: CompletionCommand) -> miette::Result<()> {
@@ -168,6 +170,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
+        Command::Project(cmd) => project::execute(cmd).await,
     }
 }
 
@@ -185,8 +188,7 @@ pub enum ColorOutput {
 
 /// Returns true if the output is considered to be a terminal.
 fn is_terminal() -> bool {
-    // Crate `atty` provides a platform-independent way of checking whether the output is a tty.
-    atty::is(atty::Stream::Stderr)
+    std::io::stderr().is_terminal()
 }
 
 /// Returns true if the log outputs should be colored or not.

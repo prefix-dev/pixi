@@ -133,7 +133,10 @@ pub fn non_relevant_virtual_packages_for_platform(
                 || matches!(requirement, VirtualPackage::Osx(_))
                 || matches!(requirement, VirtualPackage::Linux(_))
         }
-        Platform::NoArch | Platform::Emscripten32 | Platform::Unknown => false,
+        Platform::NoArch
+        | Platform::Unknown
+        | Platform::EmscriptenWasm32
+        | Platform::WasiWasm32 => false,
     }
 }
 
@@ -179,14 +182,18 @@ pub fn verify_current_platform_has_required_virtual_packages(
     for req_pkg in required_pkgs {
         if let Some(local_vpkg) = system_virtual_packages.get(&req_pkg.name) {
             if req_pkg.build_string != local_vpkg.build_string {
-                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be on build '{}' but the system has build '{}'", req_pkg.name, req_pkg.build_string, local_vpkg.build_string);
+                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be on build '{}' but the system has build '{}'", req_pkg.name.as_source(), req_pkg.build_string, local_vpkg.build_string);
             }
 
             if req_pkg.version > local_vpkg.version {
-                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be at least version '{}' but the system has version '{}'", req_pkg.name, req_pkg.version, local_vpkg.version);
+                // This case can simply happen because the default system requirements in get_minimal_virtual_packages() is higher than required.
+                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be at least version '{}' but the system has version '{}'\n\n\
+                Try setting the following in your pixi.toml:\n\
+                [system-requirements]\n\
+                {} = \"{}\"", req_pkg.name.as_source(), req_pkg.version, local_vpkg.version, req_pkg.name.as_normalized().strip_prefix("__").unwrap_or(local_vpkg.name.as_normalized()), local_vpkg.version);
             }
         } else {
-            miette::bail!("The platform you are running on should at least have the virtual package {} on version {}, build_string: {}", req_pkg.name, req_pkg.version, req_pkg.build_string)
+            miette::bail!("The platform you are running on should at least have the virtual package {} on version {}, build_string: {}", req_pkg.name.as_source(), req_pkg.version, req_pkg.build_string)
         }
     }
 

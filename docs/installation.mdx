@@ -44,7 +44,7 @@ The installer will download pixi and add it to the path.
 
 ### Install from source
 
-pixi is 100% written in Rust and therefor it can be installed, build and
+pixi is 100% written in Rust and therefore it can be installed, build and
 tested with cargo.
 To start using pixi from a source build run:
 
@@ -92,9 +92,12 @@ echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
 echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
 echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
 echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+```
 
-# On Windows:
-Add-Content -Path $PROFILE -Value 'Invoke-Expression (&pixi completion --shell powershell)'
+For PowerShell on Windows:
+
+```pwsh
+Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
 ```
 
 And then restart the shell or source the shell config file.

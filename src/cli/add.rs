@@ -11,8 +11,10 @@ use console::style;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
+use rattler_conda_types::version_spec::StrictRangeOperator;
+use rattler_conda_types::PackageName;
 use rattler_conda_types::{
-    version_spec::VersionOperator, MatchSpec, NamelessMatchSpec, Platform, Version, VersionSpec,
+    MatchSpec, NamelessMatchSpec, Platform, StrictVersion, Version, VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{libsolv_rs, SolverImpl};
@@ -121,7 +123,7 @@ pub async fn add_specs_to_project(
             Some(name) => Ok((name.clone(), spec.into())),
             None => Err(miette::miette!("missing package name for spec '{spec}'")),
         })
-        .collect::<miette::Result<HashMap<String, NamelessMatchSpec>>>()?;
+        .collect::<miette::Result<HashMap<PackageName, NamelessMatchSpec>>>()?;
 
     // Get the current specs
 
@@ -154,7 +156,7 @@ pub async fn add_specs_to_project(
             Err(err) => {
                 return Err(err).wrap_err_with(||miette::miette!(
                         "could not determine any available versions for {} on {platform}. Either the package could not be found or version constraints on other dependencies result in a conflict.",
-                        new_specs.keys().join(", ")
+                        new_specs.keys().map(|s| s.as_source()).join(", ")
                     ));
             }
         };
@@ -183,9 +185,9 @@ pub async fn add_specs_to_project(
             .expect("a version must have been previously selected");
         let updated_spec = if spec.version.is_none() {
             let mut updated_spec = spec.clone();
-            updated_spec.version = Some(VersionSpec::Operator(
-                VersionOperator::StartsWith,
-                best_version,
+            updated_spec.version = Some(VersionSpec::StrictRange(
+                StrictRangeOperator::StartsWith,
+                StrictVersion(best_version),
             ));
             updated_spec
         } else {
@@ -256,11 +258,11 @@ pub async fn add_specs_to_project(
 
 /// Given several specs determines the highest installable version for them.
 pub fn determine_best_version(
-    new_specs: &HashMap<String, NamelessMatchSpec>,
-    current_specs: &IndexMap<String, NamelessMatchSpec>,
+    new_specs: &HashMap<PackageName, NamelessMatchSpec>,
+    current_specs: &IndexMap<PackageName, NamelessMatchSpec>,
     sparse_repo_data: &[SparseRepoData],
     platform: Platform,
-) -> miette::Result<HashMap<String, Version>> {
+) -> miette::Result<HashMap<PackageName, Version>> {
     let combined_specs = current_specs
         .iter()
         .chain(new_specs.iter())

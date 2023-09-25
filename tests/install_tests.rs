@@ -90,7 +90,7 @@ async fn test_incremental_lock_file() {
         .unwrap();
 
     // Force using version 2 of `foo`. This should force `foo` to version `2` but `bar` should still
-    // remaing on `1` because it was previously locked
+    // remaining on `1` because it was previously locked
     pixi.add("foo >=2").await.unwrap();
 
     let lock = pixi.lock_file().await.unwrap();

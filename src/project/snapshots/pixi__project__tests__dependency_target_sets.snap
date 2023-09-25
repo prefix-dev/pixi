@@ -1,12 +1,14 @@
 ---
 source: src/project/mod.rs
-assertion_line: 625
 expression: "project.all_dependencies(Platform::Linux64).unwrap()"
 ---
 {
-    "foo": NamelessMatchSpec {
+    PackageName {
+        normalized: None,
+        source: "foo",
+    }: NamelessMatchSpec {
         version: Some(
-            Operator(
+            Exact(
                 Equals,
                 Version {
                     version: [[0], [1], [0]],
@@ -23,9 +25,12 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         md5: None,
         sha256: None,
     },
-    "wolflib": NamelessMatchSpec {
+    PackageName {
+        normalized: None,
+        source: "wolflib",
+    }: NamelessMatchSpec {
         version: Some(
-            Operator(
+            Exact(
                 Equals,
                 Version {
                     version: [[0], [1], [0]],
@@ -42,9 +47,12 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         md5: None,
         sha256: None,
     },
-    "libc": NamelessMatchSpec {
+    PackageName {
+        normalized: None,
+        source: "libc",
+    }: NamelessMatchSpec {
         version: Some(
-            Operator(
+            Exact(
                 Equals,
                 Version {
                     version: [[0], [2], [12]],
@@ -61,9 +69,12 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         md5: None,
         sha256: None,
     },
-    "banksy": NamelessMatchSpec {
+    PackageName {
+        normalized: None,
+        source: "banksy",
+    }: NamelessMatchSpec {
         version: Some(
-            Operator(
+            Exact(
                 Equals,
                 Version {
                     version: [[0], [1], [0]],
@@ -80,9 +91,12 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         md5: None,
         sha256: None,
     },
-    "bar": NamelessMatchSpec {
+    PackageName {
+        normalized: None,
+        source: "bar",
+    }: NamelessMatchSpec {
         version: Some(
-            Operator(
+            Exact(
                 Equals,
                 Version {
                     version: [[0], [1], [0]],
@@ -99,9 +113,12 @@ expression: "project.all_dependencies(Platform::Linux64).unwrap()"
         md5: None,
         sha256: None,
     },
-    "baz": NamelessMatchSpec {
+    PackageName {
+        normalized: None,
+        source: "baz",
+    }: NamelessMatchSpec {
         version: Some(
-            Operator(
+            Exact(
                 Equals,
                 Version {
                     version: [[0], [1], [0]],

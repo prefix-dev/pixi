@@ -3,16 +3,18 @@
 pub mod builders;
 pub mod package_database;
 
-use crate::common::builders::{AddBuilder, InitBuilder, TaskAddBuilder, TaskAliasBuilder};
+use crate::common::builders::{
+    AddBuilder, InitBuilder, ProjectChannelAddBuilder, TaskAddBuilder, TaskAliasBuilder,
+};
 use pixi::cli::install::Args;
 use pixi::cli::run::{
     create_script, execute_script_with_output, get_task_env, order_tasks, RunOutput,
 };
 use pixi::cli::task::{AddArgs, AliasArgs};
-use pixi::cli::{add, init, run, task};
+use pixi::cli::{add, init, project, run, task};
 use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
-use rattler_conda_types::{MatchSpec, Platform, Version};
+use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 
 use miette::IntoDiagnostic;
 use std::path::{Path, PathBuf};
@@ -49,7 +51,7 @@ pub fn string_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<
 
 pub trait LockFileExt {
     /// Check if this package is contained in the lockfile
-    fn contains_package(&self, name: impl AsRef<str>) -> bool;
+    fn contains_package(&self, name: &PackageName) -> bool;
     /// Check if this matchspec is contained in the lockfile
     fn contains_matchspec(&self, matchspec: impl IntoMatchSpec) -> bool;
     /// Check if this matchspec is contained in the lockfile for this platform
@@ -61,10 +63,10 @@ pub trait LockFileExt {
 }
 
 impl LockFileExt for CondaLock {
-    fn contains_package(&self, name: impl AsRef<str>) -> bool {
+    fn contains_package(&self, name: &PackageName) -> bool {
         self.package
             .iter()
-            .any(|locked_dep| locked_dep.name == name.as_ref())
+            .any(|locked_dep| locked_dep.name == *name)
     }
 
     fn contains_matchspec(&self, matchspec: impl IntoMatchSpec) -> bool {
@@ -157,6 +159,17 @@ impl PixiControl {
                 build: false,
                 no_install: true,
                 platform: Default::default(),
+            },
+        }
+    }
+
+    /// Add a new channel to the project.
+    pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
+        ProjectChannelAddBuilder {
+            manifest_path: Some(self.manifest_path()),
+            args: project::channel::add::Args {
+                channel: vec![],
+                no_install: true,
             },
         }
     }

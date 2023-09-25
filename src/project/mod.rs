@@ -2,16 +2,17 @@ pub mod environment;
 pub mod manifest;
 mod serde;
 
-use crate::consts;
+use crate::consts::{self, PROJECT_MANIFEST};
 use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
 use crate::task::{CmdArgs, Task};
 use indexmap::IndexMap;
 use miette::{IntoDiagnostic, LabeledSpan, NamedSource, WrapErr};
 use rattler_conda_types::{
-    Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, Platform, Version,
+    Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
 };
 use rattler_virtual_packages::VirtualPackage;
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsStr;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -105,6 +106,10 @@ impl Project {
     pub fn load(filename: &Path) -> miette::Result<Self> {
         // Determine the parent directory of the manifest file
         let full_path = dunce::canonicalize(filename).into_diagnostic()?;
+        if full_path.file_name().and_then(OsStr::to_str) != Some(PROJECT_MANIFEST) {
+            miette::bail!("the manifest-path must point to a {PROJECT_MANIFEST} file");
+        }
+
         let root = full_path
             .parent()
             .ok_or_else(|| miette::miette!("can not find parent of {}", filename.display()))?;
@@ -332,7 +337,7 @@ impl Project {
     pub fn dependencies(
         &self,
         platform: Platform,
-    ) -> miette::Result<IndexMap<String, NamelessMatchSpec>> {
+    ) -> miette::Result<IndexMap<PackageName, NamelessMatchSpec>> {
         // Get the base dependencies (defined in the `[dependencies]` section)
         let base_dependencies = self.manifest.dependencies.iter();
 
@@ -344,17 +349,18 @@ impl Project {
         // Combine the specs.
         //
         // Note that if a dependency was specified twice the platform specific one "wins".
-        Ok(base_dependencies
+        base_dependencies
             .chain(platform_specific)
-            .map(|(name, spec)| (name.clone(), spec.clone()))
-            .collect())
+            .map(|(name, spec)| PackageName::try_from(name).map(|name| (name, spec.clone())))
+            .collect::<Result<_, _>>()
+            .into_diagnostic()
     }
 
     /// Returns the build dependencies of the project.
     pub fn build_dependencies(
         &self,
         platform: Platform,
-    ) -> miette::Result<IndexMap<String, NamelessMatchSpec>> {
+    ) -> miette::Result<IndexMap<PackageName, NamelessMatchSpec>> {
         // Get the base dependencies (defined in the `[build-dependencies]` section)
         let base_dependencies = self.manifest.build_dependencies.iter();
 
@@ -366,18 +372,19 @@ impl Project {
         // Combine the specs.
         //
         // Note that if a dependency was specified twice the platform specific one "wins".
-        Ok(base_dependencies
+        base_dependencies
             .chain(platform_specific)
             .flatten()
-            .map(|(name, spec)| (name.clone(), spec.clone()))
-            .collect())
+            .map(|(name, spec)| PackageName::try_from(name).map(|name| (name, spec.clone())))
+            .collect::<Result<_, _>>()
+            .into_diagnostic()
     }
 
     /// Returns the host dependencies of the project.
     pub fn host_dependencies(
         &self,
         platform: Platform,
-    ) -> miette::Result<IndexMap<String, NamelessMatchSpec>> {
+    ) -> miette::Result<IndexMap<PackageName, NamelessMatchSpec>> {
         // Get the base dependencies (defined in the `[host-dependencies]` section)
         let base_dependencies = self.manifest.host_dependencies.iter();
 
@@ -389,18 +396,19 @@ impl Project {
         // Combine the specs.
         //
         // Note that if a dependency was specified twice the platform specific one "wins".
-        Ok(base_dependencies
+        base_dependencies
             .chain(platform_specific)
             .flatten()
-            .map(|(name, spec)| (name.clone(), spec.clone()))
-            .collect())
+            .map(|(name, spec)| PackageName::try_from(name).map(|name| (name, spec.clone())))
+            .collect::<Result<_, _>>()
+            .into_diagnostic()
     }
 
     /// Returns all dependencies of the project. These are the run, host, build dependency sets combined.
     pub fn all_dependencies(
         &self,
         platform: Platform,
-    ) -> miette::Result<IndexMap<String, NamelessMatchSpec>> {
+    ) -> miette::Result<IndexMap<PackageName, NamelessMatchSpec>> {
         let mut dependencies = self.dependencies(platform)?;
         dependencies.extend(self.host_dependencies(platform)?);
         dependencies.extend(self.build_dependencies(platform)?);
@@ -436,8 +444,8 @@ impl Project {
     fn add_to_deps_table(
         deps_table: &mut Item,
         spec: &MatchSpec,
-    ) -> miette::Result<(String, NamelessMatchSpec)> {
-        // If it doesnt exist create a proper table
+    ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
+        // If it doesn't exist create a proper table
         if deps_table.is_none() {
             *deps_table = Item::Table(Table::new());
         }
@@ -450,7 +458,7 @@ impl Project {
         // Determine the name of the package to add
         let name = spec
             .name
-            .as_deref()
+            .clone()
             .ok_or_else(|| miette::miette!("* package specifier is not supported"))?;
 
         // Format the requirement
@@ -460,9 +468,9 @@ impl Project {
         let nameless = NamelessMatchSpec::from(spec.to_owned());
 
         // Store (or replace) in the document
-        deps_table.insert(name, Item::Value(nameless.to_string().into()));
+        deps_table.insert(name.as_source(), Item::Value(nameless.to_string().into()));
 
-        Ok((name.to_string(), nameless))
+        Ok((name, nameless))
     }
 
     fn add_dep_to_target_table(
@@ -470,7 +478,7 @@ impl Project {
         platform: Platform,
         dep_type: String,
         spec: &MatchSpec,
-    ) -> miette::Result<(String, NamelessMatchSpec)> {
+    ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
         let target = self.doc["target"]
             .or_insert(Item::Table(Table::new()))
             .as_table_mut()
@@ -502,7 +510,7 @@ impl Project {
         // Determine the name of the package to add
         let name = spec
             .name
-            .as_deref()
+            .clone()
             .ok_or_else(|| miette::miette!("* package specifier is not supported"))?;
 
         // Format the requirement
@@ -512,9 +520,9 @@ impl Project {
         let nameless = NamelessMatchSpec::from(spec.to_owned());
 
         // Store (or replace) in the document
-        dependencies.insert(name, Item::Value(nameless.to_string().into()));
+        dependencies.insert(name.as_source(), Item::Value(nameless.to_string().into()));
 
-        Ok((name.to_string(), nameless))
+        Ok((name, nameless))
     }
 
     pub fn add_target_dependency(
@@ -533,7 +541,7 @@ impl Project {
             .entry(TargetSelector::Platform(platform).into())
             .or_insert(TargetMetadata::default())
             .dependencies
-            .insert(name, nameless);
+            .insert(name.as_source().into(), nameless);
         Ok(())
     }
 
@@ -544,7 +552,7 @@ impl Project {
 
         self.manifest
             .create_or_get_dependencies(spec_type)
-            .insert(name, nameless);
+            .insert(name.as_source().into(), nameless);
 
         Ok(())
     }

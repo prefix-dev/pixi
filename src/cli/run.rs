@@ -12,7 +12,7 @@ use rattler_conda_types::Platform;
 use crate::prefix::Prefix;
 use crate::progress::await_in_progress;
 use crate::project::environment::get_metadata_env;
-use crate::task::{CmdArgs, Execute, Task};
+use crate::task::{quote_arguments, CmdArgs, Execute, Task};
 use crate::{environment::get_up_to_date_prefix, Project};
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehaviour},
@@ -78,10 +78,11 @@ pub fn order_tasks(
         .unwrap_or_else(|| {
             (
                 None,
-                Task::Execute(Execute {
-                    cmd: CmdArgs::Multiple(tasks),
+                Execute {
+                    cmd: CmdArgs::from(tasks),
                     depends_on: vec![],
-                }),
+                }
+                .into(),
                 Vec::new(),
             )
         });
@@ -100,11 +101,7 @@ pub fn order_tasks(
 
     while let Some((task, additional_args)) = s1.pop_back() {
         // Get the dependencies of the command
-        let depends_on = match &task {
-            Task::Execute(process) => process.depends_on.as_slice(),
-            Task::Alias(alias) => &alias.depends_on,
-            _ => &[],
-        };
+        let depends_on = task.depends_on();
 
         // Locate the dependencies in the project and add them to the stack
         for dependency in depends_on.iter() {
@@ -132,30 +129,19 @@ pub fn order_tasks(
 
 pub async fn create_script(task: Task, args: Vec<String>) -> miette::Result<SequentialList> {
     // Construct the script from the task
-    let task = match task {
-        Task::Execute(Execute {
-            cmd: CmdArgs::Single(cmd),
-            ..
-        })
-        | Task::Plain(cmd) => cmd,
-        Task::Execute(Execute {
-            cmd: CmdArgs::Multiple(args),
-            ..
-        }) => quote_arguments(args),
-        _ => {
-            return Err(miette::miette!("No command given"));
-        }
-    };
+    let task = task
+        .as_single_command()
+        .ok_or_else(|| miette::miette!("the task does not provide a runnable command"))?;
 
     // Append the command line arguments
-    let cli_args = quote_arguments(args);
+    let cli_args = quote_arguments(args.iter().map(|arg| arg.as_str()));
     let full_script = format!("{task} {cli_args}");
 
     // Parse the shell command
     deno_task_shell::parser::parse(full_script.trim()).map_err(|e| miette!("{e}"))
 }
 
-/// Executes the given command withing the specified project and with the given environment.
+/// Executes the given command within the specified project and with the given environment.
 pub async fn execute_script(
     script: SequentialList,
     project: &Project,
@@ -191,14 +177,6 @@ pub async fn execute_script_with_output(
         stdout: stdout_handle.await.unwrap(),
         stderr: stderr_handle.await.unwrap(),
     }
-}
-
-fn quote_arguments(args: impl IntoIterator<Item = impl AsRef<str>>) -> String {
-    args.into_iter()
-        // surround all the additional arguments in double quotes and santize any command
-        // substitution
-        .map(|a| format!("\"{}\"", a.as_ref().replace('"', "\\\"")))
-        .join(" ")
 }
 
 /// CLI entry point for `pixi run`
