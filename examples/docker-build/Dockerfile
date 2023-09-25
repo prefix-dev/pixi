@@ -5,7 +5,6 @@ ENV PIXI_VERSION=latest
 ENV INSTALL_DIR=/usr/local/bin
 ENV REPO=prefix-dev/pixi
 ENV PLATFORM=unknown-linux-musl
-ENV ARCH=x86_64
 ENV PROJECT_NAME=pixi-in-docker
 
 # Install curl and tar
@@ -14,9 +13,9 @@ RUN apt-get update && \
 
 # Download and install pixi
 RUN if [ "$PIXI_VERSION" = "latest" ]; then \
-      DOWNLOAD_URL="https://github.com/$REPO/releases/latest/download/pixi-$ARCH-$PLATFORM.tar.gz"; \
+      DOWNLOAD_URL="https://github.com/$REPO/releases/latest/download/pixi-$(uname -m)-$PLATFORM.tar.gz"; \
     else \
-      DOWNLOAD_URL="https://github.com/$REPO/releases/download/$PIXI_VERSION/pixi-$ARCH-$PLATFORM.tar.gz"; \
+      DOWNLOAD_URL="https://github.com/$REPO/releases/download/$PIXI_VERSION/pixi-$(uname -m)-$PLATFORM.tar.gz"; \
     fi && \
     curl -SL "$DOWNLOAD_URL" | tar -xz -C "$INSTALL_DIR"
 
