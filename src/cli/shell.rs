@@ -94,8 +94,9 @@ async fn start_unix_shell<T: Shell + Copy>(
 ) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
-        .prefix("pixi-env-")
+        .prefix("pixi_env_")
         .suffix(&format!(".{}", shell.extension()))
+        .rand_bytes(3)
         .tempfile()
         .into_diagnostic()?;
 
@@ -113,7 +114,8 @@ async fn start_unix_shell<T: Shell + Copy>(
 
     let mut process = PtySession::new(command).into_diagnostic()?;
     process
-        .send_line(&format!("source {}", temp_file.path().display()))
+        // Space added before `source` to automatically ignore it in history.
+        .send_line(&format!(" source {}", temp_file.path().display()))
         .into_diagnostic()?;
 
     process.interact().into_diagnostic()
