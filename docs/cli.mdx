@@ -85,9 +85,11 @@ pixi run --manifest-path ~/myproject/pixi.toml python
 pixi run build
 ```
 
-> **Note:** In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the run command.
-> Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
-> This is done so that the run commands can be run across all platforms.
+:::info
+In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the run command.
+Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
+This is done so that the run commands can be run across all platforms.
+:::
 
 ## `task`
 
@@ -142,9 +144,11 @@ cow = "cowpy \"Hello User\""
 moo = { depends_on = ["cow"] }
 ```
 
-> **Note:** In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the tasks.
-> Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
-> This is done so that the tasks defined can be run across all platforms.
+:::info
+In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the tasks.
+Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
+This is done so that the tasks defined can be run across all platforms.
+:::
 
 ## `shell`
 
@@ -194,7 +198,9 @@ This command is used to authenticate the user's access to remote hosts such as `
 
 Store authentication information for given host.
 
-> **Note:** The host is real hostname not a channel.
+:::tip
+The host is real hostname not a channel.
+:::
 
 #### Options
 
@@ -221,7 +227,12 @@ pixi auth logout repo.prefix.dev
 pixi auth logout anaconda.org
 ```
 
-## `global install`
+## `global`
+
+Global is the main entry point for the part of pixi that executes on the
+global(system) level.
+
+### `global install`
 
 This command installs a package into its own environment and adds the binary to `PATH`, allowing you to access it anywhere on your system without activating the environment.
 
@@ -244,6 +255,39 @@ pixi global install python=3.11.0=h10a6764_1_cpython
 ```
 
 After using global install, you can use the package you installed anywhere on your system.
+
+### `global info`
+
+This command shows the current installed global environments including what binaries come with it.
+A global installed package/environment can possibly contain multiple binaries.
+Here is an example of a few installed packages:
+```
+> pixi global info
+Globally installed binary packages:
+  -  [package] starship
+     -  [bin] starship
+  -  [package] pre-commit
+     -  [bin] pre-commit
+  -  [package] grayskull
+     -  [bin] grayskull
+     -  [bin] greyskull
+     -  [bin] conda-grayskull
+     -  [bin] conda-greyskull
+  -  [package] zsh
+     -  [bin] zsh
+     -  [bin] zsh-5
+```
+
+### `global remove`
+
+Removes a package previously installed into a globally accessible location via
+`pixi global install`
+
+Use `pixi global info` to find out what the package name is that belongs to the tool you want to remove.
+
+```
+pixi global remove pre-commit
+```
 
 ## `project`
 
