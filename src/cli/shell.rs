@@ -10,11 +10,12 @@ use std::path::PathBuf;
 #[cfg(target_family = "unix")]
 use crate::unix::PtySession;
 
+use crate::environment::get_up_to_date_prefix;
 use crate::project::environment::get_metadata_env;
 #[cfg(target_family = "windows")]
 use rattler_shell::shell::CmdExe;
 
-use super::run::get_task_env;
+use super::run::run_activation_async;
 
 /// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]
@@ -121,17 +122,37 @@ async fn start_unix_shell<T: Shell + Copy>(
     process.interact().into_diagnostic()
 }
 
+/// Determine the environment variables that need to be set in an interactive shell to make it
+/// function as if the environment has been activated. This method runs the activation scripts from
+/// the environment and stores the environment variables it added, finally it adds environment
+/// variables from the project.
+pub async fn get_shell_env(project: &Project) -> miette::Result<HashMap<String, String>> {
+    // Get the prefix which we can then activate.
+    let prefix = get_up_to_date_prefix(project).await?;
+
+    // Get environment variables from the activation
+    let activation_env = run_activation_async(project, prefix).await?;
+
+    // Get environment variables from the manifest
+    let manifest_env = get_metadata_env(project);
+
+    // Add the conda default env variable so that the existing tools know about the env.
+    let mut shell_env = HashMap::new();
+    shell_env.insert("CONDA_DEFAULT_ENV".to_string(), project.name().to_string());
+
+    // Construct command environment by concatenating the environments
+    Ok(activation_env
+        .into_iter()
+        .chain(manifest_env.into_iter())
+        .chain(shell_env.into_iter())
+        .collect())
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
-    // Create the environment
-    let mut env = get_task_env(&project).await?;
-
-    // Add pixi specific metadata
-    env.extend(get_metadata_env(&project));
-
-    // Add the conda default env variable so that the existing tools know about the env.
-    env.insert("CONDA_DEFAULT_ENV".to_string(), project.name().to_string());
+    // Get the environment variables we need to set activate the project in the shell.
+    let env = get_shell_env(&project).await?;
 
     // Start the shell as the last part of the activation script based on the default shell.
     let interactive_shell: ShellEnum = ShellEnum::from_parent_process()

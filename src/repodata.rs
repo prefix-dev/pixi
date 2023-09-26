@@ -129,7 +129,7 @@ async fn fetch_repo_data_records_with_progress(
     let result = fetch::fetch_repo_data(
         channel.platform_url(platform),
         client,
-        repodata_cache,
+        repodata_cache.to_path_buf(),
         Default::default(),
         Some(Box::new(move |fetch::DownloadProgress { total, bytes }| {
             download_progress_progress_bar.set_length(total.unwrap_or(bytes));
