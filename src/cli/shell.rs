@@ -122,6 +122,42 @@ async fn start_unix_shell<T: Shell + Copy>(
     process.interact().into_diagnostic()
 }
 
+/// Starts a UNIX shell.
+/// # Arguments
+/// - `shell`: The type of shell to start. Must implement the `Shell` and `Copy` traits.
+/// - `args`: A vector of arguments to pass to the shell.
+/// - `env`: A HashMap containing environment variables to set in the shell.
+#[cfg(target_family = "unix")]
+async fn start_nu_shell(
+    shell: rattler_shell::shell::NuShell,
+    env: &HashMap<String, String>,
+) -> miette::Result<Option<i32>> {
+    // create a tempfile for activation
+    let mut temp_file = tempfile::Builder::new()
+        .prefix("pixi_env_")
+        .suffix(&format!(".{}", shell.extension()))
+        .rand_bytes(3)
+        .tempfile()
+        .into_diagnostic()?;
+
+    let mut shell_script = ShellScript::new(shell, Platform::current());
+    for (key, value) in env {
+        shell_script.set_env_var(key, value);
+    }
+    // Add a custom prompt to the shell
+    let mut contents = shell_script.contents;
+    contents.push_str("\n$env.PROMPT_COMMAND = { echo \"(pixi) \" }\n");
+
+    temp_file.write_all(contents.as_bytes()).into_diagnostic()?;
+
+    let mut command = std::process::Command::new(shell.executable());
+    command.arg("--execute");
+    command.arg(format!("source {}", temp_file.path().display()));
+
+    let mut process = command.spawn().into_diagnostic()?;
+    Ok(process.wait().into_diagnostic()?.code())
+}
+
 /// Determine the environment variables that need to be set in an interactive shell to make it
 /// function as if the environment has been activated. This method runs the activation scripts from
 /// the environment and stores the environment variables it added, finally it adds environment
@@ -163,6 +199,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let res = match interactive_shell {
         ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, &env),
         ShellEnum::CmdExe(cmdexe) => start_cmdexe(cmdexe, &env),
+        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, vec![], &env).await,
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell);
         }
@@ -175,6 +212,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], &env).await,
         ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], &env).await,
         ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], &env).await,
+        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, &env).await,
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell)
         }
