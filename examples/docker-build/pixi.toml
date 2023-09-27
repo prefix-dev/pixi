@@ -1,0 +1,13 @@
+[project]
+name = "docker-build"
+version = "0.1.0"
+description = "Add a short description here"
+authors = ["Ruben Arts <ruben@prefix.dev>"]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tasks]
+test_docker_install = "docker -v || (echo No docker found, please install manually as it is not available on conda. && exit)"
+build = {cmd = "docker build ../../. --no-cache -f Dockerfile --tag pixi", depends_on = ["test_docker_install"]}
+start = {cmd = "docker run -it pixi", depends_on = ["build"]}
+[dependencies]
