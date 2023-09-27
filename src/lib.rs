@@ -7,6 +7,8 @@ pub mod progress;
 pub mod project;
 pub mod repodata;
 pub mod task;
+#[cfg(unix)]
+pub mod unix;
 pub mod util;
 pub mod utils;
 pub mod virtual_packages;

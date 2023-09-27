@@ -222,13 +222,7 @@ pub async fn get_task_env(project: &Project) -> miette::Result<HashMap<String, S
     let prefix = get_up_to_date_prefix(project).await?;
 
     // Get environment variables from the activation
-    let additional_activation_scripts = project.activation_scripts(Platform::current())?;
-    let activation_env = await_in_progress(
-        "activating environment",
-        run_activation(prefix, additional_activation_scripts.into_iter().collect()),
-    )
-    .await
-    .wrap_err("failed to activate environment")?;
+    let activation_env = run_activation_async(project, prefix).await?;
 
     // Get environment variables from the manifest
     let manifest_env = get_metadata_env(project);
@@ -238,6 +232,20 @@ pub async fn get_task_env(project: &Project) -> miette::Result<HashMap<String, S
         .chain(activation_env.into_iter())
         .chain(manifest_env.into_iter())
         .collect())
+}
+
+/// Runs the activation script asynchronously. This function also adds a progress bar.
+pub async fn run_activation_async(
+    project: &Project,
+    prefix: Prefix,
+) -> miette::Result<HashMap<String, String>> {
+    let additional_activation_scripts = project.activation_scripts(Platform::current())?;
+    await_in_progress(
+        "activating environment",
+        run_activation(prefix, additional_activation_scripts.into_iter().collect()),
+    )
+    .await
+    .wrap_err("failed to activate environment")
 }
 
 /// Runs and caches the activation script.
