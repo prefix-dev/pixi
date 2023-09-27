@@ -1,5 +1,5 @@
 use crate::{
-    default_retry_policy,
+    consts, default_retry_policy,
     prefix::Prefix,
     progress::{
         await_in_progress, default_progress_style, finished_progress_style, global_multi_progress,
@@ -58,7 +58,7 @@ pub async fn get_up_to_date_prefix(project: &Project) -> miette::Result<Prefix> 
     verify_current_platform_has_required_virtual_packages(project)?;
 
     // Start loading the installed packages in the background
-    let prefix = Prefix::new(project.root().join(".pixi/env"))?;
+    let prefix = Prefix::new(project.root().join(consts::PIXI_FOLDER_PATH).join("env"))?;
     let installed_packages_future = {
         let prefix = prefix.clone();
         tokio::spawn(async move { prefix.find_installed_packages(None).await })
