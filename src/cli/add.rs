@@ -17,7 +17,7 @@ use rattler_conda_types::{
     MatchSpec, NamelessMatchSpec, Platform, StrictVersion, Version, VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{resolvo, SolverImpl};
+use rattler_solve::{libsolv_rs, SolverImpl};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -305,7 +305,7 @@ pub fn determine_best_version(
         pinned_packages: vec![],
     };
 
-    let records = resolvo::Solver.solve(task).into_diagnostic()?;
+    let records = libsolv_rs::Solver.solve(task).into_diagnostic()?;
 
     // Determine the versions of the new packages
     Ok(records
