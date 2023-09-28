@@ -127,7 +127,6 @@ async fn start_unix_shell<T: Shell + Copy>(
 /// - `shell`: The type of shell to start. Must implement the `Shell` and `Copy` traits.
 /// - `args`: A vector of arguments to pass to the shell.
 /// - `env`: A HashMap containing environment variables to set in the shell.
-#[cfg(target_family = "unix")]
 async fn start_nu_shell(
     shell: rattler_shell::shell::NuShell,
     env: &HashMap<String, String>,
