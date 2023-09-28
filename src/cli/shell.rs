@@ -23,6 +23,14 @@ pub struct Args {
     /// The path to 'pixi.toml'
     #[arg(long)]
     manifest_path: Option<PathBuf>,
+
+    /// Require pixi.lock is up-to-date
+    #[clap(long, conflicts_with = "frozen")]
+    locked: bool,
+
+    /// Don't check if pixi.lock is up-to-date, install as lockfile states
+    #[clap(long, conflicts_with = "locked")]
+    frozen: bool,
 }
 
 fn start_powershell(
@@ -126,9 +134,9 @@ async fn start_unix_shell<T: Shell + Copy>(
 /// function as if the environment has been activated. This method runs the activation scripts from
 /// the environment and stores the environment variables it added, finally it adds environment
 /// variables from the project.
-pub async fn get_shell_env(project: &Project) -> miette::Result<HashMap<String, String>> {
+pub async fn get_shell_env(project: &Project, frozen: bool, locked: bool) -> miette::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
-    let prefix = get_up_to_date_prefix(project).await?;
+    let prefix = get_up_to_date_prefix(project, frozen, locked).await?;
 
     // Get environment variables from the activation
     let activation_env = run_activation_async(project, prefix).await?;
@@ -152,7 +160,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     // Get the environment variables we need to set activate the project in the shell.
-    let env = get_shell_env(&project).await?;
+    let env = get_shell_env(&project, args.frozen, args.locked).await?;
 
     // Start the shell as the last part of the activation script based on the default shell.
     let interactive_shell: ShellEnum = ShellEnum::from_parent_process()

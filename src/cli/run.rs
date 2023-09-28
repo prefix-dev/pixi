@@ -38,6 +38,14 @@ pub struct Args {
     /// The path to 'pixi.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
+
+    /// Require pixi.lock is up-to-date
+    #[clap(long, conflicts_with = "frozen")]
+    pub locked: bool,
+
+    /// Don't check if pixi.lock is up-to-date, install as lockfile states
+    #[clap(long, conflicts_with = "locked")]
+    pub frozen: bool,
 }
 
 pub fn order_tasks(
@@ -188,7 +196,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut ordered_commands = order_tasks(args.task, &project)?;
 
     // Get the environment to run the commands in.
-    let command_env = get_task_env(&project).await?;
+    let command_env = get_task_env(&project, args.locked, args.frozen).await?;
 
     // Execute the commands in the correct order
     while let Some((command, args)) = ordered_commands.pop_back() {
@@ -217,9 +225,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 /// activation scripts from the environment and stores the environment variables it added, it adds
 /// environment variables set by the project and merges all of that with the system environment
 /// variables.
-pub async fn get_task_env(project: &Project) -> miette::Result<HashMap<String, String>> {
+pub async fn get_task_env(
+    project: &Project,
+    frozen: bool,
+    locked: bool,
+) -> miette::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
-    let prefix = get_up_to_date_prefix(project).await?;
+    let prefix = get_up_to_date_prefix(project, frozen, locked).await?;
 
     // Get environment variables from the activation
     let activation_env = run_activation_async(project, prefix).await?;

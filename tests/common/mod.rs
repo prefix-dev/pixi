@@ -4,7 +4,8 @@ pub mod builders;
 pub mod package_database;
 
 use crate::common::builders::{
-    AddBuilder, InitBuilder, ProjectChannelAddBuilder, TaskAddBuilder, TaskAliasBuilder,
+    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, TaskAddBuilder,
+    TaskAliasBuilder,
 };
 use pixi::cli::install::Args;
 use pixi::cli::run::{
@@ -158,6 +159,7 @@ impl PixiControl {
                 specs: vec![spec.into()],
                 build: false,
                 no_install: true,
+                no_lockfile_update: false,
                 platform: Default::default(),
             },
         }
@@ -180,7 +182,9 @@ impl PixiControl {
         let mut tasks = order_tasks(args.task, &self.project().unwrap())?;
 
         let project = self.project().unwrap();
-        let task_env = get_task_env(&project).await.unwrap();
+        let task_env = get_task_env(&project, args.frozen, args.locked)
+            .await
+            .unwrap();
 
         let mut result = RunOutput::default();
         while let Some((command, args)) = tasks.pop_back() {
@@ -198,12 +202,15 @@ impl PixiControl {
         Ok(result)
     }
 
-    /// Create an installed environment. I.e a resolved and installed prefix
-    pub async fn install(&self) -> miette::Result<()> {
-        pixi::cli::install::execute(Args {
-            manifest_path: Some(self.manifest_path()),
-        })
-        .await
+    /// Returns a [`InstallBuilder`]. To execute the command and await the result call `.await` on the return value.
+    pub fn install(&self) -> InstallBuilder {
+        InstallBuilder {
+            args: Args {
+                manifest_path: Some(self.manifest_path()),
+                locked: false,
+                frozen: false,
+            },
+        }
     }
 
     /// Get the associated lock file

@@ -94,6 +94,8 @@ async fn test_alias() {
         .run(Args {
             task: vec!["helloworld".to_string()],
             manifest_path: None,
+            locked: false,
+            frozen: false,
         })
         .await
         .unwrap();

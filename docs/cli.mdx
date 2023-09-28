@@ -59,10 +59,14 @@ Which gets generated on `pixi add` or when you manually change the `pixi.toml` f
 #### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
+- `--locked`: only install if lockfile is up-to-date. Conflicts with `--frozen`.
 
 ```shell
 pixi install
 pixi install --manifest-path ~/myproject/pixi.toml
+pixi install --frozen
+pixi install --locked
 ```
 
 ## `run`
@@ -76,11 +80,15 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 #### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
+- `--locked`: only install if lockfile is up-to-date. Conflicts with `--frozen`.
 
 ```shell
 pixi run python
 pixi run cowpy "Hey pixi user"
 pixi run --manifest-path ~/myproject/pixi.toml python
+pixi run --frozen python
+pixi run --locked python
 # If you have specified a custom task in the pixi.toml you can run it with run as well
 pixi run build
 ```
@@ -158,11 +166,17 @@ To exit the pixi shell, simply run `exit`.
 #### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
+- `--locked`: only install if lockfile is up-to-date. Conflicts with `--frozen`.
 
 ```shell
 pixi shell
 exit
 pixi shell --manifest-path ~/myproject/pixi.toml
+exit
+pixi shell --frozen
+exit
+pixi shell --locked
 exit
 ```
 
