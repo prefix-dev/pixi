@@ -24,7 +24,7 @@ use rattler_conda_types::{
 };
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{libsolv_rs, SolverImpl};
+use rattler_solve::{resolvo, SolverImpl};
 use std::collections::HashMap;
 use std::{
     collections::{HashSet, VecDeque},
@@ -352,7 +352,7 @@ pub async fn update_lock_file(
         };
 
         // Solve the task
-        let records = libsolv_rs::Solver.solve(task).into_diagnostic()?;
+        let records = resolvo::Solver.solve(task).into_diagnostic()?;
 
         // Update lock file
         let mut locked_packages = LockedPackages::new(platform);
