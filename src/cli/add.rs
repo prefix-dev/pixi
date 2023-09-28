@@ -65,6 +65,10 @@ pub struct Args {
     #[arg(long, conflicts_with = "host")]
     pub build: bool,
 
+    /// Don't update lockfile, implies the no-install as well.
+    #[clap(long, conflicts_with = "no_install")]
+    pub no_lockfile_update: bool,
+
     /// Don't install the package to the environment, only add the package to the lock-file.
     #[arg(long)]
     pub no_install: bool,
@@ -104,6 +108,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.specs,
         spec_type,
         args.no_install,
+        args.no_lockfile_update,
         spec_platforms,
     )
     .await
@@ -114,6 +119,7 @@ pub async fn add_specs_to_project(
     specs: Vec<MatchSpec>,
     spec_type: SpecType,
     no_install: bool,
+    no_update_lockfile: bool,
     specs_platforms: Vec<Platform>,
 ) -> miette::Result<()> {
     // Split the specs into package name and version specifier
@@ -206,27 +212,35 @@ pub async fn add_specs_to_project(
 
         added_specs.push(spec);
     }
-
-    // Update the lock file and write to disk
-    let lock_file = update_lock_file(
-        project,
-        load_lock_file(project).await?,
-        Some(sparse_repo_data),
-    )
-    .await?;
     project.save()?;
 
-    if !no_install {
-        let platform = Platform::current();
-        if project.platforms().contains(&platform) {
-            // Get the currently installed packages
-            let prefix = Prefix::new(project.root().join(".pixi/env"))?;
-            let installed_packages = prefix.find_installed_packages(None).await?;
+    // Update the lock file
+    let lock_file = if !no_update_lockfile {
+        Some(
+            update_lock_file(
+                project,
+                load_lock_file(project).await?,
+                Some(sparse_repo_data),
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
 
-            // Update the prefix
-            update_prefix(&prefix, installed_packages, &lock_file, platform).await?;
-        } else {
-            eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", style("!").yellow().bold())
+    if let Some(lock_file) = lock_file {
+        if !no_install {
+            let platform = Platform::current();
+            if project.platforms().contains(&platform) {
+                // Get the currently installed packages
+                let prefix = Prefix::new(project.root().join(".pixi/env"))?;
+                let installed_packages = prefix.find_installed_packages(None).await?;
+
+                // Update the prefix
+                update_prefix(&prefix, installed_packages, &lock_file, platform).await?;
+            } else {
+                eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", style("!").yellow().bold())
+            }
         }
     }
 

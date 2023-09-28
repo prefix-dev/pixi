@@ -36,7 +36,13 @@ use std::{
 
 /// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
 /// up to date it is updated.
-pub async fn get_up_to_date_prefix(project: &Project) -> miette::Result<Prefix> {
+/// Use `frozen` or `locked` to skip the update of the lockfile. Use frozen when you don't even want
+/// to check the lockfile status.
+pub async fn get_up_to_date_prefix(
+    project: &Project,
+    frozen: bool,
+    locked: bool,
+) -> miette::Result<Prefix> {
     // Make sure the project supports the current platform
     let platform = Platform::current();
     if !project.platforms().contains(&platform) {
@@ -65,11 +71,17 @@ pub async fn get_up_to_date_prefix(project: &Project) -> miette::Result<Prefix> 
     };
 
     // Update the lock-file if it is out of date.
+    if frozen && locked {
+        miette::bail!("Frozen and Locked can't be true at the same time, as using frozen will ignore the locked variable.");
+    }
     let lock_file = load_lock_file(project).await?;
-    let lock_file = if !lock_file_up_to_date(project, &lock_file)? {
-        update_lock_file(project, lock_file, None).await?
-    } else {
+    let lock_file = if frozen || lock_file_up_to_date(project, &lock_file)? {
         lock_file
+    } else {
+        if locked {
+            miette::bail!("Lockfile not up-to-date with the project");
+        }
+        update_lock_file(project, lock_file, None).await?
     };
 
     // Update the environment
