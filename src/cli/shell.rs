@@ -134,7 +134,11 @@ async fn start_unix_shell<T: Shell + Copy>(
 /// function as if the environment has been activated. This method runs the activation scripts from
 /// the environment and stores the environment variables it added, finally it adds environment
 /// variables from the project.
-pub async fn get_shell_env(project: &Project, frozen: bool, locked: bool) -> miette::Result<HashMap<String, String>> {
+pub async fn get_shell_env(
+    project: &Project,
+    frozen: bool,
+    locked: bool,
+) -> miette::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
     let prefix = get_up_to_date_prefix(project, frozen, locked).await?;
 
