@@ -199,7 +199,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let res = match interactive_shell {
         ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, &env),
         ShellEnum::CmdExe(cmdexe) => start_cmdexe(cmdexe, &env),
-        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, vec![], &env).await,
+        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, &env).await,
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell);
         }
