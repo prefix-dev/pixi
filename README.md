@@ -32,7 +32,8 @@ with package managers like `cargo` or `yarn` but for any language.
 
 `pixi` is made with ❤️ at [prefix.dev](https://prefix.dev)
 
-https://github.com/prefix-dev/pixi/assets/885054/64666dee-841d-4680-9a61-7927913bc4e2
+![a real time pixi_demo](https://github.com/ruben-arts/pixi/assets/12893423/8b1a1273-a210-4be2-a664-32076c535428)
+
 
 ## Highlights
 
