@@ -2,6 +2,7 @@ use crate::Project;
 use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
+use rattler_shell::activation::PathModificationBehavior;
 use rattler_shell::shell::{PowerShell, Shell, ShellEnum, ShellScript};
 use std::collections::HashMap;
 use std::io::Write;
@@ -122,10 +123,9 @@ async fn start_unix_shell<T: Shell + Copy>(
     process.interact().into_diagnostic()
 }
 
-/// Starts a UNIX shell.
+/// Starts a nu shell.
 /// # Arguments
-/// - `shell`: The type of shell to start. Must implement the `Shell` and `Copy` traits.
-/// - `args`: A vector of arguments to pass to the shell.
+/// - `shell`: The Nushell (also contains executable location)
 /// - `env`: A HashMap containing environment variables to set in the shell.
 async fn start_nu_shell(
     shell: rattler_shell::shell::NuShell,
@@ -141,12 +141,17 @@ async fn start_nu_shell(
 
     let mut shell_script = ShellScript::new(shell, Platform::current());
     for (key, value) in env {
-        shell_script.set_env_var(key, value);
+        if key == "PATH" {
+            // split path with PATHSEP
+            let paths = std::env::split_paths(value).collect::<Vec<_>>();
+            shell_script.set_path(&paths, PathModificationBehavior::Replace);
+        } else {
+            shell_script.set_env_var(key, value);
+        }
     }
     // Add a custom prompt to the shell
     let mut contents = shell_script.contents;
     contents.push_str("\n$env.PROMPT_COMMAND = { echo \"(pixi) \" }\n");
-
     temp_file.write_all(contents.as_bytes()).into_diagnostic()?;
 
     let mut command = std::process::Command::new(shell.executable());

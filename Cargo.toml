@@ -71,20 +71,20 @@ tokio = { version = "1.32.0", features = ["rt"] }
 toml = "0.8.1"
 
 [patch.crates-io]
-rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+# rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+# rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+# rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+# rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+# rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+# rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+# rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+# rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 
-# rattler = { path = "../rattler/crates/rattler" }
-# rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-# rattler_digest = { path = "../rattler/crates/rattler_digest" }
-# rattler_networking = { path = "../rattler/crates/rattler_networking" }
-# rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-# rattler_shell = { path = "../rattler/crates/rattler_shell" }
-# rattler_solve = { path = "../rattler/crates/rattler_solve" }
-# rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
+rattler = { path = "../rattler/crates/rattler" }
+rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
+rattler_digest = { path = "../rattler/crates/rattler_digest" }
+rattler_networking = { path = "../rattler/crates/rattler_networking" }
+rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
+rattler_shell = { path = "../rattler/crates/rattler_shell" }
+rattler_solve = { path = "../rattler/crates/rattler_solve" }
+rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
