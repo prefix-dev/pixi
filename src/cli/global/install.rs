@@ -17,6 +17,7 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use rattler_solve::{resolvo, SolverImpl};
+use std::ffi::OsStr;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -210,7 +211,7 @@ async fn map_executables_to_global_bin_scripts<'a>(
 ) -> miette::Result<Vec<BinScriptMapping<'a>>> {
     #[cfg(target_family = "windows")]
     let extensions_list: Vec<String> = if let Ok(pathext) = std::env::var("PATHEXT") {
-        pathext.split(';').map(|s| s.to_string()).collect()
+        pathext.split(';').map(|s| s.to_lowercase()).collect()
     } else {
         tracing::debug!("Could not find 'PATHEXT' variable, using a default list");
         [
@@ -218,7 +219,7 @@ async fn map_executables_to_global_bin_scripts<'a>(
             ".CPL",
         ]
         .iter()
-        .map(|&s| s.to_owned())
+        .map(|&s| s.to_lowercase())
         .collect()
     };
 
@@ -237,13 +238,14 @@ async fn map_executables_to_global_bin_scripts<'a>(
 
     for exec in package_executables.iter() {
         // Remove the extension of a file if it is in the list of known extensions.
-        let file_name = exec
-            .extension()
-            .filter(|ext| extensions_list.contains(&ext.to_string_lossy().to_string()))
-            .and_then(|_| exec.file_stem())
-            .unwrap_or(exec.file_name().ok_or_else(|| {
-                miette::miette!("could not get filename from {}", exec.display())
-            })?);
+        let Some(file_name) = exec
+            .file_name()
+            .and_then(OsStr::to_str)
+            .map(str::to_lowercase) else { continue; };
+        let file_name = extensions_list
+            .iter()
+            .find_map(|ext| file_name.strip_suffix(ext))
+            .unwrap_or(file_name.as_str());
 
         let mut executable_script_path = bin_dir.join(file_name);
 
