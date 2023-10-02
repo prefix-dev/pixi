@@ -43,10 +43,10 @@ It will only add if the package with its version constraint is able to work with
 
 ```shell
 pixi add numpy
-pixi add numpy pandas pytorch>=1.8
+pixi add numpy pandas "pytorch>=1.8"
 pixi add "numpy>=1.22,<1.24"
 pixi add --manifest-path ~/myproject/pixi.toml numpy
-pixi add --host python>=3.9.0
+pixi add --host "python>=3.9.0"
 pixi add --build cmake
 pixi add --platform osx-64 --build clang
 ```
