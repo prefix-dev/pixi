@@ -111,10 +111,10 @@ async fn install_locked() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
-    pixi.add("python==3.10.0").await.unwrap();
+    pixi.add("python==3.8.0").await.unwrap();
 
     // Add new version of python only to the manifest
-    pixi.add("python==3.11.0")
+    pixi.add("python==3.9.0")
         .without_lockfile_update()
         .await
         .unwrap();
@@ -123,7 +123,7 @@ async fn install_locked() {
 
     // Check if it didn't accidentally update the lockfile
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_matchspec("python==3.10.0"));
+    assert!(lock.contains_matchspec("python==3.8.0"));
 
     // After an install with lockfile update the locked install should succeed.
     pixi.install().await.unwrap();
@@ -131,7 +131,7 @@ async fn install_locked() {
 
     // Check if lock has python version updated
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_matchspec("python==3.11.0"));
+    assert!(lock.contains_matchspec("python==3.9.0"));
 }
 
 /// Test `pixi install/run --frozen` functionality
@@ -141,10 +141,10 @@ async fn install_frozen() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
-    pixi.add("python==3.10.0").await.unwrap();
+    pixi.add("python==3.9.1").await.unwrap();
 
     // Add new version of python only to the manifest
-    pixi.add("python==3.11.0")
+    pixi.add("python==3.10.1")
         .without_lockfile_update()
         .await
         .unwrap();
@@ -153,7 +153,7 @@ async fn install_frozen() {
 
     // Check if it didn't accidentally update the lockfile
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_matchspec("python==3.10.0"));
+    assert!(lock.contains_matchspec("python==3.9.1"));
 
     // Check if running with frozen doesn't suddenly install the latest update.
     let result = pixi
@@ -165,6 +165,6 @@ async fn install_frozen() {
         .await
         .unwrap();
     assert_eq!(result.exit_code, 0);
-    assert_eq!(result.stdout.trim(), "Python 3.10.0");
+    assert_eq!(result.stdout.trim(), "Python 3.10.1");
     assert!(result.stderr.is_empty());
 }
