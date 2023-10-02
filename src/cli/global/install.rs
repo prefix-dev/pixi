@@ -208,14 +208,29 @@ async fn map_executables_to_global_bin_scripts<'a>(
     package_executables: &[&'a Path],
     bin_dir: &BinDir,
 ) -> miette::Result<Vec<BinScriptMapping<'a>>> {
+    #[cfg(target_family = "windows")]
+    let extensions_list = if let Ok(pathext) = std::env::var("PATHEXT") {
+        pathext.split(';').collect()
+    } else {
+        tracing::debug!("Could not find 'PATHEXT' variable, using a default list");
+        vec![
+            ".COM", ".EXE", ".BAT", ".CMD", ".VBS", ".VBE", ".JS", ".JSE", ".WSF", ".WSH", ".MSC",
+            ".CPL",
+        ]
+    };
+
+    #[cfg(target_family = "unix")]
+    // TODO: Find if there are more cases
+    let extensions_list = vec![".sh", ".bash"];
+
     let BinDir(bin_dir) = bin_dir;
     let mut mappings = vec![];
+
     for exec in package_executables.iter() {
-        // Determine the file name. If the extension is not numeric (e.g., '.exe'), use file_stem().
-        // This ensures that version numbers like '.11' in 'python3.11' are not mistakenly removed.
+        // Remove the extension of a file if it is in the list of known extensions.
         let file_name = exec
             .extension()
-            .filter(|ext| ext.to_str().unwrap().parse::<f64>().is_err())
+            .filter(|ext| extensions_list.contains(&ext.to_string_lossy().as_ref()))
             .and_then(|_| exec.file_stem())
             .unwrap_or(exec.file_name().ok_or_else(|| {
                 miette::miette!("could not get filename from {}", exec.display())
