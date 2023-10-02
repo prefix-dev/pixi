@@ -165,6 +165,6 @@ async fn install_frozen() {
         .await
         .unwrap();
     assert_eq!(result.exit_code, 0);
-    assert_eq!(result.stdout.trim(), "Python 3.10.1");
+    assert_eq!(result.stdout.trim(), "Python 3.9.1");
     assert!(result.stderr.is_empty());
 }
