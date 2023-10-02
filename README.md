@@ -32,7 +32,8 @@ with package managers like `cargo` or `yarn` but for any language.
 
 `pixi` is made with ❤️ at [prefix.dev](https://prefix.dev)
 
-https://github.com/prefix-dev/pixi/assets/885054/64666dee-841d-4680-9a61-7927913bc4e2
+![a real time pixi_demo](https://github.com/ruben-arts/pixi/assets/12893423/8b1a1273-a210-4be2-a664-32076c535428)
+
 
 ## Highlights
 
@@ -67,7 +68,6 @@ Some notable features that we have in the pipeline are:
 * Improve docs, examples and user experience
 
 # Installation
-You can install `pixi` as a binary from the releases.
 `pixi` can be installed on macOS, Linux, and Windows.
 The provided scripts will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `~/.pixi/bin`.
 If this directory does not already exist, the script will create it.
@@ -76,8 +76,6 @@ If this directory does not already exist, the script will create it.
 To install Pixi on macOS and Linux, open a terminal and run the following command:
 ```bash
 curl -fsSL https://pixi.sh/install.sh | bash
-# or
-curl -fsSL https://raw.githubusercontent.com/prefix-dev/pixi/main/install/install.sh | bash
 # or with brew
 brew install pixi
 ```
@@ -91,6 +89,26 @@ To install Pixi on Windows, open a PowerShell terminal (you may need to run it a
 iwr -useb https://pixi.sh/install.ps1 | iex
 ```
 The script will inform you once the installation is successful and add the ~/.pixi/bin directory to your PATH, which will allow you to run the pixi command from any location.
+
+### Autocompletion
+
+To get autocompletion run:
+
+```shell
+# On unix (MacOS or Linux), pick your shell (use `echo $SHELL` to find the shell you are using.):
+echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
+echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
+echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
+echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
+```
+
+For PowerShell on Windows:
+
+```pwsh
+Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
+```
+
+And then restart the shell or source the shell config file.
 
 ## Install from source
 
@@ -128,26 +146,6 @@ $PIXI_BIN = "$Env:LocalAppData\pixi\bin\pixi"; Remove-Item -Path $PIXI_BIN
 After this command you can still use the tools you installed with `pixi`.
 To remove these as well just remove the whole `~/.pixi` directory and remove the directory from your path.
 
-### Autocompletion
-
-To get autocompletion run:
-
-```shell
-# On unix (MacOS or Linux), pick your shell (use `echo $SHELL` to find the shell you are using.):
-echo 'eval "$(pixi completion --shell bash)"' >> ~/.bashrc
-echo 'eval "$(pixi completion --shell zsh)"' >> ~/.zshrc
-echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
-echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
-```
-
-For PowerShell on Windows:
-
-```pwsh
-Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
-```
-
-And then restart the shell or source the shell config file.
-
 # Usage
 
 The cli looks as follows:
@@ -162,18 +160,24 @@ Commands:
   completion  Generates a completion script for a shell
   init        Creates a new project
   add         Adds a dependency to the project
-  run         Runs command in project
+  run         Runs task in project
   shell       Start a shell in the pixi environment of the project
   global      Global is the main entry point for the part of pixi that executes on the global(system) level
   auth        Login to prefix.dev or anaconda.org servers to access private channels
   install     Install all dependencies
+  task        Command management in project
+  info        Information about the system and project
+  upload      Upload a package to a prefix.dev channel
+  search      Search a package, output will list the latest version of package
+  project
   help        Print this message or the help of the given subcommand(s)
 
 Options:
-  -v, --verbose...  More output per occurrence
-  -q, --quiet...    Less output per occurrence
-  -h, --help        Print help
-  -V, --version     Print version
+  -v, --verbose...     More output per occurrence
+  -q, --quiet...       Less output per occurrence
+      --color <COLOR>  Whether the log needs to be colored [default: auto] [possible values: always, never, auto]
+  -h, --help           Print help
+  -V, --version        Print version
 
 ```
 
