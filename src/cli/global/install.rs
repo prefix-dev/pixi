@@ -211,9 +211,16 @@ async fn map_executables_to_global_bin_scripts<'a>(
     let BinDir(bin_dir) = bin_dir;
     let mut mappings = vec![];
     for exec in package_executables.iter() {
+        // Determine the file name. If the extension is not numeric (e.g., '.exe'), use file_stem().
+        // This ensures that version numbers like '.11' in 'python3.11' are not mistakenly removed.
         let file_name = exec
-            .file_stem()
-            .ok_or_else(|| miette::miette!("could not get filename from {}", exec.display()))?;
+            .extension()
+            .filter(|ext| ext.to_str().unwrap().parse::<f64>().is_err())
+            .and_then(|_| exec.file_stem())
+            .unwrap_or(exec.file_name().ok_or_else(|| {
+                miette::miette!("could not get filename from {}", exec.display())
+            })?);
+
         let mut executable_script_path = bin_dir.join(file_name);
 
         if cfg!(windows) {
