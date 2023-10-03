@@ -60,7 +60,7 @@ Which gets generated on `pixi add` or when you manually change the `pixi.toml` f
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
-- `--locked`: only install if lockfile is up-to-date. Conflicts with `--frozen`.
+- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
 
 ```shell
 pixi install
@@ -81,7 +81,7 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
-- `--locked`: only install if lockfile is up-to-date. Conflicts with `--frozen`.
+- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
 
 ```shell
 pixi run python
@@ -167,7 +167,7 @@ To exit the pixi shell, simply run `exit`.
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
-- `--locked`: only install if lockfile is up-to-date. Conflicts with `--frozen`.
+- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
 
 ```shell
 pixi shell
@@ -328,3 +328,10 @@ pixi project channel add file:///home/user/local_channel
 pixi project channel add https://repo.prefix.dev/conda-forge
 pixi project channel add --no-install robostack
 ```
+
+[^1]: An __up-to-date__ lockfile means that the dependencies in the lockfile are allowed by the dependencies in the manifest file.
+    For example
+    - a `pixi.toml` with `python = ">= 3.11"` is up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
+    - a `pixi.toml` with `python = ">= 3.12"` is **not** up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
+
+    Being up-to-date does **not** mean that the lockfile holds the latest version available on the channel for the given dependency.
