@@ -1,21 +1,24 @@
 [project]
 name = "pixi"
-version = "0.0.7"
+version = "0.5.0"
 description = "Package management made easy!"
 authors = ["Wolf Vollprecht <wolf@prefix.dev>", "Bas Zalmstra <bas@prefix.dev>", "Tim de Jager <tim@prefix.dev>", "Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
-[commands]
+[tasks]
 build = "cargo build --release"
+install = "cargo install --path . --locked"
+test = "cargo test"
+lint = "pre-commit run --all"
 
 [dependencies]
-# Needed for building rattler
-rust = ">=1.65.0"
+# Dev dependencies
+pre-commit = "~=3.3.0"
+
+# Needed for building rattler/rattler-build
+rust = "~=1.70.0"
 openssl = "3.*"
 pkg-config = "0.29.*"
-
-# Needed for building libsolv
-cxx-compiler = "*"
-cmake = "*"
-make = "*"
+git = "2.42.0.*"
+compilers = "1.6.0.*"

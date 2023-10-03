@@ -24,7 +24,7 @@
 //! ```
 
 use crate::common::IntoMatchSpec;
-use pixi::cli::{add, init, task};
+use pixi::cli::{add, init, install, project, task};
 use pixi::project::SpecType;
 use rattler_conda_types::Platform;
 use std::future::{Future, IntoFuture};
@@ -37,7 +37,7 @@ pub fn string_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<
     iter.into_iter().map(|s| s.as_ref().to_string()).collect()
 }
 
-/// Contains the arguments to pass to `init::execute()`. Call `.await` to call the CLI execute
+/// Contains the arguments to pass to [`init::execute()`]. Call `.await` to call the CLI execute
 /// method and await the result at the same time.
 pub struct InitBuilder {
     pub args: init::Args,
@@ -45,12 +45,20 @@ pub struct InitBuilder {
 
 impl InitBuilder {
     pub fn with_channel(mut self, channel: impl ToString) -> Self {
-        self.args.channels.push(channel.to_string());
+        self.args
+            .channels
+            .get_or_insert_with(Default::default)
+            .push(channel.to_string());
         self
     }
 
     pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
         self.with_channel(Url::from_directory_path(channel).unwrap())
+    }
+
+    pub fn without_channels(mut self) -> Self {
+        self.args.channels = Some(vec![]);
+        self
     }
 }
 
@@ -63,7 +71,7 @@ impl IntoFuture for InitBuilder {
     }
 }
 
-/// Contains the arguments to pass to `add::execute()`. Call `.await` to call the CLI execute method
+/// Contains the arguments to pass to [`add::execute()`]. Call `.await` to call the CLI execute method
 /// and await the result at the same time.
 pub struct AddBuilder {
     pub args: add::Args,
@@ -98,6 +106,13 @@ impl AddBuilder {
     /// installed to reduce test times.
     pub fn with_install(mut self, install: bool) -> Self {
         self.args.no_install = !install;
+        self
+    }
+
+    /// Skip updating lockfile, this will only check if it can add a dependencies.
+    /// If it can add it will only add it to the manifest. Install will be skipped by default.
+    pub fn without_lockfile_update(mut self) -> Self {
+        self.args.no_lockfile_update = true;
         self
     }
 
@@ -161,5 +176,60 @@ impl TaskAliasBuilder {
             operation: task::Operation::Alias(self.args),
             manifest_path: self.manifest_path,
         })
+    }
+}
+
+pub struct ProjectChannelAddBuilder {
+    pub manifest_path: Option<PathBuf>,
+    pub args: project::channel::add::Args,
+}
+
+impl ProjectChannelAddBuilder {
+    /// Adds the specified channel
+    pub fn with_channel(mut self, name: impl Into<String>) -> Self {
+        self.args.channel.push(name.into());
+        self
+    }
+
+    /// Alias to add a local channel.
+    pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
+        self.with_channel(Url::from_directory_path(channel).unwrap())
+    }
+}
+
+impl IntoFuture for ProjectChannelAddBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(project::channel::execute(project::channel::Args {
+            manifest_path: self.manifest_path,
+            command: project::channel::Command::Add(self.args),
+        }))
+    }
+}
+
+/// Contains the arguments to pass to [`install::execute()`]. Call `.await` to call the CLI execute method
+/// and await the result at the same time.
+pub struct InstallBuilder {
+    pub args: install::Args,
+}
+
+impl InstallBuilder {
+    pub fn with_locked(mut self) -> Self {
+        self.args.locked = true;
+        self
+    }
+    pub fn with_frozen(mut self) -> Self {
+        self.args.frozen = true;
+        self
+    }
+}
+
+impl IntoFuture for InstallBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(install::execute(self.args))
     }
 }

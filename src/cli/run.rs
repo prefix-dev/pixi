@@ -4,7 +4,7 @@ use std::string::String;
 
 use clap::Parser;
 use deno_task_shell::parser::SequentialList;
-use deno_task_shell::{execute_with_pipes, get_output_writer_and_handle, pipe, ShellState};
+use deno_task_shell::{execute_with_pipes, pipe, ShellPipeWriter, ShellState};
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
 use rattler_conda_types::Platform;
@@ -12,15 +12,16 @@ use rattler_conda_types::Platform;
 use crate::prefix::Prefix;
 use crate::progress::await_in_progress;
 use crate::project::environment::get_metadata_env;
-use crate::task::{CmdArgs, Execute, Task};
+use crate::task::{quote_arguments, CmdArgs, Execute, Task};
 use crate::{environment::get_up_to_date_prefix, Project};
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehaviour},
     shell::ShellEnum,
 };
+use tokio::task::JoinHandle;
 
 /// Runs task in project.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct RunOutput {
     pub exit_code: i32,
     pub stdout: String,
@@ -37,6 +38,14 @@ pub struct Args {
     /// The path to 'pixi.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
+
+    /// Require pixi.lock is up-to-date
+    #[clap(long, conflicts_with = "frozen")]
+    pub locked: bool,
+
+    /// Don't check if pixi.lock is up-to-date, install as lockfile states
+    #[clap(long, conflicts_with = "locked")]
+    pub frozen: bool,
 }
 
 pub fn order_tasks(
@@ -45,25 +54,43 @@ pub fn order_tasks(
 ) -> miette::Result<VecDeque<(Task, Vec<String>)>> {
     let tasks: Vec<_> = tasks.iter().map(|c| c.to_string()).collect();
 
-    // Find the command in the project.
+    // Find the command in the tasks.
     let (task_name, task, additional_args) = tasks
         .first()
+        // First search in the target specific tasks
         .and_then(|cmd_name| {
-            project.task_opt(cmd_name).map(|cmd| {
-                (
-                    Some(cmd_name.clone()),
-                    cmd.clone(),
-                    tasks[1..].iter().cloned().collect_vec(),
-                )
+            project
+                .target_specific_tasks(Platform::current())
+                .get(cmd_name.as_str())
+                .map(|&cmd| {
+                    (
+                        Some(cmd_name.clone()),
+                        cmd.clone(),
+                        tasks[1..].iter().cloned().collect_vec(),
+                    )
+                })
+        })
+        // If it isn't found in the target specific tasks try to find it in the default tasks.
+        .or_else(|| {
+            tasks.first().and_then(|cmd_name| {
+                project.task_opt(cmd_name).map(|cmd| {
+                    (
+                        Some(cmd_name.clone()),
+                        cmd.clone(),
+                        tasks[1..].iter().cloned().collect_vec(),
+                    )
+                })
             })
         })
+        // When no task is found, just execute the command.
         .unwrap_or_else(|| {
             (
                 None,
-                Task::Execute(Execute {
-                    cmd: CmdArgs::Multiple(tasks),
+                Execute {
+                    cmd: CmdArgs::from(tasks),
                     depends_on: vec![],
-                }),
+                }
+                .into(),
                 Vec::new(),
             )
         });
@@ -82,26 +109,27 @@ pub fn order_tasks(
 
     while let Some((task, additional_args)) = s1.pop_back() {
         // Get the dependencies of the command
-        let depends_on = match &task {
-            Task::Execute(process) => process.depends_on.as_slice(),
-            Task::Alias(alias) => &alias.depends_on,
-            _ => &[],
-        };
+        let depends_on = task.depends_on();
 
         // Locate the dependencies in the project and add them to the stack
         for dependency in depends_on.iter() {
             if !added.contains(dependency) {
                 let cmd = project
-                    .task_opt(dependency)
-                    .ok_or_else(|| miette::miette!("failed to find dependency {}", dependency))?
-                    .clone();
+                    .target_specific_tasks(Platform::current())
+                    .get(dependency.as_str())
+                    .copied()
+                    // If there is no target specific task try to find it in the default tasks.
+                    .or_else(|| project.task_opt(dependency))
+                    .ok_or_else(|| miette::miette!("failed to find dependency {}", dependency))?;
 
-                s1.push_back((cmd, Vec::new()));
+                s1.push_back((cmd.clone(), Vec::new()));
                 added.insert(dependency.clone());
             }
         }
 
-        s2.push_back((task, additional_args))
+        if task.is_executable() {
+            s2.push_back((task, additional_args))
+        }
     }
 
     Ok(s2)
@@ -109,30 +137,19 @@ pub fn order_tasks(
 
 pub async fn create_script(task: Task, args: Vec<String>) -> miette::Result<SequentialList> {
     // Construct the script from the task
-    let task = match task {
-        Task::Execute(Execute {
-            cmd: CmdArgs::Single(cmd),
-            ..
-        })
-        | Task::Plain(cmd) => cmd,
-        Task::Execute(Execute {
-            cmd: CmdArgs::Multiple(args),
-            ..
-        }) => quote_arguments(args),
-        _ => {
-            return Err(miette::miette!("No command given"));
-        }
-    };
+    let task = task
+        .as_single_command()
+        .ok_or_else(|| miette::miette!("the task does not provide a runnable command"))?;
 
     // Append the command line arguments
-    let cli_args = quote_arguments(args);
+    let cli_args = quote_arguments(args.iter().map(|arg| arg.as_str()));
     let full_script = format!("{task} {cli_args}");
 
     // Parse the shell command
     deno_task_shell::parser::parse(full_script.trim()).map_err(|e| miette!("{e}"))
 }
 
-/// Executes the given command withing the specified project and with the given environment.
+/// Executes the given command within the specified project and with the given environment.
 pub async fn execute_script(
     script: SequentialList,
     project: &Project,
@@ -170,14 +187,6 @@ pub async fn execute_script_with_output(
     }
 }
 
-fn quote_arguments(args: impl IntoIterator<Item = impl AsRef<str>>) -> String {
-    args.into_iter()
-        // surround all the additional arguments in double quotes and santize any command
-        // substitution
-        .map(|a| format!("\"{}\"", a.as_ref().replace('"', "\\\"")))
-        .join(" ")
-}
-
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -187,7 +196,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut ordered_commands = order_tasks(args.task, &project)?;
 
     // Get the environment to run the commands in.
-    let command_env = get_task_env(&project).await?;
+    let command_env = get_task_env(&project, args.locked, args.frozen).await?;
 
     // Execute the commands in the correct order
     while let Some((command, args)) = ordered_commands.pop_back() {
@@ -216,18 +225,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 /// activation scripts from the environment and stores the environment variables it added, it adds
 /// environment variables set by the project and merges all of that with the system environment
 /// variables.
-pub async fn get_task_env(project: &Project) -> miette::Result<HashMap<String, String>> {
+pub async fn get_task_env(
+    project: &Project,
+    frozen: bool,
+    locked: bool,
+) -> miette::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
-    let prefix = get_up_to_date_prefix(project).await?;
+    let prefix = get_up_to_date_prefix(project, frozen, locked).await?;
 
     // Get environment variables from the activation
-    let additional_activation_scripts = project.activation_scripts(Platform::current())?;
-    let activation_env = await_in_progress(
-        "activating environment",
-        run_activation(prefix, additional_activation_scripts.into_iter().collect()),
-    )
-    .await
-    .wrap_err("failed to activate environment")?;
+    let activation_env = run_activation_async(project, prefix).await?;
 
     // Get environment variables from the manifest
     let manifest_env = get_metadata_env(project);
@@ -237,6 +244,20 @@ pub async fn get_task_env(project: &Project) -> miette::Result<HashMap<String, S
         .chain(activation_env.into_iter())
         .chain(manifest_env.into_iter())
         .collect())
+}
+
+/// Runs the activation script asynchronously. This function also adds a progress bar.
+pub async fn run_activation_async(
+    project: &Project,
+    prefix: Prefix,
+) -> miette::Result<HashMap<String, String>> {
+    let additional_activation_scripts = project.activation_scripts(Platform::current())?;
+    await_in_progress(
+        "activating environment",
+        run_activation(prefix, additional_activation_scripts.into_iter().collect()),
+    )
+    .await
+    .wrap_err("failed to activate environment")
 }
 
 /// Runs and caches the activation script.
@@ -271,4 +292,11 @@ async fn run_activation(
     .into_diagnostic()?;
 
     Ok(activator_result)
+}
+
+/// Helper function to create a pipe that we can get the output from.
+fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
+    let (reader, writer) = pipe();
+    let handle = reader.pipe_to_string_handle();
+    (writer, handle)
 }

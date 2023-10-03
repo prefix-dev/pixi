@@ -1,0 +1,9 @@
+---
+source: src/project/mod.rs
+expression: "project.tasks(Platform::Win64)"
+---
+{
+    "test": Plain(
+        "test win",
+    ),
+}

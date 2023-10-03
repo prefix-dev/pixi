@@ -1,9 +1,13 @@
-# Authenticate pixi with a server
+---
+part: pixi
+title: Authenticate pixi with a server
+description: Authenticate requests to the prefix GraphQL or REST endpoints with API keys
+---
 
 You can authenticate pixi with a server like prefix.dev, a private quetz instance or anaconda.org.
 Different servers use different authentication methods. In this documentation page we detail how you can authenticate against the different servers and where the authentication information is stored.
 
-```
+```shell
 Usage: pixi auth login [OPTIONS] <HOST>
 
 Arguments:
@@ -32,25 +36,25 @@ The last option, username & password, are used for "Basic HTTP Authentication". 
 
 Login to prefix.dev:
 
-```sh
+```shell
 pixi auth login prefix.dev --token pfx_jj8WDzvnuTEHGdAhwRZMC1Ag8gSto8
 ```
 
 Login to anaconda.org:
 
-```sh
+```shell
 pixi auth login anaconda.org --conda-token xy-72b914cc-c105-4ec7-a969-ab21d23480ed
 ```
 
 Login to a basic HTTP secured server:
 
-```sh
+```shell
 pixi auth login myserver.com --username user --password password
 ```
 
 ## Where does pixi store the authentication information?
 
-The storage location for the authentication information is system-dependent. By default, pixi tries to use the keychain to store this sensitive information securely on your computer.
+The storage location for the authentication information is system-dependent. By default, pixi tries to use the keychain to store this sensitive information securely on your machine.
 
 On Windows, the credentials are stored in the "credentials manager". Searching for `rattler` (the underlying library pixi uses) you should find any credentials stored by pixi (or other rattler-based programs).
 
@@ -60,4 +64,4 @@ On Linux, one can use `GNOME Keyring` (or just Keyring) to access credentials th
 
 ## Fallback storage
 
-If you run on a server with none of the aformentioned keychains available, then pixi falls back to store the credentials in an _insecure_ JSON file. This JSON file is located at `~/.rattler/rattler_auth_store.json` and contains the credentials.
+If you run on a server with none of the aforementioned keychains available, then pixi falls back to store the credentials in an _insecure_ JSON file. This JSON file is located at `~/.rattler/rattler_auth_store.json` and contains the credentials.

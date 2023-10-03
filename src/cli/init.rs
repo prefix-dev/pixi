@@ -3,7 +3,8 @@ use clap::Parser;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use rattler_conda_types::Platform;
-use std::io::{Error, ErrorKind};
+use std::io::{Error, ErrorKind, Write};
+use std::path::Path;
 use std::{fs, path::PathBuf};
 
 /// Creates a new project
@@ -15,8 +16,15 @@ pub struct Args {
 
     /// Channels to use in the project.
     #[arg(short, long = "channel", id = "channel")]
-    pub channels: Vec<String>,
+    pub channels: Option<Vec<String>>,
+
+    /// Platforms that the project supports.
+    #[arg(short, long = "platform", id = "platform")]
+    pub platforms: Vec<String>,
 }
+
+/// The default channels to use for a new project.
+const DEFAULT_CHANNELS: &[&str] = &["conda-forge"];
 
 /// The pixi.toml template
 ///
@@ -28,8 +36,8 @@ description = "Add a short description here"
 {%- if author %}
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
-channels = ["{{ channels|join("\", \"") }}"]
-platforms = ["{{ platform }}"]
+channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
+platforms = ["{{ platforms|join("\", \"") }}"]
 
 [tasks]
 
@@ -42,13 +50,19 @@ const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
 
 "#;
 
+const GITATTRIBUTES_TEMPLATE: &str = r#"# GitHub syntax highlighting
+pixi.lock linguist-language=YAML
+
+"#;
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let env = Environment::new();
     let dir = get_dir(args.path).into_diagnostic()?;
     let manifest_path = dir.join(consts::PROJECT_MANIFEST);
     let gitignore_path = dir.join(".gitignore");
+    let gitattributes_path = dir.join(".gitattributes");
 
-    // Check if the project file doesnt already exist. We don't want to overwrite it.
+    // Check if the project file doesn't already exist. We don't want to overwrite it.
     if fs::metadata(&manifest_path).map_or(false, |x| x.is_file()) {
         miette::bail!("{} already exists", consts::PROJECT_MANIFEST);
     }
@@ -68,12 +82,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .to_string_lossy();
     let version = "0.1.0";
     let author = get_default_author();
-    let channels = if args.channels.is_empty() {
-        vec![String::from("conda-forge")]
+    let channels = if let Some(channels) = args.channels {
+        channels
     } else {
-        args.channels
+        DEFAULT_CHANNELS
+            .iter()
+            .copied()
+            .map(ToOwned::to_owned)
+            .collect()
     };
-    let platform = Platform::current();
+
+    let platforms = if args.platforms.is_empty() {
+        vec![Platform::current().to_string()]
+    } else {
+        args.platforms
+    };
 
     let rv = env
         .render_named_str(
@@ -84,19 +107,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 version,
                 author,
                 channels,
-                platform
+                platforms
             },
         )
         .unwrap();
     fs::write(&manifest_path, rv).into_diagnostic()?;
 
     // create a .gitignore if one is missing
-    if !gitignore_path.is_file() {
-        let rv = env
-            .render_named_str("gitignore.txt", GITIGNORE_TEMPLATE, ())
-            .into_diagnostic()?;
-        fs::write(&gitignore_path, rv).into_diagnostic()?;
-    }
+    create_or_append_file(&gitignore_path, GITIGNORE_TEMPLATE)?;
+
+    // create a .gitattributes if one is missing
+    create_or_append_file(&gitattributes_path, GITATTRIBUTES_TEMPLATE)?;
 
     // Emit success
     eprintln!(
@@ -105,6 +126,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         dir.display()
     );
 
+    Ok(())
+}
+
+// Checks if string is in file.
+// If search string is multiline it will check if any of those lines is in the file.
+fn string_in_file(path: &Path, search: &str) -> bool {
+    let content = fs::read_to_string(path).unwrap_or_default();
+    search.lines().any(|line| content.contains(line))
+}
+
+// When the specific template is not in the file or the file does not exist.
+// Make the file and append the template to the file.
+fn create_or_append_file(path: &Path, template: &str) -> miette::Result<()> {
+    if !path.is_file() || !string_in_file(path, template) {
+        fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(path)
+            .into_diagnostic()?
+            .write_all(template.as_bytes())
+            .into_diagnostic()?;
+    }
     Ok(())
 }
 

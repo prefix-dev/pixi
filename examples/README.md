@@ -11,7 +11,7 @@ These are examples that are hosted in other repositories that use pixi for build
 
 ### AI
 
-[Lama.cpp](https://github.com/tdejager/llama.cpp)
+[Llama.cpp](https://github.com/tdejager/llama.cpp)
 
 ### Games
 

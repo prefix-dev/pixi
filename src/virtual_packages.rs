@@ -103,6 +103,43 @@ pub fn get_minimal_virtual_packages(platform: Platform) -> Vec<VirtualPackage> {
     virtual_packages
 }
 
+/// Determines whether a virtual packages is relevant based on the platform.
+pub fn non_relevant_virtual_packages_for_platform(
+    requirement: &VirtualPackage,
+    platform: Platform,
+) -> bool {
+    match platform {
+        Platform::LinuxAarch64
+        | Platform::Linux32
+        | Platform::LinuxPpc64le
+        | Platform::LinuxArmV6l
+        | Platform::LinuxArmV7l
+        | Platform::LinuxPpc64
+        | Platform::LinuxRiscv32
+        | Platform::LinuxS390X
+        | Platform::LinuxRiscv64
+        | Platform::Linux64 => {
+            matches!(requirement, VirtualPackage::Win)
+                || matches!(requirement, VirtualPackage::Osx(_))
+        }
+        Platform::Osx64 | Platform::OsxArm64 => {
+            matches!(requirement, VirtualPackage::LibC(_))
+                || matches!(requirement, VirtualPackage::Win)
+                || matches!(requirement, VirtualPackage::Linux(_))
+        }
+        Platform::Win64 | Platform::Win32 | Platform::WinArm64 => {
+            matches!(requirement, VirtualPackage::LibC(_))
+                || matches!(requirement, VirtualPackage::Unix)
+                || matches!(requirement, VirtualPackage::Osx(_))
+                || matches!(requirement, VirtualPackage::Linux(_))
+        }
+        Platform::NoArch
+        | Platform::Unknown
+        | Platform::EmscriptenWasm32
+        | Platform::WasiWasm32 => false,
+    }
+}
+
 impl Project {
     /// Returns the set of virtual packages to use for the specified platform according. This method
     /// takes into account the system requirements specified in the project manifest.
@@ -110,17 +147,14 @@ impl Project {
         &self,
         platform: Platform,
     ) -> miette::Result<Vec<GenericVirtualPackage>> {
-        // Start with the minimal virtual packages
-        let reference_packages = get_minimal_virtual_packages(platform);
-
         // Get the system requirements from the project manifest
-        let system_requirements = self.system_requirements();
+        let system_requirements = self.system_requirements_for_platform(platform);
 
         // Combine the requirements, allowing the system requirements to overwrite the reference
         // virtual packages.
-        let combined_packages = reference_packages
+        let combined_packages = get_minimal_virtual_packages(platform)
             .into_iter()
-            .chain(system_requirements.into_iter())
+            .chain(system_requirements)
             .map(GenericVirtualPackage::from)
             .map(|vpkg| (vpkg.name.clone(), vpkg))
             .collect::<HashMap<_, _>>();
@@ -148,14 +182,18 @@ pub fn verify_current_platform_has_required_virtual_packages(
     for req_pkg in required_pkgs {
         if let Some(local_vpkg) = system_virtual_packages.get(&req_pkg.name) {
             if req_pkg.build_string != local_vpkg.build_string {
-                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be on build '{}' but the system has build '{}'", req_pkg.name, req_pkg.build_string, local_vpkg.build_string);
+                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be on build '{}' but the system has build '{}'", req_pkg.name.as_source(), req_pkg.build_string, local_vpkg.build_string);
             }
 
             if req_pkg.version > local_vpkg.version {
-                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be at least version '{}' but the system has version '{}'", req_pkg.name, req_pkg.version, local_vpkg.version);
+                // This case can simply happen because the default system requirements in get_minimal_virtual_packages() is higher than required.
+                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be at least version '{}' but the system has version '{}'\n\n\
+                Try setting the following in your pixi.toml:\n\
+                [system-requirements]\n\
+                {} = \"{}\"", req_pkg.name.as_source(), req_pkg.version, local_vpkg.version, req_pkg.name.as_normalized().strip_prefix("__").unwrap_or(local_vpkg.name.as_normalized()), local_vpkg.version);
             }
         } else {
-            miette::bail!("The platform you are running on should at least have the virtual package {} on version {}, build_string: {}", req_pkg.name, req_pkg.version, req_pkg.build_string)
+            miette::bail!("The platform you are running on should at least have the virtual package {} on version {}, build_string: {}", req_pkg.name.as_source(), req_pkg.version, req_pkg.build_string)
         }
     }
 
@@ -164,9 +202,12 @@ pub fn verify_current_platform_has_required_virtual_packages(
 
 #[cfg(test)]
 mod tests {
-    use crate::virtual_packages::get_minimal_virtual_packages;
+    use crate::virtual_packages::{
+        get_minimal_virtual_packages, non_relevant_virtual_packages_for_platform,
+    };
     use insta::assert_debug_snapshot;
     use rattler_conda_types::Platform;
+    use rattler_virtual_packages::{Archspec, LibC, Linux, Osx, VirtualPackage};
 
     // Regression test on the virtual packages so there is not accidental changes
     #[test]
@@ -186,5 +227,67 @@ mod tests {
             let snapshot_name = format!("test_get_minimal_virtual_packages.{}", platform);
             assert_debug_snapshot!(snapshot_name, packages);
         }
+    }
+    #[test]
+    fn test_should_retain_of_virtual_packages_on_different_os() {
+        let libc = VirtualPackage::LibC(LibC {
+            family: "".to_string(),
+            version: "2.36".parse().unwrap(),
+        });
+        let win = VirtualPackage::Win;
+        let osx = VirtualPackage::Osx(Osx {
+            version: "11.4".parse().unwrap(),
+        });
+        let unix = VirtualPackage::Unix;
+        let linux = VirtualPackage::Linux(Linux {
+            version: "6.4.7".parse().unwrap(),
+        });
+        let archspec = VirtualPackage::Archspec(Archspec {
+            spec: "x86_64".to_string(),
+        });
+        let system_requirements = vec![libc, linux, win, unix, osx, archspec];
+
+        let linux_system_requirement: Vec<&VirtualPackage> = system_requirements
+            .iter()
+            .filter(|requirement| {
+                !non_relevant_virtual_packages_for_platform(requirement, Platform::Linux64)
+            })
+            .collect();
+        assert!(
+            !linux_system_requirement.iter().any(|r| match r {
+                VirtualPackage::Osx(_) => true,
+                VirtualPackage::Win => true,
+                _ => false,
+            }),
+            "linux has more virtual packages selected then expected: {:?}",
+            linux_system_requirement
+        );
+
+        let windows_system_requirement: Vec<&VirtualPackage> = system_requirements
+            .iter()
+            .filter(|requirement| {
+                !non_relevant_virtual_packages_for_platform(requirement, Platform::Win64)
+            })
+            .collect();
+        assert!(!windows_system_requirement.iter().any(|r| match r {
+            VirtualPackage::Osx(_) => true,
+            VirtualPackage::Linux(_) => true,
+            VirtualPackage::Unix => true,
+            VirtualPackage::LibC(_) => true,
+            _ => false,
+        }));
+
+        let osx_system_requirement: Vec<&VirtualPackage> = system_requirements
+            .iter()
+            .filter(|requirement| {
+                !non_relevant_virtual_packages_for_platform(requirement, Platform::Osx64)
+            })
+            .collect();
+        assert!(!osx_system_requirement.iter().any(|r| match r {
+            VirtualPackage::Linux(_) => true,
+            VirtualPackage::Win => true,
+            VirtualPackage::LibC(_) => true,
+            _ => false,
+        }));
     }
 }

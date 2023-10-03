@@ -1,7 +1,8 @@
-use crate::task::{Alias, CmdArgs, Execute, Task};
+use crate::task::{quote, Alias, CmdArgs, Execute, Task};
 use crate::Project;
 use clap::Parser;
 use itertools::Itertools;
+use rattler_conda_types::Platform;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -17,6 +18,10 @@ pub enum Operation {
     /// Alias another specific command
     #[clap(alias = "@")]
     Alias(AliasArgs),
+
+    /// List all tasks
+    #[clap(alias = "l")]
+    List,
 }
 
 #[derive(Parser, Debug)]
@@ -24,9 +29,13 @@ pub enum Operation {
 pub struct RemoveArgs {
     /// Task names to remove
     pub names: Vec<String>,
+
+    /// The platform for which the task should be removed
+    #[arg(long, short)]
+    pub platform: Option<Platform>,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]
 pub struct AddArgs {
     /// Task name
@@ -40,9 +49,13 @@ pub struct AddArgs {
     #[clap(long)]
     #[clap(num_args = 1..)]
     pub depends_on: Option<Vec<String>>,
+
+    /// The platform for which the task should be added
+    #[arg(long, short)]
+    pub platform: Option<Platform>,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]
 pub struct AliasArgs {
     /// Alias name
@@ -51,25 +64,35 @@ pub struct AliasArgs {
     /// Depends on these tasks to execute
     #[clap(required = true, num_args = 1..)]
     pub depends_on: Vec<String>,
+
+    /// The platform for which the alias should be added
+    #[arg(long, short)]
+    pub platform: Option<Platform>,
 }
 
 impl From<AddArgs> for Task {
     fn from(value: AddArgs) -> Self {
         let depends_on = value.depends_on.unwrap_or_default();
 
+        // Convert the arguments into a single string representation
+        let cmd_args = if value.commands.len() == 1 {
+            value.commands.into_iter().next().unwrap()
+        } else {
+            // Simply concatenate all arguments
+            value
+                .commands
+                .into_iter()
+                .map(|arg| quote(&arg).into_owned())
+                .join(" ")
+        };
+
+        // Depending on whether the task should have depends_on or not we create a Plain or complex
+        // command.
         if depends_on.is_empty() {
-            Self::Plain(if value.commands.len() == 1 {
-                value.commands[0].clone()
-            } else {
-                shlex::join(value.commands.iter().map(AsRef::as_ref))
-            })
+            Self::Plain(cmd_args)
         } else {
             Self::Execute(Execute {
-                cmd: CmdArgs::Single(if value.commands.len() == 1 {
-                    value.commands[0].clone()
-                } else {
-                    shlex::join(value.commands.iter().map(AsRef::as_ref))
-                }),
+                cmd: CmdArgs::Single(cmd_args),
                 depends_on,
             })
         }
@@ -101,9 +124,9 @@ pub fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     match args.operation {
         Operation::Add(args) => {
-            let name = args.name.clone();
-            let task: Task = args.into();
-            project.add_task(&name, task.clone())?;
+            let name = &args.name;
+            let task: Task = args.clone().into();
+            project.add_task(name, task.clone(), args.platform)?;
             eprintln!(
                 "{}Added task {}: {}",
                 console::style(console::Emoji("✔ ", "+")).green(),
@@ -114,7 +137,20 @@ pub fn execute(args: Args) -> miette::Result<()> {
         Operation::Remove(args) => {
             let mut to_remove = Vec::new();
             for name in args.names.iter() {
-                if project.task_opt(name).is_none() {
+                if let Some(platform) = args.platform {
+                    if !project
+                        .target_specific_tasks(platform)
+                        .contains_key(name.as_str())
+                    {
+                        eprintln!(
+                            "{}Task '{}' does not exist on {}",
+                            console::style(console::Emoji("❌ ", "X")).red(),
+                            console::style(&name).bold(),
+                            console::style(platform.as_str()).bold(),
+                        );
+                        continue;
+                    }
+                } else if !project.tasks(None).contains_key(name.as_str()) {
                     eprintln!(
                         "{}Task {} does not exist",
                         console::style(console::Emoji("❌ ", "X")).red(),
@@ -122,8 +158,9 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     );
                     continue;
                 }
+
                 // Check if task has dependencies
-                let depends_on = project.task_depends_on(name);
+                let depends_on = project.task_names_depending_on(name);
                 if !depends_on.is_empty() && !args.names.contains(name) {
                     eprintln!(
                         "{}: {}",
@@ -137,28 +174,40 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     );
                 }
                 // Safe to remove
-                to_remove.push(name);
+                to_remove.push((name, args.platform));
             }
 
-            for name in to_remove {
-                project.remove_task(name)?;
+            for (name, platform) in to_remove {
+                project.remove_task(name, platform)?;
                 eprintln!(
                     "{}Removed task {} ",
-                    console::style(console::Emoji("❌ ", "X")).yellow(),
+                    console::style(console::Emoji("✔ ", "+")).green(),
                     console::style(&name).bold(),
                 );
             }
         }
         Operation::Alias(args) => {
-            let name = args.alias.clone();
-            let task: Task = args.into();
-            project.add_task(&name, task.clone())?;
+            let name = &args.alias;
+            let task: Task = args.clone().into();
+            project.add_task(name, task.clone(), args.platform)?;
             eprintln!(
                 "{} Added alias {}: {}",
                 console::style("@").blue(),
                 console::style(&name).bold(),
                 task,
             );
+        }
+        Operation::List => {
+            let tasks = project.task_names(Some(Platform::current()));
+            if tasks.is_empty() {
+                eprintln!("No tasks found",);
+            } else {
+                let mut formatted = String::new();
+                for name in tasks {
+                    formatted.push_str(&format!("* {}\n", console::style(name).bold(),));
+                }
+                eprintln!("{}", formatted);
+            }
         }
     };
 

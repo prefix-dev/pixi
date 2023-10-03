@@ -36,26 +36,20 @@ jobs:
             cargo rustdoc -p "$package" --all-features -- -D warnings -W unreachable-pub
           done
 
-  fmt:
-    name: Ensure 'cargo fmt' has been run
+  format_and_lint:
+    name: Format and Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          components: rustfmt
-      - name: Rustfmt Check
+          components: clippy, rustfmt
+      - name: Run rustfmt
         uses: actions-rust-lang/rustfmt@v1
-
-  clippy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          components: clippy
       - name: Run clippy
-        run: cargo clippy --locked
+        run: cargo clippy
 
   crate_metadata:
     name: Extract crate metadata
@@ -76,79 +70,78 @@ jobs:
       homepage: ${{ steps.crate_metadata.outputs.homepage }}
 
   build:
-    name: ${{ matrix.job.name }}
-    runs-on: ${{ matrix.job.os }}
-    needs: [ crate_metadata, clippy ]
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    needs: [ crate_metadata, format_and_lint ]
     strategy:
       fail-fast: false
       matrix:
-        job:
-          - { name: "Linux-x86_64",   target: x86_64-unknown-linux-musl,  os: ubuntu-20.04, use-cross: true }
+        include:
+          - { name: "Linux-x86_64",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
+          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest, skip-tests: true }
 
-          - { name: "macOS-x86_64",   target: x86_64-apple-darwin,        os: macOS-latest }
-          - { name: "macOS-aarch64",  target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
+          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
+          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
 
-          - { name: "Windows-x86_64", target: x86_64-pc-windows-msvc,     os: windows-latest, rustflags: -C target-feature=+crt-static }
+          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
     env:
-      BUILD_CMD: cargo # The build and test command to use if not overwritten
-      RUSTFLAGS: ${{ matrix.job.rustflags || '' }} -D warnings
+      #
+      # These are some environment variables that configure the build so that the binary size is reduced.
+      # Inspiration was taken from this blog: https://arusahni.net/blog/2020/03/optimizing-rust-binary-size.html
+      #
+
+      # Enable Link Time Optimization (LTO) for our release builds. This increases link time but drastically reduces
+      # binary size.
+      CARGO_PROFILE_RELEASE_LTO: true
+
+      # Use a single code gen unit, this effectively disables parallel linking but ensures that everything is linked
+      # together in a single unit which reduces the file-size at the cost of link time.
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
+
+      # Optimize the binary for size. This reduces the filesize at the cost of a slower binary.
+      CARGO_PROFILE_OPT_LEVEL: s
     steps:
       - name: Checkout source code
         uses: actions/checkout@v3
 
-      - name: Install prerequisites
-        shell: bash
-        run: |
-          case ${{ matrix.job.target }} in
-            arm-unknown-linux-*) sudo apt-get -y update ; sudo apt-get -y install gcc-arm-linux-gnueabihf ;;
-            aarch64-unknown-linux-gnu) sudo apt-get -y update ; sudo apt-get -y install gcc-aarch64-linux-gnu ;;
-          esac
-
-      - name: Extract crate information
-        shell: bash
-        run: |
-          echo "PROJECT_NAME=$(sed -n 's/^name = "\(.*\)"/\1/p' Cargo.toml | head -n1)" >> $GITHUB_ENV
-          echo "PROJECT_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)" >> $GITHUB_ENV
-          echo "PROJECT_MAINTAINER=$(sed -n 's/^authors = \["\(.*\)"\]/\1/p' Cargo.toml)" >> $GITHUB_ENV
-          echo "PROJECT_HOMEPAGE=$(sed -n 's/^homepage = "\(.*\)"/\1/p' Cargo.toml)" >> $GITHUB_ENV
-
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          target: ${{ matrix.job.target }}
+          target: ${{ matrix.target }}
+          cache: false
+
+      - uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
+
+      - name: Use static CRT on Windows
+        shell: bash
+        run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static" >> "${GITHUB_ENV}"
+        if: endsWith(matrix.target, 'windows-msvc')
+
+      - name: Set release specific compilation flags
+        if: steps.is-release.outputs.IS_RELEASE
+        shell: bash
+        run: |
+          echo "CARGO_PROFILE_RELEASE_LTO=true" >> $GITHUB_ENV
+          echo "CARGO_PROFILE_RELEASE_STRIP=true" >> $GITHUB_ENV
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Setup | Install cargo-wix [Windows]
         continue-on-error: true
         # aarch64 is only supported in wix 4.0 development builds
-        if: matrix.job.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
+        if: startsWith(matrix.os, 'windows') && matrix.target != 'aarch64-pc-windows-msvc'
         run: cargo install --version 0.3.4 cargo-wix
         env:
           # cargo-wix does not require static crt
           RUSTFLAGS: ""
 
-      - name: Install cross
-        if: matrix.job.use-cross
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cross
-
       - name: Ensure cache directory exists
         shell: bash
-        if: matrix.job.os == 'ubuntu-20.04' && matrix.job.use-cross
+        if: matrix.os == 'ubuntu-20.04' && matrix.use-cross
         run: |
           mkdir -p ${XDG_CACHE_HOME}
-
-      - name: Overwrite build command env variable
-        if: matrix.job.use-cross
-        shell: bash
-        run: echo "BUILD_CMD=cross" >> $GITHUB_ENV
-
-      - name: Add macOS cross build capability
-        if: matrix.job.target == 'aarch64-apple-darwin'
-        shell: bash
-        run: |
-          echo "SDKROOT=$(xcrun -sdk macosx --show-sdk-path)" >> $GITHUB_ENV
-          echo "MACOSX_DEPLOYMENT_TARGET=$(xcrun -sdk macosx --show-sdk-platform-version)" >> $GITHUB_ENV
 
       - name: Show version information (Rust, cargo, GCC)
         shell: bash
@@ -166,31 +159,18 @@ jobs:
           unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true' ; fi
           echo "IS_RELEASE=${IS_RELEASE}" >> $GITHUB_OUTPUT
 
-      - name: Set release specific compilation flags
-        if: steps.is-release.outputs.IS_RELEASE
-        shell: bash
-        run: |
-          echo "CARGO_PROFILE_RELEASE_LTO=true" >> $GITHUB_ENV
-          echo "CARGO_PROFILE_RELEASE_STRIP=true" >> $GITHUB_ENV
-
-      - name: Set build options
+      - name: Use rustls on musl targets.
         id: build-options
-        shell: bash
+        if: contains(matrix.target, '-musl')
         run: |
-          unset CARGO_BUILD_OPTIONS
-          case ${{ matrix.job.target }} in
-            *-musl*) CARGO_BUILD_OPTIONS="--no-default-features --features rustls-tls"  ;;
-            *) CARGO_BUILD_OPTIONS=""  ;;
-          esac
-
-          echo "CARGO_BUILD_OPTIONS=${CARGO_BUILD_OPTIONS}" >> $GITHUB_OUTPUT
+          echo "CARGO_BUILD_OPTIONS=${CARGO_BUILD_OPTIONS} --no-default-features --features rustls-tls" >> $GITHUB_OUTPUT
 
       - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: ${{ matrix.job.use-cross }}
-          command: build
-          args: --locked --release --target=${{ matrix.job.target }} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+        run: >
+          cargo build
+          --locked
+          --release
+          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
 
       - name: Set binary name & path
         id: bin
@@ -198,13 +178,13 @@ jobs:
         run: |
           # Figure out suffix of binary
           EXE_SUFFIX=""
-          case ${{ matrix.job.target }} in
+          case ${{ matrix.target }} in
             *-pc-windows-*) EXE_SUFFIX=".exe" ;;
           esac;
 
           # Setup paths
           BIN_NAME="${{ needs.crate_metadata.outputs.name }}${EXE_SUFFIX}"
-          BIN_PATH="target/${{ matrix.job.target }}/release/${BIN_NAME}"
+          BIN_PATH="target/${{ matrix.target }}/release/${BIN_NAME}"
 
           # Let subsequent steps know where to find the binary
           echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
@@ -213,30 +193,31 @@ jobs:
 
       - name: Set testing options
         id: test-options
-        if: ${{ !matrix.job.skip-tests }}
+        if: ${{ !matrix.skip-tests }}
         shell: bash
         run: |
           # test only library unit tests and binary for arm-type targets
           unset CARGO_TEST_OPTIONS
-          unset CARGO_TEST_OPTIONS ; case ${{ matrix.job.target }} in arm-* | aarch64-*) CARGO_TEST_OPTIONS="--bin ${{ needs.crate_metadata.outputs.name }}" ;; esac;
+          unset CARGO_TEST_OPTIONS ; case ${{ matrix.target }} in arm-* | aarch64-*) CARGO_TEST_OPTIONS="--bin ${{ needs.crate_metadata.outputs.name }}" ;; esac;
           CARGO_TEST_OPTIONS="${CARGO_TEST_OPTIONS} --features ${{ env.TEST_FEATURES }}"
           echo "CARGO_TEST_OPTIONS=${CARGO_TEST_OPTIONS}" >> $GITHUB_OUTPUT
 
       - name: Run tests
-        if: ${{ !matrix.job.skip-tests }}
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: ${{ matrix.job.use-cross }}
-          command: test
-          args: --locked --target=${{ matrix.job.target }} ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}} ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+        if: ${{ !matrix.skip-tests }}
+        run: >
+          cargo test
+          --locked
+          --release
+          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+          ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
 
       - name: Build Installer
         continue-on-error: true
-        if: matrix.job.os == 'windows-latest' && matrix.job.target != 'aarch64-pc-windows-msvc'
+        if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
         run: >
           cargo wix -v --no-build --nocapture -I install/windows/main.wxs
-          --target ${{ matrix.job.target }}
-          --output target/wix/pixi-${{ matrix.job.target }}.msi
+          --target ${{ matrix.target }}
+          --output target/wix/pixi-${{ matrix.target }}.msi
 
       # Here we notarize the binary with a certificate from Apple
       # To get a certificate, go to XCode and request a Developer ID certificate for the right team.
@@ -248,7 +229,7 @@ jobs:
       # The team id is the team id of the Apple Developer Team.
       - name: Notarize binary
         # only execute this step when releasing, or on main branch and on macOS
-        if: startsWith(matrix.job.os, 'macOS-') && (github.ref == 'refs/heads/main' || steps.is-release.outputs.IS_RELEASE)
+        if: startsWith(matrix.os, 'macOS-') && (github.ref == 'refs/heads/main' || steps.is-release.outputs.IS_RELEASE)
         env:
           APPLEID_TEAMID: ${{ secrets.APPLEID_TEAMID }}
           APPLEID_USERNAME: ${{ secrets.APPLEID_USERNAME }}
@@ -300,8 +281,8 @@ jobs:
         id: package
         shell: bash
         run: |
-          PKG_suffix=".tar.gz" ; case ${{ matrix.job.target }} in *-pc-windows-*) PKG_suffix=".zip" ;; esac;
-          PKG_BASENAME=${{ needs.crate_metadata.outputs.name }}-${{ matrix.job.target }}
+          PKG_suffix=".tar.gz" ; case ${{ matrix.target }} in *-pc-windows-*) PKG_suffix=".zip" ;; esac;
+          PKG_BASENAME=${{ needs.crate_metadata.outputs.name }}-${{ matrix.target }}
           PKG_NAME=${PKG_BASENAME}${PKG_suffix}
           echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
@@ -316,17 +297,17 @@ jobs:
 
           # base compressed package
           pushd "${PKG_STAGING}/" >/dev/null
-          case ${{ matrix.job.target }} in
+          case ${{ matrix.target }} in
             *-pc-windows-*) 7z -y a "${PKG_NAME}" ./* | tail -2 ;;
             *) tar czf "${PKG_NAME}" ./* ;;
           esac;
           popd >/dev/null
 
-          cp "${{ steps.bin.outputs.BIN_PATH }}" "$PKG_STAGING/pixi-${{ matrix.job.target }}${{ steps.bin.outputs.EXE_SUFFIX }}"
+          cp "${{ steps.bin.outputs.BIN_PATH }}" "$PKG_STAGING/pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}"
 
           # Let subsequent steps know where to find the compressed package
           echo "PKG_PATH=${PKG_STAGING}/${PKG_NAME}" >> $GITHUB_OUTPUT
-          echo "BIN_PATH=$PKG_STAGING/pixi-${{ matrix.job.target }}${{ steps.bin.outputs.EXE_SUFFIX }}" >> $GITHUB_OUTPUT
+          echo "BIN_PATH=$PKG_STAGING/pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}" >> $GITHUB_OUTPUT
 
       - name: "Artifact upload: tarball"
         uses: actions/upload-artifact@master
@@ -337,16 +318,16 @@ jobs:
       - name: "Artifact upload: binary"
         uses: actions/upload-artifact@master
         with:
-          name: pixi-${{ matrix.job.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
+          name: pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
           path: ${{ steps.package.outputs.BIN_PATH }}
 
       - name: "Artifact upload: windows installer"
         continue-on-error: true
-        if: matrix.job.os == 'windows-latest' && matrix.job.target != 'aarch64-pc-windows-msvc'
+        if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
         uses: actions/upload-artifact@v3
         with:
-          name: pixi-${{ matrix.job.target }}.msi
-          path: target/wix/pixi-${{ matrix.job.target }}.msi
+          name: pixi-${{ matrix.target }}.msi
+          path: target/wix/pixi-${{ matrix.target }}.msi
 
       - name: Publish packages
         uses: softprops/action-gh-release@v1
@@ -356,6 +337,6 @@ jobs:
           files: |
             ${{ steps.package.outputs.PKG_PATH }}
             ${{ steps.package.outputs.BIN_PATH }}
-            target/wix/pixi-${{ matrix.job.target }}.msi
+            target/wix/pixi-${{ matrix.target }}.msi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

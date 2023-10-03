@@ -6,4 +6,4 @@ TOML parse error at line 8, column 9
   |
 8 | [target.foobar.dependencies]
   |         ^^^^^^
-'foobar' is not a known platform. Valid platforms are 'noarch', 'linux-32', 'linux-64', 'linux-aarch64', 'linux-armv6l', 'linux-armv7l', 'linux-ppc64le', 'linux-ppc64', 'linux-s390x', 'linux-riscv32', 'linux-riscv64', 'osx-64', 'osx-arm64', 'win-32', 'win-64', 'win-arm64', 'emscripten-32'
+'foobar' is not a known platform. Valid platforms are 'noarch', 'unknown', 'linux-32', 'linux-64', 'linux-aarch64', 'linux-armv6l', 'linux-armv7l', 'linux-ppc64le', 'linux-ppc64', 'linux-s390x', 'linux-riscv32', 'linux-riscv64', 'osx-64', 'osx-arm64', 'win-32', 'win-64', 'win-arm64', 'emscripten-wasm32', 'wasi-wasm32'

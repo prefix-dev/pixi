@@ -1,5 +1,7 @@
 use crate::common::PixiControl;
+use pixi::cli::run::Args;
 use pixi::task::{CmdArgs, Task};
+use rattler_conda_types::Platform;
 
 mod common;
 
@@ -10,7 +12,7 @@ pub async fn add_remove_task() {
 
     // Simple task
     pixi.tasks()
-        .add("test")
+        .add("test", None)
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
@@ -20,7 +22,7 @@ pub async fn add_remove_task() {
     assert!(matches!(task, Task::Plain(s) if s == "echo hello"));
 
     // Remove the task
-    pixi.tasks().remove("test").await.unwrap();
+    pixi.tasks().remove("test", None).await.unwrap();
     assert_eq!(pixi.project().unwrap().manifest.tasks.len(), 0);
 }
 
@@ -31,29 +33,112 @@ pub async fn add_command_types() {
 
     // Add a command with dependencies
     pixi.tasks()
-        .add("test")
+        .add("test", None)
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
     pixi.tasks()
-        .add("test2")
+        .add("test2", None)
         .with_commands(["echo hello", "echo bonjour"])
         .with_depends_on(["test"])
         .execute()
         .unwrap();
 
     let project = pixi.project().unwrap();
-    let task = project.manifest.tasks.get("test2").unwrap();
-    assert!(matches!(task, Task::Execute(cmd) if matches!(cmd.cmd, CmdArgs::Single(_))));
-    assert!(matches!(task, Task::Execute(cmd) if !cmd.depends_on.is_empty()));
+    let task2 = project.manifest.tasks.get("test2").unwrap();
+    let task = project.manifest.tasks.get("test").unwrap();
+    assert!(matches!(task2, Task::Execute(cmd) if matches!(cmd.cmd, CmdArgs::Single(_))));
+    assert!(matches!(task2, Task::Execute(cmd) if !cmd.depends_on.is_empty()));
+
+    assert_eq!(task.as_single_command().as_deref(), Some("echo hello"));
+    assert_eq!(
+        task2.as_single_command().as_deref(),
+        Some("\"echo hello\" \"echo bonjour\"")
+    );
 
     // Create an alias
     pixi.tasks()
-        .alias("testing")
+        .alias("testing", None)
         .with_depends_on(["test"])
         .execute()
         .unwrap();
     let project = pixi.project().unwrap();
     let task = project.manifest.tasks.get("testing").unwrap();
     assert!(matches!(task, Task::Alias(a) if a.depends_on.get(0).unwrap() == "test"));
+}
+
+#[tokio::test]
+async fn test_alias() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().without_channels().await.unwrap();
+
+    pixi.tasks()
+        .add("hello", None)
+        .with_commands(["echo hello"])
+        .execute()
+        .unwrap();
+
+    pixi.tasks()
+        .add("world", None)
+        .with_commands(["echo world"])
+        .execute()
+        .unwrap();
+
+    pixi.tasks()
+        .add("helloworld", None)
+        .with_depends_on(["hello", "world"])
+        .execute()
+        .unwrap();
+
+    let result = pixi
+        .run(Args {
+            task: vec!["helloworld".to_string()],
+            manifest_path: None,
+            locked: false,
+            frozen: false,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.stdout, "hello\nworld\n");
+}
+
+#[tokio::test]
+pub async fn add_remove_target_specific_task() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init_with_platforms(vec!["win-64".to_string()])
+        .await
+        .unwrap();
+
+    // Simple task
+    pixi.tasks()
+        .add("test", Some(Platform::Win64))
+        .with_commands(["echo only_on_windows"])
+        .execute()
+        .unwrap();
+
+    let project = pixi.project().unwrap();
+    let task = *project.tasks(Some(Platform::Win64)).get("test").unwrap();
+    assert!(matches!(task, Task::Plain(s) if s == "echo only_on_windows"));
+
+    // Simple task
+    pixi.tasks()
+        .add("test", None)
+        .with_commands(["echo hello"])
+        .execute()
+        .unwrap();
+
+    // Remove the task
+    pixi.tasks()
+        .remove("test", Some(Platform::Win64))
+        .await
+        .unwrap();
+    assert_eq!(
+        pixi.project()
+            .unwrap()
+            .target_specific_tasks(Platform::Win64)
+            .len(),
+        0
+    );
 }

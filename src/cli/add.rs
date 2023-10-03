@@ -11,11 +11,13 @@ use console::style;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
+use rattler_conda_types::version_spec::StrictRangeOperator;
+use rattler_conda_types::PackageName;
 use rattler_conda_types::{
-    version_spec::VersionOperator, MatchSpec, NamelessMatchSpec, Platform, Version, VersionSpec,
+    MatchSpec, NamelessMatchSpec, Platform, StrictVersion, Version, VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{libsolv_rs, SolverImpl};
+use rattler_solve::{resolvo, SolverImpl};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -63,6 +65,10 @@ pub struct Args {
     #[arg(long, conflicts_with = "host")]
     pub build: bool,
 
+    /// Don't update lockfile, implies the no-install as well.
+    #[clap(long, conflicts_with = "no_install")]
+    pub no_lockfile_update: bool,
+
     /// Don't install the package to the environment, only add the package to the lock-file.
     #[arg(long)]
     pub no_install: bool,
@@ -102,6 +108,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.specs,
         spec_type,
         args.no_install,
+        args.no_lockfile_update,
         spec_platforms,
     )
     .await
@@ -112,6 +119,7 @@ pub async fn add_specs_to_project(
     specs: Vec<MatchSpec>,
     spec_type: SpecType,
     no_install: bool,
+    no_update_lockfile: bool,
     specs_platforms: Vec<Platform>,
 ) -> miette::Result<()> {
     // Split the specs into package name and version specifier
@@ -121,7 +129,7 @@ pub async fn add_specs_to_project(
             Some(name) => Ok((name.clone(), spec.into())),
             None => Err(miette::miette!("missing package name for spec '{spec}'")),
         })
-        .collect::<miette::Result<HashMap<String, NamelessMatchSpec>>>()?;
+        .collect::<miette::Result<HashMap<PackageName, NamelessMatchSpec>>>()?;
 
     // Get the current specs
 
@@ -154,7 +162,7 @@ pub async fn add_specs_to_project(
             Err(err) => {
                 return Err(err).wrap_err_with(||miette::miette!(
                         "could not determine any available versions for {} on {platform}. Either the package could not be found or version constraints on other dependencies result in a conflict.",
-                        new_specs.keys().join(", ")
+                        new_specs.keys().map(|s| s.as_source()).join(", ")
                     ));
             }
         };
@@ -183,9 +191,9 @@ pub async fn add_specs_to_project(
             .expect("a version must have been previously selected");
         let updated_spec = if spec.version.is_none() {
             let mut updated_spec = spec.clone();
-            updated_spec.version = Some(VersionSpec::Operator(
-                VersionOperator::StartsWith,
-                best_version,
+            updated_spec.version = Some(VersionSpec::StrictRange(
+                StrictRangeOperator::StartsWith,
+                StrictVersion(best_version),
             ));
             updated_spec
         } else {
@@ -204,27 +212,35 @@ pub async fn add_specs_to_project(
 
         added_specs.push(spec);
     }
-
-    // Update the lock file and write to disk
-    let lock_file = update_lock_file(
-        project,
-        load_lock_file(project).await?,
-        Some(sparse_repo_data),
-    )
-    .await?;
     project.save()?;
 
-    if !no_install {
-        let platform = Platform::current();
-        if project.platforms().contains(&platform) {
-            // Get the currently installed packages
-            let prefix = Prefix::new(project.root().join(".pixi/env"))?;
-            let installed_packages = prefix.find_installed_packages(None).await?;
+    // Update the lock file
+    let lock_file = if !no_update_lockfile {
+        Some(
+            update_lock_file(
+                project,
+                load_lock_file(project).await?,
+                Some(sparse_repo_data),
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
 
-            // Update the prefix
-            update_prefix(&prefix, installed_packages, &lock_file, platform).await?;
-        } else {
-            eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", style("!").yellow().bold())
+    if let Some(lock_file) = lock_file {
+        if !no_install {
+            let platform = Platform::current();
+            if project.platforms().contains(&platform) {
+                // Get the currently installed packages
+                let prefix = Prefix::new(project.root().join(".pixi/env"))?;
+                let installed_packages = prefix.find_installed_packages(None).await?;
+
+                // Update the prefix
+                update_prefix(&prefix, installed_packages, &lock_file, platform).await?;
+            } else {
+                eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", style("!").yellow().bold())
+            }
         }
     }
 
@@ -256,11 +272,11 @@ pub async fn add_specs_to_project(
 
 /// Given several specs determines the highest installable version for them.
 pub fn determine_best_version(
-    new_specs: &HashMap<String, NamelessMatchSpec>,
-    current_specs: &IndexMap<String, NamelessMatchSpec>,
+    new_specs: &HashMap<PackageName, NamelessMatchSpec>,
+    current_specs: &IndexMap<PackageName, NamelessMatchSpec>,
     sparse_repo_data: &[SparseRepoData],
     platform: Platform,
-) -> miette::Result<HashMap<String, Version>> {
+) -> miette::Result<HashMap<PackageName, Version>> {
     let combined_specs = current_specs
         .iter()
         .chain(new_specs.iter())
@@ -303,7 +319,7 @@ pub fn determine_best_version(
         pinned_packages: vec![],
     };
 
-    let records = libsolv_rs::Solver.solve(task).into_diagnostic()?;
+    let records = resolvo::Solver.solve(task).into_diagnostic()?;
 
     // Determine the versions of the new packages
     Ok(records

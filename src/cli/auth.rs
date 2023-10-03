@@ -2,10 +2,6 @@ use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_networking::{Authentication, AuthenticationStorage};
 
-fn default_authentication_storage() -> AuthenticationStorage {
-    AuthenticationStorage::new("rattler", &dirs::home_dir().unwrap().join(".rattler"))
-}
-
 #[derive(Parser, Debug)]
 pub struct LoginArgs {
     /// The host to authenticate with (e.g. repo.prefix.dev)
@@ -113,7 +109,7 @@ fn logout(args: LogoutArgs, storage: AuthenticationStorage) -> miette::Result<()
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let storage = default_authentication_storage();
+    let storage = AuthenticationStorage::default();
 
     match args.subcommand {
         Subcommand::Login(args) => login(args, storage),

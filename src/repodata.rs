@@ -18,6 +18,10 @@ pub async fn fetch_sparse_repodata(
     channels: &[Channel],
     target_platforms: &[Platform],
 ) -> miette::Result<Vec<SparseRepoData>> {
+    if channels.is_empty() {
+        return Ok(vec![]);
+    }
+
     // Determine all the repodata that requires fetching.
     let mut fetch_targets = Vec::with_capacity(channels.len() * target_platforms.len());
     for channel in channels {
@@ -70,7 +74,7 @@ pub async fn fetch_sparse_repodata(
                 &repodata_cache,
                 download_client,
                 progress_bar.clone(),
-                platform == Platform::NoArch,
+                platform != Platform::NoArch,
             )
             .await;
 
@@ -125,14 +129,12 @@ async fn fetch_repo_data_records_with_progress(
     let result = fetch::fetch_repo_data(
         channel.platform_url(platform),
         client,
-        repodata_cache,
-        fetch::FetchRepoDataOptions {
-            download_progress: Some(Box::new(move |fetch::DownloadProgress { total, bytes }| {
-                download_progress_progress_bar.set_length(total.unwrap_or(bytes));
-                download_progress_progress_bar.set_position(bytes);
-            })),
-            ..Default::default()
-        },
+        repodata_cache.to_path_buf(),
+        Default::default(),
+        Some(Box::new(move |fetch::DownloadProgress { total, bytes }| {
+            download_progress_progress_bar.set_length(total.unwrap_or(bytes));
+            download_progress_progress_bar.set_position(bytes);
+        })),
     )
     .await;
 

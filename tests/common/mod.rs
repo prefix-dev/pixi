@@ -3,16 +3,19 @@
 pub mod builders;
 pub mod package_database;
 
-use crate::common::builders::{AddBuilder, InitBuilder, TaskAddBuilder, TaskAliasBuilder};
+use crate::common::builders::{
+    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, TaskAddBuilder,
+    TaskAliasBuilder,
+};
 use pixi::cli::install::Args;
 use pixi::cli::run::{
     create_script, execute_script_with_output, get_task_env, order_tasks, RunOutput,
 };
 use pixi::cli::task::{AddArgs, AliasArgs};
-use pixi::cli::{add, init, run, task};
+use pixi::cli::{add, init, project, run, task};
 use pixi::{consts, Project};
 use rattler_conda_types::conda_lock::CondaLock;
-use rattler_conda_types::{MatchSpec, Platform, Version};
+use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 
 use miette::IntoDiagnostic;
 use std::path::{Path, PathBuf};
@@ -49,7 +52,7 @@ pub fn string_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<
 
 pub trait LockFileExt {
     /// Check if this package is contained in the lockfile
-    fn contains_package(&self, name: impl AsRef<str>) -> bool;
+    fn contains_package(&self, name: &PackageName) -> bool;
     /// Check if this matchspec is contained in the lockfile
     fn contains_matchspec(&self, matchspec: impl IntoMatchSpec) -> bool;
     /// Check if this matchspec is contained in the lockfile for this platform
@@ -61,10 +64,10 @@ pub trait LockFileExt {
 }
 
 impl LockFileExt for CondaLock {
-    fn contains_package(&self, name: impl AsRef<str>) -> bool {
+    fn contains_package(&self, name: &PackageName) -> bool {
         self.package
             .iter()
-            .any(|locked_dep| locked_dep.name == name.as_ref())
+            .any(|locked_dep| locked_dep.name == *name)
     }
 
     fn contains_matchspec(&self, matchspec: impl IntoMatchSpec) -> bool {
@@ -128,7 +131,20 @@ impl PixiControl {
         InitBuilder {
             args: init::Args {
                 path: self.project_path().to_path_buf(),
-                channels: Vec::new(),
+                channels: None,
+                platforms: Vec::new(),
+            },
+        }
+    }
+
+    /// Initialize pixi project inside a temporary directory. Returns a [`InitBuilder`]. To execute
+    /// the command and await the result call `.await` on the return value.
+    pub fn init_with_platforms(&self, platforms: Vec<String>) -> InitBuilder {
+        InitBuilder {
+            args: init::Args {
+                path: self.project_path().to_path_buf(),
+                channels: None,
+                platforms,
             },
         }
     }
@@ -143,7 +159,19 @@ impl PixiControl {
                 specs: vec![spec.into()],
                 build: false,
                 no_install: true,
+                no_lockfile_update: false,
                 platform: Default::default(),
+            },
+        }
+    }
+
+    /// Add a new channel to the project.
+    pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
+        ProjectChannelAddBuilder {
+            manifest_path: Some(self.manifest_path()),
+            args: project::channel::add::Args {
+                channel: vec![],
+                no_install: true,
             },
         }
     }
@@ -154,26 +182,35 @@ impl PixiControl {
         let mut tasks = order_tasks(args.task, &self.project().unwrap())?;
 
         let project = self.project().unwrap();
-        let task_env = get_task_env(&project).await.unwrap();
+        let task_env = get_task_env(&project, args.frozen, args.locked)
+            .await
+            .unwrap();
 
+        let mut result = RunOutput::default();
         while let Some((command, args)) = tasks.pop_back() {
             let script = create_script(command, args).await;
             if let Ok(script) = script {
                 let output = execute_script_with_output(script, &project, &task_env, None).await;
-                if tasks.is_empty() {
-                    return Ok(output);
+                result.stdout.push_str(&output.stdout);
+                result.stderr.push_str(&output.stderr);
+                result.exit_code = output.exit_code;
+                if output.exit_code != 0 {
+                    break;
                 }
             }
         }
-        Ok(RunOutput::default())
+        Ok(result)
     }
 
-    /// Create an installed environment. I.e a resolved and installed prefix
-    pub async fn install(&self) -> miette::Result<()> {
-        pixi::cli::install::execute(Args {
-            manifest_path: Some(self.manifest_path()),
-        })
-        .await
+    /// Returns a [`InstallBuilder`]. To execute the command and await the result call `.await` on the return value.
+    pub fn install(&self) -> InstallBuilder {
+        InstallBuilder {
+            args: Args {
+                manifest_path: Some(self.manifest_path()),
+                locked: false,
+                frozen: false,
+            },
+        }
     }
 
     /// Get the associated lock file
@@ -193,32 +230,39 @@ pub struct TasksControl<'a> {
 
 impl TasksControl<'_> {
     /// Add a task
-    pub fn add(&self, name: impl ToString) -> TaskAddBuilder {
+    pub fn add(&self, name: impl ToString, platform: Option<Platform>) -> TaskAddBuilder {
         TaskAddBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AddArgs {
                 name: name.to_string(),
                 commands: vec![],
                 depends_on: None,
+                platform,
             },
         }
     }
 
     /// Remove a task
-    pub async fn remove(&self, name: impl ToString) -> miette::Result<()> {
+    pub async fn remove(
+        &self,
+        name: impl ToString,
+        platform: Option<Platform>,
+    ) -> miette::Result<()> {
         task::execute(task::Args {
             manifest_path: Some(self.pixi.manifest_path()),
             operation: task::Operation::Remove(task::RemoveArgs {
                 names: vec![name.to_string()],
+                platform,
             }),
         })
     }
 
     /// Alias one or multiple tasks
-    pub fn alias(&self, name: impl ToString) -> TaskAliasBuilder {
+    pub fn alias(&self, name: impl ToString, platform: Option<Platform>) -> TaskAliasBuilder {
         TaskAliasBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AliasArgs {
+                platform,
                 alias: name.to_string(),
                 depends_on: vec![],
             },

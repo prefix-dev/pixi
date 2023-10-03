@@ -50,7 +50,7 @@ ProjectManifest {
             dependencies: {
                 "foo": NamelessMatchSpec {
                     version: Some(
-                        Operator(
+                        Exact(
                             Equals,
                             Version {
                                 version: [[0], [3], [4], [5]],
@@ -71,6 +71,7 @@ ProjectManifest {
             host_dependencies: None,
             build_dependencies: None,
             activation: None,
+            tasks: {},
         },
         PixiSpanned {
             span: Some(
@@ -83,7 +84,7 @@ ProjectManifest {
             dependencies: {
                 "foo": NamelessMatchSpec {
                     version: Some(
-                        Operator(
+                        Exact(
                             Equals,
                             Version {
                                 version: [[0], [1], [2], [3]],
@@ -104,6 +105,7 @@ ProjectManifest {
             host_dependencies: None,
             build_dependencies: None,
             activation: None,
+            tasks: {},
         },
     },
     activation: None,

@@ -1,4 +1,5 @@
 use crate::{
+    default_retry_policy,
     prefix::Prefix,
     progress::{
         await_in_progress, default_progress_style, finished_progress_style, global_multi_progress,
@@ -19,11 +20,11 @@ use rattler_conda_types::{
     conda_lock,
     conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
     conda_lock::CondaLock,
-    MatchSpec, NamelessMatchSpec, Platform, PrefixRecord, RepoDataRecord, Version,
+    MatchSpec, NamelessMatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord, Version,
 };
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{libsolv_rs, SolverImpl};
+use rattler_solve::{resolvo, SolverImpl};
 use std::collections::HashMap;
 use std::{
     collections::{HashSet, VecDeque},
@@ -33,9 +34,15 @@ use std::{
     time::Duration,
 };
 
-/// Returns the prefix associated with the given environment. If the prefix doesnt exist or is not
+/// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
 /// up to date it is updated.
-pub async fn get_up_to_date_prefix(project: &Project) -> miette::Result<Prefix> {
+/// Use `frozen` or `locked` to skip the update of the lockfile. Use frozen when you don't even want
+/// to check the lockfile status.
+pub async fn get_up_to_date_prefix(
+    project: &Project,
+    frozen: bool,
+    locked: bool,
+) -> miette::Result<Prefix> {
     // Make sure the project supports the current platform
     let platform = Platform::current();
     if !project.platforms().contains(&platform) {
@@ -64,12 +71,21 @@ pub async fn get_up_to_date_prefix(project: &Project) -> miette::Result<Prefix> 
     };
 
     // Update the lock-file if it is out of date.
-    let lock_file = load_lock_file(project).await?;
-    let lock_file = if !lock_file_up_to_date(project, &lock_file)? {
-        update_lock_file(project, lock_file, None).await?
-    } else {
-        lock_file
-    };
+    if frozen && locked {
+        miette::bail!("Frozen and Locked can't be true at the same time, as using frozen will ignore the locked variable.");
+    }
+    if frozen && !project.lock_file_path().is_file() {
+        miette::bail!("No lockfile available, can't do a frozen installation.");
+    }
+
+    let mut lock_file = load_lock_file(project).await?;
+
+    if !frozen && !lock_file_up_to_date(project, &lock_file)? {
+        if locked {
+            miette::bail!("Lockfile not up-to-date with the project");
+        }
+        lock_file = update_lock_file(project, lock_file, None).await?
+    }
 
     // Update the environment
     update_prefix(
@@ -188,13 +204,13 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
             if let Some(vpkg) = virtual_packages.get(&name) {
                 if let Some(version_spec) = spec.version {
                     if !version_spec.matches(&vpkg.version) {
-                        tracing::info!("found a dependency on virtual package '{}' but the version spec '{}' does not match the expected version of the virtual package '{}'.", &name, &version_spec, &vpkg.version);
+                        tracing::info!("found a dependency on virtual package '{}' but the version spec '{}' does not match the expected version of the virtual package '{}'.", name.as_source(), &version_spec, &vpkg.version);
                         return Ok(false);
                     }
                 }
                 if let Some(build_spec) = spec.build {
                     if !build_spec.matches(&vpkg.build_string) {
-                        tracing::info!("found a dependency on virtual package '{}' but the build spec '{}' does not match the expected build of the virtual package '{}'.", &name, &build_spec, &vpkg.build_string);
+                        tracing::info!("found a dependency on virtual package '{}' but the build spec '{}' does not match the expected build of the virtual package '{}'.", name.as_source(), &build_spec, &vpkg.build_string);
                         return Ok(false);
                     }
                 }
@@ -212,7 +228,7 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
                 None => {
                     // No package found that matches the dependency, the lock file is not in a
                     // consistent state.
-                    tracing::info!("failed to find a locked package for '{} {}', assuming the lock file is out of date.", &name, &spec);
+                    tracing::info!("failed to find a locked package for '{} {}', assuming the lock file is out of date.", name.as_source(), &spec);
                     return Ok(false);
                 }
                 Some(package) => {
@@ -252,11 +268,11 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
 /// TODO: Make this more elaborate to include all properties of MatchSpec
 fn locked_dependency_satisfies(
     locked_package: &conda_lock::LockedDependency,
-    name: &str,
+    name: &PackageName,
     spec: &NamelessMatchSpec,
 ) -> bool {
     // Check if the name of the package matches
-    if locked_package.name.as_str() != name {
+    if locked_package.name != *name {
         return false;
     }
 
@@ -329,7 +345,7 @@ pub async fn update_lock_file(
         // Load only records we need for this platform
         let available_packages = SparseRepoData::load_records_recursive(
             platform_sparse_repo_data,
-            package_names.iter().copied(),
+            package_names.into_iter().cloned(),
             None,
         )
         .into_diagnostic()?;
@@ -351,7 +367,7 @@ pub async fn update_lock_file(
         };
 
         // Solve the task
-        let records = libsolv_rs::Solver.solve(task).into_diagnostic()?;
+        let records = resolvo::Solver.solve(task).into_diagnostic()?;
 
         // Update lock file
         let mut locked_packages = LockedPackages::new(platform);
@@ -396,7 +412,7 @@ pub async fn execute_transaction(
     // Open the package cache
     let package_cache = PackageCache::new(cache_dir.join("pkgs"));
 
-    // Create an install driver which helps limit the number of concurrent fileystem operations
+    // Create an install driver which helps limit the number of concurrent filesystem operations
     let install_driver = InstallDriver::default();
 
     // Define default installation options.
@@ -501,10 +517,11 @@ async fn execute_operation(
         async {
             // Make sure the package is available in the package cache.
             let result = package_cache
-                .get_or_fetch_from_url(
+                .get_or_fetch_from_url_with_retry(
                     &install_record.package_record,
                     install_record.url.clone(),
                     download_client.clone(),
+                    default_retry_policy(),
                 )
                 .map_ok(|cache_dir| Some((install_record.clone(), cache_dir)))
                 .await
@@ -585,7 +602,7 @@ async fn install_package_to_environment(
         link: None,
     };
 
-    // Create the conda-meta directory if it doesnt exist yet.
+    // Create the conda-meta directory if it doesn't exist yet.
     let target_prefix = target_prefix.to_path_buf();
     match tokio::task::spawn_blocking(move || {
         let conda_meta_path = target_prefix.join("conda-meta");
@@ -594,7 +611,11 @@ async fn install_package_to_environment(
         // Write the conda-meta information
         let pkg_meta_path = conda_meta_path.join(format!(
             "{}-{}-{}.json",
-            prefix_record.repodata_record.package_record.name,
+            prefix_record
+                .repodata_record
+                .package_record
+                .name
+                .as_source(),
             prefix_record.repodata_record.package_record.version,
             prefix_record.repodata_record.package_record.build
         ));
@@ -640,7 +661,7 @@ async fn remove_package_from_environment(
     // Remove the conda-meta file
     let conda_meta_path = target_prefix.join("conda-meta").join(format!(
         "{}-{}-{}.json",
-        package.repodata_record.package_record.name,
+        package.repodata_record.package_record.name.as_normalized(),
         package.repodata_record.package_record.version,
         package.repodata_record.package_record.build
     ));

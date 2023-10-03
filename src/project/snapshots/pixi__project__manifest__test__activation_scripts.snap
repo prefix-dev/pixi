@@ -59,6 +59,7 @@ ProjectManifest {
                     ),
                 },
             ),
+            tasks: {},
         },
         PixiSpanned {
             span: Some(
@@ -81,6 +82,7 @@ ProjectManifest {
                     ),
                 },
             ),
+            tasks: {},
         },
     },
     activation: Some(
