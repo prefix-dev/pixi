@@ -74,15 +74,18 @@ pub async fn get_up_to_date_prefix(
     if frozen && locked {
         miette::bail!("Frozen and Locked can't be true at the same time, as using frozen will ignore the locked variable.");
     }
-    let lock_file = load_lock_file(project).await?;
-    let lock_file = if frozen || lock_file_up_to_date(project, &lock_file)? {
-        lock_file
-    } else {
+    if frozen && !project.lock_file_path().is_file() {
+        miette::bail!("No lockfile available, can't do a frozen installation.");
+    }
+
+    let mut lock_file = load_lock_file(project).await?;
+
+    if !frozen && !lock_file_up_to_date(project, &lock_file)? {
         if locked {
             miette::bail!("Lockfile not up-to-date with the project");
         }
-        update_lock_file(project, lock_file, None).await?
-    };
+        lock_file = update_lock_file(project, lock_file, None).await?
+    }
 
     // Update the environment
     update_prefix(
