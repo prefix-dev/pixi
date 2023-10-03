@@ -93,7 +93,7 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
         .host_dependencies(target_platform)?
         .into_iter()
         .map(|dep| {
-            let ms = MatchSpec::from_str(&format!("{} {}", dep.0, dep.1)).unwrap();
+            let ms = MatchSpec::from_str(&format!("{} {}", dep.0.as_normalized(), dep.1)).unwrap();
             Dependency::Spec(ms)
         })
         .collect();
@@ -102,7 +102,7 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
         .build_dependencies(target_platform)?
         .into_iter()
         .map(|dep| {
-            let ms = MatchSpec::from_str(&format!("{} {}", dep.0, dep.1)).unwrap();
+            let ms = MatchSpec::from_str(&format!("{} {}", dep.0.as_normalized(), dep.1)).unwrap();
             Dependency::Spec(ms)
         })
         .collect();
@@ -111,7 +111,7 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
         .dependencies(target_platform)?
         .into_iter()
         .map(|dep| {
-            let ms = MatchSpec::from_str(&format!("{} {}", dep.0, dep.1)).unwrap();
+            let ms = MatchSpec::from_str(&format!("{} {}", dep.0.as_normalized(), dep.1)).unwrap();
             Dependency::Spec(ms)
         })
         .collect();
@@ -194,7 +194,7 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
             dev_url: project.manifest.project.repository.clone().map(|x| vec![x]),
         },
         package: Package {
-            name: project.name().to_string(),
+            name: project.name().parse().into_diagnostic()?,
             version: project.version().to_string(),
         },
         test: None,
