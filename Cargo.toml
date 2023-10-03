@@ -1,6 +1,6 @@
 [package]
 name = "pixi"
-version = "0.5.0"
+version = "0.5.1-dev"
 description = "A package management and workflow tool"
 edition = "2021"
 authors = ["pixi contributors <hi@prefix.dev>"]
