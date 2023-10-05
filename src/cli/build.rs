@@ -10,6 +10,7 @@ use rattler_build::{
     render::dependency_list::Dependency,
     tool_configuration::Configuration,
 };
+use rattler_conda_types::package::ArchiveType;
 use rattler_conda_types::{MatchSpec, NoArchType, Platform};
 
 use crate::{
@@ -21,7 +22,7 @@ use crate::{
 #[derive(Parser, Debug)]
 pub struct Args {}
 
-fn get_script(project: &Project) -> String {
+fn get_script(project: &Project) -> miette::Result<String> {
     // find the "install" script and all the dependencies
 
     let mut script: Vec<String> = Vec::new();
@@ -35,19 +36,19 @@ fn get_script(project: &Project) -> String {
         Task::Alias(cmd) => cmd.depends_on.join(" && "),
     };
 
-    let mut dependencies: Vec<String> = Vec::new();
     let task = project
         .task_opt("install")
-        .expect("Could not find an install task");
+        .ok_or_else(|| miette::miette!("Could not find an install task"))?;
 
     script.push(get_script(task));
 
+    let mut dependencies: Vec<String> = Vec::new();
     dependencies.extend(task.depends_on().iter().cloned());
 
     while !dependencies.is_empty() {
         let task = project
             .task_opt(&dependencies[0])
-            .expect("Could not find a task");
+            .ok_or_else(|| miette::miette!("Could not find a task"))?;
         script.push(get_script(task));
 
         dependencies.extend(task.depends_on().iter().cloned());
@@ -55,7 +56,7 @@ fn get_script(project: &Project) -> String {
     }
 
     script.reverse();
-    script.join("\n")
+    Ok(script.join("\n"))
 }
 
 pub async fn execute(_args: Args) -> miette::Result<()> {
@@ -83,9 +84,10 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
         channels: channels.iter().map(|c| c.canonical_name()).collect(),
         timestamp: chrono::Utc::now(),
         subpackages: Default::default(),
+        package_format: ArchiveType::Conda,
     };
 
-    let script = get_script(&project);
+    let script = get_script(&project)?;
 
     tracing::info!("Assembled build script:\n{}", script);
 

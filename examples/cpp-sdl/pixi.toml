@@ -38,4 +38,3 @@ ninja = "1.11.1.*"
 
 [host-dependencies]
 sdl2 = "2.26.5.*"
-
