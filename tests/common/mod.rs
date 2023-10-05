@@ -238,6 +238,7 @@ impl TasksControl<'_> {
                 commands: vec![],
                 depends_on: None,
                 platform,
+                cwd: None,
             },
         }
     }
