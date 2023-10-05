@@ -15,7 +15,7 @@ use crate::project::environment::get_metadata_env;
 use crate::task::{quote_arguments, CmdArgs, Execute, Task};
 use crate::{environment::get_up_to_date_prefix, Project};
 use rattler_shell::{
-    activation::{ActivationVariables, Activator, PathModificationBehaviour},
+    activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::ShellEnum,
 };
 use tokio::task::JoinHandle;
@@ -284,7 +284,7 @@ async fn run_activation(
             conda_prefix: None,
 
             // Prepending environment paths so they get found first.
-            path_modification_behaviour: PathModificationBehaviour::Prepend,
+            path_modification_behaviour: PathModificationBehavior::Prepend,
         })
     })
     .await

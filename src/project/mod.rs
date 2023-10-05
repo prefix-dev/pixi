@@ -1,5 +1,6 @@
 pub mod environment;
 pub mod manifest;
+mod python;
 mod serde;
 
 use crate::consts::{self, PROJECT_MANIFEST};
@@ -18,6 +19,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::project::python::PythonRequirement;
 use crate::virtual_packages::non_relevant_virtual_packages_for_platform;
 use toml_edit::{Array, Document, Item, Table, TomlError, Value};
 
@@ -413,6 +415,15 @@ impl Project {
         dependencies.extend(self.host_dependencies(platform)?);
         dependencies.extend(self.build_dependencies(platform)?);
         Ok(dependencies)
+    }
+
+    pub fn python_dependencies(&self) -> IndexMap<rip::PackageName, PythonRequirement> {
+        IndexMap::from_iter(
+            self.manifest
+                .python_dependencies
+                .iter()
+                .map(|(name, req)| (name.value.clone(), req.value.clone())),
+        )
     }
 
     /// Returns all the targets specific metadata that apply with the given context.

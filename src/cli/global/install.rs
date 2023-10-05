@@ -12,7 +12,7 @@ use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platfo
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
-    activation::{ActivationVariables, Activator, PathModificationBehaviour},
+    activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::Shell,
     shell::ShellEnum,
 };
@@ -141,7 +141,7 @@ pub(crate) fn create_activation_script(
         .activation(ActivationVariables {
             conda_prefix: None,
             path: None,
-            path_modification_behaviour: PathModificationBehaviour::Prepend,
+            path_modification_behaviour: PathModificationBehavior::Prepend,
         })
         .into_diagnostic()?;
 

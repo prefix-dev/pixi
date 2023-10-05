@@ -1,3 +1,4 @@
+use crate::project::python::PythonRequirement;
 use crate::project::SpecType;
 use crate::utils::spanned::PixiSpanned;
 use crate::{consts, task::Task};
@@ -65,6 +66,11 @@ pub struct ProjectManifest {
     /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
     /// manifest.
     pub activation: Option<Activation>,
+
+    /// Optional python requirements
+    #[serde(default, rename = "python-dependencies")]
+    pub python_dependencies:
+        IndexMap<PixiSpanned<rip::PackageName>, PixiSpanned<PythonRequirement>>,
 }
 
 impl ProjectManifest {
@@ -474,6 +480,22 @@ mod test {
 
             [target.linux-64.tasks]
             test = "test linux"
+            "#
+        );
+
+        assert_debug_snapshot!(
+            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
+        );
+    }
+
+    #[test]
+    fn test_python_dependencies() {
+        let contents = format!(
+            r#"
+            {PROJECT_BOILERPLATE}
+            [python-dependencies]
+            foo = ">=3.12"
+            bar = {{ version=">=3.12", extras=["baz"] }}
             "#
         );
 

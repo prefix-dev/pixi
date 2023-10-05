@@ -1,0 +1,119 @@
+---
+source: src/project/manifest.rs
+assertion_line: 501
+expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\")"
+---
+ProjectManifest {
+    project: ProjectMetadata {
+        name: "foo",
+        version: Version {
+            version: [[0], [0], [1], [0]],
+            local: [],
+        },
+        description: None,
+        authors: [],
+        channels: [],
+        platforms: PixiSpanned {
+            span: Some(
+                121..123,
+            ),
+            value: [],
+        },
+        license: None,
+        license_file: None,
+        readme: None,
+        homepage: None,
+        repository: None,
+        documentation: None,
+    },
+    tasks: {},
+    system_requirements: SystemRequirements {
+        windows: None,
+        unix: None,
+        macos: None,
+        linux: None,
+        cuda: None,
+        libc: None,
+        archspec: None,
+    },
+    dependencies: {},
+    host_dependencies: None,
+    build_dependencies: None,
+    target: {},
+    activation: None,
+    python_dependencies: {
+        PixiSpanned {
+            span: Some(
+                179..182,
+            ),
+            value: PackageName {
+                source: "foo",
+                normalized: "foo",
+            },
+        }: PixiSpanned {
+            span: Some(
+                185..193,
+            ),
+            value: PythonRequirement {
+                version: VersionSpecifiers(
+                    [
+                        VersionSpecifier {
+                            operator: GreaterThanEqual,
+                            version: Version {
+                                epoch: 0,
+                                release: [
+                                    3,
+                                    12,
+                                ],
+                                pre: None,
+                                post: None,
+                                dev: None,
+                                local: None,
+                            },
+                        },
+                    ],
+                ),
+                extras: {},
+            },
+        },
+        PixiSpanned {
+            span: Some(
+                206..209,
+            ),
+            value: PackageName {
+                source: "bar",
+                normalized: "bar",
+            },
+        }: PixiSpanned {
+            span: Some(
+                212..248,
+            ),
+            value: PythonRequirement {
+                version: VersionSpecifiers(
+                    [
+                        VersionSpecifier {
+                            operator: GreaterThanEqual,
+                            version: Version {
+                                epoch: 0,
+                                release: [
+                                    3,
+                                    12,
+                                ],
+                                pre: None,
+                                post: None,
+                                dev: None,
+                                local: None,
+                            },
+                        },
+                    ],
+                ),
+                extras: {
+                    Extra {
+                        source: "baz",
+                        normalized: "baz",
+                    },
+                },
+            },
+        },
+    },
+}

@@ -1,0 +1,36 @@
+---
+source: src/project/python.rs
+assertion_line: 82
+expression: requirement
+---
+{
+    PackageName {
+        source: "foo",
+        normalized: "foo",
+    }: PythonRequirement {
+        version: PixiSpanned {
+            span: Some(
+                6..14,
+            ),
+            value: VersionSpecifiers(
+                [
+                    VersionSpecifier {
+                        operator: GreaterThanEqual,
+                        version: Version {
+                            epoch: 0,
+                            release: [
+                                3,
+                                12,
+                            ],
+                            pre: None,
+                            post: None,
+                            dev: None,
+                            local: None,
+                        },
+                    },
+                ],
+            ),
+        },
+        extras: {},
+    },
+}

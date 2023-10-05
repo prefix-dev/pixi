@@ -1,0 +1,13 @@
+[project]
+name = "myproject"
+version = "0.1.0"
+description = "Add a short description here"
+authors = ["Bas Zalmstra <zalmstra.bas@gmail.com>"]
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+[tasks]
+test = "FOO=bla; echo $FOO"
+tests = "PATH=$PATH;build/Debug build/tests/Debug/behaviortree_cpp_test.exe"
+
+[dependencies]
