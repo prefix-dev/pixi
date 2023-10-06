@@ -111,8 +111,16 @@ If you want to make a shorthand for a specific command you can add a task for it
 
 Add a task to the `pixi.toml`, use `--depends-on` to add tasks you want to run before this task, e.g. build before an execute task.
 
+#### Options
+- `--platform`: the platform for which this task should be added.
+- `--depends-on`: the task it depends on to be run before the one your adding.
+- `--cwd`: the working directory for the task relative to the root of the project.
+
 ```shell
 pixi task add cow cowpy "Hello User"
+pixi task add tls ls --cwd tests
+pixi task add test cargo t --depends-on build
+pixi task add build-osx "METAL=1 cargo build" --platform osx-64
 ```
 
 This adds the following to the `pixi.toml`:
@@ -120,6 +128,11 @@ This adds the following to the `pixi.toml`:
 ```toml
 [tasks]
 cow = "cowpy \"Hello User\""
+tls = { cmd = "ls", cwd = "tests" }
+test = { cmd = "cargo t", depends_on = ["build"] }
+
+[target.osx-64.tasks]
+build-osx = "METAL=1 cargo build"
 ```
 
 Which you can then run with the `run` command:
