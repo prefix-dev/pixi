@@ -149,6 +149,12 @@ impl TaskAddBuilder {
         self
     }
 
+    /// With this working directory
+    pub fn with_cwd(mut self, cwd: PathBuf) -> Self {
+        self.args.cwd = Some(cwd);
+        self
+    }
+
     /// Execute the CLI command
     pub fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {

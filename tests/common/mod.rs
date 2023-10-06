@@ -188,9 +188,11 @@ impl PixiControl {
 
         let mut result = RunOutput::default();
         while let Some((command, args)) = tasks.pop_back() {
+            let cwd = run::select_cwd(command.working_directory(), &project)?;
             let script = create_script(command, args).await;
             if let Ok(script) = script {
-                let output = execute_script_with_output(script, &project, &task_env, None).await;
+                let output =
+                    execute_script_with_output(script, cwd.as_path(), &task_env, None).await;
                 result.stdout.push_str(&output.stdout);
                 result.stderr.push_str(&output.stderr);
                 result.exit_code = output.exit_code;

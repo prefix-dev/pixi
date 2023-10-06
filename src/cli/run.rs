@@ -151,6 +151,20 @@ pub async fn create_script(task: Task, args: Vec<String>) -> miette::Result<Sequ
     deno_task_shell::parser::parse(full_script.trim()).map_err(|e| miette!("{e}"))
 }
 
+/// Select a working directory based on a given path or the project.
+pub fn select_cwd(path: Option<&Path>, project: &Project) -> miette::Result<PathBuf> {
+    Ok(match path {
+        Some(cwd) if cwd.is_absolute() => cwd.to_path_buf(),
+        Some(cwd) => {
+            let abs_path = project.root().join(cwd);
+            if !abs_path.exists() {
+                miette::bail!("Can't find the 'cwd': '{}'", abs_path.display());
+            }
+            abs_path
+        }
+        None => project.root().to_path_buf(),
+    })
+}
 /// Executes the given command within the specified project and with the given environment.
 pub async fn execute_script(
     script: SequentialList,
@@ -163,7 +177,7 @@ pub async fn execute_script(
 
 pub async fn execute_script_with_output(
     script: SequentialList,
-    project: &Project,
+    cwd: &Path,
     command_env: &HashMap<String, String>,
     input: Option<&[u8]>,
 ) -> RunOutput {
@@ -174,7 +188,7 @@ pub async fn execute_script_with_output(
     drop(stdin_writer); // prevent a deadlock by dropping the writer
     let (stdout, stdout_handle) = get_output_writer_and_handle();
     let (stderr, stderr_handle) = get_output_writer_and_handle();
-    let state = ShellState::new(command_env.clone(), project.root(), Default::default());
+    let state = ShellState::new(command_env.clone(), cwd, Default::default());
     let code = execute_with_pipes(script, state, stdin, stdout, stderr).await;
     RunOutput {
         exit_code: code,
@@ -196,21 +210,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Execute the commands in the correct order
     while let Some((command, args)) = ordered_commands.pop_back() {
-        // Get current working directory based on the information in the task.
-        let cwd = match command.working_directory() {
-            None => project.root().to_path_buf(),
-            Some(cwd) => {
-                if cwd.is_absolute() {
-                    cwd.to_path_buf()
-                } else {
-                    let path = project.root().join(cwd);
-                    if !path.exists() {
-                        miette::bail!("Can't find the 'cwd': '{}'", path.display());
-                    }
-                    path
-                }
-            }
-        };
+        let cwd = select_cwd(command.working_directory(), &project)?;
         // Ignore CTRL+C
         // Specifically so that the child is responsible for its own signal handling
         // NOTE: one CTRL+C is registered it will always stay registered for the rest of the runtime of the program
