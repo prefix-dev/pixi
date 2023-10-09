@@ -1,4 +1,5 @@
-use crate::environment::{load_lock_file, update_lock_file, update_prefix};
+use crate::environment::update_prefix;
+use crate::lock_file::{load_lock_file, update_lock_file};
 use crate::prefix::Prefix;
 use crate::Project;
 use clap::Parser;

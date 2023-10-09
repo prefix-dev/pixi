@@ -215,7 +215,8 @@ impl PixiControl {
 
     /// Get the associated lock file
     pub async fn lock_file(&self) -> miette::Result<CondaLock> {
-        pixi::environment::load_lock_for_manifest_path(&self.manifest_path()).await
+        let project = Project::load(&self.manifest_path())?;
+        pixi::lock_file::load_lock_file(&project).await
     }
 
     pub fn tasks(&self) -> TasksControl {

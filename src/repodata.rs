@@ -1,4 +1,4 @@
-use crate::{progress, project::Project};
+use crate::{default_authenticated_client, progress, project::Project};
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, Platform};
@@ -48,7 +48,7 @@ pub async fn fetch_sparse_repodata(
     let repodata_cache_path = rattler::default_cache_dir()
         .map_err(|_| miette::miette!("could not determine default cache directory"))?
         .join("repodata");
-    let repodata_download_client = AuthenticatedClient::default();
+    let repodata_download_client = default_authenticated_client();
     let multi_progress = progress::global_multi_progress();
     let (tx, mut rx) =
         tokio::sync::mpsc::channel::<miette::Result<Option<SparseRepoData>>>(fetch_targets.len());

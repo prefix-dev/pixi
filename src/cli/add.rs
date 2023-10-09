@@ -1,11 +1,8 @@
 use crate::environment::update_prefix;
+use crate::lock_file::{load_lock_file, update_lock_file};
 use crate::prefix::Prefix;
 use crate::project::SpecType;
-use crate::{
-    environment::{load_lock_file, update_lock_file},
-    project::Project,
-    virtual_packages::get_minimal_virtual_packages,
-};
+use crate::{project::Project, virtual_packages::get_minimal_virtual_packages};
 use clap::Parser;
 use console::style;
 use indexmap::IndexMap;

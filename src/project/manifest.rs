@@ -1,4 +1,4 @@
-use crate::project::python::PythonRequirement;
+use crate::project::python::PythonDependencies;
 use crate::project::SpecType;
 use crate::utils::spanned::PixiSpanned;
 use crate::{consts, task::Task};
@@ -69,8 +69,7 @@ pub struct ProjectManifest {
 
     /// Optional python requirements
     #[serde(default, rename = "python-dependencies")]
-    pub python_dependencies:
-        IndexMap<PixiSpanned<rip::PackageName>, PixiSpanned<PythonRequirement>>,
+    pub python_dependencies: PythonDependencies,
 }
 
 impl ProjectManifest {
@@ -260,22 +259,22 @@ pub struct ProjectMetadata {
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct SystemRequirements {
-    windows: Option<bool>,
+    pub windows: Option<bool>,
 
-    unix: Option<bool>,
-
-    #[serde_as(as = "Option<DisplayFromStr>")]
-    macos: Option<Version>,
+    pub unix: Option<bool>,
 
     #[serde_as(as = "Option<DisplayFromStr>")]
-    linux: Option<Version>,
+    pub macos: Option<Version>,
 
     #[serde_as(as = "Option<DisplayFromStr>")]
-    cuda: Option<Version>,
+    pub linux: Option<Version>,
 
-    libc: Option<LibCSystemRequirement>,
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub cuda: Option<Version>,
 
-    archspec: Option<String>,
+    pub libc: Option<LibCSystemRequirement>,
+
+    pub archspec: Option<String>,
 }
 
 impl SystemRequirements {

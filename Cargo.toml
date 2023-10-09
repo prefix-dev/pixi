@@ -11,8 +11,8 @@ readme = "README.md"
 
 [features]
 default = ["native-tls"]
-native-tls = ["reqwest/native-tls", "rattler_repodata_gateway/native-tls", "rattler/native-tls"]
-rustls-tls = ["reqwest/rustls-tls", "reqwest/rustls-tls-native-roots", "rattler_repodata_gateway/rustls-tls", "rattler/rustls-tls"]
+native-tls = ["reqwest/native-tls", "rattler_repodata_gateway/native-tls", "rattler/native-tls", "rip/native-tls"]
+rustls-tls = ["reqwest/rustls-tls", "reqwest/rustls-tls-native-roots", "rattler_repodata_gateway/rustls-tls", "rattler/rustls-tls", "rip/rustls-tls"]
 slow_integration_tests = []
 
 [dependencies]
@@ -35,6 +35,7 @@ itertools = "0.11.0"
 miette = { version = "5.10.0", features = ["fancy", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
 minijinja = { version = "1.0.8", features = ["builtins"] }
 once_cell = "1.18.0"
+pep508_rs = { version = "0.2.3", features = ["modern"] }
 rattler = { version = "0.10.0", default-features = false }
 rattler_conda_types = { version = "0.10.0", default-features = false }
 rattler_digest = { version = "0.10.0", default-features = false }
@@ -44,7 +45,8 @@ rattler_shell = { version = "0.10.0", default-features = false, features = ["sys
 rattler_solve = { version = "0.10.0", default-features = false, features = ["resolvo"] }
 rattler_virtual_packages = { version = "0.10.0", default-features = false }
 reqwest = { version = "0.11.20", default-features = false }
-rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages" }
+#rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages", default-features = false, features = ["resolvo"] }
+rip = { package = "rattler_installs_packages", path = "../rattler_installs_packages/crates/rattler_installs_packages", default-features = false, features = ["resolvo"] }
 serde = "1.0.188"
 serde_json = "1.0.107"
 serde_spanned = "0.6.3"

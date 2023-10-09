@@ -3,25 +3,33 @@ pub mod manifest;
 mod python;
 mod serde;
 
-use crate::consts::{self, PROJECT_MANIFEST};
-use crate::project::manifest::{ProjectManifest, TargetMetadata, TargetSelector};
-use crate::task::{CmdArgs, Task};
 use indexmap::IndexMap;
 use miette::{IntoDiagnostic, LabeledSpan, NamedSource, WrapErr};
+use once_cell::sync::OnceCell;
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
 };
 use rattler_virtual_packages::VirtualPackage;
-use std::collections::{HashMap, HashSet};
-use std::ffi::OsStr;
+use rip::{normalize_index_url, PackageDb};
 use std::{
-    env, fs,
+    collections::{HashMap, HashSet},
+    env,
+    ffi::OsStr,
+    fs,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
-use crate::project::python::PythonRequirement;
-use crate::virtual_packages::non_relevant_virtual_packages_for_platform;
+use crate::project::python::PythonDependencies;
+use crate::{
+    consts::{self, PROJECT_MANIFEST},
+    default_client,
+    project::manifest::{ProjectManifest, TargetMetadata, TargetSelector},
+    task::{CmdArgs, Task},
+    virtual_packages::non_relevant_virtual_packages_for_platform,
+};
 use toml_edit::{Array, Document, Item, Table, TomlError, Value};
+use url::Url;
 
 #[derive(Debug, Copy, Clone)]
 /// What kind of dependency spec do we have
@@ -46,11 +54,12 @@ impl SpecType {
 }
 
 /// A project represented by a pixi.toml file.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Project {
     root: PathBuf,
     source: String,
     doc: Document,
+    package_db: OnceCell<Arc<PackageDb>>,
     pub manifest: ProjectManifest,
 }
 
@@ -88,6 +97,17 @@ fn task_as_toml(task: Task) -> Item {
 }
 
 impl Project {
+    /// Constructs a new instance from an internal manifest representation
+    pub fn from_manifest(manifest: ProjectManifest) -> Self {
+        Self {
+            root: Default::default(),
+            source: "".to_string(),
+            doc: Default::default(),
+            package_db: Default::default(),
+            manifest,
+        }
+    }
+
     /// Discovers the project manifest file in the current directory or any of the parent
     /// directories.
     /// This will also set the current working directory to the project root.
@@ -277,6 +297,7 @@ impl Project {
         self.root = project.root;
         self.doc = project.doc;
         self.manifest = project.manifest;
+        self.package_db = OnceCell::new();
         Ok(())
     }
 
@@ -312,6 +333,7 @@ impl Project {
             source: contents,
             doc,
             manifest,
+            package_db: OnceCell::new(),
         })
     }
 
@@ -417,13 +439,35 @@ impl Project {
         Ok(dependencies)
     }
 
-    pub fn python_dependencies(&self) -> IndexMap<rip::PackageName, PythonRequirement> {
-        IndexMap::from_iter(
-            self.manifest
-                .python_dependencies
-                .iter()
-                .map(|(name, req)| (name.value.clone(), req.value.clone())),
-        )
+    pub fn python_dependencies(&self) -> &PythonDependencies {
+        &self.manifest.python_dependencies
+    }
+
+    /// Returns the Python index URLs to use for this project.
+    pub fn python_index_urls(&self) -> Vec<Url> {
+        let index_url = normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap());
+        vec![index_url]
+    }
+
+    /// Returns the package database used for caching python metadata, wheels and more. See the
+    /// documentation of [`rip::PackageDb`] for more information.
+    pub fn python_package_db(&self) -> miette::Result<&rip::PackageDb> {
+        Ok(self
+            .package_db
+            .get_or_try_init(|| {
+                PackageDb::new(
+                    default_client(),
+                    &self.python_index_urls(),
+                    rattler::default_cache_dir()
+                        .map_err(|_| {
+                            miette::miette!("could not determine default cache directory")
+                        })?
+                        .join("pypi/"),
+                )
+                .into_diagnostic()
+                .map(Arc::new)
+            })?
+            .as_ref())
     }
 
     /// Returns all the targets specific metadata that apply with the given context.
@@ -960,12 +1004,7 @@ mod tests {
             "{PROJECT_BOILERPLATE}\n{file_contents}"
         ))
         .unwrap();
-        let project = Project {
-            root: Default::default(),
-            source: "".to_string(),
-            doc: Default::default(),
-            manifest,
-        };
+        let project = Project::from_manifest(manifest);
 
         assert_debug_snapshot!(project.all_dependencies(Platform::Linux64).unwrap());
     }
@@ -996,12 +1035,7 @@ mod tests {
             "{PROJECT_BOILERPLATE}\n{file_contents}"
         ))
         .unwrap();
-        let project = Project {
-            root: Default::default(),
-            source: "".to_string(),
-            doc: Default::default(),
-            manifest,
-        };
+        let project = Project::from_manifest(manifest);
 
         assert_debug_snapshot!(project.all_dependencies(Platform::Linux64).unwrap());
     }
@@ -1023,12 +1057,7 @@ mod tests {
             "{PROJECT_BOILERPLATE}\n{file_contents}"
         ))
         .unwrap();
-        let project = Project {
-            root: Default::default(),
-            source: "".to_string(),
-            doc: Default::default(),
-            manifest,
-        };
+        let project = Project::from_manifest(manifest);
 
         assert_debug_snapshot!(project.activation_scripts(Platform::Linux64).unwrap());
         assert_debug_snapshot!(project.activation_scripts(Platform::Win64).unwrap());
@@ -1052,12 +1081,7 @@ mod tests {
             "{PROJECT_BOILERPLATE}\n{file_contents}"
         ))
         .unwrap();
-        let project = Project {
-            root: Default::default(),
-            source: "".to_string(),
-            doc: Default::default(),
-            manifest,
-        };
+        let project = Project::from_manifest(manifest);
 
         assert_debug_snapshot!(project.tasks(Some(Platform::Osx64)));
         assert_debug_snapshot!(project.tasks(Some(Platform::Win64)));

@@ -1,0 +1,20 @@
+---
+source: src/lock_file/python.rs
+assertion_line: 233
+expression: tags
+---
+[
+    "py311",
+    "py3",
+    "py310",
+    "py39",
+    "py38",
+    "py37",
+    "py36",
+    "py35",
+    "py34",
+    "py33",
+    "py32",
+    "py31",
+    "py30",
+]

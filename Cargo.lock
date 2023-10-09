@@ -2245,11 +2245,13 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4516b53d9ea6112ebb38b4af08d5707d30b994fb7f98ff133c5dcf7ed8fa854"
 dependencies = [
+ "anyhow",
  "once_cell",
  "pep440_rs",
  "regex",
  "serde",
  "thiserror",
+ "toml",
  "tracing",
  "unicode-width",
  "url",
@@ -2318,6 +2320,7 @@ dependencies = [
  "minijinja",
  "nix 0.27.1",
  "once_cell",
+ "pep508_rs",
  "rattler",
  "rattler_conda_types",
  "rattler_digest 0.10.0",
@@ -2590,7 +2593,6 @@ dependencies = [
 [[package]]
 name = "rattler_installs_packages"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler_installs_packages#b64ca85dbcc8975f02db34608423d8503b0f2e90"
 dependencies = [
  "async-trait",
  "bytes 1.5.0",
@@ -2616,6 +2618,7 @@ dependencies = [
  "rattler_digest 0.9.0",
  "regex",
  "reqwest",
+ "resolvo",
  "serde",
  "serde_json",
  "serde_with",
