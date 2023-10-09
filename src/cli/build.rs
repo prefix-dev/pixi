@@ -20,7 +20,11 @@ use crate::{
 
 /// Build the project into a conda package.
 #[derive(Parser, Debug)]
-pub struct Args {}
+pub struct Args {
+    /// The path to 'pixi.toml'
+    #[arg(long)]
+    pub manifest_path: Option<PathBuf>,
+}
 
 fn get_script(project: &Project) -> miette::Result<String> {
     // find the "install" script and all the dependencies
@@ -38,7 +42,7 @@ fn get_script(project: &Project) -> miette::Result<String> {
 
     let task = project
         .task_opt("install")
-        .ok_or_else(|| miette::miette!("Could not find an install task"))?;
+        .ok_or_else(|| miette::miette!("Could not find an `install` task"))?;
 
     script.push(get_script(task));
 
@@ -46,9 +50,9 @@ fn get_script(project: &Project) -> miette::Result<String> {
     dependencies.extend(task.depends_on().iter().cloned());
 
     while !dependencies.is_empty() {
-        let task = project
-            .task_opt(&dependencies[0])
-            .ok_or_else(|| miette::miette!("Could not find a task"))?;
+        let task = project.task_opt(&dependencies[0]).ok_or_else(|| {
+            miette::miette!("Could not find a task with the name '{}'", &dependencies[0])
+        })?;
         script.push(get_script(task));
 
         dependencies.extend(task.depends_on().iter().cloned());
@@ -59,8 +63,8 @@ fn get_script(project: &Project) -> miette::Result<String> {
     Ok(script.join("\n"))
 }
 
-pub async fn execute(_args: Args) -> miette::Result<()> {
-    let project = Project::discover()?;
+pub async fn execute(args: Args) -> miette::Result<()> {
+    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     let directories = rattler_build::metadata::Directories::create(
         project.name(),
