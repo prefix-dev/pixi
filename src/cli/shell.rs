@@ -165,6 +165,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Get the environment variables we need to set activate the project in the shell.
     let env = get_shell_env(&project, args.frozen, args.locked).await?;
+    tracing::debug!("Pixi environment activation:\n{:?}", env);
 
     // Start the shell as the last part of the activation script based on the default shell.
     let interactive_shell: ShellEnum = ShellEnum::from_parent_process()
