@@ -4,9 +4,7 @@ use clap::{CommandFactory, Parser};
 use clap_complete;
 use clap_verbosity_flag::Verbosity;
 use miette::IntoDiagnostic;
-use rattler_shell::shell::{Shell, ShellEnum};
-use std::io::{IsTerminal, Write};
-use std::str::FromStr;
+use std::io::IsTerminal;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
 pub mod add;
