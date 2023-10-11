@@ -8,6 +8,7 @@ platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
 [tasks]
 start = "jupyter lab"
+test = "echo 'No tests yet' > test.txt"
 
 [dependencies]
 jupyterlab = "4.*"
