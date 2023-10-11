@@ -1,4 +1,4 @@
-use crate::Project;
+use crate::{prompt, Project};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
@@ -36,6 +36,7 @@ pub struct Args {
 fn start_powershell(
     pwsh: PowerShell,
     env: &HashMap<String, String>,
+    prompt: String,
 ) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
@@ -47,11 +48,13 @@ fn start_powershell(
     for (key, value) in env {
         shell_script.set_env_var(key, value);
     }
+    temp_file
+        .write_all(shell_script.contents.as_bytes())
+        .into_diagnostic()?;
 
-    let mut contents = shell_script.contents;
-    // TODO: build a better prompt
-    contents.push_str("\nfunction prompt {\"PS pixi> \"}");
-    temp_file.write_all(contents.as_bytes()).into_diagnostic()?;
+    // Write custom prompt to the env file
+    temp_file.write(prompt.as_bytes()).into_diagnostic()?;
+
     // close the file handle, but keep the path (needed for Windows)
     let temp_path = temp_file.into_temp_path();
 
@@ -66,7 +69,11 @@ fn start_powershell(
 }
 
 #[cfg(target_family = "windows")]
-fn start_cmdexe(cmdexe: CmdExe, env: &HashMap<String, String>) -> miette::Result<Option<i32>> {
+fn start_cmdexe(
+    cmdexe: CmdExe,
+    env: &HashMap<String, String>,
+    prompt: String,
+) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
         .suffix(".cmd")
@@ -81,6 +88,9 @@ fn start_cmdexe(cmdexe: CmdExe, env: &HashMap<String, String>) -> miette::Result
     temp_file
         .write_all(shell_script.contents.as_bytes())
         .into_diagnostic()?;
+
+    // Write custom prompt to the env file
+    temp_file.write(prompt.as_bytes()).into_diagnostic()?;
 
     let mut command = std::process::Command::new(cmdexe.executable());
     command.arg("/K");
@@ -100,6 +110,7 @@ async fn start_unix_shell<T: Shell + Copy>(
     shell: T,
     args: Vec<&str>,
     env: &HashMap<String, String>,
+    prompt: String,
 ) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
@@ -117,6 +128,9 @@ async fn start_unix_shell<T: Shell + Copy>(
     temp_file
         .write_all(shell_script.contents.as_bytes())
         .into_diagnostic()?;
+
+    // Write custom prompt to the env file
+    temp_file.write(prompt.as_bytes()).into_diagnostic()?;
 
     let mut command = std::process::Command::new(shell.executable());
     command.args(args);
@@ -174,7 +188,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "windows")]
     let res = match interactive_shell {
-        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, &env),
+        ShellEnum::PowerShell(pwsh) => {
+            start_powershell(pwsh, &env, prompt::get_powershell_prompt(project.name()))
+        }
         ShellEnum::CmdExe(cmdexe) => start_cmdexe(cmdexe, &env),
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell);
@@ -183,11 +199,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "unix")]
     let res = match interactive_shell {
-        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, &env),
-        ShellEnum::Bash(bash) => start_unix_shell(bash, vec!["-l", "-i"], &env).await,
-        ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], &env).await,
-        ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], &env).await,
-        ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], &env).await,
+        ShellEnum::PowerShell(pwsh) => {
+            start_powershell(pwsh, &env, prompt::get_powershell_prompt(project.name()))
+        }
+        ShellEnum::Bash(bash) => {
+            start_unix_shell(
+                bash,
+                vec!["-l", "-i"],
+                &env,
+                prompt::get_bash_prompt(project.name()),
+            )
+            .await
+        }
+        ShellEnum::Zsh(zsh) => {
+            start_unix_shell(
+                zsh,
+                vec!["-l", "-i"],
+                &env,
+                prompt::get_zsh_prompt(project.name()),
+            )
+            .await
+        }
+        ShellEnum::Fish(fish) => {
+            start_unix_shell(fish, vec![], &env, prompt::get_fish_prompt(project.name())).await
+        }
+        ShellEnum::Xonsh(xonsh) => {
+            start_unix_shell(xonsh, vec![], &env, prompt::get_xonsh_prompt()).await
+        }
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell)
         }

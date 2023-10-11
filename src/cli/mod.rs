@@ -80,29 +80,6 @@ fn completion(args: CompletionCommand) -> miette::Result<()> {
         "pixi",
         &mut std::io::stdout(),
     );
-
-    // Create PS1 overwrite command
-    // TODO: Also make this work for non bourne shells.
-    let mut script = String::new();
-    let shell = ShellEnum::from_str(clap_shell.to_string().as_str()).into_diagnostic()?;
-    // Generate a shell agnostic command to add the PIXI_PROMPT to the PS1 variable.
-    shell
-        .set_env_var(
-            &mut script,
-            "PS1",
-            format!(
-                "{}{}",
-                shell.format_env_var("PIXI_PROMPT"),
-                shell.format_env_var("PS1")
-            )
-            .as_str(),
-        )
-        .unwrap();
-    // Just like the clap autocompletion code write directly to the stdout
-    std::io::stdout()
-        .write_all(script.as_bytes())
-        .into_diagnostic()?;
-
     Ok(())
 }
 
