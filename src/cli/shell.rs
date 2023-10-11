@@ -137,16 +137,18 @@ async fn start_unix_shell<T: Shell + Copy>(
 
     // Space added before `source` to automatically ignore it in history.
     let mut source_command = " ".to_string();
-    shell.run_script(&mut source_command, temp_file.path()).into_diagnostic()?;
+    shell
+        .run_script(&mut source_command, temp_file.path())
+        .into_diagnostic()?;
 
     // Remove automatically added `\n`, if for some reason this fails, just ignore.
-    let source_command = source_command.strip_suffix("\n").unwrap_or(source_command.as_str());
+    let source_command = source_command
+        .strip_suffix('\n')
+        .unwrap_or(source_command.as_str());
 
     // Start process and send env activation to the shell.
     let mut process = PtySession::new(command).into_diagnostic()?;
-    process
-        .send_line(source_command)
-        .into_diagnostic()?;
+    process.send_line(source_command).into_diagnostic()?;
 
     process.interact().into_diagnostic()
 }
@@ -198,7 +200,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ShellEnum::PowerShell(pwsh) => {
             start_powershell(pwsh, &env, prompt::get_powershell_prompt(project.name()))
         }
-        ShellEnum::CmdExe(cmdexe) => start_cmdexe(cmdexe, &env, prompt::get_cmd_prompt(project.name())),
+        ShellEnum::CmdExe(cmdexe) => {
+            start_cmdexe(cmdexe, &env, prompt::get_cmd_prompt(project.name()))
+        }
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell);
         }
