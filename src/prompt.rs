@@ -34,6 +34,7 @@ pub fn get_powershell_prompt(env_name: &str) -> String {
 }
 
 /// Set default pixi prompt for the cmd.exe command prompt
+#[cfg(target_family = "windows")]
 pub fn get_cmd_prompt(env_name: &str) -> String {
     format!(r"PROMPT ({}) $P$G", env_name)
 }
