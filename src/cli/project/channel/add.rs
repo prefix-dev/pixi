@@ -61,7 +61,14 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         let installed_packages = prefix.find_installed_packages(None).await?;
 
         // Update the prefix
-        update_prefix(&prefix, installed_packages, &lock_file, Platform::current()).await?;
+        update_prefix(
+            project.python_package_db()?,
+            &prefix,
+            installed_packages,
+            &lock_file,
+            Platform::current(),
+        )
+        .await?;
     }
 
     // Report back to the user

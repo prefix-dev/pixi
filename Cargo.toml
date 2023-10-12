@@ -44,6 +44,7 @@ rattler_repodata_gateway = { version = "0.10.0", default-features = false, featu
 rattler_shell = { version = "0.10.0", default-features = false, features = ["sysinfo"] }
 rattler_solve = { version = "0.10.0", default-features = false, features = ["resolvo"] }
 rattler_virtual_packages = { version = "0.10.0", default-features = false }
+rattler_lock = { version = "0.10.0", default-features = false }
 reqwest = { version = "0.11.20", default-features = false }
 #rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages", default-features = false, features = ["resolvo"] }
 rip = { package = "rattler_installs_packages", path = "../rattler_installs_packages/crates/rattler_installs_packages", default-features = false, features = ["resolvo"] }
@@ -91,3 +92,4 @@ rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway"
 rattler_shell = { path = "../rattler/crates/rattler_shell" }
 rattler_solve = { path = "../rattler/crates/rattler_solve" }
 rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
+rattler_lock = { path = "../rattler/crates/rattler_lock" }

@@ -3,13 +3,19 @@ mod python;
 use crate::Project;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages};
-use rattler_conda_types::conda_lock::CondaLock;
 use rattler_conda_types::{
-    conda_lock, MatchSpec, NamelessMatchSpec, PackageName, Platform, RepoDataRecord, Version,
+    MatchSpec, NamelessMatchSpec, PackageName, Platform, RepoDataRecord, Version,
+};
+use rattler_lock::{
+    builder::{
+        CondaLockedDependencyBuilder, LockFileBuilder, LockedPackagesBuilder,
+        PipLockedDependencyBuilder,
+    },
+    CondaLock, LockedDependency, LockedDependencyKind, PackageHashes,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
+use rip::Wheel;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::str::FromStr;
 
@@ -31,6 +37,12 @@ pub async fn load_lock_file(project: &Project) -> miette::Result<CondaLock> {
 pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette::Result<bool> {
     let platforms = project.platforms();
 
+    // TODO: Add support for python dependencies
+    if !project.python_dependencies().is_empty() {
+        tracing::warn!("you project contains [python-dependencies]. The current implementation assumes the lock-file is out of date.");
+        return Ok(false);
+    }
+
     // If a platform is missing from the lock file the lock file is completely out-of-date.
     if HashSet::<Platform>::from_iter(lock_file.metadata.platforms.iter().copied())
         != HashSet::from_iter(platforms.iter().copied())
@@ -44,7 +56,7 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
     let channels = project
         .channels()
         .iter()
-        .map(|channel| conda_lock::Channel::from(channel.base_url().to_string()))
+        .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()))
         .collect_vec();
     if lock_file.metadata.channels.iter().ne(channels.iter()) {
         return Ok(false);
@@ -108,18 +120,20 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
                     return Ok(false);
                 }
                 Some(package) => {
-                    for (depends_name, depends_constraint) in package.dependencies.iter() {
-                        if !seen.contains(depends_name) {
-                            // Parse the constraint
-                            match NamelessMatchSpec::from_str(&depends_constraint.to_string()) {
-                                Ok(spec) => {
-                                    queue.push_back((depends_name.clone(), spec));
-                                    seen.insert(depends_name.clone());
-                                }
-                                Err(_) => {
-                                    tracing::warn!("failed to parse spec '{}', assuming the lock file is corrupt.", depends_constraint);
-                                    return Ok(false);
-                                }
+                    if let Some(conda_package) = package.as_conda() {
+                        for spec in conda_package.dependencies.iter() {
+                            let Ok(spec) = MatchSpec::from_str(spec) else {
+                                tracing::warn!("failed to parse spec '{}', assuming the lock file is corrupt.", spec);
+                                return Ok(false);
+                            };
+                            let (Some(depends_name), spec) = spec.into_nameless() else {
+                                // TODO: Should we do something with a matchspec that depends on **all** packages?
+                                continue;
+                            };
+
+                            if !seen.contains(&depends_name) {
+                                queue.push_back((depends_name.clone(), spec));
+                                seen.insert(depends_name);
                             }
                         }
                     }
@@ -143,12 +157,12 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
 /// TODO: Move this back to rattler.
 /// TODO: Make this more elaborate to include all properties of MatchSpec
 fn locked_dependency_satisfies(
-    locked_package: &conda_lock::LockedDependency,
+    locked_package: &LockedDependency,
     name: &PackageName,
     spec: &NamelessMatchSpec,
 ) -> bool {
     // Check if the name of the package matches
-    if locked_package.name != *name {
+    if locked_package.name != name.as_normalized() {
         return false;
     }
 
@@ -164,15 +178,20 @@ fn locked_dependency_satisfies(
         }
     }
 
-    // Check if the build string matches
-    match (spec.build.as_ref(), &locked_package.build) {
-        (Some(build_spec), Some(build)) => {
-            if !build_spec.matches(build) {
-                return false;
+    match &locked_package.kind {
+        LockedDependencyKind::Conda(conda) => {
+            // Check if the build string matches
+            match (spec.build.as_ref(), &conda.build) {
+                (Some(build_spec), Some(build)) => {
+                    if !build_spec.matches(build) {
+                        return false;
+                    }
+                }
+                (Some(_), None) => return false,
+                _ => {}
             }
         }
-        (Some(_), None) => return false,
-        _ => {}
+        LockedDependencyKind::Pip(_) => {}
     }
 
     true
@@ -197,7 +216,7 @@ pub async fn update_lock_file(
     let channels = project
         .channels()
         .iter()
-        .map(|channel| conda_lock::Channel::from(channel.base_url().to_string()));
+        .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()));
 
     // Empty match-specs because these differ per platform
     let mut builder = LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
@@ -234,9 +253,7 @@ pub async fn update_lock_file(
             specs: match_specs.clone(),
             available_packages: &available_packages,
             locked_packages: existing_lock_file
-                .packages_for_platform(platform)
-                .map(RepoDataRecord::try_from)
-                .collect::<Result<Vec<_>, _>>()
+                .get_conda_packages_by_platform(platform)
                 .into_diagnostic()?,
             pinned_packages: vec![],
             virtual_packages,
@@ -249,13 +266,48 @@ pub async fn update_lock_file(
         let python_artifacts =
             python::resolve_python_dependencies(project, platform, &records).await?;
 
-        dbg!(python_artifacts);
-
         // Update lock file
-        let mut locked_packages = LockedPackages::new(platform);
+        let mut locked_packages = LockedPackagesBuilder::new(platform);
+
+        // Add conda packages
         for record in records {
-            let locked_package = LockedPackage::try_from(record).into_diagnostic()?;
-            locked_packages = locked_packages.add_locked_package(locked_package);
+            let locked_package =
+                CondaLockedDependencyBuilder::try_from(record).into_diagnostic()?;
+            locked_packages.add_locked_package(locked_package);
+        }
+
+        // Add pip packages
+        for python_artifact in python_artifacts {
+            let (artifact, metadata) = project
+                .python_package_db()?
+                .get_metadata::<Wheel, _>(&python_artifact.artifacts)
+                .await
+                .expect("failed to get metadata for a package for which we have already fetched metadata during solving.");
+
+            let locked_package = PipLockedDependencyBuilder {
+                name: python_artifact.name.to_string(),
+                version: python_artifact.version.to_string(),
+                requires_dist: metadata
+                    .requires_dist
+                    .into_iter()
+                    .map(|r| r.to_string())
+                    .collect(),
+                requires_python: metadata.requires_python.map(|r| r.to_string()),
+                extras: python_artifact
+                    .extras
+                    .into_iter()
+                    .map(|e| e.as_str().to_string())
+                    .collect(),
+                url: artifact.url.clone(),
+                hash: artifact
+                    .hashes
+                    .as_ref()
+                    .and_then(|hash| PackageHashes::from_hashes(None, hash.sha256)),
+                source: None,
+                build: None,
+            };
+
+            locked_packages.add_locked_package(locked_package)
         }
 
         builder = builder.add_locked_packages(locked_packages);
@@ -272,7 +324,7 @@ pub async fn update_lock_file(
 }
 
 /// Returns the [`RepoDataRecord`]s for the packages of the current platform from the lock-file.
-pub fn get_required_packages(
+pub fn get_required_conda_packages(
     lock_file: &CondaLock,
     platform: Platform,
 ) -> miette::Result<Vec<RepoDataRecord>> {

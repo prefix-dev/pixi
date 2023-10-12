@@ -2325,6 +2325,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_digest 0.10.0",
  "rattler_installs_packages",
+ "rattler_lock",
  "rattler_networking",
  "rattler_repodata_gateway",
  "rattler_shell",
@@ -2549,7 +2550,6 @@ dependencies = [
  "rattler_macros",
  "regex",
  "serde",
- "serde-json-python-formatter",
  "serde_json",
  "serde_repr",
  "serde_with",
@@ -2632,6 +2632,26 @@ dependencies = [
  "url",
  "which",
  "zip",
+]
+
+[[package]]
+name = "rattler_lock"
+version = "0.10.0"
+dependencies = [
+ "chrono",
+ "fxhash",
+ "indexmap 2.0.2",
+ "pep440_rs",
+ "pep508_rs",
+ "rattler_conda_types",
+ "rattler_digest 0.10.0",
+ "serde",
+ "serde-json-python-formatter",
+ "serde_json",
+ "serde_with",
+ "serde_yaml",
+ "thiserror",
+ "url",
 ]
 
 [[package]]

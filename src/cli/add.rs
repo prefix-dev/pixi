@@ -234,7 +234,14 @@ pub async fn add_specs_to_project(
                 let installed_packages = prefix.find_installed_packages(None).await?;
 
                 // Update the prefix
-                update_prefix(&prefix, installed_packages, &lock_file, platform).await?;
+                update_prefix(
+                    project.python_package_db()?,
+                    &prefix,
+                    installed_packages,
+                    &lock_file,
+                    platform,
+                )
+                .await?;
             } else {
                 eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", style("!").yellow().bold())
             }

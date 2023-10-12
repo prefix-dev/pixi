@@ -4,7 +4,10 @@ use crate::{
 };
 use miette::{IntoDiagnostic, LabeledSpan};
 use rattler::install::Transaction;
-use rattler_conda_types::{conda_lock::CondaLock, Platform, PrefixRecord};
+use rattler_conda_types::{Platform, PrefixRecord};
+use rattler_lock::CondaLock;
+use rip::{ArtifactHashes, ArtifactInfo, ArtifactName, PackageDb, Wheel, WheelName};
+use std::str::FromStr;
 
 /// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
 /// up to date it is updated.
@@ -61,6 +64,7 @@ pub async fn get_up_to_date_prefix(
 
     // Update the environment
     update_prefix(
+        project.python_package_db()?,
         &prefix,
         installed_packages_future.await.into_diagnostic()??,
         &lock_file,
@@ -73,6 +77,7 @@ pub async fn get_up_to_date_prefix(
 
 /// Updates the environment to contain the packages from the specified lock-file
 pub async fn update_prefix(
+    package_db: &PackageDb,
     prefix: &Prefix,
     installed_packages: Vec<PrefixRecord>,
     lock_file: &CondaLock,
@@ -81,7 +86,9 @@ pub async fn update_prefix(
     // Construct a transaction to bring the environment up to date with the lock-file content
     let transaction = Transaction::from_current_and_desired(
         installed_packages,
-        lock_file::get_required_packages(lock_file, platform)?,
+        lock_file
+            .get_conda_packages_by_platform(platform)
+            .into_diagnostic()?,
         platform,
     )
     .into_diagnostic()?;
@@ -101,5 +108,46 @@ pub async fn update_prefix(
         )
         .await?;
     }
+
+    // Get the pip packages to install
+    let pip_packages = lock_file
+        .get_packages_by_platform(platform)
+        .filter(|pkg| pkg.is_pip());
+    for package in pip_packages {
+        let pip_package = package
+            .as_pip()
+            .expect("must be a pip package at this point");
+
+        // TODO: Kind of a hack but get the filename from the url
+        let filename = pip_package
+            .url
+            .path_segments()
+            .and_then(|s| s.last())
+            .expect("url is missing a path");
+        let filename =
+            WheelName::from_str(filename).expect("failed to convert filename to wheel filename");
+
+        // Reconstruct the ArtifactInfo from the data in the lockfile.
+        let artifact_info = ArtifactInfo {
+            filename: ArtifactName::Wheel(filename),
+            url: pip_package.url.clone(),
+            hashes: pip_package.hash.as_ref().map(|hash| ArtifactHashes {
+                sha256: hash.sha256().cloned(),
+            }),
+            requires_python: pip_package
+                .requires_python
+                .as_ref()
+                .map(|p| p.parse())
+                .transpose()
+                .expect("the lock file contains an invalid 'requires_python` field"),
+            dist_info_metadata: Default::default(),
+            yanked: Default::default(),
+        };
+
+        tracing::warn!("fetching {}", &artifact_info.filename);
+        let wheel: Wheel = package_db.get_artifact(&artifact_info).await?;
+
+    }
+
     Ok(())
 }
