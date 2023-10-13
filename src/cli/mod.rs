@@ -108,11 +108,7 @@ pub async fn execute() -> miette::Result<()> {
     };
 
     // Default pixi level to warn but overwrite if a lower level is requested.
-    let pixi_level = if level_filter > LevelFilter::WARN {
-        level_filter
-    } else {
-        LevelFilter::WARN
-    };
+    let pixi_level = level_filter.max(LevelFilter::WARN);
 
     let env_filter = EnvFilter::builder()
         .with_default_directive(level_filter.into())
