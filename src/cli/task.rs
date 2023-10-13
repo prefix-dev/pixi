@@ -21,7 +21,7 @@ pub enum Operation {
 
     /// List all tasks
     #[clap(alias = "l")]
-    List,
+    List(ListArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -72,6 +72,12 @@ pub struct AliasArgs {
     /// The platform for which the alias should be added
     #[arg(long, short)]
     pub platform: Option<Platform>,
+}
+
+#[derive(Parser, Debug, Clone)]
+pub struct ListArgs {
+    #[arg(long, short)]
+    pub summary: bool,
 }
 
 impl From<AddArgs> for Task {
@@ -202,16 +208,23 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 task,
             );
         }
-        Operation::List => {
+        Operation::List(args) => {
             let tasks = project.task_names(Some(Platform::current()));
             if tasks.is_empty() {
                 eprintln!("No tasks found",);
             } else {
-                let mut formatted = String::new();
-                for name in tasks {
-                    formatted.push_str(&format!("* {}\n", console::style(name).bold(),));
-                }
-                eprintln!("{}", formatted);
+                let formatted: String = tasks
+                    .iter()
+                    .map(|name| {
+                        if args.summary {
+                            format!("{} ", console::style(name))
+                        } else {
+                            format!("* {}\n", console::style(name).bold())
+                        }
+                    })
+                    .collect();
+
+                println!("{}", formatted);
             }
         }
     };

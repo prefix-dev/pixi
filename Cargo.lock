@@ -2061,6 +2061,7 @@ dependencies = [
  "rattler_shell",
  "rattler_solve",
  "rattler_virtual_packages",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

@@ -5,12 +5,15 @@ use clap_complete;
 use clap_verbosity_flag::Verbosity;
 use miette::IntoDiagnostic;
 use rattler_shell::shell::{Shell, ShellEnum};
+use regex::Regex;
 use std::io::{IsTerminal, Write};
+use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
 pub mod add;
 pub mod auth;
+mod completions;
 pub mod global;
 pub mod info;
 pub mod init;
@@ -74,30 +77,46 @@ fn completion(args: CompletionCommand) -> miette::Result<()> {
         .shell
         .or(clap_complete::Shell::from_env())
         .unwrap_or(clap_complete::Shell::Bash);
+
+    let mut script = b"";
     clap_complete::generate(
         clap_shell,
         &mut Args::command(),
         "pixi",
-        &mut std::io::stdout(),
+        &mut script, // &mut std::io::stdout(),
     );
 
-    // Create PS1 overwrite command
-    // TODO: Also make this work for non bourne shells.
-    let mut script = String::new();
-    let shell = ShellEnum::from_str(clap_shell.to_string().as_str()).into_diagnostic()?;
-    // Generate a shell agnostic command to add the PIXI_PROMPT to the PS1 variable.
-    shell
-        .set_env_var(
-            &mut script,
-            "PS1",
-            format!(
-                "{}{}",
-                shell.format_env_var("PIXI_PROMPT"),
-                shell.format_env_var("PS1")
-            )
-            .as_str(),
-        )
-        .unwrap();
+    let pattern = r#"(?s)pixi__run\)
+            opts="(.*?)"
+            if \[\[ \$\{cur\} == -\\* \|\| \$\{COMP_CWORD\} -eq 2 \]\] ; then
+                COMPREPLY=\( \$(compgen -W "\$\{opts\}" -- "\$\{cur\}") \)
+                return 0
+            fi"#;
+
+    let replacement = r#"pixi__run)
+            opts="$1"
+            if [[ ${cur} == -* ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            elif [[ ${COMP_CWORD} -eq 2 ]]; then
+
+                local tasks=$(pixi task list --summary 2> /dev/null)
+
+                if [[ $? -eq 0 ]]; then
+                    COMPREPLY=( $(compgen -W "${tasks}" -- "${cur}") )
+                    return 0
+                fi
+            fi"#;
+
+    match clap_shell {
+        clap_complete::Shell::Bash => {
+            // let (pattern, replacement) = completions::BASH_COMPLETION_REPLACEMENTS;
+            let re = Regex::new(pattern).unwrap();
+            script = re.replace(script.as_str(), replacement);
+        }
+        _ => {}
+    }
+
     // Just like the clap autocompletion code write directly to the stdout
     std::io::stdout()
         .write_all(script.as_bytes())
