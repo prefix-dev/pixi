@@ -81,7 +81,7 @@ fn completion(args: CompletionCommand) -> miette::Result<()> {
     Ok(())
 }
 
-pub async fn execute() -> miette::Result<()> {
+pub fn execute() -> miette::Result<()> {
     let args = Args::parse();
     let use_colors = use_color_output(&args);
 
@@ -129,25 +129,35 @@ pub async fn execute() -> miette::Result<()> {
         .into_diagnostic()?;
 
     // Execute the command
-    execute_command(args.command).await
+    execute_command(args.command)
+}
+
+fn execute_command_async(command: Command) -> miette::Result<()> {
+    let rt = tokio::runtime::Runtime::new().into_diagnostic()?;
+    rt.block_on(async move {
+        match command {
+            Command::Init(cmd) => init::execute(cmd).await,
+            Command::Add(cmd) => add::execute(cmd).await,
+            Command::Global(cmd) => global::execute(cmd).await,
+            Command::Auth(cmd) => auth::execute(cmd).await,
+            Command::Install(cmd) => install::execute(cmd).await,
+            Command::Shell(cmd) => shell::execute(cmd).await,
+            Command::Info(cmd) => info::execute(cmd).await,
+            Command::Upload(cmd) => upload::execute(cmd).await,
+            Command::Search(cmd) => search::execute(cmd).await,
+            Command::Project(cmd) => project::execute(cmd).await,
+            _ => unreachable!(),
+        }
+    })
 }
 
 /// Execute the actual command
-pub async fn execute_command(command: Command) -> miette::Result<()> {
+pub fn execute_command(command: Command) -> miette::Result<()> {
     match command {
         Command::Completion(cmd) => completion(cmd),
-        Command::Init(cmd) => init::execute(cmd).await,
-        Command::Add(cmd) => add::execute(cmd).await,
-        Command::Run(cmd) => run::execute(cmd).await,
-        Command::Global(cmd) => global::execute(cmd).await,
-        Command::Auth(cmd) => auth::execute(cmd).await,
-        Command::Install(cmd) => install::execute(cmd).await,
-        Command::Shell(cmd) => shell::execute(cmd).await,
         Command::Task(cmd) => task::execute(cmd),
-        Command::Info(cmd) => info::execute(cmd).await,
-        Command::Upload(cmd) => upload::execute(cmd).await,
-        Command::Search(cmd) => search::execute(cmd).await,
-        Command::Project(cmd) => project::execute(cmd).await,
+        Command::Run(cmd) => run::execute(cmd),
+        _ => execute_command_async(command),
     }
 }
 
