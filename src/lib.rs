@@ -5,6 +5,7 @@ pub mod environment;
 pub mod prefix;
 pub mod progress;
 pub mod project;
+mod prompt;
 pub mod repodata;
 pub mod task;
 #[cfg(unix)]

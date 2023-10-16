@@ -29,7 +29,7 @@ struct Args {
     command: Command,
 
     /// The verbosity level
-    /// (-v for verbose, -vv for debug, -vvv for trace, -q for quiet)
+    /// (-v for warning, -vv for info, -vvv for debug, -vvvv for trace, -q for quiet)
     #[command(flatten)]
     verbose: Verbosity,
 
@@ -94,14 +94,16 @@ pub async fn execute() -> miette::Result<()> {
         clap_verbosity_flag::LevelFilter::Trace => LevelFilter::TRACE,
     };
 
+    // Default pixi level to warn but overwrite if a lower level is requested.
+    let pixi_level = level_filter.max(LevelFilter::WARN);
+
     let env_filter = EnvFilter::builder()
         .with_default_directive(level_filter.into())
         .from_env()
         .into_diagnostic()?
         // filter logs from apple codesign because they are very noisy
         .add_directive("apple_codesign=off".parse().into_diagnostic()?)
-        // set pixi's tracing level to warn
-        .add_directive("pixi=warn".parse().into_diagnostic()?);
+        .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?);
 
     // Setup the tracing subscriber
     tracing_subscriber::fmt()
