@@ -44,4 +44,6 @@ expression: script
                 --channel)
             esac
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+
             ;;
+        
