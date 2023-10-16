@@ -1,16 +1,15 @@
 use super::util::IndicatifWriter;
 use crate::progress;
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 use clap_complete;
 use clap_verbosity_flag::Verbosity;
 use miette::IntoDiagnostic;
-use regex::Regex;
-use std::io::{IsTerminal, Write};
-use std::str::from_utf8_mut;
+use std::io::IsTerminal;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
 pub mod add;
 pub mod auth;
+pub mod completion;
 pub mod global;
 pub mod info;
 pub mod init;
@@ -69,53 +68,6 @@ pub enum Command {
     Project(project::Args),
 }
 
-fn completion(args: CompletionCommand) -> miette::Result<()> {
-    let clap_shell = args
-        .shell
-        .or(clap_complete::Shell::from_env())
-        .unwrap_or(clap_complete::Shell::Bash);
-
-    let mut script = vec![];
-    clap_complete::generate(
-        clap_shell,
-        &mut Args::command(),
-        "pixi",
-        &mut script, // &mut std::io::stdout(),
-    );
-
-    let pattern = r#"(?s)pixi__run\).*?opts="(.*?)".*?(if.*?fi)"#;
-
-    let replacement = r#"pixi__run)
-            opts="$1"
-            if [[ $${cur} == -* ]] ; then
-               COMPREPLY=( $$(compgen -W "$${opts}" -- "$${cur}") )
-               return 0
-            elif [[ $${COMP_CWORD} -eq 2 ]]; then
-               local tasks=$$(pixi task list --summary 2> /dev/null)
-               if [[ $$? -eq 0 ]]; then
-                   COMPREPLY=( $$(compgen -W "$${tasks}" -- "$${cur}") )
-                   return 0
-               fi
-            fi"#;
-
-    match clap_shell {
-        clap_complete::Shell::Bash => {
-            // let (pattern, replacement) = completions::BASH_COMPLETION_REPLACEMENTS;
-            let re = Regex::new(pattern).unwrap();
-            let script = re.replace(from_utf8_mut(&mut script).into_diagnostic()?, replacement);
-            // Just like the clap autocompletion code write directly to the stdout
-            std::io::stdout()
-                .write_all(script.as_ref().as_ref())
-                .into_diagnostic()?;
-        }
-        _ => {
-            std::io::stdout().write_all(&script).into_diagnostic()?;
-        }
-    }
-
-    Ok(())
-}
-
 pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
     let use_colors = use_color_output(&args);
@@ -168,7 +120,7 @@ pub async fn execute() -> miette::Result<()> {
 /// Execute the actual command
 pub async fn execute_command(command: Command) -> miette::Result<()> {
     match command {
-        Command::Completion(cmd) => completion(cmd),
+        Command::Completion(cmd) => completion::execute(cmd),
         Command::Init(cmd) => init::execute(cmd).await,
         Command::Add(cmd) => add::execute(cmd).await,
         Command::Run(cmd) => run::execute(cmd).await,
@@ -207,108 +159,5 @@ fn use_color_output(args: &Args) -> bool {
         ColorOutput::Always => true,
         ColorOutput::Never => false,
         ColorOutput::Auto => std::env::var_os("NO_COLOR").is_none() && is_terminal(),
-    }
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    pub fn test_completion() {
-        let clap_shell = clap_complete::Shell::Bash;
-
-        let mut script = vec![];
-        clap_complete::generate(
-            clap_shell,
-            &mut Args::command(),
-            "pixi",
-            &mut script, // &mut std::io::stdout(),
-        );
-        let mut script = r#"
-        pixi__project__help__help)
-            opts=""
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        pixi__run)
-            opts="-v -q -h --manifest-path --locked --frozen --verbose --quiet --color --help [TASK]..."
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                --manifest-path)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                --color)
-                    COMPREPLY=($(compgen -W "always never auto" -- "${cur}"))
-                    return 0
-                    ;;
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        pixi__search)
-            opts="-c -l -v -q -h --channel --manifest-path --limit --verbose --quiet --color --help <PACKAGE>"
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                --channel)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                -c)
-                --color)
-                    COMPREPLY=($(compgen -W "always never auto" -- "${cur}"))
-                    return 0
-                    ;;
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        "#;
-        let pattern = r#"(?s)pixi__run\).*?opts="(.*?)".*?(if.*?fi)"#;
-        // let replacement = "pixi__run)\n            opts=\"$1\"\n            if [[ ${cur} == -* ]] ; then\n                COMPREPLY=( dollar(compgen -W \"dollar{opts}\" -- \"dollar{cur}\") )\n                return 0\n            elif [[ dollar{COMP_CWORD} -eq 2 ]]; then\n                local tasks=dollar(pixi task list --summary 2> /dev/null)\n                if [[ dollar? -eq 0 ]]; then\n                    COMPREPLY=( dollar(compgen -W \"dollar{tasks}\" -- \"dollar{cur}\") )\n                    return 0\n                fi\n            fi";
-
-        let replacement = r#"pixi__run)
-            opts="$1"
-            if [[ $${cur} == -* ]] ; then
-               COMPREPLY=( $$(compgen -W "$${opts}" -- "$${cur}") )
-               return 0
-            elif [[ $${COMP_CWORD} -eq 2 ]]; then
-               local tasks=$$(pixi task list --summary 2> /dev/null)
-               if [[ $$? -eq 0 ]]; then
-                   COMPREPLY=( $$(compgen -W "$${tasks}" -- "$${cur}") )
-                   return 0
-               fi
-            fi"#;
-        // let replacement = r#"pixi__run)
-        //     opts="$1"
-        //     if [[ ${cur} == -* ]] ; then
-        //         COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-        //         return 0
-        //     elif [[ ${COMP_CWORD} -eq 2 ]]; then
-        //
-        //         local tasks=$(pixi task list --summary 2> /dev/null)
-        //
-        //         if [[ $? -eq 0 ]]; then
-        //             COMPREPLY=( $(compgen -W "${tasks}" -- "${cur}") )
-        //             return 0
-        //         fi
-        //     fi"#;
-
-        // let (pattern, replacement) = completions::BASH_COMPLETION_REPLACEMENTS;
-        let re = Regex::new(pattern).unwrap();
-        let script = re.replace(&mut script, replacement);
-        println!("{}", script)
     }
 }

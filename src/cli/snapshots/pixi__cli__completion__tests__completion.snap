@@ -1,0 +1,47 @@
+---
+source: src/cli/completion.rs
+expression: script
+---
+
+        pixi__project__help__help)
+            opts=""
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        pixi__run)
+            opts="-v -q -h --manifest-path --locked --frozen --verbose --quiet --color --help [TASK]..."
+            if [[ ${cur} == -* ]] ; then
+               COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+               return 0
+            elif [[ ${COMP_CWORD} -eq 2 ]]; then
+               local tasks=$(pixi task list --summary 2> /dev/null)
+               if [[ $? -eq 0 ]]; then
+                   COMPREPLY=( $(compgen -W "${tasks}" -- "${cur}") )
+                   return 0
+               fi
+            fi
+            case "${prev}" in
+                --manifest-path)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --color)
+                    COMPREPLY=($(compgen -W "always never auto" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        pixi__search)
+            opts="-c -l -v -q -h --channel --color --help <PACKAGE>"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+            fi
+            case "${prev}" in
+                --channel)
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            ;;
