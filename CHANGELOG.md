@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.0] - 2023-10-17
+
+### Highlights
+This release fixes some bugs and adds the `--cwd` option to the tasks.
+
+### Details
+
+#### Fixed
+* Improve shell prompts by @ruben-arts in https://github.com/prefix-dev/pixi/pull/385 https://github.com/prefix-dev/pixi/pull/388
+* Change `--frozen` logic to error when there is no lockfile by @ruben-arts in https://github.com/prefix-dev/pixi/pull/373
+* Don't remove the '.11' from 'python3.11' binary file name by @ruben-arts in https://github.com/prefix-dev/pixi/pull/366
+
+#### Changed
+* Update `rerun` example to v0.9.1 by @ruben-arts in https://github.com/prefix-dev/pixi/pull/389
+
+#### Added
+* Add the current working directory (`--cwd`) in `pixi tasks` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/380
+
+**Full Changelog**: https://github.com/prefix-dev/pixi/compare/v0.5.0...v0.6.0
+
 ## [0.5.0] - 2023-10-03
 
 ### Highlights
