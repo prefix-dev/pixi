@@ -28,11 +28,12 @@ pub fn get_xonsh_prompt() -> String {
     // Xonsh' default prompt can find the environment for some reason.
     "".to_string()
 }
+
 /// Set default pixi prompt for the powershell
 pub fn get_powershell_prompt(env_name: &str) -> String {
     format!(
-        "$old_prompt = & $function:prompt\n\
-         function prompt {{\"({}) $old_prompt\"}}",
+        "$old_prompt = $function:prompt\n\
+         function prompt {{\"({}) $($old_prompt.Invoke())\"}}",
         env_name
     )
 }
