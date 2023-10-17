@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.6.0] - 2023-10-17
 
 ### Highlights
-This release fixes some huge bugs and adds the `--cwd` option to the tasks.
+This release fixes some bugs and adds the `--cwd` option to the tasks.
 
 ### Details
 
