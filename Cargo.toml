@@ -1,6 +1,6 @@
 [package]
 name = "pixi"
-version = "0.6.0"
+version = "0.6.1-dev"
 description = "A package management and workflow tool"
 edition = "2021"
 authors = ["pixi contributors <hi@prefix.dev>"]
@@ -72,14 +72,14 @@ tokio = { version = "1.32.0", features = ["rt"] }
 toml = "0.8.1"
 
 [patch.crates-io]
-#rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 
 #rattler = { path = "../rattler/crates/rattler" }
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
