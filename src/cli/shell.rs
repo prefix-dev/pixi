@@ -2,6 +2,7 @@ use crate::{prompt, Project};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
+use rattler_shell::activation::PathModificationBehavior;
 use rattler_shell::shell::{PowerShell, Shell, ShellEnum, ShellScript};
 use std::collections::HashMap;
 use std::io::Write;
@@ -153,6 +154,49 @@ async fn start_unix_shell<T: Shell + Copy>(
     process.interact().into_diagnostic()
 }
 
+/// Starts a nu shell.
+/// # Arguments
+/// - `shell`: The Nushell (also contains executable location)
+/// - `env`: A HashMap containing environment variables to set in the shell.
+async fn start_nu_shell(
+    shell: rattler_shell::shell::NuShell,
+    env: &HashMap<String, String>,
+    prompt: String,
+) -> miette::Result<Option<i32>> {
+    // create a tempfile for activation
+    let mut temp_file = tempfile::Builder::new()
+        .prefix("pixi_env_")
+        .suffix(&format!(".{}", shell.extension()))
+        .rand_bytes(3)
+        .tempfile()
+        .into_diagnostic()?;
+
+    let mut shell_script = ShellScript::new(shell, Platform::current());
+    for (key, value) in env {
+        if key == "PATH" {
+            // split path with PATHSEP
+            let paths = std::env::split_paths(value).collect::<Vec<_>>();
+            shell_script.set_path(&paths, PathModificationBehavior::Replace);
+        } else {
+            shell_script.set_env_var(key, value);
+        }
+    }
+
+    temp_file
+        .write_all(shell_script.contents.as_bytes())
+        .into_diagnostic()?;
+
+    // Write custom prompt to the env file
+    temp_file.write(prompt.as_bytes()).into_diagnostic()?;
+
+    let mut command = std::process::Command::new(shell.executable());
+    command.arg("--execute");
+    command.arg(format!("source {}", temp_file.path().display()));
+
+    let mut process = command.spawn().into_diagnostic()?;
+    Ok(process.wait().into_diagnostic()?.code())
+}
+
 /// Determine the environment variables that need to be set in an interactive shell to make it
 /// function as if the environment has been activated. This method runs the activation scripts from
 /// the environment and stores the environment variables it added, finally it adds environment
@@ -197,6 +241,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "windows")]
     let res = match interactive_shell {
+        ShellEnum::NuShell(nushell) => {
+            start_nu_shell(nushell, &env, prompt::get_nu_prompt(project.name())).await
+        }
         ShellEnum::PowerShell(pwsh) => {
             start_powershell(pwsh, &env, prompt::get_powershell_prompt(project.name()))
         }
@@ -210,6 +257,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "unix")]
     let res = match interactive_shell {
+        ShellEnum::NuShell(nushell) => {
+            start_nu_shell(nushell, &env, prompt::get_nu_prompt(project.name())).await
+        }
         ShellEnum::PowerShell(pwsh) => {
             start_powershell(pwsh, &env, prompt::get_powershell_prompt(project.name()))
         }

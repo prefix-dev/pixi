@@ -104,6 +104,30 @@ Now run both tools with one command.
 pixi run style
 ```
 
+## Working directory
+Pixi tasks support the definition of a working directory.
+
+"cwd" stands for Current Working Directory.
+The directory is relative to the pixi package root, where the `pixi.toml` file is located.
+
+Consider a pixi project structured as follows:
+```shell
+├── pixi.toml
+└── scripts
+    └── bar.py
+```
+
+To add a task to run the `bar.py` file, use:
+```shell
+pixi task add bar "python bar.py" --cwd scripts
+```
+
+This will add the following line to `pixi.toml`:
+```toml title="pixi.toml" showLineNumbers
+[tasks]
+bar = { cmd = "python bar.py", cwd = "scripts" }
+```
+
 ## Our task runner: deno_task_shell
 
 To support the different OS's (Windows, OSX and Linux) pixi integrates a shell that can run on all of them.

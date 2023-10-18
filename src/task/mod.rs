@@ -87,6 +87,7 @@ impl Task {
 /// A command script executes a single command from the environment
 #[serde_as]
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Execute {
     /// A list of arguments, the first argument denotes the command to run. When deserializing both
     /// an array of strings and a single string are supported.
