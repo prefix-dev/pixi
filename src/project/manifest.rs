@@ -17,6 +17,7 @@ use url::Url;
 /// Describes the contents of a project manifest.
 #[serde_as]
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ProjectManifest {
     /// Information about the project
     pub project: ProjectMetadata,
@@ -177,6 +178,7 @@ impl<'de> Deserialize<'de> for TargetSelector {
 
 #[serde_as]
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TargetMetadata {
     /// Target specific dependencies
     #[serde(default)]
