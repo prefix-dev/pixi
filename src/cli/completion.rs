@@ -55,12 +55,12 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
 }
 
 fn replace_zsh_completion(script: &str) -> Cow<str> {
-    let pattern = r#"(?ms)(\(run\))(?:.*?)(_arguments)"#;
+    let pattern = r#"(?ms)(\(run\))(?:.*?)(_arguments.*?)(\*::task)"#;
 
     // NOTE THIS IS FORMATTED BY HAND
     let zsh_replacement = r#"$1
 _values 'task' $$( pixi task list --summary 2> /dev/null )
-$2"#;
+$2::task"#;
 
     let re = Regex::new(pattern).unwrap();
     re.replace(script, zsh_replacement)

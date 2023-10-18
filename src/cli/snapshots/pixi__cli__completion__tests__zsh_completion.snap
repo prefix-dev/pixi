@@ -22,7 +22,7 @@ _arguments "${_arguments_options[@]}" \
 '(-v --verbose)*--quiet[Less output per occurrence]' \
 '-h[Print help]' \
 '--help[Print help]' \
-'*::task -- The task you want to run in the projects environment:' \
+'::task -- The task you want to run in the projects environment:' \
 && ret=0
 ;;
 (add)
