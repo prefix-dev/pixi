@@ -2189,6 +2189,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "pathdiff"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8835116a5c179084a830efb3adc117ab007512b535bc1a21c991d3b32a6b44dd"
+
+[[package]]
 name = "pbkdf2"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2323,7 +2329,7 @@ dependencies = [
  "pep508_rs",
  "rattler",
  "rattler_conda_types",
- "rattler_digest 0.10.0",
+ "rattler_digest 0.11.0",
  "rattler_installs_packages",
  "rattler_lock",
  "rattler_networking",
@@ -2497,7 +2503,7 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2515,7 +2521,7 @@ dependencies = [
  "once_cell",
  "pin-project-lite",
  "rattler_conda_types",
- "rattler_digest 0.10.0",
+ "rattler_digest 0.11.0",
  "rattler_networking",
  "rattler_package_streaming",
  "regex",
@@ -2536,7 +2542,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "chrono",
  "fxhash",
@@ -2546,7 +2552,7 @@ dependencies = [
  "itertools",
  "lazy-regex",
  "nom",
- "rattler_digest 0.10.0",
+ "rattler_digest 0.11.0",
  "rattler_macros",
  "regex",
  "serde",
@@ -2578,7 +2584,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_digest"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "blake2",
  "digest",
@@ -2611,6 +2617,7 @@ dependencies = [
  "mime",
  "once_cell",
  "parking_lot",
+ "pathdiff",
  "peg",
  "pep440_rs",
  "pep508_rs",
@@ -2636,7 +2643,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "chrono",
  "fxhash",
@@ -2644,7 +2651,7 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "rattler_conda_types",
- "rattler_digest 0.10.0",
+ "rattler_digest 0.11.0",
  "serde",
  "serde-json-python-formatter",
  "serde_json",
@@ -2656,7 +2663,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_macros"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "quote",
  "syn 2.0.37",
@@ -2664,7 +2671,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2682,14 +2689,14 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "bzip2",
  "chrono",
  "futures-util",
  "itertools",
  "rattler_conda_types",
- "rattler_digest 0.10.0",
+ "rattler_digest 0.11.0",
  "rattler_networking",
  "reqwest",
  "serde_json",
@@ -2704,7 +2711,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2723,7 +2730,7 @@ dependencies = [
  "ouroboros",
  "pin-project-lite",
  "rattler_conda_types",
- "rattler_digest 0.10.0",
+ "rattler_digest 0.11.0",
  "rattler_networking",
  "reqwest",
  "serde",
@@ -2741,7 +2748,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.0.2",
@@ -2757,14 +2764,14 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "chrono",
  "hex",
  "itertools",
  "rattler_conda_types",
- "rattler_digest 0.10.0",
+ "rattler_digest 0.11.0",
  "resolvo",
  "serde",
  "tempfile",
@@ -2775,7 +2782,7 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "cfg-if",
  "libloading",

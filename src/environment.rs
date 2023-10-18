@@ -2,11 +2,16 @@ use crate::{
     default_authenticated_client, install, lock_file, prefix::Prefix, progress::await_in_progress,
     virtual_packages::verify_current_platform_has_required_virtual_packages, Project,
 };
-use miette::{IntoDiagnostic, LabeledSpan};
-use rattler::install::Transaction;
+use itertools::Itertools;
+use miette::{Context, IntoDiagnostic, LabeledSpan};
+use rattler::install::{PythonInfo, Transaction};
 use rattler_conda_types::{Platform, PrefixRecord};
 use rattler_lock::CondaLock;
-use rip::{ArtifactHashes, ArtifactInfo, ArtifactName, PackageDb, Wheel, WheelName};
+use rip::fs::RootedFilesystem;
+use rip::{
+    ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, FindDistributionError, InstallPaths,
+    PackageDb, Wheel, WheelName,
+};
 use std::str::FromStr;
 
 /// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
@@ -93,6 +98,26 @@ pub async fn update_prefix(
     )
     .into_diagnostic()?;
 
+    // Determine currently installed python packages
+    let current_python_distributions = transaction
+        .current_python_info
+        .as_ref()
+        .map(|py_info| find_externally_installed_python_distributions(prefix, platform, py_info))
+        .transpose()
+        .into_diagnostic()
+        .context("failed to locate python packages that have not been installed as conda packages")?
+        .unwrap_or_default();
+
+    dbg!(current_python_distributions
+        .iter()
+        .map(|d| format!("{}-{}", &d.name, &d.version))
+        .collect_vec());
+
+    let python_version = transaction
+        .python_info
+        .clone()
+        .map(|py| (py.short_version.0 as u32, py.short_version.1 as u32));
+
     // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
         // Execute the operations that are returned by the solver.
@@ -110,44 +135,77 @@ pub async fn update_prefix(
     }
 
     // Get the pip packages to install
-    let pip_packages = lock_file
+    let mut pip_packages = lock_file
         .get_packages_by_platform(platform)
-        .filter(|pkg| pkg.is_pip());
-    for package in pip_packages {
-        let pip_package = package
-            .as_pip()
-            .expect("must be a pip package at this point");
+        .filter(|pkg| pkg.is_pip())
+        .peekable();
+    if pip_packages.peek().is_some() {
+        let python_version =
+            python_version.ok_or_else(|| miette::miette!("no python version in transaction"))?;
+        let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
 
-        // TODO: Kind of a hack but get the filename from the url
-        let filename = pip_package
-            .url
-            .path_segments()
-            .and_then(|s| s.last())
-            .expect("url is missing a path");
-        let filename =
-            WheelName::from_str(filename).expect("failed to convert filename to wheel filename");
+        for package in pip_packages {
+            let pip_package = package
+                .as_pip()
+                .expect("must be a pip package at this point");
 
-        // Reconstruct the ArtifactInfo from the data in the lockfile.
-        let artifact_info = ArtifactInfo {
-            filename: ArtifactName::Wheel(filename),
-            url: pip_package.url.clone(),
-            hashes: pip_package.hash.as_ref().map(|hash| ArtifactHashes {
-                sha256: hash.sha256().cloned(),
-            }),
-            requires_python: pip_package
-                .requires_python
-                .as_ref()
-                .map(|p| p.parse())
-                .transpose()
-                .expect("the lock file contains an invalid 'requires_python` field"),
-            dist_info_metadata: Default::default(),
-            yanked: Default::default(),
-        };
+            // TODO: Kind of a hack but get the filename from the url
+            let filename = pip_package
+                .url
+                .path_segments()
+                .and_then(|s| s.last())
+                .expect("url is missing a path");
+            let filename = WheelName::from_str(filename)
+                .expect("failed to convert filename to wheel filename");
 
-        tracing::warn!("fetching {}", &artifact_info.filename);
-        let wheel: Wheel = package_db.get_artifact(&artifact_info).await?;
+            // Reconstruct the ArtifactInfo from the data in the lockfile.
+            let artifact_info = ArtifactInfo {
+                filename: ArtifactName::Wheel(filename),
+                url: pip_package.url.clone(),
+                hashes: pip_package.hash.as_ref().map(|hash| ArtifactHashes {
+                    sha256: hash.sha256().cloned(),
+                }),
+                requires_python: pip_package
+                    .requires_python
+                    .as_ref()
+                    .map(|p| p.parse())
+                    .transpose()
+                    .expect("the lock file contains an invalid 'requires_python` field"),
+                dist_info_metadata: Default::default(),
+                yanked: Default::default(),
+            };
 
+            let wheel: Wheel = package_db.get_artifact(&artifact_info).await?;
+            wheel.unpack(RootedFilesystem::from(prefix.root()), &install_paths)?;
+        }
     }
 
     Ok(())
+}
+
+/// Returns the python distributions installed in the given prefix that have not been installed as
+/// conda packages.
+fn find_externally_installed_python_distributions(
+    prefix: &Prefix,
+    platform: Platform,
+    py_info: &PythonInfo,
+) -> Result<Vec<Distribution>, FindDistributionError> {
+    // Determine where packages would have been installed
+    let current_install_paths = InstallPaths::for_venv(
+        (
+            py_info.short_version.0 as u32,
+            py_info.short_version.1 as u32,
+        ),
+        platform.is_windows(),
+    );
+
+    // Determine the current python distributions in those locations
+    let mut current_python_packages =
+        rip::find_distributions_in_venv(prefix.root(), &current_install_paths)?;
+
+    // Remove any packages that have been installed as conda packages. Python conda packages
+    // have their INSTALLER conveniently set to "conda".
+    current_python_packages.retain(|d| d.installer.as_deref() != Some("conda"));
+
+    Ok(current_python_packages)
 }
