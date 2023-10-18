@@ -4,7 +4,6 @@ use miette::IntoDiagnostic;
 use regex::Regex;
 use std::borrow::Cow;
 use std::io::Write;
-use std::str::from_utf8_mut;
 
 /// Generate completions for the pixi cli, and print those to the stdout
 pub(crate) fn execute(args: CompletionCommand) -> miette::Result<()> {
@@ -13,21 +12,19 @@ pub(crate) fn execute(args: CompletionCommand) -> miette::Result<()> {
         .or(clap_complete::Shell::from_env())
         .unwrap_or(clap_complete::Shell::Bash);
 
-    let mut script = vec![];
-
     // Generate the original completion script.
-    clap_complete::generate(clap_shell, &mut Args::command(), "pixi", &mut script);
-
-    let script = match clap_shell {
-        clap_complete::Shell::Bash => {
-            replace_bash_completion(from_utf8_mut(&mut script).into_diagnostic()?)
-        }
-        clap_complete::Shell::Zsh => {
-            replace_zsh_completion(from_utf8_mut(&mut script).into_diagnostic()?)
-        }
-        _ => Cow::Borrowed(from_utf8_mut(&mut script).into_diagnostic()?),
+    let script = {
+        let mut buf = vec![];
+        clap_complete::generate(clap_shell, &mut Args::command(), "pixi", &mut buf);
+        String::from_utf8(buf).expect("clap_complete did not generate a valid UTF8 script")
     };
-
+    // For supported shells, modify the script to include more context sensitive completions.
+    let script = match clap_shell {
+        clap_complete::Shell::Bash => replace_bash_completion(&script),
+        clap_complete::Shell::Zsh => replace_zsh_completion(&script),
+        _ => Cow::Owned(script),
+    };
+    // Write the result to the standard output
     std::io::stdout()
         .write_all(script.as_bytes())
         .into_diagnostic()?;
@@ -156,5 +153,33 @@ _arguments "${_arguments_options[@]}" \
         "#;
         let result = replace_bash_completion(script);
         insta::assert_snapshot!(result);
+    }
+
+    #[test]
+    pub fn test_bash_completion_working_regex() {
+        let clap_shell = clap_complete::Shell::Bash;
+
+        // Generate the original completion script.
+        let script = {
+            let mut buf = vec![];
+            clap_complete::generate(clap_shell, &mut Args::command(), "pixi", &mut buf);
+            String::from_utf8(buf).expect("clap_complete did not generate a valid UTF8 script")
+        };
+        // Test if there was a replacement done on the clap generated completions
+        assert_ne!(replace_bash_completion(&script), script);
+    }
+
+    #[test]
+    pub fn test_zsh_completion_working_regex() {
+        let clap_shell = clap_complete::Shell::Zsh;
+
+        // Generate the original completion script.
+        let script = {
+            let mut buf = vec![];
+            clap_complete::generate(clap_shell, &mut Args::command(), "pixi", &mut buf);
+            String::from_utf8(buf).expect("clap_complete did not generate a valid UTF8 script")
+        };
+        // Test if there was a replacement done on the clap generated completions
+        assert_ne!(replace_zsh_completion(&script), script);
     }
 }
