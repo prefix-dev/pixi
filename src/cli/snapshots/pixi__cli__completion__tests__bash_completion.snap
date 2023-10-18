@@ -1,6 +1,6 @@
 ---
 source: src/cli/completion.rs
-expression: script
+expression: result
 ---
 
         pixi__project__help__help)

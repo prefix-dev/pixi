@@ -6,6 +6,7 @@ use std::borrow::Cow;
 use std::io::Write;
 use std::str::from_utf8_mut;
 
+/// Generate completions for the pixi cli, and print those to the stdout
 pub(crate) fn execute(args: CompletionCommand) -> miette::Result<()> {
     let clap_shell = args
         .shell
@@ -15,38 +16,28 @@ pub(crate) fn execute(args: CompletionCommand) -> miette::Result<()> {
     let mut script = vec![];
 
     // Generate the original completion script.
-    clap_complete::generate(
-        clap_shell,
-        &mut Args::command(),
-        "pixi",
-        &mut script, // &mut std::io::stdout(),
-    );
+    clap_complete::generate(clap_shell, &mut Args::command(), "pixi", &mut script);
 
-    match clap_shell {
+    let script = match clap_shell {
         clap_complete::Shell::Bash => {
-            let script = replace_bash_completion(from_utf8_mut(&mut script).into_diagnostic()?);
-            std::io::stdout()
-                .write_all(script.as_ref().as_ref())
-                .into_diagnostic()?;
+            replace_bash_completion(from_utf8_mut(&mut script).into_diagnostic()?)
         }
         clap_complete::Shell::Zsh => {
-            let script = replace_zsh_completion(from_utf8_mut(&mut script).into_diagnostic()?);
-            std::io::stdout()
-                .write_all(script.as_ref().as_ref())
-                .into_diagnostic()?;
+            replace_zsh_completion(from_utf8_mut(&mut script).into_diagnostic()?)
         }
-        _ => {
-            // If no replacements needed write original script to stdout
-            std::io::stdout().write_all(&script).into_diagnostic()?;
-        }
-    }
+        _ => Cow::Borrowed(from_utf8_mut(&mut script).into_diagnostic()?),
+    };
+
+    std::io::stdout()
+        .write_all(script.as_bytes())
+        .into_diagnostic()?;
 
     Ok(())
 }
 
 fn replace_bash_completion(script: &str) -> Cow<str> {
     let pattern = r#"(?s)pixi__run\).*?opts="(.*?)".*?(if.*?fi)"#;
-
+    // NOTE THIS IS FORMATTED BY HAND
     let replacement = r#"pixi__run)
             opts="$1"
             if [[ $${cur} == -* ]] ; then
@@ -64,20 +55,12 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
 }
 
 fn replace_zsh_completion(script: &str) -> Cow<str> {
-    let pattern = r#"(?s)pixi__run\).*?opts="(.*?)".*?(if.*?fi)"#;
+    let pattern = r#"(?ms)(\(run\))(?:.*?)(_arguments)"#;
 
-    let zsh_replacement = r#"pixi__run)
-            opts="$1"
-            if [[ $${CURRENT} -eq 2 ]]; then
-                local tasks=$$(pixi task list --summary 2> /dev/null)
-                if [[ $$? -eq 0 ]]; then
-                    compadd "$${tasks}"
-                    return 1
-                fi
-            elif [[ $${cur} == -* ]]; then
-                compadd -- "$${opts}"
-                return 1
-            fi"#;
+    // NOTE THIS IS FORMATTED BY HAND
+    let zsh_replacement = r#"$1
+_values 'task' $$( pixi task list --summary 2> /dev/null )
+$2"#;
 
     let re = Regex::new(pattern).unwrap();
     re.replace(script, zsh_replacement)
@@ -88,8 +71,51 @@ mod tests {
     use super::*;
 
     #[test]
-    pub fn test_completion() {
+    pub fn test_zsh_completion() {
         let mut script = r#"
+(add)
+_arguments "${_arguments_options[@]}" \
+'--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
+'*::specs -- Specify the dependencies you wish to add to the project:' \
+&& ret=0
+;;
+(run)
+_arguments "${_arguments_options[@]}" \
+'--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
+'--color=[Whether the log needs to be colored]:COLOR:(always never auto)' \
+'(--frozen)--locked[Require pixi.lock is up-to-date]' \
+'(--locked)--frozen[Don'\''t check if pixi.lock is up-to-date, install as lockfile states]' \
+'*-v[More output per occurrence]' \
+'*--verbose[More output per occurrence]' \
+'(-v --verbose)*-q[Less output per occurrence]' \
+'(-v --verbose)*--quiet[Less output per occurrence]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'*::task -- The task you want to run in the projects environment:' \
+&& ret=0
+;;
+(add)
+_arguments "${_arguments_options[@]}" \
+&& ret=0
+;;
+(run)
+_arguments "${_arguments_options[@]}" \
+&& ret=0
+;;
+(shell)
+_arguments "${_arguments_options[@]}" \
+&& ret=0
+;;
+
+        "#;
+        let result = replace_zsh_completion(&mut script);
+        insta::assert_snapshot!(result);
+    }
+
+    #[test]
+    pub fn test_bash_completion() {
+        // NOTE THIS IS FORMATTED BY HAND!
+        let script = r#"
         pixi__project__help__help)
             opts=""
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -128,24 +154,7 @@ mod tests {
 
             ;;
         "#;
-        let pattern = r#"(?s)pixi__run\).*?opts="(.*?)".*?(if.*?fi)"#;
-
-        let replacement = r#"pixi__run)
-            opts="$1"
-            if [[ $${cur} == -* ]] ; then
-               COMPREPLY=( $$(compgen -W "$${opts}" -- "$${cur}") )
-               return 0
-            elif [[ $${COMP_CWORD} -eq 2 ]]; then
-               local tasks=$$(pixi task list --summary 2> /dev/null)
-               if [[ $$? -eq 0 ]]; then
-                   COMPREPLY=( $$(compgen -W "$${tasks}" -- "$${cur}") )
-                   return 0
-               fi
-            fi"#;
-
-        let re = Regex::new(pattern).unwrap();
-        let script = re.replace(&mut script, replacement);
-        insta::assert_snapshot!(script);
-        println!("{}", script)
+        let result = replace_bash_completion(script);
+        insta::assert_snapshot!(result);
     }
 }
