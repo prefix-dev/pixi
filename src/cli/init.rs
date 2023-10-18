@@ -3,11 +3,9 @@ use clap::Parser;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use rattler_conda_types::Platform;
-use std::io::{Error, ErrorKind};
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::io::{Error, ErrorKind, Write};
+use std::path::Path;
+use std::{fs, path::PathBuf};
 
 /// Creates a new project
 #[derive(Parser, Debug)]
@@ -116,19 +114,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     fs::write(&manifest_path, rv).into_diagnostic()?;
 
     // create a .gitignore if one is missing
-    if !gitignore_path.is_file() {
-        write_contextless_file(&env, gitignore_path, "gitignore.txt", GITIGNORE_TEMPLATE)?;
-    }
+    create_or_append_file(&gitignore_path, GITIGNORE_TEMPLATE)?;
 
     // create a .gitattributes if one is missing
-    if !gitattributes_path.is_file() {
-        write_contextless_file(
-            &env,
-            gitattributes_path,
-            "gitattributes.txt",
-            GITATTRIBUTES_TEMPLATE,
-        )?;
-    }
+    create_or_append_file(&gitattributes_path, GITATTRIBUTES_TEMPLATE)?;
 
     // Emit success
     eprintln!(
@@ -137,6 +126,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         dir.display()
     );
 
+    Ok(())
+}
+
+// Checks if string is in file.
+// If search string is multiline it will check if any of those lines is in the file.
+fn string_in_file(path: &Path, search: &str) -> bool {
+    let content = fs::read_to_string(path).unwrap_or_default();
+    search.lines().any(|line| content.contains(line))
+}
+
+// When the specific template is not in the file or the file does not exist.
+// Make the file and append the template to the file.
+fn create_or_append_file(path: &Path, template: &str) -> miette::Result<()> {
+    if !path.is_file() || !string_in_file(path, template) {
+        fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(path)
+            .into_diagnostic()?
+            .write_all(template.as_bytes())
+            .into_diagnostic()?;
+    }
     Ok(())
 }
 
@@ -158,17 +169,6 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
             ),
         })
     }
-}
-
-fn write_contextless_file<P: AsRef<Path>>(
-    env: &Environment,
-    path: P,
-    name: &str,
-    template: &str,
-) -> miette::Result<()> {
-    let rv = env.render_named_str(name, template, ()).into_diagnostic()?;
-    fs::write(&path, rv).into_diagnostic()?;
-    Ok(())
 }
 
 #[cfg(test)]

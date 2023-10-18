@@ -43,10 +43,10 @@ It will only add if the package with its version constraint is able to work with
 
 ```shell
 pixi add numpy
-pixi add numpy pandas pytorch>=1.8
+pixi add numpy pandas "pytorch>=1.8"
 pixi add "numpy>=1.22,<1.24"
 pixi add --manifest-path ~/myproject/pixi.toml numpy
-pixi add --host python>=3.9.0
+pixi add --host "python>=3.9.0"
 pixi add --build cmake
 pixi add --platform osx-64 --build clang
 ```
@@ -59,10 +59,14 @@ Which gets generated on `pixi add` or when you manually change the `pixi.toml` f
 #### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
+- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
 
 ```shell
 pixi install
 pixi install --manifest-path ~/myproject/pixi.toml
+pixi install --frozen
+pixi install --locked
 ```
 
 ## `run`
@@ -76,11 +80,15 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 #### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
+- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
 
 ```shell
 pixi run python
 pixi run cowpy "Hey pixi user"
 pixi run --manifest-path ~/myproject/pixi.toml python
+pixi run --frozen python
+pixi run --locked python
 # If you have specified a custom task in the pixi.toml you can run it with run as well
 pixi run build
 ```
@@ -103,8 +111,16 @@ If you want to make a shorthand for a specific command you can add a task for it
 
 Add a task to the `pixi.toml`, use `--depends-on` to add tasks you want to run before this task, e.g. build before an execute task.
 
+#### Options
+- `--platform`: the platform for which this task should be added.
+- `--depends-on`: the task it depends on to be run before the one your adding.
+- `--cwd`: the working directory for the task relative to the root of the project.
+
 ```shell
 pixi task add cow cowpy "Hello User"
+pixi task add tls ls --cwd tests
+pixi task add test cargo t --depends-on build
+pixi task add build-osx "METAL=1 cargo build" --platform osx-64
 ```
 
 This adds the following to the `pixi.toml`:
@@ -112,6 +128,11 @@ This adds the following to the `pixi.toml`:
 ```toml
 [tasks]
 cow = "cowpy \"Hello User\""
+tls = { cmd = "ls", cwd = "tests" }
+test = { cmd = "cargo t", depends_on = ["build"] }
+
+[target.osx-64.tasks]
+build-osx = "METAL=1 cargo build"
 ```
 
 Which you can then run with the `run` command:
@@ -158,11 +179,17 @@ To exit the pixi shell, simply run `exit`.
 #### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
+- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
 
 ```shell
 pixi shell
 exit
 pixi shell --manifest-path ~/myproject/pixi.toml
+exit
+pixi shell --frozen
+exit
+pixi shell --locked
 exit
 ```
 
@@ -314,3 +341,11 @@ pixi project channel add file:///home/user/local_channel
 pixi project channel add https://repo.prefix.dev/conda-forge
 pixi project channel add --no-install robostack
 ```
+
+[^1]: An __up-to-date__ lockfile means that the dependencies in the lockfile are allowed by the dependencies in the manifest file.
+For example
+
+      - a `pixi.toml` with `python = ">= 3.11"` is up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
+      - a `pixi.toml` with `python = ">= 3.12"` is **not** up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
+
+      Being up-to-date does **not** mean that the lockfile holds the latest version available on the channel for the given dependency.

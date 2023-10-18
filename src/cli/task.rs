@@ -53,6 +53,10 @@ pub struct AddArgs {
     /// The platform for which the task should be added
     #[arg(long, short)]
     pub platform: Option<Platform>,
+
+    /// The working directory relative to the root of the project
+    #[arg(long)]
+    pub cwd: Option<PathBuf>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -88,12 +92,13 @@ impl From<AddArgs> for Task {
 
         // Depending on whether the task should have depends_on or not we create a Plain or complex
         // command.
-        if depends_on.is_empty() {
+        if depends_on.is_empty() && value.cwd.is_none() {
             Self::Plain(cmd_args)
         } else {
             Self::Execute(Execute {
                 cmd: CmdArgs::Single(cmd_args),
                 depends_on,
+                cwd: value.cwd,
             })
         }
     }

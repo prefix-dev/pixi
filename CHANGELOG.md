@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.0] - 2023-10-17
+
+### Highlights
+This release fixes some bugs and adds the `--cwd` option to the tasks.
+
+### Details
+
+#### Fixed
+* Improve shell prompts by @ruben-arts in https://github.com/prefix-dev/pixi/pull/385 https://github.com/prefix-dev/pixi/pull/388
+* Change `--frozen` logic to error when there is no lockfile by @ruben-arts in https://github.com/prefix-dev/pixi/pull/373
+* Don't remove the '.11' from 'python3.11' binary file name by @ruben-arts in https://github.com/prefix-dev/pixi/pull/366
+
+#### Changed
+* Update `rerun` example to v0.9.1 by @ruben-arts in https://github.com/prefix-dev/pixi/pull/389
+
+#### Added
+* Add the current working directory (`--cwd`) in `pixi tasks` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/380
+
+**Full Changelog**: https://github.com/prefix-dev/pixi/compare/v0.5.0...v0.6.0
+
+## [0.5.0] - 2023-10-03
+
+### Highlights
+
+We rebuilt `pixi shell`, fixing the fact that your `rc` file would overrule the environment activation.
+
+### Details
+
+#### Fixed
+* Change how `shell` works and make activation more robust by @wolfv in https://github.com/prefix-dev/pixi/pull/316
+* Documentation: use quotes in cli by @pavelzw in https://github.com/prefix-dev/pixi/pull/367
+
+#### Added
+* Create or append to the `.gitignore` and `.gitattributes` files by @ruben-arts in https://github.com/prefix-dev/pixi/pull/359
+* Add `--locked` and `--frozen` to getting an up-to-date prefix by @ruben-arts in https://github.com/prefix-dev/pixi/pull/363
+* Documentation: improvement/update by @ruben-arts in https://github.com/prefix-dev/pixi/pull/355
+* Example: how to build a docker image using `pixi` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/353 & https://github.com/prefix-dev/pixi/pull/365
+* Update to the newest rattler by @baszalmstra in https://github.com/prefix-dev/pixi/pull/361
+* Periodic `cargo upgrade --all --incompatible` by @wolfv in https://github.com/prefix-dev/pixi/pull/358
+
+**Full Changelog**: https://github.com/prefix-dev/pixi/compare/v0.4.0...v0.5.0
+
 ## [0.4.0] - 2023-09-22
 
 ### Highlights

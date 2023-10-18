@@ -4,9 +4,7 @@ use clap::{CommandFactory, Parser};
 use clap_complete;
 use clap_verbosity_flag::Verbosity;
 use miette::IntoDiagnostic;
-use rattler_shell::shell::{Shell, ShellEnum};
-use std::io::{IsTerminal, Write};
-use std::str::FromStr;
+use std::io::IsTerminal;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
 pub mod add;
@@ -30,7 +28,7 @@ struct Args {
     command: Command,
 
     /// The verbosity level
-    /// (-v for verbose, -vv for debug, -vvv for trace, -q for quiet)
+    /// (-v for warning, -vv for info, -vvv for debug, -vvvv for trace, -q for quiet)
     #[command(flatten)]
     verbose: Verbosity,
 
@@ -80,29 +78,6 @@ fn completion(args: CompletionCommand) -> miette::Result<()> {
         "pixi",
         &mut std::io::stdout(),
     );
-
-    // Create PS1 overwrite command
-    // TODO: Also make this work for non bourne shells.
-    let mut script = String::new();
-    let shell = ShellEnum::from_str(clap_shell.to_string().as_str()).into_diagnostic()?;
-    // Generate a shell agnostic command to add the PIXI_PROMPT to the PS1 variable.
-    shell
-        .set_env_var(
-            &mut script,
-            "PS1",
-            format!(
-                "{}{}",
-                shell.format_env_var("PIXI_PROMPT"),
-                shell.format_env_var("PS1")
-            )
-            .as_str(),
-        )
-        .unwrap();
-    // Just like the clap autocompletion code write directly to the stdout
-    std::io::stdout()
-        .write_all(script.as_bytes())
-        .into_diagnostic()?;
-
     Ok(())
 }
 
@@ -132,14 +107,16 @@ pub async fn execute() -> miette::Result<()> {
         clap_verbosity_flag::LevelFilter::Trace => LevelFilter::TRACE,
     };
 
+    // Default pixi level to warn but overwrite if a lower level is requested.
+    let pixi_level = level_filter.max(LevelFilter::WARN);
+
     let env_filter = EnvFilter::builder()
         .with_default_directive(level_filter.into())
         .from_env()
         .into_diagnostic()?
         // filter logs from apple codesign because they are very noisy
         .add_directive("apple_codesign=off".parse().into_diagnostic()?)
-        // set pixi's tracing level to warn
-        .add_directive("pixi=warn".parse().into_diagnostic()?);
+        .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?);
 
     // Setup the tracing subscriber
     tracing_subscriber::fmt()

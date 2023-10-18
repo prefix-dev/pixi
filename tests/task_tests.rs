@@ -2,6 +2,8 @@ use crate::common::PixiControl;
 use pixi::cli::run::Args;
 use pixi::task::{CmdArgs, Task};
 use rattler_conda_types::Platform;
+use std::fs;
+use std::path::PathBuf;
 
 mod common;
 
@@ -94,6 +96,8 @@ async fn test_alias() {
         .run(Args {
             task: vec!["helloworld".to_string()],
             manifest_path: None,
+            locked: false,
+            frozen: false,
         })
         .await
         .unwrap();
@@ -139,4 +143,51 @@ pub async fn add_remove_target_specific_task() {
             .len(),
         0
     );
+}
+
+#[tokio::test]
+async fn test_cwd() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().without_channels().await.unwrap();
+
+    // Create test dir
+    fs::create_dir(pixi.project_path().join("test")).unwrap();
+
+    pixi.tasks()
+        .add("pwd-test", None)
+        .with_commands(["pwd"])
+        .with_cwd(PathBuf::from("test"))
+        .execute()
+        .unwrap();
+
+    let result = pixi
+        .run(Args {
+            task: vec!["pwd-test".to_string()],
+            manifest_path: None,
+            locked: false,
+            frozen: false,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(result.exit_code, 0);
+    assert!(result.stdout.contains("test"));
+
+    // Test that an unknown cwd gives an error
+    pixi.tasks()
+        .add("unknown-cwd", None)
+        .with_commands(["pwd"])
+        .with_cwd(PathBuf::from("tests"))
+        .execute()
+        .unwrap();
+
+    assert!(pixi
+        .run(Args {
+            task: vec!["unknown-cwd".to_string()],
+            manifest_path: None,
+            locked: false,
+            frozen: false,
+        })
+        .await
+        .is_err());
 }
