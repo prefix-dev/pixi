@@ -161,6 +161,7 @@ async fn start_unix_shell<T: Shell + Copy>(
 async fn start_nu_shell(
     shell: rattler_shell::shell::NuShell,
     env: &HashMap<String, String>,
+    prompt: String,
 ) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
@@ -180,10 +181,13 @@ async fn start_nu_shell(
             shell_script.set_env_var(key, value);
         }
     }
-    // Add a custom prompt to the shell
-    let mut contents = shell_script.contents;
-    contents.push_str("\n$env.PROMPT_COMMAND = { echo \"(pixi) \" }\n");
-    temp_file.write_all(contents.as_bytes()).into_diagnostic()?;
+
+    temp_file
+        .write_all(shell_script.contents.as_bytes())
+        .into_diagnostic()?;
+
+    // Write custom prompt to the env file
+    temp_file.write(prompt.as_bytes()).into_diagnostic()?;
 
     let mut command = std::process::Command::new(shell.executable());
     command.arg("--execute");
@@ -251,7 +255,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "unix")]
     let res = match interactive_shell {
-        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, &env).await,
+        ShellEnum::NuShell(nushell) => {
+            start_nu_shell(nushell, &env, prompt::get_nu_prompt(project.name())).await
+        }
         ShellEnum::PowerShell(pwsh) => {
             start_powershell(pwsh, &env, prompt::get_powershell_prompt(project.name()))
         }

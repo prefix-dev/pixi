@@ -38,6 +38,15 @@ pub fn get_powershell_prompt(env_name: &str) -> String {
     )
 }
 
+/// Set default pixi prompt for the Nu shell
+pub fn get_nu_prompt(env_name: &str) -> String {
+    format!(
+        "let old_prompt = $env.PROMPT_COMMAND; \
+         $env.PROMPT_COMMAND = {{|| echo $\"\\({}\\) (do $old_prompt)\"}}",
+        env_name
+    )
+}
+
 /// Set default pixi prompt for the cmd.exe command prompt
 #[cfg(target_family = "windows")]
 pub fn get_cmd_prompt(env_name: &str) -> String {
