@@ -241,7 +241,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "windows")]
     let res = match interactive_shell {
-        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, &env).await,
+        ShellEnum::NuShell(nushell) => {
+            start_nu_shell(nushell, &env, prompt::get_nu_prompt(project.name())).await
+        }
         ShellEnum::PowerShell(pwsh) => {
             start_powershell(pwsh, &env, prompt::get_powershell_prompt(project.name()))
         }
