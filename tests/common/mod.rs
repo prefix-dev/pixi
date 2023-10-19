@@ -14,8 +14,8 @@ use pixi::cli::run::{
 use pixi::cli::task::{AddArgs, AliasArgs};
 use pixi::cli::{add, init, project, run, task};
 use pixi::{consts, Project};
-use rattler_conda_types::conda_lock::CondaLock;
 use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
+use rattler_lock::CondaLock;
 
 use miette::IntoDiagnostic;
 use std::path::{Path, PathBuf};
@@ -67,7 +67,7 @@ impl LockFileExt for CondaLock {
     fn contains_package(&self, name: &PackageName) -> bool {
         self.package
             .iter()
-            .any(|locked_dep| locked_dep.name == *name)
+            .any(|locked_dep| locked_dep.name == name.as_normalized())
     }
 
     fn contains_matchspec(&self, matchspec: impl IntoMatchSpec) -> bool {
@@ -79,7 +79,7 @@ impl LockFileExt for CondaLock {
         self.package.iter().any(|locked_dep| {
             let package_version =
                 Version::from_str(&locked_dep.version).expect("could not parse version");
-            locked_dep.name == name && version.matches(&package_version)
+            locked_dep.name == name.as_normalized() && version.matches(&package_version)
         })
     }
 
@@ -97,7 +97,7 @@ impl LockFileExt for CondaLock {
         self.package.iter().any(|locked_dep| {
             let package_version =
                 Version::from_str(&locked_dep.version).expect("could not parse version");
-            locked_dep.name == name
+            locked_dep.name == name.as_normalized()
                 && version.matches(&package_version)
                 && locked_dep.platform == platform
         })
@@ -188,9 +188,11 @@ impl PixiControl {
 
         let mut result = RunOutput::default();
         while let Some((command, args)) = tasks.pop_back() {
+            let cwd = run::select_cwd(command.working_directory(), &project)?;
             let script = create_script(command, args).await;
             if let Ok(script) = script {
-                let output = execute_script_with_output(script, &project, &task_env, None).await;
+                let output =
+                    execute_script_with_output(script, cwd.as_path(), &task_env, None).await;
                 result.stdout.push_str(&output.stdout);
                 result.stderr.push_str(&output.stderr);
                 result.exit_code = output.exit_code;
@@ -238,6 +240,7 @@ impl TasksControl<'_> {
                 commands: vec![],
                 depends_on: None,
                 platform,
+                cwd: None,
             },
         }
     }

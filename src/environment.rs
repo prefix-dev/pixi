@@ -17,11 +17,10 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    conda_lock,
-    conda_lock::builder::{LockFileBuilder, LockedPackage, LockedPackages},
-    conda_lock::CondaLock,
     MatchSpec, NamelessMatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord, Version,
 };
+use rattler_lock::builder::{CondaLockedDependencyBuilder, LockFileBuilder, LockedPackagesBuilder};
+use rattler_lock::{CondaLock, LockedDependency};
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
@@ -168,7 +167,7 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
     let channels = project
         .channels()
         .iter()
-        .map(|channel| conda_lock::Channel::from(channel.base_url().to_string()))
+        .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()))
         .collect_vec();
     if lock_file.metadata.channels.iter().ne(channels.iter()) {
         return Ok(false);
@@ -221,7 +220,7 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
 
             // Find the package in the lock-file that matches our dependency.
             let locked_package = lock_file
-                .packages_for_platform(platform)
+                .get_packages_by_platform(platform)
                 .find(|locked_package| locked_dependency_satisfies(locked_package, &name, &spec));
 
             match locked_package {
@@ -232,19 +231,22 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
                     return Ok(false);
                 }
                 Some(package) => {
-                    for (depends_name, depends_constraint) in package.dependencies.iter() {
-                        if !seen.contains(depends_name) {
-                            // Parse the constraint
-                            match NamelessMatchSpec::from_str(&depends_constraint.to_string()) {
-                                Ok(spec) => {
-                                    queue.push_back((depends_name.clone(), spec));
-                                    seen.insert(depends_name.clone());
-                                }
-                                Err(_) => {
-                                    tracing::warn!("failed to parse spec '{}', assuming the lock file is corrupt.", depends_constraint);
-                                    return Ok(false);
-                                }
-                            }
+                    let Some(conda) = package.as_conda() else { continue; };
+
+                    for dependency in conda.dependencies.iter() {
+                        let Ok(match_spec) = MatchSpec::from_str(dependency) else {
+                            tracing::warn!("failed to parse spec '{dependency}', assuming the lock file is corrupt.");
+                            return Ok(false);
+                        };
+
+                        let (Some(package_name), spec) = match_spec.into_nameless() else {
+                            tracing::warn!("missing package name in '{dependency}', assuming the lock file is corrupt.");
+                            continue;
+                        };
+
+                        if !seen.contains(&package_name) {
+                            queue.push_back((package_name.clone(), spec));
+                            seen.insert(package_name);
                         }
                     }
                 }
@@ -267,12 +269,12 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
 /// TODO: Move this back to rattler.
 /// TODO: Make this more elaborate to include all properties of MatchSpec
 fn locked_dependency_satisfies(
-    locked_package: &conda_lock::LockedDependency,
+    locked_package: &LockedDependency,
     name: &PackageName,
     spec: &NamelessMatchSpec,
 ) -> bool {
     // Check if the name of the package matches
-    if locked_package.name != *name {
+    if locked_package.name != name.as_normalized() {
         return false;
     }
 
@@ -288,15 +290,16 @@ fn locked_dependency_satisfies(
         }
     }
 
-    // Check if the build string matches
-    match (spec.build.as_ref(), &locked_package.build) {
-        (Some(build_spec), Some(build)) => {
-            if !build_spec.matches(build) {
-                return false;
+    if let Some(conda) = locked_package.as_conda() {
+        match (spec.build.as_ref(), &conda.build) {
+            (Some(build_spec), Some(build)) => {
+                if !build_spec.matches(build) {
+                    return false;
+                }
             }
+            (Some(_), None) => return false,
+            _ => {}
         }
-        (Some(_), None) => return false,
-        _ => {}
     }
 
     true
@@ -321,7 +324,7 @@ pub async fn update_lock_file(
     let channels = project
         .channels()
         .iter()
-        .map(|channel| conda_lock::Channel::from(channel.base_url().to_string()));
+        .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()));
 
     // Empty match-specs because these differ per platform
     let mut builder = LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
@@ -370,10 +373,11 @@ pub async fn update_lock_file(
         let records = resolvo::Solver.solve(task).into_diagnostic()?;
 
         // Update lock file
-        let mut locked_packages = LockedPackages::new(platform);
+        let mut locked_packages = LockedPackagesBuilder::new(platform);
         for record in records {
-            let locked_package = LockedPackage::try_from(record).into_diagnostic()?;
-            locked_packages = locked_packages.add_locked_package(locked_package);
+            let locked_package =
+                CondaLockedDependencyBuilder::try_from(record).into_diagnostic()?;
+            locked_packages.add_locked_package(locked_package);
         }
 
         builder = builder.add_locked_packages(locked_packages);

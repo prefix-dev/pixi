@@ -146,11 +146,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     println!("Env vars: {:?}", env_vars);
 
     let recipe = RenderedRecipe {
-        source: Some(vec![rattler_build::metadata::Source::Path(PathSrc {
+        source: vec![rattler_build::metadata::Source::Path(PathSrc {
             path: project.root().to_path_buf(),
             patches: Default::default(),
             folder: None,
-        })]),
+        })],
         build: BuildOptions {
             number: 0,
             // todo - how do we compute the build hash?
