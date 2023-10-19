@@ -13,17 +13,15 @@ pub(crate) fn execute(args: CompletionCommand) -> miette::Result<()> {
         .unwrap_or(clap_complete::Shell::Bash);
 
     // Generate the original completion script.
-    let script = {
-        let mut buf = vec![];
-        clap_complete::generate(clap_shell, &mut Args::command(), "pixi", &mut buf);
-        String::from_utf8(buf).expect("clap_complete did not generate a valid UTF8 script")
-    };
+    let script = get_completion_script(clap_shell);
+
     // For supported shells, modify the script to include more context sensitive completions.
     let script = match clap_shell {
         clap_complete::Shell::Bash => replace_bash_completion(&script),
         clap_complete::Shell::Zsh => replace_zsh_completion(&script),
         _ => Cow::Owned(script),
     };
+
     // Write the result to the standard output
     std::io::stdout()
         .write_all(script.as_bytes())
@@ -32,8 +30,17 @@ pub(crate) fn execute(args: CompletionCommand) -> miette::Result<()> {
     Ok(())
 }
 
+/// Generate the completion script using clap_complete for a specified shell.
+fn get_completion_script(shell: clap_complete::Shell) -> String {
+    let mut buf = vec![];
+    clap_complete::generate(shell, &mut Args::command(), "pixi", &mut buf);
+    String::from_utf8(buf).expect("clap_complete did not generate a valid UTF8 script")
+}
+
+/// Replace the parts of the bash completion script that need different functionality.
 fn replace_bash_completion(script: &str) -> Cow<str> {
     let pattern = r#"(?s)pixi__run\).*?opts="(.*?)".*?(if.*?fi)"#;
+    // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     let replacement = r#"pixi__run)
             opts="$1"
@@ -51,9 +58,10 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
     re.replace(script, replacement)
 }
 
+/// Replace the parts of the bash completion script that need different functionality.
 fn replace_zsh_completion(script: &str) -> Cow<str> {
     let pattern = r#"(?ms)(\(run\))(?:.*?)(_arguments.*?)(\*::task)"#;
-
+    // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     let zsh_replacement = r#"$1
 _values 'task' $$( pixi task list --summary 2> /dev/null )
@@ -157,28 +165,16 @@ _arguments "${_arguments_options[@]}" \
 
     #[test]
     pub fn test_bash_completion_working_regex() {
-        let clap_shell = clap_complete::Shell::Bash;
-
         // Generate the original completion script.
-        let script = {
-            let mut buf = vec![];
-            clap_complete::generate(clap_shell, &mut Args::command(), "pixi", &mut buf);
-            String::from_utf8(buf).expect("clap_complete did not generate a valid UTF8 script")
-        };
+        let script = get_completion_script(clap_complete::Shell::Bash);
         // Test if there was a replacement done on the clap generated completions
         assert_ne!(replace_bash_completion(&script), script);
     }
 
     #[test]
     pub fn test_zsh_completion_working_regex() {
-        let clap_shell = clap_complete::Shell::Zsh;
-
         // Generate the original completion script.
-        let script = {
-            let mut buf = vec![];
-            clap_complete::generate(clap_shell, &mut Args::command(), "pixi", &mut buf);
-            String::from_utf8(buf).expect("clap_complete did not generate a valid UTF8 script")
-        };
+        let script = get_completion_script(clap_complete::Shell::Zsh);
         // Test if there was a replacement done on the clap generated completions
         assert_ne!(replace_zsh_completion(&script), script);
     }
