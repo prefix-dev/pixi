@@ -1,6 +1,6 @@
 use super::util::IndicatifWriter;
 use crate::progress;
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 use clap_complete;
 use clap_verbosity_flag::Verbosity;
 use miette::IntoDiagnostic;
@@ -9,6 +9,7 @@ use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter
 
 pub mod add;
 pub mod auth;
+pub mod completion;
 pub mod global;
 pub mod info;
 pub mod init;
@@ -67,20 +68,6 @@ pub enum Command {
     Project(project::Args),
 }
 
-fn completion(args: CompletionCommand) -> miette::Result<()> {
-    let clap_shell = args
-        .shell
-        .or(clap_complete::Shell::from_env())
-        .unwrap_or(clap_complete::Shell::Bash);
-    clap_complete::generate(
-        clap_shell,
-        &mut Args::command(),
-        "pixi",
-        &mut std::io::stdout(),
-    );
-    Ok(())
-}
-
 pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
     let use_colors = use_color_output(&args);
@@ -135,7 +122,7 @@ pub async fn execute() -> miette::Result<()> {
 /// Execute the actual command
 pub async fn execute_command(command: Command) -> miette::Result<()> {
     match command {
-        Command::Completion(cmd) => completion(cmd),
+        Command::Completion(cmd) => completion::execute(cmd),
         Command::Init(cmd) => init::execute(cmd).await,
         Command::Add(cmd) => add::execute(cmd).await,
         Command::Run(cmd) => run::execute(cmd).await,
