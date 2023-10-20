@@ -6,7 +6,7 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, LabeledSpan};
 use rattler::install::{PythonInfo, Transaction};
 use rattler_conda_types::{Platform, PrefixRecord};
-use rattler_lock::CondaLock;
+use rattler_lock::{CondaLock, LockedDependency};
 use rip::{
     ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, FindDistributionError, InstallPaths,
     PackageDb, UnpackWheelOptions, Wheel, WheelName,
@@ -108,7 +108,7 @@ pub async fn update_prefix(
         .unwrap_or_default();
 
     // Log some information about these packages
-    tracing::info!(
+    tracing::debug!(
         "found the following python packages in the environment:\n{}",
         current_python_distributions
             .iter()
@@ -124,7 +124,47 @@ pub async fn update_prefix(
         .clone()
         .map(|py| (py.short_version.0 as u32, py.short_version.1 as u32));
 
+    // Determine the python packages that are part of the lock-file
+    let python_packages = lock_file
+        .get_packages_by_platform(platform)
+        .filter(|p| p.is_pip())
+        .collect_vec();
+
     // Determine the python packages to remove before we start installing anything new.
+    let (python_packages_to_remove, python_packages_to_install) =
+        determine_python_packages_to_remove_and_install(
+            current_python_distributions,
+            python_packages,
+        );
+
+    // Remove python packages that need to be removed
+    if !python_packages_to_remove.is_empty() {
+        let python_version = transaction.current_python_info.as_ref().map(|p| (p.short_version.0 as u32, p.short_version.1 as u32)).expect(
+            "there cannot be any installed python package without a previous python installation",
+        );
+
+        // Get the site_package path since everything is relative to that directory.
+        let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
+        let site_package_path = install_paths
+            .site_packages()
+            .expect("site-packages path must exist");
+
+        // Remove the python packages
+        for python_package in python_packages_to_remove {
+            tracing::info!(
+                "uninstalling python package {}-{}",
+                &python_package.name,
+                &python_package.version
+            );
+            let relative_dist_info = python_package
+                .dist_info
+                .strip_prefix(site_package_path)
+                .expect("the dist-info path must be a sub-path of the site-packages path");
+            rip::uninstall::uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
+                .into_diagnostic()
+                .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_package.name, &python_package.version))?;
+        }
+    }
 
     // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
@@ -143,16 +183,18 @@ pub async fn update_prefix(
     }
 
     // Get the pip packages to install
-    let mut pip_packages = lock_file
-        .get_packages_by_platform(platform)
-        .filter(|pkg| pkg.is_pip())
-        .peekable();
-    if pip_packages.peek().is_some() {
+    if !python_packages_to_install.is_empty() {
         let python_version =
             python_version.ok_or_else(|| miette::miette!("no python version in transaction"))?;
         let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
 
-        for package in pip_packages {
+        for package in python_packages_to_install {
+            tracing::info!(
+                "installing python package {}-{}",
+                &package.name,
+                &package.version
+            );
+
             let pip_package = package
                 .as_pip()
                 .expect("must be a pip package at this point");
@@ -183,6 +225,8 @@ pub async fn update_prefix(
                 yanked: Default::default(),
             };
 
+            // TODO: Maybe we should have a cache of wheels seperate from the package_db. Since a
+            //   wheel can just be identified by its hash or url.
             let wheel: Wheel = package_db.get_artifact(&artifact_info).await?;
             wheel
                 .unpack(
@@ -197,6 +241,16 @@ pub async fn update_prefix(
     }
 
     Ok(())
+}
+
+/// Determine which python packages we can leave untouched and which python packages should be
+/// removed.
+fn determine_python_packages_to_remove_and_install(
+    current_python_packages: Vec<Distribution>,
+    desired_python_packages: Vec<&LockedDependency>,
+) -> (Vec<Distribution>, Vec<&LockedDependency>) {
+    // TODO: Make this a hell of a lot smarter ...
+    (current_python_packages, desired_python_packages)
 }
 
 /// Returns the python distributions installed in the given prefix that have not been installed as
