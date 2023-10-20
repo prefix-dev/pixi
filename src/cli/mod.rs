@@ -1,16 +1,15 @@
 use super::util::IndicatifWriter;
 use crate::progress;
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 use clap_complete;
 use clap_verbosity_flag::Verbosity;
 use miette::IntoDiagnostic;
-use rattler_shell::shell::{Shell, ShellEnum};
-use std::io::{IsTerminal, Write};
-use std::str::FromStr;
+use std::io::IsTerminal;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
 pub mod add;
 pub mod auth;
+pub mod completion;
 pub mod global;
 pub mod info;
 pub mod init;
@@ -30,7 +29,7 @@ struct Args {
     command: Command,
 
     /// The verbosity level
-    /// (-v for verbose, -vv for debug, -vvv for trace, -q for quiet)
+    /// (-v for warning, -vv for info, -vvv for debug, -vvvv for trace, -q for quiet)
     #[command(flatten)]
     verbose: Verbosity,
 
@@ -69,43 +68,6 @@ pub enum Command {
     Project(project::Args),
 }
 
-fn completion(args: CompletionCommand) -> miette::Result<()> {
-    let clap_shell = args
-        .shell
-        .or(clap_complete::Shell::from_env())
-        .unwrap_or(clap_complete::Shell::Bash);
-    clap_complete::generate(
-        clap_shell,
-        &mut Args::command(),
-        "pixi",
-        &mut std::io::stdout(),
-    );
-
-    // Create PS1 overwrite command
-    // TODO: Also make this work for non bourne shells.
-    let mut script = String::new();
-    let shell = ShellEnum::from_str(clap_shell.to_string().as_str()).into_diagnostic()?;
-    // Generate a shell agnostic command to add the PIXI_PROMPT to the PS1 variable.
-    shell
-        .set_env_var(
-            &mut script,
-            "PS1",
-            format!(
-                "{}{}",
-                shell.format_env_var("PIXI_PROMPT"),
-                shell.format_env_var("PS1")
-            )
-            .as_str(),
-        )
-        .unwrap();
-    // Just like the clap autocompletion code write directly to the stdout
-    std::io::stdout()
-        .write_all(script.as_bytes())
-        .into_diagnostic()?;
-
-    Ok(())
-}
-
 pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
     let use_colors = use_color_output(&args);
@@ -123,13 +85,13 @@ pub async fn execute() -> miette::Result<()> {
     console::set_colors_enabled(use_colors);
     console::set_colors_enabled_stderr(use_colors);
 
-    let level_filter = match args.verbose.log_level_filter() {
-        clap_verbosity_flag::LevelFilter::Off => LevelFilter::OFF,
-        clap_verbosity_flag::LevelFilter::Error => LevelFilter::ERROR,
-        clap_verbosity_flag::LevelFilter::Warn => LevelFilter::WARN,
-        clap_verbosity_flag::LevelFilter::Info => LevelFilter::INFO,
-        clap_verbosity_flag::LevelFilter::Debug => LevelFilter::DEBUG,
-        clap_verbosity_flag::LevelFilter::Trace => LevelFilter::TRACE,
+    let (level_filter, pixi_level) = match args.verbose.log_level_filter() {
+        clap_verbosity_flag::LevelFilter::Off => (LevelFilter::OFF, LevelFilter::WARN),
+        clap_verbosity_flag::LevelFilter::Error => (LevelFilter::ERROR, LevelFilter::WARN),
+        clap_verbosity_flag::LevelFilter::Warn => (LevelFilter::WARN, LevelFilter::INFO),
+        clap_verbosity_flag::LevelFilter::Info => (LevelFilter::INFO, LevelFilter::INFO),
+        clap_verbosity_flag::LevelFilter::Debug => (LevelFilter::DEBUG, LevelFilter::DEBUG),
+        clap_verbosity_flag::LevelFilter::Trace => (LevelFilter::TRACE, LevelFilter::TRACE),
     };
 
     let env_filter = EnvFilter::builder()
@@ -138,8 +100,7 @@ pub async fn execute() -> miette::Result<()> {
         .into_diagnostic()?
         // filter logs from apple codesign because they are very noisy
         .add_directive("apple_codesign=off".parse().into_diagnostic()?)
-        // set pixi's tracing level to warn
-        .add_directive("pixi=warn".parse().into_diagnostic()?);
+        .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?);
 
     // Setup the tracing subscriber
     tracing_subscriber::fmt()
@@ -158,7 +119,7 @@ pub async fn execute() -> miette::Result<()> {
 /// Execute the actual command
 pub async fn execute_command(command: Command) -> miette::Result<()> {
     match command {
-        Command::Completion(cmd) => completion(cmd),
+        Command::Completion(cmd) => completion::execute(cmd),
         Command::Init(cmd) => init::execute(cmd).await,
         Command::Add(cmd) => add::execute(cmd).await,
         Command::Run(cmd) => run::execute(cmd).await,

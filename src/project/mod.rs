@@ -83,6 +83,9 @@ fn task_as_toml(task: Task) -> Item {
                     Value::Array(Array::from_iter(process.depends_on.into_iter())),
                 );
             }
+            if let Some(cwd) = process.cwd {
+                table.insert("cwd", cwd.to_string_lossy().to_string().into());
+            }
             Item::Value(Value::InlineTable(table))
         }
         Task::Alias(alias) => {

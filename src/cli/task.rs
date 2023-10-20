@@ -21,7 +21,7 @@ pub enum Operation {
 
     /// List all tasks
     #[clap(alias = "l")]
-    List,
+    List(ListArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -53,6 +53,10 @@ pub struct AddArgs {
     /// The platform for which the task should be added
     #[arg(long, short)]
     pub platform: Option<Platform>,
+
+    /// The working directory relative to the root of the project
+    #[arg(long)]
+    pub cwd: Option<PathBuf>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -68,6 +72,12 @@ pub struct AliasArgs {
     /// The platform for which the alias should be added
     #[arg(long, short)]
     pub platform: Option<Platform>,
+}
+
+#[derive(Parser, Debug, Clone)]
+pub struct ListArgs {
+    #[arg(long, short)]
+    pub summary: bool,
 }
 
 impl From<AddArgs> for Task {
@@ -88,12 +98,13 @@ impl From<AddArgs> for Task {
 
         // Depending on whether the task should have depends_on or not we create a Plain or complex
         // command.
-        if depends_on.is_empty() {
+        if depends_on.is_empty() && value.cwd.is_none() {
             Self::Plain(cmd_args)
         } else {
             Self::Execute(Execute {
                 cmd: CmdArgs::Single(cmd_args),
                 depends_on,
+                cwd: value.cwd,
             })
         }
     }
@@ -197,16 +208,23 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 task,
             );
         }
-        Operation::List => {
+        Operation::List(args) => {
             let tasks = project.task_names(Some(Platform::current()));
             if tasks.is_empty() {
                 eprintln!("No tasks found",);
             } else {
-                let mut formatted = String::new();
-                for name in tasks {
-                    formatted.push_str(&format!("* {}\n", console::style(name).bold(),));
-                }
-                eprintln!("{}", formatted);
+                let formatted: String = tasks
+                    .iter()
+                    .map(|name| {
+                        if args.summary {
+                            format!("{} ", console::style(name))
+                        } else {
+                            format!("* {}\n", console::style(name).bold())
+                        }
+                    })
+                    .collect();
+
+                println!("{}", formatted);
             }
         }
     };

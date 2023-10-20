@@ -3,6 +3,7 @@ use serde::Deserialize;
 use serde_with::{formats::PreferMany, serde_as, OneOrMany};
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
+use std::path::{Path, PathBuf};
 
 /// Represents different types of scripts
 #[derive(Debug, Clone, Deserialize)]
@@ -72,11 +73,21 @@ impl Task {
             Task::Alias(_) => None,
         }
     }
+
+    /// Returns the working directory for the task to run in.
+    pub fn working_directory(&self) -> Option<&Path> {
+        match self {
+            Task::Plain(_) => None,
+            Task::Execute(t) => t.cwd.as_deref(),
+            Task::Alias(_) => None,
+        }
+    }
 }
 
 /// A command script executes a single command from the environment
 #[serde_as]
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Execute {
     /// A list of arguments, the first argument denotes the command to run. When deserializing both
     /// an array of strings and a single string are supported.
@@ -86,6 +97,9 @@ pub struct Execute {
     #[serde(default)]
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<String>,
+
+    /// The working directory for the command relative to the root of the project.
+    pub cwd: Option<PathBuf>,
 }
 
 impl From<Execute> for Task {

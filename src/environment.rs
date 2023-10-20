@@ -8,8 +8,8 @@ use rattler::install::{PythonInfo, Transaction};
 use rattler_conda_types::{Platform, PrefixRecord};
 use rattler_lock::CondaLock;
 use rip::{
-    ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, FindDistributionError,
-    UnpackWheelOptions, InstallPaths, PackageDb, Wheel, WheelName,
+    ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, FindDistributionError, InstallPaths,
+    PackageDb, UnpackWheelOptions, Wheel, WheelName,
 };
 use std::str::FromStr;
 
