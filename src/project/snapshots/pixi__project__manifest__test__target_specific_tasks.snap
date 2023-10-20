@@ -5,10 +5,12 @@ expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"pars
 ProjectManifest {
     project: ProjectMetadata {
         name: "foo",
-        version: Version {
-            version: [[0], [0], [1], [0]],
-            local: [],
-        },
+        version: Some(
+            Version {
+                version: [[0], [0], [1], [0]],
+                local: [],
+            },
+        ),
         description: None,
         authors: [],
         channels: [],
