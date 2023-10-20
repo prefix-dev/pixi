@@ -15,7 +15,6 @@ The minimally required information in the `project` table is:
 ```toml
 [project]
 name = "project-name"
-version = "0.1.0"
 authors = ["John Doe <j.doe@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
@@ -28,7 +27,7 @@ The name of the project.
 name = "project-name"
 ```
 
-### `version`
+### `version` (optional)
 The version of the project.
 This should be a valid version based on the conda Version Spec.
 See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation what is allowed in a Version Spec.

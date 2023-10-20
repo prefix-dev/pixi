@@ -27,7 +27,12 @@ pub fn get_metadata_env(project: &Project) -> HashMap<String, String> {
         ),
         (
             format!("{ENV_PREFIX}VERSION"),
-            project.version().to_string(),
+            project
+                .version()
+                .as_ref()
+                .map_or("NO_VERSION_SPECIFIED".to_string(), |version| {
+                    version.to_string()
+                }),
         ),
         ("PIXI_PROMPT".to_string(), format!("({}) ", project.name())),
     ])

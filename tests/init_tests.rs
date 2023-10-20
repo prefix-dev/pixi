@@ -24,7 +24,10 @@ async fn init_creates_project_manifest() {
             .as_ref(),
         "project name should match the directory name"
     );
-    assert_eq!(project.version(), &Version::from_str("0.1.0").unwrap());
+    assert_eq!(
+        project.version().as_ref().unwrap(),
+        &Version::from_str("0.1.0").unwrap()
+    );
 }
 
 /// Tests that when initializing an empty project with a custom channel it is actually used.
