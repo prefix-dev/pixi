@@ -7,10 +7,9 @@ use miette::{Context, IntoDiagnostic, LabeledSpan};
 use rattler::install::{PythonInfo, Transaction};
 use rattler_conda_types::{Platform, PrefixRecord};
 use rattler_lock::CondaLock;
-use rip::fs::RootedFilesystem;
 use rip::{
-    ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, FindDistributionError, InstallPaths,
-    PackageDb, Wheel, WheelName,
+    ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, FindDistributionError,
+    UnpackWheelOptions, InstallPaths, PackageDb, Wheel, WheelName,
 };
 use std::str::FromStr;
 
@@ -108,15 +107,24 @@ pub async fn update_prefix(
         .context("failed to locate python packages that have not been installed as conda packages")?
         .unwrap_or_default();
 
-    dbg!(current_python_distributions
-        .iter()
-        .map(|d| format!("{}-{}", &d.name, &d.version))
-        .collect_vec());
+    // Log some information about these packages
+    tracing::info!(
+        "found the following python packages in the environment:\n{}",
+        current_python_distributions
+            .iter()
+            .format_with("\n", |d, f| f(&format_args!(
+                "- {} (installed by {})",
+                d.name,
+                d.installer.as_deref().unwrap_or("?")
+            )))
+    );
 
     let python_version = transaction
         .python_info
         .clone()
         .map(|py| (py.short_version.0 as u32, py.short_version.1 as u32));
+
+    // Determine the python packages to remove before we start installing anything new.
 
     // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
@@ -176,7 +184,15 @@ pub async fn update_prefix(
             };
 
             let wheel: Wheel = package_db.get_artifact(&artifact_info).await?;
-            wheel.unpack(RootedFilesystem::from(prefix.root()), &install_paths)?;
+            wheel
+                .unpack(
+                    prefix.root(),
+                    &install_paths,
+                    &UnpackWheelOptions {
+                        installer: Some(env!("CARGO_PKG_NAME").into()),
+                    },
+                )
+                .into_diagnostic()?;
         }
     }
 
