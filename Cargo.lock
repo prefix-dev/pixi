@@ -2365,6 +2365,7 @@ dependencies = [
  "minijinja",
  "nix 0.27.1",
  "once_cell",
+ "pep440_rs",
  "pep508_rs",
  "rattler",
  "rattler_conda_types",

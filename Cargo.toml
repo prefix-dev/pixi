@@ -36,6 +36,7 @@ miette = { version = "5.10.0", features = ["fancy", "supports-color", "supports-
 minijinja = { version = "1.0.8", features = ["builtins"] }
 once_cell = "1.18.0"
 pep508_rs = { version = "0.2.3", features = ["modern"] }
+pep440_rs = "0.3.12"
 rattler = { version = "0.11.0", default-features = false }
 rattler_conda_types = { version = "0.11.0", default-features = false }
 rattler_digest = { version = "0.11.0", default-features = false }

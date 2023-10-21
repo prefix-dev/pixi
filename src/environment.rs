@@ -2,14 +2,16 @@ use crate::{
     default_authenticated_client, install, lock_file, prefix::Prefix, progress::await_in_progress,
     virtual_packages::verify_current_platform_has_required_virtual_packages, Project,
 };
+use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, LabeledSpan};
 use rattler::install::{PythonInfo, Transaction};
 use rattler_conda_types::{Platform, PrefixRecord};
-use rattler_lock::{CondaLock, LockedDependency};
+use rattler_lock::{CondaLock, LockedDependency, PipLockedDependency};
+use rip::tags::WheelTag;
 use rip::{
     ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, FindDistributionError, InstallPaths,
-    PackageDb, UnpackWheelOptions, Wheel, WheelName,
+    PackageDb, ParseArtifactNameError, UnpackWheelOptions, Wheel, WheelName,
 };
 use std::str::FromStr;
 
@@ -130,9 +132,13 @@ pub async fn update_prefix(
         .filter(|p| p.is_pip())
         .collect_vec();
 
-    // Determine the python packages to remove before we start installing anything new.
+    // Determine the python packages to remove before we start installing anything new. If the
+    // python version changed between installations we will have to remove any previous distribution
+    // regardless.
     let (python_packages_to_remove, python_packages_to_install) =
         determine_python_packages_to_remove_and_install(
+            transaction.current_python_info.as_ref(),
+            transaction.python_info.as_ref(),
             current_python_distributions,
             python_packages,
         );
@@ -189,28 +195,25 @@ pub async fn update_prefix(
         let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
 
         for package in python_packages_to_install {
-            tracing::info!(
-                "installing python package {}-{}",
-                &package.name,
-                &package.version
-            );
-
             let pip_package = package
                 .as_pip()
                 .expect("must be a pip package at this point");
 
-            // TODO: Kind of a hack but get the filename from the url
+            // Determine the filename from the
             let filename = pip_package
                 .url
                 .path_segments()
                 .and_then(|s| s.last())
                 .expect("url is missing a path");
-            let filename = WheelName::from_str(filename)
+            let wheel_name = WheelName::from_str(filename)
                 .expect("failed to convert filename to wheel filename");
+
+            // Log out intent to install this python package.
+            tracing::info!("installing python package {filename}",);
 
             // Reconstruct the ArtifactInfo from the data in the lockfile.
             let artifact_info = ArtifactInfo {
-                filename: ArtifactName::Wheel(filename),
+                filename: ArtifactName::Wheel(wheel_name),
                 url: pip_package.url.clone(),
                 hashes: pip_package.hash.as_ref().map(|hash| ArtifactHashes {
                     sha256: hash.sha256().cloned(),
@@ -225,7 +228,7 @@ pub async fn update_prefix(
                 yanked: Default::default(),
             };
 
-            // TODO: Maybe we should have a cache of wheels seperate from the package_db. Since a
+            // TODO: Maybe we should have a cache of wheels separate from the package_db. Since a
             //   wheel can just be identified by its hash or url.
             let wheel: Wheel = package_db.get_artifact(&artifact_info).await?;
             wheel
@@ -245,12 +248,119 @@ pub async fn update_prefix(
 
 /// Determine which python packages we can leave untouched and which python packages should be
 /// removed.
-fn determine_python_packages_to_remove_and_install(
-    current_python_packages: Vec<Distribution>,
+fn determine_python_packages_to_remove_and_install<'p>(
+    current_python_info: Option<&PythonInfo>,
+    desired_python_info: Option<&PythonInfo>,
+    mut current_python_packages: Vec<Distribution>,
+    desired_python_packages: Vec<&'p LockedDependency>,
+) -> (Vec<Distribution>, Vec<&'p LockedDependency>) {
+    // If the python version do not match we have to remove all python packages and reinstall.
+    if current_python_info.map(|p| p.short_version) != desired_python_info.map(|p| p.short_version)
+    {
+        return (current_python_packages, desired_python_packages);
+    }
+
+    // Determine the artifact tags associated with the locked dependencies.
+    let mut desired_python_packages = extract_locked_tags(desired_python_packages);
+
+    // Remove any package that we also have as a locked dependency. If an installed package matches
+    // a locked package we can assume that it has already been installed.
+    current_python_packages.retain(|current_python_packages| {
+        if let Some(found_desired_packages_idx) =
+            desired_python_packages
+                .iter()
+                .position(|(pkg, artifact_name)| {
+                    does_installed_match_locked_package(
+                        &current_python_packages,
+                        (&pkg, artifact_name.as_ref()),
+                    )
+                })
+        {
+            // Remove from the desired list of packages to install & from the packages to uninstall.
+            desired_python_packages.remove(found_desired_packages_idx);
+            false
+        } else {
+            true
+        }
+    });
+
+    (
+        current_python_packages,
+        desired_python_packages
+            .into_iter()
+            .map(|(pkg, _)| pkg)
+            .collect(),
+    )
+}
+
+/// Determine the wheel tags for the locked dependencies. These are extracted by looking at the url
+/// of the locked dependency. The filename of the URL is converted to a wheel name and the tags are
+/// extract from that.
+///
+/// If the locked dependency is not a wheel distribution `None` is returned for the tags. If the
+/// the wheel name could not be parsed `None` is returned for the tags and a warning is emitted.
+fn extract_locked_tags(
     desired_python_packages: Vec<&LockedDependency>,
-) -> (Vec<Distribution>, Vec<&LockedDependency>) {
-    // TODO: Make this a hell of a lot smarter ...
-    (current_python_packages, desired_python_packages)
+) -> Vec<(&LockedDependency, Option<IndexSet<WheelTag>>)> {
+    desired_python_packages
+        .into_iter()
+        .map(|pkg| {
+            let Some(pip) = pkg.as_pip() else { return (pkg, None); };
+            match pip.artifact_name().as_ref().map(|name| name.as_wheel()) {
+                Ok(Some(name)) => (pkg, Some(IndexSet::from_iter(name.all_tags_iter()))),
+                Ok(None) => (pkg, None),
+                Err(err) => {
+                    tracing::warn!(
+                        "failed to determine the artifact name of the python package {}-{}. Could not determine the name from the url {}: {err}",
+                        &pkg.name, pkg.version, &pip.url);
+                    (pkg, None)
+                }
+            }
+        })
+        .collect()
+}
+
+/// Returns true if the installed python package matches the locked python package. If that is the
+/// case we can assume that the locked python package is already installed.
+fn does_installed_match_locked_package(
+    installed_python_package: &Distribution,
+    locked_python_package: (&LockedDependency, Option<&IndexSet<WheelTag>>),
+) -> bool {
+    let (pkg, artifact_tags) = locked_python_package;
+
+    // Match on name and version
+    if pkg.name != installed_python_package.name.as_str()
+        || pep440_rs::Version::from_str(&pkg.version).ok().as_ref()
+            != Some(&installed_python_package.version)
+    {
+        return false;
+    }
+
+    // Now match on the type of the artifact
+    match (artifact_tags, &installed_python_package.tags) {
+        (None, _) | (_, None) => {
+            // One, or both, of the artifacts are not a wheel distribution so we cannot
+            // currently compare them. In that case we always just reinstall.
+            // TODO: Maybe log some info here?
+            // TODO: Add support for more distribution types.
+            false
+        }
+        (Some(locked_tags), Some(installed_tags)) => locked_tags == installed_tags,
+    }
+}
+
+trait PipLockedDependencyExt {
+    /// Returns the artifact name of the locked dependency.
+    fn artifact_name(&self) -> Result<ArtifactName, ParseArtifactNameError>;
+}
+
+impl PipLockedDependencyExt for PipLockedDependency {
+    fn artifact_name(&self) -> Result<ArtifactName, ParseArtifactNameError> {
+        self.url.path_segments().and_then(|s| s.last()).map_or(
+            Err(ParseArtifactNameError::InvalidName),
+            ArtifactName::from_str,
+        )
+    }
 }
 
 /// Returns the python distributions installed in the given prefix that have not been installed as
