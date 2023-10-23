@@ -3,9 +3,7 @@ mod python;
 use crate::Project;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{
-    MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
-};
+use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
 use rattler_lock::{
     builder::{
         CondaLockedDependencyBuilder, LockFileBuilder, LockedPackagesBuilder,
@@ -242,7 +240,7 @@ pub async fn update_lock_file(
             platform_sparse_repo_data,
             package_names.into_iter().cloned(),
             None,
-            true
+            true,
         )
         .into_diagnostic()?;
 

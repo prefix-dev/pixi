@@ -300,7 +300,7 @@ pub fn determine_best_version(
         platform_sparse_repo_data,
         package_names.iter().cloned(),
         None,
-        true
+        true,
     )
     .into_diagnostic()?;
 
