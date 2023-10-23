@@ -13,6 +13,18 @@ metadata:
   custom_metadata: null
 package:
 - platform: win-64
+  name: blinker
+  version: 1.6.3
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/bf/2b/11bcedb7dee4923253a4a21bae3be854bcc4f06295bd827756352016d97c/blinker-1.6.3-py3-none-any.whl#sha256=296320d6c28b006eb5e32d4712202dbcdcbf5dc482da298c2f44881c43884aaa
+  hash:
+    md5: null
+    sha256: 296320d6c28b006eb5e32d4712202dbcdcbf5dc482da298c2f44881c43884aaa
+- platform: win-64
   name: bzip2
   version: 1.0.8
   category: main
@@ -50,6 +62,32 @@ package:
   size: 150013
   timestamp: 1690026269050
 - platform: win-64
+  name: click
+  version: 8.1.7
+  category: main
+  manager: pip
+  requires_dist:
+  - colorama ; platform_system == 'Windows'
+  - importlib-metadata ; python_version < '3.8'
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl#sha256=ae74fb96c20a0277a1d615f1e4d73c8414f5a98db8b799a7931d1582f3390c28
+  hash:
+    md5: null
+    sha256: ae74fb96c20a0277a1d615f1e4d73c8414f5a98db8b799a7931d1582f3390c28
+- platform: win-64
+  name: colorama
+  version: 0.4.6
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '!=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, !=3.6.*, >=2.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl#sha256=4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
+  hash:
+    md5: null
+    sha256: 4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
+- platform: win-64
   name: colorama
   version: 0.4.6
   category: main
@@ -69,6 +107,72 @@ package:
   noarch: python
   size: 25170
   timestamp: 1666700778190
+- platform: win-64
+  name: flask
+  version: 3.0.0
+  category: main
+  manager: pip
+  requires_dist:
+  - Werkzeug >=3.0.0
+  - Jinja2 >=3.1.2
+  - itsdangerous >=2.1.2
+  - click >=8.1.3
+  - blinker >=1.6.2
+  - importlib-metadata >=3.6.0 ; python_version < '3.10'
+  - asgiref >=3.2 ; extra == 'async'
+  - python-dotenv ; extra == 'dotenv'
+  requires_python: '>=3.8'
+  extras: []
+  url: https://files.pythonhosted.org/packages/36/42/015c23096649b908c809c69388a805a571a3bea44362fe87e33fc3afa01f/flask-3.0.0-py3-none-any.whl#sha256=21128f47e4e3b9d597a3e8521a329bf56909b690fcc3fa3e477725aa81367638
+  hash:
+    md5: null
+    sha256: 21128f47e4e3b9d597a3e8521a329bf56909b690fcc3fa3e477725aa81367638
+- platform: win-64
+  name: itsdangerous
+  version: 2.1.2
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/68/5f/447e04e828f47465eeab35b5d408b7ebaaaee207f48b7136c5a7267a30ae/itsdangerous-2.1.2-py3-none-any.whl#sha256=2c2349112351b88699d8d4b6b075022c0808887cb7ad10069318a8b0bc88db44
+  hash:
+    md5: null
+    sha256: 2c2349112351b88699d8d4b6b075022c0808887cb7ad10069318a8b0bc88db44
+- platform: win-64
+  name: jinja2
+  version: 3.1.2
+  category: main
+  manager: pip
+  requires_dist:
+  - MarkupSafe >=2.0
+  - Babel >=2.7 ; extra == 'i18n'
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/bc/c3/f068337a370801f372f2f8f6bad74a5c140f6fda3d9de154052708dd3c65/Jinja2-3.1.2-py3-none-any.whl#sha256=6088930bfe239f0e6710546ab9c19c9ef35e29792895fed6e6e31a023a182a61
+  hash:
+    md5: null
+    sha256: 6088930bfe239f0e6710546ab9c19c9ef35e29792895fed6e6e31a023a182a61
+- platform: win-64
+  name: libexpat
+  version: 2.5.0
+  category: main
+  manager: conda
+  dependencies: []
+  url: https://conda.anaconda.org/conda-forge/win-64/libexpat-2.5.0-h63175ca_1.conda
+  hash:
+    md5: 636cc3cbbd2e28bcfd2f73b2044aac2c
+    sha256: 794b2a9be72f176a2767c299574d330ffb76b2ed75d7fd20bee3bbadce5886cf
+  build: h63175ca_1
+  arch: x86_64
+  subdir: win-64
+  build_number: 1
+  constrains:
+  - expat 2.5.0.*
+  license: MIT
+  license_family: MIT
+  size: 138689
+  timestamp: 1680190844101
 - platform: win-64
   name: libffi
   version: 3.4.2
@@ -133,6 +237,18 @@ package:
   size: 55800
   timestamp: 1686575452215
 - platform: win-64
+  name: markupsafe
+  version: 2.1.3
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/be/bb/08b85bc194034efbf572e70c3951549c8eca0ada25363afc154386b5390a/MarkupSafe-2.1.3-cp311-cp311-win_amd64.whl#sha256=134da1eca9ec0ae528110ccc9e48041e0828d79f24121a1a146161103c76e686
+  hash:
+    md5: null
+    sha256: 134da1eca9ec0ae528110ccc9e48041e0828d79f24121a1a146161103c76e686
+- platform: win-64
   name: openssl
   version: 3.1.3
   category: main
@@ -158,33 +274,35 @@ package:
   timestamp: 1695218580613
 - platform: win-64
   name: python
-  version: 3.10.12
+  version: 3.11.6
   category: main
   manager: conda
   dependencies:
   - bzip2 >=1.0.8,<2.0a0
+  - libexpat >=2.5.0,<3.0a0
   - libffi >=3.4,<4.0a0
-  - libsqlite >=3.42.0,<4.0a0
+  - libsqlite >=3.43.0,<4.0a0
   - libzlib >=1.2.13,<1.3.0a0
-  - openssl >=3.1.1,<4.0a0
-  - tk >=8.6.12,<8.7.0a0
+  - openssl >=3.1.3,<4.0a0
+  - tk >=8.6.13,<8.7.0a0
   - tzdata
-  - vc >=14.1,<15
-  - vc14_runtime >=14.16.27033
+  - ucrt >=10.0.20348.0
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
   - xz >=5.2.6,<6.0a0
-  url: https://conda.anaconda.org/conda-forge/win-64/python-3.10.12-h4de0772_0_cpython.conda
+  url: https://conda.anaconda.org/conda-forge/win-64/python-3.11.6-h2628c8c_0_cpython.conda
   hash:
-    md5: 14273454ca348a123ce09ab9d39c1a6e
-    sha256: 02ee08f3f27488b76155535e43fc99ef491ccc21f28001c3cde9b134e8aa0b94
-  build: h4de0772_0_cpython
+    md5: 80b761856b20383615a3fe8b1b13eef8
+    sha256: 7fb38fda8296b2651ef727bb57603f0952c07fc533b172044395744a2641a00a
+  build: h2628c8c_0_cpython
   arch: x86_64
   subdir: win-64
   build_number: 0
   constrains:
-  - python_abi 3.10.* *_cp310
+  - python_abi 3.11.* *_cp311
   license: Python-2.0
-  size: 16002560
-  timestamp: 1687560007019
+  size: 18121128
+  timestamp: 1696329396864
 - platform: win-64
   name: tk
   version: 8.6.13
@@ -304,6 +422,20 @@ package:
   license_family: BSD
   size: 17207
   timestamp: 1688020635322
+- platform: win-64
+  name: werkzeug
+  version: 3.0.0
+  category: main
+  manager: pip
+  requires_dist:
+  - MarkupSafe >=2.1.1
+  - watchdog >=2.3 ; extra == 'watchdog'
+  requires_python: '>=3.8'
+  extras: []
+  url: https://files.pythonhosted.org/packages/b6/a5/54b01f663d60d5334f6c9c87c26274e94617a4fd463d812463626423b10d/werkzeug-3.0.0-py3-none-any.whl#sha256=cbb2600f7eabe51dbc0502f58be0b3e1b96b893b05695ea2b35b43d4de2d9962
+  hash:
+    md5: null
+    sha256: cbb2600f7eabe51dbc0502f58be0b3e1b96b893b05695ea2b35b43d4de2d9962
 - platform: win-64
   name: xz
   version: 5.2.6

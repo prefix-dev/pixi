@@ -90,20 +90,34 @@ pub async fn update_prefix(
     platform: Platform,
 ) -> miette::Result<()> {
     // Construct a transaction to bring the environment up to date with the lock-file content
-    let transaction = Transaction::from_current_and_desired(
-        installed_packages,
-        lock_file
-            .get_conda_packages_by_platform(platform)
-            .into_diagnostic()?,
-        platform,
-    )
-    .into_diagnostic()?;
+    let desired_conda_packages = lock_file
+        .get_conda_packages_by_platform(platform)
+        .into_diagnostic()?;
+    let transaction =
+        Transaction::from_current_and_desired(installed_packages, desired_conda_packages, platform)
+            .into_diagnostic()?;
+
+    // Execute the transaction if there is work to do
+    if !transaction.operations.is_empty() {
+        // Execute the operations that are returned by the solver.
+        await_in_progress(
+            "updating environment",
+            install::execute_transaction(
+                &transaction,
+                prefix.root().to_path_buf(),
+                rattler::default_cache_dir()
+                    .map_err(|_| miette::miette!("could not determine default cache directory"))?,
+                default_authenticated_client(),
+            ),
+        )
+        .await?;
+    }
 
     // Determine currently installed python packages
     let current_python_distributions = transaction
         .current_python_info
         .as_ref()
-        .map(|py_info| find_externally_installed_python_distributions(prefix, platform, py_info))
+        .map(|py_info| find_installed_python_distributions(prefix, platform, py_info))
         .transpose()
         .into_diagnostic()
         .context("failed to locate python packages that have not been installed as conda packages")?
@@ -141,6 +155,7 @@ pub async fn update_prefix(
             transaction.python_info.as_ref(),
             current_python_distributions,
             python_packages,
+
         );
 
     // Remove python packages that need to be removed
@@ -170,22 +185,6 @@ pub async fn update_prefix(
                 .into_diagnostic()
                 .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_package.name, &python_package.version))?;
         }
-    }
-
-    // Execute the transaction if there is work to do
-    if !transaction.operations.is_empty() {
-        // Execute the operations that are returned by the solver.
-        await_in_progress(
-            "updating environment",
-            install::execute_transaction(
-                transaction,
-                prefix.root().to_path_buf(),
-                rattler::default_cache_dir()
-                    .map_err(|_| miette::miette!("could not determine default cache directory"))?,
-                default_authenticated_client(),
-            ),
-        )
-        .await?;
     }
 
     // Get the pip packages to install
@@ -257,6 +256,9 @@ fn determine_python_packages_to_remove_and_install<'p>(
     // If the python version do not match we have to remove all python packages and reinstall.
     if current_python_info.map(|p| p.short_version) != desired_python_info.map(|p| p.short_version)
     {
+        // Filter any package that is installed by conda
+        current_python_packages.retain(|p| p.installer.as_deref() != Some("conda"));
+
         return (current_python_packages, desired_python_packages);
     }
 
@@ -278,6 +280,9 @@ fn determine_python_packages_to_remove_and_install<'p>(
         {
             // Remove from the desired list of packages to install & from the packages to uninstall.
             desired_python_packages.remove(found_desired_packages_idx);
+            false
+        } else if current_python_packages.installer.as_deref() == Some("conda") {
+            // If this package was installed as a conda package we also don't want to remove it.
             false
         } else {
             true
@@ -363,9 +368,8 @@ impl PipLockedDependencyExt for PipLockedDependency {
     }
 }
 
-/// Returns the python distributions installed in the given prefix that have not been installed as
-/// conda packages.
-fn find_externally_installed_python_distributions(
+/// Returns the python distributions installed in the given prefix.
+fn find_installed_python_distributions(
     prefix: &Prefix,
     platform: Platform,
     py_info: &PythonInfo,
@@ -380,12 +384,8 @@ fn find_externally_installed_python_distributions(
     );
 
     // Determine the current python distributions in those locations
-    let mut current_python_packages =
+    let current_python_packages =
         rip::find_distributions_in_venv(prefix.root(), &current_install_paths)?;
-
-    // Remove any packages that have been installed as conda packages. Python conda packages
-    // have their INSTALLER conveniently set to "conda".
-    current_python_packages.retain(|d| d.installer.as_deref() != Some("conda"));
 
     Ok(current_python_packages)
 }

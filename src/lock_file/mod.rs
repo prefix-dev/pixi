@@ -1,4 +1,5 @@
 mod python;
+mod python_name_mapping;
 
 use crate::Project;
 use itertools::Itertools;

@@ -381,7 +381,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         await_in_progress(
             "creating virtual environment",
             execute_transaction(
-                transaction,
+                &transaction,
                 prefix.root().to_path_buf(),
                 rattler::default_cache_dir()
                     .map_err(|_| miette::miette!("could not determine default cache directory"))?,

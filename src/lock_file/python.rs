@@ -1,14 +1,15 @@
-use crate::consts::PROJECT_MANIFEST;
-use crate::project::manifest::LibCSystemRequirement;
-use crate::virtual_packages::default_glibc_version;
-use crate::Project;
+use crate::{
+    consts::PROJECT_MANIFEST, lock_file::python_name_mapping,
+    project::manifest::LibCSystemRequirement, virtual_packages::default_glibc_version, Project,
+};
 use itertools::Itertools;
 use pep508_rs::{MarkerEnvironment, StringVersion};
 use rattler_conda_types::{PackageRecord, Platform, RepoDataRecord, Version, VersionWithSource};
-use rip::tags::{WheelTag, WheelTags};
-use rip::PinnedPackage;
-use std::str::FromStr;
-use std::vec;
+use rip::{
+    tags::{WheelTag, WheelTags},
+    PinnedPackage,
+};
+use std::{str::FromStr, vec};
 
 /// Resolve python packages for the specified project.
 pub async fn resolve_python_dependencies<'p>(
@@ -20,6 +21,23 @@ pub async fn resolve_python_dependencies<'p>(
     if requirements.is_empty() {
         // If there are no requirements we can skip this function.
         return Ok(vec![]);
+    }
+
+    // Determine the python packages that are installed by the conda packages
+    let conda_python_packages =
+        python_name_mapping::find_conda_python_packages(conda_packages).await?;
+
+    if !conda_python_packages.is_empty() {
+        tracing::info!(
+            "the following python packages are installed by conda: {conda_python_packages}",
+            conda_python_packages = conda_python_packages
+                .iter()
+                .format_with(", ", |(name, version), f| f(&format_args!(
+                    "{name} {version}"
+                )))
+        );
+    } else {
+        tracing::info!("there are no python packages installed by conda");
     }
 
     // Determine the python interpreter that is installed as part of the conda packages.
@@ -44,15 +62,6 @@ pub async fn resolve_python_dependencies<'p>(
     .await?;
 
     Ok(result)
-}
-
-/// Determine the python packages that are installed as part of the conda packages.
-pub fn find_conda_python_packages(records: &[RepoDataRecord]) {
-    records
-        .iter()
-        .filter(|r| is_python_package())
-        .map(|r| r.as_ref())
-        .collect()
 }
 
 /// Returns true if the specified record refers to a version/variant of python.

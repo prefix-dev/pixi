@@ -16,7 +16,7 @@ use std::time::Duration;
 
 /// Executes the transaction on the given environment.
 pub async fn execute_transaction(
-    transaction: Transaction<PrefixRecord, RepoDataRecord>,
+    transaction: &Transaction<PrefixRecord, RepoDataRecord>,
     target_prefix: PathBuf,
     cache_dir: PathBuf,
     download_client: AuthenticatedClient,
@@ -65,7 +65,7 @@ pub async fn execute_transaction(
     link_pb.enable_steady_tick(Duration::from_millis(100));
 
     // Perform all transactions operations in parallel.
-    let result = stream::iter(transaction.operations)
+    let result = stream::iter(transaction.operations.iter())
         .map(Ok)
         .try_for_each_concurrent(50, |op| {
             let target_prefix = target_prefix.clone();
@@ -110,7 +110,7 @@ async fn execute_operation(
     install_driver: &InstallDriver,
     download_pb: Option<&ProgressBar>,
     link_pb: &ProgressBar,
-    op: TransactionOperation<PrefixRecord, RepoDataRecord>,
+    op: &TransactionOperation<PrefixRecord, RepoDataRecord>,
     install_options: &InstallOptions,
 ) -> miette::Result<()> {
     // Determine the package to install
