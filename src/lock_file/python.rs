@@ -26,7 +26,7 @@ pub async fn resolve_python_dependencies<'p>(
     let python_record = conda_packages
         .iter()
         .find(|r| is_python(r))
-        .ok_or_else(|| miette::miette!("could not resolve python dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, e.g.:.\n\n\t[dependencies]\n\tpython = \"*\""))?;
+        .ok_or_else(|| miette::miette!("could not resolve python dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
 
     // Determine the environment markers
     let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
@@ -44,6 +44,15 @@ pub async fn resolve_python_dependencies<'p>(
     .await?;
 
     Ok(result)
+}
+
+/// Determine the python packages that are installed as part of the conda packages.
+pub fn find_conda_python_packages(records: &[RepoDataRecord]) {
+    records
+        .iter()
+        .filter(|r| is_python_package())
+        .map(|r| r.as_ref())
+        .collect()
 }
 
 /// Returns true if the specified record refers to a version/variant of python.

@@ -4,7 +4,7 @@ use crate::Project;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
-    MatchSpec, NamelessMatchSpec, PackageName, Platform, RepoDataRecord, Version,
+    MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
 };
 use rattler_lock::{
     builder::{
@@ -242,6 +242,7 @@ pub async fn update_lock_file(
             platform_sparse_repo_data,
             package_names.into_iter().cloned(),
             None,
+            true
         )
         .into_diagnostic()?;
 
@@ -321,17 +322,4 @@ pub async fn update_lock_file(
         .into_diagnostic()?;
 
     Ok(conda_lock)
-}
-
-/// Returns the [`RepoDataRecord`]s for the packages of the current platform from the lock-file.
-pub fn get_required_conda_packages(
-    lock_file: &CondaLock,
-    platform: Platform,
-) -> miette::Result<Vec<RepoDataRecord>> {
-    lock_file
-        .package
-        .iter()
-        .filter(|pkg| pkg.platform == platform)
-        .map(|pkg| pkg.clone().try_into().into_diagnostic())
-        .collect()
 }

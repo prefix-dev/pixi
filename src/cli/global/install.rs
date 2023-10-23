@@ -341,6 +341,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         platform_sparse_repodata.iter(),
         vec![package_name.clone()],
         None,
+        true,
     )
     .into_diagnostic()?;
 
