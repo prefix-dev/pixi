@@ -350,6 +350,8 @@ pub async fn update_lock_file(
             platform_sparse_repo_data,
             package_names.into_iter().cloned(),
             None,
+            // Default to true strict channel priority
+            true,
         )
         .into_diagnostic()?;
 

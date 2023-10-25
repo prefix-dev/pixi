@@ -296,6 +296,8 @@ pub fn determine_best_version(
         platform_sparse_repo_data,
         package_names.iter().cloned(),
         None,
+        // Default to strict_channel_priority
+        true,
     )
     .into_diagnostic()?;
 
