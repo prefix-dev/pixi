@@ -35,7 +35,7 @@ pub struct ProjectManifest {
     /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
     /// manifest.
     #[serde(default)]
-    #[serde_as(as = "IndexMap<_, DisplayFromStr>")]
+    #[serde_as(as = "IndexMap<_, PickFirst<(_, DisplayFromStr)>>")]
     pub dependencies: IndexMap<String, NamelessMatchSpec>,
 
     /// The host-dependencies of the project.
@@ -43,7 +43,7 @@ pub struct ProjectManifest {
     /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
     /// manifest.
     #[serde(default, rename = "host-dependencies")]
-    #[serde_as(as = "Option<IndexMap<_, DisplayFromStr>>")]
+    #[serde_as(as = "Option<IndexMap<_, PickFirst<(_, DisplayFromStr)>>>")]
     pub host_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
 
     /// The build-dependencies of the project.
@@ -51,7 +51,7 @@ pub struct ProjectManifest {
     /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
     /// manifest.
     #[serde(default, rename = "build-dependencies")]
-    #[serde_as(as = "Option<IndexMap<_, DisplayFromStr>>")]
+    #[serde_as(as = "Option<IndexMap<_, PickFirst<(_, DisplayFromStr)>>>")]
     pub build_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
 
     /// Target specific configuration.
@@ -182,17 +182,17 @@ impl<'de> Deserialize<'de> for TargetSelector {
 pub struct TargetMetadata {
     /// Target specific dependencies
     #[serde(default)]
-    #[serde_as(as = "IndexMap<_, DisplayFromStr>")]
+    #[serde_as(as = "IndexMap<_, PickFirst<(_, DisplayFromStr)>>")]
     pub dependencies: IndexMap<String, NamelessMatchSpec>,
 
     /// The host-dependencies of the project.
     #[serde(default, rename = "host-dependencies")]
-    #[serde_as(as = "Option<IndexMap<_, DisplayFromStr>>")]
+    #[serde_as(as = "Option<IndexMap<_, PickFirst<(_, DisplayFromStr)>>>")]
     pub host_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
 
     /// The build-dependencies of the project.
     #[serde(default, rename = "build-dependencies")]
-    #[serde_as(as = "Option<IndexMap<_, DisplayFromStr>>")]
+    #[serde_as(as = "Option<IndexMap<_, PickFirst<(_, DisplayFromStr)>>>")]
     pub build_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
 
     /// Additional information to activate an environment.
@@ -410,6 +410,7 @@ mod test {
             {PROJECT_BOILERPLATE}
             [dependencies]
             my-game = "1.0.0"
+            test_map = {{ version = ">=1.2.3", channel="conda-forge", build="py34_0" }}
 
             [build-dependencies]
             cmake = "*"
