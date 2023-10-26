@@ -98,6 +98,9 @@ jobs:
       # together in a single unit which reduces the file-size at the cost of link time.
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
 
+      # Strip the binaries. This reduces the filesize of the final release. 
+      CARGO_PROFILE_RELEASE_STRIP: "symbols"
+
       # Optimize the binary for size. This reduces the filesize at the cost of a slower binary.
       CARGO_PROFILE_OPT_LEVEL: s
     steps:
@@ -118,13 +121,6 @@ jobs:
         shell: bash
         run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static" >> "${GITHUB_ENV}"
         if: endsWith(matrix.target, 'windows-msvc')
-
-      - name: Set release specific compilation flags
-        if: steps.is-release.outputs.IS_RELEASE
-        shell: bash
-        run: |
-          echo "CARGO_PROFILE_RELEASE_LTO=true" >> $GITHUB_ENV
-          echo "CARGO_PROFILE_RELEASE_STRIP=true" >> $GITHUB_ENV
 
       - uses: Swatinem/rust-cache@v2
 
