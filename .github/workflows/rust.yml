@@ -98,7 +98,7 @@ jobs:
       # together in a single unit which reduces the file-size at the cost of link time.
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
 
-      # Strip the binaries. This reduces the filesize of the final release. 
+      # Strip the binaries. This reduces the filesize of the final release.
       CARGO_PROFILE_RELEASE_STRIP: "symbols"
 
       # Optimize the binary for size. This reduces the filesize at the cost of a slower binary.
