@@ -100,7 +100,7 @@ jobs:
 
       # Strip the binaries. This reduces the filesize of the final release.
       CARGO_PROFILE_RELEASE_STRIP: "symbols"
-
+      
       # Optimize the binary for size. This reduces the filesize at the cost of a slower binary.
       CARGO_PROFILE_OPT_LEVEL: s
     steps:
