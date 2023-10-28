@@ -106,7 +106,7 @@ echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
 echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
 ```
 
-For PowerShell on Windows: Run the following command and then restart the shell or source the shell config file:
+For PowerShell on Windows, run the following command and then restart the shell or source the shell config file:
 
 ```pwsh
 Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
