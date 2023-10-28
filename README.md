@@ -164,17 +164,17 @@ Commands:
   completion  Generates a completion script for a shell
   init        Creates a new project
   add         Adds a dependency to the project
-  run         Runs a task in the project
-  shell       Start a shell in the `pixi` environment of the project
-  global      Global is the main entry point for the part of `pixi` that executes on the global (system) level
+  run         Runs task in project
+  shell       Start a shell in the pixi environment of the project
+  global      Global is the main entry point for the part of pixi that executes on the global(system) level
   auth        Login to prefix.dev or anaconda.org servers to access private channels
   install     Install all dependencies
-  task        Command management in the project
+  task        Command management in project
   info        Information about the system and project
   upload      Upload a package to a prefix.dev channel
-  search      Search a package; output will list the latest version of the package
+  search      Search a package, output will list the latest version of package
   project
-  help        Print this message or the help for the given subcommands
+  help        Print this message or the help of the given subcommand(s)
 
 Options:
   -v, --verbose...     More output per occurrence
