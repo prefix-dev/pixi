@@ -65,12 +65,19 @@ pub fn verify_prefix_location_unchanged(prefix_file: &Path) -> miette::Result<()
 /// Create the prefix location file.
 /// Give it the file path of the required location to place it.
 fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
-    let contents = prefix_file
+    if prefix_file
         .parent()
-        .expect("There should always be the ability to display the parent folder.")
-        .to_str()
-        .expect("Should always make a str of the prefix path");
-    std::fs::write(prefix_file, contents).into_diagnostic()
+        .ok_or_else(|| miette::miette!("Cannot find parent in '{}'", prefix_file.display()))?
+        .exists()
+    {
+        let contents = prefix_file
+            .parent()
+            .expect("There should always be the ability to display the parent folder.")
+            .to_str()
+            .expect("Should always make a str of the prefix path");
+        return std::fs::write(prefix_file, contents).into_diagnostic();
+    }
+    Ok(())
 }
 
 /// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
