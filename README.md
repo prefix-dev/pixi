@@ -24,15 +24,6 @@
 
 # pixi: Package Management Made Easy
 
-- [Overview](#overview)
-- [Highlights](#highlights)
-- [Getting Started](#getting-started)
-- [Status](#status)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Contributing](#contributing)
-- [Built Using Pixi](#built-using-pixi)
-
 ## Overview
 
 `pixi` is a cross-platform, multi-language package manager and workflow tool built on the foundation of the conda ecosystem. It provides developers with an exceptional experience similar to popular package managers like `cargo` or `yarn`, but for any language.
