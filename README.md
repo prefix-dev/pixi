@@ -22,58 +22,53 @@
 
 </h1>
 
-# pixi: Package management made easy
+# pixi: Package Management Made Easy
 
-`pixi` is a cross-platform, multi-language package manager and workflow tool
-built on the shoulders of the conda ecosystem.
+## Overview
 
-`pixi` provides all developers the exceptional experience that is usually found
-with package managers like `cargo` or `yarn` but for any language.
+`pixi` is a cross-platform, multi-language package manager and workflow tool built on the foundation of the conda ecosystem. It provides developers with an exceptional experience similar to popular package managers like `cargo` or `yarn`, but for any language.
 
-`pixi` is made with ❤️ at [prefix.dev](https://prefix.dev)
+Developed with ❤️ at [prefix.dev](https://prefix.dev).
 
-![a real time pixi_demo](https://github.com/ruben-arts/pixi/assets/12893423/8b1a1273-a210-4be2-a664-32076c535428)
-
+![Real-time pixi_demo](https://github.com/ruben-arts/pixi/assets/12893423/8b1a1273-a210-4be2-a664-32076c535428)
 
 ## Highlights
 
-- Support for **multiple languages** like Python, C++ and R using Conda packages. Search for available packages on: [prefix.dev](https://prefix.dev)
-- **All OS's**: Linux, Windows, macOS (including Apple Silicon)
-- A **lockfile** is always included and always up-to-date.
-- A clean and simple Cargo-like **command-line interface**.
-- Install tools **per-project** or **system-wide**.
-- Completely written in **Rust** and build on top of the **[rattler](https://github.com/mamba-org/rattler)** library.
+- Supports **multiple languages** including Python, C++, and R using Conda packages. You can find available packages on [prefix.dev](https://prefix.dev).
+- Compatible with all major operating systems: Linux, Windows, macOS (including Apple Silicon).
+- Always includes an up-to-date **lockfile**.
+- Provides a clean and simple Cargo-like **command-line interface**.
+- Allows you to install tools **per-project** or **system-wide**.
+- Entirely written in **Rust** and built on top of the **[rattler](https://github.com/mamba-org/rattler)** library.
 
 ## Getting Started
 
-* ⚡ [Installation](#installation)
-* ⚙️ [Examples](/examples)
-* 📚 [Documentation](https://prefix.dev/docs/pixi/overview)
-* 😍 [Contributing](#contributing)
-* 🔨 [Built using Pixi](#pixibuilt)
-* 🚀 [GitHub Action](https://github.com/prefix-dev/setup-pixi)
+- ⚡ [Installation](#installation)
+- ⚙️ [Examples](/examples)
+- 📚 [Documentation](https://prefix.dev/docs/pixi/overview)
+- 😍 [Contributing](#contributing)
+- 🔨 [Built using Pixi](#built-using-pixi)
+- 🚀 [GitHub Action](https://github.com/prefix-dev/setup-pixi)
 
-# Status
+## Status
 
-This project is currently in _alpha stage_.
-There are many features that we want to add.
-The file formats are still in flux.
-Expect breaking changes while we work towards a v1.0.
+This project is currently in the _alpha stage_. It's actively under development, and we're planning to add many more features. The file formats are still subject to change, and you should expect breaking changes as we work towards a v1.0.
 
-Some notable features that we have in the pipeline are:
+Some notable features we have in the pipeline are:
 
-* **Build and publish** your project as a Conda package.
-* Support for **PyPi packages**.
-* Support **dependencies from source**.
-* Improve docs, examples and user experience
+- **Build and publish** your project as a Conda package.
+- Support for **PyPi packages**.
+- Support for **dependencies from source**.
+- Improvements to documentation, examples, and user experience.
 
-# Installation
-`pixi` can be installed on macOS, Linux, and Windows.
-The provided scripts will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `~/.pixi/bin`.
-If this directory does not already exist, the script will create it.
+## Installation
 
-## macOS and Linux
+`pixi` can be installed on macOS, Linux, and Windows. The provided scripts will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `~/.pixi/bin`. If this directory does not exist, the script will create it.
+
+### macOS and Linux
+
 To install Pixi on macOS and Linux, open a terminal and run the following command:
+
 ```bash
 curl -fsSL https://pixi.sh/install.sh | bash
 # or with brew
@@ -102,7 +97,7 @@ echo 'pixi completion --shell fish | source' >> ~/.config/fish/config.fish
 echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
 ```
 
-For PowerShell on Windows:
+For PowerShell on Windows, run the following command and then restart the shell or source the shell config file:
 
 ```pwsh
 Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
