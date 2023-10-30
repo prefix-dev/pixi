@@ -49,7 +49,7 @@ pub fn verify_prefix_location_unchanged(prefix_file: &Path) -> miette::Result<()
             } else {
                 Err(miette::miette!(
                     "The project location seems to be change from `{}` to `{}`, this is not allowed.\
-                \nPlease remove the `{}` folder and run install",
+                \nPlease remove the `{}` folder and run again",
                     p,
                     prefix_file
                         .parent()
@@ -65,17 +65,15 @@ pub fn verify_prefix_location_unchanged(prefix_file: &Path) -> miette::Result<()
 /// Create the prefix location file.
 /// Give it the file path of the required location to place it.
 fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
-    if prefix_file
+    let parent = prefix_file
         .parent()
-        .ok_or_else(|| miette::miette!("Cannot find parent in '{}'", prefix_file.display()))?
-        .exists()
-    {
-        let contents = prefix_file
-            .parent()
-            .expect("There should always be the ability to display the parent folder.")
-            .to_str()
-            .expect("Should always make a str of the prefix path");
-        return std::fs::write(prefix_file, contents).into_diagnostic();
+        .ok_or_else(|| miette::miette!("Cannot find parent of '{}'", prefix_file.display()))?;
+
+    if parent.exists() {
+        let contents = parent.to_str().ok_or_else(|| {
+            miette::miette!("Failed to convert path to str: '{}'", parent.display())
+        })?;
+        std::fs::write(prefix_file, contents).into_diagnostic()?;
     }
     Ok(())
 }
