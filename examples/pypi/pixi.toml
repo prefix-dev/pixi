@@ -10,7 +10,6 @@ platforms = ["win-64"]
 
 [dependencies]
 python = "~=3.11.0"
-colorama = "0.4.6"
 
 [python-dependencies]
 flask = "~=3.0"

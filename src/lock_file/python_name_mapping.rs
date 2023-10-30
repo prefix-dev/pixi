@@ -19,7 +19,7 @@ pub async fn find_conda_python_packages(
 ) -> miette::Result<Vec<(rip::NormalizedPackageName, rip::Version)>> {
     // Get all the records from conda-forge
     let conda_forge_records = records
-        .into_iter()
+        .iter()
         .filter(|r| is_conda_forge_package(r))
         .collect_vec();
 

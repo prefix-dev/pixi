@@ -5,12 +5,11 @@ use crate::{
 use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, LabeledSpan};
-use rattler::install::{PythonInfo, Transaction};
-use rattler_conda_types::{Platform, PrefixRecord};
+use rattler::install::Transaction;
+use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{CondaLock, LockedDependency, PipLockedDependency};
-use rip::tags::WheelTag;
 use rip::{
-    ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, FindDistributionError, InstallPaths,
+    tags::WheelTag, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, InstallPaths,
     PackageDb, ParseArtifactNameError, UnpackWheelOptions, Wheel, WheelName,
 };
 use std::str::FromStr;
@@ -113,32 +112,41 @@ pub async fn update_prefix(
         .await?;
     }
 
-    // Determine currently installed python packages
-    let current_python_distributions = transaction
-        .current_python_info
-        .as_ref()
-        .map(|py_info| find_installed_python_distributions(prefix, platform, py_info))
-        .transpose()
-        .into_diagnostic()
-        .context("failed to locate python packages that have not been installed as conda packages")?
-        .unwrap_or_default();
+    // Remove python packages from a previous python distribution if the python version changed.
+    remove_old_distribution_packages(prefix, platform, &transaction)?;
 
-    // Log some information about these packages
-    tracing::debug!(
-        "found the following python packages in the environment:\n{}",
-        current_python_distributions
-            .iter()
-            .format_with("\n", |d, f| f(&format_args!(
-                "- {} (installed by {})",
-                d.name,
-                d.installer.as_deref().unwrap_or("?")
-            )))
+    // Install and/or remove python packages
+    update_python_packages(package_db, &prefix, lock_file, platform, &transaction).await?;
+
+    Ok(())
+}
+
+///
+async fn update_python_packages(
+    package_db: &PackageDb,
+    prefix: &&Prefix,
+    lock_file: &CondaLock,
+    platform: Platform,
+    transaction: &Transaction<PrefixRecord, RepoDataRecord>,
+) -> miette::Result<()> {
+    // Get the python info from the transaction
+    let Some(python_info) = transaction.python_info.as_ref() else { return Ok(()) };
+
+    // Determine where packages would have been installed
+    let install_paths = InstallPaths::for_venv(
+        (
+            python_info.short_version.0 as u32,
+            python_info.short_version.1 as u32,
+        ),
+        platform.is_windows(),
     );
 
-    let python_version = transaction
-        .python_info
-        .clone()
-        .map(|py| (py.short_version.0 as u32, py.short_version.1 as u32));
+    // Determine the current python distributions in those locations
+    let current_python_packages = rip::find_distributions_in_venv(prefix.root(), &install_paths)
+        .into_diagnostic()
+        .context(
+            "failed to locate python packages that have not been installed as conda packages",
+        )?;
 
     // Determine the python packages that are part of the lock-file
     let python_packages = lock_file
@@ -150,27 +158,14 @@ pub async fn update_prefix(
     // python version changed between installations we will have to remove any previous distribution
     // regardless.
     let (python_packages_to_remove, python_packages_to_install) =
-        determine_python_packages_to_remove_and_install(
-            transaction.current_python_info.as_ref(),
-            transaction.python_info.as_ref(),
-            current_python_distributions,
-            python_packages,
-
-        );
+        determine_python_packages_to_remove_and_install(current_python_packages, python_packages);
 
     // Remove python packages that need to be removed
     if !python_packages_to_remove.is_empty() {
-        let python_version = transaction.current_python_info.as_ref().map(|p| (p.short_version.0 as u32, p.short_version.1 as u32)).expect(
-            "there cannot be any installed python package without a previous python installation",
-        );
-
-        // Get the site_package path since everything is relative to that directory.
-        let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
         let site_package_path = install_paths
             .site_packages()
             .expect("site-packages path must exist");
 
-        // Remove the python packages
         for python_package in python_packages_to_remove {
             tracing::info!(
                 "uninstalling python package {}-{}",
@@ -189,10 +184,6 @@ pub async fn update_prefix(
 
     // Get the pip packages to install
     if !python_packages_to_install.is_empty() {
-        let python_version =
-            python_version.ok_or_else(|| miette::miette!("no python version in transaction"))?;
-        let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
-
         for package in python_packages_to_install {
             let pip_package = package
                 .as_pip()
@@ -241,48 +232,89 @@ pub async fn update_prefix(
                 .into_diagnostic()?;
         }
     }
+    Ok(())
+}
+
+/// If there was a previous version of python installed, remove any distribution installed in that
+/// environment.
+fn remove_old_distribution_packages(
+    prefix: &Prefix,
+    platform: Platform,
+    transaction: &Transaction<PrefixRecord, RepoDataRecord>,
+) -> miette::Result<()> {
+    // Determine if the current distribution is the same as the desired distribution.
+    let Some(previous_python_installation) = transaction.current_python_info.as_ref() else { return Ok(()) };
+    if Some(previous_python_installation.short_version)
+        == transaction.python_info.as_ref().map(|p| p.short_version)
+    {
+        return Ok(());
+    }
+
+    // Determine the current python distributions in its install locations
+    let python_version = (
+        previous_python_installation.short_version.0 as u32,
+        previous_python_installation.short_version.1 as u32,
+    );
+    let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
+
+    // Locate the packages that are installed in the previous environment
+    let current_python_packages = rip::find_distributions_in_venv(prefix.root(), &install_paths)
+        .into_diagnostic()
+        .with_context(|| format!("failed to determine the python packages installed for a previous version of python ({}.{})", python_version.0, python_version.1))?;
+
+    // Remove the python packages
+    let site_package_path = install_paths
+        .site_packages()
+        .expect("site-packages path must exist");
+    for python_package in current_python_packages {
+        // Skip any package installed as a conda package
+        if python_package.installer.as_deref() == Some("conda") {
+            continue;
+        }
+
+        tracing::info!(
+            "uninstalling python package from previous python version {}-{}",
+            &python_package.name,
+            &python_package.version
+        );
+        let relative_dist_info = python_package
+            .dist_info
+            .strip_prefix(site_package_path)
+            .expect("the dist-info path must be a sub-path of the site-packages path");
+        rip::uninstall::uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
+            .into_diagnostic()
+            .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_package.name, &python_package.version))?;
+    }
 
     Ok(())
 }
 
 /// Determine which python packages we can leave untouched and which python packages should be
 /// removed.
-fn determine_python_packages_to_remove_and_install<'p>(
-    current_python_info: Option<&PythonInfo>,
-    desired_python_info: Option<&PythonInfo>,
+fn determine_python_packages_to_remove_and_install(
     mut current_python_packages: Vec<Distribution>,
-    desired_python_packages: Vec<&'p LockedDependency>,
-) -> (Vec<Distribution>, Vec<&'p LockedDependency>) {
-    // If the python version do not match we have to remove all python packages and reinstall.
-    if current_python_info.map(|p| p.short_version) != desired_python_info.map(|p| p.short_version)
-    {
-        // Filter any package that is installed by conda
-        current_python_packages.retain(|p| p.installer.as_deref() != Some("conda"));
-
-        return (current_python_packages, desired_python_packages);
-    }
-
+    desired_python_packages: Vec<&LockedDependency>,
+) -> (Vec<Distribution>, Vec<&LockedDependency>) {
     // Determine the artifact tags associated with the locked dependencies.
     let mut desired_python_packages = extract_locked_tags(desired_python_packages);
 
-    // Remove any package that we also have as a locked dependency. If an installed package matches
-    // a locked package we can assume that it has already been installed.
+    // Any package that is currently installed that is not part of the locked dependencies should be
+    // removed. So we keep it in the `current_python_packages` list.
+    // Any package that is in the currently installed list that is NOT found in the lockfile is
+    // retained in the list to mark it for removal.
     current_python_packages.retain(|current_python_packages| {
         if let Some(found_desired_packages_idx) =
             desired_python_packages
                 .iter()
                 .position(|(pkg, artifact_name)| {
                     does_installed_match_locked_package(
-                        &current_python_packages,
-                        (&pkg, artifact_name.as_ref()),
+                        current_python_packages,
+                        (pkg, artifact_name.as_ref()),
                     )
                 })
         {
             // Remove from the desired list of packages to install & from the packages to uninstall.
             desired_python_packages.remove(found_desired_packages_idx);
-            false
-        } else if current_python_packages.installer.as_deref() == Some("conda") {
-            // If this package was installed as a conda package we also don't want to remove it.
             false
         } else {
             true
@@ -366,26 +398,4 @@ impl PipLockedDependencyExt for PipLockedDependency {
             ArtifactName::from_str,
         )
     }
-}
-
-/// Returns the python distributions installed in the given prefix.
-fn find_installed_python_distributions(
-    prefix: &Prefix,
-    platform: Platform,
-    py_info: &PythonInfo,
-) -> Result<Vec<Distribution>, FindDistributionError> {
-    // Determine where packages would have been installed
-    let current_install_paths = InstallPaths::for_venv(
-        (
-            py_info.short_version.0 as u32,
-            py_info.short_version.1 as u32,
-        ),
-        platform.is_windows(),
-    );
-
-    // Determine the current python distributions in those locations
-    let current_python_packages =
-        rip::find_distributions_in_venv(prefix.root(), &current_install_paths)?;
-
-    Ok(current_python_packages)
 }
