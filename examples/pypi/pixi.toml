@@ -9,7 +9,8 @@ platforms = ["win-64"]
 [tasks]
 
 [dependencies]
-python = "~=3.11.0"
+python = "~=3.10.0"
+numpy = "*"
 
 [python-dependencies]
-flask = "~=3.0"
+pyboy = "1.6.6"

@@ -9,6 +9,7 @@ use rip::{
     tags::{WheelTag, WheelTags},
     PinnedPackage,
 };
+use std::collections::HashMap;
 use std::{str::FromStr, vec};
 
 /// Resolve python packages for the specified project.
@@ -30,11 +31,14 @@ pub async fn resolve_python_dependencies<'p>(
     if !conda_python_packages.is_empty() {
         tracing::info!(
             "the following python packages are installed by conda: {conda_python_packages}",
-            conda_python_packages = conda_python_packages
-                .iter()
-                .format_with(", ", |(name, version), f| f(&format_args!(
-                    "{name} {version}"
-                )))
+            conda_python_packages =
+                conda_python_packages
+                    .iter()
+                    .format_with(", ", |p, f| f(&format_args!(
+                        "{name} {version}",
+                        name = &p.name,
+                        version = &p.version
+                    )))
         );
     } else {
         tracing::info!("there are no python packages installed by conda");
@@ -53,13 +57,21 @@ pub async fn resolve_python_dependencies<'p>(
     let compatible_tags = project_platform_tags(project, platform, python_record.as_ref());
 
     // Resolve the PyPi dependencies
-    let result = rip::resolve(
+    let mut result = rip::resolve(
         project.python_package_db()?,
         &requirements.as_pep508(),
         &marker_environment,
         Some(&compatible_tags),
+        conda_python_packages
+            .into_iter()
+            .map(|p| (p.name.clone(), p))
+            .collect(),
+        HashMap::default(),
     )
     .await?;
+
+    // Remove any conda package from the result
+    result.retain(|p| !p.artifacts.is_empty());
 
     Ok(result)
 }

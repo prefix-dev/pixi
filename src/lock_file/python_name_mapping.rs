@@ -2,6 +2,7 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::RepoDataRecord;
 use reqwest::Response;
+use rip::PinnedPackage;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -14,9 +15,9 @@ struct CondaPyPiNameMapping {
 
 /// Determine the python packages that are installed as part of the conda packages.
 /// TODO: Add some form of HTTP caching mechanisms here.
-pub async fn find_conda_python_packages(
+pub async fn find_conda_python_packages<'p>(
     records: &[RepoDataRecord],
-) -> miette::Result<Vec<(rip::NormalizedPackageName, rip::Version)>> {
+) -> miette::Result<Vec<PinnedPackage<'p>>> {
     // Get all the records from conda-forge
     let conda_forge_records = records
         .iter()
@@ -51,7 +52,12 @@ pub async fn find_conda_python_packages(
             let pypi_name = mapping_by_name.get(r.package_record.name.as_normalized())?;
             let pypi_name = rip::NormalizedPackageName::from_str(pypi_name).ok()?;
             let version = rip::Version::from_str(&r.package_record.version.as_str()).ok()?;
-            Some((pypi_name, version))
+            Some(PinnedPackage {
+                name: pypi_name,
+                version,
+                extras: Default::default(),
+                artifacts: vec![],
+            })
         })
         .collect();
 

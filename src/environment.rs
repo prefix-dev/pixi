@@ -317,7 +317,8 @@ fn determine_python_packages_to_remove_and_install(
             desired_python_packages.remove(found_desired_packages_idx);
             false
         } else {
-            true
+            // If this package was installed as a conda package we should not remove it.
+            current_python_packages.installer.as_deref() != Some("conda")
         }
     });
 
