@@ -66,7 +66,7 @@ fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
 
     if parent.exists() {
         let contents = parent.to_str().ok_or_else(|| {
-            miette::miette!("Failed to convert path to str: '{}'", parent.display())
+            miette::miette!("failed to convert path to str: '{}'", parent.display())
         })?;
         std::fs::write(prefix_file, contents).into_diagnostic()?;
     }
