@@ -107,7 +107,7 @@ And then restart the shell or source the shell config file.
 
 ## Install from source
 
-`pixi` is 100% written in Rust and therefore it can be installed, build and tested with cargo.
+`pixi` is 100% written in Rust and therefore it can be installed, built and tested with cargo.
 To start using `pixi` from a source build run:
 
 ```shell
@@ -130,11 +130,11 @@ it's [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-tr
 To uninstall the pixi binary should be removed.
 Delete `pixi` from the `$PIXI_DIR` which is default to `~/.pixi/bin/pixi`
 
-So on linux its:
+So on Linux its:
 ```shell
 rm ~/.pixi/bin/pixi
 ```
-and on windows:
+and on Windows:
 ```shell
 $PIXI_BIN = "$Env:LocalAppData\pixi\bin\pixi"; Remove-Item -Path $PIXI_BIN
 ```
