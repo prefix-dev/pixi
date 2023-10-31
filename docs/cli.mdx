@@ -343,7 +343,7 @@ pixi project channel add --no-install robostack
 ```
 
 [^1]: An __up-to-date__ lockfile means that the dependencies in the lockfile are allowed by the dependencies in the manifest file.
-For example
+      For example
 
       - a `pixi.toml` with `python = ">= 3.11"` is up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
       - a `pixi.toml` with `python = ">= 3.12"` is **not** up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.

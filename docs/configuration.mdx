@@ -74,7 +74,7 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html)
 
 ### `description` (optional)
-Should contain a short description of the project.
+This should contain a short description of the project.
 ```toml
 [project]
 description = "A simple description"
@@ -124,10 +124,10 @@ documentation = "https://pixi.sh"
 
 ## The `tasks` table
 Tasks are a way to automate certain custom commands in your project.
-For example: a `lint` or `format` step.
+For example, a `lint` or `format` step.
 Tasks in a pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
-For more in-depth information check the [Advanced tasks documentation](advanced/advanced_tasks).
-Pixi tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](advanced/advanced_tasks#our-task-runner-deno_task_shell).
+For more in-depth information, check the [Advanced tasks documentation](advanced/advanced_tasks).
+Pixi's tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](advanced/advanced_tasks#our-task-runner-deno_task_shell).
 
 ```toml
 [tasks]
@@ -143,7 +143,8 @@ Specify different tasks for different platforms using the [target](#the-target-t
 
 ## The `system-requirements` table
 The system requirements are used to define minimal system specifications used during dependency resolution.
-For example, we can define a unix system with a specific minimal libc version, this will be the minimal system specification for the project.
+For example, we can define a unix system with a specific minimal libc version.
+This will be the minimal system specification for the project.
 System specifications are directly related to the [virtual packages](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html).
 
 Currently, the specified **defaults** are the same as [conda-lock](https://github.com/conda/conda-lock)'s implementation:
@@ -266,7 +267,7 @@ cmake = "~=3.24"
 Typical examples of build dependencies are:
 
 * Compilers are invoked on the build machine, but they generate code for the target machine.
-If the project is cross-compiled the architecture of the build and target machine might differ.
+If the project is cross-compiled, the architecture of the build and target machine might differ.
 * `cmake` is invoked on the build machine to generate additional code- or project-files which are then include in the compilation process.
 
 :::info
