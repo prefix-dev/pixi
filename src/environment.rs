@@ -45,7 +45,7 @@ pub fn verify_prefix_location_unchanged(prefix_file: &Path) -> miette::Result<()
         // Check if the path in the file aligns with the current path.
         Ok(p) if prefix_file.starts_with(&p) => Ok(()),
         Ok(p) => Err(miette::miette!(
-            "The project location seems to be change from `{}` to `{}`, this is not allowed.\
+            "the project location seems to be change from `{}` to `{}`, this is not allowed.\
             \nPlease remove the `{}` folder and run again",
             p,
             prefix_file
