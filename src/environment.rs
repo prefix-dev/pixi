@@ -43,22 +43,17 @@ pub fn verify_prefix_location_unchanged(prefix_file: &Path) -> miette::Result<()
         // Scream the error if we dont know it.
         Err(e) => Err(e).into_diagnostic(),
         // Check if the path in the file aligns with the current path.
-        Ok(p) => {
-            if prefix_file.starts_with(&p) {
-                Ok(())
-            } else {
-                Err(miette::miette!(
-                    "The project location seems to be change from `{}` to `{}`, this is not allowed.\
-                \nPlease remove the `{}` folder and run again",
-                    p,
-                    prefix_file
-                        .parent()
-                        .expect("prefix_file should always be a file")
-                        .display(),
-                    consts::PIXI_DIR
-                ))
-            }
-        }
+        Ok(p) if prefix_file.starts_with(&p) => Ok(()),
+        Ok(p) => Err(miette::miette!(
+            "The project location seems to be change from `{}` to `{}`, this is not allowed.\
+            \nPlease remove the `{}` folder and run again",
+            p,
+            prefix_file
+                .parent()
+                .expect("prefix_file should always be a file")
+                .display(),
+            consts::PIXI_DIR
+        )),
     }
 }
 
@@ -182,14 +177,14 @@ pub async fn update_prefix(
         .await?;
     }
 
-    //
     create_prefix_location_file(
         &prefix
             .root()
             .parent()
             .map(|p| p.join(consts::PREFIX_FILE_NAME))
             .ok_or_else(|| miette::miette!("We should be able to create a prefix file name."))?,
-    )?;
+    )
+    .with_context(|| "Failed to create prefix location file.".to_string())?;
     Ok(())
 }
 
