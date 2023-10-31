@@ -495,7 +495,7 @@ impl Project {
     }
 
     /// Returns the version of the project
-    pub fn version(&self) -> &Version {
+    pub fn version(&self) -> &Option<Version> {
         &self.manifest.project.version
     }
 
@@ -864,7 +864,10 @@ mod tests {
         let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
 
         assert_eq!(project.name(), "pixi");
-        assert_eq!(project.version(), &Version::from_str("0.0.2").unwrap());
+        assert_eq!(
+            project.version().as_ref().unwrap(),
+            &Version::from_str("0.0.2").unwrap()
+        );
         assert_eq!(
             project.channels(),
             [Channel::from_name(

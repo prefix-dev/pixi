@@ -1,4 +1,5 @@
 use crate::{default_authenticated_client, progress, project::Project};
+use futures::{stream, StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, Platform};
@@ -50,56 +51,44 @@ pub async fn fetch_sparse_repodata(
         .join("repodata");
     let repodata_download_client = default_authenticated_client();
     let multi_progress = progress::global_multi_progress();
-    let (tx, mut rx) =
-        tokio::sync::mpsc::channel::<miette::Result<Option<SparseRepoData>>>(fetch_targets.len());
     let mut progress_bars = Vec::new();
-    for (channel, platform) in fetch_targets {
-        // Construct a progress bar for the fetch
-        let progress_bar = multi_progress.add(
-            indicatif::ProgressBar::new(1)
-                .with_prefix(format!("{}/{platform}", friendly_channel_name(&channel)))
-                .with_style(progress::default_bytes_style()),
-        );
-        progress_bar.enable_steady_tick(Duration::from_millis(50));
-        progress_bars.push(progress_bar.clone());
 
-        // Spawn a future that downloads the repodata in the background
-        let repodata_cache = repodata_cache_path.clone();
-        let download_client = repodata_download_client.clone();
-        let result_tx = tx.clone();
-        tokio::spawn(async move {
-            let fetch_result = fetch_repo_data_records_with_progress(
-                channel,
-                platform,
-                &repodata_cache,
-                download_client,
-                progress_bar.clone(),
-                platform != Platform::NoArch,
-            )
-            .await;
+    let repo_data = stream::iter(fetch_targets.into_iter())
+        .map(|(channel, platform)| {
+            // Construct a progress bar for the fetch
+            let progress_bar = multi_progress.add(
+                indicatif::ProgressBar::new(1)
+                    .with_prefix(format!("{}/{platform}", friendly_channel_name(&channel)))
+                    .with_style(progress::default_bytes_style()),
+            );
+            progress_bar.enable_steady_tick(Duration::from_millis(50));
+            progress_bars.push(progress_bar.clone());
 
-            // Silently ignore send error, it means the receiving end has been dropped and this
-            // task was probably cancelled.
-            let _ = result_tx.send(fetch_result).await;
-        });
-    }
+            // Spawn a future that downloads the repodata in the background
+            let repodata_cache = repodata_cache_path.clone();
+            let download_client = repodata_download_client.clone();
+            let top_level_progress = top_level_progress.clone();
 
-    // No longer need the sending end of the results channel
-    drop(tx);
+            async move {
+                let result = fetch_repo_data_records_with_progress(
+                    channel,
+                    platform,
+                    &repodata_cache,
+                    download_client,
+                    progress_bar.clone(),
+                    platform != Platform::NoArch,
+                )
+                .await;
 
-    // Await all the results (including the failures)
-    let mut result = Vec::new();
-    let mut error = None;
-    while let Some(fetch_result) = rx.recv().await {
-        match fetch_result {
-            Err(e) => {
-                error = error.or(Some(e));
+                top_level_progress.tick();
+
+                result
             }
-            Ok(Some(data)) => result.push(data),
-            Ok(None) => {}
-        }
-        top_level_progress.tick();
-    }
+        })
+        .buffered(20)
+        .filter_map(|result| async move { result.transpose() })
+        .try_collect::<Vec<_>>()
+        .await;
 
     // Clear all the progressbars together
     for pb in progress_bars {
@@ -107,11 +96,7 @@ pub async fn fetch_sparse_repodata(
     }
 
     // If there was an error, report it.
-    if let Some(error) = error {
-        return Err(error).wrap_err("failed to fetch repodata from channels");
-    }
-
-    Ok(result)
+    repo_data.wrap_err("failed to fetch repodata from channels")
 }
 
 /// Given a channel and platform, download and cache the `repodata.json` for it. This function

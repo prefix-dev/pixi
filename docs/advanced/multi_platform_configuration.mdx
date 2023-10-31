@@ -34,7 +34,7 @@ scripts = ["setup.ps1"]
 ## Platform definition
 
 The `project.platforms` defines which platforms your project supports.
-When multiple platforms are defined pixi determines which dependencies to install for each platform individually.
+When multiple platforms are defined, pixi determines which dependencies to install for each platform individually.
 All of this is stored in a lockfile.
 
 Running `pixi install` on a platform that is not configured will warn the user that it is not setup for that platform:
@@ -100,10 +100,10 @@ clang = "16.0.6.*"
 
 ### Activation
 
-Pixies vision is to enable completely cross-platform projects but you often need to run tools that are not built by your projects.
+Pixi's vision is to enable completely cross-platform projects, but you often need to run tools that are not built by your projects.
 Generated activation scripts are often in this category, default scripts in unix are `bash` and for windows they are `bat` or `ps1`
 
-To deal with this you can define your activation scripts using the target definition.
+To deal with this, you can define your activation scripts using the target definition.
 
 ```toml title="pixi.toml" showlinenumbers
 [activation]

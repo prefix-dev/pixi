@@ -15,7 +15,6 @@ The minimally required information in the `project` table is:
 ```toml
 [project]
 name = "project-name"
-version = "0.1.0"
 authors = ["John Doe <j.doe@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
@@ -28,10 +27,10 @@ The name of the project.
 name = "project-name"
 ```
 
-### `version`
+### `version` (optional)
 The version of the project.
 This should be a valid version based on the conda Version Spec.
-See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation what is allowed in a Version Spec.
+See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation of what is allowed in a Version Spec.
 ```toml
 [project]
 version = "1.2.3"
@@ -75,7 +74,7 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html)
 
 ### `description` (optional)
-Should contain a short description of the project.
+This should contain a short description of the project.
 ```toml
 [project]
 description = "A simple description"
@@ -125,10 +124,10 @@ documentation = "https://pixi.sh"
 
 ## The `tasks` table
 Tasks are a way to automate certain custom commands in your project.
-For example: a `lint` or `format` step.
+For example, a `lint` or `format` step.
 Tasks in a pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
-For the more in-depth information check the [Advanced tasks documentation](advanced/advanced_tasks).
-Pixi tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](advanced/advanced_tasks#our-task-runner-deno_task_shell).
+For more in-depth information, check the [Advanced tasks documentation](advanced/advanced_tasks).
+Pixi's tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](advanced/advanced_tasks#our-task-runner-deno_task_shell).
 
 ```toml
 [tasks]
@@ -144,7 +143,8 @@ Specify different tasks for different platforms using the [target](#the-target-t
 
 ## The `system-requirements` table
 The system requirements are used to define minimal system specifications used during dependency resolution.
-For example, we can define a unix system with a specific minimal libc version, this will be the minimal system specification for the project.
+For example, we can define a unix system with a specific minimal libc version.
+This will be the minimal system specification for the project.
 System specifications are directly related to the [virtual packages](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html).
 
 Currently, the specified **defaults** are the same as [conda-lock](https://github.com/conda/conda-lock)'s implementation:
@@ -171,7 +171,7 @@ Currently, the specified **defaults** are the same as [conda-lock](https://githu
         ```
     </TabItem>
     <TabItem value="Osx-arm64">
-        ```toml title="Default system requirements"
+        ```toml title="default system requirements"
         [system-requirements]
         unix = true
         macos = "11.0"
@@ -194,7 +194,7 @@ linux = "4.12.14"
 ```
 
 ## The `dependencies` table(s)
-This section defines what dependencies you would like to use your project.
+This section defines what dependencies you would like to use for your project.
 
 There are multiple dependencies tables.
 The default is `[dependencies]`, which are dependencies that are shared across platforms.
@@ -267,7 +267,7 @@ cmake = "~=3.24"
 Typical examples of build dependencies are:
 
 * Compilers are invoked on the build machine, but they generate code for the target machine.
-If the project is cross-compiled the architecture of the build and target machine might differ.
+If the project is cross-compiled, the architecture of the build and target machine might differ.
 * `cmake` is invoked on the build machine to generate additional code- or project-files which are then include in the compilation process.
 
 :::info
@@ -304,7 +304,7 @@ E.g `[target.linux-64.dependencies]`
 The platform can be any of the target [platforms](#platforms) but must also be defined there.
 The sub-table can be any of the specified above.
 
-To make it a bit more clear, lets look at an example below.
+To make it a bit more clear, let's look at an example below.
 Currently, pixi combines the top level tables like `dependencies` with the target-specific ones into a single set.
 Which, in the case of dependencies, can both add or overwrite dependencies.
 In the example below, we have `cmake` being used for all targets but on `osx-64` a different version of python will be selected.

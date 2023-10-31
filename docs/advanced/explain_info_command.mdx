@@ -34,7 +34,7 @@ Target platforms    : linux-64
 
 #### Options
 
-- `--extended`: Gives more information that would otherwise be to slow for command.
+- `--extended`: Gives more information that would otherwise be too slow for command.
   This shows the sizes of the directories.
 - `--json`: Get a machine-readable version of the information as output.
 
@@ -45,20 +45,20 @@ The first part of the info output is information that is always available and te
 ### Platform
 
 This defines the platform you're currently on according to pixi.
-If this is incorrect please file an issue on the [pixi repo](https://github.com/prefix-dev/pixi).
+If this is incorrect, please file an issue on the [pixi repo](https://github.com/prefix-dev/pixi).
 
 ### Virtual packages
 
 The virtual packages that pixi can find on your machine.
 
-In the Conda ecosystem you can depend on virtual packages.
+In the Conda ecosystem, you can depend on virtual packages.
 These packages aren't real dependencies that are going to be installed, but rather are being used in the solve step to find if a package can be installed on the machine.
 A simple example: When a package depends on Cuda drivers being present on the host machine it can do that by depending on the `__cuda` virtual package.
 In that case, if pixi cannot find the `__cuda` virtual package on your machine the installation will fail.
 
 ### Cache dir
 
-Pixi caches all previous downloaded packages in a cache folder.
+Pixi caches all previously downloaded packages in a cache folder.
 This cache folder is shared between all pixi projects and globally installed tools.
 Normally the locations would be:
 

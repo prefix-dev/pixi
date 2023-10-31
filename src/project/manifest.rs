@@ -218,8 +218,8 @@ pub struct ProjectMetadata {
     pub name: String,
 
     /// The version of the project
-    #[serde_as(as = "DisplayFromStr")]
-    pub version: Version,
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub version: Option<Version>,
 
     /// An optional project description
     pub description: Option<String>,
