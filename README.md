@@ -46,7 +46,6 @@ Developed with ❤️ at [prefix.dev](https://prefix.dev).
 - ⚡ [Installation](#installation)
 - ⚙️ [Examples](/examples)
 - 📚 [Documentation](https://prefix.dev/docs/pixi/overview)
-- 😍 [Contributing](#contributing)
 - 🔨 [Built using Pixi](#built-using-pixi)
 - 🚀 [GitHub Action](https://github.com/prefix-dev/setup-pixi)
 
@@ -223,26 +222,6 @@ You can use pixi in GitHub Actions to install dependencies and run commands.
     cache: true
 - run: pixi run cowpy "Thanks for using pixi"
 ```
-
-<a name="contributing"></a>
-
-## Contributing 😍
-
-We would absolutely love for you to contribute to `pixi`!
-Whether you want to start an issue, fix a bug you encountered, or suggest an
-improvement, every contribution is greatly appreciated.
-
-If you're just getting started with our project or stepping into the Rust
-ecosystem for the first time, we've got your back!
-We recommend beginning with issues labeled as `good first issue`.
-These are carefully chosen tasks that provide a smooth entry point into
-contributing.These issues are typically more straightforward and are a great way
-to get familiar with the project.
-
-Got questions or ideas, or just want to chat? Join our lively conversations on
-Discord.
-We're very active and would be happy to welcome you to our
-community. [Join our discord server today!][chat-url]
 
 <a name="pixibuilt"></a>
 ## Built using pixi
