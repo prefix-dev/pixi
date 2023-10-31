@@ -182,7 +182,7 @@ pub async fn update_prefix(
             .root()
             .parent()
             .map(|p| p.join(consts::PREFIX_FILE_NAME))
-            .ok_or_else(|| miette::miette!("We should be able to create a prefix file name."))?,
+            .ok_or_else(|| miette::miette!("we should be able to create a prefix file name."))?,
     )
     .with_context(|| "failed to create prefix location file.".to_string())?;
     Ok(())
