@@ -1,7 +1,9 @@
 mod python;
 mod python_name_mapping;
 
-use crate::Project;
+use crate::progress::global_multi_progress;
+use crate::{progress, Project};
+use indicatif::{ProgressBar, ProgressState};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
@@ -16,7 +18,10 @@ use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
 use rip::Wheel;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt::Write;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 
 /// Loads the lockfile for the specified project or returns a dummy one if none could be found.
 pub async fn load_lock_file(project: &Project) -> miette::Result<CondaLock> {
@@ -204,12 +209,20 @@ pub async fn update_lock_file(
 ) -> miette::Result<CondaLock> {
     let platforms = project.platforms();
 
+    // Construct a progress bar
+    let multi_progress = progress::global_multi_progress();
+    let top_level_progress = multi_progress.add(ProgressBar::new(platforms.len() as u64));
+    top_level_progress.set_style(progress::long_running_progress_style());
+    top_level_progress.set_message("solving dependencies");
+    top_level_progress.enable_steady_tick(Duration::from_millis(50));
+
     // Get the repodata for the project
-    let sparse_repo_data = if let Some(sparse_repo_data) = repodata {
+    let sparse_repo_data: Arc<[_]> = if let Some(sparse_repo_data) = repodata {
         sparse_repo_data
     } else {
         project.fetch_sparse_repodata().await?
-    };
+    }
+    .into();
 
     // Construct a conda lock file
     let channels = project
@@ -218,99 +231,54 @@ pub async fn update_lock_file(
         .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()));
 
     // Empty match-specs because these differ per platform
+    let mut solve_bars = Vec::new();
     let mut builder = LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
     for platform in platforms.iter().cloned() {
-        let dependencies = project.all_dependencies(platform)?;
-        let match_specs = dependencies
-            .iter()
-            .map(|(name, constraint)| {
-                MatchSpec::from_nameless(constraint.clone(), Some(name.clone()))
-            })
-            .collect_vec();
+        // Construct a progress bar
+        let platform_progress =
+            progress::global_multi_progress().add(ProgressBar::new(platforms.len() as u64));
+        platform_progress.set_style(
+            indicatif::ProgressStyle::with_template(&format!(
+                " ↳ solving {platform} ({{msg}}) ({{elapsed}})"
+            ))
+            .unwrap(),
+        );
+        platform_progress.set_prefix("  ↳ ");
+        platform_progress.enable_steady_tick(Duration::from_millis(100));
+        platform_progress.set_message("conda");
+        solve_bars.push(platform_progress.clone());
 
-        // Extract the package names from the dependencies
-        let package_names = dependencies.keys().collect_vec();
-
-        // Get the repodata for the current platform and for NoArch
-        let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
-            sparse.subdir() == platform.as_str() || sparse.subdir() == Platform::NoArch.as_str()
-        });
-
-        // Load only records we need for this platform
-        let available_packages = SparseRepoData::load_records_recursive(
-            platform_sparse_repo_data,
-            package_names.into_iter().cloned(),
-            None,
-            true,
+        let result = resolve_platform(
+            project,
+            &existing_lock_file,
+            sparse_repo_data.clone(),
+            platform,
         )
-        .into_diagnostic()?;
+        .await;
 
-        // Get the virtual packages for this platform
-        let virtual_packages = project.virtual_packages(platform)?;
-
-        // Construct a solver task that we can start solving.
-        let task = rattler_solve::SolverTask {
-            specs: match_specs.clone(),
-            available_packages: &available_packages,
-            locked_packages: existing_lock_file
-                .get_conda_packages_by_platform(platform)
-                .into_diagnostic()?,
-            pinned_packages: vec![],
-            virtual_packages,
+        let locked_packages = match result {
+            Ok(locked_packages) => locked_packages,
+            Err(e) => {
+                for bar in solve_bars {
+                    bar.finish_and_clear();
+                }
+                return Err(e);
+            }
         };
 
-        // Solve the task
-        let records = resolvo::Solver.solve(task).into_diagnostic()?;
-
-        // Solve python packages
-        let python_artifacts =
-            python::resolve_python_dependencies(project, platform, &records).await?;
-
-        // Update lock file
-        let mut locked_packages = LockedPackagesBuilder::new(platform);
-
-        // Add conda packages
-        for record in records {
-            let locked_package =
-                CondaLockedDependencyBuilder::try_from(record).into_diagnostic()?;
-            locked_packages.add_locked_package(locked_package);
-        }
-
-        // Add pip packages
-        for python_artifact in python_artifacts {
-            let (artifact, metadata) = project
-                .python_package_db()?
-                .get_metadata::<Wheel, _>(&python_artifact.artifacts)
-                .await
-                .expect("failed to get metadata for a package for which we have already fetched metadata during solving.");
-
-            let locked_package = PipLockedDependencyBuilder {
-                name: python_artifact.name.to_string(),
-                version: python_artifact.version.to_string(),
-                requires_dist: metadata
-                    .requires_dist
-                    .into_iter()
-                    .map(|r| r.to_string())
-                    .collect(),
-                requires_python: metadata.requires_python.map(|r| r.to_string()),
-                extras: python_artifact
-                    .extras
-                    .into_iter()
-                    .map(|e| e.as_str().to_string())
-                    .collect(),
-                url: artifact.url.clone(),
-                hash: artifact
-                    .hashes
-                    .as_ref()
-                    .and_then(|hash| PackageHashes::from_hashes(None, hash.sha256)),
-                source: None,
-                build: None,
-            };
-
-            locked_packages.add_locked_package(locked_package)
-        }
+        platform_progress.set_style(
+            indicatif::ProgressStyle::with_template(&format!(
+                " {} solved {platform} in {{elapsed}}",
+                console::style(console::Emoji("✔", "↳")).green(),
+            ))
+            .unwrap(),
+        );
 
         builder = builder.add_locked_packages(locked_packages);
+    }
+
+    for bar in solve_bars {
+        bar.finish_and_clear();
     }
 
     let conda_lock = builder.build().into_diagnostic()?;
@@ -321,4 +289,98 @@ pub async fn update_lock_file(
         .into_diagnostic()?;
 
     Ok(conda_lock)
+}
+
+async fn resolve_platform(
+    project: &Project,
+    existing_lock_file: &CondaLock,
+    sparse_repo_data: Arc<[SparseRepoData]>,
+    platform: Platform,
+) -> miette::Result<LockedPackagesBuilder> {
+    let dependencies = project.all_dependencies(platform)?;
+    let match_specs = dependencies
+        .iter()
+        .map(|(name, constraint)| MatchSpec::from_nameless(constraint.clone(), Some(name.clone())))
+        .collect_vec();
+
+    // Extract the package names from the dependencies
+    let package_names = dependencies.keys().collect_vec();
+
+    // Get the virtual packages for this platform
+    let virtual_packages = project.virtual_packages(platform)?;
+
+    // Get the repodata for the current platform and for NoArch
+    let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
+        sparse.subdir() == platform.as_str() || sparse.subdir() == Platform::NoArch.as_str()
+    });
+
+    // Load only records we need for this platform
+    let available_packages = SparseRepoData::load_records_recursive(
+        platform_sparse_repo_data,
+        package_names.into_iter().cloned(),
+        None,
+        true,
+    )
+    .into_diagnostic()?;
+
+    // Construct a solver task that we can start solving.
+    let task = rattler_solve::SolverTask {
+        specs: match_specs.clone(),
+        available_packages: &available_packages,
+        locked_packages: existing_lock_file
+            .get_conda_packages_by_platform(platform)
+            .into_diagnostic()?,
+        pinned_packages: vec![],
+        virtual_packages,
+    };
+
+    // Solve the task
+    let records = resolvo::Solver.solve(task).into_diagnostic()?;
+
+    // Solve python packages
+    let python_artifacts = python::resolve_python_dependencies(project, platform, &records).await?;
+
+    // Update lock file
+    let mut locked_packages = LockedPackagesBuilder::new(platform);
+
+    // Add conda packages
+    for record in records {
+        let locked_package = CondaLockedDependencyBuilder::try_from(record).into_diagnostic()?;
+        locked_packages.add_locked_package(locked_package);
+    }
+
+    // Add pip packages
+    for python_artifact in python_artifacts {
+        let (artifact, metadata) = project
+            .python_package_db()?
+            .get_metadata::<Wheel, _>(&python_artifact.artifacts)
+            .await
+            .expect("failed to get metadata for a package for which we have already fetched metadata during solving.");
+
+        let locked_package = PipLockedDependencyBuilder {
+            name: python_artifact.name.to_string(),
+            version: python_artifact.version.to_string(),
+            requires_dist: metadata
+                .requires_dist
+                .into_iter()
+                .map(|r| r.to_string())
+                .collect(),
+            requires_python: metadata.requires_python.map(|r| r.to_string()),
+            extras: python_artifact
+                .extras
+                .into_iter()
+                .map(|e| e.as_str().to_string())
+                .collect(),
+            url: artifact.url.clone(),
+            hash: artifact
+                .hashes
+                .as_ref()
+                .and_then(|hash| PackageHashes::from_hashes(None, hash.sha256)),
+            source: None,
+            build: None,
+        };
+
+        locked_packages.add_locked_package(locked_package)
+    }
+    Ok(locked_packages)
 }
