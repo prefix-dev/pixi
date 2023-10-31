@@ -62,7 +62,7 @@ pub fn verify_prefix_location_unchanged(prefix_file: &Path) -> miette::Result<()
 fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
     let parent = prefix_file
         .parent()
-        .ok_or_else(|| miette::miette!("Cannot find parent of '{}'", prefix_file.display()))?;
+        .ok_or_else(|| miette::miette!("cannot find parent of '{}'", prefix_file.display()))?;
 
     if parent.exists() {
         let contents = parent.to_str().ok_or_else(|| {
