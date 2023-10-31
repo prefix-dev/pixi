@@ -77,7 +77,7 @@ The tasks will be executed after each other:
 - Then `build` as it only depends on `configure`.
 - Then `start` as all it dependencies are run.
 
-If one of the commands fail (exit with non-zero code.) it will stop and the next once will not be started.
+If one of the commands fails (exit with non-zero code.) it will stop and the next one will not be started.
 
 With this logic you can also create aliases as you don't have to specify any command in a task.
 
@@ -157,7 +157,7 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
 - **Boolean list:** use `&&` or `||` to separate two commands.
   - `&&`: if the command before `&&` succeeds continue with the next command.
   - `||`: if the command before `||` fails continue with the next command.
-- **Sequential lists:** use `;` to run two commands without checking if the fist command failed or succeeded.
+- **Sequential lists:** use `;` to run two commands without checking if the first command failed or succeeded.
 - **Environment variables:**
   - Set env variable using: `export ENV_VAR=value`
   - Use env variable using: `$ENV_VAR`

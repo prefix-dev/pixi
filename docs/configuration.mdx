@@ -30,7 +30,7 @@ name = "project-name"
 ### `version` (optional)
 The version of the project.
 This should be a valid version based on the conda Version Spec.
-See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation what is allowed in a Version Spec.
+See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation of what is allowed in a Version Spec.
 ```toml
 [project]
 version = "1.2.3"
@@ -126,7 +126,7 @@ documentation = "https://pixi.sh"
 Tasks are a way to automate certain custom commands in your project.
 For example: a `lint` or `format` step.
 Tasks in a pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
-For the more in-depth information check the [Advanced tasks documentation](advanced/advanced_tasks).
+For more in-depth information check the [Advanced tasks documentation](advanced/advanced_tasks).
 Pixi tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](advanced/advanced_tasks#our-task-runner-deno_task_shell).
 
 ```toml
@@ -193,7 +193,7 @@ linux = "4.12.14"
 ```
 
 ## The `dependencies` table(s)
-This section defines what dependencies you would like to use your project.
+This section defines what dependencies you would like to use for your project.
 
 There are multiple dependencies tables.
 The default is `[dependencies]`, which are dependencies that are shared across platforms.
@@ -303,7 +303,7 @@ E.g `[target.linux-64.dependencies]`
 The platform can be any of the target [platforms](#platforms) but must also be defined there.
 The sub-table can be any of the specified above.
 
-To make it a bit more clear, lets look at an example below.
+To make it a bit more clear, let's look at an example below.
 Currently, pixi combines the top level tables like `dependencies` with the target-specific ones into a single set.
 Which, in the case of dependencies, can both add or overwrite dependencies.
 In the example below, we have `cmake` being used for all targets but on `osx-64` a different version of python will be selected.
