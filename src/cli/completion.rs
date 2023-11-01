@@ -64,7 +64,14 @@ fn replace_zsh_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     let zsh_replacement = r#"$1
-_values 'task' $$( pixi task list --summary 2> /dev/null )
+local tasks
+tasks=("$${(@s/ /)$$(pixi task list --summary 2> /dev/null)}")
+
+if [[ -n "$$tasks" ]]; then
+    _values 'task' "$${tasks[@]}"
+else
+    return 1
+fi
 $2::task"#;
 
     let re = Regex::new(pattern).unwrap();

@@ -10,7 +10,14 @@ _arguments "${_arguments_options[@]}" \
 && ret=0
 ;;
 (run)
-_values 'task' $( pixi task list --summary 2> /dev/null )
+local tasks
+tasks=("${(@s/ /)$(pixi task list --summary 2> /dev/null)}")
+
+if [[ -n "$tasks" ]]; then
+    _values 'task' "${tasks[@]}"
+else
+    return 1
+fi
 _arguments "${_arguments_options[@]}" \
 '--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
 '--color=[Whether the log needs to be colored]:COLOR:(always never auto)' \
