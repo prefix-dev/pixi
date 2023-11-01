@@ -9,4 +9,4 @@
 - [Ribasim](https://github.com/Deltares/Ribasim): Water resources model
 - [LFortran](https://github.com/lfortran/lfortran): A modern cross-platform Fortran compiler
 - [Rerun](https://www.rerun.io/): Rerun is an SDK for building time aware visualizations of multimodal data.
-- [conda-auth](https://github.com/conda-incubator/conda-auth): a conda plugin providing more secure authentication support.
+- [conda-auth](https://github.com/conda-incubator/conda-auth): a conda plugin providing more secure authentication support to conda.
