@@ -64,12 +64,16 @@ update_shell() {
     FILE=$1
     LINE=$2
 
+    # Create the file if it doesn't exist
     if [ -f "$FILE" ]; then
-        if ! grep -Fxq "$LINE" "$FILE"
-        then
-            echo "Updating '${FILE}'"
-            echo "$LINE" >> "$FILE"
-        fi
+        touch "$FILE"
+    fi
+
+    # Append the line if not already present
+    if ! grep -Fxq "$LINE" "$FILE"
+    then
+        echo "Updating '${FILE}'"
+        echo "$LINE" >> "$FILE"
     fi
 }
 case "$(basename "$SHELL")" in

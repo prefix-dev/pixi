@@ -1,7 +1,8 @@
-use crate::environment::update_prefix;
+use crate::environment::{update_prefix, verify_prefix_location_unchanged};
 use crate::prefix::Prefix;
 use crate::project::SpecType;
 use crate::{
+    consts,
     environment::{load_lock_file, update_lock_file},
     project::Project,
     virtual_packages::get_minimal_virtual_packages,
@@ -94,6 +95,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let spec_type = SpecType::from_args(&args);
     let spec_platforms = args.platform;
+
+    // Sanity check of prefix location
+    verify_prefix_location_unchanged(
+        project
+            .environment_dir()
+            .join(consts::PREFIX_FILE_NAME)
+            .as_path(),
+    )?;
 
     // Add the platform if it is not already present
     let platforms_to_add = spec_platforms
@@ -296,6 +305,8 @@ pub fn determine_best_version(
         platform_sparse_repo_data,
         package_names.iter().cloned(),
         None,
+        // Default to strict_channel_priority
+        true,
     )
     .into_diagnostic()?;
 

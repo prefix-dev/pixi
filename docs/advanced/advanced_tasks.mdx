@@ -4,9 +4,9 @@ title: Advanced tasks
 description: Learn how to interact with pixi tasks
 ---
 
-When building a package you often have to do more than just run the code.
+When building a package, you often have to do more than just run the code.
 Steps like formatting, linting, compiling, testing, benchmarking, etc. are often part of a project.
-With pixi tasks this should become much easier to do.
+With pixi tasks, this should become much easier to do.
 
 Here are some quick examples
 
@@ -41,7 +41,7 @@ move = "mv pixi.toml backup.toml"
 
 ## Depends on
 
-Just like packages can depend on other packages our tasks can depend on other tasks.
+Just like packages can depend on other packages, our tasks can depend on other tasks.
 This allows for complete pipelines to be run with a single command.
 
 An obvious example is **compiling** before **running** an application.
@@ -77,9 +77,9 @@ The tasks will be executed after each other:
 - Then `build` as it only depends on `configure`.
 - Then `start` as all it dependencies are run.
 
-If one of the commands fail (exit with non-zero code.) it will stop and the next once will not be started.
+If one of the commands fails (exit with non-zero code.) it will stop and the next one will not be started.
 
-With this logic you can also create aliases as you don't have to specify any command in a task.
+With this logic, you can also create aliases as you don't have to specify any command in a task.
 
 ```shell
 pixi task add fmt ruff
@@ -107,7 +107,7 @@ pixi run style
 ## Working directory
 Pixi tasks support the definition of a working directory.
 
-"cwd" stands for Current Working Directory.
+`cwd`" stands for Current Working Directory.
 The directory is relative to the pixi package root, where the `pixi.toml` file is located.
 
 Consider a pixi project structured as follows:
@@ -130,7 +130,7 @@ bar = { cmd = "python bar.py", cwd = "scripts" }
 
 ## Our task runner: deno_task_shell
 
-To support the different OS's (Windows, OSX and Linux) pixi integrates a shell that can run on all of them.
+To support the different OS's (Windows, OSX and Linux), pixi integrates a shell that can run on all of them.
 This is [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#built-in-commands).
 The task shell is a limited implementation of a bourne-shell interface.
 
@@ -147,7 +147,7 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
 - `sleep`: Delays for a specified amount of time.
   Ex. `sleep 1` to sleep for 1 second, `sleep 0.5` to sleep for half a second, or `sleep 1m` to sleep a minute
 - `echo`: Displays a line of text.
-- `cat`: Concatenates files and outputs them on stdout. When no arguments are provided it reads and outputs stdin.
+- `cat`: Concatenates files and outputs them on stdout. When no arguments are provided, it reads and outputs stdin.
 - `exit`: Causes the shell to exit.
 - `unset`: Unsets environment variables.
 - `xargs`: Builds arguments from stdin and executes a command.
@@ -157,7 +157,7 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
 - **Boolean list:** use `&&` or `||` to separate two commands.
   - `&&`: if the command before `&&` succeeds continue with the next command.
   - `||`: if the command before `||` fails continue with the next command.
-- **Sequential lists:** use `;` to run two commands without checking if the fist command failed or succeeded.
+- **Sequential lists:** use `;` to run two commands without checking if the first command failed or succeeded.
 - **Environment variables:**
   - Set env variable using: `export ENV_VAR=value`
   - Use env variable using: `$ENV_VAR`

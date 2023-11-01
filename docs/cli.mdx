@@ -18,7 +18,7 @@ It initializes a `pixi.toml` file and also prepares a `.gitignore` to prevent th
 
 #### Options
 
-- `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be use more than once)
+- `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 
 ```shell
 pixi init myproject
@@ -39,7 +39,7 @@ It will only add if the package with its version constraint is able to work with
 - `--host`: Specify that it is a host dependency, important for building a package.
 - `--build`: Specify that it is a build dependency, important for building a package.
 - `--no-install`: Don't install the package to the environment, only add the package to the lock-file.
-- `--platform (-p)`: The platform for which the dependency should be added. (Allowed to be use more than once)
+- `--platform (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 
 ```shell
 pixi add numpy
@@ -265,7 +265,7 @@ This command installs a package into its own environment and adds the binary to 
 
 #### Options
 
-- `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be use more than once)
+- `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 
 ```shell
 pixi global install ruff
@@ -343,7 +343,7 @@ pixi project channel add --no-install robostack
 ```
 
 [^1]: An __up-to-date__ lockfile means that the dependencies in the lockfile are allowed by the dependencies in the manifest file.
-For example
+      For example
 
       - a `pixi.toml` with `python = ">= 3.11"` is up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
       - a `pixi.toml` with `python = ">= 3.12"` is **not** up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
