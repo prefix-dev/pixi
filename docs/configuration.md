@@ -51,13 +51,13 @@ If you want to use channels hosted on `anaconda.org` you only need to use the na
 channels = ["conda-forge", "robostack", "bioconda", "nvidia", "pytorch"]
 ```
 
-Channels situated on the file system are also supported with file paths:
+Channels situated on the file system are also supported with **absolute** file paths:
 ```toml
 [project]
 channels = ["conda-forge", "file:///home/user/staged-recipes/build_artifacts"]
 ```
 
-To access private or public channels on [prefix.dev](prefix.dev) or [Quetz](https://github.com/mamba-org/quetz) use the url including the hostname:
+To access private or public channels on [prefix.dev](https://prefix.dev/channels) or [Quetz](https://github.com/mamba-org/quetz) use the url including the hostname:
 ```toml
 [project]
 channels = ["conda-forge", "https://repo.prefix.dev/channel-name"]
@@ -115,7 +115,7 @@ URL of the project source repository.
 repository = "https://github.com/prefix-dev/pixi"
 ```
 
-### `documentation`
+### `documentation` (optional)
 URL of the project documentation.
 ```toml
 [project]
@@ -126,7 +126,7 @@ documentation = "https://pixi.sh"
 Tasks are a way to automate certain custom commands in your project.
 For example, a `lint` or `format` step.
 Tasks in a pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
-For more in-depth information, check the [Advanced tasks documentation](advanced/advanced_tasks).
+For more in-depth information, check the [Advanced tasks documentation](../advanced/advanced_tasks).
 Pixi's tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](advanced/advanced_tasks#our-task-runner-deno_task_shell).
 
 ```toml
@@ -136,10 +136,10 @@ cmd = { cmd="echo Same as a simple task but now more verbose"}
 depending = { cmd="echo run after simple", depends_on="simple"}
 alias = { depends_on=["depending"]}
 ```
-You can modify this table using [`pixi task`](cli#task).
-:::note
-Specify different tasks for different platforms using the [target](#the-target-table) table
-:::
+You can modify this table using [`pixi task`](../cli#task).
+!!! note
+    Specify different tasks for different platforms using the [target](#the-target-table) table
+
 
 ## The `system-requirements` table
 The system requirements are used to define minimal system specifications used during dependency resolution.
@@ -214,13 +214,13 @@ package2 = ">1.2,<=1.4"
 package3 = ">=1.2.3|<1.0.0"
 ```
 
-:::tip
-The dependencies can be easily added using the `pixi add` command line.
-Running `add` for an existing dependency will replace it with the newest it can use.
-:::
-:::note
-To specify different dependencies for different platforms use the [target](#the-target-table) table
-:::
+!!! tip
+    The dependencies can be easily added using the `pixi add` command line.
+    Running `add` for an existing dependency will replace it with the newest it can use.
+
+!!! note
+    To specify different dependencies for different platforms use the [target](#the-target-table) table
+
 
 ### `dependencies`
 Add any conda package dependency that you want to install into the environment.
@@ -232,11 +232,11 @@ python = ">3.9,<=3.11"
 rust = "1.72"
 ```
 
-:::note
-All packages added to the `dependencies` table are also included as dependencies of the binary build by `pixi build`.
+!!!note
+    All packages added to the `dependencies` table are also included as dependencies of the binary build by `pixi build`.
 
-To only include certain packages in different stages of the build see [`build-dependencies`](#build-dependencies) and [`host-dependencies`](#host-dependencies).
-:::
+    To only include certain packages in different stages of the build see [`build-dependencies`](#build-dependencies) and [`host-dependencies`](#host-dependencies).
+
 
 ### `host-dependencies`
 
@@ -270,12 +270,12 @@ Typical examples of build dependencies are:
 If the project is cross-compiled, the architecture of the build and target machine might differ.
 * `cmake` is invoked on the build machine to generate additional code- or project-files which are then include in the compilation process.
 
-:::info
-The _build_ target refers to the machine that will execute the build.
-Programs and libraries installed by these dependencies will be executed on the build machine.
+!!! info
+    The _build_ target refers to the machine that will execute the build.
+    Programs and libraries installed by these dependencies will be executed on the build machine.
 
-For example, if you compile on a MacBook with an Apple Silicon chip but target Linux x86_64 then your *build* platform is `osx-arm64` and your *host* platform is `linux-64`.
-:::
+    For example, if you compile on a MacBook with an Apple Silicon chip but target Linux x86_64 then your *build* platform is `osx-arm64` and your *host* platform is `linux-64`.
+
 
 ## The `activation` table
 If you want to run an activation script inside the environment when either doing a `pixi run` or `pixi shell` these can be defined here.
@@ -285,9 +285,9 @@ The scripts defined in this table will be sourced when the environment is activa
 [activation]
 scripts = ["env_setup.sh"]
 ```
-:::note
-Specify different scripts for different platforms using the [target](#the-target-table) table
-:::
+!!! note
+    Specify different scripts for different platforms using the [target](#the-target-table) table
+
 
 
 ## The `target` table
@@ -295,8 +295,9 @@ The target table is a table that allows for platform specific configuration.
 Allowing you to make different sets of tasks or dependencies per platform.
 
 The target table is currently implemented for the following sub-tables:
+
 - [`activation`](#the-activation-table)
-- [`dependencies`](#the-dependencies-table)
+- [`dependencies`](#dependencies)
 - [`tasks`](#the-tasks-table)
 
 The target table is defined using `[target.PLATFORM.SUB-TABLE]`.

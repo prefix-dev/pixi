@@ -4,12 +4,12 @@ title: Multi platform config
 description: Learn how to set up for different platforms/OS's
 ---
 
-[Pixi's vision](./../vision) includes being supported on all major platforms. Sometimes that needs some extra configuration to work well.
+[Pixi's vision](../../vision) includes being supported on all major platforms. Sometimes that needs some extra configuration to work well.
 On this page, you will learn what you can configure to align better with the platform you are making your application for.
 
 Here is an example `pixi.toml` that highlights some of the features:
 
-```toml showLineNumbers title="pixi.toml"
+```toml title="pixi.toml"
 [project]
 # Default project info....
 # A list of platforms you are supporting with your package.
@@ -61,7 +61,7 @@ If you are targeting a specific platform in your target specifier that was not s
 
 It might happen that you want to install a certain dependency only on a specific platform, or you might want to use a different version on different platforms.
 
-```toml title="pixi.toml" showLineNumbers
+```toml title="pixi.toml"
 [dependencies]
 python = ">=3.8"
 
@@ -90,7 +90,7 @@ pixi add --build --platform osx-64 clang
 
 Which results in this.
 
-```toml title="pixi.toml" showlinenumbers
+```toml title="pixi.toml"
 [target.win-64.host-dependencies]
 posix = "1.0.0.*"
 
@@ -105,7 +105,7 @@ Generated activation scripts are often in this category, default scripts in unix
 
 To deal with this, you can define your activation scripts using the target definition.
 
-```toml title="pixi.toml" showlinenumbers
+```toml title="pixi.toml"
 [activation]
 scripts = ["setup.sh", "local_setup.bash"]
 
