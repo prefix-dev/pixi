@@ -1,12 +1,16 @@
 mod python;
 mod python_name_mapping;
 
-use crate::progress::global_multi_progress;
 use crate::{progress, Project};
-use indicatif::{ProgressBar, ProgressState};
+use futures::TryStreamExt;
+use futures::{stream, StreamExt};
+use indicatif::ProgressBar;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
-use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
+use miette::{Context, IntoDiagnostic};
+use rattler_conda_types::{
+    GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageName, Platform, RepoDataRecord,
+    Version,
+};
 use rattler_lock::{
     builder::{
         CondaLockedDependencyBuilder, LockFileBuilder, LockedPackagesBuilder,
@@ -17,11 +21,12 @@ use rattler_lock::{
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
 use rip::Wheel;
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::fmt::Write;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
+};
 
 /// Loads the lockfile for the specified project or returns a dummy one if none could be found.
 pub async fn load_lock_file(project: &Project) -> miette::Result<CondaLock> {
@@ -209,13 +214,6 @@ pub async fn update_lock_file(
 ) -> miette::Result<CondaLock> {
     let platforms = project.platforms();
 
-    // Construct a progress bar
-    let multi_progress = progress::global_multi_progress();
-    let top_level_progress = multi_progress.add(ProgressBar::new(platforms.len() as u64));
-    top_level_progress.set_style(progress::long_running_progress_style());
-    top_level_progress.set_message("solving dependencies");
-    top_level_progress.enable_steady_tick(Duration::from_millis(50));
-
     // Get the repodata for the project
     let sparse_repo_data: Arc<[_]> = if let Some(sparse_repo_data) = repodata {
         sparse_repo_data
@@ -224,63 +222,88 @@ pub async fn update_lock_file(
     }
     .into();
 
+    // Construct a progress bar
+    let multi_progress = progress::global_multi_progress();
+    let top_level_progress = multi_progress.add(ProgressBar::new(platforms.len() as u64));
+    top_level_progress.set_style(progress::long_running_progress_style());
+    top_level_progress.set_message("solving dependencies");
+    top_level_progress.enable_steady_tick(Duration::from_millis(50));
+
     // Construct a conda lock file
     let channels = project
         .channels()
         .iter()
         .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()));
 
-    // Empty match-specs because these differ per platform
-    let mut solve_bars = Vec::new();
-    let mut builder = LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
-    for platform in platforms.iter().cloned() {
-        // Construct a progress bar
-        let platform_progress =
-            progress::global_multi_progress().add(ProgressBar::new(platforms.len() as u64));
-        platform_progress.set_style(
-            indicatif::ProgressStyle::with_template(&format!(
-                " ↳ solving {platform} ({{msg}}) ({{elapsed}})"
-            ))
-            .unwrap(),
-        );
-        platform_progress.set_prefix("  ↳ ");
-        platform_progress.enable_steady_tick(Duration::from_millis(100));
-        platform_progress.set_message("conda");
-        solve_bars.push(platform_progress.clone());
+    // Create progress bars for each platform
+    let solve_bars = platforms
+        .iter()
+        .map(|platform| {
+            let pb =
+                progress::global_multi_progress().add(ProgressBar::new(platforms.len() as u64));
+            pb.set_style(
+                indicatif::ProgressStyle::with_template(&format!(
+                    "    {:<9} ..",
+                    platform.to_string(),
+                ))
+                .unwrap(),
+            );
+            pb.enable_steady_tick(Duration::from_millis(100));
+            pb
+        })
+        .collect_vec();
 
-        let result = resolve_platform(
-            project,
-            &existing_lock_file,
-            sparse_repo_data.clone(),
-            platform,
-        )
-        .await;
+    // Solve each platform concurrently
+    let result: miette::Result<Vec<_>> =
+        stream::iter(platforms.iter().zip(solve_bars.iter().cloned()))
+            .map(|(platform, pb)| {
+                pb.reset_elapsed();
+                pb.set_style(
+                    indicatif::ProgressStyle::with_template(&format!(
+                        "  {{spinner:.dim}} {:<9} [{{elapsed_precise}}] {{msg:.dim}}",
+                        platform.to_string(),
+                    ))
+                    .unwrap(),
+                );
 
-        let locked_packages = match result {
-            Ok(locked_packages) => locked_packages,
-            Err(e) => {
-                for bar in solve_bars {
-                    bar.finish_and_clear();
+                let existing_lock_file = &existing_lock_file;
+                let sparse_repo_data = sparse_repo_data.clone();
+                async move {
+                    let result = resolve_platform(
+                        project,
+                        existing_lock_file,
+                        sparse_repo_data.clone(),
+                        *platform,
+                        pb.clone(),
+                    )
+                    .await?;
+
+                    pb.set_style(
+                        indicatif::ProgressStyle::with_template(&format!(
+                            "  {} {:<9} [{{elapsed_precise}}]",
+                            console::style(console::Emoji("✔", "↳")).green(),
+                            platform.to_string(),
+                        ))
+                        .unwrap(),
+                    );
+                    pb.finish();
+
+                    Ok(result)
                 }
-                return Err(e);
-            }
-        };
-
-        platform_progress.set_style(
-            indicatif::ProgressStyle::with_template(&format!(
-                " {} solved {platform} in {{elapsed}}",
-                console::style(console::Emoji("✔", "↳")).green(),
-            ))
-            .unwrap(),
-        );
-
-        builder = builder.add_locked_packages(locked_packages);
-    }
+            })
+            .buffer_unordered(2)
+            .try_collect()
+            .await;
 
     for bar in solve_bars {
         bar.finish_and_clear();
     }
 
+    // Collect the result of each individual solve
+    let mut builder = LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
+    for locked_packages in result? {
+        builder = builder.add_locked_packages(locked_packages);
+    }
     let conda_lock = builder.build().into_diagnostic()?;
 
     // Write the conda lock to disk
@@ -296,6 +319,7 @@ async fn resolve_platform(
     existing_lock_file: &CondaLock,
     sparse_repo_data: Arc<[SparseRepoData]>,
     platform: Platform,
+    pb: ProgressBar,
 ) -> miette::Result<LockedPackagesBuilder> {
     let dependencies = project.all_dependencies(platform)?;
     let match_specs = dependencies
@@ -304,41 +328,39 @@ async fn resolve_platform(
         .collect_vec();
 
     // Extract the package names from the dependencies
-    let package_names = dependencies.keys().collect_vec();
+    let package_names = dependencies.keys().cloned().collect_vec();
 
     // Get the virtual packages for this platform
     let virtual_packages = project.virtual_packages(platform)?;
 
+    // Get the packages that were contained in the last lock-file. We use these as favored packages
+    // for the solver (which is called `locked` for rattler_solve).
+    let locked_packages = existing_lock_file
+        .get_conda_packages_by_platform(platform)
+        .into_diagnostic()
+        .context("failed to retrieve the conda packages from the previous lock-file")?;
+
     // Get the repodata for the current platform and for NoArch
-    let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
-        sparse.subdir() == platform.as_str() || sparse.subdir() == Platform::NoArch.as_str()
-    });
+    pb.set_message("loading repodata");
+    let available_packages =
+        load_sparse_repo_data_async(platform, package_names.clone(), sparse_repo_data).await?;
 
-    // Load only records we need for this platform
-    let available_packages = SparseRepoData::load_records_recursive(
-        platform_sparse_repo_data,
-        package_names.into_iter().cloned(),
-        None,
-        true,
-    )
-    .into_diagnostic()?;
-
-    // Construct a solver task that we can start solving.
-    let task = rattler_solve::SolverTask {
-        specs: match_specs.clone(),
-        available_packages: &available_packages,
-        locked_packages: existing_lock_file
-            .get_conda_packages_by_platform(platform)
-            .into_diagnostic()?,
-        pinned_packages: vec![],
+    // Solve conda packages
+    pb.set_message("resolving conda");
+    let records = resolve_conda_dependencies(
+        match_specs,
         virtual_packages,
-    };
-
-    // Solve the task
-    let records = resolvo::Solver.solve(task).into_diagnostic()?;
+        locked_packages,
+        available_packages,
+    )
+    .await?;
 
     // Solve python packages
+    pb.set_message("resolving python");
     let python_artifacts = python::resolve_python_dependencies(project, platform, &records).await?;
+
+    // Clear message
+    pb.set_message("");
 
     // Update lock file
     let mut locked_packages = LockedPackagesBuilder::new(platform);
@@ -383,4 +405,57 @@ async fn resolve_platform(
         locked_packages.add_locked_package(locked_package)
     }
     Ok(locked_packages)
+}
+
+/// Solves the conda package environment for the given input. This function is async because it
+/// spawns a background task for the solver. Since solving is a CPU intensive task we do not want to
+/// block the main task.
+async fn resolve_conda_dependencies(
+    specs: Vec<MatchSpec>,
+    virtual_packages: Vec<GenericVirtualPackage>,
+    locked_packages: Vec<RepoDataRecord>,
+    available_packages: Vec<Vec<RepoDataRecord>>,
+) -> miette::Result<Vec<RepoDataRecord>> {
+    // Construct a solver task that we can start solving.
+    let task = rattler_solve::SolverTask {
+        specs,
+        available_packages: &available_packages,
+        locked_packages,
+        pinned_packages: vec![],
+        virtual_packages,
+    };
+
+    // Solve the task
+    resolvo::Solver.solve(task).into_diagnostic()
+}
+
+/// Load the repodata records for the specified platform and package names in the background. This
+/// is a CPU and IO intensive task so we run it in a blocking task to not block the main task.
+async fn load_sparse_repo_data_async(
+    platform: Platform,
+    package_names: Vec<PackageName>,
+    sparse_repo_data: Arc<[SparseRepoData]>,
+) -> miette::Result<Vec<Vec<RepoDataRecord>>> {
+    tokio::task::spawn_blocking(move || {
+        let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
+            sparse.subdir() == platform.as_str() || sparse.subdir() == Platform::NoArch.as_str()
+        });
+
+        // Load only records we need for this platform
+        SparseRepoData::load_records_recursive(platform_sparse_repo_data, package_names, None, true)
+            .into_diagnostic()
+    })
+    .await
+    .map_err(|e| {
+        if let Ok(panic) = e.try_into_panic() {
+            std::panic::resume_unwind(panic);
+        }
+        miette::miette!("the operation was cancelled")
+    })?
+    .with_context(|| {
+        format!(
+            "failed to load repodata records for platform '{}'",
+            platform.as_str()
+        )
+    })
 }
