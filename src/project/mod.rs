@@ -331,6 +331,11 @@ impl Project {
             root,
         )?;
 
+        // Notify the user that python-dependencies are still experimental
+        if !manifest.python_dependencies.is_empty() {
+            tracing::warn!("ALPHA feature enabled!\n\nIt looks like your project contains `[python-dependencies]`. This feature is currently still in an ALPHA state!\n\nYou may encounter bugs or weird behavior. Please report any and all issues you encounter on our github repository:\n\n\thttps://github.com/prefix-dev/pixi.\n");
+        }
+
         Ok(Self {
             root: root.to_path_buf(),
             source: contents,

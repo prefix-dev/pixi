@@ -87,10 +87,10 @@ pub async fn execute() -> miette::Result<()> {
 
     let (level_filter, pixi_level, rip_level) = match args.verbose.log_level_filter() {
         clap_verbosity_flag::LevelFilter::Off => {
-            (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::INFO)
+            (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::OFF)
         }
         clap_verbosity_flag::LevelFilter::Error => {
-            (LevelFilter::ERROR, LevelFilter::WARN, LevelFilter::INFO)
+            (LevelFilter::ERROR, LevelFilter::WARN, LevelFilter::WARN)
         }
         clap_verbosity_flag::LevelFilter::Warn => {
             (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::INFO)

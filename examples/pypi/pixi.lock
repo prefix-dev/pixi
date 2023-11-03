@@ -123,10 +123,10 @@ package:
   - uvloop >=0.15.2 ; extra == 'uvloop'
   requires_python: '>=3.8'
   extras: []
-  url: https://files.pythonhosted.org/packages/0f/96/c778963e523e8c2ab79d461d91d0eaa93d3a1f19e383b6c85db0ebc49c63/black-23.10.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=9c74de4c77b849e6359c6f01987e94873c707098322b91490d24296f66d067dc
+  url: https://files.pythonhosted.org/packages/80/4a/dd74ca838e8a536f3ac061cec9ef1d0c73e3ad2f3584be2127d53cd82f0f/black-23.10.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=7d56124b7a61d092cb52cce34182a5280e160e6aff3137172a68c2c2c4b76bcb
   hash:
     md5: null
-    sha256: 9c74de4c77b849e6359c6f01987e94873c707098322b91490d24296f66d067dc
+    sha256: 7d56124b7a61d092cb52cce34182a5280e160e6aff3137172a68c2c2c4b76bcb
 - platform: win-64
   name: black
   version: 23.10.1
@@ -147,10 +147,10 @@ package:
   - uvloop >=0.15.2 ; extra == 'uvloop'
   requires_python: '>=3.8'
   extras: []
-  url: https://files.pythonhosted.org/packages/8f/5d/83eef43f6f50395d0607a2c93419b523fa31f7543ef9919c9fe29cf2098b/black-23.10.1-cp310-cp310-win_amd64.whl#sha256=7b4d10b0f016616a0d93d24a448100adf1699712fb7a4efd0e2c32bbb219b173
+  url: https://files.pythonhosted.org/packages/bf/f6/1b039c5ea8fc18a3e710cc1e217fa65369e3fe9173eac9ec5080f89f9f38/black-23.10.1-cp311-cp311-win_amd64.whl#sha256=3f157a8945a7b2d424da3335f7ace89c14a3b0625e6593d21139c2d8214d55ce
   hash:
     md5: null
-    sha256: 7b4d10b0f016616a0d93d24a448100adf1699712fb7a4efd0e2c32bbb219b173
+    sha256: 3f157a8945a7b2d424da3335f7ace89c14a3b0625e6593d21139c2d8214d55ce
 - platform: linux-64
   name: blinker
   version: 1.7.0
@@ -304,10 +304,10 @@ package:
   requires_dist: []
   requires_python: '>=3.7.0'
   extras: []
-  url: https://files.pythonhosted.org/packages/da/f1/3702ba2a7470666a62fd81c58a4c40be00670e5006a67f4d626e57f013ae/charset_normalizer-3.3.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=8465322196c8b4d7ab6d1e049e4c5cb460d0394da4a27d23cc242fbf0034b6b5
+  url: https://files.pythonhosted.org/packages/40/26/f35951c45070edc957ba40a5b1db3cf60a9dbb1b350c2d5bef03e01e61de/charset_normalizer-3.3.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=753f10e867343b4511128c6ed8c82f7bec3bd026875576dfd88483c5c73b2fd8
   hash:
     md5: null
-    sha256: 8465322196c8b4d7ab6d1e049e4c5cb460d0394da4a27d23cc242fbf0034b6b5
+    sha256: 753f10e867343b4511128c6ed8c82f7bec3bd026875576dfd88483c5c73b2fd8
 - platform: win-64
   name: charset-normalizer
   version: 3.3.2
@@ -316,10 +316,10 @@ package:
   requires_dist: []
   requires_python: '>=3.7.0'
   extras: []
-  url: https://files.pythonhosted.org/packages/a2/a0/4af29e22cb5942488cf45630cbdd7cefd908768e69bdd90280842e4e8529/charset_normalizer-3.3.2-cp310-cp310-win_amd64.whl#sha256=10955842570876604d404661fbccbc9c7e684caf432c09c715ec38fbae45ae09
+  url: https://files.pythonhosted.org/packages/57/ec/80c8d48ac8b1741d5b963797b7c0c869335619e13d4744ca2f67fc11c6fc/charset_normalizer-3.3.2-cp311-cp311-win_amd64.whl#sha256=663946639d296df6a2bb2aa51b60a2454ca1cb29835324c640dafb5ff2131a77
   hash:
     md5: null
-    sha256: 10955842570876604d404661fbccbc9c7e684caf432c09c715ec38fbae45ae09
+    sha256: 663946639d296df6a2bb2aa51b60a2454ca1cb29835324c640dafb5ff2131a77
 - platform: linux-64
   name: click
   version: 8.1.7
@@ -555,10 +555,10 @@ package:
   - grpcio-tools >=1.59.2 ; extra == 'protobuf'
   requires_python: '>=3.7'
   extras: []
-  url: https://files.pythonhosted.org/packages/29/cc/e6883efbbcaa6570a0d2207ba53c796137f11293e47d11e2696f37b66811/grpcio-1.59.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=0a4a3833c0e067f3558538727235cd8a49709bff1003200bbdefa2f09334e4b1
+  url: https://files.pythonhosted.org/packages/2b/d2/07dc87cd50c5b08b8b911163e39661d387c507e2f1c6e13b0556ce9e01cd/grpcio-1.59.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=bb7e0fe6ad73b7f06d7e2b689c19a71cf5cc48f0c2bf8608469e51ffe0bd2867
   hash:
     md5: null
-    sha256: 0a4a3833c0e067f3558538727235cd8a49709bff1003200bbdefa2f09334e4b1
+    sha256: bb7e0fe6ad73b7f06d7e2b689c19a71cf5cc48f0c2bf8608469e51ffe0bd2867
 - platform: win-64
   name: grpcio
   version: 1.59.2
@@ -568,10 +568,10 @@ package:
   - grpcio-tools >=1.59.2 ; extra == 'protobuf'
   requires_python: '>=3.7'
   extras: []
-  url: https://files.pythonhosted.org/packages/15/de/68190e69102510b243238c7cc537e808c108df2106ea69f83d53d537208d/grpcio-1.59.2-cp310-cp310-win_amd64.whl#sha256=3c61d641d4f409c5ae46bfdd89ea42ce5ea233dcf69e74ce9ba32b503c727e29
+  url: https://files.pythonhosted.org/packages/13/ee/b698a4d0eeae2d58d9906f20959b58a00622180ff8bf4ba71f71aad3c7f8/grpcio-1.59.2-cp311-cp311-win_amd64.whl#sha256=2067274c88bc6de89c278a672a652b4247d088811ece781a4858b09bdf8448e3
   hash:
     md5: null
-    sha256: 3c61d641d4f409c5ae46bfdd89ea42ce5ea233dcf69e74ce9ba32b503c727e29
+    sha256: 2067274c88bc6de89c278a672a652b4247d088811ece781a4858b09bdf8448e3
 - platform: linux-64
   name: h5py
   version: 3.10.0
@@ -581,10 +581,10 @@ package:
   - numpy >=1.17.3
   requires_python: '>=3.8'
   extras: []
-  url: https://files.pythonhosted.org/packages/3b/d3/ecb4b3d2ec2c84132987e5f12ab1408f455bec1d90cd5bc408ebf37800f5/h5py-3.10.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=f42e6c30698b520f0295d70157c4e202a9e402406f50dc08f5a7bc416b24e52d
+  url: https://files.pythonhosted.org/packages/1e/e9/61d7338e503d63d2ce733373fa86256614f579b173cf3d0571d4f46cb561/h5py-3.10.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=6c013d2e79c00f28ffd0cc24e68665ea03ae9069e167087b2adb5727d2736a52
   hash:
     md5: null
-    sha256: f42e6c30698b520f0295d70157c4e202a9e402406f50dc08f5a7bc416b24e52d
+    sha256: 6c013d2e79c00f28ffd0cc24e68665ea03ae9069e167087b2adb5727d2736a52
 - platform: win-64
   name: h5py
   version: 3.10.0
@@ -594,10 +594,10 @@ package:
   - numpy >=1.17.3
   requires_python: '>=3.8'
   extras: []
-  url: https://files.pythonhosted.org/packages/25/5e/2e29933bd1dd67c76b56dd37f5950e6a0cf86ce67e9a9eb6761dac80c031/h5py-3.10.0-cp310-cp310-win_amd64.whl#sha256=93dd840bd675787fc0b016f7a05fc6efe37312a08849d9dd4053fd0377b1357f
+  url: https://files.pythonhosted.org/packages/b6/35/ed21094eb4d8acf31ccc7666a4d8701c1ce38f8d1fa3c7036f24416f6337/h5py-3.10.0-cp311-cp311-win_amd64.whl#sha256=92273ce69ae4983dadb898fd4d3bea5eb90820df953b401282ee69ad648df684
   hash:
     md5: null
-    sha256: 93dd840bd675787fc0b016f7a05fc6efe37312a08849d9dd4053fd0377b1357f
+    sha256: 92273ce69ae4983dadb898fd4d3bea5eb90820df953b401282ee69ad648df684
 - platform: linux-64
   name: idna
   version: '3.4'
@@ -853,6 +853,47 @@ package:
   hash:
     md5: null
     sha256: daab4a11dae228f1efa9efa3fe638b493b14d8d52c71fb3c7019e2f1df4514c2
+- platform: linux-64
+  name: libexpat
+  version: 2.5.0
+  category: main
+  manager: conda
+  dependencies:
+  - libgcc-ng >=12
+  url: https://conda.anaconda.org/conda-forge/linux-64/libexpat-2.5.0-hcb278e6_1.conda
+  hash:
+    md5: 6305a3dd2752c76335295da4e581f2fd
+    sha256: 74c98a563777ae2ad71f1f74d458a8ab043cee4a513467c159ccf159d0e461f3
+  build: hcb278e6_1
+  arch: x86_64
+  subdir: linux-64
+  build_number: 1
+  constrains:
+  - expat 2.5.0.*
+  license: MIT
+  license_family: MIT
+  size: 77980
+  timestamp: 1680190528313
+- platform: win-64
+  name: libexpat
+  version: 2.5.0
+  category: main
+  manager: conda
+  dependencies: []
+  url: https://conda.anaconda.org/conda-forge/win-64/libexpat-2.5.0-h63175ca_1.conda
+  hash:
+    md5: 636cc3cbbd2e28bcfd2f73b2044aac2c
+    sha256: 794b2a9be72f176a2767c299574d330ffb76b2ed75d7fd20bee3bbadce5886cf
+  build: h63175ca_1
+  arch: x86_64
+  subdir: win-64
+  build_number: 1
+  constrains:
+  - expat 2.5.0.*
+  license: MIT
+  license_family: MIT
+  size: 138689
+  timestamp: 1680190844101
 - platform: linux-64
   name: libffi
   version: 3.4.2
@@ -1298,10 +1339,10 @@ package:
   requires_dist: []
   requires_python: '>=3.7'
   extras: []
-  url: https://files.pythonhosted.org/packages/12/b3/d9ed2c0971e1435b8a62354b18d3060b66c8cb1d368399ec0b9baa7c0ee5/MarkupSafe-2.1.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=65c1a9bcdadc6c28eecee2c119465aebff8f7a584dd719facdd9e825ec61ab52
+  url: https://files.pythonhosted.org/packages/fe/21/2eff1de472ca6c99ec3993eab11308787b9879af9ca8bbceb4868cf4f2ca/MarkupSafe-2.1.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=bfce63a9e7834b12b87c64d6b155fdd9b3b96191b6bd334bf37db7ff1fe457f2
   hash:
     md5: null
-    sha256: 65c1a9bcdadc6c28eecee2c119465aebff8f7a584dd719facdd9e825ec61ab52
+    sha256: bfce63a9e7834b12b87c64d6b155fdd9b3b96191b6bd334bf37db7ff1fe457f2
 - platform: win-64
   name: markupsafe
   version: 2.1.3
@@ -1310,10 +1351,10 @@ package:
   requires_dist: []
   requires_python: '>=3.7'
   extras: []
-  url: https://files.pythonhosted.org/packages/84/a8/c4aebb8a14a1d39d5135eb8233a0b95831cdc42c4088358449c3ed657044/MarkupSafe-2.1.3-cp310-cp310-win_amd64.whl#sha256=1577735524cdad32f9f694208aa75e422adba74f1baee7551620e43a3141f559
+  url: https://files.pythonhosted.org/packages/be/bb/08b85bc194034efbf572e70c3951549c8eca0ada25363afc154386b5390a/MarkupSafe-2.1.3-cp311-cp311-win_amd64.whl#sha256=134da1eca9ec0ae528110ccc9e48041e0828d79f24121a1a146161103c76e686
   hash:
     md5: null
-    sha256: 1577735524cdad32f9f694208aa75e422adba74f1baee7551620e43a3141f559
+    sha256: 134da1eca9ec0ae528110ccc9e48041e0828d79f24121a1a146161103c76e686
 - platform: win-64
   name: mkl
   version: 2023.2.0
@@ -1350,10 +1391,10 @@ package:
   - pyink ; extra == 'dev'
   requires_python: '>=3.7'
   extras: []
-  url: https://files.pythonhosted.org/packages/d1/1d/d5cf76e5e40f69dbd273036e3172ae4a614577cb141673427b80cac948df/ml_dtypes-0.2.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=f08c391c2794f2aad358e6f4c70785a9a7b1df980ef4c232b3ccd4f6fe39f719
+  url: https://files.pythonhosted.org/packages/87/91/d57c2d22e4801edeb7f3e7939214c0ea8a28c6e16f85208c2df2145e0213/ml_dtypes-0.2.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=e85ba8e24cf48d456e564688e981cf379d4c8e644db0a2f719b78de281bac2ca
   hash:
     md5: null
-    sha256: f08c391c2794f2aad358e6f4c70785a9a7b1df980ef4c232b3ccd4f6fe39f719
+    sha256: e85ba8e24cf48d456e564688e981cf379d4c8e644db0a2f719b78de281bac2ca
 - platform: win-64
   name: ml-dtypes
   version: 0.2.0
@@ -1370,10 +1411,10 @@ package:
   - pyink ; extra == 'dev'
   requires_python: '>=3.7'
   extras: []
-  url: https://files.pythonhosted.org/packages/55/51/c430b4f5f4a6df00aa41c1ee195e179489565e61cfad559506ca7442ce67/ml_dtypes-0.2.0-cp310-cp310-win_amd64.whl#sha256=75015818a7fccf99a5e8ed18720cb430f3e71a8838388840f4cdf225c036c983
+  url: https://files.pythonhosted.org/packages/08/89/c727fde1a3d12586e0b8c01abf53754707d76beaa9987640e70807d4545f/ml_dtypes-0.2.0-cp311-cp311-win_amd64.whl#sha256=832a019a1b6db5c4422032ca9940a990fa104eee420f643713241b3a518977fa
   hash:
     md5: null
-    sha256: 75015818a7fccf99a5e8ed18720cb430f3e71a8838388840f4cdf225c036c983
+    sha256: 832a019a1b6db5c4422032ca9940a990fa104eee420f643713241b3a518977fa
 - platform: linux-64
   name: mypy-extensions
   version: 1.0.0
@@ -1427,13 +1468,13 @@ package:
   - libgcc-ng >=12
   - liblapack >=3.9.0,<4.0a0
   - libstdcxx-ng >=12
-  - python >=3.10,<3.11.0a0
-  - python_abi 3.10.* *_cp310
-  url: https://conda.anaconda.org/conda-forge/linux-64/numpy-1.26.0-py310hb13e2d6_0.conda
+  - python >=3.11,<3.12.0a0
+  - python_abi 3.11.* *_cp311
+  url: https://conda.anaconda.org/conda-forge/linux-64/numpy-1.26.0-py311h64a7726_0.conda
   hash:
-    md5: ac3b67e928cc71548efad9b522d42fef
-    sha256: d4671e365c2ed30bf8a376bdc65afcbeeae440ca2091c8712ff8f23678f64973
-  build: py310hb13e2d6_0
+    md5: bf16a9f625126e378302f08e7ed67517
+    sha256: 0aab5cef67cc2a1cd584f6e9cc6f2065c7a28c142d7defcb8096e8f719d9b3bf
+  build: py311h64a7726_0
   arch: x86_64
   subdir: linux-64
   build_number: 0
@@ -1441,8 +1482,8 @@ package:
   - numpy-base <0a0
   license: BSD-3-Clause
   license_family: BSD
-  size: 6893487
-  timestamp: 1695291234099
+  size: 8039946
+  timestamp: 1694920380273
 - platform: win-64
   name: numpy
   version: 1.26.0
@@ -1452,16 +1493,16 @@ package:
   - libblas >=3.9.0,<4.0a0
   - libcblas >=3.9.0,<4.0a0
   - liblapack >=3.9.0,<4.0a0
-  - python >=3.10,<3.11.0a0
-  - python_abi 3.10.* *_cp310
+  - python >=3.11,<3.12.0a0
+  - python_abi 3.11.* *_cp311
   - ucrt >=10.0.20348.0
   - vc >=14.2,<15
   - vc14_runtime >=14.29.30139
-  url: https://conda.anaconda.org/conda-forge/win-64/numpy-1.26.0-py310hf667824_0.conda
+  url: https://conda.anaconda.org/conda-forge/win-64/numpy-1.26.0-py311h0b4df5a_0.conda
   hash:
-    md5: a4f8b5a677ba150fcc10a1265bb0554a
-    sha256: 8cbf1502ff9f7cc382ab0a269554da9fa8ea5fd28c30a4e01856a0e3ef7f537d
-  build: py310hf667824_0
+    md5: a65e57fff208fd1d0f632e0afa8985d4
+    sha256: 3da6bcf524a4418d7d0dbc084c23c74e1f2fc4b19c34a5805f5e201e5d7fcd8f
+  build: py311h0b4df5a_0
   arch: x86_64
   subdir: win-64
   build_number: 0
@@ -1469,8 +1510,8 @@ package:
   - numpy-base <0a0
   license: BSD-3-Clause
   license_family: BSD
-  size: 6001376
-  timestamp: 1695291827551
+  size: 7085715
+  timestamp: 1694920741486
 - platform: linux-64
   name: oauthlib
   version: 3.2.2
@@ -1788,10 +1829,10 @@ package:
   - gym ; extra == 'all'
   requires_python: '>=3.8'
   extras: []
-  url: https://files.pythonhosted.org/packages/fa/0c/0ff132fbf26d677d0de56ebfdb8d2f77617df4e3a1488ddefe7c89bef227/pyboy-1.6.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl#sha256=8cb327bfcaeeab298b1ecb9237da9499f18d55e2e8568cbecaccae43a3dc65f4
+  url: https://files.pythonhosted.org/packages/b8/50/7425532d3e3ea4107a095617c16484b88f507fd77f172ce90bab366d32c6/pyboy-1.6.6-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl#sha256=4e60e8faf92836c91123529dcbb1daf5d686d16d8bc23009d4d69db722bdeae6
   hash:
     md5: null
-    sha256: 8cb327bfcaeeab298b1ecb9237da9499f18d55e2e8568cbecaccae43a3dc65f4
+    sha256: 4e60e8faf92836c91123529dcbb1daf5d686d16d8bc23009d4d69db722bdeae6
 - platform: win-64
   name: pyboy
   version: 1.6.6
@@ -1807,10 +1848,10 @@ package:
   - gym ; extra == 'all'
   requires_python: '>=3.8'
   extras: []
-  url: https://files.pythonhosted.org/packages/2e/ef/3c8176c03a87b5c322420c18948afa3932180775d79a6a18d233f8c81d0b/pyboy-1.6.6-cp310-cp310-win_amd64.whl#sha256=cb8a3935b79dc9be2f4ac595046abf59e55345a817525e12fdb84534370d7184
+  url: https://files.pythonhosted.org/packages/66/e7/1c223e5e749fe568a0c8e24def8e0004da1fbc48e3f4cabb449ee655deaa/pyboy-1.6.6-cp311-cp311-win_amd64.whl#sha256=bc10363e3b83330c1bb19fc9a16590a6308f94f37df12b0db93ff1c164c1a43c
   hash:
     md5: null
-    sha256: cb8a3935b79dc9be2f4ac595046abf59e55345a817525e12fdb84534370d7184
+    sha256: bc10363e3b83330c1bb19fc9a16590a6308f94f37df12b0db93ff1c164c1a43c
 - platform: linux-64
   name: pysdl2
   version: 0.9.12
@@ -1857,106 +1898,109 @@ package:
     sha256: 667628a119e00f45aed279e480516ccc484c2f9a5d03c901dd1996c3af4c5840
 - platform: linux-64
   name: python
-  version: 3.10.13
+  version: 3.11.6
   category: main
   manager: conda
   dependencies:
   - bzip2 >=1.0.8,<2.0a0
   - ld_impl_linux-64 >=2.36.1
+  - libexpat >=2.5.0,<3.0a0
   - libffi >=3.4,<4.0a0
   - libgcc-ng >=12
-  - libnsl >=2.0.1,<2.1.0a0
-  - libsqlite >=3.43.2,<4.0a0
+  - libnsl >=2.0.0,<2.1.0a0
+  - libsqlite >=3.43.0,<4.0a0
   - libuuid >=2.38.1,<3.0a0
   - libzlib >=1.2.13,<1.3.0a0
   - ncurses >=6.4,<7.0a0
-  - openssl >=3.1.4,<4.0a0
+  - openssl >=3.1.3,<4.0a0
   - readline >=8.2,<9.0a0
   - tk >=8.6.13,<8.7.0a0
   - tzdata
   - xz >=5.2.6,<6.0a0
-  url: https://conda.anaconda.org/conda-forge/linux-64/python-3.10.13-hd12c33a_0_cpython.conda
+  url: https://conda.anaconda.org/conda-forge/linux-64/python-3.11.6-hab00c5b_0_cpython.conda
   hash:
-    md5: f3a8c32aa764c3e7188b4b810fc9d6ce
-    sha256: a53410f459f314537b379982717b1c5911efc2f0cc26d63c4d6f831bcb31c964
-  build: hd12c33a_0_cpython
+    md5: b0dfbe2fcbfdb097d321bfd50ecddab1
+    sha256: 84f13bd70cff5dcdaee19263b2d4291d5793856a718efc1b63a9cfa9eb6e2ca1
+  build: hab00c5b_0_cpython
   arch: x86_64
   subdir: linux-64
   build_number: 0
   constrains:
-  - python_abi 3.10.* *_cp310
+  - python_abi 3.11.* *_cp311
   license: Python-2.0
-  size: 25476977
-  timestamp: 1698344640413
+  size: 30720625
+  timestamp: 1696331287478
 - platform: win-64
   name: python
-  version: 3.10.13
+  version: 3.11.6
   category: main
   manager: conda
   dependencies:
   - bzip2 >=1.0.8,<2.0a0
+  - libexpat >=2.5.0,<3.0a0
   - libffi >=3.4,<4.0a0
-  - libsqlite >=3.43.2,<4.0a0
+  - libsqlite >=3.43.0,<4.0a0
   - libzlib >=1.2.13,<1.3.0a0
-  - openssl >=3.1.4,<4.0a0
+  - openssl >=3.1.3,<4.0a0
   - tk >=8.6.13,<8.7.0a0
   - tzdata
-  - vc >=14.1,<15
-  - vc14_runtime >=14.16.27033
+  - ucrt >=10.0.20348.0
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
   - xz >=5.2.6,<6.0a0
-  url: https://conda.anaconda.org/conda-forge/win-64/python-3.10.13-h4de0772_0_cpython.conda
+  url: https://conda.anaconda.org/conda-forge/win-64/python-3.11.6-h2628c8c_0_cpython.conda
   hash:
-    md5: cbf696b644613f8ab6c9df6b5005c042
-    sha256: 9e55fa834ddb2c24aec8ee4d4738584fea71edc084a615facc846ce90deb58e4
-  build: h4de0772_0_cpython
+    md5: 80b761856b20383615a3fe8b1b13eef8
+    sha256: 7fb38fda8296b2651ef727bb57603f0952c07fc533b172044395744a2641a00a
+  build: h2628c8c_0_cpython
   arch: x86_64
   subdir: win-64
   build_number: 0
   constrains:
-  - python_abi 3.10.* *_cp310
+  - python_abi 3.11.* *_cp311
   license: Python-2.0
-  size: 15891788
-  timestamp: 1698344089500
+  size: 18121128
+  timestamp: 1696329396864
 - platform: linux-64
   name: python_abi
-  version: '3.10'
+  version: '3.11'
   category: main
   manager: conda
   dependencies: []
-  url: https://conda.anaconda.org/conda-forge/linux-64/python_abi-3.10-4_cp310.conda
+  url: https://conda.anaconda.org/conda-forge/linux-64/python_abi-3.11-4_cp311.conda
   hash:
-    md5: 26322ec5d7712c3ded99dd656142b8ce
-    sha256: 456bec815bfc2b364763084d08b412fdc4c17eb9ccc66a36cb775fa7ac3cbaec
-  build: 4_cp310
+    md5: d786502c97404c94d7d58d258a445a65
+    sha256: 0be3ac1bf852d64f553220c7e6457e9c047dfb7412da9d22fbaa67e60858b3cf
+  build: 4_cp311
   arch: x86_64
   subdir: linux-64
   build_number: 4
   constrains:
-  - python 3.10.* *_cpython
+  - python 3.11.* *_cpython
   license: BSD-3-Clause
   license_family: BSD
-  size: 6398
-  timestamp: 1695147363189
+  size: 6385
+  timestamp: 1695147338551
 - platform: win-64
   name: python_abi
-  version: '3.10'
+  version: '3.11'
   category: main
   manager: conda
   dependencies: []
-  url: https://conda.anaconda.org/conda-forge/win-64/python_abi-3.10-4_cp310.conda
+  url: https://conda.anaconda.org/conda-forge/win-64/python_abi-3.11-4_cp311.conda
   hash:
-    md5: b41195997c14fb7473d26637ea4c3946
-    sha256: 19066c462fd0e32c64503c688f77cb603beb4019b812caf855d03f2a5447960b
-  build: 4_cp310
+    md5: 70513332c71b56eace4ee6441e66c012
+    sha256: 67c2aade3e2160642eec0742384e766b20c766055e3d99335681e3e05d88ed7b
+  build: 4_cp311
   arch: x86_64
   subdir: win-64
   build_number: 4
   constrains:
-  - python 3.10.* *_cpython
+  - python 3.11.* *_cpython
   license: BSD-3-Clause
   license_family: BSD
-  size: 6773
-  timestamp: 1695147715814
+  size: 6755
+  timestamp: 1695147711935
 - platform: linux-64
   name: readline
   version: '8.2'
@@ -2344,10 +2388,10 @@ package:
   - tensorrt ==8.5.3.1 ; extra == 'and-cuda'
   requires_python: '>=3.9'
   extras: []
-  url: https://files.pythonhosted.org/packages/e2/7a/c7762c698fb1ac41a7e3afee51dc72aa3ec74ae8d2f57ce19a9cded3a4af/tensorflow-2.14.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=0c9c1101269efcdb63492b45c8e83df0fc30c4454260a252d507dfeaebdf77ff
+  url: https://files.pythonhosted.org/packages/09/63/25e76075081ea98ec48f23929cefee58be0b42212e38074a9ec5c19e838c/tensorflow-2.14.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=a80cabe6ab5f44280c05533e5b4a08e5b128f0d68d112564cffa3b96638e28aa
   hash:
     md5: null
-    sha256: 0c9c1101269efcdb63492b45c8e83df0fc30c4454260a252d507dfeaebdf77ff
+    sha256: a80cabe6ab5f44280c05533e5b4a08e5b128f0d68d112564cffa3b96638e28aa
 - platform: win-64
   name: tensorflow
   version: 2.14.0
@@ -2370,10 +2414,10 @@ package:
   - tensorrt ==8.5.3.1 ; extra == 'and-cuda'
   requires_python: '>=3.9'
   extras: []
-  url: https://files.pythonhosted.org/packages/1c/c3/17c6aa1dd5bc8cea5bf00d0c3a021a5dd1680c250861cc877a7e556e4b9b/tensorflow-2.14.0-cp310-cp310-win_amd64.whl#sha256=0b7eaab5e034f1695dc968f7be52ce7ccae4621182d1e2bf6d5b3fab583be98c
+  url: https://files.pythonhosted.org/packages/80/6f/57d36f6507e432d7fc1956b2e9e8530c5c2d2bfcd8821bcbfae271cd6688/tensorflow-2.14.0-cp311-cp311-win_amd64.whl#sha256=0587ece626c4f7c4fcb2132525ea6c77ad2f2f5659a9b0f4451b1000be1b5e16
   hash:
     md5: null
-    sha256: 0b7eaab5e034f1695dc968f7be52ce7ccae4621182d1e2bf6d5b3fab583be98c
+    sha256: 0587ece626c4f7c4fcb2132525ea6c77ad2f2f5659a9b0f4451b1000be1b5e16
 - platform: linux-64
   name: tensorflow-estimator
   version: 2.14.0
@@ -2439,10 +2483,10 @@ package:
   - tensorrt ==8.5.3.1 ; extra == 'and-cuda'
   requires_python: '>=3.9'
   extras: []
-  url: https://files.pythonhosted.org/packages/cb/90/599c79a248dcae6935331113649de5d75427e320efde21b583648b498584/tensorflow_intel-2.14.0-cp310-cp310-win_amd64.whl#sha256=f4824c9ff48f9a89b0df494fe61795db05304c95f0e0d661b8d1fd6b855c0324
+  url: https://files.pythonhosted.org/packages/ad/6e/1bfe367855dd87467564f7bf9fa14f3b17889988e79598bc37bf18f5ffb6/tensorflow_intel-2.14.0-cp311-cp311-win_amd64.whl#sha256=51f96c729d61ff8e2e340df5b3b4db81a938258f1c9282ab09277896d0c408ae
   hash:
     md5: null
-    sha256: f4824c9ff48f9a89b0df494fe61795db05304c95f0e0d661b8d1fd6b855c0324
+    sha256: 51f96c729d61ff8e2e340df5b3b4db81a938258f1c9282ab09277896d0c408ae
 - platform: linux-64
   name: tensorflow-io-gcs-filesystem
   version: 0.34.0
@@ -2456,10 +2500,10 @@ package:
   - tensorflow-rocm <2.14.0, >=2.13.0 ; extra == 'tensorflow-rocm'
   requires_python: '>=3.7, <3.12'
   extras: []
-  url: https://files.pythonhosted.org/packages/88/99/8b507a009359fd55e411001acb64a1a8a4f81a26cb6e21c3b75c7fda4ae3/tensorflow_io_gcs_filesystem-0.34.0-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.whl#sha256=5813c336b4f7cb0a01ff4cc6cbd3edf11ef67305baf0e3cf634911b702f493f8
+  url: https://files.pythonhosted.org/packages/4c/64/245746084cdd5fafa680a6e7effeecf87abeeac2796decfa835a99b397c7/tensorflow_io_gcs_filesystem-0.34.0-cp311-cp311-manylinux_2_12_x86_64.manylinux2010_x86_64.whl#sha256=cbe26c4a3332589c7b724f147df453b5c226993aa8d346a15536358d77b364c4
   hash:
     md5: null
-    sha256: 5813c336b4f7cb0a01ff4cc6cbd3edf11ef67305baf0e3cf634911b702f493f8
+    sha256: cbe26c4a3332589c7b724f147df453b5c226993aa8d346a15536358d77b364c4
 - platform: win-64
   name: tensorflow-io-gcs-filesystem
   version: 0.31.0
@@ -2473,10 +2517,10 @@ package:
   - tensorflow-rocm <2.12.0, >=2.11.0 ; extra == 'tensorflow-rocm'
   requires_python: '>=3.7, <3.12'
   extras: []
-  url: https://files.pythonhosted.org/packages/78/51/437068ed6b44162d54addb8ac0ddfe9e406d07ac6f9c8a6cf96869ec2262/tensorflow_io_gcs_filesystem-0.31.0-cp310-cp310-win_amd64.whl#sha256=961353b38c76471fa296bb7d883322c66b91415e7d47087236a6706db3ab2758
+  url: https://files.pythonhosted.org/packages/ac/4e/9566a313927be582ca99455a9523a097c7888fc819695bdc08415432b202/tensorflow_io_gcs_filesystem-0.31.0-cp311-cp311-win_amd64.whl#sha256=4bb37d23f21c434687b11059cb7ffd094d52a7813368915ba1b7057e3c16e414
   hash:
     md5: null
-    sha256: 961353b38c76471fa296bb7d883322c66b91415e7d47087236a6706db3ab2758
+    sha256: 4bb37d23f21c434687b11059cb7ffd094d52a7813368915ba1b7057e3c16e414
 - platform: linux-64
   name: termcolor
   version: 2.3.0
@@ -2546,30 +2590,6 @@ package:
   license_family: BSD
   size: 3478482
   timestamp: 1695506766462
-- platform: linux-64
-  name: tomli
-  version: 2.0.1
-  category: main
-  manager: pip
-  requires_dist: []
-  requires_python: '>=3.7'
-  extras: []
-  url: https://files.pythonhosted.org/packages/97/75/10a9ebee3fd790d20926a90a2547f0bf78f371b2f13aa822c759680ca7b9/tomli-2.0.1-py3-none-any.whl#sha256=939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc
-  hash:
-    md5: null
-    sha256: 939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc
-- platform: win-64
-  name: tomli
-  version: 2.0.1
-  category: main
-  manager: pip
-  requires_dist: []
-  requires_python: '>=3.7'
-  extras: []
-  url: https://files.pythonhosted.org/packages/97/75/10a9ebee3fd790d20926a90a2547f0bf78f371b2f13aa822c759680ca7b9/tomli-2.0.1-py3-none-any.whl#sha256=939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc
-  hash:
-    md5: null
-    sha256: 939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc
 - platform: linux-64
   name: typing-extensions
   version: 4.8.0
@@ -2816,10 +2836,10 @@ package:
   requires_dist: []
   requires_python: '!=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, >=2.7'
   extras: []
-  url: https://files.pythonhosted.org/packages/fd/70/8a133c88a394394dd57159083b86a564247399440b63f2da0ad727593570/wrapt-1.14.1-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=257fd78c513e0fb5cdbe058c27a0624c9884e735bbd131935fd49e9fe719d310
+  url: https://files.pythonhosted.org/packages/7f/1b/e0439eec0db6520968c751bc7e12480bb80bb8d939190e0e55ed762f3c7a/wrapt-1.14.1-cp311-cp311-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=a9008dad07d71f68487c91e96579c8567c98ca4c3881b9b113bc7b33e9fd78b8
   hash:
     md5: null
-    sha256: 257fd78c513e0fb5cdbe058c27a0624c9884e735bbd131935fd49e9fe719d310
+    sha256: a9008dad07d71f68487c91e96579c8567c98ca4c3881b9b113bc7b33e9fd78b8
 - platform: win-64
   name: wrapt
   version: 1.14.1
@@ -2828,10 +2848,10 @@ package:
   requires_dist: []
   requires_python: '!=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, >=2.7'
   extras: []
-  url: https://files.pythonhosted.org/packages/c0/1e/e5a5ac09e92fd112d50e1793e5b9982dc9e510311ed89dacd2e801f82967/wrapt-1.14.1-cp310-cp310-win_amd64.whl#sha256=6d323e1554b3d22cfc03cd3243b5bb815a51f5249fdcbb86fda4bf62bab9e164
+  url: https://files.pythonhosted.org/packages/ba/7e/14113996bc6ee68eb987773b4139c87afd3ceff60e27e37648aa5eb2798a/wrapt-1.14.1-cp311-cp311-win_amd64.whl#sha256=26046cd03936ae745a502abf44dac702a5e6880b2b01c29aea8ddf3353b68224
   hash:
     md5: null
-    sha256: 6d323e1554b3d22cfc03cd3243b5bb815a51f5249fdcbb86fda4bf62bab9e164
+    sha256: 26046cd03936ae745a502abf44dac702a5e6880b2b01c29aea8ddf3353b68224
 - platform: linux-64
   name: xz
   version: 5.2.6

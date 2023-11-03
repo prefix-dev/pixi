@@ -22,7 +22,7 @@ pub fn global_multi_progress() -> MultiProgress {
 /// Returns the style to use for a progressbar that is currently in progress.
 pub fn default_bytes_style() -> indicatif::ProgressStyle {
     indicatif::ProgressStyle::default_bar()
-        .template("    {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {bytes:>8} @ {smoothed_bytes_per_sec:8}").unwrap()
+        .template("  {spinner:.dim} {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {bytes:>8} @ {smoothed_bytes_per_sec:8}").unwrap()
         .progress_chars("━━╾─")
         .with_key(
             "smoothed_bytes_per_sec",
@@ -38,14 +38,14 @@ pub fn default_bytes_style() -> indicatif::ProgressStyle {
 /// Returns the style to use for a progressbar that is currently in progress.
 pub fn default_progress_style() -> indicatif::ProgressStyle {
     indicatif::ProgressStyle::default_bar()
-        .template("    {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {pos:>7}/{len:7}").unwrap()
+        .template("  {spinner:.dim} {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {pos:>4}/{len:4} {wide_msg:.dim}").unwrap()
         .progress_chars("━━╾─")
 }
 
 /// Returns the style to use for a progressbar that is in Deserializing state.
 pub fn deserializing_progress_style() -> indicatif::ProgressStyle {
     indicatif::ProgressStyle::default_bar()
-        .template("    {prefix:20!} [{elapsed_precise}] {wide_msg}")
+        .template("  {spinner:.dim} {prefix:20!} [{elapsed_precise}] {wide_msg}")
         .unwrap()
         .progress_chars("━━╾─")
 }

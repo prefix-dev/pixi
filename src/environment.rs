@@ -1,18 +1,23 @@
 use crate::{
-    default_authenticated_client, install, lock_file, prefix::Prefix, progress::await_in_progress,
+    default_authenticated_client, install, lock_file, prefix::Prefix, progress,
     virtual_packages::verify_current_platform_has_required_virtual_packages, Project,
 };
+use futures::{stream, Stream, StreamExt, TryFutureExt, TryStreamExt};
 use indexmap::IndexSet;
+use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, LabeledSpan};
 use rattler::install::Transaction;
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{CondaLock, LockedDependency, PipLockedDependency};
 use rip::{
-    tags::WheelTag, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, InstallPaths,
-    PackageDb, ParseArtifactNameError, UnpackWheelOptions, Wheel, WheelName,
+    tags::WheelTag, Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution,
+    InstallPaths, PackageDb, ParseArtifactNameError, UnpackWheelOptions, Wheel, WheelName,
 };
-use std::str::FromStr;
+use std::collections::VecDeque;
+use std::{str::FromStr, time::Duration};
+use tokio::sync::mpsc::{channel, Sender};
+use tokio::task::JoinError;
 
 /// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
 /// up to date it is updated.
@@ -99,7 +104,7 @@ pub async fn update_prefix(
     // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
         // Execute the operations that are returned by the solver.
-        await_in_progress(
+        progress::await_in_progress(
             "updating environment",
             install::execute_transaction(
                 &transaction,
@@ -116,7 +121,11 @@ pub async fn update_prefix(
     remove_old_distribution_packages(prefix, platform, &transaction)?;
 
     // Install and/or remove python packages
-    update_python_packages(package_db, &prefix, lock_file, platform, &transaction).await?;
+    progress::await_in_progress(
+        "updating python packages",
+        update_python_packages(package_db, &prefix, lock_file, platform, &transaction),
+    )
+    .await?;
 
     Ok(())
 }
@@ -160,6 +169,10 @@ async fn update_python_packages(
     let (python_packages_to_remove, python_packages_to_install) =
         determine_python_packages_to_remove_and_install(current_python_packages, python_packages);
 
+    // Start downloading the python packages that we want in the background.
+    let (package_stream, package_stream_pb) =
+        stream_python_packages(package_db, python_packages_to_install.clone());
+
     // Remove python packages that need to be removed
     if !python_packages_to_remove.is_empty() {
         let site_package_path = install_paths
@@ -182,57 +195,219 @@ async fn update_python_packages(
         }
     }
 
-    // Get the pip packages to install
-    if !python_packages_to_install.is_empty() {
-        for package in python_packages_to_install {
-            let pip_package = package
-                .as_pip()
-                .expect("must be a pip package at this point");
+    // Install the individual python packages that we want
+    let package_install_pb = install_python_packages(prefix, install_paths, package_stream).await?;
 
-            // Determine the filename from the
-            let filename = pip_package
-                .url
-                .path_segments()
-                .and_then(|s| s.last())
-                .expect("url is missing a path");
-            let wheel_name = WheelName::from_str(filename)
-                .expect("failed to convert filename to wheel filename");
-
-            // Log out intent to install this python package.
-            tracing::info!("installing python package {filename}",);
-
-            // Reconstruct the ArtifactInfo from the data in the lockfile.
-            let artifact_info = ArtifactInfo {
-                filename: ArtifactName::Wheel(wheel_name),
-                url: pip_package.url.clone(),
-                hashes: pip_package.hash.as_ref().map(|hash| ArtifactHashes {
-                    sha256: hash.sha256().cloned(),
-                }),
-                requires_python: pip_package
-                    .requires_python
-                    .as_ref()
-                    .map(|p| p.parse())
-                    .transpose()
-                    .expect("the lock file contains an invalid 'requires_python` field"),
-                dist_info_metadata: Default::default(),
-                yanked: Default::default(),
-            };
-
-            // TODO: Maybe we should have a cache of wheels separate from the package_db. Since a
-            //   wheel can just be identified by its hash or url.
-            let wheel: Wheel = package_db.get_artifact(&artifact_info).await?;
-            wheel
-                .unpack(
-                    prefix.root(),
-                    &install_paths,
-                    &UnpackWheelOptions {
-                        installer: Some(env!("CARGO_PKG_NAME").into()),
-                    },
-                )
-                .into_diagnostic()?;
-        }
+    // Clear any pending progress bar
+    for pb in package_install_pb
+        .into_iter()
+        .chain(package_stream_pb.into_iter())
+    {
+        pb.finish_and_clear();
     }
+
     Ok(())
+}
+
+/// Concurrently installs python wheels as they become available.
+async fn install_python_packages(
+    prefix: &Prefix,
+    install_paths: InstallPaths,
+    package_stream: impl Stream<Item = miette::Result<Wheel>> + Sized,
+) -> miette::Result<Option<ProgressBar>> {
+    // Determine the number of packages that we are going to install
+    let len = {
+        let (lower_bound, upper_bound) = package_stream.size_hint();
+        upper_bound.unwrap_or(lower_bound)
+    };
+    if len == 0 {
+        return Ok(None);
+    }
+
+    // Create a progress bar to show the progress of the installation
+    let pb = progress::global_multi_progress().add(ProgressBar::new(len as u64));
+    pb.set_style(progress::default_progress_style());
+    pb.set_prefix("unpacking wheels");
+    pb.enable_steady_tick(Duration::from_millis(100));
+
+    // Create a message formatter to show the current operation
+    let message_formatter = MessageFormatter::new(pb.clone());
+
+    // Concurrently unpack the wheels as they become available in the stream.
+    let install_pb = pb.clone();
+    package_stream
+        .try_for_each_concurrent(Some(20), move |wheel| {
+            let install_paths = install_paths.clone();
+            let root = prefix.root().to_path_buf();
+            let message_formatter = message_formatter.clone();
+            let pb = install_pb.clone();
+            async move {
+                let op = wheel.name().to_string();
+                message_formatter.start(op.clone()).await;
+                let unpack_result = tokio::task::spawn_blocking(move || {
+                    wheel
+                        .unpack(
+                            &root,
+                            &install_paths,
+                            &UnpackWheelOptions {
+                                installer: Some(env!("CARGO_PKG_NAME").into()),
+                            },
+                        )
+                        .into_diagnostic()
+                })
+                .map_err(JoinError::try_into_panic)
+                .await;
+                message_formatter.finish(op).await;
+
+                pb.inc(1);
+
+                match unpack_result {
+                    Ok(unpack_result) => unpack_result,
+                    Err(Ok(panic)) => std::panic::resume_unwind(panic),
+                    Err(Err(e)) => Err(miette::miette!("{e}")),
+                }
+            }
+        })
+        .await?;
+
+    // Update the progress bar
+    pb.set_style(progress::finished_progress_style());
+    pb.finish();
+
+    Ok(Some(pb))
+}
+
+/// Creates a stream which downloads the specified python packages. The stream will download the
+/// packages in parallel and yield them as soon as they become available.
+fn stream_python_packages<'a>(
+    package_db: &'a PackageDb,
+    packages_to_download: Vec<&'a LockedDependency>,
+) -> (
+    impl Stream<Item = miette::Result<Wheel>> + 'a,
+    Option<ProgressBar>,
+) {
+    if packages_to_download.is_empty() {
+        return (stream::empty().left_stream(), None);
+    }
+
+    // Construct a progress bar to provide some indication on what is currently downloading.
+    // TODO: It would be much nicer if we can provide more information with regards to the progress.
+    //  For instance if we could also show at what speed the downloads are progressing or the total
+    //  size of the downloads that would really help the user I think.
+    let pb =
+        progress::global_multi_progress().add(ProgressBar::new(packages_to_download.len() as u64));
+    pb.set_style(progress::default_progress_style());
+    pb.set_prefix("acquiring wheels");
+    pb.enable_steady_tick(Duration::from_millis(100));
+
+    // Construct a message formatter
+    let message_formatter = MessageFormatter::new(pb.clone());
+
+    let stream_pb = pb.clone();
+    let total_packages = packages_to_download.len();
+    let download_stream = stream::iter(packages_to_download)
+        .map(move |package| {
+            let pb = stream_pb.clone();
+            let message_formatter = message_formatter.clone();
+            async move {
+                let pip_package = package
+                    .as_pip()
+                    .expect("must be a pip package at this point");
+
+                // Determine the filename from the
+                let filename = pip_package
+                    .url
+                    .path_segments()
+                    .and_then(|s| s.last())
+                    .expect("url is missing a path");
+                let wheel_name = WheelName::from_str(filename)
+                    .expect("failed to convert filename to wheel filename");
+
+                // Log out intent to install this python package.
+                tracing::info!("downloading python package {filename}");
+                message_formatter.start(filename.to_string()).await;
+
+                // Reconstruct the ArtifactInfo from the data in the lockfile.
+                let artifact_info = ArtifactInfo {
+                    filename: ArtifactName::Wheel(wheel_name),
+                    url: pip_package.url.clone(),
+                    hashes: pip_package.hash.as_ref().map(|hash| ArtifactHashes {
+                        sha256: hash.sha256().cloned(),
+                    }),
+                    requires_python: pip_package
+                        .requires_python
+                        .as_ref()
+                        .map(|p| p.parse())
+                        .transpose()
+                        .expect("the lock file contains an invalid 'requires_python` field"),
+                    dist_info_metadata: Default::default(),
+                    yanked: Default::default(),
+                };
+
+                // TODO: Maybe we should have a cache of wheels separate from the package_db. Since a
+                //   wheel can just be identified by its hash or url.
+                let wheel: Wheel = package_db.get_artifact(&artifact_info).await?;
+
+                // Update the progress bar
+                message_formatter.finish(filename.to_string()).await;
+                pb.inc(1);
+                if pb.position() == total_packages as u64 {
+                    pb.set_style(progress::finished_progress_style());
+                    pb.finish();
+                }
+
+                Ok(wheel)
+            }
+        })
+        .buffer_unordered(20)
+        .right_stream();
+
+    (download_stream, Some(pb))
+}
+
+#[derive(Debug, Clone)]
+struct MessageFormatter {
+    sender: Sender<Operation>,
+}
+
+enum Operation {
+    Started(String),
+    Finished(String),
+}
+
+impl MessageFormatter {
+    pub fn new(progress_bar: ProgressBar) -> Self {
+        let (tx, mut rx) = channel::<Operation>(20);
+        tokio::spawn(async move {
+            let mut pending = VecDeque::with_capacity(20);
+            while let Some(msg) = rx.recv().await {
+                match msg {
+                    Operation::Started(op) => pending.push_back(op),
+                    Operation::Finished(op) => {
+                        let Some(idx) = pending.iter().position(|p| p == &op) else { panic!("operation {op} was never started"); };
+                        pending.remove(idx);
+                    }
+                }
+
+                if pending.len() == 0 {
+                    progress_bar.set_message("");
+                } else if pending.len() == 1 {
+                    progress_bar.set_message(pending[0].clone());
+                } else {
+                    progress_bar.set_message(format!("{} (+{})", pending[0], pending.len() - 1));
+                }
+            }
+        });
+        Self { sender: tx }
+    }
+
+    pub async fn start(&self, op: String) {
+        self.sender.send(Operation::Started(op)).await.unwrap();
+    }
+
+    pub async fn finish(&self, op: String) {
+        self.sender.send(Operation::Finished(op)).await.unwrap();
+    }
 }
 
 /// If there was a previous version of python installed, remove any distribution installed in that
@@ -260,23 +435,31 @@ fn remove_old_distribution_packages(
     // Locate the packages that are installed in the previous environment
     let current_python_packages = rip::find_distributions_in_venv(prefix.root(), &install_paths)
         .into_diagnostic()
-        .with_context(|| format!("failed to determine the python packages installed for a previous version of python ({}.{})", python_version.0, python_version.1))?;
+        .with_context(|| format!("failed to determine the python packages installed for a previous version of python ({}.{})", python_version.0, python_version.1))?
+        .into_iter().filter(|d| d.installer.as_deref() != Some("conda")).collect_vec();
+
+    let pb = progress::global_multi_progress()
+        .add(ProgressBar::new(current_python_packages.len() as u64));
+    pb.set_style(progress::default_progress_style());
+    pb.set_message("removing old python packages");
+    pb.enable_steady_tick(Duration::from_millis(100));
 
     // Remove the python packages
     let site_package_path = install_paths
         .site_packages()
         .expect("site-packages path must exist");
     for python_package in current_python_packages {
-        // Skip any package installed as a conda package
-        if python_package.installer.as_deref() == Some("conda") {
-            continue;
-        }
-
         tracing::info!(
             "uninstalling python package from previous python version {}-{}",
             &python_package.name,
             &python_package.version
         );
+
+        pb.set_message(format!(
+            "{} {}",
+            &python_package.name, &python_package.version
+        ));
+
         let relative_dist_info = python_package
             .dist_info
             .strip_prefix(site_package_path)
@@ -284,6 +467,8 @@ fn remove_old_distribution_packages(
         rip::uninstall::uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
             .into_diagnostic()
             .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_package.name, &python_package.version))?;
+
+        pb.inc(1);
     }
 
     Ok(())
