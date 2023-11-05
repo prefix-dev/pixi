@@ -1,0 +1,64 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    # Don't run on forks
+    if: github.repository == 'prefix-dev/pixi'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+
+      - uses: prefix-dev/setup-pixi@v0.3.0
+        with:
+          pixi-version: v0.6.0
+          cache: true
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+
+      - name: Build pixi Documentation
+        run: pixi run build-docs
+
+      #  This adds the following:
+      #   - A .nojekyll file to disable Jekyll GitHub Pages builds.
+      - name: Finalize documentation
+        run: |
+          touch site/.nojekyll
+
+      # https://github.com/actions/upload-pages-artifact#file-permissions
+      - run: chmod -c -R +rX site/
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: "site"
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2

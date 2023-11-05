@@ -50,9 +50,9 @@ markdown_extensions:
       permalink: "#"
 
 nav:
-  - Getting Started : getting_started.md
+  - Getting Started : index.md
   - Basic Usage: basic_usage.md
-  - Reference: cli.md
+  - Reference (CLI): cli.md
   - Configuration: configuration.md
   - Vision: vision.md
   - Indepth:
