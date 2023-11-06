@@ -23,6 +23,7 @@ To install `pixi` you can run the following command in your terminal:
     The script will also update your `~/.bash_profile` to include `~/.pixi/bin` in your PATH, allowing you to invoke the `pixi` command from anywhere.
 
 === "Windows"
+    PowerShell:
     ```powershell
     iwr -useb https://pixi.sh/install.ps1 | iex
     ```
@@ -51,6 +52,7 @@ To get autocompletion run:
     echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
     ```
 === "Windows"
+    PowerShell:
     ```powershell
     Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
     ```

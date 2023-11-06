@@ -60,11 +60,12 @@ nav:
     - Tasks: advanced/advanced_tasks.md
     - Multi Platform: advanced/multi_platform_configuration.md
     - Info command: advanced/explain_info_command.md
-  - Community: Community.md
   - Examples:
       - C++/Cmake: examples/cpp-sdl.md
       - OpenCV: examples/opencv.md
       - ROS2: examples/ros2-nav2.md
+  - Community: Community.md
+  - FAQ: FAQ.md
 
 
 plugins:
