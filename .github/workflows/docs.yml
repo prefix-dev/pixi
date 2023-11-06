@@ -14,10 +14,6 @@ on:
       - 'docs/**'
       - 'mkdocs.yml'
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
-permissions:
-  contents: write
-  pages: write
 
 # Allow one concurrent deployment
 concurrency:
@@ -26,6 +22,9 @@ concurrency:
 
 jobs:
   build-and-deploy:
+    permissions:
+      pages: write
+      id-token: write
     # Don't run on forks
     if: github.repository == 'prefix-dev/pixi'
     runs-on: ubuntu-latest
