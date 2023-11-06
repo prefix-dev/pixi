@@ -31,7 +31,7 @@ pixi init --channel conda-forge --channel bioconda myproject
 
 Adds dependencies to the `pixi.toml`.
 It will only add if the package with its version constraint is able to work with rest of the dependencies in the project.
-[More info](../advanced/multi_platform_configuration) on multi-platform configuration.
+[More info](advanced/multi_platform_configuration.md) on multi-platform configuration.
 
 ##### Options
 
@@ -196,7 +196,7 @@ exit
 ## `info`
 
 Shows helpful information about the pixi installation, cache directories, disk usage, and more.
-More information [here](./advanced/explain_info_command).
+More information [here](advanced/explain_info_command.md).
 
 #####Options
 

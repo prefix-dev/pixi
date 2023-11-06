@@ -12,7 +12,7 @@ install = "cargo install --path . --locked"
 test = "cargo test"
 lint = "pre-commit run --all"
 docs = { cmd = "mkdocs serve" }
-build-docs = { cmd = "mkdocs build" }
+build-docs = { cmd = "mkdocs build --strict" }
 
 [dependencies]
 # Dev dependencies

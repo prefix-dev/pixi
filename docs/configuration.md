@@ -126,8 +126,8 @@ documentation = "https://pixi.sh"
 Tasks are a way to automate certain custom commands in your project.
 For example, a `lint` or `format` step.
 Tasks in a pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
-For more in-depth information, check the [Advanced tasks documentation](../advanced/advanced_tasks).
-Pixi's tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](advanced/advanced_tasks#our-task-runner-deno_task_shell).
+For more in-depth information, check the [Advanced tasks documentation](advanced/advanced_tasks.md).
+Pixi's tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](advanced/advanced_tasks.md#our-task-runner-deno_task_shell).
 
 ```toml
 [tasks]
@@ -136,7 +136,7 @@ cmd = { cmd="echo Same as a simple task but now more verbose"}
 depending = { cmd="echo run after simple", depends_on="simple"}
 alias = { depends_on=["depending"]}
 ```
-You can modify this table using [`pixi task`](../cli#task).
+You can modify this table using [`pixi task`](cli.md#task).
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
 

@@ -1,13 +1,13 @@
 
 ## What is the difference with `conda`, `mamba`, `poetry`, `pip`
 
-| Tool   | Installs python | Builds packages          | Runs predefined tasks | Has lockfiles builtin | Fast | Use without python                                                     |
-|--------|-----------------|--------------------------|-----------------------|-----------------------|------|------------------------------------------------------------------------|
-| Conda  | ✅               | ❌                        | ❌                     | ❌                     | ❌    | ❌                                                                      |
-| Mamba  | ✅               | ❌                        | ❌                     | ❌                     | ✅    | [✅](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html) |
-| Pip    | ❌               | ✅                        | ❌                     | ❌                     | ❌    | ❌                                                                      |
-| Pixi   | ✅               | [🚧](under construction) | ✅                     | ✅                     | ✅    | ✅                                                                      |
-| Poetry | ❌               | ✅                        | ❌                     | ✅                     | ❌    | ❌                                                                      |
+| Tool   | Installs python | Builds packages | Runs predefined tasks | Has lockfiles builtin | Fast | Use without python                                                     |
+|--------|-----------------|-----------------|-----------------------|-----------------------|------|------------------------------------------------------------------------|
+| Conda  | ✅               | ❌               | ❌                     | ❌                     | ❌    | ❌                                                                      |
+| Mamba  | ✅               | ❌               | ❌                     | ❌                     | ✅    | [✅](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html) |
+| Pip    | ❌               | ✅               | ❌                     | ❌                     | ❌    | ❌                                                                      |
+| Pixi   | ✅               | 🚧              | ✅                     | ✅                     | ✅    | ✅                                                                      |
+| Poetry | ❌               | ✅               | ❌                     | ✅                     | ❌    | ❌                                                                      |
 
 
 ## Why the name `pixi`
