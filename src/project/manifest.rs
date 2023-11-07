@@ -404,13 +404,27 @@ mod test {
     }
 
     #[test]
+    fn test_mapped_dependencies() {
+        let contents = format!(
+            r#"
+            {PROJECT_BOILERPLATE}
+            [dependencies]
+            test_map = {{ version = ">=1.2.3", channel="conda-forge", build="py34_0" }}
+            "#
+        );
+
+        assert_debug_snapshot!(
+            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
+        );
+    }
+
+    #[test]
     fn test_dependency_types() {
         let contents = format!(
             r#"
             {PROJECT_BOILERPLATE}
             [dependencies]
             my-game = "1.0.0"
-            test_map = {{ version = ">=1.2.3", channel="conda-forge", build="py34_0" }}
 
             [build-dependencies]
             cmake = "*"
