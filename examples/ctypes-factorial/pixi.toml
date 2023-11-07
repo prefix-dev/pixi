@@ -1,0 +1,16 @@
+[project]
+name = "pixidemo2"
+version = "0.1.0"
+description = "Add a short description here"
+authors = ["liquidcarbon <akscrps@gmail.com>"]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tasks]
+compile = {cmd = "gcc -shared -o src/factorial.so -fPIC src/factorial.c"}
+factorial = {cmd = "python src/factorial.py $1 $2", depends_on = "compile"}
+
+[dependencies]
+gcc = "13.2.0.*"
+python = "3.12.0.*"
+loguru = "0.7.2.*"
