@@ -3,8 +3,7 @@ part: pixi
 title: Basic usage
 description: Taking your first steps with pixi
 ---
-
-Make sure that you have `pixi` installed, this should print the help function, check the [installation manual](overview) if it doesn't.
+Ensure you've got `pixi` set up. If running `pixi` doesn't show the help, see the [getting started](index.md) if it doesn't.
 
 ```shell
 pixi
@@ -25,7 +24,7 @@ pixi add python
 
 Create a file named `hello_world.py` in the directory and paste the following code into the file.
 
-```python title="hello_world.py" showLineNumbers
+```py title="hello_world.py"
 def hello():
     print("Hello World, to the new revolution in package management.")
 
@@ -60,11 +59,13 @@ exit
 ```
 
 You've just learned the basic features of pixi:
-1. adding a dependency.
+
+1. initializing a project
+2. adding a dependency.
 2. adding a task, and executing it.
 3. running a program.
+
 Feel free to play around with what you just learned like adding more tasks, dependencies or code.
-If you want to learn more, checkout out our [in-depth documentation](./advanced)
 
 Happy coding!
 

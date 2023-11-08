@@ -1,0 +1,72 @@
+site_name: "Pixi by prefix.dev"
+
+extra:
+  homepage: https://prefix.dev
+
+theme:
+  name: material
+  favicon: https://prefix.dev/logo_light_no_text.svg
+  logo: https://prefix.dev/logo_light_no_text.svg
+  site_url: https://prefix.dev
+  palette:
+    primary: custom
+  icon:
+    edit: material/pencil
+    view: material/eye
+  features:
+    - content.tabs.link
+    - content.code.copy
+    - content.action.edit
+    # - content.code.select Sponsor only
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+
+
+
+extra_css:
+  - stylesheets/extra.css
+
+repo_url: https://github.com/prefix-dev/pixi/
+edit_uri: edit/main/docs/
+
+markdown_extensions:
+  - admonition
+  - footnotes
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      toc_depth: 3
+      permalink: "#"
+
+nav:
+  - Getting Started : index.md
+  - Basic Usage: basic_usage.md
+  - Reference (CLI): cli.md
+  - Configuration: configuration.md
+  - Vision: vision.md
+  - Indepth:
+    - Authentication: advanced/authentication.md
+    - Tasks: advanced/advanced_tasks.md
+    - Multi Platform: advanced/multi_platform_configuration.md
+    - Info command: advanced/explain_info_command.md
+  - Examples:
+      - C++/Cmake: examples/cpp-sdl.md
+      - OpenCV: examples/opencv.md
+      - ROS2: examples/ros2-nav2.md
+  - Community: Community.md
+  - FAQ: FAQ.md
+
+
+plugins:
+  - search
