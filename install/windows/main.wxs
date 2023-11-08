@@ -129,7 +129,7 @@
                             <Environment
                                 Id='PIXI_BIN_PATH'
                                 Name='PATH'
-                                Value='%UserProfile%/.pixi/bin'
+                                Value='%UserProfile%\.pixi\bin'
                                 Permanent='no'
                                 Part='last'
                                 Action='set'
