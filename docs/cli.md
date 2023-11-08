@@ -91,6 +91,8 @@ pixi run --frozen python
 pixi run --locked python
 # If you have specified a custom task in the pixi.toml you can run it with run as well
 pixi run build
+# Extra arguments will be passed to the tasks command.
+pixi run task argument1 argument2
 ```
 
 !!! info
@@ -139,6 +141,8 @@ Which you can then run with the `run` command:
 
 ```shell
 pixi run cow
+# Extra arguments will be passed to the tasks command.
+pixi run test --test test1
 ```
 
 ### `task remove`
