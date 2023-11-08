@@ -27,6 +27,4 @@ compilers = "1.6.0.*"
 
 # Documentation building
 mkdocs = "1.5.3.*"
-mkdocstrings-python = "1.7.1.*"
-mkdocstrings = "0.23.0.*"
 mkdocs-material = "9.4.4.*"

@@ -69,10 +69,4 @@ nav:
 
 
 plugins:
-  - mkdocstrings:
-      handlers:
-        python:
-          options:
-            show_source: false
-
   - search
