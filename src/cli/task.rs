@@ -215,6 +215,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
             } else {
                 let formatted: String = tasks
                     .iter()
+                    .sorted()
                     .map(|name| {
                         if args.summary {
                             format!("{} ", console::style(name))
