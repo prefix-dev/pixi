@@ -357,6 +357,13 @@ fn locked_dependency_satisfies(
             (Some(_), None) => return false,
             _ => {}
         }
+
+        // Test if the locked channel is equal to the channel that is requested.
+        if let Some(channel) = &spec.channel {
+            if !conda.url.as_ref().contains(channel) {
+                return false;
+            }
+        }
     }
 
     true
@@ -413,15 +420,26 @@ pub async fn update_lock_file(
         // Get the virtual packages for this platform
         let virtual_packages = project.virtual_packages(platform)?;
 
+        // Get and filter out locked packages that dont satisfy the dependencies
+        let locked_packages = existing_lock_file
+            .packages_for_platform(platform)
+            .filter(|locked_dep| {
+                dependencies
+                    .iter()
+                    .find(|dep| dep.0.as_normalized() == locked_dep.name.as_str())
+                    .map_or(true, |dep| {
+                        locked_dependency_satisfies(locked_dep, dep.0, dep.1)
+                    })
+            })
+            .map(RepoDataRecord::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .into_diagnostic()?;
+
         // Construct a solver task that we can start solving.
         let task = rattler_solve::SolverTask {
             specs: match_specs.clone(),
             available_packages: &available_packages,
-            locked_packages: existing_lock_file
-                .packages_for_platform(platform)
-                .map(RepoDataRecord::try_from)
-                .collect::<Result<Vec<_>, _>>()
-                .into_diagnostic()?,
+            locked_packages,
             pinned_packages: vec![],
             virtual_packages,
         };
