@@ -73,14 +73,14 @@ tokio = { version = "1.32.0", features = ["rt"] }
 toml = "0.8.1"
 
 [patch.crates-io]
-rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler = { git = "https://github.com/ruben-arts/rattler", branch = "feature/retry_on_failed_link" }
+rattler_conda_types = { git = "https://github.com/ruben-arts/rattler", branch = "feature/retry_on_failed_link" }
+rattler_digest = { git = "https://github.com/ruben-arts/rattler", branch = "feature/retry_on_failed_link" }
+rattler_networking = { git = "https://github.com/ruben-arts/rattler", branch = "feature/retry_on_failed_link" }
+rattler_repodata_gateway = { git = "https://github.com/ruben-arts/rattler", branch = "feature/retry_on_failed_link" }
+rattler_shell = { git = "https://github.com/ruben-arts/rattler", branch = "feature/retry_on_failed_link" }
+rattler_solve = { git = "https://github.com/ruben-arts/rattler", branch = "feature/retry_on_failed_link" }
+rattler_virtual_packages = { git = "https://github.com/ruben-arts/rattler", branch = "feature/retry_on_failed_link" }
 
 #rattler = { path = "../rattler/crates/rattler" }
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
