@@ -25,8 +25,7 @@ pkg-config = "0.29.*"
 git = "2.42.0.*"
 
 [target.linux-64.dependencies]
-compilers = { version="1.6.0", channel="conda-forge", build="ha770c72_0"}
-
+compilers = { version=">=1.6.0", channel="conda-forge"}
 
 # Documentation building
 mkdocs = "1.5.3.*"
