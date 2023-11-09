@@ -1,5 +1,5 @@
 site_name: "Pixi by prefix.dev"
-site_url: https://prefix.dev
+site_url: https://prefix-dev.github.io/pixi
 
 extra:
   homepage: https://prefix.dev
@@ -54,7 +54,7 @@ nav:
   - Reference (CLI): cli.md
   - Configuration: configuration.md
   - Vision: vision.md
-  - Indepth:
+  - In-depth:
     - Authentication: advanced/authentication.md
     - Tasks: advanced/advanced_tasks.md
     - Multi Platform: advanced/multi_platform_configuration.md
