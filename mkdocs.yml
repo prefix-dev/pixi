@@ -1,12 +1,13 @@
 site_name: "Pixi by prefix.dev"
+site_url: https://prefix.dev
 
 extra:
   homepage: https://prefix.dev
 
 theme:
   name: material
-  favicon: https://prefix.dev/logo_light_no_text.svg
-  logo: https://prefix.dev/logo_light_no_text.svg
+  favicon: assets/logo_light_no_text.svg
+  logo: assets/logo_light_no_text.svg
   site_url: https://prefix.dev
   palette:
     primary: custom
@@ -23,8 +24,6 @@ theme:
     - navigation.tracking
     - navigation.sections
     - navigation.top
-
-
 
 extra_css:
   - stylesheets/extra.css
@@ -70,3 +69,4 @@ nav:
 
 plugins:
   - search
+  - social
