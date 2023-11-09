@@ -1,3 +1,8 @@
+---
+part: pixi
+title: Community
+description: Who is using pixi?
+---
 # Community
 
 ## Built using Pixi
