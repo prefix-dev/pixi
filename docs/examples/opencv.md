@@ -25,7 +25,7 @@ pixi run start
 ```
 
 The screen that starts should look like this:
-![](/assets/docs/opencv_face_recognition.png)
+![](https://storage.googleapis.com/prefix-cms-images/docs/opencv_face_recognition.png)
 
 Check out the `webcame_capture.py` to see how we detect a face.
 
@@ -49,4 +49,4 @@ After that press `ESC` which will start the calibration.
 
 When the calibration is done, the camera will be used again to find the distance to the checkerboard.
 
-![](/assets/docs/calibration_board_detected.png)
+![](https://storage.googleapis.com/prefix-cms-images/docs/calibration_board_detected.png)

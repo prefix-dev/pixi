@@ -73,7 +73,7 @@ It will re-download everything it needs the next time you install a project.
 
 ### Auth storage
 
-Check the [authentication documentation](./../authentication)
+Check the [authentication documentation](authentication.md)
 
 ### Cache size
 
