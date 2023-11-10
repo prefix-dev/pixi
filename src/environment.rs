@@ -17,14 +17,14 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    MatchSpec, NamelessMatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord, Version,
+    Channel, MatchSpec, NamelessMatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
+    Version,
 };
 use rattler_lock::builder::{CondaLockedDependencyBuilder, LockFileBuilder, LockedPackagesBuilder};
 use rattler_lock::{CondaLock, LockedDependency};
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
-use regex::Regex;
 use std::collections::HashMap;
 use std::{
     collections::{HashSet, VecDeque},
@@ -33,7 +33,6 @@ use std::{
     str::FromStr,
     time::Duration,
 };
-use url::Url;
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
 /// Errors when there is a file system error or the path does not align with the defined prefix.
@@ -325,25 +324,15 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
 }
 
 fn check_channel_package_url(channel: &str, url: &str) -> bool {
-    if Url::try_from(channel).is_ok() {
-        // In case the channel is a full url eg.
-        // - file:///home/user/staged-recipes/build_artifacts
-        // - https://repo.prefix.dev/conda-forge
-        if !url.starts_with(channel) {
-            return false;
-        }
-    } else {
-        // Channel is not an url so we assume a channel name.
-        // For this we use a regex to see if the channel matches a full string in between '/'s in the url.
-        // We do this to avoid issues like `pytorch` and `pytorch-nightly`
-        let pattern = format!(r#"/{}/.*"#, channel);
-        let regex = Regex::new(pattern.as_str()).unwrap();
+    // Try to parse the channel string into a Channel type
+    // If this fails, the error will be propagated using `?`
+    let Ok(channel) = Channel::from_str(channel, &Default::default()) else {
+        return false;
+    };
 
-        if !regex.is_match(url) {
-            return false;
-        }
-    }
-    true
+    // Check if the URL starts with the channel's base URL
+    // Return true or false accordingly
+    url.starts_with(channel.base_url.as_str())
 }
 
 /// Returns true if the specified [`conda_lock::LockedDependency`] satisfies the given MatchSpec.
@@ -801,9 +790,11 @@ mod tests {
     fn test_channel_name_match() {
         // Test with a channel name that matches a segment in the URL
         let channel = "conda-forge";
-        let url = "https://repo.prefix.dev/conda-forge/some_package";
+        let url = "https://conda.anaconda.org/conda-forge/some_package";
         assert!(check_channel_package_url(channel, url));
-        let url = "https://repo.prefix.dev/not-conda-forge/some_package";
+        let url = "https://conda.anaconda.org/not-conda-forge/some_package";
+        assert!(!check_channel_package_url(channel, url));
+        let url = "https://repo.prefix.dev/conda-forge/some_package";
         assert!(!check_channel_package_url(channel, url));
 
         // Test other parts of the url
