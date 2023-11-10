@@ -69,7 +69,7 @@ Feel free to play around with what you just learned like adding more tasks, depe
 
 Happy coding!
 
-## Use pixi as an installation tool
+## Use pixi as a global installation tool
 
 Use pixi to install tools on your machine.
 

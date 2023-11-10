@@ -1,7 +1,7 @@
 ---
 part: pixi
 title: Configuration
-description: Learn what you can do in the `pixi.toml` configuration.
+description: Learn what you can do in the pixi.toml configuration.
 ---
 
 The `pixi.toml` is the pixi project configuration file, also known as the project manifest.

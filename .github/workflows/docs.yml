@@ -13,6 +13,7 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+  workflow_dispatch:
 
 
 # Allow one concurrent deployment
@@ -30,10 +31,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
 
       - uses: prefix-dev/setup-pixi@v0.3.0
         with:
@@ -64,6 +61,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.repository == 'prefix-dev/pixi' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

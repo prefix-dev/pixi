@@ -196,6 +196,19 @@ exit
 pixi shell --locked
 exit
 ```
+## `search`
+Search a package, output will list the latest version of the package.
+
+###### Options
+- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--limit (-l)`: Limit the number of search results (default: 15)
+
+```zsh
+pixi search pixi
+pixi search -l 30 py
+pixi search -c robostack plotjuggler
+```
 
 ## `info`
 
@@ -287,13 +300,13 @@ pixi global install python=3.11.0=h10a6764_1_cpython
 
 After using global install, you can use the package you installed anywhere on your system.
 
-### `global info`
+### `global list`
 
 This command shows the current installed global environments including what binaries come with it.
 A global installed package/environment can possibly contain multiple binaries.
 Here is an example of a few installed packages:
 ```
-> pixi global info
+> pixi global list
 Globally installed binary packages:
   -  [package] starship
      -  [bin] starship

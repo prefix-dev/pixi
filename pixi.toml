@@ -25,8 +25,10 @@ pkg-config = "0.29.*"
 git = "2.42.0.*"
 
 [target.linux-64.dependencies]
-compilers = { version=">=1.6.0", channel="conda-forge"}
+compilers = ">=1.6.0"
 
 # Documentation building
 mkdocs = "1.5.3.*"
 mkdocs-material = "9.4.4.*"
+pillow = ">=9.4.0.*"
+cairosvg = "2.7.1.*"
