@@ -23,7 +23,9 @@ rust = "~=1.70.0"
 openssl = "3.*"
 pkg-config = "0.29.*"
 git = "2.42.0.*"
-compilers = "1.6.0.*"
+
+[target.linux-64.dependencies]
+compilers = ">=1.6.0"
 
 # Documentation building
 mkdocs = "1.5.3.*"

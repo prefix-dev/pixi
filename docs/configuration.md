@@ -214,6 +214,12 @@ package2 = ">1.2,<=1.4"
 package3 = ">=1.2.3|<1.0.0"
 ```
 
+Dependencies can also be defined as a mapping where it is using a [matchspec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.NamelessMatchSpec.html):
+```toml
+package0 = { version = ">=1.2.3", channel="conda-forge" }
+package1 = { version = ">=1.2.3", build="py34_0" }
+```
+
 !!! tip
     The dependencies can be easily added using the `pixi add` command line.
     Running `add` for an existing dependency will replace it with the newest it can use.
