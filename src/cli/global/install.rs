@@ -23,8 +23,16 @@ use std::{
     str::FromStr,
 };
 
+#[cfg(target_family = "windows")]
+const BIN_DIR: &str = "pixi\\bin";
+#[cfg(target_family = "windows")]
+const BIN_ENVS_DIR: &str = "pixi\\envs";
+
+#[cfg(target_family = "unix")]
 const BIN_DIR: &str = ".pixi/bin";
+#[cfg(target_family = "unix")]
 const BIN_ENVS_DIR: &str = ".pixi/envs";
+
 
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
@@ -70,11 +78,22 @@ impl BinDir {
     }
 }
 
-/// Binaries are installed in ~/.pixi/bin
+/// Binaries are installed in .pixi/bin
 fn bin_dir() -> miette::Result<PathBuf> {
-    Ok(home_dir()
-        .ok_or_else(|| miette::miette!("could not find home directory"))?
-        .join(BIN_DIR))
+    #[cfg(target_family = "windows")]
+    {
+        let path = std::env::var("LOCALAPPDATA")
+            .map_err(|_| miette::miette!("could not find local app data directory"))?;
+
+        Ok(PathBuf::from(path).join(BIN_DIR))
+    }
+
+    #[cfg(target_family = "unix")]
+    {
+        home_dir()
+            .ok_or_else(|| miette::miette!("could not find home directory"))?
+            .join(BIN_DIR)
+    }
 }
 
 pub(crate) struct BinEnvDir(pub PathBuf);
@@ -464,11 +483,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 "{whitespace}These apps are now globally available:\n{whitespace} -  {script_names}",
             )
         } else {
-            let bin_dir = format!("~/{BIN_DIR}");
             eprintln!("{whitespace}These apps have been added to {}\n{whitespace} -  {script_names}\n\n{} To use them, make sure to add {} to your PATH",
-                      console::style(&bin_dir).bold(),
+                      console::style(&bin_dir.to_string_lossy()).bold(),
                       console::style("!").yellow().bold(),
-                      console::style(&bin_dir).bold()
+                      console::style(&bin_dir.to_string_lossy()).bold()
             )
         }
     }
@@ -493,6 +511,7 @@ fn is_bin_folder_on_path() -> bool {
     };
 
     std::env::var_os("PATH")
+
         .map(|path| std::env::split_paths(&path).collect_vec())
         .unwrap_or_default()
         .into_iter()
