@@ -28,9 +28,9 @@ const BIN_DIR: &str = "pixi\\bin";
 #[cfg(target_family = "windows")]
 const BIN_ENVS_DIR: &str = "pixi\\envs";
 
-#[cfg(target_family = "unix")]
+#[cfg(not(target_family = "windows"))]
 const BIN_DIR: &str = ".pixi/bin";
-#[cfg(target_family = "unix")]
+#[cfg(not(target_family = "windows"))]
 const BIN_ENVS_DIR: &str = ".pixi/envs";
 
 
@@ -78,24 +78,6 @@ impl BinDir {
     }
 }
 
-/// Binaries are installed in .pixi/bin
-fn bin_dir() -> miette::Result<PathBuf> {
-    #[cfg(target_family = "windows")]
-    {
-        let path = std::env::var("LOCALAPPDATA")
-            .map_err(|_| miette::miette!("could not find local app data directory"))?;
-
-        Ok(PathBuf::from(path).join(BIN_DIR))
-    }
-
-    #[cfg(target_family = "unix")]
-    {
-        home_dir()
-            .ok_or_else(|| miette::miette!("could not find home directory"))?
-            .join(BIN_DIR)
-    }
-}
-
 pub(crate) struct BinEnvDir(pub PathBuf);
 
 impl BinEnvDir {
@@ -130,11 +112,24 @@ impl BinEnvDir {
     }
 }
 
-/// Binary environments are installed in ~/.pixi/envs
+// get a global directory path based on the platform.
+fn get_platform_dir(sub_dir: &str) -> miette::Result<PathBuf> {
+    let base_dir = if cfg!(target_family = "windows") {
+        std::env::var("LOCALAPPDATA").map_err(|_| miette::miette!("could not find local app data directory"))?
+    } else {
+        home_dir().ok_or_else(|| miette::miette!("could not find home directory"))?.to_string_lossy().into_owned()
+    };
+
+    Ok(PathBuf::from(base_dir).join(sub_dir))
+}
+// Binaries install location
+fn bin_dir() -> miette::Result<PathBuf> {
+    get_platform_dir(BIN_DIR)
+}
+
+// Binary environments are installed in ~/.pixi/envs
 pub(crate) fn bin_env_dir() -> miette::Result<PathBuf> {
-    Ok(home_dir()
-        .ok_or_else(|| miette::miette!("could not find home directory"))?
-        .join(BIN_ENVS_DIR))
+    get_platform_dir(BIN_ENVS_DIR)
 }
 
 /// Find the designated package in the prefix
