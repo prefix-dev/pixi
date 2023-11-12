@@ -46,11 +46,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "n",
         type=int,
+        nargs='?',
+        default=10,
         help="Number for which to calculate the factorial."
     )
     parser.add_argument(
-        "engine",
+        "-e", "--engine",
         choices=["python", "ctypes"],
+        default="ctypes",
         help="Calculation engine (python or ctypes)."
     )
     args = parser.parse_args()
