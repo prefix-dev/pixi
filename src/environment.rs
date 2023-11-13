@@ -1,5 +1,5 @@
 use crate::{
-    default_authenticated_client, install, lock_file, prefix::Prefix, progress,
+    consts, default_authenticated_client, install, lock_file, prefix::Prefix, progress,
     virtual_packages::verify_current_platform_has_required_virtual_packages, Project,
 };
 use futures::{stream, Stream, StreamExt, TryFutureExt, TryStreamExt};
@@ -7,17 +7,60 @@ use indexmap::IndexSet;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, LabeledSpan};
+
 use rattler::install::Transaction;
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{CondaLock, LockedDependency, PipLockedDependency};
+use rip::tags::WheelTag;
 use rip::{
-    tags::WheelTag, Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution,
-    InstallPaths, PackageDb, ParseArtifactNameError, UnpackWheelOptions, Wheel, WheelName,
+    Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, InstallPaths, PackageDb,
+    ParseArtifactNameError, UnpackWheelOptions, Wheel, WheelName,
 };
-use std::collections::VecDeque;
-use std::{str::FromStr, time::Duration};
-use tokio::sync::mpsc::{channel, Sender};
-use tokio::task::JoinError;
+use std::{collections::VecDeque, io::ErrorKind, path::Path, str::FromStr, time::Duration};
+use tokio::{
+    sync::mpsc::{channel, Sender},
+    task::JoinError,
+};
+
+/// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
+/// Errors when there is a file system error or the path does not align with the defined prefix.
+/// Returns false when the file is not present.
+pub fn verify_prefix_location_unchanged(prefix_file: &Path) -> miette::Result<()> {
+    match std::fs::read_to_string(prefix_file) {
+        // Not found is fine as it can be new or backwards compatible.
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
+        // Scream the error if we dont know it.
+        Err(e) => Err(e).into_diagnostic(),
+        // Check if the path in the file aligns with the current path.
+        Ok(p) if prefix_file.starts_with(&p) => Ok(()),
+        Ok(p) => Err(miette::miette!(
+            "the project location seems to be change from `{}` to `{}`, this is not allowed.\
+            \nPlease remove the `{}` folder and run again",
+            p,
+            prefix_file
+                .parent()
+                .expect("prefix_file should always be a file")
+                .display(),
+            consts::PIXI_DIR
+        )),
+    }
+}
+
+/// Create the prefix location file.
+/// Give it the file path of the required location to place it.
+fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
+    let parent = prefix_file
+        .parent()
+        .ok_or_else(|| miette::miette!("cannot find parent of '{}'", prefix_file.display()))?;
+
+    if parent.exists() {
+        let contents = parent.to_str().ok_or_else(|| {
+            miette::miette!("failed to convert path to str: '{}'", parent.display())
+        })?;
+        std::fs::write(prefix_file, contents).into_diagnostic()?;
+    }
+    Ok(())
+}
 
 /// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
 /// up to date it is updated.
@@ -28,6 +71,14 @@ pub async fn get_up_to_date_prefix(
     frozen: bool,
     locked: bool,
 ) -> miette::Result<Prefix> {
+    // Sanity check of prefix location
+    verify_prefix_location_unchanged(
+        project
+            .environment_dir()
+            .join(consts::PREFIX_FILE_NAME)
+            .as_path(),
+    )?;
+
     // Make sure the project supports the current platform
     let platform = Platform::current();
     if !project.platforms().contains(&platform) {
@@ -126,6 +177,16 @@ pub async fn update_prefix(
         update_python_packages(package_db, &prefix, lock_file, platform, &transaction),
     )
     .await?;
+
+    // Mark the location of the prefix
+    create_prefix_location_file(
+        &prefix
+            .root()
+            .parent()
+            .map(|p| p.join(consts::PREFIX_FILE_NAME))
+            .ok_or_else(|| miette::miette!("we should be able to create a prefix file name."))?,
+    )
+    .with_context(|| "failed to create prefix location file.".to_string())?;
 
     Ok(())
 }
@@ -389,7 +450,7 @@ impl MessageFormatter {
                     }
                 }
 
-                if pending.len() == 0 {
+                if pending.is_empty() {
                     progress_bar.set_message("");
                 } else if pending.len() == 1 {
                     progress_bar.set_message(pending[0].clone());
@@ -583,5 +644,46 @@ impl PipLockedDependencyExt for PipLockedDependency {
             Err(ParseArtifactNameError::InvalidName),
             ArtifactName::from_str,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_full_url_channel_match() {
+        // Test with a full URL channel
+        let channel = "https://repo.prefix.dev/conda-forge";
+        let url = "https://repo.prefix.dev/conda-forge/some_package";
+        assert!(check_channel_package_url(channel, url));
+        // Test with a full URL channel that does not match the URL
+        let url = "https://repo.other.dev/conda-forge/some_package";
+        assert!(!check_channel_package_url(channel, url));
+
+        // Test with a local path channel
+        let channel = "file:///home/rarts/development/staged-recipes/build_artifacts";
+        let url =
+            "file:///home/rarts/development/staged-recipes/build_artifacts/linux-64/some_package";
+        assert!(check_channel_package_url(channel, url));
+        let url = "file:///home/beskebob/development/staged-recipes/build_artifacts/linux-64/some_package";
+        assert!(!check_channel_package_url(channel, url));
+    }
+
+    #[test]
+    fn test_channel_name_match() {
+        // Test with a channel name that matches a segment in the URL
+        let channel = "conda-forge";
+        let url = "https://conda.anaconda.org/conda-forge/some_package";
+        assert!(check_channel_package_url(channel, url));
+        let url = "https://conda.anaconda.org/not-conda-forge/some_package";
+        assert!(!check_channel_package_url(channel, url));
+        let url = "https://repo.prefix.dev/conda-forge/some_package";
+        assert!(!check_channel_package_url(channel, url));
+
+        // Test other parts of the url
+        let channel = "conda";
+        let url = "https://conda.anaconda.org/conda-forge/some_package";
+        assert!(!check_channel_package_url(channel, url));
     }
 }

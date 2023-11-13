@@ -4,7 +4,7 @@ title: SDL example
 description: How to build and run an SDL application in C++
 ---
 
-![](/assets/docs/sdl_examle.png)
+![](https://storage.googleapis.com/prefix-cms-images/docs/sdl_examle.png)
 The `cpp-sdl` example is located in the pixi repository.
 
 ```shell
@@ -23,7 +23,7 @@ Run the `start` command
 pixi run start
 ```
 
-Using the [`depends_on`](../advanced/advanced_tasks#depends-on) feature you only needed to run the `start` task but under water it is running the following tasks.
+Using the [`depends_on`](../advanced/advanced_tasks.md#depends-on) feature you only needed to run the `start` task but under water it is running the following tasks.
 
 ```shell
 # Configure the CMake project

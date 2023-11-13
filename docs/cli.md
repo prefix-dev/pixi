@@ -16,7 +16,7 @@ description: All pixi cli subcommands
 This command is used to create a new project.
 It initializes a `pixi.toml` file and also prepares a `.gitignore` to prevent the environment from being added to `git`.
 
-#### Options
+##### Options
 
 - `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 
@@ -31,9 +31,9 @@ pixi init --channel conda-forge --channel bioconda myproject
 
 Adds dependencies to the `pixi.toml`.
 It will only add if the package with its version constraint is able to work with rest of the dependencies in the project.
-[More info](./advanced/multi_platform_configuration) on multi platform configuration.
+[More info](advanced/multi_platform_configuration.md) on multi-platform configuration.
 
-#### Options
+##### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--host`: Specify that it is a host dependency, important for building a package.
@@ -56,7 +56,7 @@ pixi add --platform osx-64 --build clang
 Installs all dependencies specified in the lockfile `pixi.lock`.
 Which gets generated on `pixi add` or when you manually change the `pixi.toml` file and run `pixi install`.
 
-#### Options
+##### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
@@ -77,7 +77,7 @@ The custom tasks defined in the `pixi.toml` are also available through the run c
 
 You cannot run `pixi run source setup.bash` as `source` is not available in the `deno_task_shell` commandos and not an executable.
 
-#### Options
+##### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
@@ -91,19 +91,21 @@ pixi run --frozen python
 pixi run --locked python
 # If you have specified a custom task in the pixi.toml you can run it with run as well
 pixi run build
+# Extra arguments will be passed to the tasks command.
+pixi run task argument1 argument2
 ```
 
-:::info
-In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the run command.
-Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
-This is done so that the run commands can be run across all platforms.
-:::
+!!! info
+      In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the run command.
+      Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
+      This is done so that the run commands can be run across all platforms.
+
 
 ## `task`
 
 If you want to make a shorthand for a specific command you can add a task for it.
 
-#### Options
+##### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 
@@ -111,7 +113,7 @@ If you want to make a shorthand for a specific command you can add a task for it
 
 Add a task to the `pixi.toml`, use `--depends-on` to add tasks you want to run before this task, e.g. build before an execute task.
 
-#### Options
+##### Options
 - `--platform`: the platform for which this task should be added.
 - `--depends-on`: the task it depends on to be run before the one your adding.
 - `--cwd`: the working directory for the task relative to the root of the project.
@@ -139,6 +141,8 @@ Which you can then run with the `run` command:
 
 ```shell
 pixi run cow
+# Extra arguments will be passed to the tasks command.
+pixi run test --test test1
 ```
 
 ### `task remove`
@@ -165,18 +169,18 @@ cow = "cowpy \"Hello User\""
 moo = { depends_on = ["cow"] }
 ```
 
-:::info
-In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the tasks.
-Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
-This is done so that the tasks defined can be run across all platforms.
-:::
+!!! info
+      In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the tasks.
+      Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
+      This is done so that the tasks defined can be run across all platforms.
+
 
 ## `shell`
 
 This command starts a new shell in the project's environment.
 To exit the pixi shell, simply run `exit`.
 
-#### Options
+#####Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
@@ -192,13 +196,26 @@ exit
 pixi shell --locked
 exit
 ```
+## `search`
+Search a package, output will list the latest version of the package.
+
+###### Options
+- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--limit (-l)`: Limit the number of search results (default: 15)
+
+```zsh
+pixi search pixi
+pixi search -l 30 py
+pixi search -c robostack plotjuggler
+```
 
 ## `info`
 
 Shows helpful information about the pixi installation, cache directories, disk usage, and more.
-More information [here](./advanced/explain_info_command).
+More information [here](advanced/explain_info_command.md).
 
-#### Options
+#####Options
 
 - `--extended`: extend the information with more slow queries to the system, like directory sizes.
 - `--json`: Get a machine-readable version of the information as output.
@@ -225,11 +242,11 @@ This command is used to authenticate the user's access to remote hosts such as `
 
 Store authentication information for given host.
 
-:::tip
-The host is real hostname not a channel.
-:::
+!!! tip
+      The host is real hostname not a channel.
 
-#### Options
+
+##### Options
 
 - `--token`: The token to use for authentication with prefix.dev.
 - `--username`: The username to use for basic HTTP authentication
@@ -263,7 +280,7 @@ global(system) level.
 
 This command installs a package into its own environment and adds the binary to `PATH`, allowing you to access it anywhere on your system without activating the environment.
 
-#### Options
+##### Options
 
 - `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 
@@ -283,13 +300,13 @@ pixi global install python=3.11.0=h10a6764_1_cpython
 
 After using global install, you can use the package you installed anywhere on your system.
 
-### `global info`
+### `global list`
 
 This command shows the current installed global environments including what binaries come with it.
 A global installed package/environment can possibly contain multiple binaries.
 Here is an example of a few installed packages:
 ```
-> pixi global info
+> pixi global list
 Globally installed binary packages:
   -  [package] starship
      -  [bin] starship
@@ -320,7 +337,7 @@ pixi global remove pre-commit
 
 This subcommand allows you to modify the project configuration through the command line interface.
 
-#### Options
+##### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--no-install`: do not update the environment, only add changed packages to the lock-file.
@@ -330,7 +347,7 @@ This subcommand allows you to modify the project configuration through the comma
 Add channels to the channel list in the project configuration.
 When you add channels, the channels are tested for existence, added to the lockfile and the environment is reinstalled.
 
-#### Options
+##### Options
 
 - `--no-install`: do not update the environment, only add changed packages to the lock-file.
 

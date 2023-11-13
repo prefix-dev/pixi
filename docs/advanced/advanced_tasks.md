@@ -10,7 +10,7 @@ With pixi tasks, this should become much easier to do.
 
 Here are some quick examples
 
-```toml title="pixi.toml" showLineNumbers
+```toml title="pixi.toml"
 [tasks]
 # Commands as lists so you can also add documentation in between.
 configure = { cmd = [
@@ -57,7 +57,7 @@ pixi task add start ".build/bin/sdl_example" --depends-on build
 
 Results in the following lines added to the `pixi.toml`
 
-```toml title="pixi.toml" showLineNumbers
+```toml title="pixi.toml"
 [tasks]
 # Configures CMake
 configure = "cmake -G Ninja -S . -B .build"
@@ -92,7 +92,7 @@ pixi task alias style fmt lint
 
 Results in the following `pixi.toml`.
 
-```toml title="pixi.toml" showLineNumbers
+```toml title="pixi.toml"
 fmt = "ruff"
 lint = "pylint"
 style = { depends_on = ["fmt", "lint"] }
@@ -123,7 +123,7 @@ pixi task add bar "python bar.py" --cwd scripts
 ```
 
 This will add the following line to `pixi.toml`:
-```toml title="pixi.toml" showLineNumbers
+```toml title="pixi.toml"
 [tasks]
 bar = { cmd = "python bar.py", cwd = "scripts" }
 ```
@@ -155,30 +155,30 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
 ### Syntax
 
 - **Boolean list:** use `&&` or `||` to separate two commands.
-  - `&&`: if the command before `&&` succeeds continue with the next command.
-  - `||`: if the command before `||` fails continue with the next command.
+    - `&&`: if the command before `&&` succeeds continue with the next command.
+    - `||`: if the command before `||` fails continue with the next command.
 - **Sequential lists:** use `;` to run two commands without checking if the first command failed or succeeded.
 - **Environment variables:**
-  - Set env variable using: `export ENV_VAR=value`
-  - Use env variable using: `$ENV_VAR`
-  - unset env variable using `unset ENV_VAR`
+    - Set env variable using: `export ENV_VAR=value`
+    - Use env variable using: `$ENV_VAR`
+    - unset env variable using `unset ENV_VAR`
 - **Shell variables:** Shell variables are similar to environment variables, but won’t be exported to spawned commands.
-  - Set them: `VAR=value`
-  - use them: `VAR=value && echo $VAR`
+    - Set them: `VAR=value`
+    - use them: `VAR=value && echo $VAR`
 - **Pipelines:** Use the stdout output of a command into the stdin a following command
-  - `|`: `echo Hello | python receiving_app.py`
-  - `|&`: use this to also get the stderr as input.
+    - `|`: `echo Hello | python receiving_app.py`
+    - `|&`: use this to also get the stderr as input.
 - **Command substitution:** `$()` to use the output of a command as input for another command.
-  - `python main.py $(git rev-parse HEAD)`
+    - `python main.py $(git rev-parse HEAD)`
 - **Negate exit code:** `! ` before any command will negate the exit code from 1 to 0 or visa-versa.
 - **Redirects:** `>` to redirect the stdout to a file.
-  - `echo hello > file.txt` will put `hello` in `file.txt` and overwrite existing text.
-  - `python main.py 2> file.txt` will put the `stderr` output in `file.txt`.
-  - `python main.py &> file.txt` will put the `stderr` **and** `stdout` in `file.txt`.
-  - `echo hello > file.txt` will append `hello` to the existing `file.txt`.
+    - `echo hello > file.txt` will put `hello` in `file.txt` and overwrite existing text.
+    - `python main.py 2> file.txt` will put the `stderr` output in `file.txt`.
+    - `python main.py &> file.txt` will put the `stderr` **and** `stdout` in `file.txt`.
+    - `echo hello > file.txt` will append `hello` to the existing `file.txt`.
 - **Glob expansion:** `*` to expand all options.
-  - `echo *.py` will echo all filenames that end with `.py`
-  - `echo **/*.py` will echo all filenames that end with `.py` in this directory and all descendant directories.
-  - `echo data[0-9].csv` will echo all filenames that have a single number after `data` and before `.csv`
+    - `echo *.py` will echo all filenames that end with `.py`
+    - `echo **/*.py` will echo all filenames that end with `.py` in this directory and all descendant directories.
+    - `echo data[0-9].csv` will echo all filenames that have a single number after `data` and before `.csv`
 
 More info in [`deno_task_shell` documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner).

@@ -11,6 +11,8 @@ build = "cargo build --release"
 install = "cargo install --path . --locked"
 test = "cargo test"
 lint = "pre-commit run --all"
+docs = { cmd = "mkdocs serve" }
+build-docs = { cmd = "mkdocs build --strict" }
 
 [dependencies]
 # Dev dependencies
@@ -21,4 +23,12 @@ rust = "~=1.70.0"
 openssl = "3.*"
 pkg-config = "0.29.*"
 git = "2.42.0.*"
-compilers = "1.6.0.*"
+
+# Documentation building
+mkdocs = "1.5.3.*"
+mkdocs-material = "9.4.4.*"
+pillow = ">=9.4.0.*"
+cairosvg = "2.7.1.*"
+
+[target.linux-64.dependencies]
+compilers = ">=1.6.0"

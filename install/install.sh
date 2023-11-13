@@ -56,6 +56,13 @@ if [[ ${HTTP_CODE} -lt 200 || ${HTTP_CODE} -gt 299 ]]; then
   exit 1
 fi
 
+# Check that file was correctly created (https://github.com/prefix-dev/pixi/issues/446)
+if [[ ! -s $TEMP_FILE ]]; then
+  echo "error: temporary file ${TEMP_FILE} not correctly created."
+  echo "       As a workaround, you can try set TMPDIR env variable to directory with write permissions."
+  exit 1
+fi
+
 # Extract pixi from the downloaded tar file
 mkdir -p "$INSTALL_DIR"
 tar -xzf "$TEMP_FILE" -C "$INSTALL_DIR"

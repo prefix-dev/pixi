@@ -8,15 +8,15 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageName, Platform, RepoDataRecord,
-    Version,
+    Channel, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageName, Platform,
+    RepoDataRecord, Version,
 };
 use rattler_lock::{
     builder::{
         CondaLockedDependencyBuilder, LockFileBuilder, LockedPackagesBuilder,
         PipLockedDependencyBuilder,
     },
-    CondaLock, LockedDependency, LockedDependencyKind, PackageHashes,
+    CondaLock, LockedDependency, PackageHashes,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
@@ -163,6 +163,19 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
 }
 
 /// Returns true if the specified [`conda_lock::LockedDependency`] satisfies the given MatchSpec.
+fn check_channel_package_url(channel: &str, url: &str) -> bool {
+    // Try to parse the channel string into a Channel type
+    // If this fails, the error will be propagated using `?`
+    let Ok(channel) = Channel::from_str(channel, &Default::default()) else {
+        return false;
+    };
+
+    // Check if the URL starts with the channel's base URL
+    // Return true or false accordingly
+    url.starts_with(channel.base_url.as_str())
+}
+
+/// Returns true if the specified [`conda_lock::LockedDependency`] satisfies the given MatchSpec.
 /// TODO: Move this back to rattler.
 /// TODO: Make this more elaborate to include all properties of MatchSpec
 fn locked_dependency_satisfies(
@@ -187,20 +200,22 @@ fn locked_dependency_satisfies(
         }
     }
 
-    match &locked_package.kind {
-        LockedDependencyKind::Conda(conda) => {
-            // Check if the build string matches
-            match (spec.build.as_ref(), &conda.build) {
-                (Some(build_spec), Some(build)) => {
-                    if !build_spec.matches(build) {
-                        return false;
-                    }
+    if let Some(conda) = locked_package.as_conda() {
+        match (spec.build.as_ref(), &conda.build) {
+            (Some(build_spec), Some(build)) => {
+                if !build_spec.matches(build) {
+                    return false;
                 }
-                (Some(_), None) => return false,
-                _ => {}
+            }
+            (Some(_), None) => return false,
+            _ => {}
+        }
+
+        if let Some(channel) = &spec.channel {
+            if !check_channel_package_url(channel.as_str(), conda.url.as_ref()) {
+                return false;
             }
         }
-        LockedDependencyKind::Pip(_) => {}
     }
 
     true
@@ -377,7 +392,8 @@ async fn resolve_platform(
             .python_package_db()?
             .get_metadata::<Wheel, _>(&python_artifact.artifacts)
             .await
-            .expect("failed to get metadata for a package for which we have already fetched metadata during solving.");
+            .expect("failed to get metadata for a package for which we have already fetched metadata during solving.")
+            .expect("no metadata for a package for which we have already fetched metadata during solving.");
 
         let locked_package = PipLockedDependencyBuilder {
             name: python_artifact.name.to_string(),
@@ -442,7 +458,7 @@ async fn load_sparse_repo_data_async(
         });
 
         // Load only records we need for this platform
-        SparseRepoData::load_records_recursive(platform_sparse_repo_data, package_names, None, true)
+        SparseRepoData::load_records_recursive(platform_sparse_repo_data, package_names, None)
             .into_diagnostic()
     })
     .await

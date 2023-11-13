@@ -6,3 +6,5 @@ __pycache__
 **/**/.pixi
 **/**/.build
 .DS_store
+site/
+.cache

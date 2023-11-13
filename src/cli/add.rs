@@ -1,17 +1,20 @@
-use crate::environment::update_prefix;
-use crate::lock_file::{load_lock_file, update_lock_file};
+use crate::environment::{update_prefix, verify_prefix_location_unchanged};
 use crate::prefix::Prefix;
 use crate::project::SpecType;
-use crate::{project::Project, virtual_packages::get_minimal_virtual_packages};
+use crate::{
+    consts,
+    lock_file::{load_lock_file, update_lock_file},
+    project::Project,
+    virtual_packages::get_minimal_virtual_packages,
+};
 use clap::Parser;
 use console::style;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
-use rattler_conda_types::version_spec::StrictRangeOperator;
-use rattler_conda_types::PackageName;
 use rattler_conda_types::{
-    MatchSpec, NamelessMatchSpec, Platform, StrictVersion, Version, VersionSpec,
+    version_spec::StrictRangeOperator, MatchSpec, NamelessMatchSpec, PackageName, Platform,
+    StrictVersion, Version, VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
@@ -91,6 +94,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let spec_type = SpecType::from_args(&args);
     let spec_platforms = args.platform;
+
+    // Sanity check of prefix location
+    verify_prefix_location_unchanged(
+        project
+            .environment_dir()
+            .join(consts::PREFIX_FILE_NAME)
+            .as_path(),
+    )?;
 
     // Add the platform if it is not already present
     let platforms_to_add = spec_platforms
@@ -300,8 +311,6 @@ pub fn determine_best_version(
         platform_sparse_repo_data,
         package_names.iter().cloned(),
         None,
-        // Default to strict_channel_priority
-        true,
     )
     .into_diagnostic()?;
 
