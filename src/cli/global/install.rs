@@ -241,7 +241,10 @@ async fn map_executables_to_global_bin_scripts<'a>(
         let Some(file_name) = exec
             .file_name()
             .and_then(OsStr::to_str)
-            .map(str::to_lowercase) else { continue; };
+            .map(str::to_lowercase)
+        else {
+            continue;
+        };
         let file_name = extensions_list
             .iter()
             .find_map(|ext| file_name.strip_suffix(ext))

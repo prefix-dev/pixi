@@ -200,7 +200,9 @@ async fn update_python_packages(
     transaction: &Transaction<PrefixRecord, RepoDataRecord>,
 ) -> miette::Result<()> {
     // Get the python info from the transaction
-    let Some(python_info) = transaction.python_info.as_ref() else { return Ok(()) };
+    let Some(python_info) = transaction.python_info.as_ref() else {
+        return Ok(());
+    };
 
     // Determine where packages would have been installed
     let install_paths = InstallPaths::for_venv(
@@ -445,7 +447,9 @@ impl MessageFormatter {
                 match msg {
                     Operation::Started(op) => pending.push_back(op),
                     Operation::Finished(op) => {
-                        let Some(idx) = pending.iter().position(|p| p == &op) else { panic!("operation {op} was never started"); };
+                        let Some(idx) = pending.iter().position(|p| p == &op) else {
+                            panic!("operation {op} was never started");
+                        };
                         pending.remove(idx);
                     }
                 }
@@ -479,7 +483,9 @@ fn remove_old_distribution_packages(
     transaction: &Transaction<PrefixRecord, RepoDataRecord>,
 ) -> miette::Result<()> {
     // Determine if the current distribution is the same as the desired distribution.
-    let Some(previous_python_installation) = transaction.current_python_info.as_ref() else { return Ok(()) };
+    let Some(previous_python_installation) = transaction.current_python_info.as_ref() else {
+        return Ok(());
+    };
     if Some(previous_python_installation.short_version)
         == transaction.python_info.as_ref().map(|p| p.short_version)
     {

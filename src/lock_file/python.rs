@@ -207,7 +207,9 @@ fn linux_platform_tags(platform: Platform, max_glibc_version: &Version) -> Vec<S
 
 // Generate all manylinux tags based on the major minor version of glibc.
 fn manylinux_versions(glibc_version: &Version) -> Vec<String> {
-    let Some((major, minor)) = glibc_version.as_major_minor() else { return Vec::new() };
+    let Some((major, minor)) = glibc_version.as_major_minor() else {
+        return Vec::new();
+    };
 
     let mut result = Vec::new();
     for minor in (0..=minor).rev() {
@@ -230,7 +232,9 @@ where
     PIter: IntoIterator<Item = P>,
     PIter::IntoIter: Clone,
 {
-    let Some((major, minor)) = python_version.as_major_minor() else { return Vec::new() };
+    let Some((major, minor)) = python_version.as_major_minor() else {
+        return Vec::new();
+    };
 
     let interpreter = format!("cp{major}{minor}");
     let core_abi = format!("cp{}{}", major, minor);

@@ -132,7 +132,10 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
                     if let Some(conda_package) = package.as_conda() {
                         for spec in conda_package.dependencies.iter() {
                             let Ok(spec) = MatchSpec::from_str(spec) else {
-                                tracing::warn!("failed to parse spec '{}', assuming the lock file is corrupt.", spec);
+                                tracing::warn!(
+                                    "failed to parse spec '{}', assuming the lock file is corrupt.",
+                                    spec
+                                );
                                 return Ok(false);
                             };
                             let (Some(depends_name), spec) = spec.into_nameless() else {
