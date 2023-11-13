@@ -475,3 +475,44 @@ async fn load_sparse_repo_data_async(
         )
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_full_url_channel_match() {
+        // Test with a full URL channel
+        let channel = "https://repo.prefix.dev/conda-forge";
+        let url = "https://repo.prefix.dev/conda-forge/some_package";
+        assert!(check_channel_package_url(channel, url));
+        // Test with a full URL channel that does not match the URL
+        let url = "https://repo.other.dev/conda-forge/some_package";
+        assert!(!check_channel_package_url(channel, url));
+
+        // Test with a local path channel
+        let channel = "file:///home/rarts/development/staged-recipes/build_artifacts";
+        let url =
+            "file:///home/rarts/development/staged-recipes/build_artifacts/linux-64/some_package";
+        assert!(check_channel_package_url(channel, url));
+        let url = "file:///home/beskebob/development/staged-recipes/build_artifacts/linux-64/some_package";
+        assert!(!check_channel_package_url(channel, url));
+    }
+
+    #[test]
+    fn test_channel_name_match() {
+        // Test with a channel name that matches a segment in the URL
+        let channel = "conda-forge";
+        let url = "https://conda.anaconda.org/conda-forge/some_package";
+        assert!(check_channel_package_url(channel, url));
+        let url = "https://conda.anaconda.org/not-conda-forge/some_package";
+        assert!(!check_channel_package_url(channel, url));
+        let url = "https://repo.prefix.dev/conda-forge/some_package";
+        assert!(!check_channel_package_url(channel, url));
+
+        // Test other parts of the url
+        let channel = "conda";
+        let url = "https://conda.anaconda.org/conda-forge/some_package";
+        assert!(!check_channel_package_url(channel, url));
+    }
+}
