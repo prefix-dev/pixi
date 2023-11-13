@@ -24,6 +24,7 @@
 //! ```
 
 use crate::common::IntoMatchSpec;
+use futures::FutureExt;
 use pixi::cli::{add, init, install, project, task};
 use pixi::project::SpecType;
 use rattler_conda_types::Platform;
@@ -124,10 +125,10 @@ impl AddBuilder {
 
 impl IntoFuture for AddBuilder {
     type Output = miette::Result<()>;
-    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(add::execute(self.args))
+        add::execute(self.args).boxed_local()
     }
 }
 
@@ -205,13 +206,14 @@ impl ProjectChannelAddBuilder {
 
 impl IntoFuture for ProjectChannelAddBuilder {
     type Output = miette::Result<()>;
-    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(project::channel::execute(project::channel::Args {
+        project::channel::execute(project::channel::Args {
             manifest_path: self.manifest_path,
             command: project::channel::Command::Add(self.args),
-        }))
+        })
+        .boxed_local()
     }
 }
 
@@ -234,8 +236,8 @@ impl InstallBuilder {
 
 impl IntoFuture for InstallBuilder {
     type Output = miette::Result<()>;
-    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(install::execute(self.args))
+        install::execute(self.args).boxed_local()
     }
 }

@@ -68,4 +68,7 @@ ProjectManifest {
     build_dependencies: None,
     target: {},
     activation: None,
+    python_dependencies: PythonDependencies {
+        requirements: {},
+    },
 }
