@@ -4,7 +4,23 @@ version = "0.2.0"
 description = "Add a short description here"
 authors = ["liquidcarbon <akscrps@gmail.com>"]
 channels = ["conda-forge"]
-platforms = ["linux-64", "win-64"]
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+[dependencies]
+python = "3.12.0.*"
+loguru = "0.7.2.*"
+
+[target.win-64.dependencies]
+m2w64-gcc = "5.3.0.*"
+
+[target.linux-64.dependencies]
+gcc = "13.2.0.*"
+
+[target.osx-64.dependencies]
+clang-16 = "*"
+
+[target.osx-arm64.dependencies]
+clang-16 = "*"
 
 [tasks]
 compile = {cmd = "gcc -shared -o src/factorial.so src/factorial.c"}
@@ -21,12 +37,9 @@ start = { cmd = [
     "python",
 ], depends_on = "compile" }
 
-[dependencies]
-python = "3.12.0.*"
-loguru = "0.7.2.*"
+[target.osx-64.tasks]
+compile = {cmd = "clang -shared -o src/factorial.so src/factorial.c"}
 
-[target.win-64.dependencies]
-m2w64-gcc = "5.3.0.*"
+[target.osx-arm64.tasks]
+compile = {cmd = "clang -shared -o src/factorial.so src/factorial.c"}
 
-[target.linux-64.dependencies]
-gcc = "13.2.0.*"
