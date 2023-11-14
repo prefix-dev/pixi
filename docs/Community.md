@@ -15,3 +15,4 @@ description: Who is using pixi?
 - [LFortran](https://github.com/lfortran/lfortran): A modern cross-platform Fortran compiler
 - [Rerun](https://www.rerun.io/): Rerun is an SDK for building time aware visualizations of multimodal data.
 - [conda-auth](https://github.com/conda-incubator/conda-auth): a conda plugin providing more secure authentication support to conda.
+- [py-rattler](https://github.com/mamba-org/rattler/tree/main/py-rattler): Build your own conda environment manager using the python wrapper of our Rattler backend.
