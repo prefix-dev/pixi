@@ -49,7 +49,13 @@ pub async fn find_conda_python_packages<'p>(
     let packages = conda_forge_records
         .iter()
         .filter_map(|r| {
-            let pypi_name = mapping_by_name.get(r.package_record.name.as_normalized())?;
+            // Lookup the pypi name for the conda package. If the mapping is not found simply use
+            // the conda name.
+            let conda_name = r.package_record.name.as_normalized();
+            let pypi_name = mapping_by_name
+                .get(conda_name)
+                .map(String::as_str)
+                .unwrap_or(conda_name);
             let pypi_name = rip::NormalizedPackageName::from_str(pypi_name).ok()?;
             let version = rip::Version::from_str(&r.package_record.version.as_str()).ok()?;
             Some(PinnedPackage {

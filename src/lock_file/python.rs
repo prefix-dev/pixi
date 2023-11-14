@@ -30,7 +30,7 @@ pub async fn resolve_python_dependencies<'p>(
 
     if !conda_python_packages.is_empty() {
         tracing::info!(
-            "the following python packages are installed by conda: {conda_python_packages}",
+            "the following python packages are assumed to be installed conda: {conda_python_packages}",
             conda_python_packages =
                 conda_python_packages
                     .iter()
