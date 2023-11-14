@@ -56,7 +56,27 @@ ProjectManifest {
             build_number: None,
             file_name: None,
             channel: Some(
-                "conda-forge",
+                Channel {
+                    platforms: None,
+                    base_url: Url {
+                        scheme: "https",
+                        cannot_be_a_base: false,
+                        username: "",
+                        password: None,
+                        host: Some(
+                            Domain(
+                                "conda.anaconda.org",
+                            ),
+                        ),
+                        port: None,
+                        path: "/conda-forge/",
+                        query: None,
+                        fragment: None,
+                    },
+                    name: Some(
+                        "conda-forge",
+                    ),
+                },
             ),
             subdir: None,
             namespace: None,
