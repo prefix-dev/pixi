@@ -1,6 +1,6 @@
 param (
     [string]$PIXI_VERSION = "latest",
-    [string]$PIXI_DIR = "$Env:LocalAppData\pixi\bin"
+    [string]$PIXI_DIR = "$Env:USERPROFILE\.pixi\bin"
 )
 
 # Repository name
