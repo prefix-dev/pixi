@@ -52,7 +52,7 @@ jobs:
       - name: Finalize documentation
         run: |
           touch site/.nojekyll
-          cp install/{install.sh,install.ps1} site
+          mkdir site/get && cp install/{install.sh,install.ps1} site/get
 
       # https://github.com/actions/upload-pages-artifact#file-permissions
       - run: chmod -c -R +rX site/
