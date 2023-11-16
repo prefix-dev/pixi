@@ -1,5 +1,6 @@
 use crate::{
     consts, default_authenticated_client, install, lock_file, prefix::Prefix, progress,
+    progress::ProgressBarMessageFormatter,
     virtual_packages::verify_current_platform_has_required_virtual_packages, Project,
 };
 use futures::{stream, Stream, StreamExt, TryFutureExt, TryStreamExt};
@@ -8,14 +9,12 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, LabeledSpan};
 
-use crate::progress::ProgressBarMessageFormatter;
 use rattler::install::Transaction;
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{CondaLock, LockedDependency, PipLockedDependency};
-use rip::tags::WheelTag;
 use rip::{
-    Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, InstallPaths, PackageDb,
-    ParseArtifactNameError, UnpackWheelOptions, Wheel, WheelName,
+    tags::WheelTag, Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution,
+    InstallPaths, PackageDb, ParseArtifactNameError, UnpackWheelOptions, Wheel, WheelName,
 };
 use std::{io::ErrorKind, path::Path, str::FromStr, time::Duration};
 use tokio::task::JoinError;

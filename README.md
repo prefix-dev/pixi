@@ -77,6 +77,14 @@ brew install pixi
 The script will also update your ~/.bash_profile to include ~/.pixi/bin in your PATH, allowing you to invoke the pixi command from anywhere.
 You might need to restart your terminal or source your shell for the changes to take effect.
 
+#### Arch Linux
+
+`pixi` is also available [in the AUR](https://aur.archlinux.org/packages/pixi). If you're using `paru`:
+
+```sh
+paru -S pixi
+```
+
 ## Windows
 To install Pixi on Windows, open a PowerShell terminal (you may need to run it as an administrator) and run the following command:
 

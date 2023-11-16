@@ -1,9 +1,9 @@
 ---
 source: src/project/python.rs
-assertion_line: 108
+assertion_line: 109
 expression: requirement
 ---
-PythonDependencies {
+PypiDependencies {
     requirements: {
         PixiSpanned {
             span: Some(

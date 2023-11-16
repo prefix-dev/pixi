@@ -1,5 +1,6 @@
 ---
 source: src/project/manifest.rs
+assertion_line: 518
 expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\")"
 ---
 ProjectManifest {
@@ -42,11 +43,11 @@ ProjectManifest {
     build_dependencies: None,
     target: {},
     activation: None,
-    python_dependencies: PythonDependencies {
+    pypi_dependencies: PypiDependencies {
         requirements: {
             PixiSpanned {
                 span: Some(
-                    179..182,
+                    177..180,
                 ),
                 value: PackageName {
                     source: "foo",
@@ -54,7 +55,7 @@ ProjectManifest {
                 },
             }: PixiSpanned {
                 span: Some(
-                    185..193,
+                    183..191,
                 ),
                 value: (
                     Dependency(
@@ -110,7 +111,7 @@ ProjectManifest {
             },
             PixiSpanned {
                 span: Some(
-                    206..209,
+                    204..207,
                 ),
                 value: PackageName {
                     source: "bar",
@@ -118,7 +119,7 @@ ProjectManifest {
                 },
             }: PixiSpanned {
                 span: Some(
-                    212..248,
+                    210..246,
                 ),
                 value: (
                     LongDependency {

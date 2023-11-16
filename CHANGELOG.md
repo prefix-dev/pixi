@@ -4,6 +4,60 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.7.0] - 2023-11-14
+
+### Highlights
+
+- Channel priority: `channels = ["conda-forge", "pytorch"]` All packages found in conda-forge will not be taken from pytorch.
+- Channel specific dependencies: `pytorch = { version="*", channel="pytorch"}`
+- Autocompletion on `pixi run <TABTAB>`
+- Moved all pixi documentation into this repo, try it with `pixi run docs`!
+- Lots of new contributors!
+
+### Details
+#### Added
+* Bump rattler to its newest version by @ruben-arts in https://github.com/prefix-dev/pixi/pull/395
+    * Some notable changes:
+        * Add channel priority (If a package is found in the first listed channel it will not be looked for in the other channels).
+        * Fix JLAP using wrong hash.
+        * Lockfile forward compatibility error.
+* Add nushell support by @wolfv in https://github.com/prefix-dev/pixi/pull/360
+* Autocomplete tasks on `pixi run` for `bash` and `zsh` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/390
+* Add prefix location file to avoid copy error by @ruben-arts in https://github.com/prefix-dev/pixi/pull/422
+* Channel specific dependencies `python = { version = "*" channel="conda-forge" }` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/439
+
+#### Changed
+* `project.version` as optional field in the `pixi.toml` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/400
+
+#### Fixed
+* Deny unknown fields in `pixi.toml` to help users find errors by @ruben-arts in https://github.com/prefix-dev/pixi/pull/396
+* `install.sh` to create dot file if not present by @humphd in https://github.com/prefix-dev/pixi/pull/408
+* Ensure order of repodata fetches by @baszalmstra in https://github.com/prefix-dev/pixi/pull/405
+* Strip Linux binaries by @baszalmstra in https://github.com/prefix-dev/pixi/pull/414
+* Sort `task list` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/431
+* Fix `global install` path on windows by @ruben-arts in https://github.com/prefix-dev/pixi/pull/449
+* Let `PIXI_BIN_PATH` use backslashes by @Hofer-Julian in https://github.com/prefix-dev/pixi/pull/442
+* Print more informative error if created file is empty by @traversaro in https://github.com/prefix-dev/pixi/pull/447
+
+#### Docs
+* Move to `mkdocs` with all documentation by @ruben-arts in https://github.com/prefix-dev/pixi/pull/435
+* Fix typing errors by @FarukhS52 in https://github.com/prefix-dev/pixi/pull/426
+* Add social cards to the pages by @ruben-arts in https://github.com/prefix-dev/pixi/pull/445
+* Enhance README.md: Added Table of Contents, Grammar Improvements by @adarsh-jha-dev in https://github.com/prefix-dev/pixi/pull/421
+* Adding conda-auth to community examples by @travishathaway in https://github.com/prefix-dev/pixi/pull/433
+* Minor grammar correction by @tylere in https://github.com/prefix-dev/pixi/pull/406
+* Make capitalization of tab titles consistent by @tylere in https://github.com/prefix-dev/pixi/pull/407
+
+## New Contributors
+* @tylere made their first contribution in https://github.com/prefix-dev/pixi/pull/406
+* @humphd made their first contribution in https://github.com/prefix-dev/pixi/pull/408
+* @adarsh-jha-dev made their first contribution in https://github.com/prefix-dev/pixi/pull/421
+* @FarukhS52 made their first contribution in https://github.com/prefix-dev/pixi/pull/426
+* @travishathaway made their first contribution in https://github.com/prefix-dev/pixi/pull/433
+* @traversaro made their first contribution in https://github.com/prefix-dev/pixi/pull/447
+
+**Full Changelog**: https://github.com/prefix-dev/pixi/compare/v0.6.0...v0.7.0
+
 ## [0.6.0] - 2023-10-17
 
 ### Highlights

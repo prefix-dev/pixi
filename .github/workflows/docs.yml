@@ -12,7 +12,10 @@ on:
       - main
     paths:
       - 'docs/**'
+      - 'install/**'
+      - '.github/workflows/docs.yml'
       - 'mkdocs.yml'
+      - 'pixi.*'
   workflow_dispatch:
 
 
@@ -45,9 +48,11 @@ jobs:
 
       #  This adds the following:
       #   - A .nojekyll file to disable Jekyll GitHub Pages builds.
+      #   - Adds installation scripts to the pages webserver.
       - name: Finalize documentation
         run: |
           touch site/.nojekyll
+          cp install/{install.sh,install.ps1} site
 
       # https://github.com/actions/upload-pages-artifact#file-permissions
       - run: chmod -c -R +rX site/

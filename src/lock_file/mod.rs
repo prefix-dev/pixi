@@ -8,8 +8,8 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{
-    Channel, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageName, Platform,
-    RepoDataRecord, Version,
+    GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageName, Platform, RepoDataRecord,
+    Version,
 };
 use rattler_lock::{
     builder::{
@@ -166,19 +166,6 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
 }
 
 /// Returns true if the specified [`conda_lock::LockedDependency`] satisfies the given MatchSpec.
-fn check_channel_package_url(channel: &str, url: &str) -> bool {
-    // Try to parse the channel string into a Channel type
-    // If this fails, the error will be propagated using `?`
-    let Ok(channel) = Channel::from_str(channel, &Default::default()) else {
-        return false;
-    };
-
-    // Check if the URL starts with the channel's base URL
-    // Return true or false accordingly
-    url.starts_with(channel.base_url.as_str())
-}
-
-/// Returns true if the specified [`conda_lock::LockedDependency`] satisfies the given MatchSpec.
 /// TODO: Move this back to rattler.
 /// TODO: Make this more elaborate to include all properties of MatchSpec
 fn locked_dependency_satisfies(
@@ -215,7 +202,7 @@ fn locked_dependency_satisfies(
         }
 
         if let Some(channel) = &spec.channel {
-            if !check_channel_package_url(channel.as_str(), conda.url.as_ref()) {
+            if !conda.url.as_str().starts_with(channel.base_url.as_str()) {
                 return false;
             }
         }
@@ -477,45 +464,4 @@ async fn load_sparse_repo_data_async(
             platform.as_str()
         )
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_full_url_channel_match() {
-        // Test with a full URL channel
-        let channel = "https://repo.prefix.dev/conda-forge";
-        let url = "https://repo.prefix.dev/conda-forge/some_package";
-        assert!(check_channel_package_url(channel, url));
-        // Test with a full URL channel that does not match the URL
-        let url = "https://repo.other.dev/conda-forge/some_package";
-        assert!(!check_channel_package_url(channel, url));
-
-        // Test with a local path channel
-        let channel = "file:///home/rarts/development/staged-recipes/build_artifacts";
-        let url =
-            "file:///home/rarts/development/staged-recipes/build_artifacts/linux-64/some_package";
-        assert!(check_channel_package_url(channel, url));
-        let url = "file:///home/beskebob/development/staged-recipes/build_artifacts/linux-64/some_package";
-        assert!(!check_channel_package_url(channel, url));
-    }
-
-    #[test]
-    fn test_channel_name_match() {
-        // Test with a channel name that matches a segment in the URL
-        let channel = "conda-forge";
-        let url = "https://conda.anaconda.org/conda-forge/some_package";
-        assert!(check_channel_package_url(channel, url));
-        let url = "https://conda.anaconda.org/not-conda-forge/some_package";
-        assert!(!check_channel_package_url(channel, url));
-        let url = "https://repo.prefix.dev/conda-forge/some_package";
-        assert!(!check_channel_package_url(channel, url));
-
-        // Test other parts of the url
-        let channel = "conda";
-        let url = "https://conda.anaconda.org/conda-forge/some_package";
-        assert!(!check_channel_package_url(channel, url));
-    }
 }
