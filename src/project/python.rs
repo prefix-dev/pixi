@@ -8,14 +8,14 @@ use std::fmt::Formatter;
 /// Represents a set of python dependencies on which a project can depend. The dependencies are
 /// formatted using a modern version specifier. See [`pep508_rs::modern::RequirementModern`].
 #[derive(Default, Debug, Clone)]
-pub struct PythonDependencies {
+pub struct PypiDependencies {
     requirements: IndexMap<
         PixiSpanned<rip::PackageName>,
         PixiSpanned<(pep508_rs::modern::RequirementModern, pep508_rs::Requirement)>,
     >,
 }
 
-impl PythonDependencies {
+impl PypiDependencies {
     /// Returns `true` if no requirements have been specified
     pub fn is_empty(&self) -> bool {
         self.requirements.is_empty()
@@ -30,7 +30,7 @@ impl PythonDependencies {
     }
 }
 
-impl<'de> Deserialize<'de> for PythonDependencies {
+impl<'de> Deserialize<'de> for PypiDependencies {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -87,7 +87,7 @@ impl<'de> Deserialize<'de> for PythonDependencies {
 
         deserializer
             .deserialize_map(RequirementsVisitor {})
-            .map(|requirements| PythonDependencies { requirements })
+            .map(|requirements| PypiDependencies { requirements })
     }
 }
 
@@ -98,20 +98,20 @@ mod test {
 
     #[test]
     fn test_only_version() {
-        let requirement: PythonDependencies = toml_edit::de::from_str("foo = \">=3.12\"").unwrap();
+        let requirement: PypiDependencies = toml_edit::de::from_str("foo = \">=3.12\"").unwrap();
         assert_debug_snapshot!(requirement);
     }
 
     #[test]
     fn test_extended() {
-        let requirement: PythonDependencies =
+        let requirement: PypiDependencies =
             toml::de::from_str("foo = { version=\">=3.12\", extras = [\"bar\"] }").unwrap();
         assert_debug_snapshot!(requirement);
     }
 
     #[test]
     fn test_invalid_git_dependency_error() {
-        let requirement = toml::de::from_str::<PythonDependencies>(
+        let requirement = toml::de::from_str::<PypiDependencies>(
             "foo = { git=\"https://github.com/foo/bar\", branch = \"main\", rev=\"deadbeef\" }",
         );
         assert_debug_snapshot!(requirement.unwrap_err());

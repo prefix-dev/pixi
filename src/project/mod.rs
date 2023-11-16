@@ -20,7 +20,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::project::python::PythonDependencies;
+use crate::project::python::PypiDependencies;
 use crate::{
     consts::{self, PROJECT_MANIFEST},
     default_client,
@@ -332,8 +332,8 @@ impl Project {
         )?;
 
         // Notify the user that python-dependencies are still experimental
-        if !manifest.python_dependencies.is_empty() {
-            tracing::warn!("ALPHA feature enabled!\n\nIt looks like your project contains `[python-dependencies]`. This feature is currently still in an ALPHA state!\n\nYou may encounter bugs or weird behavior. Please report any and all issues you encounter on our github repository:\n\n\thttps://github.com/prefix-dev/pixi.\n");
+        if !manifest.pypi_dependencies.is_empty() {
+            tracing::warn!("ALPHA feature enabled!\n\nIt looks like your project contains `[pypi-dependencies]`. This feature is currently still in an ALPHA state!\n\nYou may encounter bugs or weird behavior. Please report any and all issues you encounter on our github repository:\n\n\thttps://github.com/prefix-dev/pixi.\n");
         }
 
         Ok(Self {
@@ -447,25 +447,25 @@ impl Project {
         Ok(dependencies)
     }
 
-    pub fn python_dependencies(&self) -> &PythonDependencies {
-        &self.manifest.python_dependencies
+    pub fn pypi_dependencies(&self) -> &PypiDependencies {
+        &self.manifest.pypi_dependencies
     }
 
     /// Returns the Python index URLs to use for this project.
-    pub fn python_index_urls(&self) -> Vec<Url> {
+    pub fn pypi_index_urls(&self) -> Vec<Url> {
         let index_url = normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap());
         vec![index_url]
     }
 
     /// Returns the package database used for caching python metadata, wheels and more. See the
     /// documentation of [`rip::PackageDb`] for more information.
-    pub fn python_package_db(&self) -> miette::Result<&rip::PackageDb> {
+    pub fn pypi_package_db(&self) -> miette::Result<&rip::PackageDb> {
         Ok(self
             .package_db
             .get_or_try_init(|| {
                 PackageDb::new(
                     default_client(),
-                    &self.python_index_urls(),
+                    &self.pypi_index_urls(),
                     rattler::default_cache_dir()
                         .map_err(|_| {
                             miette::miette!("could not determine default cache directory")

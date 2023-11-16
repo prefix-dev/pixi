@@ -1,9 +1,11 @@
 use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState};
 use once_cell::sync::Lazy;
 use std::borrow::Cow;
+use std::collections::VecDeque;
 use std::fmt::Write;
 use std::future::Future;
 use std::time::Duration;
+use tokio::sync::mpsc::{channel, Sender};
 
 /// Returns a global instance of [`indicatif::MultiProgress`].
 ///
@@ -100,4 +102,78 @@ pub async fn await_in_progress<T, F: Future<Output = T>>(
     let result = future.await;
     pb.finish_and_clear();
     result
+}
+
+/// A struct that can be used to format the message part of a progress bar.
+///
+/// It's primary usecase is when you have a single progress bar but multiple tasks that are running
+/// and which you want to communicate to the user. This struct will set the message part of the
+/// passed progress bar to the oldest unfinished task and include a the number of pending tasks.
+#[derive(Debug, Clone)]
+pub struct ProgressBarMessageFormatter {
+    sender: Sender<Operation>,
+}
+
+enum Operation {
+    Started(String),
+    Finished(String),
+}
+
+pub struct ScopedTask {
+    name: String,
+    sender: Sender<Operation>,
+}
+
+impl Drop for ScopedTask {
+    fn drop(&mut self) {
+        // Send the finished operation. If this fails the receiving end was most likely already
+        // closed and we can just ignore the error.
+        let _ = self
+            .sender
+            .blocking_send(Operation::Finished(std::mem::take(&mut self.name)));
+    }
+}
+
+impl ProgressBarMessageFormatter {
+    /// Construct a new instance that will update the given progress bar.
+    pub fn new(progress_bar: ProgressBar) -> Self {
+        let (tx, mut rx) = channel::<Operation>(20);
+        tokio::spawn(async move {
+            let mut pending = VecDeque::with_capacity(20);
+            while let Some(msg) = rx.recv().await {
+                match msg {
+                    Operation::Started(op) => pending.push_back(op),
+                    Operation::Finished(op) => {
+                        let Some(idx) = pending.iter().position(|p| p == &op) else {
+                            panic!("operation {op} was never started");
+                        };
+                        pending.remove(idx);
+                    }
+                }
+
+                if pending.is_empty() {
+                    progress_bar.set_message("");
+                } else if pending.len() == 1 {
+                    progress_bar.set_message(pending[0].clone());
+                } else {
+                    progress_bar.set_message(format!("{} (+{})", pending[0], pending.len() - 1));
+                }
+            }
+        });
+        Self { sender: tx }
+    }
+
+    /// Adds the start of another task to the progress bar and returns an object that is used to
+    /// mark the lifetime of the task. If the object is dropped the task is considered finished.
+    #[must_use]
+    pub async fn start(&self, op: String) -> ScopedTask {
+        self.sender
+            .send(Operation::Started(op.clone()))
+            .await
+            .unwrap();
+        ScopedTask {
+            name: op,
+            sender: self.sender.clone(),
+        }
+    }
 }

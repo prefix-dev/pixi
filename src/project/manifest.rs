@@ -1,4 +1,4 @@
-use crate::project::python::PythonDependencies;
+use crate::project::python::PypiDependencies;
 use crate::project::SpecType;
 use crate::utils::spanned::PixiSpanned;
 use crate::{consts, task::Task};
@@ -69,8 +69,8 @@ pub struct ProjectManifest {
     pub activation: Option<Activation>,
 
     /// Optional python requirements
-    #[serde(default, rename = "python-dependencies")]
-    pub python_dependencies: PythonDependencies,
+    #[serde(default, rename = "pypi-dependencies")]
+    pub pypi_dependencies: PypiDependencies,
 }
 
 impl ProjectManifest {
@@ -509,7 +509,7 @@ mod test {
         let contents = format!(
             r#"
             {PROJECT_BOILERPLATE}
-            [python-dependencies]
+            [pypi-dependencies]
             foo = ">=3.12"
             bar = {{ version=">=3.12", extras=["baz"] }}
             "#

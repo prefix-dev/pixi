@@ -85,25 +85,13 @@ pub async fn execute() -> miette::Result<()> {
     console::set_colors_enabled(use_colors);
     console::set_colors_enabled_stderr(use_colors);
 
-    let (level_filter, pixi_level, rip_level) = match args.verbose.log_level_filter() {
-        clap_verbosity_flag::LevelFilter::Off => {
-            (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::OFF)
-        }
-        clap_verbosity_flag::LevelFilter::Error => {
-            (LevelFilter::ERROR, LevelFilter::WARN, LevelFilter::WARN)
-        }
-        clap_verbosity_flag::LevelFilter::Warn => {
-            (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::INFO)
-        }
-        clap_verbosity_flag::LevelFilter::Info => {
-            (LevelFilter::INFO, LevelFilter::INFO, LevelFilter::INFO)
-        }
-        clap_verbosity_flag::LevelFilter::Debug => {
-            (LevelFilter::DEBUG, LevelFilter::DEBUG, LevelFilter::DEBUG)
-        }
-        clap_verbosity_flag::LevelFilter::Trace => {
-            (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE)
-        }
+    let (level_filter, pixi_level) = match args.verbose.log_level_filter() {
+        clap_verbosity_flag::LevelFilter::Off => (LevelFilter::OFF, LevelFilter::OFF),
+        clap_verbosity_flag::LevelFilter::Error => (LevelFilter::ERROR, LevelFilter::WARN),
+        clap_verbosity_flag::LevelFilter::Warn => (LevelFilter::WARN, LevelFilter::INFO),
+        clap_verbosity_flag::LevelFilter::Info => (LevelFilter::INFO, LevelFilter::INFO),
+        clap_verbosity_flag::LevelFilter::Debug => (LevelFilter::DEBUG, LevelFilter::DEBUG),
+        clap_verbosity_flag::LevelFilter::Trace => (LevelFilter::TRACE, LevelFilter::TRACE),
     };
 
     let env_filter = EnvFilter::builder()
@@ -114,7 +102,7 @@ pub async fn execute() -> miette::Result<()> {
         .add_directive("apple_codesign=off".parse().into_diagnostic()?)
         .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?)
         .add_directive(
-            format!("rattler_installs_packages={}", rip_level)
+            format!("rattler_installs_packages={}", pixi_level)
                 .parse()
                 .into_diagnostic()?,
         );

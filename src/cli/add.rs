@@ -246,7 +246,7 @@ pub async fn add_specs_to_project(
 
                 // Update the prefix
                 update_prefix(
-                    project.python_package_db()?,
+                    project.pypi_package_db()?,
                     &prefix,
                     installed_packages,
                     &lock_file,

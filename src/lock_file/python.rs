@@ -1,3 +1,4 @@
+use crate::project::manifest::SystemRequirements;
 use crate::{
     consts::PROJECT_MANIFEST, lock_file::python_name_mapping,
     project::manifest::LibCSystemRequirement, virtual_packages::default_glibc_version, Project,
@@ -13,12 +14,12 @@ use std::collections::HashMap;
 use std::{str::FromStr, vec};
 
 /// Resolve python packages for the specified project.
-pub async fn resolve_python_dependencies<'p>(
+pub async fn resolve_pypi_dependencies<'p>(
     project: &'p Project,
     platform: Platform,
     conda_packages: &[RepoDataRecord],
 ) -> miette::Result<Vec<PinnedPackage<'p>>> {
-    let requirements = project.python_dependencies();
+    let requirements = project.pypi_dependencies();
     if requirements.is_empty() {
         // If there are no requirements we can skip this function.
         return Ok(vec![]);
@@ -30,7 +31,7 @@ pub async fn resolve_python_dependencies<'p>(
 
     if !conda_python_packages.is_empty() {
         tracing::info!(
-            "the following python packages are assumed to be installed conda: {conda_python_packages}",
+            "the following python packages are assumed to be installed by conda: {conda_python_packages}",
             conda_python_packages =
                 conda_python_packages
                     .iter()
@@ -48,17 +49,21 @@ pub async fn resolve_python_dependencies<'p>(
     let python_record = conda_packages
         .iter()
         .find(|r| is_python(r))
-        .ok_or_else(|| miette::miette!("could not resolve python dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
+        .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
 
     // Determine the environment markers
     let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
 
     // Determine the compatible tags
-    let compatible_tags = project_platform_tags(project, platform, python_record.as_ref());
+    let compatible_tags = project_platform_tags(
+        platform,
+        &project.manifest.system_requirements,
+        python_record.as_ref(),
+    );
 
     // Resolve the PyPi dependencies
     let mut result = rip::resolve(
-        project.python_package_db()?,
+        project.pypi_package_db()?,
         &requirements.as_pep508(),
         &marker_environment,
         Some(&compatible_tags),
@@ -145,11 +150,11 @@ fn version_to_string_version(version: &VersionWithSource) -> StringVersion {
 
 /// Returns the compatible tags for the project on the given platform with the given python package.
 fn project_platform_tags(
-    project: &Project,
     platform: Platform,
+    system_requirements: &SystemRequirements,
     python_record: &PackageRecord,
 ) -> WheelTags {
-    let platforms = project_platforms(project, platform);
+    let platforms = project_platforms(platform, system_requirements);
 
     let mut tags = Vec::new();
 
@@ -164,7 +169,7 @@ fn project_platform_tags(
     WheelTags::from_iter(tags.into_iter())
 }
 
-fn project_platforms(project: &Project, platform: Platform) -> Vec<String> {
+fn project_platforms(platform: Platform, system_requirements: &SystemRequirements) -> Vec<String> {
     if platform.is_windows() {
         match platform {
             Platform::Win32 => vec![String::from("win32")],
@@ -173,7 +178,7 @@ fn project_platforms(project: &Project, platform: Platform) -> Vec<String> {
             _ => unreachable!("not windows"),
         }
     } else if platform.is_linux() {
-        let max_glibc_version = match &project.manifest.system_requirements.libc {
+        let max_glibc_version = match &system_requirements.libc {
             Some(LibCSystemRequirement::GlibC(v)) => v.clone(),
             Some(LibCSystemRequirement::OtherFamily(_)) => return Vec::new(),
             None => default_glibc_version(),

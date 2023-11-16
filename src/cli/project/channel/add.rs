@@ -62,7 +62,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
 
         // Update the prefix
         update_prefix(
-            project.python_package_db()?,
+            project.pypi_package_db()?,
             &prefix,
             installed_packages,
             &lock_file,

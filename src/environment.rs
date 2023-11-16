@@ -8,6 +8,7 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, LabeledSpan};
 
+use crate::progress::ProgressBarMessageFormatter;
 use rattler::install::Transaction;
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{CondaLock, LockedDependency, PipLockedDependency};
@@ -16,11 +17,8 @@ use rip::{
     Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, InstallPaths, PackageDb,
     ParseArtifactNameError, UnpackWheelOptions, Wheel, WheelName,
 };
-use std::{collections::VecDeque, io::ErrorKind, path::Path, str::FromStr, time::Duration};
-use tokio::{
-    sync::mpsc::{channel, Sender},
-    task::JoinError,
-};
+use std::{io::ErrorKind, path::Path, str::FromStr, time::Duration};
+use tokio::task::JoinError;
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
 /// Errors when there is a file system error or the path does not align with the defined prefix.
@@ -125,7 +123,7 @@ pub async fn get_up_to_date_prefix(
 
     // Update the environment
     update_prefix(
-        project.python_package_db()?,
+        project.pypi_package_db()?,
         &prefix,
         installed_packages_future.await.into_diagnostic()??,
         &lock_file,
@@ -169,12 +167,12 @@ pub async fn update_prefix(
     }
 
     // Remove python packages from a previous python distribution if the python version changed.
-    remove_old_distribution_packages(prefix, platform, &transaction)?;
+    remove_old_python_distributions(prefix, platform, &transaction)?;
 
     // Install and/or remove python packages
     progress::await_in_progress(
         "updating python packages",
-        update_python_packages(package_db, &prefix, lock_file, platform, &transaction),
+        update_python_distributions(package_db, &prefix, lock_file, platform, &transaction),
     )
     .await?;
 
@@ -191,8 +189,8 @@ pub async fn update_prefix(
     Ok(())
 }
 
-///
-async fn update_python_packages(
+/// Installs and/or remove python distributions.
+async fn update_python_distributions(
     package_db: &PackageDb,
     prefix: &&Prefix,
     lock_file: &CondaLock,
@@ -229,37 +227,41 @@ async fn update_python_packages(
     // Determine the python packages to remove before we start installing anything new. If the
     // python version changed between installations we will have to remove any previous distribution
     // regardless.
-    let (python_packages_to_remove, python_packages_to_install) =
-        determine_python_packages_to_remove_and_install(current_python_packages, python_packages);
+    let (python_distributions_to_remove, python_distributions_to_install) =
+        determine_python_distributions_to_remove_and_install(
+            current_python_packages,
+            python_packages,
+        );
 
     // Start downloading the python packages that we want in the background.
     let (package_stream, package_stream_pb) =
-        stream_python_packages(package_db, python_packages_to_install.clone());
+        stream_python_artifacts(package_db, python_distributions_to_install.clone());
 
     // Remove python packages that need to be removed
-    if !python_packages_to_remove.is_empty() {
+    if !python_distributions_to_remove.is_empty() {
         let site_package_path = install_paths
             .site_packages()
             .expect("site-packages path must exist");
 
-        for python_package in python_packages_to_remove {
+        for python_distribution in python_distributions_to_remove {
             tracing::info!(
                 "uninstalling python package {}-{}",
-                &python_package.name,
-                &python_package.version
+                &python_distribution.name,
+                &python_distribution.version
             );
-            let relative_dist_info = python_package
+            let relative_dist_info = python_distribution
                 .dist_info
                 .strip_prefix(site_package_path)
                 .expect("the dist-info path must be a sub-path of the site-packages path");
             rip::uninstall::uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
                 .into_diagnostic()
-                .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_package.name, &python_package.version))?;
+                .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_distribution.name, &python_distribution.version))?;
         }
     }
 
     // Install the individual python packages that we want
-    let package_install_pb = install_python_packages(prefix, install_paths, package_stream).await?;
+    let package_install_pb =
+        install_python_distributions(prefix, install_paths, package_stream).await?;
 
     // Clear any pending progress bar
     for pb in package_install_pb
@@ -273,7 +275,7 @@ async fn update_python_packages(
 }
 
 /// Concurrently installs python wheels as they become available.
-async fn install_python_packages(
+async fn install_python_distributions(
     prefix: &Prefix,
     install_paths: InstallPaths,
     package_stream: impl Stream<Item = miette::Result<Wheel>> + Sized,
@@ -294,7 +296,7 @@ async fn install_python_packages(
     pb.enable_steady_tick(Duration::from_millis(100));
 
     // Create a message formatter to show the current operation
-    let message_formatter = MessageFormatter::new(pb.clone());
+    let message_formatter = ProgressBarMessageFormatter::new(pb.clone());
 
     // Concurrently unpack the wheels as they become available in the stream.
     let install_pb = pb.clone();
@@ -305,8 +307,7 @@ async fn install_python_packages(
             let message_formatter = message_formatter.clone();
             let pb = install_pb.clone();
             async move {
-                let op = wheel.name().to_string();
-                message_formatter.start(op.clone()).await;
+                let _pb_task = message_formatter.start(wheel.name().to_string()).await;
                 let unpack_result = tokio::task::spawn_blocking(move || {
                     wheel
                         .unpack(
@@ -320,7 +321,6 @@ async fn install_python_packages(
                 })
                 .map_err(JoinError::try_into_panic)
                 .await;
-                message_formatter.finish(op).await;
 
                 pb.inc(1);
 
@@ -342,7 +342,7 @@ async fn install_python_packages(
 
 /// Creates a stream which downloads the specified python packages. The stream will download the
 /// packages in parallel and yield them as soon as they become available.
-fn stream_python_packages<'a>(
+fn stream_python_artifacts<'a>(
     package_db: &'a PackageDb,
     packages_to_download: Vec<&'a LockedDependency>,
 ) -> (
@@ -364,7 +364,7 @@ fn stream_python_packages<'a>(
     pb.enable_steady_tick(Duration::from_millis(100));
 
     // Construct a message formatter
-    let message_formatter = MessageFormatter::new(pb.clone());
+    let message_formatter = ProgressBarMessageFormatter::new(pb.clone());
 
     let stream_pb = pb.clone();
     let total_packages = packages_to_download.len();
@@ -388,7 +388,7 @@ fn stream_python_packages<'a>(
 
                 // Log out intent to install this python package.
                 tracing::info!("downloading python package {filename}");
-                message_formatter.start(filename.to_string()).await;
+                let pb_task = message_formatter.start(filename.to_string()).await;
 
                 // Reconstruct the ArtifactInfo from the data in the lockfile.
                 let artifact_info = ArtifactInfo {
@@ -412,7 +412,7 @@ fn stream_python_packages<'a>(
                 let wheel: Wheel = package_db.get_artifact(&artifact_info).await?;
 
                 // Update the progress bar
-                message_formatter.finish(filename.to_string()).await;
+                drop(pb_task);
                 pb.inc(1);
                 if pb.position() == total_packages as u64 {
                     pb.set_style(progress::finished_progress_style());
@@ -428,56 +428,9 @@ fn stream_python_packages<'a>(
     (download_stream, Some(pb))
 }
 
-#[derive(Debug, Clone)]
-struct MessageFormatter {
-    sender: Sender<Operation>,
-}
-
-enum Operation {
-    Started(String),
-    Finished(String),
-}
-
-impl MessageFormatter {
-    pub fn new(progress_bar: ProgressBar) -> Self {
-        let (tx, mut rx) = channel::<Operation>(20);
-        tokio::spawn(async move {
-            let mut pending = VecDeque::with_capacity(20);
-            while let Some(msg) = rx.recv().await {
-                match msg {
-                    Operation::Started(op) => pending.push_back(op),
-                    Operation::Finished(op) => {
-                        let Some(idx) = pending.iter().position(|p| p == &op) else {
-                            panic!("operation {op} was never started");
-                        };
-                        pending.remove(idx);
-                    }
-                }
-
-                if pending.is_empty() {
-                    progress_bar.set_message("");
-                } else if pending.len() == 1 {
-                    progress_bar.set_message(pending[0].clone());
-                } else {
-                    progress_bar.set_message(format!("{} (+{})", pending[0], pending.len() - 1));
-                }
-            }
-        });
-        Self { sender: tx }
-    }
-
-    pub async fn start(&self, op: String) {
-        self.sender.send(Operation::Started(op)).await.unwrap();
-    }
-
-    pub async fn finish(&self, op: String) {
-        self.sender.send(Operation::Finished(op)).await.unwrap();
-    }
-}
-
 /// If there was a previous version of python installed, remove any distribution installed in that
 /// environment.
-fn remove_old_distribution_packages(
+fn remove_old_python_distributions(
     prefix: &Prefix,
     platform: Platform,
     transaction: &Transaction<PrefixRecord, RepoDataRecord>,
@@ -543,7 +496,7 @@ fn remove_old_distribution_packages(
 
 /// Determine which python packages we can leave untouched and which python packages should be
 /// removed.
-fn determine_python_packages_to_remove_and_install(
+fn determine_python_distributions_to_remove_and_install(
     mut current_python_packages: Vec<Distribution>,
     desired_python_packages: Vec<&LockedDependency>,
 ) -> (Vec<Distribution>, Vec<&LockedDependency>) {

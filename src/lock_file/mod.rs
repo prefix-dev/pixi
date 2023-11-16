@@ -47,7 +47,7 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
     let platforms = project.platforms();
 
     // TODO: Add support for python dependencies
-    if !project.python_dependencies().is_empty() {
+    if !project.pypi_dependencies().is_empty() {
         tracing::warn!("Checking if a lock-file is up to date with `python-dependencies` in the mix is not yet implemented.");
         return Ok(false);
     }
@@ -375,7 +375,7 @@ async fn resolve_platform(
 
     // Solve python packages
     pb.set_message("resolving python");
-    let python_artifacts = python::resolve_python_dependencies(project, platform, &records).await?;
+    let python_artifacts = python::resolve_pypi_dependencies(project, platform, &records).await?;
 
     // Clear message
     pb.set_message("");
@@ -392,7 +392,7 @@ async fn resolve_platform(
     // Add pip packages
     for python_artifact in python_artifacts {
         let (artifact, metadata) = project
-            .python_package_db()?
+            .pypi_package_db()?
             .get_metadata::<Wheel, _>(&python_artifact.artifacts)
             .await
             .expect("failed to get metadata for a package for which we have already fetched metadata during solving.")
