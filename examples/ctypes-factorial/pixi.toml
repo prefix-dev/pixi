@@ -42,4 +42,3 @@ compile = {cmd = "clang -shared -o src/factorial.so src/factorial.c"}
 
 [target.osx-arm64.tasks]
 compile = {cmd = "clang -shared -o src/factorial.so src/factorial.c"}
-
