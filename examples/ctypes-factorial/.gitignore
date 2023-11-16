@@ -1,0 +1,6 @@
+# pixi environments
+.pixi
+
+# shared objects
+**/*.dll
+**/*.so
