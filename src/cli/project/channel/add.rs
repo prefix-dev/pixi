@@ -1,4 +1,5 @@
-use crate::environment::{load_lock_file, update_lock_file, update_prefix};
+use crate::environment::update_prefix;
+use crate::lock_file::{load_lock_file, update_lock_file};
 use crate::prefix::Prefix;
 use crate::Project;
 use clap::Parser;
@@ -60,7 +61,14 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         let installed_packages = prefix.find_installed_packages(None).await?;
 
         // Update the prefix
-        update_prefix(&prefix, installed_packages, &lock_file, Platform::current()).await?;
+        update_prefix(
+            project.pypi_package_db()?,
+            &prefix,
+            installed_packages,
+            &lock_file,
+            Platform::current(),
+        )
+        .await?;
     }
 
     // Report back to the user

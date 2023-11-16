@@ -4,13 +4,12 @@ use clap::Parser;
 use futures::TryStreamExt;
 use indicatif::HumanBytes;
 use miette::IntoDiagnostic;
-use rattler_networking::AuthenticatedClient;
 
 use rattler_digest::{compute_file_digest, Sha256};
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
-use crate::progress;
+use crate::{default_authenticated_client, progress};
 
 /// Upload a package to a prefix.dev channel
 #[derive(Parser, Debug)]
@@ -40,7 +39,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         HumanBytes(filesize)
     );
 
-    let client = AuthenticatedClient::default();
+    let client = default_authenticated_client();
 
     let sha256sum = format!(
         "{:x}",

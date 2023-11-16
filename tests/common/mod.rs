@@ -67,7 +67,7 @@ impl LockFileExt for CondaLock {
     fn contains_package(&self, name: &PackageName) -> bool {
         self.package
             .iter()
-            .any(|locked_dep| locked_dep.name == name.as_normalized())
+            .any(|locked_dep| locked_dep.name == *name.as_normalized())
     }
 
     fn contains_matchspec(&self, matchspec: impl IntoMatchSpec) -> bool {
@@ -217,7 +217,8 @@ impl PixiControl {
 
     /// Get the associated lock file
     pub async fn lock_file(&self) -> miette::Result<CondaLock> {
-        pixi::environment::load_lock_for_manifest_path(&self.manifest_path()).await
+        let project = Project::load(&self.manifest_path())?;
+        pixi::lock_file::load_lock_file(&project).await
     }
 
     pub fn tasks(&self) -> TasksControl {

@@ -3,7 +3,7 @@ use crate::prefix::Prefix;
 use crate::project::SpecType;
 use crate::{
     consts,
-    environment::{load_lock_file, update_lock_file},
+    lock_file::{load_lock_file, update_lock_file},
     project::Project,
     virtual_packages::get_minimal_virtual_packages,
 };
@@ -12,10 +12,9 @@ use console::style;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
-use rattler_conda_types::version_spec::StrictRangeOperator;
-use rattler_conda_types::PackageName;
 use rattler_conda_types::{
-    MatchSpec, NamelessMatchSpec, Platform, StrictVersion, Version, VersionSpec,
+    version_spec::StrictRangeOperator, MatchSpec, NamelessMatchSpec, PackageName, Platform,
+    StrictVersion, Version, VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
@@ -246,7 +245,14 @@ pub async fn add_specs_to_project(
                 let installed_packages = prefix.find_installed_packages(None).await?;
 
                 // Update the prefix
-                update_prefix(&prefix, installed_packages, &lock_file, platform).await?;
+                update_prefix(
+                    project.pypi_package_db()?,
+                    &prefix,
+                    installed_packages,
+                    &lock_file,
+                    platform,
+                )
+                .await?;
             } else {
                 eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", style("!").yellow().bold())
             }

@@ -1,37 +1,23 @@
 use crate::{
-    consts, default_retry_policy,
-    prefix::Prefix,
-    progress::{
-        await_in_progress, default_progress_style, finished_progress_style, global_multi_progress,
-    },
-    virtual_packages::verify_current_platform_has_required_virtual_packages,
-    Project,
+    consts, default_authenticated_client, install, lock_file, prefix::Prefix, progress,
+    progress::ProgressBarMessageFormatter,
+    virtual_packages::verify_current_platform_has_required_virtual_packages, Project,
 };
-use futures::future::ready;
-use futures::{stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
+use futures::{stream, Stream, StreamExt, TryFutureExt, TryStreamExt};
+use indexmap::IndexSet;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, LabeledSpan};
-use rattler::{
-    install::{link_package, InstallDriver, InstallOptions, Transaction, TransactionOperation},
-    package_cache::PackageCache,
+
+use rattler::install::Transaction;
+use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
+use rattler_lock::{CondaLock, LockedDependency, PipLockedDependency};
+use rip::{
+    tags::WheelTag, Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution,
+    InstallPaths, PackageDb, ParseArtifactNameError, UnpackWheelOptions, Wheel, WheelName,
 };
-use rattler_conda_types::{
-    MatchSpec, NamelessMatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord, Version,
-};
-use rattler_lock::builder::{CondaLockedDependencyBuilder, LockFileBuilder, LockedPackagesBuilder};
-use rattler_lock::{CondaLock, LockedDependency};
-use rattler_networking::AuthenticatedClient;
-use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{resolvo, SolverImpl};
-use std::collections::HashMap;
-use std::{
-    collections::{HashSet, VecDeque},
-    io::ErrorKind,
-    path::{Path, PathBuf},
-    str::FromStr,
-    time::Duration,
-};
+use std::{io::ErrorKind, path::Path, str::FromStr, time::Duration};
+use tokio::task::JoinError;
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
 /// Errors when there is a file system error or the path does not align with the defined prefix.
@@ -125,17 +111,18 @@ pub async fn get_up_to_date_prefix(
         miette::bail!("No lockfile available, can't do a frozen installation.");
     }
 
-    let mut lock_file = load_lock_file(project).await?;
+    let mut lock_file = lock_file::load_lock_file(project).await?;
 
-    if !frozen && !lock_file_up_to_date(project, &lock_file)? {
+    if !frozen && !lock_file::lock_file_up_to_date(project, &lock_file)? {
         if locked {
             miette::bail!("Lockfile not up-to-date with the project");
         }
-        lock_file = update_lock_file(project, lock_file, None).await?
+        lock_file = lock_file::update_lock_file(project, lock_file, None).await?
     }
 
     // Update the environment
     update_prefix(
+        project.pypi_package_db()?,
         &prefix,
         installed_packages_future.await.into_diagnostic()??,
         &lock_file,
@@ -148,35 +135,47 @@ pub async fn get_up_to_date_prefix(
 
 /// Updates the environment to contain the packages from the specified lock-file
 pub async fn update_prefix(
+    package_db: &PackageDb,
     prefix: &Prefix,
     installed_packages: Vec<PrefixRecord>,
     lock_file: &CondaLock,
     platform: Platform,
 ) -> miette::Result<()> {
     // Construct a transaction to bring the environment up to date with the lock-file content
-    let transaction = Transaction::from_current_and_desired(
-        installed_packages,
-        get_required_packages(lock_file, platform)?,
-        platform,
-    )
-    .into_diagnostic()?;
+    let desired_conda_packages = lock_file
+        .get_conda_packages_by_platform(platform)
+        .into_diagnostic()?;
+    let transaction =
+        Transaction::from_current_and_desired(installed_packages, desired_conda_packages, platform)
+            .into_diagnostic()?;
 
     // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
         // Execute the operations that are returned by the solver.
-        await_in_progress(
+        progress::await_in_progress(
             "updating environment",
-            execute_transaction(
-                transaction,
+            install::execute_transaction(
+                &transaction,
                 prefix.root().to_path_buf(),
                 rattler::default_cache_dir()
                     .map_err(|_| miette::miette!("could not determine default cache directory"))?,
-                AuthenticatedClient::default(),
+                default_authenticated_client(),
             ),
         )
         .await?;
     }
 
+    // Remove python packages from a previous python distribution if the python version changed.
+    remove_old_python_distributions(prefix, platform, &transaction)?;
+
+    // Install and/or remove python packages
+    progress::await_in_progress(
+        "updating python packages",
+        update_python_distributions(package_db, &prefix, lock_file, platform, &transaction),
+    )
+    .await?;
+
+    // Mark the location of the prefix
     create_prefix_location_file(
         &prefix
             .root()
@@ -185,567 +184,423 @@ pub async fn update_prefix(
             .ok_or_else(|| miette::miette!("we should be able to create a prefix file name."))?,
     )
     .with_context(|| "failed to create prefix location file.".to_string())?;
+
     Ok(())
 }
 
-/// Loads the lockfile for the specified project or returns a dummy one if none could be found.
-pub async fn load_lock_for_manifest_path(path: &Path) -> miette::Result<CondaLock> {
-    load_lock_file(&Project::load(path)?).await
-}
-
-/// Loads the lockfile for the specified project or returns a dummy one if none could be found.
-pub async fn load_lock_file(project: &Project) -> miette::Result<CondaLock> {
-    let lock_file_path = project.lock_file_path();
-    tokio::task::spawn_blocking(move || {
-        if lock_file_path.is_file() {
-            CondaLock::from_path(&lock_file_path).into_diagnostic()
-        } else {
-            LockFileBuilder::default().build().into_diagnostic()
-        }
-    })
-    .await
-    .unwrap_or_else(|e| Err(e).into_diagnostic())
-}
-
-/// Returns true if the locked packages match the dependencies in the project.
-pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette::Result<bool> {
-    let platforms = project.platforms();
-
-    // If a platform is missing from the lock file the lock file is completely out-of-date.
-    if HashSet::<Platform>::from_iter(lock_file.metadata.platforms.iter().copied())
-        != HashSet::from_iter(platforms.iter().copied())
-    {
-        return Ok(false);
-    }
-
-    // Check if the channels in the lock file match our current configuration. Note that the order
-    // matters here. If channels are added in a different order, the solver might return a different
-    // result.
-    let channels = project
-        .channels()
-        .iter()
-        .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()))
-        .collect_vec();
-    if lock_file.metadata.channels.iter().ne(channels.iter()) {
-        return Ok(false);
-    }
-
-    // For each platform,
-    for platform in platforms.iter().cloned() {
-        // Check if all dependencies exist in the lock-file.
-        let dependencies = project
-            .all_dependencies(platform)?
-            .into_iter()
-            .collect::<VecDeque<_>>();
-
-        // Construct a queue of dependencies that we wanna find in the lock file
-        let mut queue = dependencies.clone();
-
-        // Get the virtual packages for the system
-        let virtual_packages = project
-            .virtual_packages(platform)?
-            .into_iter()
-            .map(|vpkg| (vpkg.name.clone(), vpkg))
-            .collect::<HashMap<_, _>>();
-
-        // Keep track of which dependencies we already found. Since there can always only be one
-        // version per named package we can just keep track of the package names.
-        let mut seen = dependencies
-            .iter()
-            .map(|(name, _)| name.clone())
-            .collect::<HashSet<_>>();
-
-        while let Some((name, spec)) = queue.pop_back() {
-            // Is this a virtual package? And does it match?
-            if let Some(vpkg) = virtual_packages.get(&name) {
-                if let Some(version_spec) = spec.version {
-                    if !version_spec.matches(&vpkg.version) {
-                        tracing::info!("found a dependency on virtual package '{}' but the version spec '{}' does not match the expected version of the virtual package '{}'.", name.as_source(), &version_spec, &vpkg.version);
-                        return Ok(false);
-                    }
-                }
-                if let Some(build_spec) = spec.build {
-                    if !build_spec.matches(&vpkg.build_string) {
-                        tracing::info!("found a dependency on virtual package '{}' but the build spec '{}' does not match the expected build of the virtual package '{}'.", name.as_source(), &build_spec, &vpkg.build_string);
-                        return Ok(false);
-                    }
-                }
-
-                // Virtual package matches
-                continue;
-            }
-
-            // Find the package in the lock-file that matches our dependency.
-            let locked_package = lock_file
-                .get_packages_by_platform(platform)
-                .find(|locked_package| locked_dependency_satisfies(locked_package, &name, &spec));
-
-            match locked_package {
-                None => {
-                    // No package found that matches the dependency, the lock file is not in a
-                    // consistent state.
-                    tracing::info!("failed to find a locked package for '{} {}', assuming the lock file is out of date.", name.as_source(), &spec);
-                    return Ok(false);
-                }
-                Some(package) => {
-                    let Some(conda) = package.as_conda() else { continue; };
-
-                    for dependency in conda.dependencies.iter() {
-                        let Ok(match_spec) = MatchSpec::from_str(dependency) else {
-                            tracing::warn!("failed to parse spec '{dependency}', assuming the lock file is corrupt.");
-                            return Ok(false);
-                        };
-
-                        let (Some(package_name), spec) = match_spec.into_nameless() else {
-                            tracing::warn!("missing package name in '{dependency}', assuming the lock file is corrupt.");
-                            continue;
-                        };
-
-                        if !seen.contains(&package_name) {
-                            queue.push_back((package_name.clone(), spec));
-                            seen.insert(package_name);
-                        }
-                    }
-                }
-            }
-        }
-
-        // If the number of "seen" dependencies is less than the number of packages for this
-        // platform in the first place, there are more packages in the lock file than are used. This
-        // means the lock file is also out of date.
-        if seen.len() < lock_file.packages_for_platform(platform).count() {
-            tracing::info!("there are more packages in the lock-file than required to fulfill all dependency requirements. Assuming the lock file is out of date.");
-            return Ok(false);
-        }
-    }
-
-    Ok(true)
-}
-
-/// Returns true if the specified [`conda_lock::LockedDependency`] satisfies the given MatchSpec.
-/// TODO: Move this back to rattler.
-/// TODO: Make this more elaborate to include all properties of MatchSpec
-fn locked_dependency_satisfies(
-    locked_package: &LockedDependency,
-    name: &PackageName,
-    spec: &NamelessMatchSpec,
-) -> bool {
-    // Check if the name of the package matches
-    if locked_package.name != name.as_normalized() {
-        return false;
-    }
-
-    // Check if the version matches
-    if let Some(version_spec) = &spec.version {
-        let v = match Version::from_str(&locked_package.version) {
-            Err(_) => return false,
-            Ok(v) => v,
-        };
-
-        if !version_spec.matches(&v) {
-            return false;
-        }
-    }
-
-    if let Some(conda) = locked_package.as_conda() {
-        match (spec.build.as_ref(), &conda.build) {
-            (Some(build_spec), Some(build)) => {
-                if !build_spec.matches(build) {
-                    return false;
-                }
-            }
-            (Some(_), None) => return false,
-            _ => {}
-        }
-
-        if let Some(channel) = &spec.channel {
-            if !conda.url.as_str().starts_with(channel.base_url.as_str()) {
-                return false;
-            }
-        }
-    }
-
-    true
-}
-
-/// Updates the lock file for a project.
-pub async fn update_lock_file(
-    project: &Project,
-    existing_lock_file: CondaLock,
-    repodata: Option<Vec<SparseRepoData>>,
-) -> miette::Result<CondaLock> {
-    let platforms = project.platforms();
-
-    // Get the repodata for the project
-    let sparse_repo_data = if let Some(sparse_repo_data) = repodata {
-        sparse_repo_data
-    } else {
-        project.fetch_sparse_repodata().await?
-    };
-
-    // Construct a conda lock file
-    let channels = project
-        .channels()
-        .iter()
-        .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()));
-
-    // Empty match-specs because these differ per platform
-    let mut builder = LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
-    for platform in platforms.iter().cloned() {
-        let dependencies = project.all_dependencies(platform)?;
-        let match_specs = dependencies
-            .iter()
-            .map(|(name, constraint)| {
-                MatchSpec::from_nameless(constraint.clone(), Some(name.clone()))
-            })
-            .collect_vec();
-
-        // Extract the package names from the dependencies
-        let package_names = dependencies.keys().collect_vec();
-
-        // Get the repodata for the current platform and for NoArch
-        let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
-            sparse.subdir() == platform.as_str() || sparse.subdir() == Platform::NoArch.as_str()
-        });
-
-        // Load only records we need for this platform
-        let available_packages = SparseRepoData::load_records_recursive(
-            platform_sparse_repo_data,
-            package_names.into_iter().cloned(),
-            None,
-        )
-        .into_diagnostic()?;
-
-        // Get the virtual packages for this platform
-        let virtual_packages = project.virtual_packages(platform)?;
-
-        // Get and filter out locked packages that dont satisfy the dependencies
-        let locked_packages = existing_lock_file
-            .packages_for_platform(platform)
-            .filter(|locked_dep| {
-                dependencies
-                    .iter()
-                    .find(|dep| dep.0.as_normalized() == locked_dep.name.as_str())
-                    .map_or(true, |dep| {
-                        locked_dependency_satisfies(locked_dep, dep.0, dep.1)
-                    })
-            })
-            .map(RepoDataRecord::try_from)
-            .collect::<Result<Vec<_>, _>>()
-            .into_diagnostic()?;
-
-        // Construct a solver task that we can start solving.
-        let task = rattler_solve::SolverTask {
-            specs: match_specs.clone(),
-            available_packages: &available_packages,
-            locked_packages,
-            pinned_packages: vec![],
-            virtual_packages,
-        };
-
-        // Solve the task
-        let records = resolvo::Solver.solve(task).into_diagnostic()?;
-
-        // Update lock file
-        let mut locked_packages = LockedPackagesBuilder::new(platform);
-        for record in records {
-            let locked_package =
-                CondaLockedDependencyBuilder::try_from(record).into_diagnostic()?;
-            locked_packages.add_locked_package(locked_package);
-        }
-
-        builder = builder.add_locked_packages(locked_packages);
-    }
-
-    let conda_lock = builder.build().into_diagnostic()?;
-
-    // Write the conda lock to disk
-    conda_lock
-        .to_path(&project.lock_file_path())
-        .into_diagnostic()?;
-
-    Ok(conda_lock)
-}
-
-/// Returns the [`RepoDataRecord`]s for the packages of the current platform from the lock-file.
-pub fn get_required_packages(
+/// Installs and/or remove python distributions.
+async fn update_python_distributions(
+    package_db: &PackageDb,
+    prefix: &&Prefix,
     lock_file: &CondaLock,
     platform: Platform,
-) -> miette::Result<Vec<RepoDataRecord>> {
-    lock_file
-        .package
-        .iter()
-        .filter(|pkg| pkg.platform == platform)
-        .map(|pkg| pkg.clone().try_into().into_diagnostic())
+    transaction: &Transaction<PrefixRecord, RepoDataRecord>,
+) -> miette::Result<()> {
+    // Get the python info from the transaction
+    let Some(python_info) = transaction.python_info.as_ref() else {
+        return Ok(());
+    };
+
+    // Determine where packages would have been installed
+    let install_paths = InstallPaths::for_venv(
+        (
+            python_info.short_version.0 as u32,
+            python_info.short_version.1 as u32,
+        ),
+        platform.is_windows(),
+    );
+
+    // Determine the current python distributions in those locations
+    let current_python_packages = rip::find_distributions_in_venv(prefix.root(), &install_paths)
+        .into_diagnostic()
+        .context(
+            "failed to locate python packages that have not been installed as conda packages",
+        )?;
+
+    // Determine the python packages that are part of the lock-file
+    let python_packages = lock_file
+        .get_packages_by_platform(platform)
+        .filter(|p| p.is_pip())
+        .collect_vec();
+
+    // Determine the python packages to remove before we start installing anything new. If the
+    // python version changed between installations we will have to remove any previous distribution
+    // regardless.
+    let (python_distributions_to_remove, python_distributions_to_install) =
+        determine_python_distributions_to_remove_and_install(
+            current_python_packages,
+            python_packages,
+        );
+
+    // Start downloading the python packages that we want in the background.
+    let (package_stream, package_stream_pb) =
+        stream_python_artifacts(package_db, python_distributions_to_install.clone());
+
+    // Remove python packages that need to be removed
+    if !python_distributions_to_remove.is_empty() {
+        let site_package_path = install_paths
+            .site_packages()
+            .expect("site-packages path must exist");
+
+        for python_distribution in python_distributions_to_remove {
+            tracing::info!(
+                "uninstalling python package {}-{}",
+                &python_distribution.name,
+                &python_distribution.version
+            );
+            let relative_dist_info = python_distribution
+                .dist_info
+                .strip_prefix(site_package_path)
+                .expect("the dist-info path must be a sub-path of the site-packages path");
+            rip::uninstall::uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
+                .into_diagnostic()
+                .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_distribution.name, &python_distribution.version))?;
+        }
+    }
+
+    // Install the individual python packages that we want
+    let package_install_pb =
+        install_python_distributions(prefix, install_paths, package_stream).await?;
+
+    // Clear any pending progress bar
+    for pb in package_install_pb
+        .into_iter()
+        .chain(package_stream_pb.into_iter())
+    {
+        pb.finish_and_clear();
+    }
+
+    Ok(())
+}
+
+/// Concurrently installs python wheels as they become available.
+async fn install_python_distributions(
+    prefix: &Prefix,
+    install_paths: InstallPaths,
+    package_stream: impl Stream<Item = miette::Result<Wheel>> + Sized,
+) -> miette::Result<Option<ProgressBar>> {
+    // Determine the number of packages that we are going to install
+    let len = {
+        let (lower_bound, upper_bound) = package_stream.size_hint();
+        upper_bound.unwrap_or(lower_bound)
+    };
+    if len == 0 {
+        return Ok(None);
+    }
+
+    // Create a progress bar to show the progress of the installation
+    let pb = progress::global_multi_progress().add(ProgressBar::new(len as u64));
+    pb.set_style(progress::default_progress_style());
+    pb.set_prefix("unpacking wheels");
+    pb.enable_steady_tick(Duration::from_millis(100));
+
+    // Create a message formatter to show the current operation
+    let message_formatter = ProgressBarMessageFormatter::new(pb.clone());
+
+    // Concurrently unpack the wheels as they become available in the stream.
+    let install_pb = pb.clone();
+    package_stream
+        .try_for_each_concurrent(Some(20), move |wheel| {
+            let install_paths = install_paths.clone();
+            let root = prefix.root().to_path_buf();
+            let message_formatter = message_formatter.clone();
+            let pb = install_pb.clone();
+            async move {
+                let _pb_task = message_formatter.start(wheel.name().to_string()).await;
+                let unpack_result = tokio::task::spawn_blocking(move || {
+                    wheel
+                        .unpack(
+                            &root,
+                            &install_paths,
+                            &UnpackWheelOptions {
+                                installer: Some(env!("CARGO_PKG_NAME").into()),
+                            },
+                        )
+                        .into_diagnostic()
+                })
+                .map_err(JoinError::try_into_panic)
+                .await;
+
+                pb.inc(1);
+
+                match unpack_result {
+                    Ok(unpack_result) => unpack_result,
+                    Err(Ok(panic)) => std::panic::resume_unwind(panic),
+                    Err(Err(e)) => Err(miette::miette!("{e}")),
+                }
+            }
+        })
+        .await?;
+
+    // Update the progress bar
+    pb.set_style(progress::finished_progress_style());
+    pb.finish();
+
+    Ok(Some(pb))
+}
+
+/// Creates a stream which downloads the specified python packages. The stream will download the
+/// packages in parallel and yield them as soon as they become available.
+fn stream_python_artifacts<'a>(
+    package_db: &'a PackageDb,
+    packages_to_download: Vec<&'a LockedDependency>,
+) -> (
+    impl Stream<Item = miette::Result<Wheel>> + 'a,
+    Option<ProgressBar>,
+) {
+    if packages_to_download.is_empty() {
+        return (stream::empty().left_stream(), None);
+    }
+
+    // Construct a progress bar to provide some indication on what is currently downloading.
+    // TODO: It would be much nicer if we can provide more information with regards to the progress.
+    //  For instance if we could also show at what speed the downloads are progressing or the total
+    //  size of the downloads that would really help the user I think.
+    let pb =
+        progress::global_multi_progress().add(ProgressBar::new(packages_to_download.len() as u64));
+    pb.set_style(progress::default_progress_style());
+    pb.set_prefix("acquiring wheels");
+    pb.enable_steady_tick(Duration::from_millis(100));
+
+    // Construct a message formatter
+    let message_formatter = ProgressBarMessageFormatter::new(pb.clone());
+
+    let stream_pb = pb.clone();
+    let total_packages = packages_to_download.len();
+    let download_stream = stream::iter(packages_to_download)
+        .map(move |package| {
+            let pb = stream_pb.clone();
+            let message_formatter = message_formatter.clone();
+            async move {
+                let pip_package = package
+                    .as_pip()
+                    .expect("must be a pip package at this point");
+
+                // Determine the filename from the
+                let filename = pip_package
+                    .url
+                    .path_segments()
+                    .and_then(|s| s.last())
+                    .expect("url is missing a path");
+                let wheel_name = WheelName::from_str(filename)
+                    .expect("failed to convert filename to wheel filename");
+
+                // Log out intent to install this python package.
+                tracing::info!("downloading python package {filename}");
+                let pb_task = message_formatter.start(filename.to_string()).await;
+
+                // Reconstruct the ArtifactInfo from the data in the lockfile.
+                let artifact_info = ArtifactInfo {
+                    filename: ArtifactName::Wheel(wheel_name),
+                    url: pip_package.url.clone(),
+                    hashes: pip_package.hash.as_ref().map(|hash| ArtifactHashes {
+                        sha256: hash.sha256().cloned(),
+                    }),
+                    requires_python: pip_package
+                        .requires_python
+                        .as_ref()
+                        .map(|p| p.parse())
+                        .transpose()
+                        .expect("the lock file contains an invalid 'requires_python` field"),
+                    dist_info_metadata: Default::default(),
+                    yanked: Default::default(),
+                };
+
+                // TODO: Maybe we should have a cache of wheels separate from the package_db. Since a
+                //   wheel can just be identified by its hash or url.
+                let wheel: Wheel = package_db.get_artifact(&artifact_info).await?;
+
+                // Update the progress bar
+                drop(pb_task);
+                pb.inc(1);
+                if pb.position() == total_packages as u64 {
+                    pb.set_style(progress::finished_progress_style());
+                    pb.finish();
+                }
+
+                Ok(wheel)
+            }
+        })
+        .buffer_unordered(20)
+        .right_stream();
+
+    (download_stream, Some(pb))
+}
+
+/// If there was a previous version of python installed, remove any distribution installed in that
+/// environment.
+fn remove_old_python_distributions(
+    prefix: &Prefix,
+    platform: Platform,
+    transaction: &Transaction<PrefixRecord, RepoDataRecord>,
+) -> miette::Result<()> {
+    // Determine if the current distribution is the same as the desired distribution.
+    let Some(previous_python_installation) = transaction.current_python_info.as_ref() else {
+        return Ok(());
+    };
+    if Some(previous_python_installation.short_version)
+        == transaction.python_info.as_ref().map(|p| p.short_version)
+    {
+        return Ok(());
+    }
+
+    // Determine the current python distributions in its install locations
+    let python_version = (
+        previous_python_installation.short_version.0 as u32,
+        previous_python_installation.short_version.1 as u32,
+    );
+    let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
+
+    // Locate the packages that are installed in the previous environment
+    let current_python_packages = rip::find_distributions_in_venv(prefix.root(), &install_paths)
+        .into_diagnostic()
+        .with_context(|| format!("failed to determine the python packages installed for a previous version of python ({}.{})", python_version.0, python_version.1))?
+        .into_iter().filter(|d| d.installer.as_deref() != Some("conda")).collect_vec();
+
+    let pb = progress::global_multi_progress()
+        .add(ProgressBar::new(current_python_packages.len() as u64));
+    pb.set_style(progress::default_progress_style());
+    pb.set_message("removing old python packages");
+    pb.enable_steady_tick(Duration::from_millis(100));
+
+    // Remove the python packages
+    let site_package_path = install_paths
+        .site_packages()
+        .expect("site-packages path must exist");
+    for python_package in current_python_packages {
+        tracing::info!(
+            "uninstalling python package from previous python version {}-{}",
+            &python_package.name,
+            &python_package.version
+        );
+
+        pb.set_message(format!(
+            "{} {}",
+            &python_package.name, &python_package.version
+        ));
+
+        let relative_dist_info = python_package
+            .dist_info
+            .strip_prefix(site_package_path)
+            .expect("the dist-info path must be a sub-path of the site-packages path");
+        rip::uninstall::uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
+            .into_diagnostic()
+            .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_package.name, &python_package.version))?;
+
+        pb.inc(1);
+    }
+
+    Ok(())
+}
+
+/// Determine which python packages we can leave untouched and which python packages should be
+/// removed.
+fn determine_python_distributions_to_remove_and_install(
+    mut current_python_packages: Vec<Distribution>,
+    desired_python_packages: Vec<&LockedDependency>,
+) -> (Vec<Distribution>, Vec<&LockedDependency>) {
+    // Determine the artifact tags associated with the locked dependencies.
+    let mut desired_python_packages = extract_locked_tags(desired_python_packages);
+
+    // Any package that is currently installed that is not part of the locked dependencies should be
+    // removed. So we keep it in the `current_python_packages` list.
+    // Any package that is in the currently installed list that is NOT found in the lockfile is
+    // retained in the list to mark it for removal.
+    current_python_packages.retain(|current_python_packages| {
+        if let Some(found_desired_packages_idx) =
+            desired_python_packages
+                .iter()
+                .position(|(pkg, artifact_name)| {
+                    does_installed_match_locked_package(
+                        current_python_packages,
+                        (pkg, artifact_name.as_ref()),
+                    )
+                })
+        {
+            // Remove from the desired list of packages to install & from the packages to uninstall.
+            desired_python_packages.remove(found_desired_packages_idx);
+            false
+        } else {
+            // If this package was installed as a conda package we should not remove it.
+            current_python_packages.installer.as_deref() != Some("conda")
+        }
+    });
+
+    (
+        current_python_packages,
+        desired_python_packages
+            .into_iter()
+            .map(|(pkg, _)| pkg)
+            .collect(),
+    )
+}
+
+/// Determine the wheel tags for the locked dependencies. These are extracted by looking at the url
+/// of the locked dependency. The filename of the URL is converted to a wheel name and the tags are
+/// extract from that.
+///
+/// If the locked dependency is not a wheel distribution `None` is returned for the tags. If the
+/// the wheel name could not be parsed `None` is returned for the tags and a warning is emitted.
+fn extract_locked_tags(
+    desired_python_packages: Vec<&LockedDependency>,
+) -> Vec<(&LockedDependency, Option<IndexSet<WheelTag>>)> {
+    desired_python_packages
+        .into_iter()
+        .map(|pkg| {
+            let Some(pip) = pkg.as_pip() else { return (pkg, None); };
+            match pip.artifact_name().as_ref().map(|name| name.as_wheel()) {
+                Ok(Some(name)) => (pkg, Some(IndexSet::from_iter(name.all_tags_iter()))),
+                Ok(None) => (pkg, None),
+                Err(err) => {
+                    tracing::warn!(
+                        "failed to determine the artifact name of the python package {}-{}. Could not determine the name from the url {}: {err}",
+                        &pkg.name, pkg.version, &pip.url);
+                    (pkg, None)
+                }
+            }
+        })
         .collect()
 }
 
-/// Executes the transaction on the given environment.
-pub async fn execute_transaction(
-    transaction: Transaction<PrefixRecord, RepoDataRecord>,
-    target_prefix: PathBuf,
-    cache_dir: PathBuf,
-    download_client: AuthenticatedClient,
-) -> miette::Result<()> {
-    // Open the package cache
-    let package_cache = PackageCache::new(cache_dir.join("pkgs"));
+/// Returns true if the installed python package matches the locked python package. If that is the
+/// case we can assume that the locked python package is already installed.
+fn does_installed_match_locked_package(
+    installed_python_package: &Distribution,
+    locked_python_package: (&LockedDependency, Option<&IndexSet<WheelTag>>),
+) -> bool {
+    let (pkg, artifact_tags) = locked_python_package;
 
-    // Create an install driver which helps limit the number of concurrent filesystem operations
-    let install_driver = InstallDriver::default();
-
-    // Define default installation options.
-    let install_options = InstallOptions {
-        python_info: transaction.python_info.clone(),
-        platform: Some(transaction.platform),
-        ..Default::default()
-    };
-
-    // Create a progress bars for downloads.
-    let multi_progress = global_multi_progress();
-    let total_packages_to_download = transaction
-        .operations
-        .iter()
-        .filter(|op| op.record_to_install().is_some())
-        .count();
-    let download_pb = if total_packages_to_download > 0 {
-        let pb = multi_progress.add(
-            indicatif::ProgressBar::new(total_packages_to_download as u64)
-                .with_style(default_progress_style())
-                .with_finish(indicatif::ProgressFinish::WithMessage("Done!".into()))
-                .with_prefix("downloading"),
-        );
-        pb.enable_steady_tick(Duration::from_millis(100));
-        Some(pb)
-    } else {
-        None
-    };
-
-    // Create a progress bar to track all operations.
-    let total_operations = transaction.operations.len();
-    let link_pb = multi_progress.add(
-        indicatif::ProgressBar::new(total_operations as u64)
-            .with_style(default_progress_style())
-            .with_finish(indicatif::ProgressFinish::WithMessage("Done!".into()))
-            .with_prefix("linking"),
-    );
-    link_pb.enable_steady_tick(Duration::from_millis(100));
-
-    // Perform all transactions operations in parallel.
-    let result = stream::iter(transaction.operations)
-        .map(Ok)
-        .try_for_each_concurrent(50, |op| {
-            let target_prefix = target_prefix.clone();
-            let download_client = download_client.clone();
-            let package_cache = &package_cache;
-            let install_driver = &install_driver;
-            let download_pb = download_pb.as_ref();
-            let link_pb = &link_pb;
-            let install_options = &install_options;
-            async move {
-                execute_operation(
-                    &target_prefix,
-                    download_client,
-                    package_cache,
-                    install_driver,
-                    download_pb,
-                    link_pb,
-                    op,
-                    install_options,
-                )
-                .await
-            }
-        })
-        .await;
-
-    // Clear progress bars
-    if let Some(download_pb) = download_pb {
-        download_pb.finish_and_clear();
-    }
-    link_pb.finish_and_clear();
-
-    result
-}
-
-/// Executes a single operation of a transaction on the environment.
-/// TODO: Move this into an object or something.
-#[allow(clippy::too_many_arguments)]
-async fn execute_operation(
-    target_prefix: &Path,
-    download_client: AuthenticatedClient,
-    package_cache: &PackageCache,
-    install_driver: &InstallDriver,
-    download_pb: Option<&ProgressBar>,
-    link_pb: &ProgressBar,
-    op: TransactionOperation<PrefixRecord, RepoDataRecord>,
-    install_options: &InstallOptions,
-) -> miette::Result<()> {
-    // Determine the package to install
-    let install_record = op.record_to_install();
-    let remove_record = op.record_to_remove();
-
-    // Create a future to remove the existing package
-    let remove_future = if let Some(remove_record) = remove_record {
-        remove_package_from_environment(target_prefix, remove_record).left_future()
-    } else {
-        ready(Ok(())).right_future()
-    };
-
-    // Create a future to download the package
-    let cached_package_dir_fut = if let Some(install_record) = install_record {
-        async {
-            // Make sure the package is available in the package cache.
-            let result = package_cache
-                .get_or_fetch_from_url_with_retry(
-                    &install_record.package_record,
-                    install_record.url.clone(),
-                    download_client.clone(),
-                    default_retry_policy(),
-                )
-                .map_ok(|cache_dir| Some((install_record.clone(), cache_dir)))
-                .await
-                .into_diagnostic();
-
-            // Increment the download progress bar.
-            if let Some(pb) = download_pb {
-                pb.inc(1);
-                if pb.length() == Some(pb.position()) {
-                    pb.set_style(finished_progress_style());
-                }
-            }
-
-            result
-        }
-        .left_future()
-    } else {
-        ready(Ok(None)).right_future()
-    };
-
-    // Await removal and downloading concurrently
-    let (_, install_package) = tokio::try_join!(remove_future, cached_package_dir_fut)?;
-
-    // If there is a package to install, do that now.
-    if let Some((record, package_dir)) = install_package {
-        install_package_to_environment(
-            target_prefix,
-            package_dir,
-            record.clone(),
-            install_driver,
-            install_options,
-        )
-        .await?;
-    }
-
-    // Increment the link progress bar since we finished a step!
-    link_pb.inc(1);
-    if link_pb.length() == Some(link_pb.position()) {
-        link_pb.set_style(finished_progress_style());
-    }
-
-    Ok(())
-}
-
-/// Install a package into the environment and write a `conda-meta` file that contains information
-/// about how the file was linked.
-async fn install_package_to_environment(
-    target_prefix: &Path,
-    package_dir: PathBuf,
-    repodata_record: RepoDataRecord,
-    install_driver: &InstallDriver,
-    install_options: &InstallOptions,
-) -> miette::Result<()> {
-    // Link the contents of the package into our environment. This returns all the paths that were
-    // linked.
-    let paths = link_package(
-        &package_dir,
-        target_prefix,
-        install_driver,
-        install_options.clone(),
-    )
-    .await
-    .into_diagnostic()?;
-
-    // Construct a PrefixRecord for the package
-    let prefix_record = PrefixRecord {
-        repodata_record,
-        package_tarball_full_path: None,
-        extracted_package_dir: Some(package_dir),
-        files: paths
-            .iter()
-            .map(|entry| entry.relative_path.clone())
-            .collect(),
-        paths_data: paths.into(),
-        // TODO: Retrieve the requested spec for this package from the request
-        requested_spec: None,
-        // TODO: What to do with this?
-        link: None,
-    };
-
-    // Create the conda-meta directory if it doesn't exist yet.
-    let target_prefix = target_prefix.to_path_buf();
-    match tokio::task::spawn_blocking(move || {
-        let conda_meta_path = target_prefix.join("conda-meta");
-        std::fs::create_dir_all(&conda_meta_path)?;
-
-        // Write the conda-meta information
-        let pkg_meta_path = conda_meta_path.join(format!(
-            "{}-{}-{}.json",
-            prefix_record
-                .repodata_record
-                .package_record
-                .name
-                .as_source(),
-            prefix_record.repodata_record.package_record.version,
-            prefix_record.repodata_record.package_record.build
-        ));
-        prefix_record.write_to_path(pkg_meta_path, true)
-    })
-    .await
+    // Match on name and version
+    if pkg.name != installed_python_package.name.as_str()
+        || pep440_rs::Version::from_str(&pkg.version).ok().as_ref()
+            != Some(&installed_python_package.version)
     {
-        Ok(result) => Ok(result.into_diagnostic()?),
-        Err(err) => {
-            if let Ok(panic) = err.try_into_panic() {
-                std::panic::resume_unwind(panic);
-            }
-            // The operation has been cancelled, so we can also just ignore everything.
-            Ok(())
+        return false;
+    }
+
+    // Now match on the type of the artifact
+    match (artifact_tags, &installed_python_package.tags) {
+        (None, _) | (_, None) => {
+            // One, or both, of the artifacts are not a wheel distribution so we cannot
+            // currently compare them. In that case we always just reinstall.
+            // TODO: Maybe log some info here?
+            // TODO: Add support for more distribution types.
+            false
         }
+        (Some(locked_tags), Some(installed_tags)) => locked_tags == installed_tags,
     }
 }
 
-/// Completely remove the specified package from the environment.
-async fn remove_package_from_environment(
-    target_prefix: &Path,
-    package: &PrefixRecord,
-) -> miette::Result<()> {
-    // TODO: Take into account any clobbered files, they need to be restored.
-    // TODO: Can we also delete empty directories?
+trait PipLockedDependencyExt {
+    /// Returns the artifact name of the locked dependency.
+    fn artifact_name(&self) -> Result<ArtifactName, ParseArtifactNameError>;
+}
 
-    // Remove all entries
-    for paths in package.paths_data.paths.iter() {
-        match tokio::fs::remove_file(target_prefix.join(&paths.relative_path)).await {
-            Ok(_) => {}
-            Err(e) if e.kind() == ErrorKind::NotFound => {
-                // Simply ignore if the file is already gone.
-            }
-            Err(e) => {
-                return Err(e).into_diagnostic().wrap_err(format!(
-                    "failed to delete {}",
-                    paths.relative_path.display()
-                ))
-            }
-        }
+impl PipLockedDependencyExt for PipLockedDependency {
+    fn artifact_name(&self) -> Result<ArtifactName, ParseArtifactNameError> {
+        self.url.path_segments().and_then(|s| s.last()).map_or(
+            Err(ParseArtifactNameError::InvalidName),
+            ArtifactName::from_str,
+        )
     }
-
-    // Remove the conda-meta file
-    let conda_meta_path = target_prefix.join("conda-meta").join(format!(
-        "{}-{}-{}.json",
-        package.repodata_record.package_record.name.as_normalized(),
-        package.repodata_record.package_record.version,
-        package.repodata_record.package_record.build
-    ));
-    tokio::fs::remove_file(conda_meta_path)
-        .await
-        .into_diagnostic()?;
-
-    Ok(())
 }

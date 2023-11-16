@@ -35,7 +35,10 @@ def c_factorial(n):
     significand = ctypes.c_double()
     exponent = ctypes.c_int()
 
-    c_lib.calculate_factorial_approximation(n, ctypes.byref(significand), ctypes.byref(exponent))
+    c_lib.calculate_factorial_approximation(
+        n,
+        ctypes.byref(significand),
+        ctypes.byref(exponent))
     return significand.value, exponent.value
 
 

@@ -1,0 +1,19 @@
+---
+source: src/lock_file/python.rs
+assertion_line: 227
+expression: tags
+---
+[
+    "cp311-cp311-win_amd64",
+    "cp311-abi3-win_amd64",
+    "cp311-none-win_amd64",
+    "cp310-abi3-win_amd64",
+    "cp39-abi3-win_amd64",
+    "cp38-abi3-win_amd64",
+    "cp37-abi3-win_amd64",
+    "cp36-abi3-win_amd64",
+    "cp35-abi3-win_amd64",
+    "cp34-abi3-win_amd64",
+    "cp33-abi3-win_amd64",
+    "cp32-abi3-win_amd64",
+]

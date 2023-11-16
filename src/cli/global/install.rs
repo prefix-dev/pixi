@@ -1,6 +1,7 @@
+use crate::install::execute_transaction;
 use crate::repodata::friendly_channel_name;
 use crate::{
-    environment::execute_transaction, prefix::Prefix, progress::await_in_progress,
+    default_authenticated_client, prefix::Prefix, progress::await_in_progress,
     repodata::fetch_sparse_repodata,
 };
 use clap::Parser;
@@ -9,7 +10,6 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord};
-use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -241,7 +241,10 @@ async fn map_executables_to_global_bin_scripts<'a>(
         let Some(file_name) = exec
             .file_name()
             .and_then(OsStr::to_str)
-            .map(str::to_lowercase) else { continue; };
+            .map(str::to_lowercase)
+        else {
+            continue;
+        };
         let file_name = extensions_list
             .iter()
             .find_map(|ext| file_name.strip_suffix(ext))
@@ -380,11 +383,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         await_in_progress(
             "creating virtual environment",
             execute_transaction(
-                transaction,
+                &transaction,
                 prefix.root().to_path_buf(),
                 rattler::default_cache_dir()
                     .map_err(|_| miette::miette!("could not determine default cache directory"))?,
-                AuthenticatedClient::default(),
+                default_authenticated_client(),
             ),
         )
         .await?;

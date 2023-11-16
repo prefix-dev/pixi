@@ -52,7 +52,10 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
     while let Some(entry) = dir_contents.next_entry().await.into_diagnostic()? {
         if entry.file_type().await.into_diagnostic()?.is_dir() {
-            let Ok(name) = PackageName::from_str(entry.file_name().to_string_lossy().as_ref()) else { continue };
+            let Ok(name) = PackageName::from_str(entry.file_name().to_string_lossy().as_ref())
+            else {
+                continue;
+            };
             packages.push(name);
         }
     }

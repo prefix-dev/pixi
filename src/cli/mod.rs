@@ -85,17 +85,14 @@ pub async fn execute() -> miette::Result<()> {
     console::set_colors_enabled(use_colors);
     console::set_colors_enabled_stderr(use_colors);
 
-    let level_filter = match args.verbose.log_level_filter() {
-        clap_verbosity_flag::LevelFilter::Off => LevelFilter::OFF,
-        clap_verbosity_flag::LevelFilter::Error => LevelFilter::ERROR,
-        clap_verbosity_flag::LevelFilter::Warn => LevelFilter::WARN,
-        clap_verbosity_flag::LevelFilter::Info => LevelFilter::INFO,
-        clap_verbosity_flag::LevelFilter::Debug => LevelFilter::DEBUG,
-        clap_verbosity_flag::LevelFilter::Trace => LevelFilter::TRACE,
+    let (level_filter, pixi_level) = match args.verbose.log_level_filter() {
+        clap_verbosity_flag::LevelFilter::Off => (LevelFilter::OFF, LevelFilter::OFF),
+        clap_verbosity_flag::LevelFilter::Error => (LevelFilter::ERROR, LevelFilter::WARN),
+        clap_verbosity_flag::LevelFilter::Warn => (LevelFilter::WARN, LevelFilter::INFO),
+        clap_verbosity_flag::LevelFilter::Info => (LevelFilter::INFO, LevelFilter::INFO),
+        clap_verbosity_flag::LevelFilter::Debug => (LevelFilter::DEBUG, LevelFilter::DEBUG),
+        clap_verbosity_flag::LevelFilter::Trace => (LevelFilter::TRACE, LevelFilter::TRACE),
     };
-
-    // Default pixi level to warn but overwrite if a lower level is requested.
-    let pixi_level = level_filter.max(LevelFilter::WARN);
 
     let env_filter = EnvFilter::builder()
         .with_default_directive(level_filter.into())
@@ -103,7 +100,12 @@ pub async fn execute() -> miette::Result<()> {
         .into_diagnostic()?
         // filter logs from apple codesign because they are very noisy
         .add_directive("apple_codesign=off".parse().into_diagnostic()?)
-        .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?);
+        .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?)
+        .add_directive(
+            format!("rattler_installs_packages={}", pixi_level)
+                .parse()
+                .into_diagnostic()?,
+        );
 
     // Setup the tracing subscriber
     tracing_subscriber::fmt()
