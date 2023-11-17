@@ -206,6 +206,7 @@ async fn update_python_distributions(
         (
             python_info.short_version.0 as u32,
             python_info.short_version.1 as u32,
+            0,
         ),
         platform.is_windows(),
     );
@@ -306,7 +307,7 @@ async fn install_python_distributions(
             let message_formatter = message_formatter.clone();
             let pb = install_pb.clone();
             async move {
-                let _pb_task = message_formatter.start(wheel.name().to_string()).await;
+                let pb_task = message_formatter.start(wheel.name().to_string()).await;
                 let unpack_result = tokio::task::spawn_blocking(move || {
                     wheel
                         .unpack(
@@ -321,6 +322,7 @@ async fn install_python_distributions(
                 .map_err(JoinError::try_into_panic)
                 .await;
 
+                pb_task.finish().await;
                 pb.inc(1);
 
                 match unpack_result {
@@ -411,7 +413,7 @@ fn stream_python_artifacts<'a>(
                 let wheel: Wheel = package_db.get_artifact(&artifact_info).await?;
 
                 // Update the progress bar
-                drop(pb_task);
+                pb_task.finish().await;
                 pb.inc(1);
                 if pb.position() == total_packages as u64 {
                     pb.set_style(progress::finished_progress_style());
@@ -448,6 +450,7 @@ fn remove_old_python_distributions(
     let python_version = (
         previous_python_installation.short_version.0 as u32,
         previous_python_installation.short_version.1 as u32,
+        0,
     );
     let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
 
