@@ -24,12 +24,14 @@ impl FromStr for PyPiRequirement {
     type Err = ParsePyPiRequirementError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.is_empty() || s == "*" {
+        // Accept a star as an any requirement, which is represented by the none.
+        if s == "*" {
             Ok(Self {
                 version: None,
                 extras: None,
             })
         } else {
+            // From string can only parse the version specifier.
             Ok(Self {
                 version: Some(
                     VersionSpecifiers::from_str(s)
@@ -42,7 +44,7 @@ impl FromStr for PyPiRequirement {
 }
 
 /// Represents a set of python dependencies on which a project can depend. The dependencies are
-/// formatted using a modern version specifier. See [`pep508_rs::modern::RequirementModern`].
+/// formatted using a custom version specifier.
 #[derive(Default, Debug, Deserialize, Clone, Eq, PartialEq)]
 pub struct PypiDependencies {
     #[serde(flatten)]
@@ -158,7 +160,7 @@ mod test {
                 ),])
             }
         );
-        let requirement: PypiDependencies = toml_edit::de::from_str(r#"foo = """#).unwrap();
+        let requirement: PypiDependencies = toml_edit::de::from_str(r#"foo = "*""#).unwrap();
         assert_eq!(
             requirement,
             PypiDependencies {
@@ -171,11 +173,6 @@ mod test {
                 ),])
             }
         );
-    }
-    #[test]
-    fn test_specifiers() {
-        // let test = Version::from_str("").unwrap();
-        // let test = VersionSpecifiers::from_str("").unwrap();
     }
 
     #[test]
@@ -211,15 +208,4 @@ mod test {
             }
         );
     }
-
-    // TODO: This crashes currently but should instead result in an error. This should be fixed in pep508_rs.
-    // #[test]
-    // fn test_invalid_extra() {
-    //     let requirement: PypiDependencies =
-    //         toml::de::from_str(r#"bar = { version="3.12", extras = ["b$r"] }"#)
-    //             .unwrap();
-    //
-    // }
-
-    // TODO: pep508_rs does not handle ^ operator yet.
 }
