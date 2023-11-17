@@ -5,6 +5,7 @@ use crate::progress::{
 };
 use futures::future::ready;
 use futures::{stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
+use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler::install::{
     link_package, InstallDriver, InstallOptions, Transaction, TransactionOperation,
@@ -12,6 +13,7 @@ use rattler::install::{
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
 use rattler_networking::AuthenticatedClient;
+use std::cmp::Ordering;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -69,8 +71,43 @@ pub async fn execute_transaction(
         ProgressBarMessageFormatter::new(pb)
     };
 
+    // Sort the operations to try to optimize the installation time.
+    let sorted_operations = transaction
+        .operations
+        .iter()
+        .enumerate()
+        .sorted_unstable_by(|&(a_idx, a), &(b_idx, b)| {
+            // Sort the operations so we first install packages and then remove them. We do it in
+            // this order because downloading takes time so we want to do that as soon as possible
+            match (a.record_to_install(), b.record_to_install()) {
+                (Some(a), Some(b)) => {
+                    // If we have two packages sort them by size, the biggest goes first.
+                    let a_size = a.package_record.size.or(a.package_record.legacy_bz2_size);
+                    let b_size = b.package_record.size.or(b.package_record.legacy_bz2_size);
+                    if let (Some(a_size), Some(b_size)) = (a_size, b_size) {
+                        match a_size.cmp(&b_size) {
+                            Ordering::Less => return Ordering::Greater,
+                            Ordering::Greater => return Ordering::Less,
+                            Ordering::Equal => {}
+                        }
+                    }
+                }
+                (Some(_), None) => {
+                    return Ordering::Less;
+                }
+                (None, Some(_)) => {
+                    return Ordering::Greater;
+                }
+                _ => {}
+            }
+
+            // Otherwise keep the original order as much as possible.
+            a_idx.cmp(&b_idx)
+        })
+        .map(|(_, op)| op);
+
     // Perform all transactions operations in parallel.
-    let result = stream::iter(transaction.operations.iter())
+    let result = stream::iter(sorted_operations.into_iter())
         .map(Ok)
         .try_for_each_concurrent(50, |op| {
             let target_prefix = target_prefix.clone();

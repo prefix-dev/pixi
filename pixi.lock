@@ -1,3 +1,4 @@
+version: 2
 metadata:
   content_hash:
     linux-64: e90c2ee71ad70fc0a1c8302029533a7d1498f2bffcd0eaa8d2934700e775dc1d
@@ -10231,4 +10232,3 @@ package:
   license_family: BSD
   size: 343428
   timestamp: 1693151615801
-version: 1
