@@ -121,16 +121,29 @@ enum Operation {
 
 pub struct ScopedTask {
     name: String,
-    sender: Sender<Operation>,
+    sender: Option<Sender<Operation>>,
 }
 
 impl Drop for ScopedTask {
     fn drop(&mut self) {
         // Send the finished operation. If this fails the receiving end was most likely already
         // closed and we can just ignore the error.
-        let _ = self
-            .sender
-            .blocking_send(Operation::Finished(std::mem::take(&mut self.name)));
+        if let Some(sender) = self.sender.take() {
+            let _ = sender.blocking_send(Operation::Finished(std::mem::take(&mut self.name)));
+        }
+    }
+}
+
+impl ScopedTask {
+    /// Finishes the execution of the task.
+    pub async fn finish(mut self) {
+        // Send the finished operation. If this fails the receiving end was most likely already
+        // closed and we can just ignore the error.
+        if let Some(sender) = self.sender.take() {
+            let _ = sender
+                .send(Operation::Finished(std::mem::take(&mut self.name)))
+                .await;
+        }
     }
 }
 
@@ -173,7 +186,7 @@ impl ProgressBarMessageFormatter {
             .unwrap();
         ScopedTask {
             name: op,
-            sender: self.sender.clone(),
+            sender: Some(self.sender.clone()),
         }
     }
 }

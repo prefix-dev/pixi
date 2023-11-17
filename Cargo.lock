@@ -2830,7 +2830,7 @@ dependencies = [
 [[package]]
 name = "rattler_installs_packages"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler_installs_packages?branch=main#6e6b6b8a4204d02273782b1e4377e0812e62f275"
+source = "git+https://github.com/prefix-dev/rattler_installs_packages?branch=main#65c7ac5483140d759807ca04b4bfabb573cac134"
 dependencies = [
  "async-trait",
  "async_http_range_reader",
