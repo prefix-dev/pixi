@@ -112,6 +112,7 @@ pub async fn await_in_progress<T, F: Future<Output = T>>(
 #[derive(Debug, Clone)]
 pub struct ProgressBarMessageFormatter {
     sender: Sender<Operation>,
+    pb: ProgressBar,
 }
 
 enum Operation {
@@ -122,6 +123,7 @@ enum Operation {
 pub struct ScopedTask {
     name: String,
     sender: Option<Sender<Operation>>,
+    pb: ProgressBar,
 }
 
 impl Drop for ScopedTask {
@@ -136,7 +138,7 @@ impl Drop for ScopedTask {
 
 impl ScopedTask {
     /// Finishes the execution of the task.
-    pub async fn finish(mut self) {
+    pub async fn finish(mut self) -> ProgressBar {
         // Send the finished operation. If this fails the receiving end was most likely already
         // closed and we can just ignore the error.
         if let Some(sender) = self.sender.take() {
@@ -144,12 +146,19 @@ impl ScopedTask {
                 .send(Operation::Finished(std::mem::take(&mut self.name)))
                 .await;
         }
+        self.pb.clone()
+    }
+
+    /// Returns the progress bar associated with the task
+    pub fn progress_bar(&self) -> &ProgressBar {
+        &self.pb
     }
 }
 
 impl ProgressBarMessageFormatter {
     /// Construct a new instance that will update the given progress bar.
     pub fn new(progress_bar: ProgressBar) -> Self {
+        let pb = progress_bar.clone();
         let (tx, mut rx) = channel::<Operation>(20);
         tokio::spawn(async move {
             let mut pending = VecDeque::with_capacity(20);
@@ -173,7 +182,12 @@ impl ProgressBarMessageFormatter {
                 }
             }
         });
-        Self { sender: tx }
+        Self { sender: tx, pb }
+    }
+
+    /// Returns the associated progress bar
+    pub fn progress_bar(&self) -> &ProgressBar {
+        &self.pb
     }
 
     /// Adds the start of another task to the progress bar and returns an object that is used to
@@ -187,6 +201,21 @@ impl ProgressBarMessageFormatter {
         ScopedTask {
             name: op,
             sender: Some(self.sender.clone()),
+            pb: self.pb.clone(),
         }
+    }
+
+    /// Wraps an future into a task which starts when the task starts and ends when the future
+    /// returns.
+    pub async fn wrap<T, F: Future<Output = T>>(&self, name: impl Into<String>, fut: F) -> T {
+        let task = self.start(name.into()).await;
+        let result = fut.await;
+        task.finish().await;
+        result
+    }
+
+    /// Convert this instance into the underlying progress bar.
+    pub fn into_progress_bar(self) -> ProgressBar {
+        self.pb
     }
 }
