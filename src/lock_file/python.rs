@@ -8,7 +8,7 @@ use pep508_rs::{MarkerEnvironment, StringVersion};
 use rattler_conda_types::{PackageRecord, Platform, RepoDataRecord, Version, VersionWithSource};
 use rip::{
     tags::{WheelTag, WheelTags},
-    PinnedPackage,
+    PinnedPackage, SDistResolution,
 };
 use std::collections::HashMap;
 use std::{str::FromStr, vec};
@@ -72,6 +72,10 @@ pub async fn resolve_pypi_dependencies<'p>(
             .map(|p| (p.name.clone(), p))
             .collect(),
         HashMap::default(),
+        &rip::ResolveOptions {
+            // TODO: Change this once we fully support sdists.
+            sdist_resolution: SDistResolution::OnlyWheels,
+        },
     )
     .await?;
 
