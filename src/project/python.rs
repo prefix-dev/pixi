@@ -60,14 +60,13 @@ impl PypiDependencies {
     /// Returns the requirements as [`pep508_rs::Requirement`]s.
     pub fn as_pep508(&self) -> Vec<pep508_rs::Requirement> {
         self.requirements
-            .clone()
-            .into_iter()
+            .iter()
             .map(|(name, req)| {
-                let version = req.version.map(VersionOrUrl::VersionSpecifier);
+                let version = req.version.clone().map(VersionOrUrl::VersionSpecifier);
 
                 pep508_rs::Requirement {
                     name: name.as_str().to_string(),
-                    extras: req.extras,
+                    extras: req.extras.clone(),
                     version_or_url: version,
                     marker: None,
                 }
