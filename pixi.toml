@@ -10,6 +10,7 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 build = "cargo build --release"
 install = "cargo install --path . --locked"
 test = "cargo test"
+test-all = "cargo test --all-features"
 lint = "pre-commit run --all"
 docs = { cmd = "mkdocs serve" }
 build-docs = { cmd = "mkdocs build --strict" }

@@ -1,6 +1,5 @@
 ---
 source: src/project/manifest.rs
-assertion_line: 518
 expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\")"
 ---
 ProjectManifest {
@@ -45,145 +44,60 @@ ProjectManifest {
     activation: None,
     pypi_dependencies: PypiDependencies {
         requirements: {
-            PixiSpanned {
-                span: Some(
-                    177..180,
-                ),
-                value: PackageName {
-                    source: "foo",
-                    normalized: "foo",
-                },
-            }: PixiSpanned {
-                span: Some(
-                    183..191,
-                ),
-                value: (
-                    Dependency(
-                        VersionSpecifier(
-                            VersionSpecifiers(
-                                [
-                                    VersionSpecifier {
-                                        operator: GreaterThanEqual,
-                                        version: Version {
-                                            epoch: 0,
-                                            release: [
-                                                3,
-                                                12,
-                                            ],
-                                            pre: None,
-                                            post: None,
-                                            dev: None,
-                                            local: None,
-                                        },
-                                    },
-                                ],
-                            ),
-                        ),
+            PackageName {
+                source: "foo",
+                normalized: "foo",
+            }: PyPiRequirement {
+                version: Some(
+                    VersionSpecifiers(
+                        [
+                            VersionSpecifier {
+                                operator: GreaterThanEqual,
+                                version: Version {
+                                    epoch: 0,
+                                    release: [
+                                        3,
+                                        12,
+                                    ],
+                                    pre: None,
+                                    post: None,
+                                    dev: None,
+                                    local: None,
+                                },
+                            },
+                        ],
                     ),
-                    Requirement {
-                        name: "foo",
-                        extras: None,
-                        version_or_url: Some(
-                            VersionSpecifier(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: GreaterThanEqual,
-                                            version: Version {
-                                                epoch: 0,
-                                                release: [
-                                                    3,
-                                                    12,
-                                                ],
-                                                pre: None,
-                                                post: None,
-                                                dev: None,
-                                                local: None,
-                                            },
-                                        },
-                                    ],
-                                ),
-                            ),
-                        ),
-                        marker: None,
-                    },
                 ),
+                extras: None,
             },
-            PixiSpanned {
-                span: Some(
-                    204..207,
-                ),
-                value: PackageName {
-                    source: "bar",
-                    normalized: "bar",
-                },
-            }: PixiSpanned {
-                span: Some(
-                    210..246,
-                ),
-                value: (
-                    LongDependency {
-                        version: VersionSpecifier(
-                            VersionSpecifiers(
-                                [
-                                    VersionSpecifier {
-                                        operator: GreaterThanEqual,
-                                        version: Version {
-                                            epoch: 0,
-                                            release: [
-                                                3,
-                                                12,
-                                            ],
-                                            pre: None,
-                                            post: None,
-                                            dev: None,
-                                            local: None,
-                                        },
-                                    },
-                                ],
-                            ),
-                        ),
-                        common: RequirementModernCommon {
-                            optional: false,
-                            extras: Some(
-                                [
-                                    "baz",
-                                ],
-                            ),
-                            markers: None,
-                        },
-                    },
-                    Requirement {
-                        name: "bar",
-                        extras: Some(
-                            [
-                                "baz",
-                            ],
-                        ),
-                        version_or_url: Some(
-                            VersionSpecifier(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: GreaterThanEqual,
-                                            version: Version {
-                                                epoch: 0,
-                                                release: [
-                                                    3,
-                                                    12,
-                                                ],
-                                                pre: None,
-                                                post: None,
-                                                dev: None,
-                                                local: None,
-                                            },
-                                        },
+            PackageName {
+                source: "bar",
+                normalized: "bar",
+            }: PyPiRequirement {
+                version: Some(
+                    VersionSpecifiers(
+                        [
+                            VersionSpecifier {
+                                operator: GreaterThanEqual,
+                                version: Version {
+                                    epoch: 0,
+                                    release: [
+                                        3,
+                                        12,
                                     ],
-                                ),
-                            ),
-                        ),
-                        marker: None,
-                    },
+                                    pre: None,
+                                    post: None,
+                                    dev: None,
+                                    local: None,
+                                },
+                            },
+                        ],
+                    ),
+                ),
+                extras: Some(
+                    [
+                        "baz",
+                    ],
                 ),
             },
         },
