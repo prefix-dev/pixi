@@ -82,6 +82,18 @@ package:
   hash:
     md5: null
     sha256: 9a28abb62774ae4e8edbe2dd4c49ffcd45a6a848952a5eccc6a49f3f0fc1e2f3
+- platform: osx-arm64
+  name: absl-py
+  version: 2.0.0
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/01/e4/dc0a1dcc4e74e08d7abedab278c795eef54a224363bb18f5692f416d834f/absl_py-2.0.0-py3-none-any.whl#sha256=9a28abb62774ae4e8edbe2dd4c49ffcd45a6a848952a5eccc6a49f3f0fc1e2f3
+  hash:
+    md5: null
+    sha256: 9a28abb62774ae4e8edbe2dd4c49ffcd45a6a848952a5eccc6a49f3f0fc1e2f3
 - platform: win-64
   name: absl-py
   version: 2.0.0
@@ -108,6 +120,19 @@ package:
     md5: null
     sha256: c2652417f2c8b5bb325c885ae329bdf3f86424075c4fd1a128674bc6fba4b8e8
 - platform: osx-64
+  name: astunparse
+  version: 1.6.3
+  category: main
+  manager: pip
+  requires_dist:
+  - wheel <1.0, >=0.23.0
+  - six <2.0, >=1.6.1
+  extras: []
+  url: https://files.pythonhosted.org/packages/2b/03/13dde6512ad7b4557eb792fbcf0c653af6076b81e5941d36ec61f7ce6028/astunparse-1.6.3-py2.py3-none-any.whl#sha256=c2652417f2c8b5bb325c885ae329bdf3f86424075c4fd1a128674bc6fba4b8e8
+  hash:
+    md5: null
+    sha256: c2652417f2c8b5bb325c885ae329bdf3f86424075c4fd1a128674bc6fba4b8e8
+- platform: osx-arm64
   name: astunparse
   version: 1.6.3
   category: main
@@ -445,6 +470,18 @@ package:
   hash:
     md5: null
     sha256: 861f35a13a451f94e301ce2bec7cac63e881232ccce7ed67fab9b5df4d3beaa1
+- platform: osx-arm64
+  name: cachetools
+  version: 5.3.2
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/a2/91/2d843adb9fbd911e0da45fbf6f18ca89d07a087c3daa23e955584f90ebf4/cachetools-5.3.2-py3-none-any.whl#sha256=861f35a13a451f94e301ce2bec7cac63e881232ccce7ed67fab9b5df4d3beaa1
+  hash:
+    md5: null
+    sha256: 861f35a13a451f94e301ce2bec7cac63e881232ccce7ed67fab9b5df4d3beaa1
 - platform: win-64
   name: cachetools
   version: 5.3.2
@@ -470,6 +507,18 @@ package:
     md5: null
     sha256: e036ab49d5b79556f99cfc2d9320b34cfbe5be05c5871b51de9329f0603b0474
 - platform: osx-64
+  name: certifi
+  version: 2023.11.17
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=3.6'
+  extras: []
+  url: https://files.pythonhosted.org/packages/64/62/428ef076be88fa93716b576e4a01f919d25968913e817077a386fcbe4f42/certifi-2023.11.17-py3-none-any.whl#sha256=e036ab49d5b79556f99cfc2d9320b34cfbe5be05c5871b51de9329f0603b0474
+  hash:
+    md5: null
+    sha256: e036ab49d5b79556f99cfc2d9320b34cfbe5be05c5871b51de9329f0603b0474
+- platform: osx-arm64
   name: certifi
   version: 2023.11.17
   category: main
@@ -517,6 +566,18 @@ package:
   hash:
     md5: null
     sha256: 573f6eac48f4769d667c4442081b1794f52919e7edada77495aaed9236d13a96
+- platform: osx-arm64
+  name: charset-normalizer
+  version: 3.3.2
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=3.7.0'
+  extras: []
+  url: https://files.pythonhosted.org/packages/dd/51/68b61b90b24ca35495956b718f35a9756ef7d3dd4b3c1508056fa98d1a1b/charset_normalizer-3.3.2-cp311-cp311-macosx_11_0_arm64.whl#sha256=549a3a73da901d5bc3ce8d24e0600d1fa85524c10287f6004fbab87672bf3e1e
+  hash:
+    md5: null
+    sha256: 549a3a73da901d5bc3ce8d24e0600d1fa85524c10287f6004fbab87672bf3e1e
 - platform: win-64
   name: charset-normalizer
   version: 3.3.2
@@ -699,6 +760,17 @@ package:
   hash:
     md5: null
     sha256: c0ff356da363087b915fde4b8b45bdda73432fc17cddb3c8157472eab1422ad1
+- platform: osx-arm64
+  name: flatbuffers
+  version: 23.5.26
+  category: main
+  manager: pip
+  requires_dist: []
+  extras: []
+  url: https://files.pythonhosted.org/packages/6f/12/d5c79ee252793ffe845d58a913197bfa02ae9a0b5c9bc3dc4b58d477b9e7/flatbuffers-23.5.26-py2.py3-none-any.whl#sha256=c0ff356da363087b915fde4b8b45bdda73432fc17cddb3c8157472eab1422ad1
+  hash:
+    md5: null
+    sha256: c0ff356da363087b915fde4b8b45bdda73432fc17cddb3c8157472eab1422ad1
 - platform: win-64
   name: flatbuffers
   version: 23.5.26
@@ -723,6 +795,18 @@ package:
     md5: null
     sha256: 6fc4fa5fa10b72fb8aab4ae58bcb023058386e67b6fa2e3e34cec5c769360316
 - platform: osx-64
+  name: gast
+  version: 0.5.4
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*'
+  extras: []
+  url: https://files.pythonhosted.org/packages/fa/39/5aae571e5a5f4de9c3445dae08a530498e5c53b0e74410eeeb0991c79047/gast-0.5.4-py3-none-any.whl#sha256=6fc4fa5fa10b72fb8aab4ae58bcb023058386e67b6fa2e3e34cec5c769360316
+  hash:
+    md5: null
+    sha256: 6fc4fa5fa10b72fb8aab4ae58bcb023058386e67b6fa2e3e34cec5c769360316
+- platform: osx-arm64
   name: gast
   version: 0.5.4
   category: main
@@ -770,6 +854,29 @@ package:
     md5: null
     sha256: d4bbc92fe4b8bfd2f3e8d88e5ba7085935da208ee38a134fc280e7ce682a05f2
 - platform: osx-64
+  name: google-auth
+  version: 2.23.4
+  category: main
+  manager: pip
+  requires_dist:
+  - cachetools <6.0, >=2.0.0
+  - pyasn1-modules >=0.2.1
+  - rsa <5, >=3.1.4
+  - aiohttp <4.0.0.dev0, >=3.6.2 ; extra == 'aiohttp'
+  - requests <3.0.0.dev0, >=2.20.0 ; extra == 'aiohttp'
+  - cryptography ==36.0.2 ; extra == 'enterprise_cert'
+  - pyopenssl ==22.0.0 ; extra == 'enterprise_cert'
+  - pyopenssl >=20.0.0 ; extra == 'pyopenssl'
+  - cryptography >=38.0.3 ; extra == 'pyopenssl'
+  - pyu2f >=0.1.5 ; extra == 'reauth'
+  - requests <3.0.0.dev0, >=2.20.0 ; extra == 'requests'
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/86/a7/75911c13a242735d5aeaca6a272da380335ff4ba5f26d6b2ae20ff682d13/google_auth-2.23.4-py2.py3-none-any.whl#sha256=d4bbc92fe4b8bfd2f3e8d88e5ba7085935da208ee38a134fc280e7ce682a05f2
+  hash:
+    md5: null
+    sha256: d4bbc92fe4b8bfd2f3e8d88e5ba7085935da208ee38a134fc280e7ce682a05f2
+- platform: osx-arm64
   name: google-auth
   version: 2.23.4
   category: main
@@ -831,6 +938,21 @@ package:
     md5: null
     sha256: 95880ca704928c300f48194d1770cf5b1462835b6e49db61445a520f793fd5fb
 - platform: osx-64
+  name: google-auth-oauthlib
+  version: 1.0.0
+  category: main
+  manager: pip
+  requires_dist:
+  - google-auth >=2.15.0
+  - requests-oauthlib >=0.7.0
+  - click >=6.0.0 ; extra == 'tool'
+  requires_python: '>=3.6'
+  extras: []
+  url: https://files.pythonhosted.org/packages/4a/07/8d9a8186e6768b55dfffeb57c719bc03770cf8a970a074616ae6f9e26a57/google_auth_oauthlib-1.0.0-py2.py3-none-any.whl#sha256=95880ca704928c300f48194d1770cf5b1462835b6e49db61445a520f793fd5fb
+  hash:
+    md5: null
+    sha256: 95880ca704928c300f48194d1770cf5b1462835b6e49db61445a520f793fd5fb
+- platform: osx-arm64
   name: google-auth-oauthlib
   version: 1.0.0
   category: main
@@ -873,6 +995,18 @@ package:
     md5: null
     sha256: b32482794a366b5366a32c92a9a9201b107821889935a02b3e51f6b432ea84ed
 - platform: osx-64
+  name: google-pasta
+  version: 0.2.0
+  category: main
+  manager: pip
+  requires_dist:
+  - six
+  extras: []
+  url: https://files.pythonhosted.org/packages/a3/de/c648ef6835192e6e2cc03f40b19eeda4382c49b5bafb43d88b931c4c74ac/google_pasta-0.2.0-py3-none-any.whl#sha256=b32482794a366b5366a32c92a9a9201b107821889935a02b3e51f6b432ea84ed
+  hash:
+    md5: null
+    sha256: b32482794a366b5366a32c92a9a9201b107821889935a02b3e51f6b432ea84ed
+- platform: osx-arm64
   name: google-pasta
   version: 0.2.0
   category: main
@@ -910,6 +1044,19 @@ package:
     md5: null
     sha256: 8239b853226e4824e769517e1b5232e7c4dda3815b200534500338960fcc6118
 - platform: osx-64
+  name: grpcio
+  version: 1.59.3
+  category: main
+  manager: pip
+  requires_dist:
+  - grpcio-tools >=1.59.3 ; extra == 'protobuf'
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/92/93/3cbc00a269b46277ff26355074a8315eeb4c87240c27d6f7efeabe818fd9/grpcio-1.59.3-cp311-cp311-macosx_10_10_universal2.whl#sha256=cb4e9cbd9b7388fcb06412da9f188c7803742d06d6f626304eb838d1707ec7e3
+  hash:
+    md5: null
+    sha256: cb4e9cbd9b7388fcb06412da9f188c7803742d06d6f626304eb838d1707ec7e3
+- platform: osx-arm64
   name: grpcio
   version: 1.59.3
   category: main
@@ -961,6 +1108,19 @@ package:
   hash:
     md5: null
     sha256: 2381e98af081b6df7f6db300cd88f88e740649d77736e4b53db522d8874bf2dc
+- platform: osx-arm64
+  name: h5py
+  version: 3.10.0
+  category: main
+  manager: pip
+  requires_dist:
+  - numpy >=1.17.3
+  requires_python: '>=3.8'
+  extras: []
+  url: https://files.pythonhosted.org/packages/8d/70/2b0b99507287f66e71a6b2e66c5ad2ec2461ef2c534668eef96c3b48eb6d/h5py-3.10.0-cp311-cp311-macosx_11_0_arm64.whl#sha256=667fe23ab33d5a8a6b77970b229e14ae3bb84e4ea3382cc08567a02e1499eedd
+  hash:
+    md5: null
+    sha256: 667fe23ab33d5a8a6b77970b229e14ae3bb84e4ea3382cc08567a02e1499eedd
 - platform: win-64
   name: h5py
   version: 3.10.0
@@ -987,6 +1147,18 @@ package:
     md5: null
     sha256: 90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2
 - platform: osx-64
+  name: idna
+  version: '3.4'
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=3.5'
+  extras: []
+  url: https://files.pythonhosted.org/packages/fc/34/3030de6f1370931b9dbb4dad48f6ab1015ab1d32447850b9fc94e60097be/idna-3.4-py3-none-any.whl#sha256=90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2
+  hash:
+    md5: null
+    sha256: 90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2
+- platform: osx-arm64
   name: idna
   version: '3.4'
   category: main
@@ -1145,6 +1317,18 @@ package:
     md5: null
     sha256: d7429d1d2131cc7eb1f2ea2ec330227c7d9d38dab3dfdf2e78defee4ecc43fcd
 - platform: osx-64
+  name: keras
+  version: 2.14.0
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=3.9'
+  extras: []
+  url: https://files.pythonhosted.org/packages/fe/58/34d4d8f1aa11120c2d36d7ad27d0526164b1a8ae45990a2fede31d0e59bf/keras-2.14.0-py3-none-any.whl#sha256=d7429d1d2131cc7eb1f2ea2ec330227c7d9d38dab3dfdf2e78defee4ecc43fcd
+  hash:
+    md5: null
+    sha256: d7429d1d2131cc7eb1f2ea2ec330227c7d9d38dab3dfdf2e78defee4ecc43fcd
+- platform: osx-arm64
   name: keras
   version: 2.14.0
   category: main
@@ -1401,6 +1585,17 @@ package:
   hash:
     md5: null
     sha256: da9e47ebc3f0a6d90fb169ef25f9fbcd29b4a4ef97a8b0e3e3a17800af1423f4
+- platform: osx-arm64
+  name: libclang
+  version: 16.0.6
+  category: main
+  manager: pip
+  requires_dist: []
+  extras: []
+  url: https://files.pythonhosted.org/packages/32/1f/981809b77b71972beec34b3ff5422c1b1f7e519daac7b3cbd055c05ba2cf/libclang-16.0.6-py2.py3-none-macosx_11_0_arm64.whl#sha256=e1a5ad1e895e5443e205568c85c04b4608e4e973dae42f4dfd9cb46c81d1486b
+  hash:
+    md5: null
+    sha256: e1a5ad1e895e5443e205568c85c04b4608e4e973dae42f4dfd9cb46c81d1486b
 - platform: win-64
   name: libclang
   version: 16.0.6
@@ -2290,6 +2485,28 @@ package:
   hash:
     md5: null
     sha256: 5874b47d4ee3f0b14d764324d2c94c03ea66bee56f2d929da9f2508d65e722dc
+- platform: osx-arm64
+  name: markdown
+  version: 3.5.1
+  category: main
+  manager: pip
+  requires_dist:
+  - importlib-metadata >=4.4 ; python_version < '3.10'
+  - mkdocs >=1.5 ; extra == 'docs'
+  - mkdocs-nature >=0.6 ; extra == 'docs'
+  - mdx-gh-links >=0.2 ; extra == 'docs'
+  - mkdocstrings[python] ; extra == 'docs'
+  - mkdocs-gen-files ; extra == 'docs'
+  - mkdocs-section-index ; extra == 'docs'
+  - mkdocs-literate-nav ; extra == 'docs'
+  - coverage ; extra == 'testing'
+  - pyyaml ; extra == 'testing'
+  requires_python: '>=3.8'
+  extras: []
+  url: https://files.pythonhosted.org/packages/70/58/2c5a654173937d9f540a4971c569b44dcd55e5424a484d954cdaeebcf79c/Markdown-3.5.1-py3-none-any.whl#sha256=5874b47d4ee3f0b14d764324d2c94c03ea66bee56f2d929da9f2508d65e722dc
+  hash:
+    md5: null
+    sha256: 5874b47d4ee3f0b14d764324d2c94c03ea66bee56f2d929da9f2508d65e722dc
 - platform: win-64
   name: markdown
   version: 3.5.1
@@ -2401,6 +2618,26 @@ package:
     md5: null
     sha256: e85ba8e24cf48d456e564688e981cf379d4c8e644db0a2f719b78de281bac2ca
 - platform: osx-64
+  name: ml-dtypes
+  version: 0.2.0
+  category: main
+  manager: pip
+  requires_dist:
+  - numpy >1.20
+  - numpy >=1.23.3 ; python_version > '3.10'
+  - numpy >=1.21.2 ; python_version > '3.9'
+  - absl-py ; extra == 'dev'
+  - pytest ; extra == 'dev'
+  - pytest-xdist ; extra == 'dev'
+  - pylint >=2.6.0 ; extra == 'dev'
+  - pyink ; extra == 'dev'
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/15/da/43bee505963da0c730ee50e951c604bfdb90d4cccc9c0044c946b10e68a7/ml_dtypes-0.2.0-cp311-cp311-macosx_10_9_universal2.whl#sha256=e70047ec2c83eaee01afdfdabee2c5b0c133804d90d0f7db4dd903360fcc537c
+  hash:
+    md5: null
+    sha256: e70047ec2c83eaee01afdfdabee2c5b0c133804d90d0f7db4dd903360fcc537c
+- platform: osx-arm64
   name: ml-dtypes
   version: 0.2.0
   category: main
@@ -2682,6 +2919,22 @@ package:
   hash:
     md5: null
     sha256: 8139f29aac13e25d502680e9e19963e83f16838d48a0d71c287fe40e7067fbca
+- platform: osx-arm64
+  name: oauthlib
+  version: 3.2.2
+  category: main
+  manager: pip
+  requires_dist:
+  - cryptography >=3.0.0 ; extra == 'rsa'
+  - blinker >=1.4.0 ; extra == 'signals'
+  - cryptography >=3.0.0 ; extra == 'signedtoken'
+  - pyjwt <3, >=2.0.0 ; extra == 'signedtoken'
+  requires_python: '>=3.6'
+  extras: []
+  url: https://files.pythonhosted.org/packages/7e/80/cab10959dc1faead58dc8384a781dfbf93cb4d33d50988f7a69f1b7c9bbe/oauthlib-3.2.2-py3-none-any.whl#sha256=8139f29aac13e25d502680e9e19963e83f16838d48a0d71c287fe40e7067fbca
+  hash:
+    md5: null
+    sha256: 8139f29aac13e25d502680e9e19963e83f16838d48a0d71c287fe40e7067fbca
 - platform: win-64
   name: oauthlib
   version: 3.2.2
@@ -2807,6 +3060,26 @@ package:
     md5: null
     sha256: 2455e59e3947d3c275477df7f5205b30635e266fe6dc300e3d9f9646bfcea147
 - platform: osx-64
+  name: opt-einsum
+  version: 3.3.0
+  category: main
+  manager: pip
+  requires_dist:
+  - numpy >=1.7
+  - sphinx ==1.2.3 ; extra == 'docs'
+  - sphinxcontrib-napoleon ; extra == 'docs'
+  - sphinx-rtd-theme ; extra == 'docs'
+  - numpydoc ; extra == 'docs'
+  - pytest ; extra == 'tests'
+  - pytest-cov ; extra == 'tests'
+  - pytest-pep8 ; extra == 'tests'
+  requires_python: '>=3.5'
+  extras: []
+  url: https://files.pythonhosted.org/packages/bc/19/404708a7e54ad2798907210462fd950c3442ea51acc8790f3da48d2bee8b/opt_einsum-3.3.0-py3-none-any.whl#sha256=2455e59e3947d3c275477df7f5205b30635e266fe6dc300e3d9f9646bfcea147
+  hash:
+    md5: null
+    sha256: 2455e59e3947d3c275477df7f5205b30635e266fe6dc300e3d9f9646bfcea147
+- platform: osx-arm64
   name: opt-einsum
   version: 3.3.0
   category: main
@@ -3054,6 +3327,18 @@ package:
   hash:
     md5: null
     sha256: 0bf384e75b92c42830c0a679b0cd4d6e2b36ae0cf3dbb1e1dfdda48a244f4bcd
+- platform: osx-arm64
+  name: protobuf
+  version: 4.25.1
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=3.8'
+  extras: []
+  url: https://files.pythonhosted.org/packages/e6/db/7b2edc72807d45d72f9db42f3eb86ddaf37f9e55d923159b1dbfc9d835bc/protobuf-4.25.1-cp37-abi3-macosx_10_9_universal2.whl#sha256=0bf384e75b92c42830c0a679b0cd4d6e2b36ae0cf3dbb1e1dfdda48a244f4bcd
+  hash:
+    md5: null
+    sha256: 0bf384e75b92c42830c0a679b0cd4d6e2b36ae0cf3dbb1e1dfdda48a244f4bcd
 - platform: win-64
   name: protobuf
   version: 4.25.1
@@ -3108,6 +3393,18 @@ package:
   hash:
     md5: null
     sha256: 87a2121042a1ac9358cabcaf1d07680ff97ee6404333bacca15f76aa8ad01a57
+- platform: osx-arm64
+  name: pyasn1
+  version: 0.5.0
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '!=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, >=2.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/14/e5/b56a725cbde139aa960c26a1a3ca4d4af437282e20b5314ee6a3501e7dfc/pyasn1-0.5.0-py2.py3-none-any.whl#sha256=87a2121042a1ac9358cabcaf1d07680ff97ee6404333bacca15f76aa8ad01a57
+  hash:
+    md5: null
+    sha256: 87a2121042a1ac9358cabcaf1d07680ff97ee6404333bacca15f76aa8ad01a57
 - platform: win-64
   name: pyasn1
   version: 0.5.0
@@ -3134,6 +3431,19 @@ package:
     md5: null
     sha256: d3ccd6ed470d9ffbc716be08bd90efbd44d0734bc9303818f7336070984a162d
 - platform: osx-64
+  name: pyasn1-modules
+  version: 0.3.0
+  category: main
+  manager: pip
+  requires_dist:
+  - pyasn1 <0.6.0, >=0.4.6
+  requires_python: '!=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, >=2.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/cd/8e/bea464350e1b8c6ed0da3a312659cb648804a08af6cacc6435867f74f8bd/pyasn1_modules-0.3.0-py2.py3-none-any.whl#sha256=d3ccd6ed470d9ffbc716be08bd90efbd44d0734bc9303818f7336070984a162d
+  hash:
+    md5: null
+    sha256: d3ccd6ed470d9ffbc716be08bd90efbd44d0734bc9303818f7336070984a162d
+- platform: osx-arm64
   name: pyasn1-modules
   version: 0.3.0
   category: main
@@ -3622,6 +3932,24 @@ package:
   hash:
     md5: null
     sha256: 58cd2187c01e70e6e26505bca751777aa9f2ee0b7f4300988b709f44e013003f
+- platform: osx-arm64
+  name: requests
+  version: 2.31.0
+  category: main
+  manager: pip
+  requires_dist:
+  - charset-normalizer <4, >=2
+  - idna <4, >=2.5
+  - urllib3 <3, >=1.21.1
+  - certifi >=2017.4.17
+  - PySocks !=1.5.7, >=1.5.6 ; extra == 'socks'
+  - chardet <6, >=3.0.2 ; extra == 'use_chardet_on_py3'
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/70/8e/0e2d847013cb52cd35b38c009bb167a1a26b2ce6cd6965bf26b47bc0bf44/requests-2.31.0-py3-none-any.whl#sha256=58cd2187c01e70e6e26505bca751777aa9f2ee0b7f4300988b709f44e013003f
+  hash:
+    md5: null
+    sha256: 58cd2187c01e70e6e26505bca751777aa9f2ee0b7f4300988b709f44e013003f
 - platform: win-64
   name: requests
   version: 2.31.0
@@ -3670,6 +3998,21 @@ package:
   hash:
     md5: null
     sha256: 2577c501a2fb8d05a304c09d090d6e47c306fef15809d102b327cf8364bddab5
+- platform: osx-arm64
+  name: requests-oauthlib
+  version: 1.3.1
+  category: main
+  manager: pip
+  requires_dist:
+  - oauthlib >=3.0.0
+  - requests >=2.0.0
+  - oauthlib[signedtoken] >=3.0.0 ; extra == 'rsa'
+  requires_python: '>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*'
+  extras: []
+  url: https://files.pythonhosted.org/packages/6f/bb/5deac77a9af870143c684ab46a7934038a53eb4aa975bc0687ed6ca2c610/requests_oauthlib-1.3.1-py2.py3-none-any.whl#sha256=2577c501a2fb8d05a304c09d090d6e47c306fef15809d102b327cf8364bddab5
+  hash:
+    md5: null
+    sha256: 2577c501a2fb8d05a304c09d090d6e47c306fef15809d102b327cf8364bddab5
 - platform: win-64
   name: requests-oauthlib
   version: 1.3.1
@@ -3699,6 +4042,19 @@ package:
     md5: null
     sha256: 90260d9058e514786967344d0ef75fa8727eed8a7d2e43ce9f4bcf1b536174f7
 - platform: osx-64
+  name: rsa
+  version: '4.9'
+  category: main
+  manager: pip
+  requires_dist:
+  - pyasn1 >=0.1.3
+  requires_python: '>=3.6, <4'
+  extras: []
+  url: https://files.pythonhosted.org/packages/49/97/fa78e3d2f65c02c8e1268b9aba606569fe97f6c8f7c2d74394553347c145/rsa-4.9-py3-none-any.whl#sha256=90260d9058e514786967344d0ef75fa8727eed8a7d2e43ce9f4bcf1b536174f7
+  hash:
+    md5: null
+    sha256: 90260d9058e514786967344d0ef75fa8727eed8a7d2e43ce9f4bcf1b536174f7
+- platform: osx-arm64
   name: rsa
   version: '4.9'
   category: main
@@ -3782,6 +4138,63 @@ package:
     md5: null
     sha256: b454a35605876da60632df1a60f736524eb73cc47bbc9f3f1ef1b644de74fd2a
 - platform: osx-64
+  name: setuptools
+  version: 68.2.2
+  category: main
+  manager: pip
+  requires_dist:
+  - sphinx >=3.5 ; extra == 'docs'
+  - jaraco.packaging >=9.3 ; extra == 'docs'
+  - rst.linker >=1.9 ; extra == 'docs'
+  - furo ; extra == 'docs'
+  - sphinx-lint ; extra == 'docs'
+  - jaraco.tidelift >=1.4 ; extra == 'docs'
+  - pygments-github-lexers ==0.0.5 ; extra == 'docs'
+  - sphinx-favicon ; extra == 'docs'
+  - sphinx-inline-tabs ; extra == 'docs'
+  - sphinx-reredirects ; extra == 'docs'
+  - sphinxcontrib-towncrier ; extra == 'docs'
+  - sphinx-notfound-page <2, >=1 ; extra == 'docs'
+  - sphinx-hoverxref <2 ; extra == 'docs'
+  - pytest >=6 ; extra == 'testing'
+  - pytest-checkdocs >=2.4 ; extra == 'testing'
+  - pytest-enabler >=2.2 ; extra == 'testing'
+  - flake8-2020 ; extra == 'testing'
+  - virtualenv >=13.0.0 ; extra == 'testing'
+  - wheel ; extra == 'testing'
+  - pip >=19.1 ; extra == 'testing'
+  - jaraco.envs >=2.2 ; extra == 'testing'
+  - pytest-xdist ; extra == 'testing'
+  - jaraco.path >=3.2.0 ; extra == 'testing'
+  - build[virtualenv] ; extra == 'testing'
+  - filelock >=3.4.0 ; extra == 'testing'
+  - ini2toml[lite] >=0.9 ; extra == 'testing'
+  - tomli-w >=1.0.0 ; extra == 'testing'
+  - pytest-timeout ; extra == 'testing'
+  - pytest ; extra == 'testing-integration'
+  - pytest-xdist ; extra == 'testing-integration'
+  - pytest-enabler ; extra == 'testing-integration'
+  - virtualenv >=13.0.0 ; extra == 'testing-integration'
+  - tomli ; extra == 'testing-integration'
+  - wheel ; extra == 'testing-integration'
+  - jaraco.path >=3.2.0 ; extra == 'testing-integration'
+  - jaraco.envs >=2.2 ; extra == 'testing-integration'
+  - build[virtualenv] >=1.0.3 ; extra == 'testing-integration'
+  - filelock >=3.4.0 ; extra == 'testing-integration'
+  - packaging >=23.1 ; extra == 'testing-integration'
+  - pytest-black >=0.3.7 ; platform_python_implementation != 'PyPy' and extra == 'testing'
+  - pytest-cov ; platform_python_implementation != 'PyPy' and extra == 'testing'
+  - pytest-mypy >=0.9.1 ; platform_python_implementation != 'PyPy' and extra == 'testing'
+  - jaraco.develop >=7.21 ; (python_version >= '3.9' and sys_platform != 'cygwin') and extra == 'testing'
+  - pytest-ruff ; sys_platform != 'cygwin' and extra == 'testing'
+  - pytest-perf ; sys_platform != 'cygwin' and extra == 'testing'
+  requires_python: '>=3.8'
+  extras: []
+  url: https://files.pythonhosted.org/packages/bb/26/7945080113158354380a12ce26873dd6c1ebd88d47f5bc24e2c5bb38c16a/setuptools-68.2.2-py3-none-any.whl#sha256=b454a35605876da60632df1a60f736524eb73cc47bbc9f3f1ef1b644de74fd2a
+  hash:
+    md5: null
+    sha256: b454a35605876da60632df1a60f736524eb73cc47bbc9f3f1ef1b644de74fd2a
+- platform: osx-arm64
   name: setuptools
   version: 68.2.2
   category: main
@@ -3908,6 +4321,18 @@ package:
     md5: null
     sha256: 8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254
 - platform: osx-64
+  name: six
+  version: 1.16.0
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=2.7, !=3.0.*, !=3.1.*, !=3.2.*'
+  extras: []
+  url: https://files.pythonhosted.org/packages/d9/5a/e7c31adbe875f2abbb91bd84cf2dc52d792b5a01506781dbcf25c91daf11/six-1.16.0-py2.py3-none-any.whl#sha256=8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254
+  hash:
+    md5: null
+    sha256: 8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254
+- platform: osx-arm64
   name: six
   version: 1.16.0
   category: main
@@ -4001,6 +4426,30 @@ package:
   hash:
     md5: null
     sha256: 3db108fb58f023b6439880e177743c5f1e703e9eeb5fb7d597871f949f85fd58
+- platform: osx-arm64
+  name: tensorboard
+  version: 2.14.1
+  category: main
+  manager: pip
+  requires_dist:
+  - absl-py >=0.4
+  - grpcio >=1.48.2
+  - google-auth <3, >=1.6.3
+  - google-auth-oauthlib <1.1, >=0.5
+  - markdown >=2.6.8
+  - numpy >=1.12.0
+  - protobuf >=3.19.6
+  - requests <3, >=2.21.0
+  - setuptools >=41.0.0
+  - six >1.9
+  - tensorboard-data-server <0.8.0, >=0.7.0
+  - werkzeug >=1.0.1
+  requires_python: '>=3.9'
+  extras: []
+  url: https://files.pythonhosted.org/packages/73/a2/66ed644f6ed1562e0285fcd959af17670ea313c8f331c46f79ee77187eb9/tensorboard-2.14.1-py3-none-any.whl#sha256=3db108fb58f023b6439880e177743c5f1e703e9eeb5fb7d597871f949f85fd58
+  hash:
+    md5: null
+    sha256: 3db108fb58f023b6439880e177743c5f1e703e9eeb5fb7d597871f949f85fd58
 - platform: win-64
   name: tensorboard
   version: 2.14.1
@@ -4038,6 +4487,18 @@ package:
     md5: null
     sha256: 7e0610d205889588983836ec05dc098e80f97b7e7bbff7e994ebb78f578d0ddb
 - platform: osx-64
+  name: tensorboard-data-server
+  version: 0.7.2
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/7a/13/e503968fefabd4c6b2650af21e110aa8466fe21432cd7c43a84577a89438/tensorboard_data_server-0.7.2-py3-none-any.whl#sha256=7e0610d205889588983836ec05dc098e80f97b7e7bbff7e994ebb78f578d0ddb
+  hash:
+    md5: null
+    sha256: 7e0610d205889588983836ec05dc098e80f97b7e7bbff7e994ebb78f578d0ddb
+- platform: osx-arm64
   name: tensorboard-data-server
   version: 0.7.2
   category: main
@@ -4229,6 +4690,18 @@ package:
   hash:
     md5: null
     sha256: 820bf57c24aa631abb1bbe4371739ed77edb11361d61381fd8e790115ac0fd57
+- platform: osx-arm64
+  name: tensorflow-estimator
+  version: 2.14.0
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/d1/da/4f264c196325bb6e37a6285caec5b12a03def489b57cc1fdac02bb6272cd/tensorflow_estimator-2.14.0-py2.py3-none-any.whl#sha256=820bf57c24aa631abb1bbe4371739ed77edb11361d61381fd8e790115ac0fd57
+  hash:
+    md5: null
+    sha256: 820bf57c24aa631abb1bbe4371739ed77edb11361d61381fd8e790115ac0fd57
 - platform: win-64
   name: tensorflow-estimator
   version: 2.14.0
@@ -4320,6 +4793,23 @@ package:
   hash:
     md5: null
     sha256: a17a616d2c7fae83de4424404815843507d40d4eb0d507c636a5493a20c3d958
+- platform: osx-arm64
+  name: tensorflow-io-gcs-filesystem
+  version: 0.34.0
+  category: main
+  manager: pip
+  requires_dist:
+  - tensorflow <2.14.0, >=2.13.0 ; extra == 'tensorflow'
+  - tensorflow-aarch64 <2.14.0, >=2.13.0 ; extra == 'tensorflow-aarch64'
+  - tensorflow-cpu <2.14.0, >=2.13.0 ; extra == 'tensorflow-cpu'
+  - tensorflow-gpu <2.14.0, >=2.13.0 ; extra == 'tensorflow-gpu'
+  - tensorflow-rocm <2.14.0, >=2.13.0 ; extra == 'tensorflow-rocm'
+  requires_python: '>=3.7, <3.12'
+  extras: []
+  url: https://files.pythonhosted.org/packages/5b/e9/1444afc87596a90066704cc46ed661a4e7b348eec03a3fc2ca10ab917254/tensorflow_io_gcs_filesystem-0.34.0-cp311-cp311-macosx_12_0_arm64.whl#sha256=ec4604c99cbb5b708f4516dee27aa655abae222b876c98b740f4c2f89dd5c001
+  hash:
+    md5: null
+    sha256: ec4604c99cbb5b708f4516dee27aa655abae222b876c98b740f4c2f89dd5c001
 - platform: win-64
   name: tensorflow-io-gcs-filesystem
   version: 0.31.0
@@ -4337,6 +4827,51 @@ package:
   hash:
     md5: null
     sha256: 4bb37d23f21c434687b11059cb7ffd094d52a7813368915ba1b7057e3c16e414
+- platform: osx-arm64
+  name: tensorflow-macos
+  version: 2.14.0
+  category: main
+  manager: pip
+  requires_dist:
+  - absl-py >=1.0.0
+  - astunparse >=1.6.0
+  - flatbuffers >=23.5.26
+  - gast !=0.5.0, !=0.5.1, !=0.5.2, >=0.2.1
+  - google-pasta >=0.1.1
+  - h5py >=2.9.0
+  - libclang >=13.0.0
+  - ml-dtypes ==0.2.0
+  - numpy >=1.23.5
+  - opt-einsum >=2.3.2
+  - packaging
+  - protobuf !=4.21.0, !=4.21.1, !=4.21.2, !=4.21.3, !=4.21.4, !=4.21.5, <5.0.0.dev0, >=3.20.3
+  - setuptools
+  - six >=1.12.0
+  - termcolor >=1.1.0
+  - typing-extensions >=3.6.6
+  - wrapt <1.15, >=1.11.0
+  - tensorflow-io-gcs-filesystem >=0.23.1
+  - grpcio <2.0, >=1.24.3
+  - tensorboard <2.15, >=2.14
+  - tensorflow-estimator <2.15, >=2.14.0
+  - keras <2.15, >=2.14.0
+  - nvidia-cuda-runtime-cu11 ==11.8.89 ; extra == 'and-cuda'
+  - nvidia-cublas-cu11 ==11.11.3.6 ; extra == 'and-cuda'
+  - nvidia-cufft-cu11 ==10.9.0.58 ; extra == 'and-cuda'
+  - nvidia-cudnn-cu11 ==8.7.0.84 ; extra == 'and-cuda'
+  - nvidia-curand-cu11 ==10.3.0.86 ; extra == 'and-cuda'
+  - nvidia-cusolver-cu11 ==11.4.1.48 ; extra == 'and-cuda'
+  - nvidia-cusparse-cu11 ==11.7.5.86 ; extra == 'and-cuda'
+  - nvidia-nccl-cu11 ==2.16.5 ; extra == 'and-cuda'
+  - nvidia-cuda-cupti-cu11 ==11.8.87 ; extra == 'and-cuda'
+  - nvidia-cuda-nvcc-cu11 ==11.8.89 ; extra == 'and-cuda'
+  - tensorrt ==8.5.3.1 ; extra == 'and-cuda'
+  requires_python: '>=3.9'
+  extras: []
+  url: https://files.pythonhosted.org/packages/d3/4b/ae9037ea22ba94eb2cf267e991384c3444f3e6142fa49923352b4ab73e14/tensorflow_macos-2.14.0-cp311-cp311-macosx_12_0_arm64.whl#sha256=064e98b67d7a89e72c37c90254c0a322a0b8d0ce9b68f23286816210e3ef6685
+  hash:
+    md5: null
+    sha256: 064e98b67d7a89e72c37c90254c0a322a0b8d0ce9b68f23286816210e3ef6685
 - platform: linux-64
   name: termcolor
   version: 2.3.0
@@ -4352,6 +4887,20 @@ package:
     md5: null
     sha256: 3afb05607b89aed0ffe25202399ee0867ad4d3cb4180d98aaf8eefa6a5f7d475
 - platform: osx-64
+  name: termcolor
+  version: 2.3.0
+  category: main
+  manager: pip
+  requires_dist:
+  - pytest ; extra == 'tests'
+  - pytest-cov ; extra == 'tests'
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/67/e1/434566ffce04448192369c1a282931cf4ae593e91907558eaecd2e9f2801/termcolor-2.3.0-py3-none-any.whl#sha256=3afb05607b89aed0ffe25202399ee0867ad4d3cb4180d98aaf8eefa6a5f7d475
+  hash:
+    md5: null
+    sha256: 3afb05607b89aed0ffe25202399ee0867ad4d3cb4180d98aaf8eefa6a5f7d475
+- platform: osx-arm64
   name: termcolor
   version: 2.3.0
   category: main
@@ -4471,6 +5020,18 @@ package:
     md5: null
     sha256: 8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0
 - platform: osx-64
+  name: typing-extensions
+  version: 4.8.0
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '>=3.8'
+  extras: []
+  url: https://files.pythonhosted.org/packages/24/21/7d397a4b7934ff4028987914ac1044d3b7d52712f30e2ac7a2ae5bc86dd0/typing_extensions-4.8.0-py3-none-any.whl#sha256=8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0
+  hash:
+    md5: null
+    sha256: 8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0
+- platform: osx-arm64
   name: typing-extensions
   version: 4.8.0
   category: main
@@ -4603,6 +5164,22 @@ package:
     md5: null
     sha256: 55901e917a5896a349ff771be919f8bd99aff50b79fe58fec595eb37bbc56bb3
 - platform: osx-64
+  name: urllib3
+  version: 2.1.0
+  category: main
+  manager: pip
+  requires_dist:
+  - brotli >=1.0.9 ; platform_python_implementation == 'CPython' and extra == 'brotli'
+  - brotlicffi >=0.8.0 ; platform_python_implementation != 'CPython' and extra == 'brotli'
+  - pysocks !=1.5.7, <2.0, >=1.5.6 ; extra == 'socks'
+  - zstandard >=0.18.0 ; extra == 'zstd'
+  requires_python: '>=3.8'
+  extras: []
+  url: https://files.pythonhosted.org/packages/96/94/c31f58c7a7f470d5665935262ebd7455c7e4c7782eb525658d3dbf4b9403/urllib3-2.1.0-py3-none-any.whl#sha256=55901e917a5896a349ff771be919f8bd99aff50b79fe58fec595eb37bbc56bb3
+  hash:
+    md5: null
+    sha256: 55901e917a5896a349ff771be919f8bd99aff50b79fe58fec595eb37bbc56bb3
+- platform: osx-arm64
   name: urllib3
   version: 2.1.0
   category: main
@@ -4778,6 +5355,20 @@ package:
   hash:
     md5: null
     sha256: 488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942
+- platform: osx-arm64
+  name: wheel
+  version: 0.41.3
+  category: main
+  manager: pip
+  requires_dist:
+  - pytest >=6.0.0 ; extra == 'test'
+  - setuptools >=65 ; extra == 'test'
+  requires_python: '>=3.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/fa/7f/4c07234086edbce4a0a446209dc0cb08a19bb206a3ea53b2f56a403f983b/wheel-0.41.3-py3-none-any.whl#sha256=488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942
+  hash:
+    md5: null
+    sha256: 488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942
 - platform: win-64
   name: wheel
   version: 0.41.3
@@ -4816,6 +5407,18 @@ package:
   hash:
     md5: null
     sha256: ecee4132c6cd2ce5308e21672015ddfed1ff975ad0ac8d27168ea82e71413f55
+- platform: osx-arm64
+  name: wrapt
+  version: 1.14.1
+  category: main
+  manager: pip
+  requires_dist: []
+  requires_python: '!=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, >=2.7'
+  extras: []
+  url: https://files.pythonhosted.org/packages/6e/79/aec8185eefe20e8f49e5adeb0c2e20e016d5916d10872c17705ddac41be2/wrapt-1.14.1-cp311-cp311-macosx_11_0_arm64.whl#sha256=2020f391008ef874c6d9e208b24f28e31bcb85ccff4f335f15a3251d222b92d9
+  hash:
+    md5: null
+    sha256: 2020f391008ef874c6d9e208b24f28e31bcb85ccff4f335f15a3251d222b92d9
 - platform: win-64
   name: wrapt
   version: 1.14.1
