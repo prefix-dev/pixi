@@ -1,4 +1,4 @@
-use crate::project::python::PypiDependencies;
+use crate::project::python::PyPiRequirement;
 use crate::project::SpecType;
 use crate::utils::spanned::PixiSpanned;
 use crate::{consts, task::Task};
@@ -70,7 +70,7 @@ pub struct ProjectManifest {
 
     /// Optional python requirements
     #[serde(default, rename = "pypi-dependencies")]
-    pub pypi_dependencies: PypiDependencies,
+    pub pypi_dependencies: Option<IndexMap<rip::PackageName, PyPiRequirement>>,
 }
 
 impl ProjectManifest {
