@@ -42,8 +42,8 @@ ProjectManifest {
     build_dependencies: None,
     target: {},
     activation: None,
-    pypi_dependencies: PypiDependencies {
-        requirements: {
+    pypi_dependencies: Some(
+        {
             PackageName {
                 source: "foo",
                 normalized: "foo",
@@ -101,5 +101,5 @@ ProjectManifest {
                 ),
             },
         },
-    },
+    ),
 }

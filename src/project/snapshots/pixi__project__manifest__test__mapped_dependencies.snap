@@ -1,6 +1,5 @@
 ---
 source: src/project/manifest.rs
-assertion_line: 421
 expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\")"
 ---
 ProjectManifest {
@@ -89,7 +88,5 @@ ProjectManifest {
     build_dependencies: None,
     target: {},
     activation: None,
-    pypi_dependencies: PypiDependencies {
-        requirements: {},
-    },
+    pypi_dependencies: None,
 }
