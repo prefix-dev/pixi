@@ -4,11 +4,13 @@ use crate::common::builders::string_from_iter;
 use crate::common::package_database::{Package, PackageDatabase};
 use common::{LockFileExt, PixiControl};
 use pixi::cli::run;
+use serial_test::serial;
 use tempfile::TempDir;
 
 /// Should add a python version to the environment and lock file that matches the specified version
 /// and run it
 #[tokio::test]
+#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_run_python() {
     let pixi = PixiControl::new().unwrap();
@@ -43,6 +45,7 @@ async fn install_run_python() {
 /// version `2` is available. This is because `bar` was previously locked to version `1` and it is
 /// still a valid solution to keep using version `1` of bar.
 #[tokio::test]
+#[serial]
 async fn test_incremental_lock_file() {
     let mut package_database = PackageDatabase::default();
 
@@ -106,6 +109,7 @@ async fn test_incremental_lock_file() {
 
 /// Test the `pixi install --locked` functionality.
 #[tokio::test]
+#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_locked() {
     let pixi = PixiControl::new().unwrap();
@@ -136,6 +140,7 @@ async fn install_locked() {
 
 /// Test `pixi install/run --frozen` functionality
 #[tokio::test]
+#[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_frozen() {
     let pixi = PixiControl::new().unwrap();
