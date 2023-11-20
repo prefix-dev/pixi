@@ -19,11 +19,15 @@ pub async fn resolve_pypi_dependencies<'p>(
     platform: Platform,
     conda_packages: &[RepoDataRecord],
 ) -> miette::Result<Vec<PinnedPackage<'p>>> {
-    let requirements = project.pypi_dependencies();
-    if requirements.is_empty() {
-        // If there are no requirements we can skip this function.
-        return Ok(vec![]);
-    }
+    let dependencies = match project.pypi_dependencies() {
+        Some(deps) if !deps.is_empty() => deps,
+        _ => return Ok(vec![]),
+    };
+
+    let requirements = dependencies
+        .iter()
+        .map(|(name, req)| req.as_pep508(name))
+        .collect::<Vec<pep508_rs::Requirement>>();
 
     // Determine the python packages that are installed by the conda packages
     let conda_python_packages =
@@ -64,7 +68,7 @@ pub async fn resolve_pypi_dependencies<'p>(
     // Resolve the PyPi dependencies
     let mut result = rip::resolve(
         project.pypi_package_db()?,
-        &requirements.as_pep508(),
+        &requirements,
         &marker_environment,
         Some(&compatible_tags),
         conda_python_packages

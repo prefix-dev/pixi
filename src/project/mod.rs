@@ -20,7 +20,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::project::python::PypiDependencies;
+use crate::project::python::PyPiRequirement;
 use crate::{
     consts::{self, PROJECT_MANIFEST},
     default_client,
@@ -332,7 +332,11 @@ impl Project {
         )?;
 
         // Notify the user that pypi-dependencies are still experimental
-        if !manifest.pypi_dependencies.is_empty() {
+        if manifest
+            .pypi_dependencies
+            .as_ref()
+            .map_or(false, |deps| !deps.is_empty())
+        {
             tracing::warn!("ALPHA feature enabled!\n\nIt looks like your project contains `[pypi-dependencies]`. This feature is currently still in an ALPHA state!\n\nYou may encounter bugs or weird behavior. Please report any and all issues you encounter on our github repository:\n\n\thttps://github.com/prefix-dev/pixi.\n");
         }
 
@@ -447,8 +451,8 @@ impl Project {
         Ok(dependencies)
     }
 
-    pub fn pypi_dependencies(&self) -> &PypiDependencies {
-        &self.manifest.pypi_dependencies
+    pub fn pypi_dependencies(&self) -> Option<&IndexMap<rip::PackageName, PyPiRequirement>> {
+        self.manifest.pypi_dependencies.as_ref()
     }
 
     /// Returns the Python index URLs to use for this project.

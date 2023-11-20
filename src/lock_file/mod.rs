@@ -47,7 +47,10 @@ pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette:
     let platforms = project.platforms();
 
     // TODO: Add support for python dependencies
-    if !project.pypi_dependencies().is_empty() {
+    if project
+        .pypi_dependencies()
+        .is_some_and(|deps| !deps.is_empty())
+    {
         tracing::warn!("Checking if a lock-file is up to date with `pypi-dependencies` in the mix is not yet implemented.");
         return Ok(false);
     }

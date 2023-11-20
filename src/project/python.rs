@@ -1,4 +1,3 @@
-use indexmap::IndexMap;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::VersionOrUrl;
 use serde::de::{Error, MapAccess, Visitor};
@@ -16,20 +15,33 @@ pub struct PyPiRequirement {
 /// The type of parse error that occurred when parsing match spec.
 #[derive(Debug, Clone, Error)]
 pub enum ParsePyPiRequirementError {
-    #[error("invalid PEP440")]
+    #[error("invalid pep440 version specifier")]
     Pep440Error(#[from] pep440_rs::Pep440Error),
+
+    #[error("empty string is not allowed, did you mean '*'?")]
+    EmptyStringNotAllowed,
+
+    #[error("missing operator in version specifier, did you mean '~={0}'?")]
+    MissingOperator(String),
 }
 
 impl FromStr for PyPiRequirement {
     type Err = ParsePyPiRequirementError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Accept a star as an any requirement, which is represented by the none.
+        let s = s.trim();
+
+        if s.is_empty() {
+            return Err(ParsePyPiRequirementError::EmptyStringNotAllowed);
+        }
         if s == "*" {
+            // Accept a star as an any requirement, which is represented by the none.
             Ok(Self {
                 version: None,
                 extras: None,
             })
+        } else if s.starts_with(|c: char| c.is_ascii_digit()) {
+            Err(ParsePyPiRequirementError::MissingOperator(s.to_string()))
         } else {
             // From string can only parse the version specifier.
             Ok(Self {
@@ -43,35 +55,15 @@ impl FromStr for PyPiRequirement {
     }
 }
 
-/// Represents a set of python dependencies on which a project can depend. The dependencies are
-/// formatted using a custom version specifier.
-#[derive(Default, Debug, Deserialize, Clone, Eq, PartialEq)]
-pub struct PypiDependencies {
-    #[serde(flatten)]
-    requirements: IndexMap<rip::PackageName, PyPiRequirement>,
-}
-
-impl PypiDependencies {
-    /// Returns `true` if no requirements have been specified
-    pub fn is_empty(&self) -> bool {
-        self.requirements.is_empty()
-    }
-
+impl PyPiRequirement {
     /// Returns the requirements as [`pep508_rs::Requirement`]s.
-    pub fn as_pep508(&self) -> Vec<pep508_rs::Requirement> {
-        self.requirements
-            .iter()
-            .map(|(name, req)| {
-                let version = req.version.clone().map(VersionOrUrl::VersionSpecifier);
-
-                pep508_rs::Requirement {
-                    name: name.as_str().to_string(),
-                    extras: req.extras.clone(),
-                    version_or_url: version,
-                    marker: None,
-                }
-            })
-            .collect()
+    pub fn as_pep508(&self, name: &rip::PackageName) -> pep508_rs::Requirement {
+        pep508_rs::Requirement {
+            name: name.as_str().to_string(),
+            extras: self.extras.clone(),
+            version_or_url: self.version.clone().map(VersionOrUrl::VersionSpecifier),
+            marker: None,
+        }
     }
 }
 impl<'de> Deserialize<'de> for PyPiRequirement {
@@ -117,93 +109,83 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
 #[cfg(test)]
 mod test {
     use super::*;
+    use indexmap::IndexMap;
 
     #[test]
     fn test_only_version() {
-        let requirement: PypiDependencies = toml_edit::de::from_str(r#"foo = ">=3.12""#).unwrap();
+        let requirement: IndexMap<rip::PackageName, PyPiRequirement> =
+            toml_edit::de::from_str(r#"foo = ">=3.12""#).unwrap();
         assert_eq!(
-            requirement,
-            PypiDependencies {
-                requirements: IndexMap::from([(
-                    rip::PackageName::from_str("foo").unwrap(),
-                    PyPiRequirement {
-                        version: Some(VersionSpecifiers::from_str(">=3.12").unwrap()),
-                        extras: None
-                    }
-                ),])
+            requirement.first().unwrap().0,
+            &rip::PackageName::from_str("foo").unwrap()
+        );
+        assert_eq!(
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                version: Some(VersionSpecifiers::from_str(">=3.12").unwrap()),
+                extras: None
             }
         );
-        let requirement: PypiDependencies = toml_edit::de::from_str(r#"foo = "==3.12.0""#).unwrap();
+        let requirement: IndexMap<rip::PackageName, PyPiRequirement> =
+            toml_edit::de::from_str(r#"foo = "==3.12.0""#).unwrap();
         assert_eq!(
-            requirement,
-            PypiDependencies {
-                requirements: IndexMap::from([(
-                    rip::PackageName::from_str("foo").unwrap(),
-                    PyPiRequirement {
-                        version: Some(VersionSpecifiers::from_str("==3.12.0").unwrap()),
-                        extras: None
-                    }
-                ),])
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                version: Some(VersionSpecifiers::from_str("==3.12.0").unwrap()),
+                extras: None
             }
         );
-        let requirement: PypiDependencies = toml_edit::de::from_str(r#"foo = "~=2.1.3""#).unwrap();
+
+        let requirement: IndexMap<rip::PackageName, PyPiRequirement> =
+            toml_edit::de::from_str(r#"foo = "~=2.1.3""#).unwrap();
         assert_eq!(
-            requirement,
-            PypiDependencies {
-                requirements: IndexMap::from([(
-                    rip::PackageName::from_str("foo").unwrap(),
-                    PyPiRequirement {
-                        version: Some(VersionSpecifiers::from_str("~=2.1.3").unwrap()),
-                        extras: None
-                    }
-                ),])
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                version: Some(VersionSpecifiers::from_str("~=2.1.3").unwrap()),
+                extras: None
             }
         );
-        let requirement: PypiDependencies = toml_edit::de::from_str(r#"foo = "*""#).unwrap();
+
+        let requirement: IndexMap<rip::PackageName, PyPiRequirement> =
+            toml_edit::de::from_str(r#"foo = "*""#).unwrap();
         assert_eq!(
-            requirement,
-            PypiDependencies {
-                requirements: IndexMap::from([(
-                    rip::PackageName::from_str("foo").unwrap(),
-                    PyPiRequirement {
-                        version: None,
-                        extras: None
-                    }
-                ),])
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                version: None,
+                extras: None
             }
         );
     }
 
     #[test]
     fn test_extended() {
-        let requirement: PypiDependencies =
-            toml::de::from_str(r#"foo = { version=">=3.12", extras = ["bar"] }"#).unwrap();
+        let requirement: IndexMap<rip::PackageName, PyPiRequirement> =
+            toml_edit::de::from_str(r#"foo = { version=">=3.12", extras = ["bar"] }"#).unwrap();
         assert_eq!(
-            requirement,
-            PypiDependencies {
-                requirements: IndexMap::from([(
-                    rip::PackageName::from_str("foo").unwrap(),
-                    PyPiRequirement {
-                        version: Some(VersionSpecifiers::from_str(">=3.12").unwrap()),
-                        extras: Some(vec!("bar".to_string()))
-                    }
-                ),])
+            requirement.first().unwrap().0,
+            &rip::PackageName::from_str("foo").unwrap()
+        );
+        assert_eq!(
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                version: Some(VersionSpecifiers::from_str(">=3.12").unwrap()),
+                extras: Some(vec!("bar".to_string()))
             }
         );
 
-        let requirement: PypiDependencies =
-            toml::de::from_str(r#"bar = { version=">=3.12,<3.13.0", extras = ["bar", "foo"] }"#)
-                .unwrap();
+        let requirement: IndexMap<rip::PackageName, PyPiRequirement> = toml_edit::de::from_str(
+            r#"bar = { version=">=3.12,<3.13.0", extras = ["bar", "foo"] }"#,
+        )
+        .unwrap();
         assert_eq!(
-            requirement,
-            PypiDependencies {
-                requirements: IndexMap::from([(
-                    rip::PackageName::from_str("bar").unwrap(),
-                    PyPiRequirement {
-                        version: Some(VersionSpecifiers::from_str(">=3.12,<3.13.0").unwrap()),
-                        extras: Some(vec!("bar".to_string(), "foo".to_string()))
-                    }
-                ),])
+            requirement.first().unwrap().0,
+            &rip::PackageName::from_str("bar").unwrap()
+        );
+        assert_eq!(
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                version: Some(VersionSpecifiers::from_str(">=3.12,<3.13.0").unwrap()),
+                extras: Some(vec!("bar".to_string(), "foo".to_string()))
             }
         );
     }
