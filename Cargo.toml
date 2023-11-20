@@ -25,6 +25,7 @@ console = { version = "0.15.7", features = ["windows-console-colors"] }
 deno_task_shell = "0.13.2"
 # deno_task_shell = { path = "../deno_task_shell" }
 dirs = "5.0.1"
+drop_bomb = "0.1.5"
 dunce = "1.0.4"
 futures = "0.3.28"
 indexmap = { version = "2.0.2", features = ["serde"] }

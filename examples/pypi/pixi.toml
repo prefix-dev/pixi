@@ -11,6 +11,7 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 [dependencies]
 python = "~=3.11.0"
 numpy = "*"
+libclang = "~=16.0.6"
 
 [pypi-dependencies]
 pyboy = "1.6.6"

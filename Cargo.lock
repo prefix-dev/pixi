@@ -933,6 +933,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "drop_bomb"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bda8e21c04aca2ae33ffc2fd8c23134f3cac46db123ba97bd9d3f3b8a4a85e1"
+
+[[package]]
 name = "dunce"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2504,6 +2510,7 @@ dependencies = [
  "console",
  "deno_task_shell",
  "dirs",
+ "drop_bomb",
  "dunce",
  "futures 0.3.29",
  "indexmap 2.1.0",
