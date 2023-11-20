@@ -15,20 +15,33 @@ pub struct PyPiRequirement {
 /// The type of parse error that occurred when parsing match spec.
 #[derive(Debug, Clone, Error)]
 pub enum ParsePyPiRequirementError {
-    #[error("invalid PEP440: https://peps.python.org/pep-0440/")]
+    #[error("invalid pep440 version specifier")]
     Pep440Error(#[from] pep440_rs::Pep440Error),
+
+    #[error("empty string is not allowed, did you mean '*'?")]
+    EmptyStringNotAllowed,
+
+    #[error("missing operator in version specifier, did you mean '~={0}'?")]
+    MissingOperator(String),
 }
 
 impl FromStr for PyPiRequirement {
     type Err = ParsePyPiRequirementError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Accept a star as an any requirement, which is represented by the none.
+        let s = s.trim();
+
+        if s.is_empty() {
+            return Err(ParsePyPiRequirementError::EmptyStringNotAllowed);
+        }
         if s == "*" {
+            // Accept a star as an any requirement, which is represented by the none.
             Ok(Self {
                 version: None,
                 extras: None,
             })
+        } else if s.starts_with(|c: char| c.is_ascii_digit()) {
+            Err(ParsePyPiRequirementError::MissingOperator(s.to_string()))
         } else {
             // From string can only parse the version specifier.
             Ok(Self {
