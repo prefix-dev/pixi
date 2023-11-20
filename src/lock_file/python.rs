@@ -226,7 +226,7 @@ fn mac_platform_tags(platform: Platform, mac_version: &Version) -> Vec<String> {
     // macOS 11 on x86_64 is compatible with binaries from previous releases.
     // Arm64 support was introduced in 11.0, so no Arm binaries from previous releases exist.
     //
-    // However, the "universal2" binary format can have a macOS version earlier tahn 11.0 when the
+    // However, the "universal2" binary format can have a macOS version earlier than 11.0 when the
     // x86_64 part of the binary supports that version of macOS.
     if mac_version >= &v11_0 {
         for minor in (4..=16).rev() {
