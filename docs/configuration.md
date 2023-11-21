@@ -244,18 +244,13 @@ pytoch-cpu = { version = "~=1.1", channel = "pytorch" }
 Add any PyPI package that you want to install in the environment after the conda installation is finished.
 These are not available on [prefix.dev](https://prefix.dev/channels) but on [pypi.org](https://pypi.org/).
 !!! warning "Important considerations"
-    These packages are much more unstable than the conda variant. 
-    So where possible use the conda packages in the `dependencies` table.
-    We're also not yet compatible with all features of `pip`. 
-    Some notable missing features:
-
-    - `git` dependencies
-    - Source dependencies
-    - Private PyPI repositories
-    - We only support the more modern wheel format for packages.
-
-    These dependencies don't follow the conda matchspec specification.
-    So see the example below to see what type of definition is allowed. 
+    - **Stability**: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the `dependencies` table where possible.
+    - **Compatibility limitations**: Currently, pixi doesn't support:
+        - `git` dependencies
+        - Source dependencies
+        - Private PyPI repositories
+    - **Version specification**: These dependencies don't follow the conda matchspec specification.
+    So see the example below to see what type of definition is allowed.
     It is based on [pep440](https://peps.python.org/pep-0440/)
 
 ```toml
@@ -268,10 +263,10 @@ torch = "*"  # This means any version (this `*` is custom in pixi)
 pre-commit = "~=3.5.0"
 numpy = ">=1.20,<1.24"
 ```
-??? info
+??? info "We use `rip` not `pip`"
     We use [`rip`](https://github.com/prefix-dev/rip) which is our custom pypi package resolver.
-    The rip resolve step is run after the conda dependencies have been resolved. 
-    As the conda packages can also install python packages, which are used in the rip resolver. 
+    The `rip` resolve step is invoked after the conda dependencies have been resolved.
+    As the conda packages can also install python packages, which are used in the rip resolver.
     Also `rip` needs to know the version of python that is being used.
 
 ### `host-dependencies`
