@@ -7,7 +7,8 @@ pub mod channel;
 pub enum Command {
     Channel(channel::Args),
 }
-// Modify the project configuration file through the command line.
+
+/// Modify the project configuration file through the command line.
 #[derive(Debug, Parser)]
 pub struct Args {
     #[command(subcommand)]
