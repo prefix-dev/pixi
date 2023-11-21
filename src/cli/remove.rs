@@ -5,7 +5,7 @@ use rattler_conda_types::{PackageName, Platform};
 
 use crate::{project::SpecType, Project};
 
-/// Remove the depedency from the project
+/// Remove the dependency from the project
 #[derive(Debug, Default, Parser)]
 pub struct Args {
     /// List of dependencies you wish to remove from the project
@@ -59,7 +59,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 let table_name = if let Some(p) = &args.platform {
                     format!("target.{}.{}", p.as_str(), spec_type.name())
                 } else {
-                    format!("{}", spec_type.name())
+                    spec_type.name().to_string()
                 };
 
                 eprintln!(
