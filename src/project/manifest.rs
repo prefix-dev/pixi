@@ -192,7 +192,7 @@ impl ProjectManifest {
         }
     }
 
-    /// Remove a dependecy for a `Platform`.
+    /// Remove a dependency for a `Platform`.
     pub fn remove_target_dependency(
         &mut self,
         dep: &str,
