@@ -632,12 +632,10 @@ impl Project {
         spec_type: &SpecType,
     ) -> miette::Result<()> {
         if let Item::Table(ref mut t) = self.doc[spec_type.name()] {
-            if t.contains_key(dep.as_normalized()) {
-                if let Some(_) = t.remove(dep.as_normalized()) {
-                    self.save()?;
-                    self.manifest
-                        .remove_dependency(dep.as_normalized(), spec_type)?;
-                }
+            if t.contains_key(dep.as_normalized()) && t.remove(dep.as_normalized()).is_some() {
+                self.save()?;
+                self.manifest
+                    .remove_dependency(dep.as_normalized(), spec_type)?;
             }
         }
 

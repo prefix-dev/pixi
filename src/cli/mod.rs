@@ -67,6 +67,7 @@ pub enum Command {
     Upload(upload::Args),
     Search(search::Args),
     Project(project::Args),
+    #[clap(alias = "rm")]
     Remove(remove::Args),
 }
 
