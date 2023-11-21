@@ -147,30 +147,46 @@ impl ProjectManifest {
     }
 
     /// Remove dependency given a `SpecType`.
-    pub fn remove_dependency(&mut self, dep: &str, spec_type: &SpecType) -> miette::Result<()> {
+    pub fn remove_dependency(
+        &mut self,
+        dep: &str,
+        spec_type: &SpecType,
+    ) -> miette::Result<(String, NamelessMatchSpec)> {
         match spec_type {
-            SpecType::Run => {
-                self.dependencies
-                    .shift_remove(dep)
-                    .ok_or(miette::miette!("couldn't find {dep} in [dependencies]"))?;
-                Ok(())
-            }
+            SpecType::Run => self
+                .dependencies
+                .shift_remove_entry(dep)
+                .ok_or(miette::miette!(
+                    "Couldn't find {} in [{}]",
+                    console::style(dep).bold(),
+                    console::style(spec_type.name()).bold(),
+                )),
             SpecType::Build => {
                 if let Some(ref mut deps) = self.build_dependencies {
-                    deps.shift_remove(dep)
-                        .ok_or(miette::miette!("couldn't find {dep} in [dependencies]"))?;
-                    Ok(())
+                    deps.shift_remove_entry(dep).ok_or(miette::miette!(
+                        "Couldn't find {} in [{}]",
+                        console::style(dep).bold(),
+                        console::style(spec_type.name()).bold(),
+                    ))
                 } else {
-                    Err(miette::miette!("[build-dependencies] doesn't exist"))
+                    Err(miette::miette!(
+                        "[{}] doesn't exist",
+                        console::style(spec_type.name()).bold()
+                    ))
                 }
             }
             SpecType::Host => {
                 if let Some(ref mut deps) = self.host_dependencies {
-                    deps.shift_remove(dep)
-                        .ok_or(miette::miette!("couldn't find {dep} in [dependencies]"))?;
-                    Ok(())
+                    deps.shift_remove_entry(dep).ok_or(miette::miette!(
+                        "Couldn't find {} in [{}]",
+                        console::style(dep).bold(),
+                        console::style(spec_type.name()).bold(),
+                    ))
                 } else {
-                    Err(miette::miette!("[host-dependencies] doesn't exist"))
+                    Err(miette::miette!(
+                        "[{}] doesn't exist",
+                        console::style(spec_type.name()).bold()
+                    ))
                 }
             }
         }
@@ -182,37 +198,75 @@ impl ProjectManifest {
         dep: &str,
         spec_type: &SpecType,
         platform: &Platform,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<(String, NamelessMatchSpec)> {
         let target = PixiSpanned::from(TargetSelector::Platform(*platform));
         let target_metadata = self.target.get_mut(&target).ok_or(miette::miette!(
-            "couldn't find platform: {} in manifest",
-            platform.as_str()
+            "Platform: {} is not configured for this project",
+            console::style(platform.as_str()).bold(),
         ))?;
 
         match spec_type {
             SpecType::Run => {
                 target_metadata
                     .dependencies
-                    .shift_remove(dep)
-                    .ok_or(miette::miette!("couldn't find {dep} in [dependencies]"))?;
-                Ok(())
+                    .shift_remove_entry(dep)
+                    .ok_or(miette::miette!(
+                        "Couldn't find {} in [{}]",
+                        console::style(dep).bold(),
+                        console::style(format!(
+                            "target.{}.{}",
+                            platform.as_str(),
+                            spec_type.name()
+                        ))
+                        .bold(),
+                    ))
             }
             SpecType::Build => {
                 if let Some(ref mut deps) = target_metadata.build_dependencies {
-                    deps.shift_remove(dep)
-                        .ok_or(miette::miette!("couldn't find {dep} in [dependencies]"))?;
-                    Ok(())
+                    deps.shift_remove_entry(dep).ok_or(miette::miette!(
+                        "Couldn't find {} in [{}]",
+                        console::style(dep).bold(),
+                        console::style(format!(
+                            "target.{}.{}",
+                            platform.as_str(),
+                            spec_type.name()
+                        ))
+                        .bold(),
+                    ))
                 } else {
-                    Err(miette::miette!("[build-dependencies] doesn't exist"))
+                    Err(miette::miette!(
+                        "[{}] doesn't exist",
+                        console::style(format!(
+                            "target.{}.{}",
+                            platform.as_str(),
+                            spec_type.name()
+                        ))
+                        .bold(),
+                    ))
                 }
             }
             SpecType::Host => {
                 if let Some(ref mut deps) = target_metadata.host_dependencies {
-                    deps.shift_remove(dep)
-                        .ok_or(miette::miette!("couldn't find {dep} in [dependencies]"))?;
-                    Ok(())
+                    deps.shift_remove_entry(dep).ok_or(miette::miette!(
+                        "Couldn't find {} in [{}]",
+                        console::style(dep).bold(),
+                        console::style(format!(
+                            "target.{}.{}",
+                            platform.as_str(),
+                            spec_type.name()
+                        ))
+                        .bold(),
+                    ))
                 } else {
-                    Err(miette::miette!("[host-dependencies] doesn't exist"))
+                    Err(miette::miette!(
+                        "[{}] doesn't exist",
+                        console::style(format!(
+                            "target.{}.{}",
+                            platform.as_str(),
+                            spec_type.name()
+                        ))
+                        .bold(),
+                    ))
                 }
             }
         }
