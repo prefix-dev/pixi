@@ -15,6 +15,7 @@ pub mod info;
 pub mod init;
 pub mod install;
 pub mod project;
+pub mod remove;
 pub mod run;
 pub mod search;
 pub mod shell;
@@ -66,6 +67,7 @@ pub enum Command {
     Upload(upload::Args),
     Search(search::Args),
     Project(project::Args),
+    Remove(remove::Args),
 }
 
 pub async fn execute() -> miette::Result<()> {
@@ -137,6 +139,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
         Command::Project(cmd) => project::execute(cmd).await,
+        Command::Remove(cmd) => remove::execute(cmd),
     }
 }
 
