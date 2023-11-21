@@ -55,11 +55,24 @@ pub fn execute(args: Args) -> miette::Result<()> {
         .iter()
         .filter(|&result| result.is_ok())
         .map(|result| {
-            if result.is_ok() {
-                eprintln!("succesfully removed a dep!");
+            if let Ok((removed, spec)) = result {
+                eprintln!("Removed {} {}", removed, spec);
             }
         })
         .collect::<Vec<_>>();
+
+    match spec_type {
+        SpecType::Build => eprintln!("Removed these as build dependencies."),
+        SpecType::Host => eprintln!("Removed these as host dependencies."),
+        _ => (),
+    };
+
+    if let Some(p) = &args.platform {
+        eprintln!(
+            "Removed these only for platform: {}",
+            console::style(p.as_str()).bold()
+        )
+    }
 
     let _ = results
         .iter()

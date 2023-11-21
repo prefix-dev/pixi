@@ -625,16 +625,21 @@ impl Project {
         &mut self,
         dep: &PackageName,
         spec_type: &SpecType,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<(String, NamelessMatchSpec)> {
         if let Item::Table(ref mut t) = self.doc[spec_type.name()] {
             if t.contains_key(dep.as_normalized()) && t.remove(dep.as_normalized()).is_some() {
                 self.save()?;
-                self.manifest
-                    .remove_dependency(dep.as_normalized(), spec_type)?;
+                return self
+                    .manifest
+                    .remove_dependency(dep.as_normalized(), spec_type);
             }
         }
 
-        Ok(())
+        Err(miette::miette!(
+            "Couldn't find {} in [{}]",
+            console::style(dep.as_normalized()).bold(),
+            console::style(spec_type.name()).bold(),
+        ))
     }
 
     /// Removes a target specific dependency from `pixi.toml` based on `SpecType`.
@@ -643,14 +648,12 @@ impl Project {
         dep: &PackageName,
         spec_type: &SpecType,
         platform: &Platform,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<(String, NamelessMatchSpec)> {
         let table = get_toml_target_table(&mut self.doc, platform, spec_type.name())?;
         table.remove(dep.as_normalized());
         self.save()?;
         self.manifest
-            .remove_target_dependency(dep.as_normalized(), spec_type, platform)?;
-
-        Ok(())
+            .remove_target_dependency(dep.as_normalized(), spec_type, platform)
     }
 
     /// Returns the root directory of the project
