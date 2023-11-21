@@ -126,16 +126,6 @@ pub struct ScopedTask {
     pb: ProgressBar,
 }
 
-impl Drop for ScopedTask {
-    fn drop(&mut self) {
-        // Send the finished operation. If this fails the receiving end was most likely already
-        // closed and we can just ignore the error.
-        if let Some(sender) = self.sender.take() {
-            let _ = sender.blocking_send(Operation::Finished(std::mem::take(&mut self.name)));
-        }
-    }
-}
-
 impl ScopedTask {
     /// Finishes the execution of the task.
     pub async fn finish(mut self) -> ProgressBar {

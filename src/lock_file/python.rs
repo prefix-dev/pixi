@@ -1,4 +1,5 @@
 use crate::project::manifest::SystemRequirements;
+use crate::virtual_packages::default_mac_os_version;
 use crate::{
     consts::PROJECT_MANIFEST, lock_file::python_name_mapping,
     project::manifest::LibCSystemRequirement, virtual_packages::default_glibc_version, Project,
@@ -122,6 +123,25 @@ pub fn determine_marker_environment(
             )
         };
 
+    let platform_machine = match platform {
+        Platform::Linux32 => "i386",
+        Platform::Linux64 => "x86_64",
+        Platform::LinuxAarch64 => "aarch64",
+        Platform::LinuxArmV6l => "armv6l",
+        Platform::LinuxArmV7l => "armv7l",
+        Platform::LinuxPpc64le => "ppc64le",
+        Platform::LinuxPpc64 => "ppc64",
+        Platform::LinuxS390X => "s390x",
+        Platform::LinuxRiscv32 => "riscv32",
+        Platform::LinuxRiscv64 => "riscv64",
+        Platform::Osx64 => "x86_64",
+        Platform::OsxArm64 => "arm64",
+        Platform::Win32 => "x86",
+        Platform::Win64 => "AMD64",
+        Platform::WinArm64 => "ARM64",
+        _ => "",
+    };
+
     Ok(MarkerEnvironment {
         implementation_name: String::from(implementation_name),
         implementation_version: version_to_string_version(&python_record.version),
@@ -141,9 +161,7 @@ pub fn determine_marker_environment(
                 )
             })?,
         sys_platform: String::from(sys_platform),
-
-        // TODO: Can we figure this out?
-        platform_machine: "".to_string(),
+        platform_machine: String::from(platform_machine),
 
         // I assume we can leave these empty
         platform_release: "".to_string(),
@@ -193,8 +211,92 @@ fn project_platforms(platform: Platform, system_requirements: &SystemRequirement
         };
         linux_platform_tags(platform, &max_glibc_version)
     } else {
-        todo!("no implementation for mac yet!")
+        let mac_version = system_requirements
+            .macos
+            .as_ref()
+            .map_or_else(|| default_mac_os_version(platform), |v| v.clone());
+        mac_platform_tags(platform, &mac_version)
     }
+}
+
+fn mac_platform_tags(platform: Platform, mac_version: &Version) -> Vec<String> {
+    let v10_0 = Version::from_str("10.0").unwrap();
+    let v11_0 = Version::from_str("11.0").unwrap();
+    let (major, minor) = mac_version.as_major_minor().expect("invalid mac version");
+
+    let mut result = Vec::new();
+
+    // Prior to macOS 11, each yearly release of macOS bumped the "minor" version number. The
+    // major version was always 10.
+    if mac_version >= &v10_0 && mac_version < &v11_0 {
+        let binary_formats = mac_binary_formats(mac_version, platform);
+        for (minor, binary_format) in (0..=minor).rev().cartesian_product(binary_formats.iter()) {
+            result.push(format!("macosx_{major}_{minor}_{binary_format}"));
+        }
+    }
+
+    // Starting with macOS 11, each yearly release bumps the major version number. The minor
+    // versions are no the midyear updates.
+    if mac_version >= &v11_0 {
+        let binary_formats = mac_binary_formats(mac_version, platform);
+        for (major, binary_format) in (11..=major).rev().cartesian_product(binary_formats.iter()) {
+            result.push(format!("macosx_{major}_{minor}_{binary_format}", minor = 0));
+        }
+    }
+
+    // macOS 11 on x86_64 is compatible with binaries from previous releases.
+    // Arm64 support was introduced in 11.0, so no Arm binaries from previous releases exist.
+    //
+    // However, the "universal2" binary format can have a macOS version earlier than 11.0 when the
+    // x86_64 part of the binary supports that version of macOS.
+    if mac_version >= &v11_0 {
+        for minor in (4..=16).rev() {
+            let binary_formats = if platform == Platform::Osx64 {
+                let compatible_version = Version::from_str(&format!("10.{}", minor)).unwrap();
+                mac_binary_formats(&compatible_version, platform)
+            } else {
+                vec![String::from("universal2")]
+            };
+            for binary_format in binary_formats {
+                result.push(format!(
+                    "macosx_{major}_{minor}_{binary_format}",
+                    major = 10,
+                    minor = minor,
+                    binary_format = binary_format
+                ));
+            }
+        }
+    }
+
+    result
+}
+
+/// Returns a list of compatible binary formats for the specified mac version and platform.
+fn mac_binary_formats(mac_version: &Version, platform: Platform) -> Vec<String> {
+    let mut result = match platform {
+        Platform::Osx64 => vec![String::from("x86_64")],
+        Platform::OsxArm64 => vec![String::from("arm64")],
+        _ => unreachable!("unsupported mac platform: {platform}"),
+    };
+    let v10_4 = Version::from_str("10.4").unwrap();
+
+    if platform == Platform::Osx64 && mac_version >= &v10_4 {
+        result.extend([
+            String::from("intel"),
+            String::from("fat64"),
+            String::from("fat32"),
+        ]);
+    }
+
+    if matches!(platform, Platform::Osx64 | Platform::OsxArm64) {
+        result.push(String::from("universal2"));
+    }
+
+    if matches!(platform, Platform::Osx64) {
+        result.push(String::from("universal"));
+    }
+
+    result
 }
 
 /// Returns the platform tags for linux based OS
@@ -375,6 +477,16 @@ mod test {
     fn test_linux_platform_tags() {
         let tags: Vec<_> =
             linux_platform_tags(Platform::Linux64, &Version::from_str("2.17").unwrap())
+                .into_iter()
+                .map(|t| t.to_string())
+                .collect();
+        insta::assert_debug_snapshot!(tags);
+    }
+
+    #[test]
+    fn test_mac_platform_tags() {
+        let tags: Vec<_> =
+            mac_platform_tags(Platform::OsxArm64, &Version::from_str("14.0").unwrap())
                 .into_iter()
                 .map(|t| t.to_string())
                 .collect();

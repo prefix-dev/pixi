@@ -1,65 +1,25 @@
 use crate::Project;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
-use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
-use serde::Deserialize;
+use rattler_virtual_packages::{Archspec, LibC, Linux, Osx, VirtualPackage};
 use std::collections::HashMap;
-use std::str::FromStr;
 
-/// The supported system requirements that can be defined in the configuration.
-#[derive(Debug, Deserialize)]
-pub struct SystemRequirements {
-    windows: Option<bool>,
-    unix: Option<bool>,
-    linux: Option<Linux>,
-    osx: Option<String>,
-    libc: Option<LibC>,
-    cuda: Option<String>,
-    archspec: Option<Archspec>,
-}
-
-impl From<SystemRequirements> for Vec<VirtualPackage> {
-    fn from(requirements: SystemRequirements) -> Vec<VirtualPackage> {
-        let mut packages = Vec::new();
-
-        if let Some(true) = requirements.windows {
-            packages.push(VirtualPackage::Win);
-        }
-
-        if let Some(true) = requirements.unix {
-            packages.push(VirtualPackage::Unix);
-        }
-
-        if let Some(linux_config) = requirements.linux {
-            packages.push(VirtualPackage::Linux(linux_config));
-        }
-
-        if let Some(version) = requirements.osx {
-            packages.push(VirtualPackage::Osx(Osx {
-                version: Version::from_str(version.as_str()).unwrap(),
-            }));
-        }
-
-        if let Some(libc_config) = requirements.libc {
-            packages.push(VirtualPackage::LibC(libc_config));
-        }
-
-        if let Some(version) = requirements.cuda {
-            packages.push(VirtualPackage::Cuda(Cuda {
-                version: Version::from_str(version.as_str()).unwrap(),
-            }));
-        }
-
-        if let Some(archspec_config) = requirements.archspec {
-            packages.push(VirtualPackage::Archspec(archspec_config));
-        }
-
-        packages
-    }
-}
-
+/// The default GLIBC version to use. This is used when no system requirements are specified.
 pub fn default_glibc_version() -> Version {
     "2.17".parse().unwrap()
+}
+
+/// Returns the default Mac OS version for the specified platform. The platform must refer to a
+/// MacOS platform.
+pub fn default_mac_os_version(platform: Platform) -> Version {
+    match platform {
+        Platform::OsxArm64 => "11.0".parse().unwrap(),
+        Platform::Osx64 => "10.15".parse().unwrap(),
+        _ => panic!(
+            "default_mac_os_version() called with non-osx platform: {}",
+            platform
+        ),
+    }
 }
 
 /// Returns a reasonable modern set of virtual packages that should be safe enough to assume.

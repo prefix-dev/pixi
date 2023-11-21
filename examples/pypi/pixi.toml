@@ -4,16 +4,21 @@ version = "0.1.0"
 description = "Add a short description here"
 authors = ["Bas Zalmstra <bas@prefix.dev>"]
 channels = ["conda-forge"]
-platforms = ["win-64", "linux-64"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [tasks]
 
 [dependencies]
 python = "~=3.11.0"
 numpy = "*"
+libclang = "~=16.0.6"
 
 [pypi-dependencies]
 pyboy = "==1.6.6"
 tensorflow = "==2.14.0"
 flask = "*"
 black = "~=23.10"
+
+[system-requirements]
+# Tensorflow on macOS arm64 requires macOS 12.0 or higher
+macos = "12.0"
