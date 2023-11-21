@@ -55,11 +55,11 @@ pub fn execute(args: Args) -> miette::Result<()> {
         .iter()
         .filter(|&result| result.is_ok())
         .map(|result| {
-            if let Ok(_) = result {
+            if result.is_ok() {
                 eprintln!("succesfully removed a dep!");
             }
         })
-        .collect::<()>();
+        .collect::<Vec<_>>();
 
     let _ = results
         .iter()
@@ -69,7 +69,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 eprintln!("{e}");
             }
         })
-        .collect::<()>();
+        .collect::<Vec<_>>();
 
     Ok(())
 }

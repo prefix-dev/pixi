@@ -183,7 +183,7 @@ impl ProjectManifest {
         spec_type: &SpecType,
         platform: &Platform,
     ) -> miette::Result<()> {
-        let target = PixiSpanned::from(TargetSelector::Platform(platform.clone()));
+        let target = PixiSpanned::from(TargetSelector::Platform(*platform));
         let target_metadata = self.target.get_mut(&target).ok_or(miette::miette!(
             "couldn't find platform: {} in manifest",
             platform.as_str()
