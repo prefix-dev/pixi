@@ -231,18 +231,43 @@ package1 = { version = ">=1.2.3", build="py34_0" }
 ### `dependencies`
 Add any conda package dependency that you want to install into the environment.
 Don't forget to add the channel to the project table should you use anything different than `conda-forge`.
+Even if the dependency defines a channel that channel should be added to the `project.channels` list.
 
 ```toml
 [dependencies]
 python = ">3.9,<=3.11"
 rust = "1.72"
+pytoch-cpu = { version = "~=1.1", channel = "pytorch" }
 ```
 
-!!!note
-    All packages added to the `dependencies` table are also included as dependencies of the binary build by `pixi build`.
+### `pypi-dependencies` (Beta feature)
+Add any PyPI package that you want to install in the environment after the conda installation is finished.
+These are not available on [prefix.dev](https://prefix.dev/channels) but on [pypi.org](https://pypi.org/).
+!!! warning "Important considerations"
+    - **Stability**: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the `dependencies` table where possible.
+    - **Compatibility limitations**: Currently, pixi doesn't support:
+        - `git` dependencies
+        - Source dependencies
+        - Private PyPI repositories
+    - **Version specification**: These dependencies don't follow the conda matchspec specification.
+    So see the example below to see what type of definition is allowed.
+    It is based on [pep440](https://peps.python.org/pep-0440/)
 
-    To only include certain packages in different stages of the build see [`build-dependencies`](#build-dependencies) and [`host-dependencies`](#host-dependencies).
+```toml
+[dependencies]
+python = ">=3.6" # Python is needed for the pypi dependencies!
 
+[pypi-dependencies]
+pytest = "==7.4.3"
+torch = "*"  # This means any version (this `*` is custom in pixi)
+pre-commit = "~=3.5.0"
+numpy = ">=1.20,<1.24"
+```
+??? info "We use `rip` not `pip`"
+    We use [`rip`](https://github.com/prefix-dev/rip) which is our custom pypi package resolver.
+    The `rip` resolve step is invoked after the conda dependencies have been resolved.
+    As the conda packages can also install python packages, which are used in the rip resolver.
+    Also `rip` needs to know the version of python that is being used.
 
 ### `host-dependencies`
 
