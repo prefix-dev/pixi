@@ -145,6 +145,78 @@ impl ProjectManifest {
             }
         }
     }
+
+    /// Remove dependency given a `SpecType`.
+    pub fn remove_dependency(&mut self, dep: &str, spec_type: &SpecType) -> miette::Result<()> {
+        match spec_type {
+            SpecType::Run => {
+                self.dependencies
+                    .shift_remove(dep)
+                    .ok_or(miette::miette!("couldn't find {dep} in [dependencies]"))?;
+                Ok(())
+            }
+            SpecType::Build => {
+                if let Some(ref mut deps) = self.build_dependencies {
+                    deps.shift_remove(dep)
+                        .ok_or(miette::miette!("couldn't find {dep} in [dependencies]"))?;
+                    Ok(())
+                } else {
+                    Err(miette::miette!("[build-dependencies] doesn't exist"))
+                }
+            }
+            SpecType::Host => {
+                if let Some(ref mut deps) = self.host_dependencies {
+                    deps.shift_remove(dep)
+                        .ok_or(miette::miette!("couldn't find {dep} in [dependencies]"))?;
+                    Ok(())
+                } else {
+                    Err(miette::miette!("[host-dependencies] doesn't exist"))
+                }
+            }
+        }
+    }
+
+    /// Remove a dependecy for a `Platform`.
+    pub fn remove_target_dependency(
+        &mut self,
+        dep: &str,
+        spec_type: &SpecType,
+        platform: &Platform,
+    ) -> miette::Result<()> {
+        let target = PixiSpanned::from(TargetSelector::Platform(platform.clone()));
+        let target_metadata = self.target.get_mut(&target).ok_or(miette::miette!(
+            "couldn't find platform: {} in manifest",
+            platform.as_str()
+        ))?;
+
+        match spec_type {
+            SpecType::Run => {
+                target_metadata
+                    .dependencies
+                    .shift_remove(dep)
+                    .ok_or(miette::miette!("couldn't find {dep} in [dependencies]"))?;
+                Ok(())
+            }
+            SpecType::Build => {
+                if let Some(ref mut deps) = target_metadata.build_dependencies {
+                    deps.shift_remove(dep)
+                        .ok_or(miette::miette!("couldn't find {dep} in [dependencies]"))?;
+                    Ok(())
+                } else {
+                    Err(miette::miette!("[build-dependencies] doesn't exist"))
+                }
+            }
+            SpecType::Host => {
+                if let Some(ref mut deps) = target_metadata.host_dependencies {
+                    deps.shift_remove(dep)
+                        .ok_or(miette::miette!("couldn't find {dep} in [dependencies]"))?;
+                    Ok(())
+                } else {
+                    Err(miette::miette!("[host-dependencies] doesn't exist"))
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
