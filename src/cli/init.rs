@@ -143,19 +143,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 // When the specific template is not in the file or the file does not exist.
 // Make the file and append the template to the file.
-fn create_or_append_file(path: &Path, template: &str) -> miette::Result<()> {
-    let file = fs::read_to_string(path)
-        .into_diagnostic()
-        .unwrap_or_default();
+fn create_or_append_file(path: &Path, template: &str) -> std::io::Result<()> {
+    let file = fs::read_to_string(path).unwrap_or_default();
 
     if !file.contains(template) {
         fs::OpenOptions::new()
             .append(true)
             .create(true)
-            .open(path)
-            .into_diagnostic()?
-            .write_all(template.as_bytes())
-            .into_diagnostic()?;
+            .open(path)?
+            .write_all(template.as_bytes())?;
     }
     Ok(())
 }
