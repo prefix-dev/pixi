@@ -20,6 +20,7 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use tokio::task::JoinHandle;
+use tracing::Level;
 
 /// Runs task in project.
 #[derive(Default, Debug)]
@@ -137,7 +138,7 @@ pub fn order_tasks(
     Ok(s2)
 }
 
-pub async fn create_script(task: Task, args: Vec<String>) -> miette::Result<SequentialList> {
+pub async fn create_script(task: &Task, args: Vec<String>) -> miette::Result<SequentialList> {
     // Construct the script from the task
     let task = task
         .as_single_command()
@@ -209,7 +210,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let command_env = get_task_env(&project, args.locked, args.frozen).await?;
 
     // Execute the commands in the correct order
-    while let Some((command, args)) = ordered_commands.pop_back() {
+    while let Some((command, arguments)) = ordered_commands.pop_back() {
         let cwd = select_cwd(command.working_directory(), &project)?;
         // Ignore CTRL+C
         // Specifically so that the child is responsible for its own signal handling
@@ -217,7 +218,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // which is fine when using run in isolation, however if we start to use run in conjunction with
         // some other command we might want to revaluate this.
         let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
-        let script = create_script(command, args).await?;
+        let script = create_script(&command, arguments).await?;
+
+        // Showing which command is being run if the level allows it. (default should be yes)
+        if tracing::enabled!(Level::WARN) {
+            eprintln!(
+                "{}{}",
+                console::style("✨ Pixi running: ").bold(),
+                console::style(
+                    &command
+                        .as_single_command()
+                        .expect("The command should already be parsed")
+                )
+                .blue()
+                .bold()
+            );
+        }
+
         let status_code = tokio::select! {
             code = execute_script(script, &command_env, &cwd) => code?,
             // This should never exit
