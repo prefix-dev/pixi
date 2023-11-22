@@ -202,8 +202,22 @@ pub async fn execute_script_with_output(
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
+    // Split 'task' into arguments if it's a single string, supporting commands like:
+    // "test 1 == 0 || echo failed" or "echo foo && echo bar".
+    // This prevents shell interpretation of pixi run inputs.
+    // Use as-is if 'task' already contains multiple elements.
+    let task = if args.task.len() == 1 {
+        args.task[0]
+            .split_whitespace()
+            .map(String::from)
+            .collect::<Vec<_>>()
+    } else {
+        args.task
+    };
+    tracing::debug!("Task parsed from run command: {:?}", task);
+
     // Get the correctly ordered commands
-    let mut ordered_commands = order_tasks(args.task, &project)?;
+    let mut ordered_commands = order_tasks(task, &project)?;
 
     // Get the environment to run the commands in.
     let command_env = get_task_env(&project, args.locked, args.frozen).await?;
