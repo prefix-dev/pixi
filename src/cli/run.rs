@@ -207,13 +207,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // This prevents shell interpretation of pixi run inputs.
     // Use as-is if 'task' already contains multiple elements.
     let task = if args.task.len() == 1 {
-        shlex::split(
-            args.task
-                .first()
-                .map(|s| s.as_str())
-                .expect("The command should already have been checked if there is one available."),
-        )
-        .ok_or(miette!("Could not split task, assuming non valid task"))?
+        shlex::split(args.task[0].as_str())
+            .ok_or(miette!("Could not split task, assuming non valid task"))?
     } else {
         args.task
     };
