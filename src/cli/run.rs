@@ -203,14 +203,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     // Split 'task' into arguments if it's a single string, supporting commands like:
-    // "test 1 == 0 || echo failed" or "echo foo && echo bar".
+    // `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or `"echo 'Hello World'"`
     // This prevents shell interpretation of pixi run inputs.
     // Use as-is if 'task' already contains multiple elements.
     let task = if args.task.len() == 1 {
-        args.task[0]
-            .split_whitespace()
-            .map(String::from)
-            .collect::<Vec<_>>()
+        shlex::split(
+            args.task
+                .first()
+                .map(|s| s.as_str())
+                .expect("The command should already have been checked if there is one available."),
+        )
+        .ok_or(miette!("Could not split task, assuming non valid task"))?
     } else {
         args.task
     };

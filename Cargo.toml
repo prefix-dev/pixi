@@ -53,6 +53,7 @@ serde = "1.0.188"
 serde_json = "1.0.107"
 serde_spanned = "0.6.3"
 serde_with = { version = "3.3.0", features = ["indexmap"] }
+shlex = "1.2.0"
 spdx = "0.10.2"
 strsim = "0.10.0"
 tempfile = "3.8.0"
