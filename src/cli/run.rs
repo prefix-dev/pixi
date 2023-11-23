@@ -203,8 +203,20 @@ pub async fn execute_script_with_output(
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
+    // Split 'task' into arguments if it's a single string, supporting commands like:
+    // `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or `"echo 'Hello World'"`
+    // This prevents shell interpretation of pixi run inputs.
+    // Use as-is if 'task' already contains multiple elements.
+    let task = if args.task.len() == 1 {
+        shlex::split(args.task[0].as_str())
+            .ok_or(miette!("Could not split task, assuming non valid task"))?
+    } else {
+        args.task
+    };
+    tracing::debug!("Task parsed from run command: {:?}", task);
+
     // Get the correctly ordered commands
-    let mut ordered_commands = order_tasks(args.task, &project)?;
+    let mut ordered_commands = order_tasks(task, &project)?;
 
     // Get the environment to run the commands in.
     let command_env = get_task_env(&project, args.locked, args.frozen).await?;
@@ -240,7 +252,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // This should never exit
             _ = ctrl_c => { unreachable!("Ctrl+C should not be triggered") }
         };
+        if status_code == 127 {
+            let formatted: String = project
+                .tasks(Some(Platform::current()))
+                .into_keys()
+                .sorted()
+                .map(|name| format!("\t{}\n", console::style(name).bold()))
+                .collect();
 
+            eprintln!("\nAvailable tasks:\n{}", formatted);
+        }
         if status_code != 0 {
             std::process::exit(status_code);
         }
