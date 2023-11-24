@@ -19,6 +19,7 @@ use rip::{
 };
 use std::{io::ErrorKind, path::Path, str::FromStr, time::Duration};
 use tokio::task::JoinError;
+use url::Url;
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
 /// Errors when there is a file system error or the path does not align with the defined prefix.
@@ -277,7 +278,7 @@ async fn update_python_distributions(
 async fn install_python_distributions(
     prefix: &Prefix,
     install_paths: InstallPaths,
-    package_stream: impl Stream<Item = miette::Result<Wheel>> + Sized,
+    package_stream: impl Stream<Item = miette::Result<(Url, Wheel)>> + Sized,
 ) -> miette::Result<Option<ProgressBar>> {
     // Determine the number of packages that we are going to install
     let len = {
@@ -300,7 +301,7 @@ async fn install_python_distributions(
     // Concurrently unpack the wheels as they become available in the stream.
     let install_pb = pb.clone();
     package_stream
-        .try_for_each_concurrent(Some(20), move |wheel| {
+        .try_for_each_concurrent(Some(20), move |(url, wheel)| {
             let install_paths = install_paths.clone();
             let root = prefix.root().to_path_buf();
             let message_formatter = message_formatter.clone();
@@ -317,6 +318,10 @@ async fn install_python_distributions(
                             },
                         )
                         .into_diagnostic()
+                        .and_then(|unpacked_wheel| {
+                            std::fs::write(unpacked_wheel.dist_info.join("URL"), url.to_string())
+                                .into_diagnostic()
+                        })
                 })
                 .map_err(JoinError::try_into_panic)
                 .await;
@@ -346,7 +351,7 @@ fn stream_python_artifacts<'a>(
     package_db: &'a PackageDb,
     packages_to_download: Vec<&'a LockedDependency>,
 ) -> (
-    impl Stream<Item = miette::Result<Wheel>> + 'a,
+    impl Stream<Item = miette::Result<(Url, Wheel)>> + 'a,
     Option<ProgressBar>,
 ) {
     if packages_to_download.is_empty() {
@@ -424,7 +429,7 @@ fn stream_python_artifacts<'a>(
                     pb.finish();
                 }
 
-                Ok(wheel)
+                Ok((pip_package.url.clone(), wheel))
             }
         })
         .buffer_unordered(20)
@@ -600,7 +605,21 @@ fn does_installed_match_locked_package(
         return false;
     }
 
-    // Now match on the type of the artifact
+    // If this distribution is installed with pixi we can assume that there is a URL file that
+    // contains the original URL.
+    if installed_python_package.installer.as_deref() == Some("pixi") {
+        if let Some(url) = std::fs::read_to_string(installed_python_package.dist_info.join("URL"))
+            .ok()
+            .and_then(|u| Url::from_str(&u).ok())
+        {
+            let locked_package_url = pkg.as_pypi().map(|p| &p.url);
+            return locked_package_url == Some(&url);
+        }
+    }
+
+    // Try to match the tags of both packages. This turns out to be pretty unreliable because
+    // there are many WHEELS that do not report the tags of their filename correctly in the
+    // WHEEL file.
     match (artifact_tags, &installed_python_package.tags) {
         (None, _) | (_, None) => {
             // One, or both, of the artifacts are not a wheel distribution so we cannot
