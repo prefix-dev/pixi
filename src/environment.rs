@@ -172,7 +172,7 @@ pub async fn update_prefix(
     // Install and/or remove python packages
     progress::await_in_progress(
         "updating python packages",
-        update_python_distributions(package_db, &prefix, lock_file, platform, &transaction),
+        update_python_distributions(package_db, prefix, lock_file, platform, &transaction),
     )
     .await?;
 
@@ -442,12 +442,11 @@ fn stream_python_artifacts<'a>(
                     pb.finish();
                 }
 
-                let hash = if let Some(sha256) = pip_package.hash.as_ref().and_then(|h| h.sha256())
-                {
-                    Some(format!("sha256-{:x}", sha256))
-                } else {
-                    None
-                };
+                let hash = pip_package
+                    .hash
+                    .as_ref()
+                    .and_then(|h| h.sha256())
+                    .map(|sha256| format!("sha256-{:x}", sha256));
 
                 Ok((hash, wheel))
             }
@@ -644,7 +643,7 @@ fn does_installed_match_locked_package(
             let hash_path = prefix_root
                 .join(&installed_python_package.dist_info)
                 .join("HASH");
-            if let Some(actual_hash) = std::fs::read_to_string(hash_path).ok() {
+            if let Ok(actual_hash) = std::fs::read_to_string(hash_path) {
                 return actual_hash == expected_hash;
             }
         }
