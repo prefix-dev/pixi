@@ -114,10 +114,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     fs::write(&manifest_path, rv).into_diagnostic()?;
 
     // create a .gitignore if one is missing
-    create_or_append_file(&gitignore_path, GITIGNORE_TEMPLATE)?;
+    if let Err(e) = create_or_append_file(&gitignore_path, GITIGNORE_TEMPLATE) {
+        tracing::warn!(
+            "Warning, couldn't update '{}' because of: {}",
+            gitignore_path.to_string_lossy(),
+            e
+        );
+    }
 
     // create a .gitattributes if one is missing
-    create_or_append_file(&gitattributes_path, GITATTRIBUTES_TEMPLATE)?;
+    if let Err(e) = create_or_append_file(&gitattributes_path, GITATTRIBUTES_TEMPLATE) {
+        tracing::warn!(
+            "Warning, couldn't update '{}' because of: {}",
+            gitattributes_path.to_string_lossy(),
+            e
+        );
+    }
 
     // Emit success
     eprintln!(
@@ -129,24 +141,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-// Checks if string is in file.
-// If search string is multiline it will check if any of those lines is in the file.
-fn string_in_file(path: &Path, search: &str) -> bool {
-    let content = fs::read_to_string(path).unwrap_or_default();
-    search.lines().any(|line| content.contains(line))
-}
-
 // When the specific template is not in the file or the file does not exist.
 // Make the file and append the template to the file.
-fn create_or_append_file(path: &Path, template: &str) -> miette::Result<()> {
-    if !path.is_file() || !string_in_file(path, template) {
+fn create_or_append_file(path: &Path, template: &str) -> std::io::Result<()> {
+    let file = fs::read_to_string(path).unwrap_or_default();
+
+    if !file.contains(template) {
         fs::OpenOptions::new()
             .append(true)
             .create(true)
-            .open(path)
-            .into_diagnostic()?
-            .write_all(template.as_bytes())
-            .into_diagnostic()?;
+            .open(path)?
+            .write_all(template.as_bytes())?;
     }
     Ok(())
 }
@@ -173,8 +178,11 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::cli::init::get_dir;
-    use std::path::PathBuf;
+    use std::io::Read;
+    use std::path::{Path, PathBuf};
+    use tempfile::tempdir;
 
     #[test]
     fn test_get_name() {
@@ -198,5 +206,38 @@ mod tests {
             Ok(_) => panic!("Expected error, but got OK"),
             Err(e) => assert_eq!(e.kind(), std::io::ErrorKind::NotFound),
         }
+    }
+
+    #[test]
+    fn test_create_or_append_file() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test_file.txt");
+        let template = "Test Template";
+
+        fn read_file_content(path: &Path) -> String {
+            let mut file = std::fs::File::open(path).unwrap();
+            let mut content = String::new();
+            file.read_to_string(&mut content).unwrap();
+            content
+        }
+
+        // Scenario 1: File does not exist.
+        create_or_append_file(&file_path, template).unwrap();
+        assert_eq!(read_file_content(&file_path), template);
+
+        // Scenario 2: File exists but doesn't contain the template.
+        create_or_append_file(&file_path, "New Content").unwrap();
+        assert!(read_file_content(&file_path).contains(template));
+        assert!(read_file_content(&file_path).contains("New Content"));
+
+        // Scenario 3: File exists and already contains the template.
+        let original_content = read_file_content(&file_path);
+        create_or_append_file(&file_path, template).unwrap();
+        assert_eq!(read_file_content(&file_path), original_content);
+
+        // Scenario 4: Path is a folder not a file, give an error.
+        assert!(create_or_append_file(&dir.path(), template).is_err());
+
+        dir.close().unwrap();
     }
 }

@@ -20,6 +20,7 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use tokio::task::JoinHandle;
+use tracing::Level;
 
 /// Runs task in project.
 #[derive(Default, Debug)]
@@ -137,7 +138,7 @@ pub fn order_tasks(
     Ok(s2)
 }
 
-pub async fn create_script(task: Task, args: Vec<String>) -> miette::Result<SequentialList> {
+pub async fn create_script(task: &Task, args: Vec<String>) -> miette::Result<SequentialList> {
     // Construct the script from the task
     let task = task
         .as_single_command()
@@ -202,14 +203,26 @@ pub async fn execute_script_with_output(
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
+    // Split 'task' into arguments if it's a single string, supporting commands like:
+    // `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or `"echo 'Hello World'"`
+    // This prevents shell interpretation of pixi run inputs.
+    // Use as-is if 'task' already contains multiple elements.
+    let task = if args.task.len() == 1 {
+        shlex::split(args.task[0].as_str())
+            .ok_or(miette!("Could not split task, assuming non valid task"))?
+    } else {
+        args.task
+    };
+    tracing::debug!("Task parsed from run command: {:?}", task);
+
     // Get the correctly ordered commands
-    let mut ordered_commands = order_tasks(args.task, &project)?;
+    let mut ordered_commands = order_tasks(task, &project)?;
 
     // Get the environment to run the commands in.
     let command_env = get_task_env(&project, args.locked, args.frozen).await?;
 
     // Execute the commands in the correct order
-    while let Some((command, args)) = ordered_commands.pop_back() {
+    while let Some((command, arguments)) = ordered_commands.pop_back() {
         let cwd = select_cwd(command.working_directory(), &project)?;
         // Ignore CTRL+C
         // Specifically so that the child is responsible for its own signal handling
@@ -217,13 +230,38 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // which is fine when using run in isolation, however if we start to use run in conjunction with
         // some other command we might want to revaluate this.
         let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
-        let script = create_script(command, args).await?;
+        let script = create_script(&command, arguments).await?;
+
+        // Showing which command is being run if the level allows it. (default should be yes)
+        if tracing::enabled!(Level::WARN) {
+            eprintln!(
+                "{}{}",
+                console::style("✨ Pixi running: ").bold(),
+                console::style(
+                    &command
+                        .as_single_command()
+                        .expect("The command should already be parsed")
+                )
+                .blue()
+                .bold()
+            );
+        }
+
         let status_code = tokio::select! {
             code = execute_script(script, &command_env, &cwd) => code?,
             // This should never exit
             _ = ctrl_c => { unreachable!("Ctrl+C should not be triggered") }
         };
+        if status_code == 127 {
+            let formatted: String = project
+                .tasks(Some(Platform::current()))
+                .into_keys()
+                .sorted()
+                .map(|name| format!("\t{}\n", console::style(name).bold()))
+                .collect();
 
+            eprintln!("\nAvailable tasks:\n{}", formatted);
+        }
         if status_code != 0 {
             std::process::exit(status_code);
         }
