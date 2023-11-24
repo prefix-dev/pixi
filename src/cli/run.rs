@@ -13,7 +13,7 @@ use rattler_conda_types::Platform;
 use crate::prefix::Prefix;
 use crate::progress::await_in_progress;
 use crate::project::environment::get_metadata_env;
-use crate::task::{quote_arguments, CmdArgs, Execute, Task};
+use crate::task::{quote_arguments, CmdArgs, Custom, Task};
 use crate::{environment::get_up_to_date_prefix, Project};
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -88,9 +88,8 @@ pub fn order_tasks(
         .unwrap_or_else(|| {
             (
                 None,
-                Execute {
+                Custom {
                     cmd: CmdArgs::from(tasks),
-                    depends_on: vec![],
                     cwd: Some(env::current_dir().unwrap_or(project.root().to_path_buf())),
                 }
                 .into(),
@@ -232,11 +231,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
         let script = create_script(&command, arguments).await?;
 
-        // Showing which command is being run if the level allows it. (default should be yes)
-        if tracing::enabled!(Level::WARN) {
+        // Showing which command is being run if the level and type allows it.
+        if tracing::enabled!(Level::WARN) && !matches!(command, Task::Custom(_)) {
             eprintln!(
                 "{}{}",
-                console::style("✨ Pixi running: ").bold(),
+                console::style("✨ Pixi task: ").bold(),
                 console::style(
                     &command
                         .as_single_command()
