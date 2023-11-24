@@ -253,6 +253,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             _ = ctrl_c => { unreachable!("Ctrl+C should not be triggered") }
         };
         if status_code == 127 {
+            // TODO: fix this issue
+            if project
+                .manifest
+                .pypi_dependencies
+                .as_ref()
+                .map_or(false, |deps| !deps.is_empty())
+            {
+                tracing::warn!("ALPHA feature enabled: pixi doesn't support entrypoints from PyPI packages yet!");
+            }
+
             let formatted: String = project
                 .tasks(Some(Platform::current()))
                 .into_keys()
@@ -260,7 +270,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .map(|name| format!("\t{}\n", console::style(name).bold()))
                 .collect();
 
-            eprintln!("\nAvailable tasks:\n{}", formatted);
+            if !formatted.is_empty() {
+                eprintln!("\nAvailable tasks:\n{}", formatted);
+            }
         }
         if status_code != 0 {
             std::process::exit(status_code);
