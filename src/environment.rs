@@ -19,7 +19,6 @@ use rip::{
 };
 use std::{io::ErrorKind, path::Path, str::FromStr, time::Duration};
 use tokio::task::JoinError;
-use url::Url;
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
 /// Errors when there is a file system error or the path does not align with the defined prefix.
@@ -193,7 +192,7 @@ pub async fn update_prefix(
 /// Installs and/or remove python distributions.
 async fn update_python_distributions(
     package_db: &PackageDb,
-    prefix: &&Prefix,
+    prefix: &Prefix,
     lock_file: &CondaLock,
     platform: Platform,
     transaction: &Transaction<PrefixRecord, RepoDataRecord>,
@@ -231,6 +230,7 @@ async fn update_python_distributions(
     // regardless.
     let (python_distributions_to_remove, python_distributions_to_install) =
         determine_python_distributions_to_remove_and_install(
+            prefix.root(),
             current_python_packages,
             python_packages,
         );
@@ -278,7 +278,7 @@ async fn update_python_distributions(
 async fn install_python_distributions(
     prefix: &Prefix,
     install_paths: InstallPaths,
-    package_stream: impl Stream<Item = miette::Result<(Url, Wheel)>> + Sized,
+    package_stream: impl Stream<Item = miette::Result<(Option<String>, Wheel)>> + Sized,
 ) -> miette::Result<Option<ProgressBar>> {
     // Determine the number of packages that we are going to install
     let len = {
@@ -301,7 +301,7 @@ async fn install_python_distributions(
     // Concurrently unpack the wheels as they become available in the stream.
     let install_pb = pb.clone();
     package_stream
-        .try_for_each_concurrent(Some(20), move |(url, wheel)| {
+        .try_for_each_concurrent(Some(20), move |(hash, wheel)| {
             let install_paths = install_paths.clone();
             let root = prefix.root().to_path_buf();
             let message_formatter = message_formatter.clone();
@@ -319,8 +319,12 @@ async fn install_python_distributions(
                         )
                         .into_diagnostic()
                         .and_then(|unpacked_wheel| {
-                            std::fs::write(unpacked_wheel.dist_info.join("URL"), url.to_string())
-                                .into_diagnostic()
+                            if let Some(hash) = hash {
+                                std::fs::write(unpacked_wheel.dist_info.join("HASH"), hash)
+                                    .into_diagnostic()
+                            } else {
+                                Ok(())
+                            }
                         })
                 })
                 .map_err(JoinError::try_into_panic)
@@ -351,7 +355,7 @@ fn stream_python_artifacts<'a>(
     package_db: &'a PackageDb,
     packages_to_download: Vec<&'a LockedDependency>,
 ) -> (
-    impl Stream<Item = miette::Result<(Url, Wheel)>> + 'a,
+    impl Stream<Item = miette::Result<(Option<String>, Wheel)>> + 'a,
     Option<ProgressBar>,
 ) {
     if packages_to_download.is_empty() {
@@ -429,7 +433,14 @@ fn stream_python_artifacts<'a>(
                     pb.finish();
                 }
 
-                Ok((pip_package.url.clone(), wheel))
+                let hash = if let Some(sha256) = pip_package.hash.as_ref().and_then(|h| h.sha256())
+                {
+                    Some(format!("sha256-{:x}", sha256))
+                } else {
+                    None
+                };
+
+                Ok((hash, wheel))
             }
         })
         .buffer_unordered(20)
@@ -505,10 +516,11 @@ fn remove_old_python_distributions(
 
 /// Determine which python packages we can leave untouched and which python packages should be
 /// removed.
-fn determine_python_distributions_to_remove_and_install(
+fn determine_python_distributions_to_remove_and_install<'p>(
+    prefix: &Path,
     mut current_python_packages: Vec<Distribution>,
-    desired_python_packages: Vec<&LockedDependency>,
-) -> (Vec<Distribution>, Vec<&LockedDependency>) {
+    desired_python_packages: Vec<&'p LockedDependency>,
+) -> (Vec<Distribution>, Vec<&'p LockedDependency>) {
     // Determine the artifact tags associated with the locked dependencies.
     let mut desired_python_packages = extract_locked_tags(desired_python_packages);
 
@@ -522,6 +534,7 @@ fn determine_python_distributions_to_remove_and_install(
                 .iter()
                 .position(|(pkg, artifact_name)| {
                     does_installed_match_locked_package(
+                        prefix,
                         current_python_packages,
                         (pkg, artifact_name.as_ref()),
                     )
@@ -592,6 +605,7 @@ fn extract_locked_tags(
 /// Returns true if the installed python package matches the locked python package. If that is the
 /// case we can assume that the locked python package is already installed.
 fn does_installed_match_locked_package(
+    prefix_root: &Path,
     installed_python_package: &Distribution,
     locked_python_package: (&LockedDependency, Option<&IndexSet<WheelTag>>),
 ) -> bool {
@@ -608,12 +622,18 @@ fn does_installed_match_locked_package(
     // If this distribution is installed with pixi we can assume that there is a URL file that
     // contains the original URL.
     if installed_python_package.installer.as_deref() == Some("pixi") {
-        if let Some(url) = std::fs::read_to_string(installed_python_package.dist_info.join("URL"))
-            .ok()
-            .and_then(|u| Url::from_str(&u).ok())
-        {
-            let locked_package_url = pkg.as_pypi().map(|p| &p.url);
-            return locked_package_url == Some(&url);
+        let expected_hash = pkg
+            .as_pypi()
+            .and_then(|hash| hash.hash.as_ref())
+            .and_then(|hash| hash.sha256())
+            .map(|sha256| format!("sha256-{:x}", sha256));
+        if let Some(expected_hash) = expected_hash {
+            let hash_path = prefix_root
+                .join(&installed_python_package.dist_info)
+                .join("HASH");
+            if let Some(actual_hash) = std::fs::read_to_string(hash_path).ok() {
+                return actual_hash == expected_hash;
+            }
         }
     }
 
