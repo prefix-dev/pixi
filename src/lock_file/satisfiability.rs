@@ -75,7 +75,7 @@ pub fn lock_file_satisfies_project(
             .peekable();
 
         // Determine the python marker environment from the lock-file.
-        let python_maker_env = if pypi_dependencies.peek().is_some() {
+        let python_marker_env = if pypi_dependencies.peek().is_some() {
             // Determine the python executable
             let Ok(conda_packages) = lock_file
                 .get_conda_packages_by_platform(platform) else {
@@ -222,7 +222,7 @@ pub fn lock_file_satisfies_project(
                                 return Ok(false);
                             };
                             // Filter the requirement based on the environment markers
-                            if !python_maker_env
+                            if !python_marker_env
                                 .as_ref()
                                 .map(|env| {
                                     req.evaluate_markers(
