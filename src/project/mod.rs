@@ -63,7 +63,7 @@ pub struct Project {
     pub manifest: ProjectManifest,
 }
 
-/// Returns a task a a toml item
+/// Returns a task as a toml item
 fn task_as_toml(task: Task) -> Item {
     match task {
         Task::Plain(str) => Item::Value(str.into()),
@@ -96,6 +96,7 @@ fn task_as_toml(task: Task) -> Item {
             );
             Item::Value(Value::InlineTable(table))
         }
+        _ => Item::None,
     }
 }
 

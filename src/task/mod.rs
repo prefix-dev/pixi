@@ -12,13 +12,16 @@ pub enum Task {
     Plain(String),
     Execute(Execute),
     Alias(Alias),
+    // We don't what a way for the deserializer to except a custom task, as they are meant for tasks given in the command line.
+    #[serde(skip)]
+    Custom(Custom),
 }
 
 impl Task {
     /// Returns the names of the task that this task depends on
     pub fn depends_on(&self) -> &[String] {
         match self {
-            Task::Plain(_) => &[],
+            Task::Plain(_) | Task::Custom(_) => &[],
             Task::Execute(cmd) => &cmd.depends_on,
             Task::Alias(cmd) => &cmd.depends_on,
         }
@@ -51,7 +54,7 @@ impl Task {
     /// Returns true if this task is directly executable
     pub fn is_executable(&self) -> bool {
         match self {
-            Task::Plain(_) | Task::Execute(_) => true,
+            Task::Plain(_) | Task::Custom(_) | Task::Execute(_) => true,
             Task::Alias(_) => false,
         }
     }
@@ -59,7 +62,8 @@ impl Task {
     /// Returns the command to execute.
     pub fn as_command(&self) -> Option<CmdArgs> {
         match self {
-            Task::Plain(cmd) => Some(CmdArgs::Single(cmd.clone())),
+            Task::Plain(str) => Some(CmdArgs::Single(str.clone())),
+            Task::Custom(custom) => Some(custom.cmd.clone()),
             Task::Execute(exe) => Some(exe.cmd.clone()),
             Task::Alias(_) => None,
         }
@@ -68,7 +72,8 @@ impl Task {
     /// Returns the command to execute as a single string.
     pub fn as_single_command(&self) -> Option<Cow<str>> {
         match self {
-            Task::Plain(cmd) => Some(Cow::Borrowed(cmd)),
+            Task::Plain(str) => Some(Cow::Borrowed(str)),
+            Task::Custom(custom) => Some(custom.cmd.as_single()),
             Task::Execute(exe) => Some(exe.cmd.as_single()),
             Task::Alias(_) => None,
         }
@@ -78,7 +83,8 @@ impl Task {
     pub fn working_directory(&self) -> Option<&Path> {
         match self {
             Task::Plain(_) => None,
-            Task::Execute(t) => t.cwd.as_deref(),
+            Task::Custom(custom) => custom.cwd.as_deref(),
+            Task::Execute(exe) => exe.cwd.as_deref(),
             Task::Alias(_) => None,
         }
     }
@@ -105,6 +111,22 @@ pub struct Execute {
 impl From<Execute> for Task {
     fn from(value: Execute) -> Self {
         Task::Execute(value)
+    }
+}
+
+/// A custom command script executes a single command in the environment
+#[derive(Debug, Clone)]
+pub struct Custom {
+    /// A list of arguments, the first argument denotes the command to run. When deserializing both
+    /// an array of strings and a single string are supported.
+    pub cmd: CmdArgs,
+
+    /// The working directory for the command relative to the root of the project.
+    pub cwd: Option<PathBuf>,
+}
+impl From<Custom> for Task {
+    fn from(value: Custom) -> Self {
+        Task::Custom(value)
     }
 }
 
