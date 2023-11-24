@@ -9,12 +9,13 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, LabeledSpan};
 
+use crate::lock_file::lock_file_satisfies_project;
 use rattler::install::Transaction;
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
-use rattler_lock::{CondaLock, LockedDependency, PipLockedDependency};
+use rattler_lock::{CondaLock, LockedDependency};
 use rip::{
     tags::WheelTag, Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution,
-    InstallPaths, PackageDb, ParseArtifactNameError, UnpackWheelOptions, Wheel, WheelName,
+    InstallPaths, NormalizedPackageName, PackageDb, UnpackWheelOptions, Wheel, WheelFilename,
 };
 use std::{io::ErrorKind, path::Path, str::FromStr, time::Duration};
 use tokio::task::JoinError;
@@ -113,7 +114,7 @@ pub async fn get_up_to_date_prefix(
 
     let mut lock_file = lock_file::load_lock_file(project).await?;
 
-    if !frozen && !lock_file::lock_file_up_to_date(project, &lock_file)? {
+    if !frozen && !lock_file_satisfies_project(project, &lock_file)? {
         if locked {
             miette::bail!("Lockfile not up-to-date with the project");
         }
@@ -221,7 +222,7 @@ async fn update_python_distributions(
     // Determine the python packages that are part of the lock-file
     let python_packages = lock_file
         .get_packages_by_platform(platform)
-        .filter(|p| p.is_pip())
+        .filter(|p| p.is_pypi())
         .collect_vec();
 
     // Determine the python packages to remove before we start installing anything new. If the
@@ -239,9 +240,7 @@ async fn update_python_distributions(
 
     // Remove python packages that need to be removed
     if !python_distributions_to_remove.is_empty() {
-        let site_package_path = install_paths
-            .site_packages()
-            .expect("site-packages path must exist");
+        let site_package_path = install_paths.site_packages();
 
         for python_distribution in python_distributions_to_remove {
             tracing::info!(
@@ -375,7 +374,7 @@ fn stream_python_artifacts<'a>(
             let message_formatter = message_formatter.clone();
             async move {
                 let pip_package = package
-                    .as_pip()
+                    .as_pypi()
                     .expect("must be a pip package at this point");
 
                 // Determine the filename from the
@@ -384,7 +383,12 @@ fn stream_python_artifacts<'a>(
                     .path_segments()
                     .and_then(|s| s.last())
                     .expect("url is missing a path");
-                let wheel_name = WheelName::from_str(filename)
+                let name = NormalizedPackageName::from_str(&package.name)
+                    .into_diagnostic()
+                    .with_context(|| {
+                        format!("'{}' is not a valid python package name", &package.name)
+                    })?;
+                let wheel_name = WheelFilename::from_filename(filename, &name)
                     .expect("failed to convert filename to wheel filename");
 
                 // Log out intent to install this python package.
@@ -467,9 +471,7 @@ fn remove_old_python_distributions(
     pb.enable_steady_tick(Duration::from_millis(100));
 
     // Remove the python packages
-    let site_package_path = install_paths
-        .site_packages()
-        .expect("site-packages path must exist");
+    let site_package_path = install_paths.site_packages();
     for python_package in current_python_packages {
         tracing::info!(
             "uninstalling python package from previous python version {}-{}",
@@ -550,10 +552,27 @@ fn extract_locked_tags(
     desired_python_packages
         .into_iter()
         .map(|pkg| {
-            let Some(pip) = pkg.as_pip() else { return (pkg, None); };
-            match pip.artifact_name().as_ref().map(|name| name.as_wheel()) {
-                Ok(Some(name)) => (pkg, Some(IndexSet::from_iter(name.all_tags_iter()))),
-                Ok(None) => (pkg, None),
+            // Get the package as a pip package. If the package is not a pip package we can just ignore it.
+            let Some(pip) = pkg.as_pypi() else { return (pkg, None); };
+
+            // Extract the filename from the url and the name from the package name.
+            let Some(filename) = pip.url.path_segments().and_then(|s| s.last()) else {
+                tracing::warn!(
+                        "failed to determine the artifact name of the python package {}-{} from url {}: the url has no filename.",
+                        &pkg.name, pkg.version, &pip.url);
+                return (pkg, None);
+            };
+            let Ok(name) = NormalizedPackageName::from_str(&pkg.name) else {
+                tracing::warn!(
+                        "failed to determine the artifact name of the python package {}-{} from url {}: {} is not a valid package name.",
+                        &pkg.name, pkg.version, &pip.url, &pkg.name);
+                return (pkg, None);
+            };
+
+            // Determine the artifact type from the name and filename
+            match ArtifactName::from_filename(filename, &name) {
+                Ok(ArtifactName::Wheel(name)) => (pkg, Some(IndexSet::from_iter(name.all_tags_iter()))),
+                Ok(_) => (pkg, None),
                 Err(err) => {
                     tracing::warn!(
                         "failed to determine the artifact name of the python package {}-{}. Could not determine the name from the url {}: {err}",
@@ -591,19 +610,5 @@ fn does_installed_match_locked_package(
             false
         }
         (Some(locked_tags), Some(installed_tags)) => locked_tags == installed_tags,
-    }
-}
-
-trait PipLockedDependencyExt {
-    /// Returns the artifact name of the locked dependency.
-    fn artifact_name(&self) -> Result<ArtifactName, ParseArtifactNameError>;
-}
-
-impl PipLockedDependencyExt for PipLockedDependency {
-    fn artifact_name(&self) -> Result<ArtifactName, ParseArtifactNameError> {
-        self.url.path_segments().and_then(|s| s.last()).map_or(
-            Err(ParseArtifactNameError::InvalidName),
-            ArtifactName::from_str,
-        )
     }
 }
