@@ -256,6 +256,15 @@ async fn update_python_distributions(
             rip::uninstall::uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
                 .into_diagnostic()
                 .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_distribution.name, &python_distribution.version))?;
+
+            // HACK: Also remove the HASH file that pixi writes. Ignore the error if its there. We
+            // should probably actually add this file to the RECORD.
+            let _ = std::fs::remove_file(
+                prefix
+                    .root()
+                    .join(&python_distribution.dist_info)
+                    .join("HASH"),
+            );
         }
     }
 
@@ -507,6 +516,10 @@ fn remove_old_python_distributions(
         rip::uninstall::uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
             .into_diagnostic()
             .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_package.name, &python_package.version))?;
+
+        // HACK: Also remove the HASH file that pixi writes. Ignore the error if its there. We
+        // should probably actually add this file to the RECORD.
+        let _ = std::fs::remove_file(prefix.root().join(&python_package.dist_info).join("HASH"));
 
         pb.inc(1);
     }
