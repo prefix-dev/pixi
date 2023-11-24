@@ -458,7 +458,7 @@ fn remove_old_python_distributions(
     let current_python_packages = rip::find_distributions_in_venv(prefix.root(), &install_paths)
         .into_diagnostic()
         .with_context(|| format!("failed to determine the python packages installed for a previous version of python ({}.{})", python_version.0, python_version.1))?
-        .into_iter().filter(|d| d.installer.as_deref() != Some("conda")).collect_vec();
+        .into_iter().filter(|d| d.installer.as_deref() != Some("conda") && d.installer.is_some()).collect_vec();
 
     let pb = progress::global_multi_progress()
         .add(ProgressBar::new(current_python_packages.len() as u64));
@@ -510,6 +510,12 @@ fn determine_python_distributions_to_remove_and_install(
     // Any package that is in the currently installed list that is NOT found in the lockfile is
     // retained in the list to mark it for removal.
     current_python_packages.retain(|current_python_packages| {
+        if current_python_packages.installer.is_none() {
+            // If this package has no installer, we can't make a reliable decision on whether to
+            // keep it or not. So we do not uninstall it.
+            return false;
+        }
+
         if let Some(found_desired_packages_idx) =
             desired_python_packages
                 .iter()
