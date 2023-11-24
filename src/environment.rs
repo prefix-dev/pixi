@@ -9,12 +9,13 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, LabeledSpan};
 
+use crate::lock_file::lock_file_satisfies_project;
 use rattler::install::Transaction;
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
-use rattler_lock::{CondaLock, LockedDependency, PipLockedDependency};
+use rattler_lock::{CondaLock, LockedDependency};
 use rip::{
     tags::WheelTag, Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution,
-    InstallPaths, PackageDb, ParseArtifactNameError, UnpackWheelOptions, Wheel, WheelName,
+    InstallPaths, NormalizedPackageName, PackageDb, UnpackWheelOptions, Wheel, WheelFilename,
 };
 use std::{io::ErrorKind, path::Path, str::FromStr, time::Duration};
 use tokio::task::JoinError;
@@ -113,7 +114,7 @@ pub async fn get_up_to_date_prefix(
 
     let mut lock_file = lock_file::load_lock_file(project).await?;
 
-    if !frozen && !lock_file::lock_file_up_to_date(project, &lock_file)? {
+    if !frozen && !lock_file_satisfies_project(project, &lock_file)? {
         if locked {
             miette::bail!("Lockfile not up-to-date with the project");
         }
@@ -171,7 +172,7 @@ pub async fn update_prefix(
     // Install and/or remove python packages
     progress::await_in_progress(
         "updating python packages",
-        update_python_distributions(package_db, &prefix, lock_file, platform, &transaction),
+        update_python_distributions(package_db, prefix, lock_file, platform, &transaction),
     )
     .await?;
 
@@ -191,7 +192,7 @@ pub async fn update_prefix(
 /// Installs and/or remove python distributions.
 async fn update_python_distributions(
     package_db: &PackageDb,
-    prefix: &&Prefix,
+    prefix: &Prefix,
     lock_file: &CondaLock,
     platform: Platform,
     transaction: &Transaction<PrefixRecord, RepoDataRecord>,
@@ -221,7 +222,7 @@ async fn update_python_distributions(
     // Determine the python packages that are part of the lock-file
     let python_packages = lock_file
         .get_packages_by_platform(platform)
-        .filter(|p| p.is_pip())
+        .filter(|p| p.is_pypi())
         .collect_vec();
 
     // Determine the python packages to remove before we start installing anything new. If the
@@ -229,6 +230,7 @@ async fn update_python_distributions(
     // regardless.
     let (python_distributions_to_remove, python_distributions_to_install) =
         determine_python_distributions_to_remove_and_install(
+            prefix.root(),
             current_python_packages,
             python_packages,
         );
@@ -239,9 +241,7 @@ async fn update_python_distributions(
 
     // Remove python packages that need to be removed
     if !python_distributions_to_remove.is_empty() {
-        let site_package_path = install_paths
-            .site_packages()
-            .expect("site-packages path must exist");
+        let site_package_path = install_paths.site_packages();
 
         for python_distribution in python_distributions_to_remove {
             tracing::info!(
@@ -256,6 +256,15 @@ async fn update_python_distributions(
             rip::uninstall::uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
                 .into_diagnostic()
                 .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_distribution.name, &python_distribution.version))?;
+
+            // HACK: Also remove the HASH file that pixi writes. Ignore the error if its there. We
+            // should probably actually add this file to the RECORD.
+            let _ = std::fs::remove_file(
+                prefix
+                    .root()
+                    .join(&python_distribution.dist_info)
+                    .join("HASH"),
+            );
         }
     }
 
@@ -278,7 +287,7 @@ async fn update_python_distributions(
 async fn install_python_distributions(
     prefix: &Prefix,
     install_paths: InstallPaths,
-    package_stream: impl Stream<Item = miette::Result<Wheel>> + Sized,
+    package_stream: impl Stream<Item = miette::Result<(Option<String>, Wheel)>> + Sized,
 ) -> miette::Result<Option<ProgressBar>> {
     // Determine the number of packages that we are going to install
     let len = {
@@ -301,7 +310,7 @@ async fn install_python_distributions(
     // Concurrently unpack the wheels as they become available in the stream.
     let install_pb = pb.clone();
     package_stream
-        .try_for_each_concurrent(Some(20), move |wheel| {
+        .try_for_each_concurrent(Some(20), move |(hash, wheel)| {
             let install_paths = install_paths.clone();
             let root = prefix.root().to_path_buf();
             let message_formatter = message_formatter.clone();
@@ -318,6 +327,14 @@ async fn install_python_distributions(
                             },
                         )
                         .into_diagnostic()
+                        .and_then(|unpacked_wheel| {
+                            if let Some(hash) = hash {
+                                std::fs::write(unpacked_wheel.dist_info.join("HASH"), hash)
+                                    .into_diagnostic()
+                            } else {
+                                Ok(())
+                            }
+                        })
                 })
                 .map_err(JoinError::try_into_panic)
                 .await;
@@ -347,7 +364,7 @@ fn stream_python_artifacts<'a>(
     package_db: &'a PackageDb,
     packages_to_download: Vec<&'a LockedDependency>,
 ) -> (
-    impl Stream<Item = miette::Result<Wheel>> + 'a,
+    impl Stream<Item = miette::Result<(Option<String>, Wheel)>> + 'a,
     Option<ProgressBar>,
 ) {
     if packages_to_download.is_empty() {
@@ -375,7 +392,7 @@ fn stream_python_artifacts<'a>(
             let message_formatter = message_formatter.clone();
             async move {
                 let pip_package = package
-                    .as_pip()
+                    .as_pypi()
                     .expect("must be a pip package at this point");
 
                 // Determine the filename from the
@@ -384,7 +401,12 @@ fn stream_python_artifacts<'a>(
                     .path_segments()
                     .and_then(|s| s.last())
                     .expect("url is missing a path");
-                let wheel_name = WheelName::from_str(filename)
+                let name = NormalizedPackageName::from_str(&package.name)
+                    .into_diagnostic()
+                    .with_context(|| {
+                        format!("'{}' is not a valid python package name", &package.name)
+                    })?;
+                let wheel_name = WheelFilename::from_filename(filename, &name)
                     .expect("failed to convert filename to wheel filename");
 
                 // Log out intent to install this python package.
@@ -420,7 +442,13 @@ fn stream_python_artifacts<'a>(
                     pb.finish();
                 }
 
-                Ok(wheel)
+                let hash = pip_package
+                    .hash
+                    .as_ref()
+                    .and_then(|h| h.sha256())
+                    .map(|sha256| format!("sha256-{:x}", sha256));
+
+                Ok((hash, wheel))
             }
         })
         .buffer_unordered(20)
@@ -467,9 +495,7 @@ fn remove_old_python_distributions(
     pb.enable_steady_tick(Duration::from_millis(100));
 
     // Remove the python packages
-    let site_package_path = install_paths
-        .site_packages()
-        .expect("site-packages path must exist");
+    let site_package_path = install_paths.site_packages();
     for python_package in current_python_packages {
         tracing::info!(
             "uninstalling python package from previous python version {}-{}",
@@ -490,6 +516,10 @@ fn remove_old_python_distributions(
             .into_diagnostic()
             .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_package.name, &python_package.version))?;
 
+        // HACK: Also remove the HASH file that pixi writes. Ignore the error if its there. We
+        // should probably actually add this file to the RECORD.
+        let _ = std::fs::remove_file(prefix.root().join(&python_package.dist_info).join("HASH"));
+
         pb.inc(1);
     }
 
@@ -498,10 +528,11 @@ fn remove_old_python_distributions(
 
 /// Determine which python packages we can leave untouched and which python packages should be
 /// removed.
-fn determine_python_distributions_to_remove_and_install(
+fn determine_python_distributions_to_remove_and_install<'p>(
+    prefix: &Path,
     mut current_python_packages: Vec<Distribution>,
-    desired_python_packages: Vec<&LockedDependency>,
-) -> (Vec<Distribution>, Vec<&LockedDependency>) {
+    desired_python_packages: Vec<&'p LockedDependency>,
+) -> (Vec<Distribution>, Vec<&'p LockedDependency>) {
     // Determine the artifact tags associated with the locked dependencies.
     let mut desired_python_packages = extract_locked_tags(desired_python_packages);
 
@@ -521,6 +552,7 @@ fn determine_python_distributions_to_remove_and_install(
                 .iter()
                 .position(|(pkg, artifact_name)| {
                     does_installed_match_locked_package(
+                        prefix,
                         current_python_packages,
                         (pkg, artifact_name.as_ref()),
                     )
@@ -556,10 +588,27 @@ fn extract_locked_tags(
     desired_python_packages
         .into_iter()
         .map(|pkg| {
-            let Some(pip) = pkg.as_pip() else { return (pkg, None); };
-            match pip.artifact_name().as_ref().map(|name| name.as_wheel()) {
-                Ok(Some(name)) => (pkg, Some(IndexSet::from_iter(name.all_tags_iter()))),
-                Ok(None) => (pkg, None),
+            // Get the package as a pip package. If the package is not a pip package we can just ignore it.
+            let Some(pip) = pkg.as_pypi() else { return (pkg, None); };
+
+            // Extract the filename from the url and the name from the package name.
+            let Some(filename) = pip.url.path_segments().and_then(|s| s.last()) else {
+                tracing::warn!(
+                        "failed to determine the artifact name of the python package {}-{} from url {}: the url has no filename.",
+                        &pkg.name, pkg.version, &pip.url);
+                return (pkg, None);
+            };
+            let Ok(name) = NormalizedPackageName::from_str(&pkg.name) else {
+                tracing::warn!(
+                        "failed to determine the artifact name of the python package {}-{} from url {}: {} is not a valid package name.",
+                        &pkg.name, pkg.version, &pip.url, &pkg.name);
+                return (pkg, None);
+            };
+
+            // Determine the artifact type from the name and filename
+            match ArtifactName::from_filename(filename, &name) {
+                Ok(ArtifactName::Wheel(name)) => (pkg, Some(IndexSet::from_iter(name.all_tags_iter()))),
+                Ok(_) => (pkg, None),
                 Err(err) => {
                     tracing::warn!(
                         "failed to determine the artifact name of the python package {}-{}. Could not determine the name from the url {}: {err}",
@@ -574,6 +623,7 @@ fn extract_locked_tags(
 /// Returns true if the installed python package matches the locked python package. If that is the
 /// case we can assume that the locked python package is already installed.
 fn does_installed_match_locked_package(
+    prefix_root: &Path,
     installed_python_package: &Distribution,
     locked_python_package: (&LockedDependency, Option<&IndexSet<WheelTag>>),
 ) -> bool {
@@ -587,7 +637,27 @@ fn does_installed_match_locked_package(
         return false;
     }
 
-    // Now match on the type of the artifact
+    // If this distribution is installed with pixi we can assume that there is a URL file that
+    // contains the original URL.
+    if installed_python_package.installer.as_deref() == Some("pixi") {
+        let expected_hash = pkg
+            .as_pypi()
+            .and_then(|hash| hash.hash.as_ref())
+            .and_then(|hash| hash.sha256())
+            .map(|sha256| format!("sha256-{:x}", sha256));
+        if let Some(expected_hash) = expected_hash {
+            let hash_path = prefix_root
+                .join(&installed_python_package.dist_info)
+                .join("HASH");
+            if let Ok(actual_hash) = std::fs::read_to_string(hash_path) {
+                return actual_hash == expected_hash;
+            }
+        }
+    }
+
+    // Try to match the tags of both packages. This turns out to be pretty unreliable because
+    // there are many WHEELS that do not report the tags of their filename correctly in the
+    // WHEEL file.
     match (artifact_tags, &installed_python_package.tags) {
         (None, _) | (_, None) => {
             // One, or both, of the artifacts are not a wheel distribution so we cannot
@@ -597,19 +667,5 @@ fn does_installed_match_locked_package(
             false
         }
         (Some(locked_tags), Some(installed_tags)) => locked_tags == installed_tags,
-    }
-}
-
-trait PipLockedDependencyExt {
-    /// Returns the artifact name of the locked dependency.
-    fn artifact_name(&self) -> Result<ArtifactName, ParseArtifactNameError>;
-}
-
-impl PipLockedDependencyExt for PipLockedDependency {
-    fn artifact_name(&self) -> Result<ArtifactName, ParseArtifactNameError> {
-        self.url.path_segments().and_then(|s| s.last()).map_or(
-            Err(ParseArtifactNameError::InvalidName),
-            ArtifactName::from_str,
-        )
     }
 }

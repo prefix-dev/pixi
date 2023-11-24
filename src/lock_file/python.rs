@@ -1,38 +1,45 @@
-use crate::project::manifest::SystemRequirements;
-use crate::virtual_packages::default_mac_os_version;
 use crate::{
-    consts::PROJECT_MANIFEST, lock_file::python_name_mapping,
-    project::manifest::LibCSystemRequirement, virtual_packages::default_glibc_version, Project,
+    consts::PROJECT_MANIFEST,
+    lock_file::{package_identifier, python_name_mapping},
+    project::{manifest::LibCSystemRequirement, manifest::SystemRequirements},
+    virtual_packages::{default_glibc_version, default_mac_os_version},
+    Project,
 };
 use itertools::Itertools;
+use miette::{Context, IntoDiagnostic};
 use pep508_rs::{MarkerEnvironment, StringVersion};
 use rattler_conda_types::{PackageRecord, Platform, RepoDataRecord, Version, VersionWithSource};
 use rip::{
     tags::{WheelTag, WheelTags},
     PinnedPackage, SDistResolution,
 };
-use std::collections::HashMap;
-use std::{str::FromStr, vec};
+use std::{collections::HashMap, str::FromStr, vec};
 
 /// Resolve python packages for the specified project.
 pub async fn resolve_pypi_dependencies<'p>(
     project: &'p Project,
     platform: Platform,
-    conda_packages: &[RepoDataRecord],
+    conda_packages: &mut [RepoDataRecord],
 ) -> miette::Result<Vec<PinnedPackage<'p>>> {
     let dependencies = match project.pypi_dependencies() {
         Some(deps) if !deps.is_empty() => deps,
         _ => return Ok(vec![]),
     };
 
-    let requirements = dependencies
-        .iter()
-        .map(|(name, req)| req.as_pep508(name))
-        .collect::<Vec<pep508_rs::Requirement>>();
+    // Amend the records with pypi purls if they are not present yet.
+    let conda_forge_mapping = python_name_mapping::conda_pypi_name_mapping().await?;
+    for record in conda_packages.iter_mut() {
+        python_name_mapping::amend_pypi_purls(record, conda_forge_mapping)?;
+    }
 
     // Determine the python packages that are installed by the conda packages
     let conda_python_packages =
-        python_name_mapping::find_conda_python_packages(conda_packages).await?;
+        package_identifier::PypiPackageIdentifier::from_records(conda_packages)
+            .into_diagnostic()
+            .context("failed to extract python packages from conda metadata")?
+            .into_iter()
+            .map(PinnedPackage::from)
+            .collect_vec();
 
     if !conda_python_packages.is_empty() {
         tracing::info!(
@@ -66,6 +73,11 @@ pub async fn resolve_pypi_dependencies<'p>(
         python_record.as_ref(),
     );
 
+    let requirements = dependencies
+        .iter()
+        .map(|(name, req)| req.as_pep508(name))
+        .collect::<Vec<pep508_rs::Requirement>>();
+
     // Resolve the PyPi dependencies
     let mut result = rip::resolve(
         project.pypi_package_db()?,
@@ -91,9 +103,14 @@ pub async fn resolve_pypi_dependencies<'p>(
 }
 
 /// Returns true if the specified record refers to a version/variant of python.
-/// TODO: Add support for more variants.
 pub fn is_python(record: &RepoDataRecord) -> bool {
-    record.package_record.name.as_normalized() == "python"
+    is_python_name(&record.package_record.name)
+}
+
+/// Returns true if the specified name refers to a version/variant of python.
+/// TODO: Add support for more variants.
+pub fn is_python_name(record: &rattler_conda_types::PackageName) -> bool {
+    record.as_normalized() == "python"
 }
 
 /// Determine the available env markers based on the platform and python package.
