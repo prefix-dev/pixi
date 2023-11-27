@@ -46,14 +46,14 @@ ProjectManifest {
     target: {
         PixiSpanned {
             span: Some(
-                224..230,
+                223..229,
             ),
             value: Platform(
                 Win64,
             ),
         }: TargetMetadata {
             dependencies: {
-                "numpy": NamelessMatchSpec {
+                "bar": NamelessMatchSpec {
                     version: Some(
                         Any,
                     ),
@@ -74,7 +74,7 @@ ProjectManifest {
         },
         PixiSpanned {
             span: Some(
-                290..298,
+                287..295,
             ),
             value: Platform(
                 Linux64,
@@ -84,7 +84,7 @@ ProjectManifest {
             host_dependencies: None,
             build_dependencies: Some(
                 {
-                    "numpy": NamelessMatchSpec {
+                    "baz": NamelessMatchSpec {
                         version: Some(
                             Any,
                         ),
