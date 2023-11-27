@@ -11,8 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * UX of `pixi run` has been improved with better errors and showing what task is run.
 
 > [!NOTE]
-> For `[pypi-dependencies]` we're missing some features, they're listed in this project: https://github.com/orgs/prefix-dev/projects/6.
-> Being 100% feature complete with `pip` is not a focus for our company, but we need to get rid of the need for `pip` to manage dependencies in a `pixi` environment.
+> `[pypi-dependencies]` support is still incomplete, missing functionality is listed here: https://github.com/orgs/prefix-dev/projects/6.
+> Our intent is not to have 100% feature parity with `pip`, our goal is that you only need `pixi` for both conda and pypi packages alike.
 
 ### Details
 #### Added
