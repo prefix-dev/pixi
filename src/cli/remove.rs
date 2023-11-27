@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use rattler_conda_types::{PackageName, Platform};
 
-use crate::{project::SpecType, Project};
+use crate::{environment::get_up_to_date_prefix, project::SpecType, Project};
 
 /// Remove the dependency from the project
 #[derive(Debug, Default, Parser)]
@@ -29,7 +29,7 @@ pub struct Args {
     pub platform: Option<Platform>,
 }
 
-pub fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let deps = args.deps;
     let spec_type = if args.host {
@@ -80,6 +80,9 @@ pub fn execute(args: Args) -> miette::Result<()> {
             }
         })
         .collect::<Vec<_>>();
+
+    // updating prefix after removing from toml
+    let _ = get_up_to_date_prefix(&project, false, false).await?;
 
     Ok(())
 }
