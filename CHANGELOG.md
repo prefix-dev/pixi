@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.0] - 2023-11-27
+
+### Highlights
+* 🎉🐍`[pypi-dependencies]` ALPHA RELEASE🐍🎉, you can now add PyPI dependencies to your pixi project.
+* UX of `pixi run` has been improved with better errors and showing what task is run.
+
+[!NOTE]
+For `[pypi-dependencies]` we're missing some features, they're listed in this project: https://github.com/orgs/prefix-dev/projects/6.
+Being 100% feature complete with `pip` is not a focus for our company, but we need to get rid of the need for `pip` to manage dependencies in a `pixi` environment.
+
+### Details
+#### Added
+* Bump `rattler` @ruben-arts in https://github.com/prefix-dev/pixi/pull/496
+* Implement lock-file satisfiability with `pypi-dependencies` by @baszalmstra in https://github.com/prefix-dev/pixi/pull/494
+* List pixi tasks when `command not found` is returned by @ruben-arts in https://github.com/prefix-dev/pixi/pull/488
+* Show which command is run as a pixi task by @ruben-arts in https://github.com/prefix-dev/pixi/pull/491 && https://github.com/prefix-dev/pixi/pull/493
+* Add progress info to conda install by @baszalmstra in https://github.com/prefix-dev/pixi/pull/470
+* Install pypi dependencies (alpha) by @baszalmstra in https://github.com/prefix-dev/pixi/pull/452
+
+#### Fixed
+* Add install scripts to `pixi.sh` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/458 && https://github.com/prefix-dev/pixi/pull/459 && https://github.com/prefix-dev/pixi/pull/460
+* Fix `RECORD not found` issue by @baszalmstra in https://github.com/prefix-dev/pixi/pull/495
+* Actually add to the `.gitignore` and give better errors by @ruben-arts in https://github.com/prefix-dev/pixi/pull/490
+* Support macOS for `pypi-dependencies` by @baszalmstra in https://github.com/prefix-dev/pixi/pull/478
+* Custom `pypi-dependencies` type by @ruben-arts in https://github.com/prefix-dev/pixi/pull/471
+* `pypi-dependencies` parsing errors by @ruben-arts in https://github.com/prefix-dev/pixi/pull/479
+* Progress issues by @baszalmstra in https://github.com/prefix-dev/pixi/pull/4
+
+#### Miscellaneous
+* Example: `ctypes` by @liquidcarbon in https://github.com/prefix-dev/pixi/pull/441
+* Mention the AUR package by @orhun in https://github.com/prefix-dev/pixi/pull/464
+* Update `rerun` example by @ruben-arts in https://github.com/prefix-dev/pixi/pull/489
+* Document `pypi-dependencies` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/481
+* Ignore docs paths on rust workflow by @ruben-arts in https://github.com/prefix-dev/pixi/pull/482
+* Fix flaky tests, run serially by @baszalmstra in https://github.com/prefix-dev/pixi/pull/477
+
+
+## New Contributors
+* @liquidcarbon made their first contribution in https://github.com/prefix-dev/pixi/pull/441
+* @orhun made their first contribution in https://github.com/prefix-dev/pixi/pull/464
+
+**Full Changelog**: https://github.com/prefix-dev/pixi/compare/v0.7.0...v0.8.0
+
 ## [0.7.0] - 2023-11-14
 
 ### Highlights
