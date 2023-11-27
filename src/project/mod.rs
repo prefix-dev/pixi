@@ -1158,13 +1158,13 @@ mod tests {
             platforms = ["linux-64", "win-64"]
 
             [dependencies]
-            numpy = "*"
+            fooz = "*"
 
             [target.win-64.dependencies]
-            numpy = "*"
+            bar = "*"
 
             [target.linux-64.build-dependencies]
-            numpy = "*"
+            baz = "*"
         "#;
 
         let mut project =
@@ -1172,7 +1172,7 @@ mod tests {
 
         project
             .remove_target_dependency(
-                &PackageName::try_from("numpy").unwrap(),
+                &PackageName::try_from("baz").unwrap(),
                 &SpecType::Build,
                 &Platform::Linux64,
             )
@@ -1191,20 +1191,20 @@ mod tests {
             platforms = ["linux-64", "win-64"]
 
             [dependencies]
-            numpy = "*"
+            fooz = "*"
 
             [target.win-64.dependencies]
-            numpy = "*"
+            bar = "*"
 
             [target.linux-64.build-dependencies]
-            numpy = "*"
+            baz = "*"
         "#;
 
         let mut project =
             Project::from_manifest_str(&PathBuf::from("/tmp/"), file_contents).unwrap();
 
         project
-            .remove_dependency(&PackageName::try_from("numpy").unwrap(), &SpecType::Run)
+            .remove_dependency(&PackageName::try_from("fooz").unwrap(), &SpecType::Run)
             .unwrap();
         assert_debug_snapshot!(project.manifest);
     }
