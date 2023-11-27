@@ -880,7 +880,6 @@ pub fn ensure_toml_target_table<'a>(
         })
 }
 
-#[allow(unused)]
 /// Retrieve a mutable reference to a target table `table_name`
 /// for a specific platform.
 fn get_toml_target_table<'a>(

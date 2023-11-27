@@ -140,7 +140,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
         Command::Project(cmd) => project::execute(cmd).await,
-        Command::Remove(cmd) => remove::execute(cmd),
+        Command::Remove(cmd) => remove::execute(cmd).await,
     }
 }
 
