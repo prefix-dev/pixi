@@ -10,9 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * 🎉🐍`[pypi-dependencies]` ALPHA RELEASE🐍🎉, you can now add PyPI dependencies to your pixi project.
 * UX of `pixi run` has been improved with better errors and showing what task is run.
 
-[!NOTE]
-For `[pypi-dependencies]` we're missing some features, they're listed in this project: https://github.com/orgs/prefix-dev/projects/6.
-Being 100% feature complete with `pip` is not a focus for our company, but we need to get rid of the need for `pip` to manage dependencies in a `pixi` environment.
+> [!NOTE]
+> For `[pypi-dependencies]` we're missing some features, they're listed in this project: https://github.com/orgs/prefix-dev/projects/6.
+> Being 100% feature complete with `pip` is not a focus for our company, but we need to get rid of the need for `pip` to manage dependencies in a `pixi` environment.
 
 ### Details
 #### Added
