@@ -1,0 +1,110 @@
+---
+source: src/project/mod.rs
+expression: project.manifest
+---
+ProjectManifest {
+    project: ProjectMetadata {
+        name: "foo",
+        version: Some(
+            Version {
+                version: [[0], [0], [1], [0]],
+                local: [],
+            },
+        ),
+        description: None,
+        authors: [],
+        channels: [],
+        platforms: PixiSpanned {
+            span: Some(
+                128..150,
+            ),
+            value: [
+                Linux64,
+                Win64,
+            ],
+        },
+        license: None,
+        license_file: None,
+        readme: None,
+        homepage: None,
+        repository: None,
+        documentation: None,
+    },
+    tasks: {},
+    system_requirements: SystemRequirements {
+        windows: None,
+        unix: None,
+        macos: None,
+        linux: None,
+        cuda: None,
+        libc: None,
+        archspec: None,
+    },
+    dependencies: {
+        "numpy": NamelessMatchSpec {
+            version: Some(
+                Any,
+            ),
+            build: None,
+            build_number: None,
+            file_name: None,
+            channel: None,
+            subdir: None,
+            namespace: None,
+            md5: None,
+            sha256: None,
+        },
+    },
+    host_dependencies: None,
+    build_dependencies: None,
+    target: {
+        PixiSpanned {
+            span: Some(
+                224..230,
+            ),
+            value: Platform(
+                Win64,
+            ),
+        }: TargetMetadata {
+            dependencies: {
+                "numpy": NamelessMatchSpec {
+                    version: Some(
+                        Any,
+                    ),
+                    build: None,
+                    build_number: None,
+                    file_name: None,
+                    channel: None,
+                    subdir: None,
+                    namespace: None,
+                    md5: None,
+                    sha256: None,
+                },
+            },
+            host_dependencies: None,
+            build_dependencies: None,
+            activation: None,
+            tasks: {},
+        },
+        PixiSpanned {
+            span: Some(
+                290..298,
+            ),
+            value: Platform(
+                Linux64,
+            ),
+        }: TargetMetadata {
+            dependencies: {},
+            host_dependencies: None,
+            build_dependencies: Some(
+                {},
+            ),
+            activation: None,
+            tasks: {},
+        },
+    },
+    activation: None,
+    pypi_dependencies: PypiDependencies {
+        requirements: {},
+    },
+}
