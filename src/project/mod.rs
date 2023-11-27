@@ -1141,6 +1141,69 @@ mod tests {
         assert_debug_snapshot!(project.activation_scripts(Platform::Win64).unwrap());
         assert_debug_snapshot!(project.activation_scripts(Platform::OsxArm64).unwrap());
     }
+
+    #[test]
+    fn test_remove_target_dependencies() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+            numpy = "*"
+
+            [target.win-64.dependencies]
+            numpy = "*"
+
+            [target.linux-64.build-dependencies]
+            numpy = "*"
+        "#;
+
+        let mut project =
+            Project::from_manifest_str(&PathBuf::from("/tmp/"), file_contents).unwrap();
+
+        project
+            .remove_target_dependency(
+                &PackageName::try_from("numpy").unwrap(),
+                &SpecType::Build,
+                &Platform::Linux64,
+            )
+            .unwrap();
+        assert_debug_snapshot!(project.manifest);
+    }
+
+    #[test]
+    fn test_remove_dependencies() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+            numpy = "*"
+
+            [target.win-64.dependencies]
+            numpy = "*"
+
+            [target.linux-64.build-dependencies]
+            numpy = "*"
+        "#;
+
+        let mut project =
+            Project::from_manifest_str(&PathBuf::from("/tmp/"), file_contents).unwrap();
+
+        project
+            .remove_dependency(&PackageName::try_from("numpy").unwrap(), &SpecType::Run)
+            .unwrap();
+        assert_debug_snapshot!(project.manifest);
+    }
+
     #[test]
     fn test_target_specific_tasks() {
         // Using known files in the project so the test succeed including the file check.
