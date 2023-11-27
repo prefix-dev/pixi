@@ -919,6 +919,7 @@ mod tests {
     use rattler_conda_types::ChannelConfig;
     use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
     use std::str::FromStr;
+    use tempfile::tempdir;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -1167,8 +1168,9 @@ mod tests {
             baz = "*"
         "#;
 
-        let mut project =
-            Project::from_manifest_str(&PathBuf::from("/tmp/"), file_contents).unwrap();
+        let tmpdir = tempdir().unwrap();
+
+        let mut project = Project::from_manifest_str(tmpdir.path(), file_contents).unwrap();
 
         project
             .remove_target_dependency(
@@ -1200,8 +1202,9 @@ mod tests {
             baz = "*"
         "#;
 
-        let mut project =
-            Project::from_manifest_str(&PathBuf::from("/tmp/"), file_contents).unwrap();
+        let tmpdir = tempdir().unwrap();
+
+        let mut project = Project::from_manifest_str(tmpdir.path(), file_contents).unwrap();
 
         project
             .remove_dependency(&PackageName::try_from("fooz").unwrap(), &SpecType::Run)
