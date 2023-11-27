@@ -51,6 +51,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .collect::<Vec<_>>();
 
+    // updating prefix after removing from toml
+    let _ = get_up_to_date_prefix(&project, false, false).await?;
+
     let _ = results
         .iter()
         .filter(|&result| result.is_ok())
@@ -80,9 +83,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         })
         .collect::<Vec<_>>();
-
-    // updating prefix after removing from toml
-    let _ = get_up_to_date_prefix(&project, false, false).await?;
 
     Ok(())
 }
