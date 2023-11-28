@@ -217,6 +217,7 @@ impl PackageBuilder {
                 timestamp: None,
                 track_features: vec![],
                 version: self.version,
+                purls: vec![],
             },
             subdir,
             archive_type: self.archive_type,

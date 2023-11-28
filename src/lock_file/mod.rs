@@ -1,5 +1,7 @@
+mod package_identifier;
 mod python;
 mod python_name_mapping;
+mod satisfiability;
 
 use crate::{progress, Project};
 use futures::TryStreamExt;
@@ -8,25 +10,20 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageName, Platform, RepoDataRecord,
-    Version,
+    GenericVirtualPackage, MatchSpec, PackageName, Platform, RepoDataRecord,
 };
 use rattler_lock::{
     builder::{
         CondaLockedDependencyBuilder, LockFileBuilder, LockedPackagesBuilder,
-        PipLockedDependencyBuilder,
+        PypiLockedDependencyBuilder,
     },
-    CondaLock, LockedDependency, PackageHashes,
+    CondaLock, PackageHashes,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
-use rip::Wheel;
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    str::FromStr,
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
+
+pub use satisfiability::lock_file_satisfies_project;
 
 /// Loads the lockfile for the specified project or returns a dummy one if none could be found.
 pub async fn load_lock_file(project: &Project) -> miette::Result<CondaLock> {
@@ -40,178 +37,6 @@ pub async fn load_lock_file(project: &Project) -> miette::Result<CondaLock> {
     })
     .await
     .unwrap_or_else(|e| Err(e).into_diagnostic())
-}
-
-/// Returns true if the locked packages match the dependencies in the project.
-pub fn lock_file_up_to_date(project: &Project, lock_file: &CondaLock) -> miette::Result<bool> {
-    let platforms = project.platforms();
-
-    // TODO: Add support for python dependencies
-    if project
-        .pypi_dependencies()
-        .is_some_and(|deps| !deps.is_empty())
-    {
-        tracing::warn!("Checking if a lock-file is up to date with `pypi-dependencies` in the mix is not yet implemented.");
-        return Ok(false);
-    }
-
-    // If a platform is missing from the lock file the lock file is completely out-of-date.
-    if HashSet::<Platform>::from_iter(lock_file.metadata.platforms.iter().copied())
-        != HashSet::from_iter(platforms.iter().copied())
-    {
-        return Ok(false);
-    }
-
-    // Check if the channels in the lock file match our current configuration. Note that the order
-    // matters here. If channels are added in a different order, the solver might return a different
-    // result.
-    let channels = project
-        .channels()
-        .iter()
-        .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()))
-        .collect_vec();
-    if lock_file.metadata.channels.iter().ne(channels.iter()) {
-        return Ok(false);
-    }
-
-    // For each platform,
-    for platform in platforms.iter().cloned() {
-        // Check if all dependencies exist in the lock-file.
-        let dependencies = project
-            .all_dependencies(platform)?
-            .into_iter()
-            .collect::<VecDeque<_>>();
-
-        // Construct a queue of dependencies that we wanna find in the lock file
-        let mut queue = dependencies.clone();
-
-        // Get the virtual packages for the system
-        let virtual_packages = project
-            .virtual_packages(platform)?
-            .into_iter()
-            .map(|vpkg| (vpkg.name.clone(), vpkg))
-            .collect::<HashMap<_, _>>();
-
-        // Keep track of which dependencies we already found. Since there can always only be one
-        // version per named package we can just keep track of the package names.
-        let mut seen = dependencies
-            .iter()
-            .map(|(name, _)| name.clone())
-            .collect::<HashSet<_>>();
-
-        while let Some((name, spec)) = queue.pop_back() {
-            // Is this a virtual package? And does it match?
-            if let Some(vpkg) = virtual_packages.get(&name) {
-                if let Some(version_spec) = spec.version {
-                    if !version_spec.matches(&vpkg.version) {
-                        tracing::info!("found a dependency on virtual package '{}' but the version spec '{}' does not match the expected version of the virtual package '{}'.", name.as_source(), &version_spec, &vpkg.version);
-                        return Ok(false);
-                    }
-                }
-                if let Some(build_spec) = spec.build {
-                    if !build_spec.matches(&vpkg.build_string) {
-                        tracing::info!("found a dependency on virtual package '{}' but the build spec '{}' does not match the expected build of the virtual package '{}'.", name.as_source(), &build_spec, &vpkg.build_string);
-                        return Ok(false);
-                    }
-                }
-
-                // Virtual package matches
-                continue;
-            }
-
-            // Find the package in the lock-file that matches our dependency.
-            let locked_package = lock_file
-                .packages_for_platform(platform)
-                .find(|locked_package| locked_dependency_satisfies(locked_package, &name, &spec));
-
-            match locked_package {
-                None => {
-                    // No package found that matches the dependency, the lock file is not in a
-                    // consistent state.
-                    tracing::info!("failed to find a locked package for '{} {}', assuming the lock file is out of date.", name.as_source(), &spec);
-                    return Ok(false);
-                }
-                Some(package) => {
-                    if let Some(conda_package) = package.as_conda() {
-                        for spec in conda_package.dependencies.iter() {
-                            let Ok(spec) = MatchSpec::from_str(spec) else {
-                                tracing::warn!(
-                                    "failed to parse spec '{}', assuming the lock file is corrupt.",
-                                    spec
-                                );
-                                return Ok(false);
-                            };
-                            let (Some(depends_name), spec) = spec.into_nameless() else {
-                                // TODO: Should we do something with a matchspec that depends on **all** packages?
-                                continue;
-                            };
-
-                            if !seen.contains(&depends_name) {
-                                queue.push_back((depends_name.clone(), spec));
-                                seen.insert(depends_name);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // If the number of "seen" dependencies is less than the number of packages for this
-        // platform in the first place, there are more packages in the lock file than are used. This
-        // means the lock file is also out of date.
-        if seen.len() < lock_file.packages_for_platform(platform).count() {
-            tracing::info!("there are more packages in the lock-file than required to fulfill all dependency requirements. Assuming the lock file is out of date.");
-            return Ok(false);
-        }
-    }
-
-    Ok(true)
-}
-
-/// Returns true if the specified [`conda_lock::LockedDependency`] satisfies the given MatchSpec.
-/// TODO: Move this back to rattler.
-/// TODO: Make this more elaborate to include all properties of MatchSpec
-fn locked_dependency_satisfies(
-    locked_package: &LockedDependency,
-    name: &PackageName,
-    spec: &NamelessMatchSpec,
-) -> bool {
-    // Check if the name of the package matches
-    if locked_package.name != name.as_normalized() {
-        return false;
-    }
-
-    // Check if the version matches
-    if let Some(version_spec) = &spec.version {
-        let v = match Version::from_str(&locked_package.version) {
-            Err(_) => return false,
-            Ok(v) => v,
-        };
-
-        if !version_spec.matches(&v) {
-            return false;
-        }
-    }
-
-    if let Some(conda) = locked_package.as_conda() {
-        match (spec.build.as_ref(), &conda.build) {
-            (Some(build_spec), Some(build)) => {
-                if !build_spec.matches(build) {
-                    return false;
-                }
-            }
-            (Some(_), None) => return false,
-            _ => {}
-        }
-
-        if let Some(channel) = &spec.channel {
-            if !conda.url.as_str().starts_with(channel.base_url.as_str()) {
-                return false;
-            }
-        }
-    }
-
-    true
 }
 
 /// Updates the lock file for a project.
@@ -355,7 +180,7 @@ async fn resolve_platform(
 
     // Solve conda packages
     pb.set_message("resolving conda");
-    let records = resolve_conda_dependencies(
+    let mut records = resolve_conda_dependencies(
         match_specs,
         virtual_packages,
         locked_packages,
@@ -365,7 +190,8 @@ async fn resolve_platform(
 
     // Solve python packages
     pb.set_message("resolving python");
-    let python_artifacts = python::resolve_pypi_dependencies(project, platform, &records).await?;
+    let python_artifacts =
+        python::resolve_pypi_dependencies(project, platform, &mut records).await?;
 
     // Clear message
     pb.set_message("");
@@ -383,12 +209,12 @@ async fn resolve_platform(
     for python_artifact in python_artifacts {
         let (artifact, metadata) = project
             .pypi_package_db()?
-            .get_metadata::<Wheel, _>(&python_artifact.artifacts)
+            .get_metadata(&python_artifact.artifacts)
             .await
             .expect("failed to get metadata for a package for which we have already fetched metadata during solving.")
             .expect("no metadata for a package for which we have already fetched metadata during solving.");
 
-        let locked_package = PipLockedDependencyBuilder {
+        let locked_package = PypiLockedDependencyBuilder {
             name: python_artifact.name.to_string(),
             version: python_artifact.version.to_string(),
             requires_dist: metadata
