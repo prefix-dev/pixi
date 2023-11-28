@@ -625,6 +625,40 @@ impl Project {
         Ok(())
     }
 
+    /// Removes a dependency from `pixi.toml` based on `SpecType`.
+    pub fn remove_dependency(
+        &mut self,
+        dep: &PackageName,
+        spec_type: &SpecType,
+    ) -> miette::Result<(String, NamelessMatchSpec)> {
+        if let Item::Table(ref mut t) = self.doc[spec_type.name()] {
+            if t.contains_key(dep.as_normalized()) && t.remove(dep.as_normalized()).is_some() {
+                return self
+                    .manifest
+                    .remove_dependency(dep.as_normalized(), spec_type);
+            }
+        }
+
+        Err(miette::miette!(
+            "Couldn't find {} in [{}]",
+            console::style(dep.as_normalized()).bold(),
+            console::style(spec_type.name()).bold(),
+        ))
+    }
+
+    /// Removes a target specific dependency from `pixi.toml` based on `SpecType`.
+    pub fn remove_target_dependency(
+        &mut self,
+        dep: &PackageName,
+        spec_type: &SpecType,
+        platform: &Platform,
+    ) -> miette::Result<(String, NamelessMatchSpec)> {
+        let table = get_toml_target_table(&mut self.doc, platform, spec_type.name())?;
+        table.remove(dep.as_normalized());
+        self.manifest
+            .remove_target_dependency(dep.as_normalized(), spec_type, platform)
+    }
+
     /// Returns the root directory of the project
     pub fn root(&self) -> &Path {
         &self.root
@@ -849,6 +883,32 @@ pub fn ensure_toml_target_table<'a>(
         })
 }
 
+/// Retrieve a mutable reference to a target table `table_name`
+/// for a specific platform.
+fn get_toml_target_table<'a>(
+    doc: &'a mut Document,
+    platform: &Platform,
+    table_name: &str,
+) -> miette::Result<&'a mut Table> {
+    let platform_table = doc["target"][platform.as_str()]
+        .as_table_mut()
+        .ok_or(miette::miette!(
+            "could not find {} in {}",
+            console::style(platform.as_str()).bold(),
+            consts::PROJECT_MANIFEST,
+        ))?;
+
+    platform_table.set_dotted(true);
+
+    platform_table[table_name]
+        .as_table_mut()
+        .ok_or(miette::miette!(
+            "could not find {} in {}",
+            console::style(format!("[target.{}.{}]", platform.as_str(), table_name)).bold(),
+            consts::PROJECT_MANIFEST,
+        ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -857,6 +917,7 @@ mod tests {
     use rattler_conda_types::ChannelConfig;
     use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
     use std::str::FromStr;
+    use tempfile::tempdir;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -1084,6 +1145,71 @@ mod tests {
         assert_debug_snapshot!(project.activation_scripts(Platform::Win64).unwrap());
         assert_debug_snapshot!(project.activation_scripts(Platform::OsxArm64).unwrap());
     }
+
+    #[test]
+    fn test_remove_target_dependencies() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+            fooz = "*"
+
+            [target.win-64.dependencies]
+            bar = "*"
+
+            [target.linux-64.build-dependencies]
+            baz = "*"
+        "#;
+
+        let tmpdir = tempdir().unwrap();
+
+        let mut project = Project::from_manifest_str(tmpdir.path(), file_contents).unwrap();
+
+        project
+            .remove_target_dependency(
+                &PackageName::try_from("baz").unwrap(),
+                &SpecType::Build,
+                &Platform::Linux64,
+            )
+            .unwrap();
+        assert_debug_snapshot!(project.manifest);
+    }
+
+    #[test]
+    fn test_remove_dependencies() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+            fooz = "*"
+
+            [target.win-64.dependencies]
+            bar = "*"
+
+            [target.linux-64.build-dependencies]
+            baz = "*"
+        "#;
+
+        let tmpdir = tempdir().unwrap();
+
+        let mut project = Project::from_manifest_str(tmpdir.path(), file_contents).unwrap();
+
+        project
+            .remove_dependency(&PackageName::try_from("fooz").unwrap(), &SpecType::Run)
+            .unwrap();
+        assert_debug_snapshot!(project.manifest);
+    }
+
     #[test]
     fn test_target_specific_tasks() {
         // Using known files in the project so the test succeed including the file check.
