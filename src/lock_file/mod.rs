@@ -209,7 +209,7 @@ async fn resolve_platform(
     for python_artifact in python_artifacts {
         let (artifact, metadata) = project
             .pypi_package_db()?
-            .get_metadata(&python_artifact.artifacts)
+            .get_metadata(&python_artifact.artifacts, None)
             .await
             .expect("failed to get metadata for a package for which we have already fetched metadata during solving.")
             .expect("no metadata for a package for which we have already fetched metadata during solving.");
