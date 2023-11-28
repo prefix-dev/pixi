@@ -501,17 +501,3 @@ fn is_bin_folder_on_path() -> bool {
         .into_iter()
         .contains(&bin_path)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_create_bin() {
-        let tmp_dir = tempfile::TempDir::new().unwrap();
-        let spaced_dir = tmp_dir.path().join("Test Spaced");
-        let prefix = Prefix::new(spaced_dir).unwrap();
-        let script =
-            create_activation_script(&prefix, ShellEnum::Bash(Default::default())).unwrap();
-        dbg!(script);
-    }
-}
