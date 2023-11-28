@@ -248,28 +248,11 @@ async fn update_python_distributions(
         let site_package_path = install_paths.site_packages();
 
         for python_distribution in python_distributions_to_remove {
-            tracing::info!(
-                "uninstalling python package {}-{}",
-                &python_distribution.name,
-                &python_distribution.version
-            );
-            let relative_dist_info = python_distribution
-                .dist_info
-                .strip_prefix(site_package_path)
-                .expect("the dist-info path must be a sub-path of the site-packages path");
-
-            // HACK: Also remove the HASH file that pixi writes. Ignore the error if its there. We
-            // should probably actually add this file to the RECORD.
-            let _ = std::fs::remove_file(
-                prefix
-                    .root()
-                    .join(&python_distribution.dist_info)
-                    .join("HASH"),
-            );
-
-            rip::uninstall::uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
-                .into_diagnostic()
-                .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_distribution.name, &python_distribution.version))?;
+            uninstall_pixi_installed_distribution(
+                &prefix,
+                &site_package_path,
+                &python_distribution,
+            )?;
         }
     }
 
@@ -520,32 +503,42 @@ fn remove_old_python_distributions(
     // Remove the python packages
     let site_package_path = install_paths.site_packages();
     for python_package in current_python_packages {
-        tracing::info!(
-            "uninstalling python package from previous python version {}-{}",
-            &python_package.name,
-            &python_package.version
-        );
-
         pb.set_message(format!(
             "{} {}",
             &python_package.name, &python_package.version
         ));
 
-        let relative_dist_info = python_package
-            .dist_info
-            .strip_prefix(site_package_path)
-            .expect("the dist-info path must be a sub-path of the site-packages path");
-
-        // HACK: Also remove the HASH file that pixi writes. Ignore the error if its there. We
-        // should probably actually add this file to the RECORD.
-        let _ = std::fs::remove_file(prefix.root().join(&python_package.dist_info).join("HASH"));
-
-        rip::uninstall::uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
-            .into_diagnostic()
-            .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_package.name, &python_package.version))?;
+        uninstall_pixi_installed_distribution(&prefix, &site_package_path, &python_package)?;
 
         pb.inc(1);
     }
+
+    Ok(())
+}
+
+/// Uninstalls a python distribution that was previously installed by pixi.
+fn uninstall_pixi_installed_distribution(
+    prefix: &&Prefix,
+    site_package_path: &&Path,
+    python_package: &Distribution,
+) -> miette::Result<()> {
+    tracing::info!(
+        "uninstalling python package {}-{}",
+        &python_package.name,
+        &python_package.version
+    );
+    let relative_dist_info = python_package
+        .dist_info
+        .strip_prefix(site_package_path)
+        .expect("the dist-info path must be a sub-path of the site-packages path");
+
+    // HACK: Also remove the HASH file that pixi writes. Ignore the error if its there. We
+    // should probably actually add this file to the RECORD.
+    let _ = std::fs::remove_file(prefix.root().join(&python_package.dist_info).join("HASH"));
+
+    rip::uninstall::uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
+        .into_diagnostic()
+        .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_package.name, &python_package.version))?;
 
     Ok(())
 }
