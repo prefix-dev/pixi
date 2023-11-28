@@ -9,7 +9,7 @@ This simple code to build and evaluate a LightGBM classification model using the
 2. Run the code:
 
 ```bash
-pixi run python main.py
+pixi run start
 ```
 
 ## Results
