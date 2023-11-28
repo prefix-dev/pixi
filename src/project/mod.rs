@@ -463,7 +463,7 @@ impl Project {
     }
 
     /// Returns the package database used for caching python metadata, wheels and more. See the
-    /// documentation of [`rip::PackageDb`] for more information.
+    /// documentation of [`rip::index::PackageDb`] for more information.
     pub fn pypi_package_db(&self) -> miette::Result<&PackageDb> {
         Ok(self
             .package_db
