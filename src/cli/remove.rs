@@ -51,38 +51,32 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .collect::<Vec<_>>();
 
+    project.save()?;
+
     // updating prefix after removing from toml
     let _ = get_up_to_date_prefix(&project, false, false).await?;
 
-    let _ = results
-        .iter()
-        .filter(|&result| result.is_ok())
-        .map(|result| {
-            if let Ok((removed, spec)) = result {
-                let table_name = if let Some(p) = &args.platform {
-                    format!("target.{}.{}", p.as_str(), spec_type.name())
-                } else {
-                    spec_type.name().to_string()
-                };
+    for result in &results {
+        if let Ok((removed, spec)) = result {
+            let table_name = if let Some(p) = &args.platform {
+                format!("target.{}.{}", p.as_str(), spec_type.name())
+            } else {
+                spec_type.name().to_string()
+            };
 
-                eprintln!(
-                    "Removed {} from [{}]",
-                    console::style(format!("{removed} {spec}")).bold(),
-                    console::style(table_name).bold(),
-                );
-            }
-        })
-        .collect::<Vec<_>>();
+            eprintln!(
+                "Removed {} from [{}]",
+                console::style(format!("{removed} {spec}")).bold(),
+                console::style(table_name).bold(),
+            );
+        }
+    }
 
-    let _ = results
-        .iter()
-        .filter(|&result| result.is_err())
-        .map(|result| {
-            if let Err(e) = result {
-                eprintln!("{e}");
-            }
-        })
-        .collect::<Vec<_>>();
+    for result in &results {
+        if let Err(e) = result {
+            eprintln!("{e}");
+        }
+    }
 
     Ok(())
 }
