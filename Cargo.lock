@@ -714,6 +714,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "configparser"
+version = "3.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0e56e414a2a52ab2a104f85cd40933c2fbc278b83637facf646ecf451b49237"
+
+[[package]]
 name = "console"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2918,13 +2924,15 @@ dependencies = [
 [[package]]
 name = "rattler_installs_packages"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler_installs_packages?branch=main#2d7694d00e79daf9a8764af668cbe55e67b26dc6"
+source = "git+https://github.com/prefix-dev/rattler_installs_packages?branch=main#2ee92fdabfd2c73d52b5d6702b39268b48897a41"
 dependencies = [
+ "async-once-cell",
  "async-trait",
  "async_http_range_reader",
  "async_zip",
  "bytes 1.5.0",
  "ciborium",
+ "configparser",
  "csv",
  "data-encoding",
  "dunce",
