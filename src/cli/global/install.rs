@@ -294,7 +294,7 @@ pub(crate) async fn create_executable_scripts(
             .run_command(
                 &mut script,
                 [
-                    prefix.root().join(exec).to_string_lossy().as_ref(),
+                    format!(r###""{}""###, prefix.root().join(exec).to_string_lossy()).as_str(),
                     get_catch_all_arg(shell),
                 ],
             )
