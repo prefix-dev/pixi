@@ -209,6 +209,11 @@ jobs:
           ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
           ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
 
+      - name: Run user test
+        if: ${{ !matrix.skip-tests }}
+        run: >
+          cargo run -- run -v --manifest-path examples/extended-example/pixi.toml test
+
       - name: Build Installer
         continue-on-error: true
         if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'

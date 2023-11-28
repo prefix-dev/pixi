@@ -1,0 +1,25 @@
+[project]
+name = "extended-example"
+description = "This example is intended to test minimal situations encountered by users"
+channels = ["conda-forge"]
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+[tasks]
+# Test "cwd", "depends_on" and pip install
+install = {cmd = "pip install --editable .", cwd = "python" }
+import = { cmd = "python -c 'import test_package'", depends_on = "install" }
+# Test running pypi executable
+lint = "black python"
+
+# Combine all tasks in one
+test = {cmd = "echo test", depends_on=["import", "lint"]}
+# For normal example usage
+start = {depends_on = ["test"]}
+
+[dependencies]
+python = "3.12.0.*"
+pip = "23.3.1.*"
+
+[pypi-dependencies]
+# ruff = ">=0.1.6" still fails on not having scripts support
+black = "*"
