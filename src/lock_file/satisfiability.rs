@@ -1,15 +1,19 @@
 use super::package_identifier;
-use crate::lock_file::python::{determine_marker_environment, is_python};
-use crate::Project;
+use crate::{
+    lock_file::python::{determine_marker_environment, is_python},
+    Project,
+};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
 use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{CondaLock, LockedDependency, LockedDependencyKind};
-use rip::NormalizedPackageName;
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::fmt::{Display, Formatter};
-use std::str::FromStr;
+use rip::types::NormalizedPackageName;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    fmt::{Display, Formatter},
+    str::FromStr,
+};
 
 #[derive(Clone)]
 enum DependencyKind {
@@ -29,7 +33,7 @@ impl Display for DependencyKind {
 #[derive(Eq, PartialEq, Hash)]
 enum DependencyName {
     Conda(PackageName),
-    PyPi(rip::NormalizedPackageName),
+    PyPi(NormalizedPackageName),
 }
 
 /// Returns true if the locked packages match the dependencies in the project.
@@ -77,15 +81,16 @@ pub fn lock_file_satisfies_project(
         // Determine the python marker environment from the lock-file.
         let python_marker_env = if pypi_dependencies.peek().is_some() {
             // Determine the python executable
-            let Ok(conda_packages) = lock_file
-                .get_conda_packages_by_platform(platform) else {
-                    tracing::info!("failed to convert conda package to RepoDataRecord, assuming the lockfile is corrupt.");
-                    return Ok(false);
-                };
+            let Ok(conda_packages) = lock_file.get_conda_packages_by_platform(platform) else {
+                tracing::info!("failed to convert conda package to RepoDataRecord, assuming the lockfile is corrupt.");
+                return Ok(false);
+            };
 
             // Find the python package
             let Some(python_record) = conda_packages.into_iter().find(is_python) else {
-                tracing::info!("there are pypi-dependencies but there is no python version in the lock-file");
+                tracing::info!(
+                    "there are pypi-dependencies but there is no python version in the lock-file"
+                );
                 return Ok(false);
             };
 
@@ -128,7 +133,7 @@ pub fn lock_file_satisfies_project(
             .filter_map(|req| match req {
                 DependencyKind::Conda(spec) => spec.name.clone().map(DependencyName::Conda),
                 DependencyKind::PyPi(req) => Some(DependencyName::PyPi(
-                    NormalizedPackageName::from(rip::PackageName::from_str(&req.name).ok()?),
+                    NormalizedPackageName::from_str(&req.name).ok()?,
                 )),
             })
             .collect::<HashSet<_>>();
@@ -194,12 +199,12 @@ pub fn lock_file_satisfies_project(
                     LockedDependencyKind::Conda(conda_package) => {
                         for spec in conda_package.dependencies.iter() {
                             let Ok(spec) = MatchSpec::from_str(spec) else {
-                                    tracing::warn!(
+                                tracing::warn!(
                                     "failed to parse spec '{}', assuming the lock file is corrupt.",
                                     spec
                                 );
-                                    return Ok(false);
-                                };
+                                return Ok(false);
+                            };
 
                             if let Some(name) = spec.name.clone() {
                                 let dependency_name = DependencyName::Conda(name);
@@ -234,8 +239,8 @@ pub fn lock_file_satisfies_project(
                             {
                                 continue;
                             }
-                            let Ok(name) =
-                                rip::PackageName::from_str(&req.name).map(NormalizedPackageName::from) else {
+                            let Ok(name) = rip::types::NormalizedPackageName::from_str(&req.name)
+                            else {
                                 tracing::warn!(
                                     "failed to parse package name '{}', assuming the lock file is corrupt.",
                                     req.name

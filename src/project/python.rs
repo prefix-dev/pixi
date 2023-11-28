@@ -57,7 +57,7 @@ impl FromStr for PyPiRequirement {
 
 impl PyPiRequirement {
     /// Returns the requirements as [`pep508_rs::Requirement`]s.
-    pub fn as_pep508(&self, name: &rip::PackageName) -> pep508_rs::Requirement {
+    pub fn as_pep508(&self, name: &rip::types::PackageName) -> pep508_rs::Requirement {
         pep508_rs::Requirement {
             name: name.as_str().to_string(),
             extras: self.extras.clone(),

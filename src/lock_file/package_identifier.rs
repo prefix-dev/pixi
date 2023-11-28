@@ -2,7 +2,8 @@ use super::python_name_mapping;
 use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use rattler_lock::{LockedDependency, LockedDependencyKind};
-use rip::PinnedPackage;
+use rip::resolve::PinnedPackage;
+use rip::types::{Extra, NormalizedPackageName, ParsePackageNameError};
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
 
@@ -10,9 +11,9 @@ use thiserror::Error;
 /// conda package.
 #[derive(Debug)]
 pub struct PypiPackageIdentifier {
-    pub name: rip::NormalizedPackageName,
-    pub version: rip::Version,
-    pub extras: HashSet<rip::Extra>,
+    pub name: NormalizedPackageName,
+    pub version: pep440_rs::Version,
+    pub extras: HashSet<Extra>,
 }
 
 impl PypiPackageIdentifier {
@@ -45,14 +46,14 @@ impl PypiPackageIdentifier {
             panic!("expected conda dependency");
         };
 
-        let name = rip::NormalizedPackageName::from_str(&locked_dependency.name)
+        let name = NormalizedPackageName::from_str(&locked_dependency.name)
             .map_err(|e| ConversionError::PackageName(locked_dependency.name.clone(), e))?;
-        let version = rip::Version::from_str(&locked_dependency.version)
+        let version = pep440_rs::Version::from_str(&locked_dependency.version)
             .map_err(|_| ConversionError::Version(locked_dependency.version.clone()))?;
         let extras = pypi
             .extras
             .iter()
-            .map(|e| rip::Extra::from_str(e).map_err(|_| ConversionError::Extra(e.clone())))
+            .map(|e| Extra::from_str(e).map_err(|_| ConversionError::Extra(e.clone())))
             .collect::<Result<_, _>>()?;
 
         Ok(Self {
@@ -87,8 +88,8 @@ impl PypiPackageIdentifier {
         if !has_pypi_purl && python_name_mapping::is_conda_forge_url(&conda.url) {
             // Convert the conda package names to pypi package names. If the conversion fails we
             // just assume that its not a valid python package.
-            let name = rip::NormalizedPackageName::from_str(&locked_dependency.name).ok();
-            let version = rip::Version::from_str(&locked_dependency.version).ok();
+            let name = NormalizedPackageName::from_str(&locked_dependency.name).ok();
+            let version = pep440_rs::Version::from_str(&locked_dependency.version).ok();
             if let (Some(name), Some(version)) = (name, version) {
                 result.push(PypiPackageIdentifier {
                     name,
@@ -123,9 +124,9 @@ impl PypiPackageIdentifier {
         if !has_pypi_purl && python_name_mapping::is_conda_forge_record(record) {
             // Convert the conda package names to pypi package names. If the conversion fails we
             // just assume that its not a valid python package.
-            let name =
-                rip::NormalizedPackageName::from_str(record.package_record.name.as_source()).ok();
-            let version = rip::Version::from_str(&record.package_record.version.as_str()).ok();
+            let name = NormalizedPackageName::from_str(record.package_record.name.as_source()).ok();
+            let version =
+                pep440_rs::Version::from_str(&record.package_record.version.as_str()).ok();
             if let (Some(name), Some(version)) = (name, version) {
                 result.push(PypiPackageIdentifier {
                     name,
@@ -172,10 +173,10 @@ impl PypiPackageIdentifier {
     ) -> Result<Self, ConversionError> {
         assert_eq!(package_url.package_type(), "pypi");
         let name = package_url.name();
-        let name = rip::NormalizedPackageName::from_str(name)
+        let name = NormalizedPackageName::from_str(name)
             .map_err(|e| ConversionError::PackageName(name.to_string(), e))?;
         let version_str = package_url.version().unwrap_or(fallback_version);
-        let version = rip::Version::from_str(version_str)
+        let version = pep440_rs::Version::from_str(version_str)
             .map_err(|_| ConversionError::Version(version_str.to_string()))?;
 
         // TODO: We can't really tell which python extras are enabled from a PURL.
@@ -191,7 +192,7 @@ impl PypiPackageIdentifier {
     pub fn satisfies(&self, requirement: &Requirement) -> bool {
         // Parse the name of the requirement. If the name cannot be parsed to a normalized package
         // the names will also not match.
-        let Ok(req_name) = rip::NormalizedPackageName::from_str(&requirement.name) else {
+        let Ok(req_name) = NormalizedPackageName::from_str(&requirement.name) else {
             return false;
         };
 
@@ -227,7 +228,7 @@ impl PypiPackageIdentifier {
 #[derive(Error, Debug)]
 pub enum ConversionError {
     #[error("'{0}' is not a valid python package name")]
-    PackageName(String, #[source] rip::ParsePackageNameError),
+    PackageName(String, #[source] ParsePackageNameError),
 
     #[error("'{0}' is not a valid python version")]
     Version(String),

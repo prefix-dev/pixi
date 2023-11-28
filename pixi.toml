@@ -20,7 +20,7 @@ build-docs = { cmd = "mkdocs build --strict" }
 pre-commit = "~=3.3.0"
 
 # Needed for building rattler
-rust = "~=1.70.0"
+rust = "~=1.73.0"
 openssl = "3.*"
 pkg-config = "0.29.*"
 git = "2.42.0.*"

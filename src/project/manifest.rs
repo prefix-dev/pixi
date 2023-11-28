@@ -70,7 +70,7 @@ pub struct ProjectManifest {
 
     /// Optional python requirements
     #[serde(default, rename = "pypi-dependencies")]
-    pub pypi_dependencies: Option<IndexMap<rip::PackageName, PyPiRequirement>>,
+    pub pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
 }
 
 impl ProjectManifest {

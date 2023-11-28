@@ -10,7 +10,7 @@ use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
 };
 use rattler_virtual_packages::VirtualPackage;
-use rip::{normalize_index_url, PackageDb};
+use rip::{index::PackageDb, normalize_index_url};
 use std::{
     collections::{HashMap, HashSet},
     env,
@@ -74,13 +74,13 @@ fn task_as_toml(task: Task) -> Item {
                     table.insert("cmd", cmd_str.into());
                 }
                 CmdArgs::Multiple(cmd_strs) => {
-                    table.insert("cmd", Value::Array(Array::from_iter(cmd_strs.into_iter())));
+                    table.insert("cmd", Value::Array(Array::from_iter(cmd_strs)));
                 }
             }
             if !process.depends_on.is_empty() {
                 table.insert(
                     "depends_on",
-                    Value::Array(Array::from_iter(process.depends_on.into_iter())),
+                    Value::Array(Array::from_iter(process.depends_on)),
                 );
             }
             if let Some(cwd) = process.cwd {
@@ -92,7 +92,7 @@ fn task_as_toml(task: Task) -> Item {
             let mut table = Table::new().into_inline_table();
             table.insert(
                 "depends_on",
-                Value::Array(Array::from_iter(alias.depends_on.into_iter())),
+                Value::Array(Array::from_iter(alias.depends_on)),
             );
             Item::Value(Value::InlineTable(table))
         }
@@ -452,7 +452,7 @@ impl Project {
         Ok(dependencies)
     }
 
-    pub fn pypi_dependencies(&self) -> Option<&IndexMap<rip::PackageName, PyPiRequirement>> {
+    pub fn pypi_dependencies(&self) -> Option<&IndexMap<rip::types::PackageName, PyPiRequirement>> {
         self.manifest.pypi_dependencies.as_ref()
     }
 
@@ -464,7 +464,7 @@ impl Project {
 
     /// Returns the package database used for caching python metadata, wheels and more. See the
     /// documentation of [`rip::PackageDb`] for more information.
-    pub fn pypi_package_db(&self) -> miette::Result<&rip::PackageDb> {
+    pub fn pypi_package_db(&self) -> miette::Result<&PackageDb> {
         Ok(self
             .package_db
             .get_or_try_init(|| {

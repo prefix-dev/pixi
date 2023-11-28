@@ -9,10 +9,8 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::{MarkerEnvironment, StringVersion};
 use rattler_conda_types::{PackageRecord, Platform, RepoDataRecord, Version, VersionWithSource};
-use rip::{
-    tags::{WheelTag, WheelTags},
-    PinnedPackage, SDistResolution,
-};
+use rip::python_env::{WheelTag, WheelTags};
+use rip::resolve::{resolve, PinnedPackage, ResolveOptions, SDistResolution};
 use std::{collections::HashMap, str::FromStr, vec};
 
 /// Resolve python packages for the specified project.
@@ -79,7 +77,7 @@ pub async fn resolve_pypi_dependencies<'p>(
         .collect::<Vec<pep508_rs::Requirement>>();
 
     // Resolve the PyPi dependencies
-    let mut result = rip::resolve(
+    let mut result = resolve(
         project.pypi_package_db()?,
         &requirements,
         &marker_environment,
@@ -89,7 +87,7 @@ pub async fn resolve_pypi_dependencies<'p>(
             .map(|p| (p.name.clone(), p))
             .collect(),
         HashMap::default(),
-        &rip::ResolveOptions {
+        &ResolveOptions {
             // TODO: Change this once we fully support sdists.
             sdist_resolution: SDistResolution::OnlyWheels,
         },
@@ -209,7 +207,7 @@ fn project_platform_tags(
 
     tags.append(&mut compatible_tags(&python_record.version, &platforms).collect());
 
-    WheelTags::from_iter(tags.into_iter())
+    WheelTags::from_iter(tags)
 }
 
 fn project_platforms(platform: Platform, system_requirements: &SystemRequirements) -> Vec<String> {
@@ -447,7 +445,7 @@ where
     PIter::IntoIter: Clone + 'a,
 {
     py_interpreter_range(python_version)
-        .cartesian_product(platforms.into_iter())
+        .cartesian_product(platforms)
         .map(|(interpreter, platform)| WheelTag {
             interpreter,
             abi: String::from("none"),

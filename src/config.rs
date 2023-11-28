@@ -16,10 +16,10 @@ pub fn get_default_author() -> Option<(String, String)> {
 
     for line in std::str::from_utf8(&rv.stdout).ok()?.lines() {
         match line.split_once(' ') {
-            Some((key, value)) if key == "user.email" => {
+            Some(("user.email", value)) => {
                 email = Some(value.to_string());
             }
-            Some((key, value)) if key == "user.name" => {
+            Some(("user.name", value)) => {
                 name = Some(value.to_string());
             }
             _ => {}

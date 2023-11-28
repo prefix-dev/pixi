@@ -60,7 +60,7 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
 
 /// Replace the parts of the bash completion script that need different functionality.
 fn replace_zsh_completion(script: &str) -> Cow<str> {
-    let pattern = r#"(?ms)(\(run\))(?:.*?)(_arguments.*?)(\*::task)"#;
+    let pattern = r"(?ms)(\(run\))(?:.*?)(_arguments.*?)(\*::task)";
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     let zsh_replacement = r#"$1
