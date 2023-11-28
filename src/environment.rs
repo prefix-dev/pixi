@@ -14,9 +14,10 @@ use rattler::install::Transaction;
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{CondaLock, LockedDependency};
 use rip::{
-    tags::WheelTag, Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution,
+    tags::WheelTag, Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, Extra,
     InstallPaths, NormalizedPackageName, PackageDb, UnpackWheelOptions, Wheel, WheelFilename,
 };
+use std::collections::HashSet;
 use std::{io::ErrorKind, path::Path, str::FromStr, time::Duration};
 use tokio::task::JoinError;
 
@@ -269,8 +270,13 @@ async fn update_python_distributions(
     }
 
     // Install the individual python packages that we want
-    let package_install_pb =
-        install_python_distributions(prefix, install_paths, package_stream).await?;
+    let package_install_pb = install_python_distributions(
+        prefix,
+        install_paths,
+        &prefix.root().join(&python_info.path),
+        package_stream,
+    )
+    .await?;
 
     // Clear any pending progress bar
     for pb in package_install_pb
@@ -287,7 +293,8 @@ async fn update_python_distributions(
 async fn install_python_distributions(
     prefix: &Prefix,
     install_paths: InstallPaths,
-    package_stream: impl Stream<Item = miette::Result<(Option<String>, Wheel)>> + Sized,
+    python_executable_path: &Path,
+    package_stream: impl Stream<Item = miette::Result<(Option<String>, HashSet<Extra>, Wheel)>> + Sized,
 ) -> miette::Result<Option<ProgressBar>> {
     // Determine the number of packages that we are going to install
     let len = {
@@ -310,11 +317,12 @@ async fn install_python_distributions(
     // Concurrently unpack the wheels as they become available in the stream.
     let install_pb = pb.clone();
     package_stream
-        .try_for_each_concurrent(Some(20), move |(hash, wheel)| {
+        .try_for_each_concurrent(Some(20), move |(hash, extras, wheel)| {
             let install_paths = install_paths.clone();
             let root = prefix.root().to_path_buf();
             let message_formatter = message_formatter.clone();
             let pb = install_pb.clone();
+            let python_executable_path = python_executable_path.to_owned();
             async move {
                 let pb_task = message_formatter.start(wheel.name().to_string()).await;
                 let unpack_result = tokio::task::spawn_blocking(move || {
@@ -322,8 +330,11 @@ async fn install_python_distributions(
                         .unpack(
                             &root,
                             &install_paths,
+                            &python_executable_path,
                             &UnpackWheelOptions {
                                 installer: Some(env!("CARGO_PKG_NAME").into()),
+                                extras: Some(extras),
+                                ..Default::default()
                             },
                         )
                         .into_diagnostic()
@@ -364,7 +375,7 @@ fn stream_python_artifacts<'a>(
     package_db: &'a PackageDb,
     packages_to_download: Vec<&'a LockedDependency>,
 ) -> (
-    impl Stream<Item = miette::Result<(Option<String>, Wheel)>> + 'a,
+    impl Stream<Item = miette::Result<(Option<String>, HashSet<Extra>, Wheel)>> + 'a,
     Option<ProgressBar>,
 ) {
     if packages_to_download.is_empty() {
@@ -448,7 +459,15 @@ fn stream_python_artifacts<'a>(
                     .and_then(|h| h.sha256())
                     .map(|sha256| format!("sha256-{:x}", sha256));
 
-                Ok((hash, wheel))
+                Ok((
+                    hash,
+                    pip_package
+                        .extras
+                        .iter()
+                        .filter_map(|e| Extra::from_str(e).ok())
+                        .collect(),
+                    wheel,
+                ))
             }
         })
         .buffer_unordered(20)

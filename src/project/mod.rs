@@ -471,7 +471,7 @@ impl Project {
                 PackageDb::new(
                     default_client(),
                     &self.pypi_index_urls(),
-                    rattler::default_cache_dir()
+                    &rattler::default_cache_dir()
                         .map_err(|_| {
                             miette::miette!("could not determine default cache directory")
                         })?

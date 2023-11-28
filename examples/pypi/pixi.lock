@@ -1098,44 +1098,44 @@ package:
   timestamp: 1692902104771
 - platform: linux-64
   name: idna
-  version: '3.4'
+  version: '3.6'
   category: main
   manager: pypi
   requires_python: '>=3.5'
-  url: https://files.pythonhosted.org/packages/fc/34/3030de6f1370931b9dbb4dad48f6ab1015ab1d32447850b9fc94e60097be/idna-3.4-py3-none-any.whl#sha256=90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2
+  url: https://files.pythonhosted.org/packages/c2/e7/a82b05cf63a603df6e68d59ae6a68bf5064484a0718ea5033660af4b54a9/idna-3.6-py3-none-any.whl#sha256=c05567e9c24a6b9faaa835c4821bad0590fbb9d5779e7caa6e1cc4978e7eb24f
   hash:
     md5: null
-    sha256: 90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2
+    sha256: c05567e9c24a6b9faaa835c4821bad0590fbb9d5779e7caa6e1cc4978e7eb24f
 - platform: osx-64
   name: idna
-  version: '3.4'
+  version: '3.6'
   category: main
   manager: pypi
   requires_python: '>=3.5'
-  url: https://files.pythonhosted.org/packages/fc/34/3030de6f1370931b9dbb4dad48f6ab1015ab1d32447850b9fc94e60097be/idna-3.4-py3-none-any.whl#sha256=90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2
+  url: https://files.pythonhosted.org/packages/c2/e7/a82b05cf63a603df6e68d59ae6a68bf5064484a0718ea5033660af4b54a9/idna-3.6-py3-none-any.whl#sha256=c05567e9c24a6b9faaa835c4821bad0590fbb9d5779e7caa6e1cc4978e7eb24f
   hash:
     md5: null
-    sha256: 90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2
+    sha256: c05567e9c24a6b9faaa835c4821bad0590fbb9d5779e7caa6e1cc4978e7eb24f
 - platform: osx-arm64
   name: idna
-  version: '3.4'
+  version: '3.6'
   category: main
   manager: pypi
   requires_python: '>=3.5'
-  url: https://files.pythonhosted.org/packages/fc/34/3030de6f1370931b9dbb4dad48f6ab1015ab1d32447850b9fc94e60097be/idna-3.4-py3-none-any.whl#sha256=90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2
+  url: https://files.pythonhosted.org/packages/c2/e7/a82b05cf63a603df6e68d59ae6a68bf5064484a0718ea5033660af4b54a9/idna-3.6-py3-none-any.whl#sha256=c05567e9c24a6b9faaa835c4821bad0590fbb9d5779e7caa6e1cc4978e7eb24f
   hash:
     md5: null
-    sha256: 90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2
+    sha256: c05567e9c24a6b9faaa835c4821bad0590fbb9d5779e7caa6e1cc4978e7eb24f
 - platform: win-64
   name: idna
-  version: '3.4'
+  version: '3.6'
   category: main
   manager: pypi
   requires_python: '>=3.5'
-  url: https://files.pythonhosted.org/packages/fc/34/3030de6f1370931b9dbb4dad48f6ab1015ab1d32447850b9fc94e60097be/idna-3.4-py3-none-any.whl#sha256=90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2
+  url: https://files.pythonhosted.org/packages/c2/e7/a82b05cf63a603df6e68d59ae6a68bf5064484a0718ea5033660af4b54a9/idna-3.6-py3-none-any.whl#sha256=c05567e9c24a6b9faaa835c4821bad0590fbb9d5779e7caa6e1cc4978e7eb24f
   hash:
     md5: null
-    sha256: 90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2
+    sha256: c05567e9c24a6b9faaa835c4821bad0590fbb9d5779e7caa6e1cc4978e7eb24f
 - platform: win-64
   name: intel-openmp
   version: 2023.2.0
@@ -2366,79 +2366,79 @@ package:
   timestamp: 1700535987588
 - platform: linux-64
   name: libsqlite
-  version: 3.44.1
+  version: 3.44.2
   category: main
   manager: conda
   dependencies:
   - libgcc-ng >=12
   - libzlib >=1.2.13,<1.3.0a0
-  url: https://conda.anaconda.org/conda-forge/linux-64/libsqlite-3.44.1-h2797004_0.conda
+  url: https://conda.anaconda.org/conda-forge/linux-64/libsqlite-3.44.2-h2797004_0.conda
   hash:
-    md5: b4ad86d2527b890e43ff2efc68b239f4
-    sha256: c37bb6ec8b09f690d84e8f14fabb75e00c221d11a256137d5b206e26f37e9483
+    md5: 3b6a9f225c3dbe0d24f4fedd4625c5bf
+    sha256: ee2c4d724a3ed60d5b458864d66122fb84c6ce1df62f735f90d8db17b66cd88a
   build: h2797004_0
   arch: x86_64
   subdir: linux-64
   build_number: 0
   license: Unlicense
-  size: 846227
-  timestamp: 1700684372427
+  size: 845830
+  timestamp: 1700863204572
 - platform: osx-64
   name: libsqlite
-  version: 3.44.1
+  version: 3.44.2
   category: main
   manager: conda
   dependencies:
   - libzlib >=1.2.13,<1.3.0a0
-  url: https://conda.anaconda.org/conda-forge/osx-64/libsqlite-3.44.1-h92b6c6a_0.conda
+  url: https://conda.anaconda.org/conda-forge/osx-64/libsqlite-3.44.2-h92b6c6a_0.conda
   hash:
-    md5: 7cf15accdee2a4a1cf267a78c4b76c3d
-    sha256: e51e3e3e84df3cee02434283c8c83ed604fa50cea945a3b14904a59fac5537a5
+    md5: d4419f90019e6a2b152cd4d32f73a82f
+    sha256: 8a317d2aa6352feba951ca09d5bf34f565f9dd10bb14ff842b8650baa321d781
   build: h92b6c6a_0
   arch: x86_64
   subdir: osx-64
   build_number: 0
   license: Unlicense
-  size: 890892
-  timestamp: 1700684863628
+  size: 891089
+  timestamp: 1700863475542
 - platform: osx-arm64
   name: libsqlite
-  version: 3.44.1
+  version: 3.44.2
   category: main
   manager: conda
   dependencies:
   - libzlib >=1.2.13,<1.3.0a0
-  url: https://conda.anaconda.org/conda-forge/osx-arm64/libsqlite-3.44.1-h091b4b1_0.conda
+  url: https://conda.anaconda.org/conda-forge/osx-arm64/libsqlite-3.44.2-h091b4b1_0.conda
   hash:
-    md5: 1750563ea42661aa9e83f1077e58b75a
-    sha256: 03da3a7c97a9f24371ccb4d187454bac5db7463bd5a38c22fc5d91ee8b436515
+    md5: d7e1af696cfadec251a0abdd7b79ed77
+    sha256: f0dc2fe69eddb4bab72ff6bb0da51d689294f466ee1b01e80ced1e7878a21aa5
   build: h091b4b1_0
   arch: aarch64
   subdir: osx-arm64
   build_number: 0
   license: Unlicense
-  size: 815120
-  timestamp: 1700684967912
+  size: 815254
+  timestamp: 1700863572318
 - platform: win-64
   name: libsqlite
-  version: 3.44.1
+  version: 3.44.2
   category: main
   manager: conda
   dependencies:
   - ucrt >=10.0.20348.0
   - vc >=14.2,<15
   - vc14_runtime >=14.29.30139
-  url: https://conda.anaconda.org/conda-forge/win-64/libsqlite-3.44.1-hcfcfb64_0.conda
+  url: https://conda.anaconda.org/conda-forge/win-64/libsqlite-3.44.2-hcfcfb64_0.conda
   hash:
-    md5: cb795bb06d345285ce8b9a4b0553574f
-    sha256: cdcc7e14f0b12e521c2a7255a04a8c259b06a2c8394f7e571412c0e07ec514f5
+    md5: 4a5f5ab56cbf3ccd08d71a1168061213
+    sha256: 25bfcf79ec863c2c0f0b3599981e2eac57efc5302faf2bb84f68c3f0faa55d1c
   build: hcfcfb64_0
   arch: x86_64
   subdir: win-64
   build_number: 0
   license: Unlicense
-  size: 853647
-  timestamp: 1700684837686
+  size: 853171
+  timestamp: 1700863704859
 - platform: linux-64
   name: libstdcxx-ng
   version: 13.2.0
@@ -3006,7 +3006,7 @@ package:
   timestamp: 1698751574074
 - platform: linux-64
   name: numpy
-  version: 1.26.0
+  version: 1.26.2
   category: main
   manager: conda
   dependencies:
@@ -3017,10 +3017,10 @@ package:
   - libstdcxx-ng >=12
   - python >=3.11,<3.12.0a0
   - python_abi 3.11.* *_cp311
-  url: https://conda.anaconda.org/conda-forge/linux-64/numpy-1.26.0-py311h64a7726_0.conda
+  url: https://conda.anaconda.org/conda-forge/linux-64/numpy-1.26.2-py311h64a7726_0.conda
   hash:
-    md5: bf16a9f625126e378302f08e7ed67517
-    sha256: 0aab5cef67cc2a1cd584f6e9cc6f2065c7a28c142d7defcb8096e8f719d9b3bf
+    md5: fd2f142dcd680413b5ede5d0fb799205
+    sha256: c68b2c0ce95b79913134ec6ba2a2f1c10adcd60133afd48e4a57fdd128b694b7
   build: py311h64a7726_0
   arch: x86_64
   subdir: linux-64
@@ -3029,27 +3029,28 @@ package:
   - numpy-base <0a0
   license: BSD-3-Clause
   license_family: BSD
-  size: 8039946
-  timestamp: 1694920380273
+  size: 8120086
+  timestamp: 1700874920400
   purls:
   - pkg:pypi/numpy
 - platform: osx-64
   name: numpy
-  version: 1.26.0
+  version: 1.26.2
   category: main
   manager: conda
   dependencies:
+  - __osx >=10.9
   - libblas >=3.9.0,<4.0a0
   - libcblas >=3.9.0,<4.0a0
-  - libcxx >=15.0.7
+  - libcxx >=16.0.6
   - liblapack >=3.9.0,<4.0a0
   - python >=3.11,<3.12.0a0
   - python_abi 3.11.* *_cp311
-  url: https://conda.anaconda.org/conda-forge/osx-64/numpy-1.26.0-py311hc44ba51_0.conda
+  url: https://conda.anaconda.org/conda-forge/osx-64/numpy-1.26.2-py311h93c810c_0.conda
   hash:
-    md5: f95605c5b73f5f6a0f5f1b0aabfc2f39
-    sha256: 517cb22d5594fdb934523dd1951929961f686b5d994c684201acbf282433ec9b
-  build: py311hc44ba51_0
+    md5: 94d3dd8a8c0ad89583648b31e1a7f72a
+    sha256: ea57e333df9e3067b084a1d1b5c0abb65bc8dbdca22e1ee0300e58167032cb50
+  build: py311h93c810c_0
   arch: x86_64
   subdir: osx-64
   build_number: 0
@@ -3057,28 +3058,29 @@ package:
   - numpy-base <0a0
   license: BSD-3-Clause
   license_family: BSD
-  size: 7616817
-  timestamp: 1694920728660
+  size: 7675285
+  timestamp: 1700875144507
   purls:
   - pkg:pypi/numpy
 - platform: osx-arm64
   name: numpy
-  version: 1.26.0
+  version: 1.26.2
   category: main
   manager: conda
   dependencies:
+  - __osx >=10.9
   - libblas >=3.9.0,<4.0a0
   - libcblas >=3.9.0,<4.0a0
-  - libcxx >=15.0.7
+  - libcxx >=16.0.6
   - liblapack >=3.9.0,<4.0a0
   - python >=3.11,<3.12.0a0
   - python >=3.11,<3.12.0a0 *_cpython
   - python_abi 3.11.* *_cp311
-  url: https://conda.anaconda.org/conda-forge/osx-arm64/numpy-1.26.0-py311hb8f3215_0.conda
+  url: https://conda.anaconda.org/conda-forge/osx-arm64/numpy-1.26.2-py311h6d074dd_0.conda
   hash:
-    md5: 97f8632bf2ad5c179ff68fc90c71c2ae
-    sha256: fca5ee1363f22a160c97e92d6400d4636f4b05987b08085e4f79fb6efb75fd0a
-  build: py311hb8f3215_0
+    md5: 686a22bdbc601bfe7e7243f0263c10e3
+    sha256: a88e48461bea106a0ce41684625f79efe473d42cf0f0310535dcfe1d98c888ba
+  build: py311h6d074dd_0
   arch: aarch64
   subdir: osx-arm64
   build_number: 0
@@ -3086,13 +3088,13 @@ package:
   - numpy-base <0a0
   license: BSD-3-Clause
   license_family: BSD
-  size: 6780798
-  timestamp: 1694920700859
+  size: 6710261
+  timestamp: 1700875222261
   purls:
   - pkg:pypi/numpy
 - platform: win-64
   name: numpy
-  version: 1.26.0
+  version: 1.26.2
   category: main
   manager: conda
   dependencies:
@@ -3104,10 +3106,10 @@ package:
   - ucrt >=10.0.20348.0
   - vc >=14.2,<15
   - vc14_runtime >=14.29.30139
-  url: https://conda.anaconda.org/conda-forge/win-64/numpy-1.26.0-py311h0b4df5a_0.conda
+  url: https://conda.anaconda.org/conda-forge/win-64/numpy-1.26.2-py311h0b4df5a_0.conda
   hash:
-    md5: a65e57fff208fd1d0f632e0afa8985d4
-    sha256: 3da6bcf524a4418d7d0dbc084c23c74e1f2fc4b19c34a5805f5e201e5d7fcd8f
+    md5: 4bdfc84f67dafd5867702b1003dc8146
+    sha256: a1ee243779b274afd7dfe3bba6dfc740716411990bb91e6ae126a5f481dfd92a
   build: py311h0b4df5a_0
   arch: x86_64
   subdir: win-64
@@ -3116,8 +3118,8 @@ package:
   - numpy-base <0a0
   license: BSD-3-Clause
   license_family: BSD
-  size: 7085715
-  timestamp: 1694920741486
+  size: 7081908
+  timestamp: 1700875402881
   purls:
   - pkg:pypi/numpy
 - platform: linux-64
@@ -3182,16 +3184,16 @@ package:
     sha256: 8139f29aac13e25d502680e9e19963e83f16838d48a0d71c287fe40e7067fbca
 - platform: linux-64
   name: openssl
-  version: 3.1.4
+  version: 3.2.0
   category: main
   manager: conda
   dependencies:
   - ca-certificates
   - libgcc-ng >=12
-  url: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.1.4-hd590300_0.conda
+  url: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.2.0-hd590300_0.conda
   hash:
-    md5: 412ba6938c3e2abaca8b1129ea82e238
-    sha256: d15b3e83ce66c6f6fbb4707f2f5c53337124c01fb03bfda1cf25c5b41123efc7
+    md5: 68223671a2b68cdf7241eb4679ab2dd4
+    sha256: a8ca7c31be33894bd70bb34786d1a8c26ae650382411250b61f6b5249b69a23e
   build: hd590300_0
   arch: x86_64
   subdir: linux-64
@@ -3200,19 +3202,19 @@ package:
   - pyopenssl >=22.1
   license: Apache-2.0
   license_family: Apache
-  size: 2648006
-  timestamp: 1698164814626
+  size: 2850421
+  timestamp: 1700868789416
 - platform: osx-64
   name: openssl
-  version: 3.1.4
+  version: 3.2.0
   category: main
   manager: conda
   dependencies:
   - ca-certificates
-  url: https://conda.anaconda.org/conda-forge/osx-64/openssl-3.1.4-hd75f5a5_0.conda
+  url: https://conda.anaconda.org/conda-forge/osx-64/openssl-3.2.0-hd75f5a5_0.conda
   hash:
-    md5: bc9201da6eb1e0df4107901df5371347
-    sha256: 1c436103a8de0dc82c9c56974badaa1b8b8f8cd9f37c2766bd50cd9899720f6b
+    md5: fe12816a450e2807b99798e68a7b599d
+    sha256: 840aa40f278d486688198514dd70df7bd7cb0659bd63d79427bf9a7e151c5dfb
   build: hd75f5a5_0
   arch: x86_64
   subdir: osx-64
@@ -3221,19 +3223,19 @@ package:
   - pyopenssl >=22.1
   license: Apache-2.0
   license_family: Apache
-  size: 2320542
-  timestamp: 1698165459976
+  size: 2506836
+  timestamp: 1700869428943
 - platform: osx-arm64
   name: openssl
-  version: 3.1.4
+  version: 3.2.0
   category: main
   manager: conda
   dependencies:
   - ca-certificates
-  url: https://conda.anaconda.org/conda-forge/osx-arm64/openssl-3.1.4-h0d3ecfb_0.conda
+  url: https://conda.anaconda.org/conda-forge/osx-arm64/openssl-3.2.0-h0d3ecfb_0.conda
   hash:
-    md5: 5a89552fececf4cd99628318ccbb67a3
-    sha256: 3c715b1d4940c7ad6065935db18924b85a54048dde066f963cfc250340639457
+    md5: 4521ffa5c81e02feb99f1c8e87301a4f
+    sha256: 4fb546cf566287a80658e2d778e27c241bcc5743478da6cb03bf0b4ef8226e1c
   build: h0d3ecfb_0
   arch: aarch64
   subdir: osx-arm64
@@ -3242,11 +3244,11 @@ package:
   - pyopenssl >=22.1
   license: Apache-2.0
   license_family: Apache
-  size: 2147225
-  timestamp: 1698164947105
+  size: 2855879
+  timestamp: 1700868902387
 - platform: win-64
   name: openssl
-  version: 3.1.4
+  version: 3.2.0
   category: main
   manager: conda
   dependencies:
@@ -3254,10 +3256,10 @@ package:
   - ucrt >=10.0.20348.0
   - vc >=14.2,<15
   - vc14_runtime >=14.29.30139
-  url: https://conda.anaconda.org/conda-forge/win-64/openssl-3.1.4-hcfcfb64_0.conda
+  url: https://conda.anaconda.org/conda-forge/win-64/openssl-3.2.0-hcfcfb64_0.conda
   hash:
-    md5: 2eebbc64373a1c6db62ad23304e9678e
-    sha256: e30b7f55c27d06e3322876c9433a3522e751d06a40b3bb6c4f8b4bcd781a3794
+    md5: db2ff7e340e9b71e4051bb71f7d64ca0
+    sha256: 42c3a3e7ca7a2dbe2b455da799ee86f1139cffc9479d3c0f6c735337e35239c0
   build: hcfcfb64_0
   arch: x86_64
   subdir: win-64
@@ -3266,8 +3268,8 @@ package:
   - pyopenssl >=22.1
   license: Apache-2.0
   license_family: Apache
-  size: 7427765
-  timestamp: 1698166937344
+  size: 8179877
+  timestamp: 1700871783502
 - platform: linux-64
   name: opt-einsum
   version: 3.3.0
@@ -5420,56 +5422,56 @@ package:
     sha256: 90a285dc0e42ad56b34e696398b8122ee4c681833fb35b8334a095d82c56da10
 - platform: linux-64
   name: wheel
-  version: 0.41.3
+  version: 0.42.0
   category: main
   manager: pypi
   requires_dist:
   - pytest >=6.0.0 ; extra == 'test'
   - setuptools >=65 ; extra == 'test'
   requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/fa/7f/4c07234086edbce4a0a446209dc0cb08a19bb206a3ea53b2f56a403f983b/wheel-0.41.3-py3-none-any.whl#sha256=488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942
+  url: https://files.pythonhosted.org/packages/c7/c3/55076fc728723ef927521abaa1955213d094933dc36d4a2008d5101e1af5/wheel-0.42.0-py3-none-any.whl#sha256=177f9c9b0d45c47873b619f5b650346d632cdc35fb5e4d25058e09c9e581433d
   hash:
     md5: null
-    sha256: 488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942
+    sha256: 177f9c9b0d45c47873b619f5b650346d632cdc35fb5e4d25058e09c9e581433d
 - platform: osx-64
   name: wheel
-  version: 0.41.3
+  version: 0.42.0
   category: main
   manager: pypi
   requires_dist:
   - pytest >=6.0.0 ; extra == 'test'
   - setuptools >=65 ; extra == 'test'
   requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/fa/7f/4c07234086edbce4a0a446209dc0cb08a19bb206a3ea53b2f56a403f983b/wheel-0.41.3-py3-none-any.whl#sha256=488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942
+  url: https://files.pythonhosted.org/packages/c7/c3/55076fc728723ef927521abaa1955213d094933dc36d4a2008d5101e1af5/wheel-0.42.0-py3-none-any.whl#sha256=177f9c9b0d45c47873b619f5b650346d632cdc35fb5e4d25058e09c9e581433d
   hash:
     md5: null
-    sha256: 488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942
+    sha256: 177f9c9b0d45c47873b619f5b650346d632cdc35fb5e4d25058e09c9e581433d
 - platform: osx-arm64
   name: wheel
-  version: 0.41.3
+  version: 0.42.0
   category: main
   manager: pypi
   requires_dist:
   - pytest >=6.0.0 ; extra == 'test'
   - setuptools >=65 ; extra == 'test'
   requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/fa/7f/4c07234086edbce4a0a446209dc0cb08a19bb206a3ea53b2f56a403f983b/wheel-0.41.3-py3-none-any.whl#sha256=488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942
+  url: https://files.pythonhosted.org/packages/c7/c3/55076fc728723ef927521abaa1955213d094933dc36d4a2008d5101e1af5/wheel-0.42.0-py3-none-any.whl#sha256=177f9c9b0d45c47873b619f5b650346d632cdc35fb5e4d25058e09c9e581433d
   hash:
     md5: null
-    sha256: 488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942
+    sha256: 177f9c9b0d45c47873b619f5b650346d632cdc35fb5e4d25058e09c9e581433d
 - platform: win-64
   name: wheel
-  version: 0.41.3
+  version: 0.42.0
   category: main
   manager: pypi
   requires_dist:
   - pytest >=6.0.0 ; extra == 'test'
   - setuptools >=65 ; extra == 'test'
   requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/fa/7f/4c07234086edbce4a0a446209dc0cb08a19bb206a3ea53b2f56a403f983b/wheel-0.41.3-py3-none-any.whl#sha256=488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942
+  url: https://files.pythonhosted.org/packages/c7/c3/55076fc728723ef927521abaa1955213d094933dc36d4a2008d5101e1af5/wheel-0.42.0-py3-none-any.whl#sha256=177f9c9b0d45c47873b619f5b650346d632cdc35fb5e4d25058e09c9e581433d
   hash:
     md5: null
-    sha256: 488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942
+    sha256: 177f9c9b0d45c47873b619f5b650346d632cdc35fb5e4d25058e09c9e581433d
 - platform: linux-64
   name: wrapt
   version: 1.14.1
