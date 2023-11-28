@@ -56,20 +56,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // updating prefix after removing from toml
     let _ = get_up_to_date_prefix(&project, false, false).await?;
 
-    for result in &results {
-        if let Ok((removed, spec)) = result {
-            let table_name = if let Some(p) = &args.platform {
-                format!("target.{}.{}", p.as_str(), spec_type.name())
-            } else {
-                spec_type.name().to_string()
-            };
+    for (removed, spec) in results.iter().flatten() {
+        let table_name = if let Some(p) = &args.platform {
+            format!("target.{}.{}", p.as_str(), spec_type.name())
+        } else {
+            spec_type.name().to_string()
+        };
 
-            eprintln!(
-                "Removed {} from [{}]",
-                console::style(format!("{removed} {spec}")).bold(),
-                console::style(table_name).bold(),
-            );
-        }
+        eprintln!(
+            "Removed {} from [{}]",
+            console::style(format!("{removed} {spec}")).bold(),
+            console::style(table_name).bold(),
+        );
     }
 
     for result in &results {
