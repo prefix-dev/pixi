@@ -2922,7 +2922,7 @@ dependencies = [
 [[package]]
 name = "rattler_installs_packages"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler_installs_packages?branch=main#2ee92fdabfd2c73d52b5d6702b39268b48897a41"
+source = "git+https://github.com/prefix-dev/rattler_installs_packages?branch=main#94d965f055cb23dc82a821c53a3338d4dcc74bd7"
 dependencies = [
  "async-once-cell",
  "async-trait",
