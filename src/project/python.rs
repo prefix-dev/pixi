@@ -113,11 +113,11 @@ mod test {
 
     #[test]
     fn test_only_version() {
-        let requirement: IndexMap<rip::PackageName, PyPiRequirement> =
+        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(r#"foo = ">=3.12""#).unwrap();
         assert_eq!(
             requirement.first().unwrap().0,
-            &rip::PackageName::from_str("foo").unwrap()
+            &rip::types::PackageName::from_str("foo").unwrap()
         );
         assert_eq!(
             requirement.first().unwrap().1,
@@ -126,7 +126,7 @@ mod test {
                 extras: None
             }
         );
-        let requirement: IndexMap<rip::PackageName, PyPiRequirement> =
+        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(r#"foo = "==3.12.0""#).unwrap();
         assert_eq!(
             requirement.first().unwrap().1,
@@ -136,7 +136,7 @@ mod test {
             }
         );
 
-        let requirement: IndexMap<rip::PackageName, PyPiRequirement> =
+        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(r#"foo = "~=2.1.3""#).unwrap();
         assert_eq!(
             requirement.first().unwrap().1,
@@ -146,7 +146,7 @@ mod test {
             }
         );
 
-        let requirement: IndexMap<rip::PackageName, PyPiRequirement> =
+        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(r#"foo = "*""#).unwrap();
         assert_eq!(
             requirement.first().unwrap().1,
@@ -159,11 +159,11 @@ mod test {
 
     #[test]
     fn test_extended() {
-        let requirement: IndexMap<rip::PackageName, PyPiRequirement> =
+        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(r#"foo = { version=">=3.12", extras = ["bar"] }"#).unwrap();
         assert_eq!(
             requirement.first().unwrap().0,
-            &rip::PackageName::from_str("foo").unwrap()
+            &rip::types::PackageName::from_str("foo").unwrap()
         );
         assert_eq!(
             requirement.first().unwrap().1,
@@ -173,13 +173,14 @@ mod test {
             }
         );
 
-        let requirement: IndexMap<rip::PackageName, PyPiRequirement> = toml_edit::de::from_str(
-            r#"bar = { version=">=3.12,<3.13.0", extras = ["bar", "foo"] }"#,
-        )
-        .unwrap();
+        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
+            toml_edit::de::from_str(
+                r#"bar = { version=">=3.12,<3.13.0", extras = ["bar", "foo"] }"#,
+            )
+            .unwrap();
         assert_eq!(
             requirement.first().unwrap().0,
-            &rip::PackageName::from_str("bar").unwrap()
+            &rip::types::PackageName::from_str("bar").unwrap()
         );
         assert_eq!(
             requirement.first().unwrap().1,
