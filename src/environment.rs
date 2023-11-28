@@ -21,6 +21,9 @@ use std::collections::HashSet;
 use std::{io::ErrorKind, path::Path, str::FromStr, time::Duration};
 use tokio::task::JoinError;
 
+/// The installer name for pypi packages installed by pixi.
+const PIXI_PYPI_INSTALLER: &str = env!("CARGO_PKG_NAME");
+
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
 /// Errors when there is a file system error or the path does not align with the defined prefix.
 /// Returns false when the file is not present.
@@ -332,7 +335,7 @@ async fn install_python_distributions(
                             &install_paths,
                             &python_executable_path,
                             &UnpackWheelOptions {
-                                installer: Some(env!("CARGO_PKG_NAME").into()),
+                                installer: Some(PIXI_PYPI_INSTALLER.into()),
                                 extras: Some(extras),
                                 ..Default::default()
                             },
@@ -581,8 +584,8 @@ fn determine_python_distributions_to_remove_and_install<'p>(
             desired_python_packages.remove(found_desired_packages_idx);
             false
         } else {
-            // If this package was installed as a conda package we should not remove it.
-            current_python_packages.installer.as_deref() != Some("conda")
+            // Only if this package was previously installed by us do we remove it.
+            current_python_packages.installer.as_deref() == Some(PIXI_PYPI_INSTALLER)
         }
     });
 
