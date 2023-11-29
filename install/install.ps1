@@ -1,7 +1,12 @@
 param (
-    [string]$PIXI_VERSION = "latest",
     [string]$PIXI_DIR = "$Env:USERPROFILE\.pixi\bin"
 )
+
+if ($Env:PIXI_VERSION) {
+    $PIXI_VERSION = $Env:PIXI_VERSION
+} else {
+    $PIXI_VERSION = "latest"
+}
 
 # Repository name
 $REPO = "prefix-dev/pixi"
