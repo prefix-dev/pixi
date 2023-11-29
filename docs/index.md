@@ -115,7 +115,7 @@ Updating is as simple as installing, rerunning the installation script gets you 
     Or get a specific pixi version using:
     PowerShell:
     ```powershell
-    $Env:PIXI_VERSION=vX.Y.Z && iwr -useb https://pixi.sh/install.ps1 | iex
+    $Env:PIXI_VERSION="vX.Y.Z"; iwr -useb https://pixi.sh/install.ps1 | iex
     ```
 !!! note
     If you used a package manager like `brew`, `mamba`, `conda`, `paru` to install `pixi`.
