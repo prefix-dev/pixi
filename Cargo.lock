@@ -2568,7 +2568,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-once-cell",
  "chrono",
