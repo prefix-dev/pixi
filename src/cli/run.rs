@@ -252,15 +252,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             _ = ctrl_c => { unreachable!("Ctrl+C should not be triggered") }
         };
         if status_code == 127 {
-            let formatted: String = project
+            let available_tasks = project
                 .tasks(Some(Platform::current()))
                 .into_keys()
                 .sorted()
-                .map(|name| format!("\t{}\n", console::style(name).bold()))
-                .collect();
+                .collect_vec();
 
-            if !formatted.is_empty() {
-                eprintln!("\nAvailable tasks:\n{}", formatted);
+            if !available_tasks.is_empty() {
+                eprintln!(
+                    "\nAvailable tasks:\n{}",
+                    available_tasks.into_iter().format_with("\n", |name, f| {
+                        f(&format_args!("\t{}", console::style(name).bold()))
+                    })
+                );
             }
         }
         if status_code != 0 {

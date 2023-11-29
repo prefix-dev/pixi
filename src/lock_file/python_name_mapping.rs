@@ -14,7 +14,7 @@ struct CondaPyPiNameMapping {
 /// Downloads and caches the conda-forge conda-to-pypi name mapping.
 pub async fn conda_pypi_name_mapping() -> miette::Result<&'static HashMap<String, String>> {
     static MAPPING: OnceCell<HashMap<String, String>> = OnceCell::new();
-    MAPPING.get_or_try_init((|| async {
+    MAPPING.get_or_try_init(async {
         let response = reqwest::get("https://raw.githubusercontent.com/regro/cf-graph-countyfair/master/mappings/pypi/name_mapping.json").await
             .into_diagnostic()
             .context("failed to download pypi name mapping")?;
@@ -28,7 +28,7 @@ pub async fn conda_pypi_name_mapping() -> miette::Result<&'static HashMap<String
             .map(|m| (m.conda_name, m.pypi_name))
             .collect();
         Ok(mapping_by_name)
-    })()).await
+    }).await
 }
 
 /// Updates the specified repodata record to include an optional PyPI package name if it is missing.

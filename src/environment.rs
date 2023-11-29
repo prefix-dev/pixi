@@ -13,9 +13,17 @@ use crate::lock_file::lock_file_satisfies_project;
 use rattler::install::Transaction;
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{CondaLock, LockedDependency};
+use rip::types::Artifact;
 use rip::{
-    tags::WheelTag, Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Distribution, Extra,
-    InstallPaths, NormalizedPackageName, PackageDb, UnpackWheelOptions, Wheel, WheelFilename,
+    artifacts::{
+        wheel::{InstallPaths, UnpackWheelOptions},
+        Wheel,
+    },
+    index::PackageDb,
+    python_env::{find_distributions_in_venv, uninstall_distribution, Distribution, WheelTag},
+    types::{
+        ArtifactHashes, ArtifactInfo, ArtifactName, Extra, NormalizedPackageName, WheelFilename,
+    },
 };
 use std::collections::HashSet;
 use std::{io::ErrorKind, path::Path, str::FromStr, time::Duration};
@@ -217,7 +225,7 @@ async fn update_python_distributions(
     );
 
     // Determine the current python distributions in those locations
-    let current_python_packages = rip::find_distributions_in_venv(prefix.root(), &install_paths)
+    let current_python_packages = find_distributions_in_venv(prefix.root(), &install_paths)
         .into_diagnostic()
         .context(
             "failed to locate python packages that have not been installed as conda packages",
@@ -248,11 +256,7 @@ async fn update_python_distributions(
         let site_package_path = install_paths.site_packages();
 
         for python_distribution in python_distributions_to_remove {
-            uninstall_pixi_installed_distribution(
-                &prefix,
-                &site_package_path,
-                &python_distribution,
-            )?;
+            uninstall_pixi_installed_distribution(prefix, site_package_path, &python_distribution)?;
         }
     }
 
@@ -489,7 +493,7 @@ fn remove_old_python_distributions(
     let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
 
     // Locate the packages that are installed in the previous environment
-    let current_python_packages = rip::find_distributions_in_venv(prefix.root(), &install_paths)
+    let current_python_packages = find_distributions_in_venv(prefix.root(), &install_paths)
         .into_diagnostic()
         .with_context(|| format!("failed to determine the python packages installed for a previous version of python ({}.{})", python_version.0, python_version.1))?
         .into_iter().filter(|d| d.installer.as_deref() != Some("conda") && d.installer.is_some()).collect_vec();
@@ -508,7 +512,7 @@ fn remove_old_python_distributions(
             &python_package.name, &python_package.version
         ));
 
-        uninstall_pixi_installed_distribution(&prefix, &site_package_path, &python_package)?;
+        uninstall_pixi_installed_distribution(prefix, site_package_path, &python_package)?;
 
         pb.inc(1);
     }
@@ -518,8 +522,8 @@ fn remove_old_python_distributions(
 
 /// Uninstalls a python distribution that was previously installed by pixi.
 fn uninstall_pixi_installed_distribution(
-    prefix: &&Prefix,
-    site_package_path: &&Path,
+    prefix: &Prefix,
+    site_package_path: &Path,
     python_package: &Distribution,
 ) -> miette::Result<()> {
     tracing::info!(
@@ -536,7 +540,7 @@ fn uninstall_pixi_installed_distribution(
     // should probably actually add this file to the RECORD.
     let _ = std::fs::remove_file(prefix.root().join(&python_package.dist_info).join("HASH"));
 
-    rip::uninstall::uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
+    uninstall_distribution(&prefix.root().join(site_package_path), relative_dist_info)
         .into_diagnostic()
         .with_context(|| format!("could not uninstall python package {}-{}. Manually remove the `.pixi/env` folder and try again.", &python_package.name, &python_package.version))?;
 
