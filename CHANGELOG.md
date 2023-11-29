@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+
+## [0.9.1] - 2023-11-29
+### Highlights
+
+* PyPI's `scripts` are now fixed. For example: https://github.com/prefix-dev/pixi/issues/516
+
+### Details
+#### Fixed
+* Remove attr (unused) and update all dependencies by @wolfv in https://github.com/prefix-dev/pixi/pull/510
+* Remove empty folders on python uninstall by @baszalmstra in https://github.com/prefix-dev/pixi/pull/512
+* Bump `rip` to add scripts by @baszalmstra in https://github.com/prefix-dev/pixi/pull/517
+
+**Full Changelog**: https://github.com/prefix-dev/pixi/compare/v0.9.0...v0.9.1
+
 ## [0.9.0] - 2023-11-28
 
 ### Highlights
