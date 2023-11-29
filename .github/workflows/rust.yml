@@ -212,7 +212,12 @@ jobs:
       - name: Run user test
         if: ${{ !matrix.skip-tests }}
         run: >
-          cargo run --locked --release -- run -v --manifest-path examples/extended-example/pixi.toml test
+          cargo run
+          --locked
+          --release
+          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+          --
+          run -v --manifest-path examples/extended-example/pixi.toml test
 
       - name: Build Installer
         continue-on-error: true
