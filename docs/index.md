@@ -96,6 +96,31 @@ cargo test
 If you have any issues building because of the dependency on `rattler` checkout
 it's [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try)
 
+## Update
+Updating is as simple as installing, rerunning the installation script gets you the latest version.
+
+=== "Linux & macOS"
+    ```shell
+    curl -fsSL https://pixi.sh/install.sh | bash
+    ```
+    Or get a specific pixi version using:
+    ```shell
+    export PIXI_VERSION=vX.Y.Z && curl -fsSL https://pixi.sh/install.sh | bash
+    ```
+=== "Windows"
+    PowerShell:
+    ```powershell
+    iwr -useb https://pixi.sh/install.ps1 | iex
+    ```
+    Or get a specific pixi version using:
+    PowerShell:
+    ```powershell
+    $Env:PIXI_VERSION="vX.Y.Z"; iwr -useb https://pixi.sh/install.ps1 | iex
+    ```
+!!! note
+    If you used a package manager like `brew`, `mamba`, `conda`, `paru` to install `pixi`.
+    Then use their builtin update mechanism. e.g. `brew update && brew upgrade pixi`
+
 ## Uninstall
 
 To uninstall pixi from your system, simply remove the binary.
