@@ -7,11 +7,14 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 df = pd.read_csv("Breast_cancer_data.csv")
 
 # Declare feature vector and target variable
-X = df[['mean_radius','mean_texture','mean_perimeter','mean_area','mean_smoothness']]
+X = df[[
+    'mean_radius','mean_texture','mean_perimeter',
+    'mean_area','mean_smoothness']]
 y = df['diagnosis']
 
 # split the dataset into the training set and test set
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42)
 
 # build the lightgbm model
 clf = lgb.LGBMClassifier(verbose=-1)
