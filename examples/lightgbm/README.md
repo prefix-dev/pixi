@@ -18,7 +18,7 @@ After running the code, the model's training and testing accuracy will be displa
 
 ```bash
 Model accuracy: 0.930
-True Postive(TP) = 55
+True Positive(TP) = 55
 True Negatice(TN) = 104
 False Positive(FP) = 8
 False Negative(FN) = 4
