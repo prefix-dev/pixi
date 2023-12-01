@@ -45,7 +45,7 @@ Developed with ❤️ at [prefix.dev](https://prefix.dev).
 
 - ⚡ [Installation](#installation)
 - ⚙️ [Examples](/examples)
-- 📚 [Documentation](https://prefix.dev/docs/pixi/overview)
+- 📚 [Documentation](https://pixi.sh/)
 - 😍 [Contributing](#contributing)
 - 🔨 [Built using Pixi](#built-using-pixi)
 - 🚀 [GitHub Action](https://github.com/prefix-dev/setup-pixi)
