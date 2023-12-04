@@ -12,13 +12,13 @@ use console::style;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
+use rattler_conda_types::version_spec::{LogicalOperator, RangeOperator};
 use rattler_conda_types::{
-    version_spec::StrictRangeOperator, MatchSpec, NamelessMatchSpec, PackageName, Platform,
-    StrictVersion, Version, VersionSpec,
+    MatchSpec, NamelessMatchSpec, PackageName, Platform, Version, VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 /// Adds a dependency to the project
@@ -145,7 +145,7 @@ pub async fn add_specs_to_project(
     let sparse_repo_data = project.fetch_sparse_repodata().await?;
 
     // Determine the best version per platform
-    let mut best_versions = HashMap::new();
+    let mut package_versions = HashMap::<PackageName, HashSet<Version>>::new();
 
     let platforms = if specs_platforms.is_empty() {
         project.platforms()
@@ -175,34 +175,22 @@ pub async fn add_specs_to_project(
             }
         };
 
-        // Determine the minimum compatible constraining version.
+        // Collect all the versions seen.
         for (name, version) in solved_versions {
-            match best_versions.get_mut(&name) {
-                Some(prev) => {
-                    if *prev > version {
-                        *prev = version
-                    }
-                }
-                None => {
-                    best_versions.insert(name, version);
-                }
-            }
+            package_versions.entry(name).or_default().insert(version);
         }
     }
 
     // Update the specs passed on the command line with the best available versions.
     let mut added_specs = Vec::new();
     for (name, spec) in new_specs {
-        let best_version = best_versions
+        let versions_seen = package_versions
             .get(&name)
             .cloned()
             .expect("a version must have been previously selected");
         let updated_spec = if spec.version.is_none() {
             let mut updated_spec = spec.clone();
-            updated_spec.version = Some(VersionSpec::StrictRange(
-                StrictRangeOperator::StartsWith,
-                StrictVersion(best_version),
-            ));
+            updated_spec.version = determine_version_constraint(&versions_seen);
             updated_spec
         } else {
             spec
@@ -347,4 +335,39 @@ pub fn determine_best_version(
             )
         })
         .collect())
+}
+
+/// Given a set of versions, determines the best version constraint to use that captures all of them.
+fn determine_version_constraint<'a>(
+    versions: impl IntoIterator<Item = &'a Version>,
+) -> Option<VersionSpec> {
+    let (min_version, max_version) = versions.into_iter().minmax().into_option()?;
+    let lower_bound = min_version.clone();
+    let upper_bound = max_version
+        .pop_segments(1)
+        .unwrap_or_else(|| max_version.clone())
+        .bump();
+    Some(VersionSpec::Group(
+        LogicalOperator::And,
+        vec![
+            VersionSpec::Range(RangeOperator::GreaterEquals, lower_bound),
+            VersionSpec::Range(RangeOperator::Less, upper_bound),
+        ],
+    ))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_determine_version_constraint() {
+        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap()])
+            .unwrap()
+            .to_string(), @">=1.2.0,<1.3");
+
+        insta::assert_snapshot!(determine_version_constraint(&["1.2.0".parse().unwrap(), "1.3.0".parse().unwrap()])
+            .unwrap()
+            .to_string(), @">=1.2.0,<1.4");
+    }
 }
