@@ -154,11 +154,17 @@ pub async fn add_specs_to_project(
     }
     .to_vec();
     for platform in platforms {
-        let current_specs = match spec_type {
-            SpecType::Host => project.host_dependencies(platform)?,
-            SpecType::Build => project.build_dependencies(platform)?,
-            SpecType::Run => project.dependencies(platform)?,
-        };
+        // TODO: `build` and `host` has to be separated when we have separated environments for them.
+        //       While we combine them on install we should also do that on getting the best version.
+        // let current_specs = match spec_type {
+        //     SpecType::Host => project.host_dependencies(platform)?,
+        //     SpecType::Build => project.build_dependencies(platform)?,
+        //     SpecType::Run => project.dependencies(platform)?,
+        // };
+        let mut current_specs = project.dependencies(platform)?;
+        current_specs.extend(project.host_dependencies(platform)?);
+        current_specs.extend(project.build_dependencies(platform)?);
+
         // Solve the environment with the new specs added
         let solved_versions = match determine_best_version(
             &new_specs,
