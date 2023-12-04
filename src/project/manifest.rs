@@ -7,6 +7,7 @@ use indexmap::IndexMap;
 use miette::{Context, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use rattler_conda_types::{Channel, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
+use rip::types::PackageName;
 use serde::Deserializer;
 use serde_with::de::DeserializeAsWrap;
 use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
@@ -143,6 +144,17 @@ impl ProjectManifest {
                     self.build_dependencies.insert(IndexMap::new())
                 }
             }
+            SpecType::Pypi => panic!("Misusing function"),
+        }
+    }
+
+    /// Get the map of dependencies for a given spec type.
+    pub fn create_or_get_pypi_dependencies(
+        &mut self,
+        spec_type: SpecType,
+    ) -> &mut IndexMap<PackageName, PyPiRequirement> {
+        match spec_type {
+            SpecType::Run | SpecType::Host | SpecType::Build => panic!("Misusing function"),
             SpecType::Pypi => {
                 if let Some(ref mut deps) = self.pypi_dependencies {
                     deps
@@ -163,7 +175,7 @@ impl ProjectManifest {
             SpecType::Run => Some(&mut self.dependencies),
             SpecType::Build => self.build_dependencies.as_mut(),
             SpecType::Host => self.host_dependencies.as_mut(),
-            _ => {}
+            _ => None,
         };
 
         if let Some(deps) = dependencies {
@@ -197,7 +209,7 @@ impl ProjectManifest {
             SpecType::Run => Some(&mut target_metadata.dependencies),
             SpecType::Build => target_metadata.build_dependencies.as_mut(),
             SpecType::Host => target_metadata.host_dependencies.as_mut(),
-            _ => {}
+            _ => None,
         };
 
         if let Some(deps) = dependencies {

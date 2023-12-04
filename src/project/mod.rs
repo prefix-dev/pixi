@@ -552,8 +552,8 @@ impl Project {
 
     fn add_pypi_dep_to_table(
         deps_table: &mut Item,
-        name: rip::types::PackageName,
-        requirement: PyPiRequirement,
+        name: &rip::types::PackageName,
+        requirement: &PyPiRequirement,
     ) -> miette::Result<()> {
         // If it doesn't exist create a proper table
         if deps_table.is_none() {
@@ -565,13 +565,14 @@ impl Project {
             miette::miette!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
         })?;
 
-        let requirement_string = if let Some(version) = requirement.version {
+        let requirement_string = if let Some(version) = requirement.clone().version {
             version.to_string()
         } else {
             "*".to_string()
         };
         // Store (or replace) in the document
-        deps_table.insert(name.as_source(), Item::Value(requirement_string.into()));
+        deps_table.insert(name.as_str(), Item::Value(requirement_string.into()));
+        Ok(())
     }
 
     fn add_dep_to_target_table(
@@ -649,7 +650,7 @@ impl Project {
             })?;
         platform_table.set_dotted(true);
 
-        let dependencies = platform_table[SpecType::Pypi.as_str()]
+        let dependencies = platform_table[SpecType::Pypi.name()]
             .or_insert(Item::Table(Table::new()))
             .as_table_mut()
             .ok_or_else(|| {
@@ -667,7 +668,7 @@ impl Project {
 
         // Store (or replace) in the document
         dependencies.insert(
-            name.as_source(),
+            name.as_str(),
             Item::Value(requirement_string.to_string().into()),
         );
 
@@ -696,11 +697,11 @@ impl Project {
     pub fn add_target_pypi_dependency(
         &mut self,
         platform: Platform,
-        name: &rip::types::PackageName,
+        name: rip::types::PackageName,
         requirement: &PyPiRequirement,
     ) -> miette::Result<()> {
         // Add to target table toml
-        self.add_pypi_dep_to_target_table(platform, name, requirement)?;
+        self.add_pypi_dep_to_target_table(platform, &name.clone(), requirement)?;
         // Add to manifest
         self.manifest
             .target
@@ -708,7 +709,7 @@ impl Project {
             .or_insert(TargetMetadata::default())
             .pypi_dependencies
             .get_or_insert(IndexMap::new())
-            .insert(name.as_source().into(), requirement.into());
+            .insert(name, requirement.clone());
         Ok(())
     }
 
@@ -724,18 +725,18 @@ impl Project {
         Ok(())
     }
 
-    pub fn add_pipy_dependency(
+    pub fn add_pypi_dependency(
         &mut self,
         name: &rip::types::PackageName,
         requirement: &PyPiRequirement,
     ) -> miette::Result<()> {
         // Find the dependencies table
         let deps = &mut self.doc[SpecType::Pypi.name()];
-        Project::add_to_pypi_deps_table(deps, name, requirement)?;
+        Project::add_pypi_dep_to_table(deps, name, requirement)?;
 
         self.manifest
-            .create_or_get_dependencies(SpecType::Pypi)
-            .insert(name.as_source().into(), requirement.into());
+            .create_or_get_pypi_dependencies(SpecType::Pypi)
+            .insert(name.clone(), requirement.clone());
 
         Ok(())
     }

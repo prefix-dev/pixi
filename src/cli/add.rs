@@ -91,7 +91,9 @@ pub struct Args {
 
 impl SpecType {
     pub fn from_args(args: &Args) -> Self {
-        if args.host {
+        if args.pypi {
+            Self::Pypi
+        } else if args.host {
             Self::Host
         } else if args.build {
             Self::Build
@@ -141,54 +143,116 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .await
         }
         SpecType::Pypi => {
-            fn split_name_requirement(s: String) -> (String, String) {
-                match s.find(&['=', '>', '<', ' ', '!', '~']) {
-                    Some(index) => {
-                        let split_index = index + 1;
-                        (s[..split_index].to_string(), s[split_index..].to_string())
-                    }
-                    None => (s, String::new()),
-                }
-            }
-
-            let specs = args
+            // Parse specs as pep508_rs requirements
+            let pep508_requirements = args
                 .specs
                 .into_iter()
-                .map(split_name_requirement)
-                .map(|(name, version)| {
-                    let package_name =
-                        rip::types::PackageName::from_str(name.as_ref()).into_diagnostic()?;
-                    let pypi_requirement =
-                        PyPiRequirement::from_str(&version.as_str()).into_diagnostic()?;
-                    Ok::<(rip::types::PackageName, PyPiRequirement), dyn std::error::Error>((
-                        package_name,
-                        pypi_requirement,
-                    ))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+                .map(|input| pep508_rs::Requirement::from_str(input.as_ref()).into_diagnostic())
+                .collect::<miette::Result<Vec<_>>>()?;
 
-            add_pypi_specs_to_project(&mut project, specs, spec_platforms)
+            // Move those requirements into our custom PyPiRequirement
+            let specs_result: miette::Result<Vec<(rip::types::PackageName, PyPiRequirement)>> =
+                pep508_requirements
+                    .into_iter()
+                    .map(|req| {
+                        let name = rip::types::PackageName::from_str(req.name.as_str())?;
+                        let requirement = PyPiRequirement::from(req);
+                        Ok((name, requirement))
+                    })
+                    .collect();
+
+            specs_result
+                .map(|specs| async move {
+                    add_pypi_specs_to_project(
+                        &mut project,
+                        specs,
+                        spec_platforms,
+                        args.no_lockfile_update,
+                        args.no_install,
+                    )
+                    .await
+                })?
+                .await
         }
     }
 }
 
-pub fn add_pypi_specs_to_project(
+pub async fn add_pypi_specs_to_project(
     project: &mut Project,
     specs: Vec<(rip::types::PackageName, PyPiRequirement)>,
     specs_platforms: Vec<Platform>,
+    no_update_lockfile: bool,
+    no_install: bool,
 ) -> miette::Result<()> {
-    for (name, spec) in specs {
+    for (name, spec) in &specs {
         // TODO: Get best version
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.add_pipy_dependency(&name, &spec)?;
+            project.add_pypi_dependency(name, spec)?;
         } else {
             for platform in specs_platforms.iter() {
-                project.add_target_pypi_dependency(*platform, &name, &spec)?;
+                project.add_target_pypi_dependency(*platform, name.clone(), spec)?;
             }
         }
     }
-    project.save()
+    project.save()?;
+
+    let sparse_repo_data = project.fetch_sparse_repodata().await?;
+
+    // Update the lock file
+    let lock_file = if !no_update_lockfile {
+        Some(
+            update_lock_file(
+                project,
+                load_lock_file(project).await?,
+                Some(sparse_repo_data),
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+
+    if let Some(lock_file) = lock_file {
+        if !no_install {
+            let platform = Platform::current();
+            if project.platforms().contains(&platform) {
+                // Get the currently installed packages
+                let prefix = Prefix::new(project.root().join(".pixi/env"))?;
+                let installed_packages = prefix.find_installed_packages(None).await?;
+
+                // Update the prefix
+                update_prefix(
+                    project.pypi_package_db()?,
+                    &prefix,
+                    installed_packages,
+                    &lock_file,
+                    platform,
+                )
+                .await?;
+            } else {
+                eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", style("!").yellow().bold())
+            }
+        }
+    }
+
+    for spec in specs {
+        eprintln!(
+            "{}Added `{}` as pypi dependency",
+            console::style(console::Emoji("✔ ", "")).green(),
+            spec.0.as_str(),
+        );
+    }
+
+    // Print something if we've added for platforms
+    if !specs_platforms.is_empty() {
+        eprintln!(
+            "Added these only for platform(s): {}",
+            specs_platforms.iter().join(", ")
+        )
+    }
+
+    Ok(())
 }
 pub async fn add_conda_specs_to_project(
     project: &mut Project,
@@ -226,7 +290,7 @@ pub async fn add_conda_specs_to_project(
             SpecType::Host => project.host_dependencies(platform)?,
             SpecType::Build => project.build_dependencies(platform)?,
             SpecType::Run => project.dependencies(platform)?,
-            _ => return panic!(),
+            _ => return Err(miette::miette!("Fail")),
         };
         // Solve the environment with the new specs added
         let solved_versions = match determine_best_version(

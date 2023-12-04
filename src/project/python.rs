@@ -1,5 +1,3 @@
-use pep440_rs::VersionSpecifiers;
-use pep508_rs::VersionOrUrl;
 use serde::de::{Error, MapAccess, Visitor};
 use serde::{de, Deserialize, Deserializer};
 use std::fmt::Formatter;
@@ -8,8 +6,8 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PyPiRequirement {
-    pub(crate) version: Option<VersionSpecifiers>,
-    extras: Option<Vec<String>>,
+    pub(crate) version: Option<pep440_rs::VersionSpecifiers>,
+    pub(crate) extras: Option<Vec<String>>,
 }
 
 /// The type of parse error that occurred when parsing match spec.
@@ -46,7 +44,7 @@ impl FromStr for PyPiRequirement {
             // From string can only parse the version specifier.
             Ok(Self {
                 version: Some(
-                    VersionSpecifiers::from_str(s)
+                    pep440_rs::VersionSpecifiers::from_str(s)
                         .map_err(ParsePyPiRequirementError::Pep440Error)?,
                 ),
                 extras: None,
@@ -54,14 +52,32 @@ impl FromStr for PyPiRequirement {
         }
     }
 }
-
+impl From<pep508_rs::Requirement> for PyPiRequirement {
+    fn from(req: pep508_rs::Requirement) -> Self {
+        let version = if let Some(version_or_url) = req.version_or_url {
+            match version_or_url {
+                pep508_rs::VersionOrUrl::VersionSpecifier(v) => Some(v),
+                pep508_rs::VersionOrUrl::Url(_) => None,
+            }
+        } else {
+            None
+        };
+        PyPiRequirement {
+            version,
+            extras: req.extras,
+        }
+    }
+}
 impl PyPiRequirement {
     /// Returns the requirements as [`pep508_rs::Requirement`]s.
     pub fn as_pep508(&self, name: &rip::types::PackageName) -> pep508_rs::Requirement {
         pep508_rs::Requirement {
             name: name.as_str().to_string(),
             extras: self.extras.clone(),
-            version_or_url: self.version.clone().map(VersionOrUrl::VersionSpecifier),
+            version_or_url: self
+                .version
+                .clone()
+                .map(pep508_rs::VersionOrUrl::VersionSpecifier),
             marker: None,
         }
     }
@@ -91,7 +107,7 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
                 // Use a temp struct to deserialize into when it is a map.
                 #[derive(Deserialize)]
                 struct RawPyPiRequirement {
-                    version: Option<VersionSpecifiers>,
+                    version: Option<pep440_rs::VersionSpecifiers>,
                     extras: Option<Vec<String>>,
                 }
                 let raw_requirement =
@@ -122,7 +138,7 @@ mod test {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement {
-                version: Some(VersionSpecifiers::from_str(">=3.12").unwrap()),
+                version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap()),
                 extras: None
             }
         );
@@ -131,7 +147,7 @@ mod test {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement {
-                version: Some(VersionSpecifiers::from_str("==3.12.0").unwrap()),
+                version: Some(pep440_rs::VersionSpecifiers::from_str("==3.12.0").unwrap()),
                 extras: None
             }
         );
@@ -141,7 +157,7 @@ mod test {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement {
-                version: Some(VersionSpecifiers::from_str("~=2.1.3").unwrap()),
+                version: Some(pep440_rs::VersionSpecifiers::from_str("~=2.1.3").unwrap()),
                 extras: None
             }
         );
@@ -168,7 +184,7 @@ mod test {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement {
-                version: Some(VersionSpecifiers::from_str(">=3.12").unwrap()),
+                version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap()),
                 extras: Some(vec!("bar".to_string()))
             }
         );
@@ -185,7 +201,7 @@ mod test {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement {
-                version: Some(VersionSpecifiers::from_str(">=3.12,<3.13.0").unwrap()),
+                version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12,<3.13.0").unwrap()),
                 extras: Some(vec!("bar".to_string(), "foo".to_string()))
             }
         );
