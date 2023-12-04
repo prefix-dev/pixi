@@ -9,7 +9,6 @@ use crate::{
     virtual_packages::get_minimal_virtual_packages,
 };
 use clap::Parser;
-use console::style;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
@@ -106,7 +105,7 @@ impl SpecType {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let spec_type = SpecType::from_args(&args);
-    let spec_platforms = args.platform;
+    let spec_platforms = &args.platform;
 
     // Sanity check of prefix location
     verify_prefix_location_unchanged(
@@ -128,6 +127,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         SpecType::Host | SpecType::Build | SpecType::Run => {
             let specs = args
                 .specs
+                .clone()
                 .into_iter()
                 .map(|s| MatchSpec::from_str(&s))
                 .collect::<Result<Vec<_>, _>>()
@@ -146,6 +146,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // Parse specs as pep508_rs requirements
             let pep508_requirements = args
                 .specs
+                .clone()
                 .into_iter()
                 .map(|input| pep508_rs::Requirement::from_str(input.as_ref()).into_diagnostic())
                 .collect::<miette::Result<Vec<_>>>()?;
@@ -160,7 +161,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         Ok((name, requirement))
                     })
                     .collect();
-
             specs_result
                 .map(|specs| async move {
                     add_pypi_specs_to_project(
@@ -174,13 +174,39 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 })?
                 .await
         }
+    }?;
+
+    for package in args.specs {
+        eprintln!(
+            "{}Added {}",
+            console::style(console::Emoji("✔ ", "")).green(),
+            console::style(package).bold(),
+        );
     }
+
+    // Print if it is something different from host and dep
+    if !matches!(spec_type, SpecType::Run) {
+        eprintln!(
+            "Added these as {}.",
+            console::style(spec_type.name()).bold()
+        );
+    }
+
+    // Print something if we've added for platforms
+    if !args.platform.is_empty() {
+        eprintln!(
+            "Added these only for platform(s): {}",
+            console::style(args.platform.iter().join(", ")).bold()
+        )
+    }
+
+    Ok(())
 }
 
 pub async fn add_pypi_specs_to_project(
     project: &mut Project,
     specs: Vec<(rip::types::PackageName, PyPiRequirement)>,
-    specs_platforms: Vec<Platform>,
+    specs_platforms: &Vec<Platform>,
     no_update_lockfile: bool,
     no_install: bool,
 ) -> miette::Result<()> {
@@ -197,70 +223,18 @@ pub async fn add_pypi_specs_to_project(
     }
     project.save()?;
 
-    let sparse_repo_data = project.fetch_sparse_repodata().await?;
-
-    // Update the lock file
-    let lock_file = if !no_update_lockfile {
-        Some(
-            update_lock_file(
-                project,
-                load_lock_file(project).await?,
-                Some(sparse_repo_data),
-            )
-            .await?,
-        )
-    } else {
-        None
-    };
-
-    if let Some(lock_file) = lock_file {
-        if !no_install {
-            let platform = Platform::current();
-            if project.platforms().contains(&platform) {
-                // Get the currently installed packages
-                let prefix = Prefix::new(project.root().join(".pixi/env"))?;
-                let installed_packages = prefix.find_installed_packages(None).await?;
-
-                // Update the prefix
-                update_prefix(
-                    project.pypi_package_db()?,
-                    &prefix,
-                    installed_packages,
-                    &lock_file,
-                    platform,
-                )
-                .await?;
-            } else {
-                eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", style("!").yellow().bold())
-            }
-        }
-    }
-
-    for spec in specs {
-        eprintln!(
-            "{}Added `{}` as pypi dependency",
-            console::style(console::Emoji("✔ ", "")).green(),
-            spec.0.as_str(),
-        );
-    }
-
-    // Print something if we've added for platforms
-    if !specs_platforms.is_empty() {
-        eprintln!(
-            "Added these only for platform(s): {}",
-            specs_platforms.iter().join(", ")
-        )
-    }
+    update_lockfile(project, None, no_install, no_update_lockfile).await?;
 
     Ok(())
 }
+
 pub async fn add_conda_specs_to_project(
     project: &mut Project,
     specs: Vec<MatchSpec>,
     spec_type: SpecType,
     no_install: bool,
     no_update_lockfile: bool,
-    specs_platforms: Vec<Platform>,
+    specs_platforms: &Vec<Platform>,
 ) -> miette::Result<()> {
     // Split the specs into package name and version specifier
     let new_specs = specs
@@ -282,7 +256,7 @@ pub async fn add_conda_specs_to_project(
     let platforms = if specs_platforms.is_empty() {
         project.platforms()
     } else {
-        &specs_platforms
+        specs_platforms
     }
     .to_vec();
     for platform in platforms {
@@ -315,7 +289,6 @@ pub async fn add_conda_specs_to_project(
     }
 
     // Update the specs passed on the command line with the best available versions.
-    let mut added_specs = Vec::new();
     for (name, spec) in new_specs {
         let versions_seen = package_versions
             .get(&name)
@@ -338,21 +311,29 @@ pub async fn add_conda_specs_to_project(
                 project.add_target_dependency(*platform, &spec, spec_type)?;
             }
         }
-
-        added_specs.push(spec);
     }
     project.save()?;
 
+    let _ = update_lockfile(
+        project,
+        Some(sparse_repo_data),
+        no_install,
+        no_update_lockfile,
+    )
+    .await;
+
+    Ok(())
+}
+
+async fn update_lockfile(
+    project: &Project,
+    sparse_repo_data: Option<Vec<SparseRepoData>>,
+    no_install: bool,
+    no_update_lockfile: bool,
+) -> miette::Result<()> {
     // Update the lock file
     let lock_file = if !no_update_lockfile {
-        Some(
-            update_lock_file(
-                project,
-                load_lock_file(project).await?,
-                Some(sparse_repo_data),
-            )
-            .await?,
-        )
+        Some(update_lock_file(project, load_lock_file(project).await?, sparse_repo_data).await?)
     } else {
         None
     };
@@ -375,38 +356,12 @@ pub async fn add_conda_specs_to_project(
                 )
                 .await?;
             } else {
-                eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", style("!").yellow().bold())
+                eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", console::style("!").yellow().bold())
             }
         }
     }
-
-    for spec in added_specs {
-        eprintln!(
-            "{}Added {}",
-            console::style(console::Emoji("✔ ", "")).green(),
-            spec,
-        );
-    }
-
-    // Print if it is something different from host and dep
-    match spec_type {
-        SpecType::Host => eprintln!("Added these as host dependencies."),
-        SpecType::Build => eprintln!("Added these as build dependencies."),
-        SpecType::Pypi => eprintln!("Added these as pypi dependencies."),
-        SpecType::Run => {}
-    };
-
-    // Print something if we've added for platforms
-    if !specs_platforms.is_empty() {
-        eprintln!(
-            "Added these only for platform(s): {}",
-            specs_platforms.iter().join(", ")
-        )
-    }
-
     Ok(())
 }
-
 /// Given several specs determines the highest installable version for them.
 pub fn determine_best_version(
     new_specs: &HashMap<PackageName, NamelessMatchSpec>,
