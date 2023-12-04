@@ -52,6 +52,7 @@ ProjectManifest {
             dependencies: {},
             host_dependencies: None,
             build_dependencies: None,
+            pypi_dependencies: None,
             activation: Some(
                 Activation {
                     scripts: Some(
@@ -74,6 +75,7 @@ ProjectManifest {
             dependencies: {},
             host_dependencies: None,
             build_dependencies: None,
+            pypi_dependencies: None,
             activation: Some(
                 Activation {
                     scripts: Some(

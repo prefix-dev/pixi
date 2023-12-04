@@ -151,16 +151,17 @@ impl PixiControl {
 
     /// Initialize pixi project inside a temporary directory. Returns a [`AddBuilder`]. To execute
     /// the command and await the result call `.await` on the return value.
-    pub fn add(&self, spec: impl IntoMatchSpec) -> AddBuilder {
+    pub fn add(&self, spec: &str) -> AddBuilder {
         AddBuilder {
             args: add::Args {
                 manifest_path: Some(self.manifest_path()),
                 host: false,
-                specs: vec![spec.into()],
+                specs: vec![spec.to_string()],
                 build: false,
                 no_install: true,
                 no_lockfile_update: false,
                 platform: Default::default(),
+                pypi: false,
             },
         }
     }

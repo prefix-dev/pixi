@@ -23,7 +23,6 @@
 //!
 //! ```
 
-use crate::common::IntoMatchSpec;
 use futures::FutureExt;
 use pixi::cli::{add, init, install, project, task};
 use pixi::project::SpecType;
@@ -79,8 +78,8 @@ pub struct AddBuilder {
 }
 
 impl AddBuilder {
-    pub fn with_spec(mut self, spec: impl IntoMatchSpec) -> Self {
-        self.args.specs.push(spec.into());
+    pub fn with_spec(mut self, spec: &str) -> Self {
+        self.args.specs.push(spec.to_string());
         self
     }
 
@@ -95,7 +94,7 @@ impl AddBuilder {
                 self.args.host = false;
                 self.args.build = true;
             }
-            SpecType::Run => {
+            SpecType::Pypi | SpecType::Run => {
                 self.args.host = false;
                 self.args.build = false;
             }
