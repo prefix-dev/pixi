@@ -219,9 +219,16 @@ fn project_platforms(platform: Platform, system_requirements: &SystemRequirement
             _ => unreachable!("not windows"),
         }
     } else if platform.is_linux() {
-        let max_glibc_version = match &system_requirements.libc {
-            Some(LibCSystemRequirement::GlibC(v)) => v.clone(),
-            Some(LibCSystemRequirement::OtherFamily(_)) => return Vec::new(),
+        let max_glibc_version = match system_requirements
+            .libc
+            .as_ref()
+            .map(LibCSystemRequirement::family_and_version)
+        {
+            Some((family, version)) if family.eq_ignore_ascii_case("glibc") => version.clone(),
+            Some(_) => {
+                // Another libc family is being target.
+                return Vec::new();
+            }
             None => default_glibc_version(),
         };
         linux_platform_tags(platform, &max_glibc_version)

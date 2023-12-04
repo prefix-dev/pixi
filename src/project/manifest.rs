@@ -378,6 +378,18 @@ pub enum LibCSystemRequirement {
     OtherFamily(LibCFamilyAndVersion),
 }
 
+impl LibCSystemRequirement {
+    /// Returns the family and version of this libc requirement.
+    pub fn family_and_version(&self) -> (&str, &Version) {
+        match self {
+            LibCSystemRequirement::GlibC(version) => ("glibc", version),
+            LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion { family, version: v }) => {
+                (family.as_deref().unwrap_or("glibc"), v)
+            }
+        }
+    }
+}
+
 #[serde_as]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
