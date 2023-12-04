@@ -8,7 +8,7 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PyPiRequirement {
-    version: Option<VersionSpecifiers>,
+    pub(crate) version: Option<VersionSpecifiers>,
     extras: Option<Vec<String>>,
 }
 

@@ -143,6 +143,13 @@ impl ProjectManifest {
                     self.build_dependencies.insert(IndexMap::new())
                 }
             }
+            SpecType::Pypi => {
+                if let Some(ref mut deps) = self.pypi_dependencies {
+                    deps
+                } else {
+                    self.pypi_dependencies.insert(IndexMap::new())
+                }
+            }
         }
     }
 
@@ -156,6 +163,7 @@ impl ProjectManifest {
             SpecType::Run => Some(&mut self.dependencies),
             SpecType::Build => self.build_dependencies.as_mut(),
             SpecType::Host => self.host_dependencies.as_mut(),
+            _ => {}
         };
 
         if let Some(deps) = dependencies {
@@ -189,6 +197,7 @@ impl ProjectManifest {
             SpecType::Run => Some(&mut target_metadata.dependencies),
             SpecType::Build => target_metadata.build_dependencies.as_mut(),
             SpecType::Host => target_metadata.host_dependencies.as_mut(),
+            _ => {}
         };
 
         if let Some(deps) = dependencies {
@@ -258,6 +267,9 @@ pub struct TargetMetadata {
     #[serde(default, rename = "build-dependencies")]
     #[serde_as(as = "Option<IndexMap<_, PickFirst<(_, DisplayFromStr)>>>")]
     pub build_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
+
+    #[serde(default, rename = "pypi-dependencies")]
+    pub pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
 
     /// Additional information to activate an environment.
     #[serde(default)]

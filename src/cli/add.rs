@@ -4,6 +4,7 @@ use crate::project::SpecType;
 use crate::{
     consts,
     lock_file::{load_lock_file, update_lock_file},
+    project::python::PyPiRequirement,
     project::Project,
     virtual_packages::get_minimal_virtual_packages,
 };
@@ -20,6 +21,7 @@ use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 /// Adds a dependency to the project
 #[derive(Parser, Debug, Default)]
@@ -27,8 +29,9 @@ use std::path::PathBuf;
 pub struct Args {
     /// Specify the dependencies you wish to add to the project.
     ///
-    /// All dependencies should be defined as MatchSpec. If no specific version is
-    /// provided, the latest version compatible with your project will be chosen automatically.
+    /// The dependencies should be defined as MatchSpec, for conda package or a PyPI requirement
+    /// for the --pypi dependencies. If no specific version is provided, the latest version
+    /// compatible with your project will be chosen automatically or a * will be used.
     ///
     /// Example usage:
     ///
@@ -50,8 +53,12 @@ pub struct Args {
     ///
     /// Mixing `--platform` and `--build`/`--host` flags is supported
     ///
+    /// The `--pypi` option will add the package as a pypi-dependency this can not be mixed with the conda dependencies
+    /// - `pixi add --pypi boto3`
+    /// - `pixi add --pypi "boto3==version"
+    ///
     #[arg(required = true)]
-    pub specs: Vec<MatchSpec>,
+    pub specs: Vec<String>,
 
     /// The path to 'pixi.toml'
     #[arg(long)]
@@ -64,6 +71,10 @@ pub struct Args {
     /// This is a build dependency
     #[arg(long, conflicts_with = "host")]
     pub build: bool,
+
+    /// This is a pypi dependency
+    #[arg(long, conflicts_with_all = ["host", "build"])]
+    pub pypi: bool,
 
     /// Don't update lockfile, implies the no-install as well.
     #[clap(long, conflicts_with = "no_install")]
@@ -111,18 +122,75 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect::<Vec<Platform>>();
     project.add_platforms(platforms_to_add.iter())?;
 
-    add_specs_to_project(
-        &mut project,
-        args.specs,
-        spec_type,
-        args.no_install,
-        args.no_lockfile_update,
-        spec_platforms,
-    )
-    .await
+    match spec_type {
+        SpecType::Host | SpecType::Build | SpecType::Run => {
+            let specs = args
+                .specs
+                .into_iter()
+                .map(|s| MatchSpec::from_str(&s))
+                .collect::<Result<Vec<_>, _>>()
+                .into_diagnostic()?;
+            add_conda_specs_to_project(
+                &mut project,
+                specs,
+                spec_type,
+                args.no_install,
+                args.no_lockfile_update,
+                spec_platforms,
+            )
+            .await
+        }
+        SpecType::Pypi => {
+            fn split_name_requirement(s: String) -> (String, String) {
+                match s.find(&['=', '>', '<', ' ', '!', '~']) {
+                    Some(index) => {
+                        let split_index = index + 1;
+                        (s[..split_index].to_string(), s[split_index..].to_string())
+                    }
+                    None => (s, String::new()),
+                }
+            }
+
+            let specs = args
+                .specs
+                .into_iter()
+                .map(split_name_requirement)
+                .map(|(name, version)| {
+                    let package_name =
+                        rip::types::PackageName::from_str(name.as_ref()).into_diagnostic()?;
+                    let pypi_requirement =
+                        PyPiRequirement::from_str(&version.as_str()).into_diagnostic()?;
+                    Ok::<(rip::types::PackageName, PyPiRequirement), dyn std::error::Error>((
+                        package_name,
+                        pypi_requirement,
+                    ))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            add_pypi_specs_to_project(&mut project, specs, spec_platforms)
+        }
+    }
 }
 
-pub async fn add_specs_to_project(
+pub fn add_pypi_specs_to_project(
+    project: &mut Project,
+    specs: Vec<(rip::types::PackageName, PyPiRequirement)>,
+    specs_platforms: Vec<Platform>,
+) -> miette::Result<()> {
+    for (name, spec) in specs {
+        // TODO: Get best version
+        // Add the dependency to the project
+        if specs_platforms.is_empty() {
+            project.add_pipy_dependency(&name, &spec)?;
+        } else {
+            for platform in specs_platforms.iter() {
+                project.add_target_pypi_dependency(*platform, &name, &spec)?;
+            }
+        }
+    }
+    project.save()
+}
+pub async fn add_conda_specs_to_project(
     project: &mut Project,
     specs: Vec<MatchSpec>,
     spec_type: SpecType,
@@ -158,6 +226,7 @@ pub async fn add_specs_to_project(
             SpecType::Host => project.host_dependencies(platform)?,
             SpecType::Build => project.build_dependencies(platform)?,
             SpecType::Run => project.dependencies(platform)?,
+            _ => return panic!(),
         };
         // Solve the environment with the new specs added
         let solved_versions = match determine_best_version(
@@ -271,6 +340,7 @@ pub async fn add_specs_to_project(
     match spec_type {
         SpecType::Host => eprintln!("Added these as host dependencies."),
         SpecType::Build => eprintln!("Added these as build dependencies."),
+        SpecType::Pypi => eprintln!("Added these as pypi dependencies."),
         SpecType::Run => {}
     };
 
