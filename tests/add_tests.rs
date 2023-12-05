@@ -4,7 +4,8 @@ use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
 use pixi::project::SpecType;
-use rattler_conda_types::Platform;
+use rattler_conda_types::{PackageName, Platform};
+use std::str::FromStr;
 use tempfile::TempDir;
 
 /// Test add functionality for different types of packages.
@@ -140,4 +141,55 @@ async fn add_functionality_os() {
 
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_matchspec_for_platform("rattler==1", Platform::LinuxS390X));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn add_pypi_functionality() {
+    let mut package_database = PackageDatabase::default();
+
+    // Add a package `foo` that depends on `bar` both set to version 1.
+    package_database.add_package(Package::build("python", "3.9").finish());
+
+    // Write the repodata to disk
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+
+    pixi.init()
+        .with_local_channel(channel_dir.path())
+        .await
+        .unwrap();
+
+    // Add python
+    pixi.add("python")
+        .set_type(SpecType::Run)
+        .with_install(false)
+        .await
+        .unwrap();
+
+    // Add a pypi package
+    pixi.add("pytest")
+        .set_type(SpecType::Pypi)
+        .with_install(false)
+        .await
+        .unwrap();
+
+    // Add a pypi package to a target
+    pixi.add("boto3>=1.33")
+        .set_type(SpecType::Pypi)
+        .with_install(false)
+        .set_platforms(&[Platform::Osx64])
+        .await
+        .unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_package(&PackageName::from_str("pytest").unwrap()));
+    assert!(lock.contains_pep508_requirement_for_platform(
+        pep508_rs::Requirement::from_str("boto3>=1.33").unwrap(),
+        Platform::Osx64
+    ));
 }

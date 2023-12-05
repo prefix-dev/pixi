@@ -18,6 +18,7 @@ use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 use rattler_lock::CondaLock;
 
 use miette::IntoDiagnostic;
+use pep508_rs::VersionOrUrl;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 use std::str::FromStr;
@@ -61,6 +62,12 @@ pub trait LockFileExt {
         matchspec: impl IntoMatchSpec,
         platform: impl Into<Platform>,
     ) -> bool;
+    /// Check if the pep508 requirement is contained in the lockfile for this platform
+    fn contains_pep508_requirement_for_platform(
+        &self,
+        requirement: pep508_rs::Requirement,
+        platform: impl Into<Platform>,
+    ) -> bool;
 }
 
 impl LockFileExt for CondaLock {
@@ -99,6 +106,30 @@ impl LockFileExt for CondaLock {
                 Version::from_str(&locked_dep.version).expect("could not parse version");
             locked_dep.name == name.as_normalized()
                 && version.matches(&package_version)
+                && locked_dep.platform == platform
+        })
+    }
+
+    fn contains_pep508_requirement_for_platform(
+        &self,
+        requirement: pep508_rs::Requirement,
+        platform: impl Into<Platform>,
+    ) -> bool {
+        let name = requirement.name;
+        let version = match requirement.version_or_url.expect("expected version or url") {
+            VersionOrUrl::VersionSpecifier(version) => version,
+            VersionOrUrl::Url(_) => {
+                eprintln!("Can't contain an url yet");
+                return false;
+            }
+        };
+
+        let platform = platform.into();
+        self.package.iter().any(|locked_dep| {
+            let package_version =
+                pep440_rs::Version::from_str(&locked_dep.version).expect("could not parse version");
+            locked_dep.name == *name
+                && version.contains(&package_version)
                 && locked_dep.platform == platform
         })
     }

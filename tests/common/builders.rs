@@ -94,9 +94,14 @@ impl AddBuilder {
                 self.args.host = false;
                 self.args.build = true;
             }
-            SpecType::Pypi | SpecType::Run => {
+            SpecType::Run => {
                 self.args.host = false;
                 self.args.build = false;
+            }
+            SpecType::Pypi => {
+                self.args.host = false;
+                self.args.build = false;
+                self.args.pypi = true;
             }
         }
         self
