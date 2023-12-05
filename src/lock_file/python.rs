@@ -20,6 +20,9 @@ pub async fn resolve_pypi_dependencies<'p>(
     conda_packages: &mut [RepoDataRecord],
 ) -> miette::Result<Vec<PinnedPackage<'p>>> {
     let dependencies = project.pypi_dependencies(platform);
+    if dependencies.is_empty() {
+        return Ok(vec![]);
+    }
 
     // Amend the records with pypi purls if they are not present yet.
     let conda_forge_mapping = python_name_mapping::conda_pypi_name_mapping().await?;

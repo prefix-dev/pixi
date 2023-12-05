@@ -261,7 +261,11 @@ pub async fn add_conda_specs_to_project(
             SpecType::Host => project.host_dependencies(platform)?,
             SpecType::Build => project.build_dependencies(platform)?,
             SpecType::Run => project.dependencies(platform)?,
-            _ => return Err(miette::miette!("Fail")),
+            _ => {
+                return Err(miette::miette!(
+                    "Cannot add any other spec types as conda packages"
+                ))
+            }
         };
         // Solve the environment with the new specs added
         let solved_versions = match determine_best_version(
@@ -311,13 +315,13 @@ pub async fn add_conda_specs_to_project(
     }
     project.save()?;
 
-    let _ = update_lockfile(
+    update_lockfile(
         project,
         Some(sparse_repo_data),
         no_install,
         no_update_lockfile,
     )
-    .await;
+    .await?;
 
     Ok(())
 }
