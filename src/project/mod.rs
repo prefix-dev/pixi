@@ -461,8 +461,25 @@ impl Project {
         Ok(dependencies)
     }
 
-    pub fn pypi_dependencies(&self) -> Option<&IndexMap<rip::types::PackageName, PyPiRequirement>> {
-        self.manifest.pypi_dependencies.as_ref()
+    pub fn pypi_dependencies(
+        &self,
+        platform: Platform,
+    ) -> IndexMap<&rip::types::PackageName, &PyPiRequirement> {
+        // Get the base pypi dependencies (defined in the `[pypi-dependencies]` section)
+        let base_pypi_dependencies = self.manifest.pypi_dependencies.iter();
+
+        // Get the platform specific dependencies in the order they were defined.
+        let platform_specific = self
+            .target_specific_metadata(platform)
+            .flat_map(|target| target.pypi_dependencies.iter());
+
+        // Combine the specs.
+        //
+        // Note that if a dependency was specified twice the platform specific one "wins".
+        base_pypi_dependencies
+            .chain(platform_specific)
+            .flatten()
+            .collect::<IndexMap<_, _>>()
     }
 
     /// Returns the Python index URLs to use for this project.
