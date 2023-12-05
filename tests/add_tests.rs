@@ -143,6 +143,7 @@ async fn add_functionality_os() {
     assert!(lock.contains_matchspec_for_platform("rattler==1", Platform::LinuxS390X));
 }
 
+/// Test the `pixi add --pypi` functionality
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn add_pypi_functionality() {
     let mut package_database = PackageDatabase::default();

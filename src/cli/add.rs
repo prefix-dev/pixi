@@ -63,15 +63,15 @@ pub struct Args {
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
-    /// This is a host dependency
+    /// The specified dependencies are host dependencies. Conflicts with `build` and `pypi`
     #[arg(long, conflicts_with = "build")]
     pub host: bool,
 
-    /// This is a build dependency
+    /// The specified dependencies are build dependencies. Conflicts with `host` and `pypi`
     #[arg(long, conflicts_with = "host")]
     pub build: bool,
 
-    /// This is a pypi dependency
+    /// The specified dependencies are pypi dependencies. Conflicts with `host` and `build`
     #[arg(long, conflicts_with_all = ["host", "build"])]
     pub pypi: bool,
 

@@ -52,6 +52,8 @@ impl FromStr for PyPiRequirement {
         }
     }
 }
+
+/// Implement from [`pep508_rs::Requirement`] to make the conversion easier.
 impl From<pep508_rs::Requirement> for PyPiRequirement {
     fn from(req: pep508_rs::Requirement) -> Self {
         let version = if let Some(version_or_url) = req.version_or_url {
@@ -68,6 +70,7 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
         }
     }
 }
+
 impl PyPiRequirement {
     /// Returns the requirements as [`pep508_rs::Requirement`]s.
     pub fn as_pep508(&self, name: &rip::types::PackageName) -> pep508_rs::Requirement {
