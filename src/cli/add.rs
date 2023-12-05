@@ -152,27 +152,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .collect::<miette::Result<Vec<_>>>()?;
 
             // Move those requirements into our custom PyPiRequirement
-            let specs_result: miette::Result<Vec<(rip::types::PackageName, PyPiRequirement)>> =
-                pep508_requirements
-                    .into_iter()
-                    .map(|req| {
-                        let name = rip::types::PackageName::from_str(req.name.as_str())?;
-                        let requirement = PyPiRequirement::from(req);
-                        Ok((name, requirement))
-                    })
-                    .collect();
-            specs_result
-                .map(|specs| async move {
-                    add_pypi_specs_to_project(
-                        &mut project,
-                        specs,
-                        spec_platforms,
-                        args.no_lockfile_update,
-                        args.no_install,
-                    )
-                    .await
-                })?
-                .await
+            let specs = pep508_requirements
+                .into_iter()
+                .map(|req| {
+                    let name = rip::types::PackageName::from_str(req.name.as_str())?;
+                    let requirement = PyPiRequirement::from(req);
+                    Ok((name, requirement))
+                })
+                .collect::<Result<Vec<_>, rip::types::ParsePackageNameError>>()
+                .into_diagnostic()?;
+
+            add_pypi_specs_to_project(
+                &mut project,
+                specs,
+                spec_platforms,
+                args.no_lockfile_update,
+                args.no_install,
+            )
+            .await
         }
     }?;
 
