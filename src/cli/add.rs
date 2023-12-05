@@ -1,6 +1,7 @@
 use crate::environment::{update_prefix, verify_prefix_location_unchanged};
 use crate::prefix::Prefix;
-use crate::project::SpecType;
+use crate::project::DependencyType::CondaDependency;
+use crate::project::{DependencyType, SpecType};
 use crate::{
     consts,
     lock_file::{load_lock_file, update_lock_file},
@@ -88,23 +89,23 @@ pub struct Args {
     pub platform: Vec<Platform>,
 }
 
-impl SpecType {
+impl DependencyType {
     pub fn from_args(args: &Args) -> Self {
         if args.pypi {
-            Self::Pypi
+            Self::PypiDependency
         } else if args.host {
-            Self::Host
+            CondaDependency(SpecType::Host)
         } else if args.build {
-            Self::Build
+            CondaDependency(SpecType::Build)
         } else {
-            Self::Run
+            CondaDependency(SpecType::Run)
         }
     }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let spec_type = SpecType::from_args(&args);
+    let dependency_type = DependencyType::from_args(&args);
     let spec_platforms = &args.platform;
 
     // Sanity check of prefix location
@@ -123,8 +124,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect::<Vec<Platform>>();
     project.add_platforms(platforms_to_add.iter())?;
 
-    match spec_type {
-        SpecType::Host | SpecType::Build | SpecType::Run => {
+    match dependency_type {
+        DependencyType::CondaDependency(spec_type) => {
             let specs = args
                 .specs
                 .clone()
@@ -142,7 +143,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
             .await
         }
-        SpecType::Pypi => {
+        DependencyType::PypiDependency => {
             // Parse specs as pep508_rs requirements
             let pep508_requirements = args
                 .specs
@@ -182,10 +183,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Print if it is something different from host and dep
-    if !matches!(spec_type, SpecType::Run) {
+    if !matches!(dependency_type, CondaDependency(SpecType::Run)) {
         eprintln!(
             "Added these as {}.",
-            console::style(spec_type.name()).bold()
+            console::style(dependency_type.name()).bold()
         );
     }
 
@@ -261,11 +262,6 @@ pub async fn add_conda_specs_to_project(
             SpecType::Host => project.host_dependencies(platform)?,
             SpecType::Build => project.build_dependencies(platform)?,
             SpecType::Run => project.dependencies(platform)?,
-            _ => {
-                return Err(miette::miette!(
-                    "Cannot add any other spec types as conda packages"
-                ))
-            }
         };
         // Solve the environment with the new specs added
         let solved_versions = match determine_best_version(

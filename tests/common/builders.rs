@@ -25,7 +25,7 @@
 
 use futures::FutureExt;
 use pixi::cli::{add, init, install, project, task};
-use pixi::project::SpecType;
+use pixi::project::{DependencyType, SpecType};
 use rattler_conda_types::Platform;
 use std::future::{Future, IntoFuture};
 use std::path::{Path, PathBuf};
@@ -84,21 +84,23 @@ impl AddBuilder {
     }
 
     /// Set as a host
-    pub fn set_type(mut self, t: SpecType) -> Self {
+    pub fn set_type(mut self, t: DependencyType) -> Self {
         match t {
-            SpecType::Host => {
-                self.args.host = true;
-                self.args.build = false;
-            }
-            SpecType::Build => {
-                self.args.host = false;
-                self.args.build = true;
-            }
-            SpecType::Run => {
-                self.args.host = false;
-                self.args.build = false;
-            }
-            SpecType::Pypi => {
+            DependencyType::CondaDependency(spec_type) => match spec_type {
+                SpecType::Host => {
+                    self.args.host = true;
+                    self.args.build = false;
+                }
+                SpecType::Build => {
+                    self.args.host = false;
+                    self.args.build = true;
+                }
+                SpecType::Run => {
+                    self.args.host = false;
+                    self.args.build = false;
+                }
+            },
+            DependencyType::PypiDependency => {
                 self.args.host = false;
                 self.args.build = false;
                 self.args.pypi = true;

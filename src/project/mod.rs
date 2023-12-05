@@ -31,12 +31,22 @@ use crate::{
 use toml_edit::{Array, Document, Item, Table, TomlError, Value};
 use url::Url;
 
-/// Generalization over the different version specifiers
-pub enum Spec {
-    MatchSpec(MatchSpec),
-    PyPiSpec((rip::types::PackageName, PyPiRequirement)),
+/// The dependency types we support
+#[derive(Debug, Copy, Clone)]
+pub enum DependencyType {
+    CondaDependency(SpecType),
+    PypiDependency,
 }
 
+impl DependencyType {
+    /// Convert to a name used in the manifest
+    pub fn name(&self) -> &'static str {
+        match self {
+            DependencyType::CondaDependency(dep) => dep.name(),
+            DependencyType::PypiDependency => "pypi-dependencies",
+        }
+    }
+}
 #[derive(Debug, Copy, Clone)]
 /// What kind of dependency spec do we have
 pub enum SpecType {
@@ -46,8 +56,6 @@ pub enum SpecType {
     Build,
     /// Regular dependencies that are used when we need to run the project
     Run,
-    /// PyPI dependencies that are used when we need to run the project
-    Pypi,
 }
 
 impl SpecType {
@@ -57,7 +65,6 @@ impl SpecType {
             SpecType::Host => "host-dependencies",
             SpecType::Build => "build-dependencies",
             SpecType::Run => "dependencies",
-            SpecType::Pypi => "pypi-dependencies",
         }
     }
 }
@@ -616,32 +623,9 @@ impl Project {
             })?;
         platform_table.set_dotted(true);
 
-        let dependencies = platform_table[dep_type.as_str()]
-            .or_insert(Item::Table(Table::new()))
-            .as_table_mut()
-            .ok_or_else(|| {
-                miette::miette!(
-                    "platform table in {} is malformed",
-                    consts::PROJECT_MANIFEST
-                )
-            })?;
+        let dependencies = platform_table[dep_type.as_str()].or_insert(Item::Table(Table::new()));
 
-        // Determine the name of the package to add
-        let name = spec
-            .name
-            .clone()
-            .ok_or_else(|| miette::miette!("* package specifier is not supported"))?;
-
-        // Format the requirement
-        // TODO: Do this smarter. E.g.:
-        //  - split this into an object if exotic properties (like channel) are specified.
-        //  - split the name from the rest of the requirement.
-        let nameless = NamelessMatchSpec::from(spec.to_owned());
-
-        // Store (or replace) in the document
-        dependencies.insert(name.as_source(), Item::Value(nameless.to_string().into()));
-
-        Ok((name, nameless))
+        Self::add_to_deps_table(dependencies, spec)
     }
     fn add_pypi_dep_to_target_table(
         &mut self,
@@ -667,29 +651,10 @@ impl Project {
             })?;
         platform_table.set_dotted(true);
 
-        let dependencies = platform_table[SpecType::Pypi.name()]
-            .or_insert(Item::Table(Table::new()))
-            .as_table_mut()
-            .ok_or_else(|| {
-                miette::miette!(
-                    "platform table in {} is malformed",
-                    consts::PROJECT_MANIFEST
-                )
-            })?;
+        let dependencies = platform_table[DependencyType::PypiDependency.name()]
+            .or_insert(Item::Table(Table::new()));
 
-        let requirement_string = if let Some(version) = requirement.version.clone() {
-            version.to_string()
-        } else {
-            "*".to_string()
-        };
-
-        // Store (or replace) in the document
-        dependencies.insert(
-            name.as_str(),
-            Item::Value(requirement_string.to_string().into()),
-        );
-
-        Ok(())
+        Self::add_pypi_dep_to_table(dependencies, name, requirement)
     }
     pub fn add_target_dependency(
         &mut self,
@@ -748,11 +713,11 @@ impl Project {
         requirement: &PyPiRequirement,
     ) -> miette::Result<()> {
         // Find the dependencies table
-        let deps = &mut self.doc[SpecType::Pypi.name()];
+        let deps = &mut self.doc[DependencyType::PypiDependency.name()];
         Project::add_pypi_dep_to_table(deps, name, requirement)?;
 
         self.manifest
-            .create_or_get_pypi_dependencies(SpecType::Pypi)
+            .create_or_get_pypi_dependencies()
             .insert(name.clone(), requirement.clone());
 
         Ok(())
