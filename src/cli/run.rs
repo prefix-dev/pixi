@@ -137,7 +137,7 @@ pub fn order_tasks(
     Ok(s2)
 }
 
-pub async fn create_script(task: &Task, args: Vec<String>) -> miette::Result<SequentialList> {
+pub async fn create_script(task: &Task, args: &[String]) -> miette::Result<SequentialList> {
     // Construct the script from the task
     let task = task
         .as_single_command()
@@ -229,12 +229,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // which is fine when using run in isolation, however if we start to use run in conjunction with
         // some other command we might want to revaluate this.
         let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
-        let script = create_script(&command, arguments).await?;
+        let script = create_script(&command, &arguments).await?;
 
         // Showing which command is being run if the level and type allows it.
         if tracing::enabled!(Level::WARN) && !matches!(command, Task::Custom(_)) {
             eprintln!(
-                "{}{}",
+                "{}{} {}",
                 console::style("✨ Pixi task: ").bold(),
                 console::style(
                     &command
@@ -242,7 +242,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         .expect("The command should already be parsed")
                 )
                 .blue()
-                .bold()
+                .bold(),
+                console::style(arguments.join(" ")).blue().bold(),
             );
         }
 
