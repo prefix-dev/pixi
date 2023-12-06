@@ -23,11 +23,14 @@ To install `pixi` you can run the following command in your terminal:
     The script will also update your `~/.bash_profile` to include `~/.pixi/bin` in your PATH, allowing you to invoke the `pixi` command from anywhere.
 
 === "Windows"
-    PowerShell:
+    `PowerShell`:
     ```powershell
     iwr -useb https://pixi.sh/install.ps1 | iex
     ```
-
+    `winget`:
+    ```
+    winget install prefix-dev.pixi
+    ```
     The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `LocalAppData/pixi/bin`.
     If this directory does not already exist, the script will create it.
 
