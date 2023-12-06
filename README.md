@@ -92,6 +92,11 @@ To install Pixi on Windows, open a PowerShell terminal (you may need to run it a
 iwr -useb https://pixi.sh/install.ps1 | iex
 ```
 The script will inform you once the installation is successful and add the ~/.pixi/bin directory to your PATH, which will allow you to run the pixi command from any location.
+Or with `winget`
+```
+winget install prefix-dev.pixi
+```
+
 
 ### Autocompletion
 
