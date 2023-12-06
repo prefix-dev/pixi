@@ -434,7 +434,7 @@ fn stream_python_artifacts<'a>(
 
                 // TODO: Maybe we should have a cache of wheels separate from the package_db. Since a
                 //   wheel can just be identified by its hash or url.
-                let wheel: Wheel = package_db.get_artifact(&artifact_info).await?;
+                let wheel: Wheel = package_db.get_wheel(&artifact_info, None).await?;
 
                 // Update the progress bar
                 pb_task.finish().await;
