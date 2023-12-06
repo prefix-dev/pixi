@@ -25,12 +25,6 @@ for package in package_data:
 rr.init("fdg", spawn=True)
 rr.connect()
 
-# Force-Directed Simulation Parameters
-iterations = 100
-repulsive_force = 0.04
-attractive_force = 0.002
-
-
 def hash_string_to_int(string):
     return int(hashlib.sha256(string.encode('utf-8')).hexdigest(), 16) % (10 ** 8)
 
@@ -49,8 +43,13 @@ def get_color_for_node(node):
 
 def apply_forces_and_log(graph, pos):
     damping = 0.9
-    max_force = 10
-    degree_scale = 0.9  # Scale factor for degree-based forces
+    max_force = 1
+    degree_scale = 2  # Scale factor for degree-based forces
+    dist_scale = 0.5
+
+    iterations = 1000
+    repulsive_force = 0.01
+    attractive_force = 0.005
 
     for iteration in range(iterations):
         force = {node: np.zeros(3) for node in graph}
@@ -59,7 +58,7 @@ def apply_forces_and_log(graph, pos):
         for i, node1 in enumerate(graph):
             for node2 in list(graph)[i + 1:]:
                 diff = pos[node1] - pos[node2]
-                dist = np.linalg.norm(diff) + 1e-9  # Avoid divide-by-zero
+                dist = (np.linalg.norm(diff) + 1e-9) * dist_scale
                 degree_factor = (
                         (graph.degree(node1) + graph.degree(node2)) * degree_scale)
                 repel = repulsive_force * degree_factor / dist ** 2
@@ -71,7 +70,7 @@ def apply_forces_and_log(graph, pos):
         for edge in graph.edges():
             u, v = edge
             diff = pos[u] - pos[v]
-            dist = np.linalg.norm(diff)
+            dist = dist = (np.linalg.norm(diff) + 1e-9) * dist_scale
             if dist > 0:
                 degree_factor = (graph.degree(u) + graph.degree(v)) * degree_scale
                 attract = (attractive_force * dist ** 2) / degree_factor
