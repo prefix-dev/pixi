@@ -15,7 +15,8 @@ use pixi::cli::task::{AddArgs, AliasArgs};
 use pixi::cli::{add, init, project, run, task};
 use pixi::{consts, Project};
 use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
-use rattler_lock::CondaLock;
+use rattler_lock::{CondaLock, LockedDependencyKind};
+use std::collections::HashSet;
 
 use miette::IntoDiagnostic;
 use pep508_rs::VersionOrUrl;
@@ -116,21 +117,37 @@ impl LockFileExt for CondaLock {
         platform: impl Into<Platform>,
     ) -> bool {
         let name = requirement.name;
-        let version = match requirement.version_or_url.expect("expected version or url") {
-            VersionOrUrl::VersionSpecifier(version) => version,
-            VersionOrUrl::Url(_) => {
-                eprintln!("Can't contain an url yet");
-                return false;
-            }
-        };
+        let version: Option<pep440_rs::VersionSpecifiers> =
+            requirement
+                .version_or_url
+                .and_then(|version_or_url| match version_or_url {
+                    VersionOrUrl::VersionSpecifier(version) => Some(version),
+                    VersionOrUrl::Url(_) => unimplemented!(),
+                });
 
         let platform = platform.into();
         self.package.iter().any(|locked_dep| {
             let package_version =
                 pep440_rs::Version::from_str(&locked_dep.version).expect("could not parse version");
+
+            let req_extras = requirement
+                .extras
+                .as_ref()
+                .map(|extras| extras.iter().cloned().collect::<HashSet<_>>())
+                .unwrap_or_default();
+
             locked_dep.name == *name
-                && version.contains(&package_version)
+                && version
+                    .as_ref()
+                    .map_or(true, |v| v.contains(&package_version))
                 && locked_dep.platform == platform
+                // Check if the extras are the same.
+                && match &locked_dep.kind {
+                    LockedDependencyKind::Conda(_) => false,
+                    LockedDependencyKind::Pypi(locked) => {
+                        req_extras == locked.extras.iter().cloned().collect()
+                    }
+                }
         })
     }
 }

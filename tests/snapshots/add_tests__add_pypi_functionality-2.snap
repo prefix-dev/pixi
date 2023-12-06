@@ -1,0 +1,125 @@
+---
+source: tests/add_tests.rs
+expression: pixi.project().unwrap().manifest.target
+---
+{
+    PixiSpanned {
+        span: Some(
+            303..309,
+        ),
+        value: Platform(
+            Osx64,
+        ),
+    }: TargetMetadata {
+        dependencies: {},
+        host_dependencies: None,
+        build_dependencies: None,
+        pypi_dependencies: Some(
+            {
+                PackageName {
+                    source: "boto3",
+                    normalized: "boto3",
+                }: PyPiRequirement {
+                    version: Some(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: GreaterThanEqual,
+                                    version: Version {
+                                        epoch: 0,
+                                        release: [
+                                            1,
+                                            33,
+                                        ],
+                                        pre: None,
+                                        post: None,
+                                        dev: None,
+                                        local: None,
+                                    },
+                                },
+                            ],
+                        ),
+                    ),
+                    extras: None,
+                },
+            },
+        ),
+        activation: None,
+        tasks: {},
+    },
+    PixiSpanned {
+        span: Some(
+            355..363,
+        ),
+        value: Platform(
+            Linux64,
+        ),
+    }: TargetMetadata {
+        dependencies: {},
+        host_dependencies: None,
+        build_dependencies: None,
+        pypi_dependencies: Some(
+            {
+                PackageName {
+                    source: "pytest",
+                    normalized: "pytest",
+                }: PyPiRequirement {
+                    version: None,
+                    extras: Some(
+                        [
+                            "all",
+                        ],
+                    ),
+                },
+                PackageName {
+                    source: "requests",
+                    normalized: "requests",
+                }: PyPiRequirement {
+                    version: Some(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: GreaterThanEqual,
+                                    version: Version {
+                                        epoch: 0,
+                                        release: [
+                                            2,
+                                            8,
+                                            1,
+                                        ],
+                                        pre: None,
+                                        post: None,
+                                        dev: None,
+                                        local: None,
+                                    },
+                                },
+                                VersionSpecifier {
+                                    operator: EqualStar,
+                                    version: Version {
+                                        epoch: 0,
+                                        release: [
+                                            2,
+                                            8,
+                                        ],
+                                        pre: None,
+                                        post: None,
+                                        dev: None,
+                                        local: None,
+                                    },
+                                },
+                            ],
+                        ),
+                    ),
+                    extras: Some(
+                        [
+                            "security",
+                            "tests",
+                        ],
+                    ),
+                },
+            },
+        ),
+        activation: None,
+        tasks: {},
+    },
+}

@@ -589,13 +589,7 @@ impl Project {
             miette::miette!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
         })?;
 
-        let requirement_string = if let Some(version) = requirement.clone().version {
-            version.to_string()
-        } else {
-            "*".to_string()
-        };
-        // Store (or replace) in the document
-        deps_table.insert(name.as_str(), Item::Value(requirement_string.into()));
+        deps_table.insert(name.as_str(), (*requirement).clone().into());
         Ok(())
     }
 

@@ -3,6 +3,7 @@ mod common;
 use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
+use insta::assert_debug_snapshot;
 use pixi::project::{DependencyType, SpecType};
 use rattler_conda_types::{PackageName, Platform};
 use std::str::FromStr;
@@ -176,7 +177,7 @@ async fn add_pypi_functionality() {
         .unwrap();
 
     // Add a pypi package
-    pixi.add("pytest")
+    pixi.add("pipx")
         .set_type(DependencyType::PypiDependency)
         .with_install(false)
         .await
@@ -190,10 +191,36 @@ async fn add_pypi_functionality() {
         .await
         .unwrap();
 
+    // Add a pypi package to a target
+    pixi.add("pytest[all]")
+        .set_type(DependencyType::PypiDependency)
+        .set_platforms(&[Platform::Linux64])
+        .with_install(false)
+        .await
+        .unwrap();
+
+    pixi.add("requests [security,tests] >= 2.8.1, == 2.8.*")
+        .set_type(DependencyType::PypiDependency)
+        .set_platforms(&[Platform::Linux64])
+        .with_install(false)
+        .await
+        .unwrap();
+
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_package(&PackageName::from_str("pytest").unwrap()));
+    assert!(lock.contains_package(&PackageName::from_str("pipx").unwrap()));
     assert!(lock.contains_pep508_requirement_for_platform(
         pep508_rs::Requirement::from_str("boto3>=1.33").unwrap(),
         Platform::Osx64
     ));
+    assert!(lock.contains_pep508_requirement_for_platform(
+        pep508_rs::Requirement::from_str("pytest[all]").unwrap(),
+        Platform::Linux64
+    ));
+    assert!(lock.contains_pep508_requirement_for_platform(
+        pep508_rs::Requirement::from_str("requests [security,tests] >= 2.8.1, == 2.8.*").unwrap(),
+        Platform::Linux64
+    ));
+
+    assert_debug_snapshot!(pixi.project().unwrap().manifest.pypi_dependencies);
+    assert_debug_snapshot!(pixi.project().unwrap().manifest.target);
 }
