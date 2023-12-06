@@ -243,7 +243,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 )
                 .blue()
                 .bold(),
-                console::style(arguments.join(" ")).blue().bold(),
+                console::style(arguments.join(" ")).blue(),
             );
         }
 
