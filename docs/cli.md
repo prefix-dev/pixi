@@ -36,8 +36,11 @@ It will only add if the package with its version constraint is able to work with
 ##### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
-- `--host`: Specify that it is a host dependency, important for building a package.
-- `--build`: Specify that it is a build dependency, important for building a package.
+- `--host`: Specifies a host dependency, important for building a package.
+- `--build`: Specifies a build dependency, important for building a package.
+- `--pypi`: Specifies a PyPI dependency, not a conda package.
+      Parses dependencies as [PEP508](https://peps.python.org/pep-0508/) requirements, supporting extras and versions.
+      See [configuration](configuration.md) for details.
 - `--no-install`: Don't install the package to the environment, only add the package to the lock-file.
 - `--platform (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 
@@ -48,6 +51,7 @@ pixi add "numpy>=1.22,<1.24"
 pixi add --manifest-path ~/myproject/pixi.toml numpy
 pixi add --host "python>=3.9.0"
 pixi add --build cmake
+pixi add --pypi requests[security]
 pixi add --platform osx-64 --build clang
 ```
 

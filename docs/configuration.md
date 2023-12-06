@@ -246,23 +246,24 @@ These are not available on [prefix.dev](https://prefix.dev/channels) but on [pyp
 !!! warning "Important considerations"
     - **Stability**: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the `dependencies` table where possible.
     - **Compatibility limitations**: Currently, pixi doesn't support:
-        - `git` dependencies
+        - `git` dependencies (`git+https://github.com/package-org/package.git`)
         - Source dependencies
         - Private PyPI repositories
     - **Version specification**: These dependencies don't follow the conda matchspec specification.
+    The `version` is a [`VersionSpecifier`](https://docs.rs/pep440_rs/0.3.12/pep440_rs/struct.VersionSpecifiers.html) and the `extras` are a list of `Strings`.
     So see the example below to see what type of definition is allowed.
-    It is based on [pep440](https://peps.python.org/pep-0440/)
+
 
 ```toml
 [dependencies]
 python = ">=3.6" # Python is needed for the pypi dependencies!
 
 [pypi-dependencies]
-pytest = "==7.4.3"
-torch = "*"  # This means any version (this `*` is custom in pixi)
-pre-commit = "~=3.5.0"
-numpy = ">=1.20,<1.24"
+pytest = "*"  # This means any version (this `*` is custom in pixi)
+pre-commit = "~=3.5.0" # Single string is of type VersionSpecifiers
+requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]} # Using the map allows the user to add `extras`
 ```
+
 ??? info "We use `rip` not `pip`"
     We use [`rip`](https://github.com/prefix-dev/rip) which is our custom pypi package resolver.
     The `rip` resolve step is invoked after the conda dependencies have been resolved.
