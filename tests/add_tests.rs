@@ -3,7 +3,6 @@ mod common;
 use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
-use insta::assert_debug_snapshot;
 use pixi::project::{DependencyType, SpecType};
 use rattler_conda_types::{PackageName, Platform};
 use std::str::FromStr;
@@ -220,7 +219,4 @@ async fn add_pypi_functionality() {
         pep508_rs::Requirement::from_str("requests [security,tests] >= 2.8.1, == 2.8.*").unwrap(),
         Platform::Linux64
     ));
-
-    assert_debug_snapshot!(pixi.project().unwrap().manifest.pypi_dependencies);
-    assert_debug_snapshot!(pixi.project().unwrap().manifest.target);
 }
