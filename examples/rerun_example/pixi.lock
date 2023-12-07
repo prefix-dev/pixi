@@ -1,4 +1,4 @@
-version: 2
+version: 3
 metadata:
   content_hash:
     linux-64: e90c2ee71ad70fc0a1c8302029533a7d1498f2bffcd0eaa8d2934700e775dc1d
@@ -5261,23 +5261,123 @@ package:
   size: 799196
   timestamp: 1686077139703
 - platform: linux-64
-  name: numpy
-  version: 1.25.1
+  name: networkx
+  version: 3.2.1
   category: main
   manager: conda
   dependencies:
+  - python >=3.9
+  url: https://conda.anaconda.org/conda-forge/noarch/networkx-3.2.1-pyhd8ed1ab_0.conda
+  hash:
+    md5: 425fce3b531bed6ec3c74fab3e5f0a1c
+    sha256: 7629aa4f9f8cdff45ea7a4701fe58dccce5bf2faa01c26eb44cbb27b7e15ca9d
+  build: pyhd8ed1ab_0
+  arch: x86_64
+  subdir: linux-64
+  build_number: 0
+  constrains:
+  - matplotlib >=3.5
+  - scipy >=1.9,!=1.11.0,!=1.11.1
+  - numpy >=1.22
+  - pandas >=1.4
+  license: BSD-3-Clause
+  license_family: BSD
+  noarch: python
+  size: 1149552
+  timestamp: 1698504905258
+- platform: osx-64
+  name: networkx
+  version: 3.2.1
+  category: main
+  manager: conda
+  dependencies:
+  - python >=3.9
+  url: https://conda.anaconda.org/conda-forge/noarch/networkx-3.2.1-pyhd8ed1ab_0.conda
+  hash:
+    md5: 425fce3b531bed6ec3c74fab3e5f0a1c
+    sha256: 7629aa4f9f8cdff45ea7a4701fe58dccce5bf2faa01c26eb44cbb27b7e15ca9d
+  build: pyhd8ed1ab_0
+  arch: x86_64
+  subdir: osx-64
+  build_number: 0
+  constrains:
+  - matplotlib >=3.5
+  - scipy >=1.9,!=1.11.0,!=1.11.1
+  - numpy >=1.22
+  - pandas >=1.4
+  license: BSD-3-Clause
+  license_family: BSD
+  noarch: python
+  size: 1149552
+  timestamp: 1698504905258
+- platform: osx-arm64
+  name: networkx
+  version: 3.2.1
+  category: main
+  manager: conda
+  dependencies:
+  - python >=3.9
+  url: https://conda.anaconda.org/conda-forge/noarch/networkx-3.2.1-pyhd8ed1ab_0.conda
+  hash:
+    md5: 425fce3b531bed6ec3c74fab3e5f0a1c
+    sha256: 7629aa4f9f8cdff45ea7a4701fe58dccce5bf2faa01c26eb44cbb27b7e15ca9d
+  build: pyhd8ed1ab_0
+  arch: aarch64
+  subdir: osx-arm64
+  build_number: 0
+  constrains:
+  - matplotlib >=3.5
+  - scipy >=1.9,!=1.11.0,!=1.11.1
+  - numpy >=1.22
+  - pandas >=1.4
+  license: BSD-3-Clause
+  license_family: BSD
+  noarch: python
+  size: 1149552
+  timestamp: 1698504905258
+- platform: win-64
+  name: networkx
+  version: 3.2.1
+  category: main
+  manager: conda
+  dependencies:
+  - python >=3.9
+  url: https://conda.anaconda.org/conda-forge/noarch/networkx-3.2.1-pyhd8ed1ab_0.conda
+  hash:
+    md5: 425fce3b531bed6ec3c74fab3e5f0a1c
+    sha256: 7629aa4f9f8cdff45ea7a4701fe58dccce5bf2faa01c26eb44cbb27b7e15ca9d
+  build: pyhd8ed1ab_0
+  arch: x86_64
+  subdir: win-64
+  build_number: 0
+  constrains:
+  - matplotlib >=3.5
+  - scipy >=1.9,!=1.11.0,!=1.11.1
+  - numpy >=1.22
+  - pandas >=1.4
+  license: BSD-3-Clause
+  license_family: BSD
+  noarch: python
+  size: 1149552
+  timestamp: 1698504905258
+- platform: linux-64
+  name: numpy
+  version: 1.26.2
+  category: main
+  manager: conda
+  dependencies:
+  - libblas >=3.9.0,<4.0a0
   - libcblas >=3.9.0,<4.0a0
+  - libgcc-ng >=12
   - liblapack >=3.9.0,<4.0a0
   - libstdcxx-ng >=12
   - python >=3.10,<3.11.0a0
   - python_abi 3.10.* *_cp310
-  - libblas >=3.9.0,<4.0a0
-  - libgcc-ng >=12
-  url: https://conda.anaconda.org/conda-forge/linux-64/numpy-1.25.1-py310ha4c1d20_0.conda
+  url: https://conda.anaconda.org/conda-forge/linux-64/numpy-1.26.2-py310hb13e2d6_0.conda
   hash:
-    md5: 3810cbf2635cb1d0edb97715d4ad74e7
-    sha256: 38ec15fe0afe9fb90bd50314ccd506f0e7d1642db0c7eb2b77627d448aa9ee6c
-  build: py310ha4c1d20_0
+    md5: d3147cfbf72d6ae7bba10562208f6def
+    sha256: f5ea7769beb7827f4f5858d28bbdbc814c01649cb8cb81cccbba476ebe3798cd
+  build: py310hb13e2d6_0
   arch: x86_64
   subdir: linux-64
   build_number: 0
@@ -5285,25 +5385,26 @@ package:
   - numpy-base <0a0
   license: BSD-3-Clause
   license_family: BSD
-  size: 6816069
-  timestamp: 1688887559516
+  size: 6922736
+  timestamp: 1700875005993
 - platform: osx-64
   name: numpy
-  version: 1.25.1
+  version: 1.26.2
   category: main
   manager: conda
   dependencies:
+  - __osx >=10.9
+  - libblas >=3.9.0,<4.0a0
   - libcblas >=3.9.0,<4.0a0
-  - libcxx >=15.0.7
+  - libcxx >=16.0.6
   - liblapack >=3.9.0,<4.0a0
   - python >=3.10,<3.11.0a0
   - python_abi 3.10.* *_cp310
-  - libblas >=3.9.0,<4.0a0
-  url: https://conda.anaconda.org/conda-forge/osx-64/numpy-1.25.1-py310h7451ae0_0.conda
+  url: https://conda.anaconda.org/conda-forge/osx-64/numpy-1.26.2-py310h2a7ecf2_0.conda
   hash:
-    md5: 525db32fd93b63f2f7ca3ece8576b9c8
-    sha256: 32fe99f86e998169999514fb7f96695fdec9215bd0e7061425c1b4e399ca2cae
-  build: py310h7451ae0_0
+    md5: 1ab91874430a8d4ba9b622082e08f438
+    sha256: e607a924f5fce4b17262c4e091efcf6d1ccfded59212d9ac786ecf89f4cecae4
+  build: py310h2a7ecf2_0
   arch: x86_64
   subdir: osx-64
   build_number: 0
@@ -5311,25 +5412,27 @@ package:
   - numpy-base <0a0
   license: BSD-3-Clause
   license_family: BSD
-  size: 6378643
-  timestamp: 1688887678910
+  size: 6368647
+  timestamp: 1700875132575
 - platform: osx-arm64
   name: numpy
-  version: 1.25.1
+  version: 1.26.2
   category: main
   manager: conda
   dependencies:
+  - __osx >=10.9
+  - libblas >=3.9.0,<4.0a0
   - libcblas >=3.9.0,<4.0a0
-  - libcxx >=15.0.7
+  - libcxx >=16.0.6
   - liblapack >=3.9.0,<4.0a0
+  - python >=3.10,<3.11.0a0
   - python >=3.10,<3.11.0a0 *_cpython
   - python_abi 3.10.* *_cp310
-  - libblas >=3.9.0,<4.0a0
-  url: https://conda.anaconda.org/conda-forge/osx-arm64/numpy-1.25.1-py310haa1e00c_0.conda
+  url: https://conda.anaconda.org/conda-forge/osx-arm64/numpy-1.26.2-py310h30ee222_0.conda
   hash:
-    md5: e6cb6d386238dd8cce9b403b8f91a33f
-    sha256: 80a838a20e053efe45da5bdad7b21383eda398384caae77453330386c705012a
-  build: py310haa1e00c_0
+    md5: baea68ccbc288b1a8afb237ddee162c8
+    sha256: d1c03544798b3916c97571dcc3ec3cde8ad2d9afe2f7ab82277fdadef4186e46
+  build: py310h30ee222_0
   arch: aarch64
   subdir: osx-arm64
   build_number: 0
@@ -5337,27 +5440,27 @@ package:
   - numpy-base <0a0
   license: BSD-3-Clause
   license_family: BSD
-  size: 5634016
-  timestamp: 1688887693258
+  size: 5562504
+  timestamp: 1700875196095
 - platform: win-64
   name: numpy
-  version: 1.25.1
+  version: 1.26.2
   category: main
   manager: conda
   dependencies:
-  - python >=3.10,<3.11.0a0
-  - python_abi 3.10.* *_cp310
   - libblas >=3.9.0,<4.0a0
-  - vc >=14.2,<15
-  - ucrt >=10.0.20348.0
   - libcblas >=3.9.0,<4.0a0
   - liblapack >=3.9.0,<4.0a0
+  - python >=3.10,<3.11.0a0
+  - python_abi 3.10.* *_cp310
+  - ucrt >=10.0.20348.0
+  - vc >=14.2,<15
   - vc14_runtime >=14.29.30139
-  url: https://conda.anaconda.org/conda-forge/win-64/numpy-1.25.1-py310hd02465a_0.conda
+  url: https://conda.anaconda.org/conda-forge/win-64/numpy-1.26.2-py310hf667824_0.conda
   hash:
-    md5: 922f75b8698c5b9909bf03c658898117
-    sha256: 25e07d23dd78641537082fd9b0c4183784fcc1d84c65f207d6e2e7ede7702c8f
-  build: py310hd02465a_0
+    md5: 4aa7d608c4c28f9f7927df760be4d52a
+    sha256: 574818695f0d320e0bc8405dd777f154e065deecfdc3546878443ce8dfe5af35
+  build: py310hf667824_0
   arch: x86_64
   subdir: win-64
   build_number: 0
@@ -5365,8 +5468,8 @@ package:
   - numpy-base <0a0
   license: BSD-3-Clause
   license_family: BSD
-  size: 5985520
-  timestamp: 1688887651966
+  size: 6001822
+  timestamp: 1700875316861
 - platform: linux-64
   name: openjpeg
   version: 2.5.0
@@ -6159,6 +6262,95 @@ package:
   license_family: BSD
   size: 6130
   timestamp: 1669071917673
+- platform: linux-64
+  name: pyyaml
+  version: 6.0.1
+  category: main
+  manager: conda
+  dependencies:
+  - libgcc-ng >=12
+  - python >=3.10,<3.11.0a0
+  - python_abi 3.10.* *_cp310
+  - yaml >=0.2.5,<0.3.0a0
+  url: https://conda.anaconda.org/conda-forge/linux-64/pyyaml-6.0.1-py310h2372a71_1.conda
+  hash:
+    md5: bb010e368de4940771368bc3dc4c63e7
+    sha256: aa78ccddb0a75fa722f0f0eb3537c73ee1219c9dd46cea99d6b9eebfdd780f3d
+  build: py310h2372a71_1
+  arch: x86_64
+  subdir: linux-64
+  build_number: 1
+  license: MIT
+  license_family: MIT
+  size: 170627
+  timestamp: 1695373587159
+- platform: osx-64
+  name: pyyaml
+  version: 6.0.1
+  category: main
+  manager: conda
+  dependencies:
+  - python >=3.10,<3.11.0a0
+  - python_abi 3.10.* *_cp310
+  - yaml >=0.2.5,<0.3.0a0
+  url: https://conda.anaconda.org/conda-forge/osx-64/pyyaml-6.0.1-py310h6729b98_1.conda
+  hash:
+    md5: d964cec3e7972e44bc4a328134b9eaf1
+    sha256: 00567f2cb2d1c8fede8fe7727f7bbd1c38cbca886814d612e162d5c936d8db1b
+  build: py310h6729b98_1
+  arch: x86_64
+  subdir: osx-64
+  build_number: 1
+  license: MIT
+  license_family: MIT
+  size: 160097
+  timestamp: 1695373947773
+- platform: osx-arm64
+  name: pyyaml
+  version: 6.0.1
+  category: main
+  manager: conda
+  dependencies:
+  - python >=3.10,<3.11.0a0
+  - python >=3.10,<3.11.0a0 *_cpython
+  - python_abi 3.10.* *_cp310
+  - yaml >=0.2.5,<0.3.0a0
+  url: https://conda.anaconda.org/conda-forge/osx-arm64/pyyaml-6.0.1-py310h2aa6e3c_1.conda
+  hash:
+    md5: 0e7ccdd121ce7b486f1de7917178387c
+    sha256: 7b8668cd86d2421c62ec241f840d84a600b854afc91383a509bbb60ba907aeec
+  build: py310h2aa6e3c_1
+  arch: aarch64
+  subdir: osx-arm64
+  build_number: 1
+  license: MIT
+  license_family: MIT
+  size: 158641
+  timestamp: 1695373859696
+- platform: win-64
+  name: pyyaml
+  version: 6.0.1
+  category: main
+  manager: conda
+  dependencies:
+  - python >=3.10,<3.11.0a0
+  - python_abi 3.10.* *_cp310
+  - ucrt >=10.0.20348.0
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  - yaml >=0.2.5,<0.3.0a0
+  url: https://conda.anaconda.org/conda-forge/win-64/pyyaml-6.0.1-py310h8d17308_1.conda
+  hash:
+    md5: ce279186f68d0f12812dc9955ea909a4
+    sha256: ea51291e477b44c5bb9d91cc095db0dfe07b9576831e9682100d68c820c43ae3
+  build: py310h8d17308_1
+  arch: x86_64
+  subdir: win-64
+  build_number: 1
+  license: MIT
+  license_family: MIT
+  size: 146195
+  timestamp: 1695374085323
 - platform: linux-64
   name: rdma-core
   version: '28.9'
@@ -7100,6 +7292,81 @@ package:
   license: LGPL-2.1 and GPL-2.0
   size: 217804
   timestamp: 1660346976440
+- platform: linux-64
+  name: yaml
+  version: 0.2.5
+  category: main
+  manager: conda
+  dependencies:
+  - libgcc-ng >=9.4.0
+  url: https://conda.anaconda.org/conda-forge/linux-64/yaml-0.2.5-h7f98852_2.tar.bz2
+  hash:
+    md5: 4cb3ad778ec2d5a7acbdf254eb1c42ae
+    sha256: a4e34c710eeb26945bdbdaba82d3d74f60a78f54a874ec10d373811a5d217535
+  build: h7f98852_2
+  arch: x86_64
+  subdir: linux-64
+  build_number: 2
+  license: MIT
+  license_family: MIT
+  size: 89141
+  timestamp: 1641346969816
+- platform: osx-64
+  name: yaml
+  version: 0.2.5
+  category: main
+  manager: conda
+  dependencies: []
+  url: https://conda.anaconda.org/conda-forge/osx-64/yaml-0.2.5-h0d85af4_2.tar.bz2
+  hash:
+    md5: d7e08fcf8259d742156188e8762b4d20
+    sha256: 5301417e2c8dea45b401ffee8df3957d2447d4ce80c83c5ff151fc6bfe1c4148
+  build: h0d85af4_2
+  arch: x86_64
+  subdir: osx-64
+  build_number: 2
+  license: MIT
+  license_family: MIT
+  size: 84237
+  timestamp: 1641347062780
+- platform: osx-arm64
+  name: yaml
+  version: 0.2.5
+  category: main
+  manager: conda
+  dependencies: []
+  url: https://conda.anaconda.org/conda-forge/osx-arm64/yaml-0.2.5-h3422bc3_2.tar.bz2
+  hash:
+    md5: 4bb3f014845110883a3c5ee811fd84b4
+    sha256: 93181a04ba8cfecfdfb162fc958436d868cc37db504c58078eab4c1a3e57fbb7
+  build: h3422bc3_2
+  arch: aarch64
+  subdir: osx-arm64
+  build_number: 2
+  license: MIT
+  license_family: MIT
+  size: 88016
+  timestamp: 1641347076660
+- platform: win-64
+  name: yaml
+  version: 0.2.5
+  category: main
+  manager: conda
+  dependencies:
+  - vc >=14.1,<15.0a0
+  - vs2015_runtime >=14.16.27012
+  url: https://conda.anaconda.org/conda-forge/win-64/yaml-0.2.5-h8ffe710_2.tar.bz2
+  hash:
+    md5: adbfb9f45d1004a26763652246a33764
+    sha256: 4e2246383003acbad9682c7c63178e2e715ad0eb84f03a8df1fbfba455dfedc5
+  build: h8ffe710_2
+  arch: x86_64
+  subdir: win-64
+  build_number: 2
+  license: MIT
+  license_family: MIT
+  size: 63274
+  timestamp: 1641347623319
 - platform: linux-64
   name: zstd
   version: 1.5.2

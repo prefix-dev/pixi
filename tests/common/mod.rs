@@ -15,9 +15,11 @@ use pixi::cli::task::{AddArgs, AliasArgs};
 use pixi::cli::{add, init, project, run, task};
 use pixi::{consts, Project};
 use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
-use rattler_lock::CondaLock;
+use rattler_lock::{CondaLock, LockedDependencyKind};
+use std::collections::HashSet;
 
 use miette::IntoDiagnostic;
+use pep508_rs::VersionOrUrl;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 use std::str::FromStr;
@@ -61,6 +63,12 @@ pub trait LockFileExt {
         matchspec: impl IntoMatchSpec,
         platform: impl Into<Platform>,
     ) -> bool;
+    /// Check if the pep508 requirement is contained in the lockfile for this platform
+    fn contains_pep508_requirement_for_platform(
+        &self,
+        requirement: pep508_rs::Requirement,
+        platform: impl Into<Platform>,
+    ) -> bool;
 }
 
 impl LockFileExt for CondaLock {
@@ -100,6 +108,46 @@ impl LockFileExt for CondaLock {
             locked_dep.name == name.as_normalized()
                 && version.matches(&package_version)
                 && locked_dep.platform == platform
+        })
+    }
+
+    fn contains_pep508_requirement_for_platform(
+        &self,
+        requirement: pep508_rs::Requirement,
+        platform: impl Into<Platform>,
+    ) -> bool {
+        let name = requirement.name;
+        let version: Option<pep440_rs::VersionSpecifiers> =
+            requirement
+                .version_or_url
+                .and_then(|version_or_url| match version_or_url {
+                    VersionOrUrl::VersionSpecifier(version) => Some(version),
+                    VersionOrUrl::Url(_) => unimplemented!(),
+                });
+
+        let platform = platform.into();
+        self.package.iter().any(|locked_dep| {
+            let package_version =
+                pep440_rs::Version::from_str(&locked_dep.version).expect("could not parse version");
+
+            let req_extras = requirement
+                .extras
+                .as_ref()
+                .map(|extras| extras.iter().cloned().collect::<HashSet<_>>())
+                .unwrap_or_default();
+
+            locked_dep.name == *name
+                && version
+                    .as_ref()
+                    .map_or(true, |v| v.contains(&package_version))
+                && locked_dep.platform == platform
+                // Check if the extras are the same.
+                && match &locked_dep.kind {
+                    LockedDependencyKind::Conda(_) => false,
+                    LockedDependencyKind::Pypi(locked) => {
+                        req_extras == locked.extras.iter().cloned().collect()
+                    }
+                }
         })
     }
 }
@@ -151,16 +199,17 @@ impl PixiControl {
 
     /// Initialize pixi project inside a temporary directory. Returns a [`AddBuilder`]. To execute
     /// the command and await the result call `.await` on the return value.
-    pub fn add(&self, spec: impl IntoMatchSpec) -> AddBuilder {
+    pub fn add(&self, spec: &str) -> AddBuilder {
         AddBuilder {
             args: add::Args {
                 manifest_path: Some(self.manifest_path()),
                 host: false,
-                specs: vec![spec.into()],
+                specs: vec![spec.to_string()],
                 build: false,
                 no_install: true,
                 no_lockfile_update: false,
                 platform: Default::default(),
+                pypi: false,
             },
         }
     }
