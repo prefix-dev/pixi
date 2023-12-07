@@ -1,0 +1,15 @@
+---
+source: tests/add_tests.rs
+expression: pixi.project().unwrap().manifest.pypi_dependencies
+---
+Some(
+    {
+        PackageName {
+            source: "pipx",
+            normalized: "pipx",
+        }: PyPiRequirement {
+            version: None,
+            extras: None,
+        },
+    },
+)

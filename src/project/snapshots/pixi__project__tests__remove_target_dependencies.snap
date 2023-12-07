@@ -83,6 +83,7 @@ ProjectManifest {
             },
             host_dependencies: None,
             build_dependencies: None,
+            pypi_dependencies: None,
             activation: None,
             tasks: {},
         },
@@ -99,6 +100,7 @@ ProjectManifest {
             build_dependencies: Some(
                 {},
             ),
+            pypi_dependencies: None,
             activation: None,
             tasks: {},
         },

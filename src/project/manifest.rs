@@ -7,6 +7,7 @@ use indexmap::IndexMap;
 use miette::{Context, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use rattler_conda_types::{Channel, NamelessMatchSpec, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
+use rip::types::PackageName;
 use serde::Deserializer;
 use serde_with::de::DeserializeAsWrap;
 use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
@@ -146,6 +147,17 @@ impl ProjectManifest {
         }
     }
 
+    /// Get the map of dependencies for a given spec type.
+    pub fn create_or_get_pypi_dependencies(
+        &mut self,
+    ) -> &mut IndexMap<PackageName, PyPiRequirement> {
+        if let Some(ref mut deps) = self.pypi_dependencies {
+            deps
+        } else {
+            self.pypi_dependencies.insert(IndexMap::new())
+        }
+    }
+
     /// Remove dependency given a `SpecType`.
     pub fn remove_dependency(
         &mut self,
@@ -258,6 +270,9 @@ pub struct TargetMetadata {
     #[serde(default, rename = "build-dependencies")]
     #[serde_as(as = "Option<IndexMap<_, PickFirst<(_, DisplayFromStr)>>>")]
     pub build_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
+
+    #[serde(default, rename = "pypi-dependencies")]
+    pub pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
 
     /// Additional information to activate an environment.
     #[serde(default)]

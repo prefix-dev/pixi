@@ -1,6 +1,6 @@
 pub mod environment;
 pub mod manifest;
-mod python;
+pub(crate) mod python;
 mod serde;
 
 use indexmap::IndexMap;
@@ -31,6 +31,22 @@ use crate::{
 use toml_edit::{Array, Document, Item, Table, TomlError, Value};
 use url::Url;
 
+/// The dependency types we support
+#[derive(Debug, Copy, Clone)]
+pub enum DependencyType {
+    CondaDependency(SpecType),
+    PypiDependency,
+}
+
+impl DependencyType {
+    /// Convert to a name used in the manifest
+    pub fn name(&self) -> &'static str {
+        match self {
+            DependencyType::CondaDependency(dep) => dep.name(),
+            DependencyType::PypiDependency => "pypi-dependencies",
+        }
+    }
+}
 #[derive(Debug, Copy, Clone)]
 /// What kind of dependency spec do we have
 pub enum SpecType {
@@ -452,8 +468,25 @@ impl Project {
         Ok(dependencies)
     }
 
-    pub fn pypi_dependencies(&self) -> Option<&IndexMap<rip::types::PackageName, PyPiRequirement>> {
-        self.manifest.pypi_dependencies.as_ref()
+    pub fn pypi_dependencies(
+        &self,
+        platform: Platform,
+    ) -> IndexMap<&rip::types::PackageName, &PyPiRequirement> {
+        // Get the base pypi dependencies (defined in the `[pypi-dependencies]` section)
+        let base_pypi_dependencies = self.manifest.pypi_dependencies.iter();
+
+        // Get the platform specific dependencies in the order they were defined.
+        let platform_specific = self
+            .target_specific_metadata(platform)
+            .flat_map(|target| target.pypi_dependencies.iter());
+
+        // Combine the specs.
+        //
+        // Note that if a dependency was specified twice the platform specific one "wins".
+        base_pypi_dependencies
+            .chain(platform_specific)
+            .flatten()
+            .collect::<IndexMap<_, _>>()
     }
 
     /// Returns the Python index URLs to use for this project.
@@ -541,6 +574,25 @@ impl Project {
         Ok((name, nameless))
     }
 
+    fn add_pypi_dep_to_table(
+        deps_table: &mut Item,
+        name: &rip::types::PackageName,
+        requirement: &PyPiRequirement,
+    ) -> miette::Result<()> {
+        // If it doesn't exist create a proper table
+        if deps_table.is_none() {
+            *deps_table = Item::Table(Table::new());
+        }
+
+        // Cast the item into a table
+        let deps_table = deps_table.as_table_like_mut().ok_or_else(|| {
+            miette::miette!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
+        })?;
+
+        deps_table.insert(name.as_str(), (*requirement).clone().into());
+        Ok(())
+    }
+
     fn add_dep_to_target_table(
         &mut self,
         platform: Platform,
@@ -565,7 +617,24 @@ impl Project {
             })?;
         platform_table.set_dotted(true);
 
-        let dependencies = platform_table[dep_type.as_str()]
+        let dependencies = platform_table[dep_type.as_str()].or_insert(Item::Table(Table::new()));
+
+        Self::add_to_deps_table(dependencies, spec)
+    }
+    fn add_pypi_dep_to_target_table(
+        &mut self,
+        platform: Platform,
+        name: &rip::types::PackageName,
+        requirement: &PyPiRequirement,
+    ) -> miette::Result<()> {
+        let target = self.doc["target"]
+            .or_insert(Item::Table(Table::new()))
+            .as_table_mut()
+            .ok_or_else(|| {
+                miette::miette!("target table in {} is malformed", consts::PROJECT_MANIFEST)
+            })?;
+        target.set_dotted(true);
+        let platform_table = self.doc["target"][platform.as_str()]
             .or_insert(Item::Table(Table::new()))
             .as_table_mut()
             .ok_or_else(|| {
@@ -574,25 +643,13 @@ impl Project {
                     consts::PROJECT_MANIFEST
                 )
             })?;
+        platform_table.set_dotted(true);
 
-        // Determine the name of the package to add
-        let name = spec
-            .name
-            .clone()
-            .ok_or_else(|| miette::miette!("* package specifier is not supported"))?;
+        let dependencies = platform_table[DependencyType::PypiDependency.name()]
+            .or_insert(Item::Table(Table::new()));
 
-        // Format the requirement
-        // TODO: Do this smarter. E.g.:
-        //  - split this into an object if exotic properties (like channel) are specified.
-        //  - split the name from the rest of the requirement.
-        let nameless = NamelessMatchSpec::from(spec.to_owned());
-
-        // Store (or replace) in the document
-        dependencies.insert(name.as_source(), Item::Value(nameless.to_string().into()));
-
-        Ok((name, nameless))
+        Self::add_pypi_dep_to_table(dependencies, name, requirement)
     }
-
     pub fn add_target_dependency(
         &mut self,
         platform: Platform,
@@ -613,6 +670,25 @@ impl Project {
         Ok(())
     }
 
+    pub fn add_target_pypi_dependency(
+        &mut self,
+        platform: Platform,
+        name: rip::types::PackageName,
+        requirement: &PyPiRequirement,
+    ) -> miette::Result<()> {
+        // Add to target table toml
+        self.add_pypi_dep_to_target_table(platform, &name.clone(), requirement)?;
+        // Add to manifest
+        self.manifest
+            .target
+            .entry(TargetSelector::Platform(platform).into())
+            .or_insert(TargetMetadata::default())
+            .pypi_dependencies
+            .get_or_insert(IndexMap::new())
+            .insert(name, requirement.clone());
+        Ok(())
+    }
+
     pub fn add_dependency(&mut self, spec: &MatchSpec, spec_type: SpecType) -> miette::Result<()> {
         // Find the dependencies table
         let deps = &mut self.doc[spec_type.name()];
@@ -621,6 +697,22 @@ impl Project {
         self.manifest
             .create_or_get_dependencies(spec_type)
             .insert(name.as_source().into(), nameless);
+
+        Ok(())
+    }
+
+    pub fn add_pypi_dependency(
+        &mut self,
+        name: &rip::types::PackageName,
+        requirement: &PyPiRequirement,
+    ) -> miette::Result<()> {
+        // Find the dependencies table
+        let deps = &mut self.doc[DependencyType::PypiDependency.name()];
+        Project::add_pypi_dep_to_table(deps, name, requirement)?;
+
+        self.manifest
+            .create_or_get_pypi_dependencies()
+            .insert(name.clone(), requirement.clone());
 
         Ok(())
     }

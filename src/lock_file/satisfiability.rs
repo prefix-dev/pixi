@@ -72,9 +72,9 @@ pub fn lock_file_satisfies_project(
             .collect::<Vec<_>>();
 
         let mut pypi_dependencies = project
-            .pypi_dependencies()
+            .pypi_dependencies(platform)
             .into_iter()
-            .flat_map(|deps| deps.into_iter().map(|(name, req)| req.as_pep508(name)))
+            .map(|(name, requirement)| requirement.as_pep508(name))
             .map(DependencyKind::PyPi)
             .peekable();
 
