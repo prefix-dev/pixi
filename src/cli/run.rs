@@ -113,15 +113,15 @@ pub fn order_tasks(
         visited: &mut HashSet<String>,
         sorted: &mut VecDeque<(Task, Vec<String>)>,
         args: Vec<String>,
+        platform: Platform,
     ) -> miette::Result<()> {
         if visited.contains(task_name) {
             return Ok(());
         }
 
         visited.insert(task_name.to_string());
-
         let task = project
-            .target_specific_tasks(Platform::current())
+            .target_specific_tasks(platform)
             .get(task_name)
             .copied()
             // If there is no target specific task try to find it in the default tasks.
@@ -131,7 +131,14 @@ pub fn order_tasks(
         // Also visit the dependencies of the task.
         for dependency_name in task.depends_on() {
             if !visited.contains(dependency_name) {
-                visit(dependency_name, project, visited, sorted, Vec::new())?;
+                visit(
+                    dependency_name,
+                    project,
+                    visited,
+                    sorted,
+                    Vec::new(),
+                    platform,
+                )?;
             }
         }
 
@@ -146,6 +153,7 @@ pub fn order_tasks(
             &mut visited,
             &mut sorted,
             additional_args,
+            platform,
         )?;
     }
 
