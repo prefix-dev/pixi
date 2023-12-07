@@ -5,6 +5,7 @@ use crate::common::LockFileExt;
 use crate::common::PixiControl;
 use pixi::project::{DependencyType, SpecType};
 use rattler_conda_types::{PackageName, Platform};
+use rip::resolve::SDistResolution;
 use std::str::FromStr;
 use tempfile::TempDir;
 
@@ -219,4 +220,27 @@ async fn add_pypi_functionality() {
         pep508_rs::Requirement::from_str("requests [security,tests] >= 2.8.1, == 2.8.*").unwrap(),
         Platform::Linux64
     ));
+}
+
+/// Test the sdist support for pypi packages
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn add_sdist_functionality() {
+    let pixi = PixiControl::new().unwrap();
+
+    pixi.init().await.unwrap();
+
+    // Add python
+    pixi.add("python")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .with_install(true)
+        .await
+        .unwrap();
+
+    // // Add the sdist pypi package
+    pixi.add("flask")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .with_sdist_resolution(SDistResolution::OnlySDists)
+        .await
+        .unwrap();
 }

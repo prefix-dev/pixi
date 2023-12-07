@@ -19,6 +19,7 @@ use rattler_conda_types::{
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
+use rip::resolve::SDistResolution;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -87,6 +88,10 @@ pub struct Args {
     /// The platform(s) for which the dependency should be added
     #[arg(long, short)]
     pub platform: Vec<Platform>,
+
+    /// Resolution scheme to use
+    #[arg(skip)]
+    pub sdist_resolution: SDistResolution,
 }
 
 impl DependencyType {
@@ -169,6 +174,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 spec_platforms,
                 args.no_lockfile_update,
                 args.no_install,
+                Some(args.sdist_resolution),
             )
             .await
         }
@@ -207,6 +213,7 @@ pub async fn add_pypi_specs_to_project(
     specs_platforms: &Vec<Platform>,
     no_update_lockfile: bool,
     no_install: bool,
+    sdist_resolution: Option<SDistResolution>,
 ) -> miette::Result<()> {
     for (name, spec) in &specs {
         // TODO: Get best version
@@ -221,7 +228,14 @@ pub async fn add_pypi_specs_to_project(
     }
     project.save()?;
 
-    update_lockfile(project, None, no_install, no_update_lockfile).await?;
+    update_lockfile(
+        project,
+        None,
+        no_install,
+        no_update_lockfile,
+        sdist_resolution,
+    )
+    .await?;
 
     Ok(())
 }
@@ -322,6 +336,7 @@ pub async fn add_conda_specs_to_project(
         Some(sparse_repo_data),
         no_install,
         no_update_lockfile,
+        None,
     )
     .await?;
 
@@ -333,10 +348,19 @@ async fn update_lockfile(
     sparse_repo_data: Option<Vec<SparseRepoData>>,
     no_install: bool,
     no_update_lockfile: bool,
+    sdist_resolution: Option<SDistResolution>,
 ) -> miette::Result<()> {
     // Update the lock file
     let lock_file = if !no_update_lockfile {
-        Some(update_lock_file(project, load_lock_file(project).await?, sparse_repo_data).await?)
+        Some(
+            update_lock_file(
+                project,
+                load_lock_file(project).await?,
+                sparse_repo_data,
+                sdist_resolution,
+            )
+            .await?,
+        )
     } else {
         None
     };

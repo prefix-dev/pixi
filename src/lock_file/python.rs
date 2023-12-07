@@ -18,6 +18,7 @@ pub async fn resolve_pypi_dependencies<'p>(
     project: &'p Project,
     platform: Platform,
     conda_packages: &mut [RepoDataRecord],
+    sdist_resolution: SDistResolution,
 ) -> miette::Result<Vec<PinnedPackage<'p>>> {
     let dependencies = project.pypi_dependencies(platform);
     if dependencies.is_empty() {
@@ -87,9 +88,7 @@ pub async fn resolve_pypi_dependencies<'p>(
             .map(|p| (p.name.clone(), p))
             .collect(),
         HashMap::default(),
-        &ResolveOptions {
-            sdist_resolution: SDistResolution::PreferWheels,
-        },
+        &ResolveOptions { sdist_resolution },
     )
     .await?;
 

@@ -21,6 +21,7 @@ use rattler_lock::{
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
+use rip::resolve::SDistResolution;
 use std::{sync::Arc, time::Duration};
 
 pub use satisfiability::lock_file_satisfies_project;
@@ -44,6 +45,7 @@ pub async fn update_lock_file(
     project: &Project,
     existing_lock_file: CondaLock,
     repodata: Option<Vec<SparseRepoData>>,
+    sdist_resolution: Option<SDistResolution>,
 ) -> miette::Result<CondaLock> {
     let platforms = project.platforms();
 
@@ -108,6 +110,7 @@ pub async fn update_lock_file(
                         sparse_repo_data.clone(),
                         *platform,
                         pb.clone(),
+                        sdist_resolution.unwrap_or_default(),
                     )
                     .await?;
 
@@ -153,6 +156,7 @@ async fn resolve_platform(
     sparse_repo_data: Arc<[SparseRepoData]>,
     platform: Platform,
     pb: ProgressBar,
+    sdist_resolution: SDistResolution,
 ) -> miette::Result<LockedPackagesBuilder> {
     let dependencies = project.all_dependencies(platform)?;
     let match_specs = dependencies
@@ -191,7 +195,8 @@ async fn resolve_platform(
     // Solve python packages
     pb.set_message("resolving python");
     let python_artifacts =
-        python::resolve_pypi_dependencies(project, platform, &mut records).await?;
+        python::resolve_pypi_dependencies(project, platform, &mut records, sdist_resolution)
+            .await?;
 
     // Clear message
     pb.set_message("");

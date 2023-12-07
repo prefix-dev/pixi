@@ -27,6 +27,7 @@ use futures::FutureExt;
 use pixi::cli::{add, init, install, project, task};
 use pixi::project::{DependencyType, SpecType};
 use rattler_conda_types::Platform;
+use rip::resolve::SDistResolution;
 use std::future::{Future, IntoFuture};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -113,6 +114,11 @@ impl AddBuilder {
     /// installed to reduce test times.
     pub fn with_install(mut self, install: bool) -> Self {
         self.args.no_install = !install;
+        self
+    }
+
+    pub fn with_sdist_resolution(mut self, sdist_resolution: SDistResolution) -> Self {
+        self.args.sdist_resolution = sdist_resolution;
         self
     }
 

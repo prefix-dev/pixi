@@ -24,9 +24,7 @@ use rip::{
     },
     index::PackageDb,
     python_env::{find_distributions_in_venv, uninstall_distribution, Distribution, WheelTag},
-    types::{
-        ArtifactHashes, ArtifactInfo, ArtifactName, Extra, NormalizedPackageName, WheelFilename,
-    },
+    types::{ArtifactHashes, ArtifactInfo, ArtifactName, Extra, NormalizedPackageName},
 };
 use std::collections::HashSet;
 use std::{io::ErrorKind, path::Path, str::FromStr, time::Duration};
@@ -133,7 +131,7 @@ pub async fn get_up_to_date_prefix(
         if locked {
             miette::bail!("Lockfile not up-to-date with the project");
         }
-        lock_file = lock_file::update_lock_file(project, lock_file, None).await?
+        lock_file = lock_file::update_lock_file(project, lock_file, None, None).await?
     }
 
     // Update the environment
@@ -429,7 +427,7 @@ fn stream_python_artifacts<'a>(
                     .with_context(|| {
                         format!("'{}' is not a valid python package name", &package.name)
                     })?;
-                let wheel_name = WheelFilename::from_filename(filename, &name)
+                let artifact_name = ArtifactName::from_filename(filename, &name)
                     .expect("failed to convert filename to wheel filename");
 
                 // Log out intent to install this python package.
@@ -438,7 +436,7 @@ fn stream_python_artifacts<'a>(
 
                 // Reconstruct the ArtifactInfo from the data in the lockfile.
                 let artifact_info = ArtifactInfo {
-                    filename: ArtifactName::Wheel(wheel_name),
+                    filename: artifact_name,
                     url: pip_package.url.clone(),
                     hashes: pip_package.hash.as_ref().map(|hash| ArtifactHashes {
                         sha256: hash.sha256().cloned(),
