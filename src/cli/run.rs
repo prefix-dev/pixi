@@ -355,3 +355,43 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
     let handle = reader.pipe_to_string_handle();
     (writer, handle)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ordered_commands() {
+        let file_content = r#"
+        [project]
+        name = "pixi"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "win-64"]
+
+        [tasks]
+        root = "echo root"
+        task1 = {cmd="echo task1", depends_on=["root"]}
+        task2 = {cmd="echo task2", depends_on=["root"]}
+        top = {cmd="echo top", depends_on=["task1","task2"]}
+    "#;
+        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
+
+        let ordered_tasks = order_tasks(vec!["top".to_string()], &project).unwrap();
+
+        let ordered_task_names: Vec<_> = ordered_tasks
+            .iter()
+            .map(|(task, _args)| task.as_single_command().unwrap())
+            .collect();
+
+        assert_eq!(
+            ordered_task_names,
+            vec![
+                "echo top",
+                "echo task2",
+                "echo root",
+                "echo task1",
+                "echo root"
+            ]
+        )
+    }
+}
