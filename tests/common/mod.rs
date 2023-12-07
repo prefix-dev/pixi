@@ -179,7 +179,7 @@ impl PixiControl {
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
-        let mut tasks = order_tasks(args.task, &self.project().unwrap())?;
+        let mut tasks = order_tasks(args.task, &self.project().unwrap(), Platform::current())?;
 
         let project = self.project().unwrap();
         let task_env = get_task_env(&project, args.frozen, args.locked)

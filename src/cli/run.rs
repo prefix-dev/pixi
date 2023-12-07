@@ -53,6 +53,7 @@ pub struct Args {
 pub fn order_tasks(
     tasks: Vec<String>,
     project: &Project,
+    platform: Platform,
 ) -> miette::Result<VecDeque<(Task, Vec<String>)>> {
     let tasks: Vec<_> = tasks.iter().map(|c| c.to_string()).collect();
 
@@ -62,7 +63,7 @@ pub fn order_tasks(
         // First search in the target specific tasks
         .and_then(|cmd_name| {
             project
-                .target_specific_tasks(Platform::current())
+                .target_specific_tasks(platform)
                 .get(cmd_name.as_str())
                 .map(|&cmd| {
                     (
@@ -97,44 +98,58 @@ pub fn order_tasks(
             )
         });
 
-    // Perform post order traversal of the tasks and their `depends_on` to make sure they are
-    // executed in the right order.
-    let mut s1 = VecDeque::new();
-    let mut s2 = VecDeque::new();
-    let mut added = HashSet::new();
-
-    // Add the command specified on the command line first
-    s1.push_back((task, additional_args));
-    if let Some(task_name) = task_name {
-        added.insert(task_name);
+    // If the task is a custom command, don't check for dependencies.
+    if matches!(task, Task::Custom(_)) {
+        return Ok(VecDeque::from(vec![(task, additional_args)]));
     }
 
-    while let Some((task, additional_args)) = s1.pop_back() {
-        // Get the dependencies of the command
-        let depends_on = task.depends_on();
+    let mut sorted = VecDeque::new();
+    let mut visited = HashSet::new();
 
-        // Locate the dependencies in the project and add them to the stack
-        for dependency in depends_on.iter() {
-            if !added.contains(dependency) {
-                let cmd = project
-                    .target_specific_tasks(Platform::current())
-                    .get(dependency.as_str())
-                    .copied()
-                    // If there is no target specific task try to find it in the default tasks.
-                    .or_else(|| project.task_opt(dependency))
-                    .ok_or_else(|| miette::miette!("failed to find dependency {}", dependency))?;
+    // Visit the task and its dependencies recursively.
+    fn visit(
+        task_name: &str,
+        project: &Project,
+        visited: &mut HashSet<String>,
+        sorted: &mut VecDeque<(Task, Vec<String>)>,
+        args: Vec<String>,
+    ) -> miette::Result<()> {
+        if visited.contains(task_name) {
+            return Ok(());
+        }
 
-                s1.push_back((cmd.clone(), Vec::new()));
-                added.insert(dependency.clone());
+        visited.insert(task_name.to_string());
+
+        let task = project
+            .target_specific_tasks(Platform::current())
+            .get(task_name)
+            .copied()
+            // If there is no target specific task try to find it in the default tasks.
+            .or_else(|| project.task_opt(task_name))
+            .ok_or_else(|| miette::miette!("failed to find task '{}'", task_name))?;
+
+        // Also visit the dependencies of the task.
+        for dependency_name in task.depends_on() {
+            if !visited.contains(dependency_name) {
+                visit(dependency_name, project, visited, sorted, Vec::new())?;
             }
         }
 
-        if task.is_executable() {
-            s2.push_back((task, additional_args))
-        }
+        sorted.push_front((task.clone(), args));
+        Ok(())
     }
 
-    Ok(s2)
+    if let Some(task_name) = task_name {
+        visit(
+            &task_name,
+            project,
+            &mut visited,
+            &mut sorted,
+            additional_args,
+        )?;
+    }
+
+    Ok(sorted)
 }
 
 pub async fn create_script(task: &Task, args: &[String]) -> miette::Result<SequentialList> {
@@ -215,7 +230,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     tracing::debug!("Task parsed from run command: {:?}", task);
 
     // Get the correctly ordered commands
-    let mut ordered_commands = order_tasks(task, &project)?;
+    let mut ordered_commands = order_tasks(task, &project, Platform::current())?;
 
     // Get the environment to run the commands in.
     let command_env = get_task_env(&project, args.locked, args.frozen).await?;
@@ -366,7 +381,7 @@ mod tests {
         [project]
         name = "pixi"
         channels = ["conda-forge"]
-        platforms = ["linux-64", "win-64"]
+        platforms = ["linux-64"]
 
         [tasks]
         root = "echo root"
@@ -376,7 +391,12 @@ mod tests {
     "#;
         let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
 
-        let ordered_tasks = order_tasks(vec!["top".to_string()], &project).unwrap();
+        let ordered_tasks = order_tasks(
+            vec!["top".to_string(), "--test".to_string()],
+            &project,
+            Platform::current(),
+        )
+        .unwrap();
 
         let ordered_task_names: Vec<_> = ordered_tasks
             .iter()
@@ -385,13 +405,102 @@ mod tests {
 
         assert_eq!(
             ordered_task_names,
-            vec![
-                "echo top",
-                "echo task2",
-                "echo root",
-                "echo task1",
-                "echo root"
-            ]
-        )
+            vec!["echo top", "echo task2", "echo task1", "echo root"]
+        );
+
+        // Also check if the arguments are passed correctly
+        let ordered_args: Vec<_> = ordered_tasks
+            .iter()
+            .map(|(_task, args)| args.clone())
+            .collect();
+
+        assert_eq!(ordered_args[0], vec!["--test".to_string()]);
+    }
+
+    #[test]
+    fn test_cycle_ordered_commands() {
+        let file_content = r#"
+        [project]
+        name = "pixi"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [tasks]
+        root = {cmd="echo root", depends_on=["task1"]}
+        task1 = {cmd="echo task1", depends_on=["root"]}
+        task2 = {cmd="echo task2", depends_on=["root"]}
+        top = {cmd="echo top", depends_on=["task1","task2"]}
+    "#;
+        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
+
+        let ordered_tasks =
+            order_tasks(vec!["top".to_string()], &project, Platform::current()).unwrap();
+
+        let ordered_task_names: Vec<_> = ordered_tasks
+            .iter()
+            .map(|(task, _args)| task.as_single_command().unwrap())
+            .collect();
+
+        assert_eq!(
+            ordered_task_names,
+            vec!["echo top", "echo task2", "echo task1", "echo root"]
+        );
+    }
+
+    #[test]
+    fn test_platform_ordered_commands() {
+        let file_content = r#"
+        [project]
+        name = "pixi"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [tasks]
+        root = "echo root"
+        task1 = {cmd="echo task1", depends_on=["root"]}
+        task2 = {cmd="echo task2", depends_on=["root"]}
+        top = {cmd="echo top", depends_on=["task1","task2"]}
+
+        [target.linux-64.tasks]
+        root = {cmd="echo linux", depends_on=["task1"]}
+    "#;
+        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
+
+        let ordered_tasks =
+            order_tasks(vec!["top".to_string()], &project, Platform::Linux64).unwrap();
+
+        let ordered_task_names: Vec<_> = ordered_tasks
+            .iter()
+            .map(|(task, _args)| task.as_single_command().unwrap())
+            .collect();
+
+        assert_eq!(
+            ordered_task_names,
+            vec!["echo top", "echo task2", "echo task1", "echo linux"]
+        );
+    }
+
+    #[test]
+    fn test_custom_command() {
+        let file_content = r#"
+        [project]
+        name = "pixi"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+    "#;
+        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
+
+        let ordered_tasks =
+            order_tasks(vec!["echo bla".to_string()], &project, Platform::Linux64).unwrap();
+
+        assert_eq!(ordered_tasks.len(), 1);
+
+        let (command, _args) = ordered_tasks.get(0).unwrap();
+        assert!(matches!(command, &Task::Custom(_)));
+
+        assert_eq!(
+            ordered_tasks[0].0.as_single_command().unwrap(),
+            r###""echo bla""###
+        );
     }
 }
