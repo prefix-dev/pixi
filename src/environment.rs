@@ -13,7 +13,10 @@ use crate::lock_file::lock_file_satisfies_project;
 use rattler::install::Transaction;
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{CondaLock, LockedDependency};
+use rip::python_env::{Pep508EnvMakers, WheelTags};
+use rip::resolve::{ResolveOptions, SDistResolution};
 use rip::types::Artifact;
+use rip::wheel_builder::WheelBuilder;
 use rip::{
     artifacts::{
         wheel::{InstallPaths, UnpackWheelOptions},
@@ -247,9 +250,26 @@ async fn update_python_distributions(
             python_packages,
         );
 
+    let cache_dir = package_db.cache_dir();
+    let wheel_tags = WheelTags::from_env().await.into_diagnostic()?;
+    let marker_env = Pep508EnvMakers::from_env().await.into_diagnostic()?;
+    let resolve_options = ResolveOptions {
+        sdist_resolution: SDistResolution::PreferWheels,
+    };
+    let wheel_builder = WheelBuilder::new(
+        package_db,
+        &marker_env,
+        Some(&wheel_tags),
+        &resolve_options,
+        cache_dir,
+    );
+
     // Start downloading the python packages that we want in the background.
-    let (package_stream, package_stream_pb) =
-        stream_python_artifacts(package_db, python_distributions_to_install.clone());
+    let (package_stream, package_stream_pb) = stream_python_artifacts(
+        package_db,
+        &wheel_builder,
+        python_distributions_to_install.clone(),
+    );
 
     // Remove python packages that need to be removed
     if !python_distributions_to_remove.is_empty() {
@@ -364,6 +384,7 @@ async fn install_python_distributions(
 /// packages in parallel and yield them as soon as they become available.
 fn stream_python_artifacts<'a>(
     package_db: &'a PackageDb,
+    wheel_builder: &'a WheelBuilder<'a, '_>,
     packages_to_download: Vec<&'a LockedDependency>,
 ) -> (
     impl Stream<Item = miette::Result<(Option<String>, HashSet<Extra>, Wheel)>> + 'a,
@@ -434,7 +455,9 @@ fn stream_python_artifacts<'a>(
 
                 // TODO: Maybe we should have a cache of wheels separate from the package_db. Since a
                 //   wheel can just be identified by its hash or url.
-                let wheel: Wheel = package_db.get_wheel(&artifact_info, None).await?;
+                let wheel: Wheel = package_db
+                    .get_wheel(&artifact_info, Some(wheel_builder))
+                    .await?;
 
                 // Update the progress bar
                 pb_task.finish().await;

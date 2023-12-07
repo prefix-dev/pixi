@@ -88,8 +88,7 @@ pub async fn resolve_pypi_dependencies<'p>(
             .collect(),
         HashMap::default(),
         &ResolveOptions {
-            // TODO: Change this once we fully support sdists.
-            sdist_resolution: SDistResolution::OnlyWheels,
+            sdist_resolution: SDistResolution::PreferWheels,
         },
     )
     .await?;
