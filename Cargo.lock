@@ -2604,7 +2604,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "async-once-cell",
  "chrono",
@@ -2958,7 +2958,8 @@ dependencies = [
 [[package]]
 name = "rattler_installs_packages"
 version = "0.1.0"
-source = "git+https://github.com/prefix-dev/rattler_installs_packages?branch=main#29a5b30c820ce6d211d49603c637bf6e0345d452"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae67cf7e1c4a7f35bf82b38fed677ba56e4540a70a94bea91d29443ba0d136c6"
 dependencies = [
  "async-once-cell",
  "async-recursion",
