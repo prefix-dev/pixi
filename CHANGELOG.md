@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.10.0] - 2023-12-8
+### Highlights
+- Better `pypi-dependencies` support, now install even more of the pypi packages.
+- `pixi add --pypi` command to add a pypi package to your project.
+
+### Details
+#### Added
+* Use range (`>=1.2.3, <1.3`) when adding requirement, instead of `1.2.3.*` by @baszalmstra in https://github.com/prefix-dev/pixi/pull/536
+* Update `rip` to fix  by @tdejager in https://github.com/prefix-dev/pixi/pull/543
+  * Better Bytecode compilation (`.pyc`) support by @baszalmstra
+  * Recognize `.data` directory `headers` by @baszalmstra
+* Also print arguments given to a pixi task by @ruben-arts in https://github.com/prefix-dev/pixi/pull/545
+* Add `pixi add --pypi` command by @ruben-arts in https://github.com/prefix-dev/pixi/pull/539
+
+#### Fixed
+* space in global install path by @ruben-arts in https://github.com/prefix-dev/pixi/pull/513
+* Glibc version/family parsing by @baszalmstra in https://github.com/prefix-dev/pixi/pull/535
+* Use `build` and `host` specs while getting the best version by @ruben-arts in https://github.com/prefix-dev/pixi/pull/538
+
+#### Miscellaneous
+* docs: add update manual by @ruben-arts in https://github.com/prefix-dev/pixi/pull/521
+* add lightgbm demo by @partrita in https://github.com/prefix-dev/pixi/pull/492
+* Update documentation link by @williamjamir in https://github.com/prefix-dev/pixi/pull/525
+* Update Community.md by @jiaxiyang in https://github.com/prefix-dev/pixi/pull/527
+* Add `winget` releaser by @ruben-arts in https://github.com/prefix-dev/pixi/pull/547
+* Custom `rerun-sdk` example, force driven graph of `pixi.lock` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/548
+* Better document pypi part by @ruben-arts in https://github.com/prefix-dev/pixi/pull/546
+
+## New Contributors
+* @partrita made their first contribution in https://github.com/prefix-dev/pixi/pull/492
+* @williamjamir made their first contribution in https://github.com/prefix-dev/pixi/pull/525
+* @jiaxiyang made their first contribution in https://github.com/prefix-dev/pixi/pull/527
+
+**Full Changelog**: https://github.com/prefix-dev/pixi/compare/v0.9.1...v0.10.0
+
 ## [0.9.1] - 2023-11-29
 ### Highlights
 

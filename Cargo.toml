@@ -1,6 +1,6 @@
 [package]
 name = "pixi"
-version = "0.9.1"
+version = "0.10.0"
 description = "A package management and workflow tool"
 edition = "2021"
 authors = ["pixi contributors <hi@prefix.dev>"]
@@ -47,7 +47,7 @@ rattler_solve = { version = "0.13.0", default-features = false, features = ["res
 rattler_virtual_packages = { version = "0.13.0", default-features = false }
 regex = "1.10.2"
 reqwest = { version = "0.11.22", default-features = false }
-rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages", branch = "main", default-features = false }
+rip = { package = "rattler_installs_packages", version = "0.1.0", default-features = false }
 serde = "1.0.193"
 serde_json = "1.0.108"
 serde_spanned = "0.6.4"
@@ -86,6 +86,7 @@ toml = "0.8.8"
 #rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 #rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 #rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+#rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages", branch = "main" }
 
 #deno_task_shell = { path = "../deno_task_shell" }
 
@@ -98,3 +99,4 @@ toml = "0.8.8"
 #rattler_solve = { path = "../rattler/crates/rattler_solve" }
 #rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
 #rattler_lock = { path = "../rattler/crates/rattler_lock" }
+#rip = { package = "rattler_installs_packages", path = "../rip" }
