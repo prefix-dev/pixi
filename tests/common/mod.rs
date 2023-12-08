@@ -8,9 +8,7 @@ use crate::common::builders::{
     TaskAliasBuilder,
 };
 use pixi::cli::install::Args;
-use pixi::cli::run::{
-    create_script, execute_script_with_output, get_task_env, order_tasks, RunOutput,
-};
+use pixi::cli::run::{execute_script_with_output, get_task_env, ExecutableTask, RunOutput};
 use pixi::cli::task::{AddArgs, AliasArgs};
 use pixi::cli::{add, init, project, run, task};
 use pixi::{consts, Project};
@@ -228,7 +226,10 @@ impl PixiControl {
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
-        let mut tasks = order_tasks(args.task, &self.project().unwrap())?;
+        let project = self.project()?;
+        let tasks = ExecutableTask::from_cmd_args(&project, args.task, Some(Platform::current()))
+            .get_ordered_dependencies(&project, Some(Platform::current()))
+            .unwrap();
 
         let project = self.project().unwrap();
         let task_env = get_task_env(&project, args.frozen, args.locked)
@@ -236,18 +237,17 @@ impl PixiControl {
             .unwrap();
 
         let mut result = RunOutput::default();
-        while let Some((command, args)) = tasks.pop_back() {
-            let cwd = run::select_cwd(command.working_directory(), &project)?;
-            let script = create_script(&command, &args).await;
-            if let Ok(script) = script {
-                let output =
-                    execute_script_with_output(script, cwd.as_path(), &task_env, None).await;
-                result.stdout.push_str(&output.stdout);
-                result.stderr.push_str(&output.stderr);
-                result.exit_code = output.exit_code;
-                if output.exit_code != 0 {
-                    break;
-                }
+        for task in tasks {
+            let cwd = task.working_directory(&project).unwrap();
+            let Some(script) = task.as_deno_script().unwrap() else {
+                continue;
+            };
+            let output = execute_script_with_output(script, cwd.as_path(), &task_env, None).await;
+            result.stdout.push_str(&output.stdout);
+            result.stderr.push_str(&output.stderr);
+            result.exit_code = output.exit_code;
+            if output.exit_code != 0 {
+                break;
             }
         }
         Ok(result)
