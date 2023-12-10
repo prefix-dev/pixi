@@ -96,9 +96,11 @@ impl From<AddArgs> for Task {
                 .join(" ")
         };
 
-        // Depending on whether the task should have depends_on or not we create a Plain or complex
-        // command.
-        if depends_on.is_empty() && value.cwd.is_none() {
+        // Depending on whether the task has a command, and depends_on or not we create a plain or
+        // complex, or alias command.
+        if cmd_args.trim().is_empty() && !depends_on.is_empty() {
+            Self::Alias(Alias { depends_on })
+        } else if depends_on.is_empty() && value.cwd.is_none() {
             Self::Plain(cmd_args)
         } else {
             Self::Execute(Execute {

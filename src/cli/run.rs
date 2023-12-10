@@ -198,7 +198,7 @@ impl<'p> ExecutableTask<'p> {
             Some(cwd) if cwd.is_absolute() => cwd.to_path_buf(),
             Some(cwd) => {
                 let abs_path = project.root().join(cwd);
-                if !abs_path.exists() {
+                if !abs_path.is_dir() {
                     return Err(InvalidWorkingDirectory {
                         path: cwd.to_string_lossy().to_string(),
                     });

@@ -228,18 +228,15 @@ impl PixiControl {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
         let project = self.project()?;
         let tasks = ExecutableTask::from_cmd_args(&project, args.task, Some(Platform::current()))
-            .get_ordered_dependencies(&project, Some(Platform::current()))
-            .unwrap();
+            .get_ordered_dependencies(&project, Some(Platform::current()))?;
 
         let project = self.project().unwrap();
-        let task_env = get_task_env(&project, args.frozen, args.locked)
-            .await
-            .unwrap();
+        let task_env = get_task_env(&project, args.frozen, args.locked).await?;
 
         let mut result = RunOutput::default();
         for task in tasks {
-            let cwd = task.working_directory(&project).unwrap();
-            let Some(script) = task.as_deno_script().unwrap() else {
+            let cwd = task.working_directory(&project)?;
+            let Some(script) = task.as_deno_script()? else {
                 continue;
             };
             let output = execute_script_with_output(script, cwd.as_path(), &task_env, None).await;
