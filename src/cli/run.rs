@@ -1,21 +1,28 @@
-use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
-use std::env;
-use std::path::{Path, PathBuf};
-use std::string::String;
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    env,
+    fmt::{Display, Formatter},
+    path::{Path, PathBuf},
+    string::String,
+};
 
 use clap::Parser;
-use deno_task_shell::parser::SequentialList;
-use deno_task_shell::{execute_with_pipes, pipe, ShellPipeWriter, ShellState};
+use deno_task_shell::{
+    execute_with_pipes, parser::SequentialList, pipe, ShellPipeWriter, ShellState,
+};
 use itertools::Itertools;
 use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use rattler_conda_types::Platform;
 
-use crate::prefix::Prefix;
-use crate::progress::await_in_progress;
-use crate::project::environment::get_metadata_env;
-use crate::task::{quote_arguments, CmdArgs, Custom, Task};
-use crate::{environment::get_up_to_date_prefix, Project};
+use crate::{
+    environment::get_up_to_date_prefix,
+    prefix::Prefix,
+    progress::await_in_progress,
+    project::environment::get_metadata_env,
+    task::{quote_arguments, CmdArgs, Custom, Task},
+    Project,
+};
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::ShellEnum,
@@ -208,6 +215,38 @@ impl<'p> ExecutableTask<'p> {
             None => project.root().to_path_buf(),
         })
     }
+
+    /// Returns an object that implements [`Display`] which outputs the command of the wrapped task.
+    fn display_command(&self) -> ExecutableTaskConsoleDisplay<'p, '_> {
+        ExecutableTaskConsoleDisplay { task: self }
+    }
+}
+
+/// A helper object that implements [`Display`] to display (with ascii color) the command of the
+/// task.
+struct ExecutableTaskConsoleDisplay<'p, 't> {
+    task: &'t ExecutableTask<'p>,
+}
+
+impl<'p, 't> Display for ExecutableTaskConsoleDisplay<'p, 't> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let command = self.task.task.as_single_command();
+        write!(
+            f,
+            "{}",
+            console::style(command.as_deref().unwrap_or("<alias>"))
+                .blue()
+                .bold()
+        )?;
+        if !self.task.additional_args.is_empty() {
+            write!(
+                f,
+                " {}",
+                console::style(self.task.additional_args.join(" ")).blue()
+            )?;
+        }
+        Ok(())
+    }
 }
 
 pub async fn execute_script_with_output(
@@ -274,17 +313,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Showing which command is being run if the level and type allows it.
         if tracing::enabled!(Level::WARN) && !matches!(task.task.as_ref(), Task::Custom(_)) {
             eprintln!(
-                "{}{} {}",
+                "{}{}",
                 console::style("✨ Pixi task: ").bold(),
-                console::style(
-                    &task
-                        .task
-                        .as_single_command()
-                        .expect("The command should already be parsed")
-                )
-                .blue()
-                .bold(),
-                console::style(task.additional_args.join(" ")).blue(),
+                task.display_command(),
             );
         }
 
