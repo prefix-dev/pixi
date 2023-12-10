@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
     env,
     fmt::{Display, Formatter},
-    path::{Path, PathBuf},
+    path::PathBuf,
     string::String,
 };
 
@@ -78,16 +78,30 @@ pub struct InvalidWorkingDirectory {
     path: String,
 }
 
+#[derive(Debug, Error, Diagnostic)]
+pub enum TaskExecutionError {
+    #[error(transparent)]
+    InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
+    #[error(transparent)]
+    FailedToParseShellScript(#[from] FailedToParseShellScript),
+}
+
 /// A task that contains enough information to be able to execute it. The lifetime [`'p`] refers to
 /// the lifetime of the project that contains the tasks.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ExecutableTask<'p> {
+    project: &'p Project,
     name: Option<String>,
     task: Cow<'p, Task>,
     additional_args: Vec<String>,
 }
 
 impl<'p> ExecutableTask<'p> {
+    /// Returns the name of the task or `None` if this is an anonymous task.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
     /// Parses command line arguments into an [`ExecutableTask`].
     pub fn from_cmd_args(
         project: &'p Project,
@@ -101,6 +115,7 @@ impl<'p> ExecutableTask<'p> {
             // back to looking for the task in the default tasks.
             if let Some(task) = project.task_opt(name, platform) {
                 return Self {
+                    project,
                     name: Some(args.remove(0)),
                     task: Cow::Borrowed(task),
                     additional_args: args,
@@ -110,6 +125,7 @@ impl<'p> ExecutableTask<'p> {
 
         // When no task is found, just execute the command verbatim.
         Self {
+            project,
             name: None,
             task: Cow::Owned(
                 Custom {
@@ -126,16 +142,14 @@ impl<'p> ExecutableTask<'p> {
     /// order they should be executed (topologically sorted).
     pub fn get_ordered_dependencies(
         self,
-        project: &'p Project,
         platform: Option<Platform>,
     ) -> Result<Vec<Self>, MissingTaskError> {
         let mut sorted = Vec::new();
-        visit(self, project, platform, &mut sorted, &mut HashSet::new())?;
+        visit(self, platform, &mut sorted, &mut HashSet::new())?;
         return Ok(sorted);
 
         fn visit<'p>(
             task: ExecutableTask<'p>,
-            project: &'p Project,
             platform: Option<Platform>,
             sorted: &mut Vec<ExecutableTask<'p>>,
             visited: &mut HashSet<String>,
@@ -150,20 +164,19 @@ impl<'p> ExecutableTask<'p> {
 
             // Locate the dependencies in the project and add them to the stack
             for dependency in task.task.depends_on() {
-                let dependency =
-                    project
-                        .task_opt(dependency, platform)
-                        .ok_or_else(|| MissingTaskError {
-                            task_name: dependency.clone(),
-                        })?;
+                let dependency = task.project.task_opt(dependency, platform).ok_or_else(|| {
+                    MissingTaskError {
+                        task_name: dependency.clone(),
+                    }
+                })?;
 
                 visit(
                     ExecutableTask {
+                        project: task.project,
                         name: Some(dependency.to_string()),
                         task: Cow::Borrowed(dependency),
                         additional_args: Vec::new(),
                     },
-                    project,
                     platform,
                     sorted,
                     visited,
@@ -197,14 +210,11 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the working directory for this task.
-    pub fn working_directory(
-        &self,
-        project: &'p Project,
-    ) -> Result<PathBuf, InvalidWorkingDirectory> {
+    pub fn working_directory(&self) -> Result<PathBuf, InvalidWorkingDirectory> {
         Ok(match self.task.working_directory() {
             Some(cwd) if cwd.is_absolute() => cwd.to_path_buf(),
             Some(cwd) => {
-                let abs_path = project.root().join(cwd);
+                let abs_path = self.project.root().join(cwd);
                 if !abs_path.is_dir() {
                     return Err(InvalidWorkingDirectory {
                         path: cwd.to_string_lossy().to_string(),
@@ -212,13 +222,43 @@ impl<'p> ExecutableTask<'p> {
                 }
                 abs_path
             }
-            None => project.root().to_path_buf(),
+            None => self.project.root().to_path_buf(),
         })
     }
 
     /// Returns an object that implements [`Display`] which outputs the command of the wrapped task.
     fn display_command(&self) -> ExecutableTaskConsoleDisplay<'p, '_> {
         ExecutableTaskConsoleDisplay { task: self }
+    }
+
+    /// Executes the task and capture its output.
+    pub async fn execute_with_pipes(
+        &self,
+        command_env: &HashMap<String, String>,
+        input: Option<&[u8]>,
+    ) -> Result<RunOutput, TaskExecutionError> {
+        let Some(script) = self.as_deno_script()? else {
+            return Ok(RunOutput {
+                exit_code: 0,
+                stdout: String::new(),
+                stderr: String::new(),
+            });
+        };
+        let cwd = self.working_directory()?;
+        let (stdin, mut stdin_writer) = pipe();
+        if let Some(stdin) = input {
+            stdin_writer.write_all(stdin).unwrap();
+        }
+        drop(stdin_writer); // prevent a deadlock by dropping the writer
+        let (stdout, stdout_handle) = get_output_writer_and_handle();
+        let (stderr, stderr_handle) = get_output_writer_and_handle();
+        let state = ShellState::new(command_env.clone(), &cwd, Default::default());
+        let code = execute_with_pipes(script, state, stdin, stdout, stderr).await;
+        Ok(RunOutput {
+            exit_code: code,
+            stdout: stdout_handle.await.unwrap(),
+            stderr: stderr_handle.await.unwrap(),
+        })
     }
 }
 
@@ -249,28 +289,6 @@ impl<'p, 't> Display for ExecutableTaskConsoleDisplay<'p, 't> {
     }
 }
 
-pub async fn execute_script_with_output(
-    script: SequentialList,
-    cwd: &Path,
-    command_env: &HashMap<String, String>,
-    input: Option<&[u8]>,
-) -> RunOutput {
-    let (stdin, mut stdin_writer) = pipe();
-    if let Some(stdin) = input {
-        stdin_writer.write_all(stdin).unwrap();
-    }
-    drop(stdin_writer); // prevent a deadlock by dropping the writer
-    let (stdout, stdout_handle) = get_output_writer_and_handle();
-    let (stderr, stderr_handle) = get_output_writer_and_handle();
-    let state = ShellState::new(command_env.clone(), cwd, Default::default());
-    let code = execute_with_pipes(script, state, stdin, stdout, stderr).await;
-    RunOutput {
-        exit_code: code,
-        stdout: stdout_handle.await.unwrap(),
-        stderr: stderr_handle.await.unwrap(),
-    }
-}
-
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -291,7 +309,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Get the correctly ordered commands
     let executable_tasks =
         ExecutableTask::from_cmd_args(&project, task_args, Some(Platform::current()))
-            .get_ordered_dependencies(&project, Some(Platform::current()))?;
+            .get_ordered_dependencies(Some(Platform::current()))?;
 
     // Get the environment to run the commands in.
     let command_env = get_task_env(&project, args.locked, args.frozen).await?;
@@ -301,7 +319,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let Some(script) = task.as_deno_script()? else {
             continue;
         };
-        let cwd = task.working_directory(&project)?;
+        let cwd = task.working_directory()?;
 
         // Ignore CTRL+C
         // Specifically so that the child is responsible for its own signal handling
@@ -311,7 +329,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
 
         // Showing which command is being run if the level and type allows it.
-        if tracing::enabled!(Level::WARN) && !matches!(task.task.as_ref(), Task::Custom(_)) {
+        if tracing::enabled!(Level::WARN) && !task.task.is_custom() {
             eprintln!(
                 "{}{}",
                 console::style("✨ Pixi task: ").bold(),
@@ -433,6 +451,7 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn test_ordered_commands() {
@@ -454,7 +473,7 @@ mod tests {
             vec!["top".to_string(), "--test".to_string()],
             Some(Platform::current()),
         )
-        .get_ordered_dependencies(&project, Some(Platform::current()))
+        .get_ordered_dependencies(Some(Platform::current()))
         .unwrap();
 
         let ordered_task_names: Vec<_> = executable_tasks
@@ -494,7 +513,7 @@ mod tests {
             vec!["top".to_string()],
             Some(Platform::current()),
         )
-        .get_ordered_dependencies(&project, Some(Platform::current()))
+        .get_ordered_dependencies(Some(Platform::current()))
         .unwrap();
 
         let ordered_task_names: Vec<_> = executable_tasks
@@ -530,7 +549,7 @@ mod tests {
             vec!["top".to_string()],
             Some(Platform::Linux64),
         )
-        .get_ordered_dependencies(&project, Some(Platform::Linux64))
+        .get_ordered_dependencies(Some(Platform::Linux64))
         .unwrap();
 
         let ordered_task_names: Vec<_> = executable_tasks
@@ -559,7 +578,7 @@ mod tests {
             vec!["echo bla".to_string()],
             Some(Platform::Linux64),
         )
-        .get_ordered_dependencies(&project, Some(Platform::Linux64))
+        .get_ordered_dependencies(Some(Platform::Linux64))
         .unwrap();
 
         assert_eq!(executable_tasks.len(), 1);

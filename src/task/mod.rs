@@ -88,6 +88,11 @@ impl Task {
             Task::Alias(_) => None,
         }
     }
+
+    /// True if this task is a custom task instead of something defined in a project.
+    pub fn is_custom(&self) -> bool {
+        matches!(self, Task::Custom(_))
+    }
 }
 
 /// A command script executes a single command from the environment

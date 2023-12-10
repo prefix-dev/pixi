@@ -8,7 +8,7 @@ use crate::common::builders::{
     TaskAliasBuilder,
 };
 use pixi::cli::install::Args;
-use pixi::cli::run::{execute_script_with_output, get_task_env, ExecutableTask, RunOutput};
+use pixi::cli::run::{get_task_env, ExecutableTask, RunOutput};
 use pixi::cli::task::{AddArgs, AliasArgs};
 use pixi::cli::{add, init, project, run, task};
 use pixi::{consts, Project};
@@ -16,7 +16,7 @@ use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{CondaLock, LockedDependencyKind};
 use std::collections::HashSet;
 
-use miette::IntoDiagnostic;
+use miette::{Context, IntoDiagnostic};
 use pep508_rs::VersionOrUrl;
 use std::path::{Path, PathBuf};
 use std::process::Output;
@@ -228,18 +228,19 @@ impl PixiControl {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
         let project = self.project()?;
         let tasks = ExecutableTask::from_cmd_args(&project, args.task, Some(Platform::current()))
-            .get_ordered_dependencies(&project, Some(Platform::current()))?;
+            .get_ordered_dependencies(Some(Platform::current()))?;
 
         let project = self.project().unwrap();
         let task_env = get_task_env(&project, args.frozen, args.locked).await?;
 
         let mut result = RunOutput::default();
         for task in tasks {
-            let cwd = task.working_directory(&project)?;
-            let Some(script) = task.as_deno_script()? else {
-                continue;
-            };
-            let output = execute_script_with_output(script, cwd.as_path(), &task_env, None).await;
+            let output = task
+                .execute_with_pipes(&task_env, None)
+                .await
+                .with_context(|| {
+                    format!("error running {}", task.name().unwrap_or("<anonymous>"))
+                })?;
             result.stdout.push_str(&output.stdout);
             result.stderr.push_str(&output.stderr);
             result.exit_code = output.exit_code;
