@@ -313,14 +313,20 @@ If the project is cross-compiled, the architecture of the build and target machi
 If you want to run an activation script inside the environment when either doing a `pixi run` or `pixi shell` these can be defined here.
 The scripts defined in this table will be sourced when the environment is activated using `pixi run` or `pixi shell`
 
+!!! note
+    The activation scripts are run by the system shell interpreter as they run before an environment is available.
+    This means that it runs as `cmd.exe` on windows and `bash` on linux and osx (Unix).
+    Only `.sh`, `.bash` and `.bat` files are supported.
+
+    If you have scripts per platform use the [target](#the-target-table) table.
+
 ```toml
 [activation]
 scripts = ["env_setup.sh"]
+# To support windows platforms as well add the following
+[target.win-64.activation]
+scripts = ["env_setup.bat"]
 ```
-!!! note
-    Specify different scripts for different platforms using the [target](#the-target-table) table
-
-
 
 ## The `target` table
 The target table is a table that allows for platform specific configuration.
