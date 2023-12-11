@@ -17,6 +17,7 @@ slow_integration_tests = []
 
 [dependencies]
 async-once-cell = "0.5.3"
+async-recursion = "1.0.5"
 chrono = "0.4.31"
 clap = { version = "4.4.10", default-features = false, features = ["derive", "usage", "wrap_help", "std", "color", "error-context"] }
 clap-verbosity-flag = "2.1.0"

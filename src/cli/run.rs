@@ -1,43 +1,23 @@
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
-    env,
-    fmt::{Display, Formatter},
-    path::PathBuf,
-    string::String,
-};
+use std::{collections::HashMap, path::PathBuf, string::String};
 
 use clap::Parser;
-use deno_task_shell::{
-    execute_with_pipes, parser::SequentialList, pipe, ShellPipeWriter, ShellState,
-};
 use itertools::Itertools;
 use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use rattler_conda_types::Platform;
 
+use crate::task::{
+    ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TraversalError,
+};
 use crate::{
-    environment::get_up_to_date_prefix,
-    prefix::Prefix,
-    progress::await_in_progress,
-    project::environment::get_metadata_env,
-    task::{quote_arguments, CmdArgs, Custom, Task},
-    Project,
+    environment::get_up_to_date_prefix, prefix::Prefix, progress::await_in_progress,
+    project::environment::get_metadata_env, Project,
 };
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::ShellEnum,
 };
 use thiserror::Error;
-use tokio::task::JoinHandle;
 use tracing::Level;
-
-/// Runs task in project.
-#[derive(Default, Debug)]
-pub struct RunOutput {
-    pub exit_code: i32,
-    pub stdout: String,
-    pub stderr: String,
-}
 
 /// Runs task in project.
 #[derive(Parser, Debug, Default)]
@@ -59,236 +39,6 @@ pub struct Args {
     pub frozen: bool,
 }
 
-#[derive(Debug, Error, Diagnostic)]
-#[error("could not find the task '{task_name}'")]
-pub struct MissingTaskError {
-    task_name: String,
-}
-
-#[derive(Debug, Error, Diagnostic)]
-#[error("deno task shell failed to parse '{script}': {error}")]
-pub struct FailedToParseShellScript {
-    script: String,
-    error: String,
-}
-
-#[derive(Debug, Error, Diagnostic)]
-#[error("invalid working directory '{path}'")]
-pub struct InvalidWorkingDirectory {
-    path: String,
-}
-
-#[derive(Debug, Error, Diagnostic)]
-pub enum TaskExecutionError {
-    #[error(transparent)]
-    InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
-    #[error(transparent)]
-    FailedToParseShellScript(#[from] FailedToParseShellScript),
-}
-
-/// A task that contains enough information to be able to execute it. The lifetime [`'p`] refers to
-/// the lifetime of the project that contains the tasks.
-#[derive(Clone)]
-pub struct ExecutableTask<'p> {
-    project: &'p Project,
-    name: Option<String>,
-    task: Cow<'p, Task>,
-    additional_args: Vec<String>,
-}
-
-impl<'p> ExecutableTask<'p> {
-    /// Returns the name of the task or `None` if this is an anonymous task.
-    pub fn name(&self) -> Option<&str> {
-        self.name.as_deref()
-    }
-
-    /// Parses command line arguments into an [`ExecutableTask`].
-    pub fn from_cmd_args(
-        project: &'p Project,
-        args: Vec<String>,
-        platform: Option<Platform>,
-    ) -> Self {
-        let mut args = args;
-
-        if let Some(name) = args.first() {
-            // Find the task in the project. First searches for platform specific tasks and falls
-            // back to looking for the task in the default tasks.
-            if let Some(task) = project.task_opt(name, platform) {
-                return Self {
-                    project,
-                    name: Some(args.remove(0)),
-                    task: Cow::Borrowed(task),
-                    additional_args: args,
-                };
-            }
-        }
-
-        // When no task is found, just execute the command verbatim.
-        Self {
-            project,
-            name: None,
-            task: Cow::Owned(
-                Custom {
-                    cmd: CmdArgs::from(args),
-                    cwd: env::current_dir().ok(),
-                }
-                .into(),
-            ),
-            additional_args: vec![],
-        }
-    }
-
-    /// Returns a list of [`ExecutableTask`]s that includes this task and its dependencies in the
-    /// order they should be executed (topologically sorted).
-    pub fn get_ordered_dependencies(
-        self,
-        platform: Option<Platform>,
-    ) -> Result<Vec<Self>, MissingTaskError> {
-        let mut sorted = Vec::new();
-        visit(self, platform, &mut sorted, &mut HashSet::new())?;
-        return Ok(sorted);
-
-        fn visit<'p>(
-            task: ExecutableTask<'p>,
-            platform: Option<Platform>,
-            sorted: &mut Vec<ExecutableTask<'p>>,
-            visited: &mut HashSet<String>,
-        ) -> Result<(), MissingTaskError> {
-            // If the task has a name that we already visited we can immediately return.
-            if let Some(name) = task.name.as_deref() {
-                if visited.contains(name) {
-                    return Ok(());
-                }
-                visited.insert(name.to_string());
-            }
-
-            // Locate the dependencies in the project and add them to the stack
-            for dependency in task.task.depends_on() {
-                let dependency = task.project.task_opt(dependency, platform).ok_or_else(|| {
-                    MissingTaskError {
-                        task_name: dependency.clone(),
-                    }
-                })?;
-
-                visit(
-                    ExecutableTask {
-                        project: task.project,
-                        name: Some(dependency.to_string()),
-                        task: Cow::Borrowed(dependency),
-                        additional_args: Vec::new(),
-                    },
-                    platform,
-                    sorted,
-                    visited,
-                )?;
-            }
-
-            sorted.push(task);
-            Ok(())
-        }
-    }
-
-    /// Returns a [`SequentialList`] which can be executed by deno task shell. Returns `None` if the
-    /// command is not executable like in the case of an alias.
-    pub fn as_deno_script(&self) -> Result<Option<SequentialList>, FailedToParseShellScript> {
-        // Convert the task into an executable string
-        let Some(task) = self.task.as_single_command() else {
-            return Ok(None);
-        };
-
-        // Append the command line arguments
-        let cli_args = quote_arguments(self.additional_args.iter().map(|arg| arg.as_str()));
-        let full_script = format!("{task} {cli_args}");
-
-        // Parse the shell command
-        deno_task_shell::parser::parse(full_script.trim())
-            .map_err(|e| FailedToParseShellScript {
-                script: full_script,
-                error: e.to_string(),
-            })
-            .map(Some)
-    }
-
-    /// Returns the working directory for this task.
-    pub fn working_directory(&self) -> Result<PathBuf, InvalidWorkingDirectory> {
-        Ok(match self.task.working_directory() {
-            Some(cwd) if cwd.is_absolute() => cwd.to_path_buf(),
-            Some(cwd) => {
-                let abs_path = self.project.root().join(cwd);
-                if !abs_path.is_dir() {
-                    return Err(InvalidWorkingDirectory {
-                        path: cwd.to_string_lossy().to_string(),
-                    });
-                }
-                abs_path
-            }
-            None => self.project.root().to_path_buf(),
-        })
-    }
-
-    /// Returns an object that implements [`Display`] which outputs the command of the wrapped task.
-    fn display_command(&self) -> ExecutableTaskConsoleDisplay<'p, '_> {
-        ExecutableTaskConsoleDisplay { task: self }
-    }
-
-    /// Executes the task and capture its output.
-    pub async fn execute_with_pipes(
-        &self,
-        command_env: &HashMap<String, String>,
-        input: Option<&[u8]>,
-    ) -> Result<RunOutput, TaskExecutionError> {
-        let Some(script) = self.as_deno_script()? else {
-            return Ok(RunOutput {
-                exit_code: 0,
-                stdout: String::new(),
-                stderr: String::new(),
-            });
-        };
-        let cwd = self.working_directory()?;
-        let (stdin, mut stdin_writer) = pipe();
-        if let Some(stdin) = input {
-            stdin_writer.write_all(stdin).unwrap();
-        }
-        drop(stdin_writer); // prevent a deadlock by dropping the writer
-        let (stdout, stdout_handle) = get_output_writer_and_handle();
-        let (stderr, stderr_handle) = get_output_writer_and_handle();
-        let state = ShellState::new(command_env.clone(), &cwd, Default::default());
-        let code = execute_with_pipes(script, state, stdin, stdout, stderr).await;
-        Ok(RunOutput {
-            exit_code: code,
-            stdout: stdout_handle.await.unwrap(),
-            stderr: stderr_handle.await.unwrap(),
-        })
-    }
-}
-
-/// A helper object that implements [`Display`] to display (with ascii color) the command of the
-/// task.
-struct ExecutableTaskConsoleDisplay<'p, 't> {
-    task: &'t ExecutableTask<'p>,
-}
-
-impl<'p, 't> Display for ExecutableTaskConsoleDisplay<'p, 't> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let command = self.task.task.as_single_command();
-        write!(
-            f,
-            "{}",
-            console::style(command.as_deref().unwrap_or("<alias>"))
-                .blue()
-                .bold()
-        )?;
-        if !self.task.additional_args.is_empty() {
-            write!(
-                f,
-                " {}",
-                console::style(self.task.additional_args.join(" ")).blue()
-            )?;
-        }
-        Ok(())
-    }
-}
-
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -307,62 +57,101 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     tracing::debug!("Task parsed from run command: {:?}", task_args);
 
     // Get the correctly ordered commands
-    let executable_tasks =
-        ExecutableTask::from_cmd_args(&project, task_args, Some(Platform::current()))
-            .get_ordered_dependencies(Some(Platform::current()))?;
+    let executable_task =
+        ExecutableTask::from_cmd_args(&project, task_args, Some(Platform::current()));
 
     // Get the environment to run the commands in.
     let command_env = get_task_env(&project, args.locked, args.frozen).await?;
 
-    // Execute the commands in the correct order
-    for task in executable_tasks {
-        let Some(script) = task.as_deno_script()? else {
-            continue;
-        };
-        let cwd = task.working_directory()?;
+    // Traverse the task and its dependencies. Execute each task in order.
+    match executable_task
+        .traverse(
+            (),
+            |_, task| execute_task(task, &command_env),
+            |_, _task| async { true },
+        )
+        .await
+    {
+        Ok(_) => Ok(()),
+        Err(TaskExecutionError::NonZeroExitCode(code)) => {
+            // If one of the tasks failed with a non-zero exit code, we exit this parent process
+            // with the same code.
+            std::process::exit(code);
+        }
+        Err(err) => Err(err.into()),
+    }
+}
 
-        // Ignore CTRL+C
-        // Specifically so that the child is responsible for its own signal handling
-        // NOTE: one CTRL+C is registered it will always stay registered for the rest of the runtime of the program
-        // which is fine when using run in isolation, however if we start to use run in conjunction with
-        // some other command we might want to revaluate this.
-        let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
+#[derive(Debug, Error, Diagnostic)]
+enum TaskExecutionError {
+    #[error("the script exited with a non-zero exit code {0}")]
+    NonZeroExitCode(i32),
 
-        // Showing which command is being run if the level and type allows it.
-        if tracing::enabled!(Level::WARN) && !task.task.is_custom() {
+    #[error(transparent)]
+    FailedToParseShellScript(#[from] FailedToParseShellScript),
+
+    #[error(transparent)]
+    InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
+
+    #[error(transparent)]
+    TraverseError(#[from] TraversalError),
+}
+
+/// Called to execute a single command.
+///
+/// This function is called from [`execute`].
+async fn execute_task<'p>(
+    task: ExecutableTask<'p>,
+    command_env: &HashMap<String, String>,
+) -> Result<(), TaskExecutionError> {
+    let Some(script) = task.as_deno_script()? else {
+        return Ok(());
+    };
+    let cwd = task.working_directory()?;
+
+    // Ignore CTRL+C
+    // Specifically so that the child is responsible for its own signal handling
+    // NOTE: one CTRL+C is registered it will always stay registered for the rest of the runtime of the program
+    // which is fine when using run in isolation, however if we start to use run in conjunction with
+    // some other command we might want to revaluate this.
+    let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
+
+    // Showing which command is being run if the level and type allows it.
+    if tracing::enabled!(Level::WARN) && !task.task().is_custom() {
+        eprintln!(
+            "{}{}",
+            console::style("✨ Pixi task: ").bold(),
+            task.display_command(),
+        );
+    }
+
+    let execute_future =
+        deno_task_shell::execute(script, command_env.clone(), &cwd, Default::default());
+    let status_code = tokio::select! {
+        code = execute_future => code,
+        // This should never exit
+        _ = ctrl_c => { unreachable!("Ctrl+C should not be triggered") }
+    };
+    if status_code == 127 {
+        let available_tasks = task
+            .project()
+            .tasks(Some(Platform::current()))
+            .into_keys()
+            .sorted()
+            .collect_vec();
+
+        if !available_tasks.is_empty() {
             eprintln!(
-                "{}{}",
-                console::style("✨ Pixi task: ").bold(),
-                task.display_command(),
+                "\nAvailable tasks:\n{}",
+                available_tasks.into_iter().format_with("\n", |name, f| {
+                    f(&format_args!("\t{}", console::style(name).bold()))
+                })
             );
         }
+    }
 
-        let execute_future =
-            deno_task_shell::execute(script, command_env.clone(), &cwd, Default::default());
-        let status_code = tokio::select! {
-            code = execute_future => code,
-            // This should never exit
-            _ = ctrl_c => { unreachable!("Ctrl+C should not be triggered") }
-        };
-        if status_code == 127 {
-            let available_tasks = project
-                .tasks(Some(Platform::current()))
-                .into_keys()
-                .sorted()
-                .collect_vec();
-
-            if !available_tasks.is_empty() {
-                eprintln!(
-                    "\nAvailable tasks:\n{}",
-                    available_tasks.into_iter().format_with("\n", |name, f| {
-                        f(&format_args!("\t{}", console::style(name).bold()))
-                    })
-                );
-            }
-        }
-        if status_code != 0 {
-            std::process::exit(status_code);
-        }
+    if status_code != 0 {
+        return Err(TaskExecutionError::NonZeroExitCode(status_code));
     }
 
     Ok(())
@@ -439,153 +228,4 @@ async fn run_activation(
     .into_diagnostic()?;
 
     Ok(activator_result)
-}
-
-/// Helper function to create a pipe that we can get the output from.
-fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
-    let (reader, writer) = pipe();
-    let handle = reader.pipe_to_string_handle();
-    (writer, handle)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::Path;
-
-    #[test]
-    fn test_ordered_commands() {
-        let file_content = r#"
-        [project]
-        name = "pixi"
-        channels = ["conda-forge"]
-        platforms = ["linux-64"]
-        [tasks]
-        root = "echo root"
-        task1 = {cmd="echo task1", depends_on=["root"]}
-        task2 = {cmd="echo task2", depends_on=["root"]}
-        top = {cmd="echo top", depends_on=["task1","task2"]}
-    "#;
-        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
-
-        let executable_tasks = ExecutableTask::from_cmd_args(
-            &project,
-            vec!["top".to_string(), "--test".to_string()],
-            Some(Platform::current()),
-        )
-        .get_ordered_dependencies(Some(Platform::current()))
-        .unwrap();
-
-        let ordered_task_names: Vec<_> = executable_tasks
-            .iter()
-            .map(|task| task.task.as_single_command().unwrap())
-            .collect();
-
-        assert_eq!(
-            ordered_task_names,
-            vec!["echo root", "echo task1", "echo task2", "echo top"]
-        );
-
-        // Also check if the arguments are passed correctly
-        assert_eq!(
-            executable_tasks.last().unwrap().additional_args,
-            vec!["--test".to_string()]
-        );
-    }
-
-    #[test]
-    fn test_cycle_ordered_commands() {
-        let file_content = r#"
-        [project]
-        name = "pixi"
-        channels = ["conda-forge"]
-        platforms = ["linux-64"]
-        [tasks]
-        root = {cmd="echo root", depends_on=["task1"]}
-        task1 = {cmd="echo task1", depends_on=["root"]}
-        task2 = {cmd="echo task2", depends_on=["root"]}
-        top = {cmd="echo top", depends_on=["task1","task2"]}
-    "#;
-        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
-
-        let executable_tasks = ExecutableTask::from_cmd_args(
-            &project,
-            vec!["top".to_string()],
-            Some(Platform::current()),
-        )
-        .get_ordered_dependencies(Some(Platform::current()))
-        .unwrap();
-
-        let ordered_task_names: Vec<_> = executable_tasks
-            .iter()
-            .map(|task| task.task.as_single_command().unwrap())
-            .collect();
-
-        assert_eq!(
-            ordered_task_names,
-            vec!["echo root", "echo task1", "echo task2", "echo top"]
-        );
-    }
-
-    #[test]
-    fn test_platform_ordered_commands() {
-        let file_content = r#"
-        [project]
-        name = "pixi"
-        channels = ["conda-forge"]
-        platforms = ["linux-64"]
-        [tasks]
-        root = "echo root"
-        task1 = {cmd="echo task1", depends_on=["root"]}
-        task2 = {cmd="echo task2", depends_on=["root"]}
-        top = {cmd="echo top", depends_on=["task1","task2"]}
-        [target.linux-64.tasks]
-        root = {cmd="echo linux", depends_on=["task1"]}
-    "#;
-        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
-
-        let executable_tasks = ExecutableTask::from_cmd_args(
-            &project,
-            vec!["top".to_string()],
-            Some(Platform::Linux64),
-        )
-        .get_ordered_dependencies(Some(Platform::Linux64))
-        .unwrap();
-
-        let ordered_task_names: Vec<_> = executable_tasks
-            .iter()
-            .map(|task| task.task.as_single_command().unwrap())
-            .collect();
-
-        assert_eq!(
-            ordered_task_names,
-            vec!["echo linux", "echo task1", "echo task2", "echo top",]
-        );
-    }
-
-    #[test]
-    fn test_custom_command() {
-        let file_content = r#"
-        [project]
-        name = "pixi"
-        channels = ["conda-forge"]
-        platforms = ["linux-64"]
-    "#;
-        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
-
-        let executable_tasks = ExecutableTask::from_cmd_args(
-            &project,
-            vec!["echo bla".to_string()],
-            Some(Platform::Linux64),
-        )
-        .get_ordered_dependencies(Some(Platform::Linux64))
-        .unwrap();
-
-        assert_eq!(executable_tasks.len(), 1);
-
-        let task = executable_tasks.get(0).unwrap();
-        assert!(matches!(task.task.as_ref(), &Task::Custom(_)));
-
-        assert_eq!(task.task.as_single_command().unwrap(), r###""echo bla""###);
-    }
 }

@@ -5,6 +5,15 @@ use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 
+mod executable_task;
+mod traverse;
+
+pub use executable_task::{
+    ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, RunOutput,
+    TaskExecutionError,
+};
+pub use traverse::TraversalError;
+
 /// Represents different types of scripts
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]

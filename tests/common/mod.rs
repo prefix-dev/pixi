@@ -7,21 +7,32 @@ use crate::common::builders::{
     AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, TaskAddBuilder,
     TaskAliasBuilder,
 };
-use pixi::cli::install::Args;
-use pixi::cli::run::{get_task_env, ExecutableTask, RunOutput};
-use pixi::cli::task::{AddArgs, AliasArgs};
-use pixi::cli::{add, init, project, run, task};
-use pixi::{consts, Project};
+use pixi::{
+    cli::{
+        add, init,
+        install::Args,
+        project, run,
+        run::get_task_env,
+        task::{self, AddArgs, AliasArgs},
+    },
+    consts,
+    task::{ExecutableTask, RunOutput, TraversalError},
+    Project,
+};
 use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{CondaLock, LockedDependencyKind};
-use std::collections::HashSet;
 
-use miette::{Context, IntoDiagnostic};
+use miette::{Diagnostic, IntoDiagnostic};
 use pep508_rs::VersionOrUrl;
-use std::path::{Path, PathBuf};
-use std::process::Output;
-use std::str::FromStr;
+use pixi::task::TaskExecutionError;
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    process::Output,
+    str::FromStr,
+};
 use tempfile::TempDir;
+use thiserror::Error;
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -227,28 +238,40 @@ impl PixiControl {
     pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
         let project = self.project()?;
-        let tasks = ExecutableTask::from_cmd_args(&project, args.task, Some(Platform::current()))
-            .get_ordered_dependencies(Some(Platform::current()))?;
+        let task = ExecutableTask::from_cmd_args(&project, args.task, Some(Platform::current()));
 
-        let project = self.project().unwrap();
         let task_env = get_task_env(&project, args.frozen, args.locked).await?;
 
-        let mut result = RunOutput::default();
-        for task in tasks {
-            let output = task
-                .execute_with_pipes(&task_env, None)
-                .await
-                .with_context(|| {
-                    format!("error running {}", task.name().unwrap_or("<anonymous>"))
-                })?;
-            result.stdout.push_str(&output.stdout);
-            result.stderr.push_str(&output.stderr);
-            result.exit_code = output.exit_code;
-            if output.exit_code != 0 {
-                break;
-            }
+        #[derive(Error, Debug, Diagnostic)]
+        enum RunError {
+            #[error(transparent)]
+            TravereError(#[from] TraversalError),
+            #[error(transparent)]
+            ExecutionError(#[from] TaskExecutionError),
+            #[error("the task executed with a non-zero exit code {0}")]
+            NonZeroExitCode(i32),
         }
-        Ok(result)
+
+        Ok(task
+            .traverse(
+                RunOutput::default(),
+                move |mut result, task| {
+                    let task_env = task_env.clone();
+                    async move {
+                        let output = task.execute_with_pipes(&task_env, None).await?;
+                        result.stdout.push_str(&output.stdout);
+                        result.stderr.push_str(&output.stderr);
+                        result.exit_code = output.exit_code;
+                        if output.exit_code != 0 {
+                            Err(RunError::NonZeroExitCode(output.exit_code))
+                        } else {
+                            Ok(result)
+                        }
+                    }
+                },
+                |_, _| async { true },
+            )
+            .await?)
     }
 
     /// Returns a [`InstallBuilder`]. To execute the command and await the result call `.await` on the return value.
