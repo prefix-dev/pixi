@@ -8,6 +8,6 @@ jobs:
     steps:
       - uses: vedantmgoyal2009/winget-releaser@v2
         with:
-          identifier: Package.Identifier
+          identifier: prefix-dev.pixi
           installers-regex: '\.msi' # Only .msi files
           token: ${{ secrets.WINGET_TOKEN }}
