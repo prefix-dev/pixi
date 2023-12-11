@@ -187,7 +187,19 @@ pub async fn run_activation_async(
     project: &Project,
     prefix: Prefix,
 ) -> miette::Result<HashMap<String, String>> {
-    let additional_activation_scripts = project.activation_scripts(Platform::current())?;
+    let platform = Platform::current();
+    let additional_activation_scripts = project.activation_scripts(platform)?;
+
+    // Check if the platform and activation script extension match. For Platform::Windows the extension should be .bat and for All other platforms it should be .sh or .bash.
+    for script in additional_activation_scripts.iter() {
+        let extension = script.extension().unwrap_or_default();
+        if platform.is_windows() && extension != "bat" {
+            tracing::warn!("The activation script '{}' does not have the correct extension for the platform '{}'. The extension should be '.bat'.", script.display(), platform);
+        } else if !platform.is_windows() && extension != "sh" && extension != "bash" {
+            tracing::warn!("The activation script '{}' does not have the correct extension for the platform '{}'. The extension should be '.sh' or '.bash'.", script.display(), platform);
+        }
+    }
+
     await_in_progress(
         "activating environment",
         run_activation(prefix, additional_activation_scripts.into_iter().collect()),
