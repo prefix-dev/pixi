@@ -2,12 +2,19 @@ name: Publish to WinGet
 on:
   release:
     types: [released]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Specific tag name'
+        required: true
+        type: string
 jobs:
   publish:
     runs-on: windows-latest
     steps:
       - uses: vedantmgoyal2009/winget-releaser@v2
         with:
-          identifier: Package.Identifier
+          identifier: prefix-dev.pixi
           installers-regex: '\.msi' # Only .msi files
           token: ${{ secrets.WINGET_TOKEN }}
+          release-tag: ${{ inputs.tag_name || github.event.release.tag_name }}
