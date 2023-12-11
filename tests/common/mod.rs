@@ -245,7 +245,7 @@ impl PixiControl {
         #[derive(Error, Debug, Diagnostic)]
         enum RunError {
             #[error(transparent)]
-            TravereError(#[from] TraversalError),
+            TraverseError(#[from] TraversalError),
             #[error(transparent)]
             ExecutionError(#[from] TaskExecutionError),
             #[error("the task executed with a non-zero exit code {0}")]

@@ -56,7 +56,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
     tracing::debug!("Task parsed from run command: {:?}", task_args);
 
-    // Get the correctly ordered commands
+    // Get the task to execute
     let executable_task =
         ExecutableTask::from_cmd_args(&project, task_args, Some(Platform::current()));
 
