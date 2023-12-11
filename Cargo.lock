@@ -2607,6 +2607,7 @@ name = "pixi"
 version = "0.10.0"
 dependencies = [
  "async-once-cell",
+ "async-recursion",
  "chrono",
  "clap",
  "clap-verbosity-flag",

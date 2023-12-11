@@ -896,8 +896,16 @@ impl Project {
         Ok(full_paths)
     }
 
-    /// Get the default task with the specified name or `None` if no such task exists.
-    pub fn task_opt(&self, name: &str) -> Option<&Task> {
+    /// Get the task with the specified `name` or `None` if no such task exists. If `platform` is
+    /// specified then the task will first be looked up in the target specific tasks for the given
+    /// platform.
+    pub fn task_opt(&self, name: &str, platform: Option<Platform>) -> Option<&Task> {
+        if let Some(platform) = platform {
+            if let Some(task) = self.target_specific_tasks(platform).get(name) {
+                return Some(*task);
+            }
+        }
+
         self.manifest.tasks.get(name)
     }
 

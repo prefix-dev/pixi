@@ -7,23 +7,32 @@ use crate::common::builders::{
     AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, TaskAddBuilder,
     TaskAliasBuilder,
 };
-use pixi::cli::install::Args;
-use pixi::cli::run::{
-    create_script, execute_script_with_output, get_task_env, order_tasks, RunOutput,
+use pixi::{
+    cli::{
+        add, init,
+        install::Args,
+        project, run,
+        run::get_task_env,
+        task::{self, AddArgs, AliasArgs},
+    },
+    consts,
+    task::{ExecutableTask, RunOutput, TraversalError},
+    Project,
 };
-use pixi::cli::task::{AddArgs, AliasArgs};
-use pixi::cli::{add, init, project, run, task};
-use pixi::{consts, Project};
 use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{CondaLock, LockedDependencyKind};
-use std::collections::HashSet;
 
-use miette::IntoDiagnostic;
+use miette::{Diagnostic, IntoDiagnostic};
 use pep508_rs::VersionOrUrl;
-use std::path::{Path, PathBuf};
-use std::process::Output;
-use std::str::FromStr;
+use pixi::task::TaskExecutionError;
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    process::Output,
+    str::FromStr,
+};
 use tempfile::TempDir;
+use thiserror::Error;
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -228,29 +237,41 @@ impl PixiControl {
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
-        let mut tasks = order_tasks(args.task, &self.project().unwrap())?;
+        let project = self.project()?;
+        let task = ExecutableTask::from_cmd_args(&project, args.task, Some(Platform::current()));
 
-        let project = self.project().unwrap();
-        let task_env = get_task_env(&project, args.frozen, args.locked)
-            .await
-            .unwrap();
+        let task_env = get_task_env(&project, args.frozen, args.locked).await?;
 
-        let mut result = RunOutput::default();
-        while let Some((command, args)) = tasks.pop_back() {
-            let cwd = run::select_cwd(command.working_directory(), &project)?;
-            let script = create_script(&command, &args).await;
-            if let Ok(script) = script {
-                let output =
-                    execute_script_with_output(script, cwd.as_path(), &task_env, None).await;
-                result.stdout.push_str(&output.stdout);
-                result.stderr.push_str(&output.stderr);
-                result.exit_code = output.exit_code;
-                if output.exit_code != 0 {
-                    break;
-                }
-            }
+        #[derive(Error, Debug, Diagnostic)]
+        enum RunError {
+            #[error(transparent)]
+            TraverseError(#[from] TraversalError),
+            #[error(transparent)]
+            ExecutionError(#[from] TaskExecutionError),
+            #[error("the task executed with a non-zero exit code {0}")]
+            NonZeroExitCode(i32),
         }
-        Ok(result)
+
+        Ok(task
+            .traverse(
+                RunOutput::default(),
+                move |mut result, task| {
+                    let task_env = task_env.clone();
+                    async move {
+                        let output = task.execute_with_pipes(&task_env, None).await?;
+                        result.stdout.push_str(&output.stdout);
+                        result.stderr.push_str(&output.stderr);
+                        result.exit_code = output.exit_code;
+                        if output.exit_code != 0 {
+                            Err(RunError::NonZeroExitCode(output.exit_code))
+                        } else {
+                            Ok(result)
+                        }
+                    }
+                },
+                |_, _| async { true },
+            )
+            .await?)
     }
 
     /// Returns a [`InstallBuilder`]. To execute the command and await the result call `.await` on the return value.

@@ -5,6 +5,15 @@ use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 
+mod executable_task;
+mod traverse;
+
+pub use executable_task::{
+    ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, RunOutput,
+    TaskExecutionError,
+};
+pub use traverse::TraversalError;
+
 /// Represents different types of scripts
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
@@ -87,6 +96,11 @@ impl Task {
             Task::Execute(exe) => exe.cwd.as_deref(),
             Task::Alias(_) => None,
         }
+    }
+
+    /// True if this task is a custom task instead of something defined in a project.
+    pub fn is_custom(&self) -> bool {
+        matches!(self, Task::Custom(_))
     }
 }
 
