@@ -219,9 +219,10 @@ pub async fn add_pypi_specs_to_project(
             }
         }
     }
-    project.save()?;
 
     update_lockfile(project, None, no_install, no_update_lockfile).await?;
+
+    project.save()?;
 
     Ok(())
 }
