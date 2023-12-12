@@ -13,7 +13,7 @@ use crate::lock_file::lock_file_satisfies_project;
 use rattler::install::Transaction;
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{CondaLock, LockedDependency};
-use rip::python_env::{Pep508EnvMakers, WheelTags};
+use rip::python_env::{Pep508EnvMakers, PythonLocation, WheelTags};
 use rip::resolve::{ResolveOptions, SDistResolution};
 use rip::types::Artifact;
 use rip::wheel_builder::WheelBuilder;
@@ -260,6 +260,7 @@ async fn update_python_distributions(
         Some(&wheel_tags),
         &resolve_options,
         cache_dir,
+        PythonLocation::System,
     );
 
     // Start downloading the python packages that we want in the background.

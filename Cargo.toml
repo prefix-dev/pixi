@@ -48,6 +48,7 @@ rattler_virtual_packages = { version = "0.13.0", default-features = false }
 regex = "1.10.2"
 reqwest = { version = "0.11.22", default-features = false }
 rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages", branch = "main", default-features = false }
+# rip = { package = "rattler_installs_packages", path = "../rattler_installs_packages/crates/rattler_installs_packages", default-features = false }
 serde = "1.0.193"
 serde_json = "1.0.108"
 serde_spanned = "0.6.4"

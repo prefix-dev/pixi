@@ -9,7 +9,7 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::{MarkerEnvironment, StringVersion};
 use rattler_conda_types::{PackageRecord, Platform, RepoDataRecord, Version, VersionWithSource};
-use rip::python_env::{WheelTag, WheelTags};
+use rip::python_env::{PythonLocation, WheelTag, WheelTags};
 use rip::resolve::{resolve, PinnedPackage, ResolveOptions, SDistResolution};
 use std::{collections::HashMap, str::FromStr, vec};
 
@@ -77,6 +77,8 @@ pub async fn resolve_pypi_dependencies<'p>(
         .map(|(name, req)| req.as_pep508(name))
         .collect::<Vec<pep508_rs::Requirement>>();
 
+    // let wheel_tags = WheelTags::from_env().await.into_diagnostic()?;
+
     // Resolve the PyPi dependencies
     let mut result = resolve(
         project.pypi_package_db()?,
@@ -89,6 +91,7 @@ pub async fn resolve_pypi_dependencies<'p>(
             .collect(),
         HashMap::default(),
         &ResolveOptions { sdist_resolution },
+        PythonLocation::System,
     )
     .await?;
 
