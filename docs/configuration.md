@@ -359,7 +359,7 @@ python = "3.11"
 Here are some more examples:
 ```toml
 [target.win-64.activation]
-scripts = ["setup.ps1"]
+scripts = ["setup.bat"]
 
 [target.win-64.dependencies]
 msmpi = "~=10.1.1"
