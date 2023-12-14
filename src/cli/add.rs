@@ -344,24 +344,21 @@ async fn update_environment(
 
     if let Some(lock_file) = lock_file {
         if !no_install {
-            let platform = Platform::current();
-            if project.platforms().contains(&platform) {
-                // Get the currently installed packages
-                let prefix = Prefix::new(project.root().join(".pixi/env"))?;
-                let installed_packages = prefix.find_installed_packages(None).await?;
+            crate::environment::sanity_check_project(project)?;
 
-                // Update the prefix
-                update_prefix(
-                    project.pypi_package_db()?,
-                    &prefix,
-                    installed_packages,
-                    &lock_file,
-                    platform,
-                )
-                .await?;
-            } else {
-                eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", console::style("!").yellow().bold())
-            }
+            // Get the currently installed packages
+            let prefix = Prefix::new(project.root().join(".pixi/env"))?;
+            let installed_packages = prefix.find_installed_packages(None).await?;
+
+            // Update the prefix
+            update_prefix(
+                project.pypi_package_db()?,
+                &prefix,
+                installed_packages,
+                &lock_file,
+                Platform::current(),
+            )
+            .await?;
         }
     }
     Ok(())
