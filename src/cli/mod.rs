@@ -75,7 +75,7 @@ pub enum Command {
 #[group(multiple = false)]
 /// Lock file usage from the CLI
 pub struct LockFileUsageArgs {
-    /// Don't update and check lock file
+    /// Don't check or update the lockfile, continue with previously installed environment.
     #[clap(long, conflicts_with = "locked")]
     pub frozen: bool,
     /// Check if lock file is up to date
