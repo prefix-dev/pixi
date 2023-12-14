@@ -78,7 +78,7 @@ pub struct LockFileUsageArgs {
     /// Don't check or update the lockfile, continue with previously installed environment.
     #[clap(long, conflicts_with = "locked")]
     pub frozen: bool,
-    /// Check if lockfile is up to date, aborts when lockfile isn't up to date with the manifest file. 
+    /// Check if lockfile is up to date, aborts when lockfile isn't up to date with the manifest file.
     #[clap(long, conflicts_with = "frozen")]
     pub locked: bool,
 }
