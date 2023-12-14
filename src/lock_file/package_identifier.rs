@@ -1,4 +1,4 @@
-use super::python_name_mapping;
+use super::pypi_name_mapping;
 use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use rattler_lock::{LockedDependency, LockedDependencyKind};
@@ -85,7 +85,7 @@ impl PypiPackageIdentifier {
 
         // If there is no pypi purl, but the package is a conda-forge package, we just assume that
         // the name of the package is equivalent to the name of the python package.
-        if !has_pypi_purl && python_name_mapping::is_conda_forge_url(&conda.url) {
+        if !has_pypi_purl && pypi_name_mapping::is_conda_forge_url(&conda.url) {
             // Convert the conda package names to pypi package names. If the conversion fails we
             // just assume that its not a valid python package.
             let name = NormalizedPackageName::from_str(&locked_dependency.name).ok();
@@ -121,7 +121,7 @@ impl PypiPackageIdentifier {
 
         // If there is no pypi purl, but the package is a conda-forge package, we just assume that
         // the name of the package is equivalent to the name of the python package.
-        if !has_pypi_purl && python_name_mapping::is_conda_forge_record(record) {
+        if !has_pypi_purl && pypi_name_mapping::is_conda_forge_record(record) {
             // Convert the conda package names to pypi package names. If the conversion fails we
             // just assume that its not a valid python package.
             let name = NormalizedPackageName::from_str(record.package_record.name.as_source()).ok();

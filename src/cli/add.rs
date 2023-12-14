@@ -220,7 +220,7 @@ pub async fn add_pypi_specs_to_project(
         }
     }
 
-    update_lockfile(project, None, no_install, no_update_lockfile).await?;
+    update_environment(project, None, no_install, no_update_lockfile).await?;
 
     project.save()?;
 
@@ -318,7 +318,7 @@ pub async fn add_conda_specs_to_project(
     }
     project.save()?;
 
-    update_lockfile(
+    update_environment(
         project,
         Some(sparse_repo_data),
         no_install,
@@ -329,7 +329,7 @@ pub async fn add_conda_specs_to_project(
     Ok(())
 }
 
-async fn update_lockfile(
+async fn update_environment(
     project: &Project,
     sparse_repo_data: Option<Vec<SparseRepoData>>,
     no_install: bool,

@@ -96,8 +96,7 @@ async fn test_alias() {
         .run(Args {
             task: vec!["helloworld".to_string()],
             manifest_path: None,
-            locked: false,
-            frozen: false,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -164,8 +163,7 @@ async fn test_cwd() {
         .run(Args {
             task: vec!["pwd-test".to_string()],
             manifest_path: None,
-            locked: false,
-            frozen: false,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -185,8 +183,7 @@ async fn test_cwd() {
         .run(Args {
             task: vec!["unknown-cwd".to_string()],
             manifest_path: None,
-            locked: false,
-            frozen: false,
+            ..Default::default()
         })
         .await
         .is_err());
