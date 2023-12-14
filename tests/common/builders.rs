@@ -231,11 +231,11 @@ pub struct InstallBuilder {
 
 impl InstallBuilder {
     pub fn with_locked(mut self) -> Self {
-        self.args.locked = true;
+        self.args.lock_file_usage.locked = true;
         self
     }
     pub fn with_frozen(mut self) -> Self {
-        self.args.frozen = true;
+        self.args.lock_file_usage.frozen = true;
         self
     }
 }

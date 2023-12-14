@@ -72,15 +72,11 @@ fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
     Ok(())
 }
 
-/// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
-/// up to date it is updated.
-/// Use `frozen` or `locked` to skip the update of the lockfile. Use frozen when you don't even want
-/// to check the lockfile status.
-pub async fn get_up_to_date_prefix(
-    project: &Project,
-    frozen: bool,
-    locked: bool,
-) -> miette::Result<Prefix> {
+/// Runs a number of different checks to make sure the project is in a sane state:
+///     1. It verifies that the prefix location is unchanged.
+///     2. It verifies that the project supports the current platform.
+///     3. It verifies that the system requirements are met.
+pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
     verify_prefix_location_unchanged(
         project
@@ -109,6 +105,30 @@ pub async fn get_up_to_date_prefix(
     // Make sure the system requirements are met
     verify_current_platform_has_required_virtual_packages(project)?;
 
+    Ok(())
+}
+
+/// Specifies how the lock-file should be updated.
+#[derive(Debug, Default)]
+pub enum LockFileUsage {
+    /// Update the lock-file if it is out of date.
+    #[default]
+    Update,
+    /// Don't update the lock-file, but do check if it is out of date
+    Locked,
+    /// Don't update the lock-file and don't check if it is out of date
+    Frozen,
+}
+
+/// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
+/// up to date it is updated.
+pub async fn get_up_to_date_prefix(
+    project: &Project,
+    usage: LockFileUsage,
+) -> miette::Result<Prefix> {
+    // Make sure the project is in a sane state
+    sanity_check_project(project)?;
+
     // Start loading the installed packages in the background
     let prefix = Prefix::new(project.root().join(".pixi/env"))?;
     let installed_packages_future = {
@@ -117,20 +137,26 @@ pub async fn get_up_to_date_prefix(
     };
 
     // Update the lock-file if it is out of date.
-    if frozen && locked {
-        miette::bail!("Frozen and Locked can't be true at the same time, as using frozen will ignore the locked variable.");
-    }
-    if frozen && !project.lock_file_path().is_file() {
+    if matches!(usage, LockFileUsage::Frozen) && !project.lock_file_path().is_file() {
         miette::bail!("No lockfile available, can't do a frozen installation.");
     }
 
     let mut lock_file = lock_file::load_lock_file(project).await?;
+    let up_to_date = lock_file_satisfies_project(project, &lock_file)?;
 
-    if !frozen && !lock_file_satisfies_project(project, &lock_file)? {
-        if locked {
-            miette::bail!("Lockfile not up-to-date with the project");
+    match usage {
+        LockFileUsage::Update => {
+            if !up_to_date {
+                lock_file = lock_file::update_lock_file(project, lock_file, None).await?
+            }
         }
-        lock_file = lock_file::update_lock_file(project, lock_file, None).await?
+        LockFileUsage::Locked => {
+            if !up_to_date {
+                miette::bail!("Lockfile not up-to-date with the project");
+            }
+        }
+        // Dont update the lock-file, dont check it
+        LockFileUsage::Frozen => {}
     }
 
     // Update the environment
@@ -139,7 +165,7 @@ pub async fn get_up_to_date_prefix(
         &prefix,
         installed_packages_future.await.into_diagnostic()??,
         &lock_file,
-        platform,
+        Platform::current(),
     )
     .await?;
 

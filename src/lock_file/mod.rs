@@ -1,6 +1,6 @@
 mod package_identifier;
-mod python;
-mod python_name_mapping;
+mod pypi;
+mod pypi_name_mapping;
 mod satisfiability;
 
 use crate::{progress, Project};
@@ -190,8 +190,7 @@ async fn resolve_platform(
 
     // Solve python packages
     pb.set_message("resolving python");
-    let python_artifacts =
-        python::resolve_pypi_dependencies(project, platform, &mut records).await?;
+    let python_artifacts = pypi::resolve_pypi_dependencies(project, platform, &mut records).await?;
 
     // Clear message
     pb.set_message("");
