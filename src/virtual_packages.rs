@@ -112,7 +112,7 @@ impl Project {
         platform: Platform,
     ) -> miette::Result<Vec<GenericVirtualPackage>> {
         // Get the system requirements from the project manifest
-        let system_requirements = self.system_requirements_for_platform(platform);
+        let system_requirements = self.virtual_packages_for_platform(platform);
 
         // Combine the requirements, allowing the system requirements to overwrite the reference
         // virtual packages.

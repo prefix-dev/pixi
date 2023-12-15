@@ -48,7 +48,9 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     let lock_file = load_lock_file(&project).await?;
 
     // Add the channels to the lock-file
-    project.add_channels(missing_channels.iter().map(|(name, _channel)| name))?;
+    project
+        .manifest
+        .add_channels(missing_channels.iter().map(|(name, _channel)| name))?;
 
     // Try to update the lock-file with the new channels
     let lock_file = update_lock_file(&project, lock_file, None).await?;
