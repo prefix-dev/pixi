@@ -1,6 +1,5 @@
 ---
-source: src/lock_file/python.rs
-assertion_line: 336
+source: src/lock_file/pypi.rs
 expression: tags
 ---
 [

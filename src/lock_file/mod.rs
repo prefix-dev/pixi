@@ -1,6 +1,6 @@
 mod package_identifier;
-mod python;
-mod python_name_mapping;
+mod pypi;
+mod pypi_name_mapping;
 mod satisfiability;
 
 use crate::{progress, Project};
@@ -87,6 +87,16 @@ pub async fn update_lock_file(
         .collect_vec();
 
     // Solve each platform concurrently
+    let num_concurrent = if project.has_pypi_dependencies() {
+        // HACK: There is a bug in rip that causes a dead-lock when solving multiple environments
+        // at the same time. So if there are pypi dependencies we limit the number of concurrent
+        // solves to 1.
+        1
+    } else {
+        // By default we solve 2 platforms concurrently. Could probably do more but solving takes
+        // a significant amount of memory.
+        2
+    };
     let result: miette::Result<Vec<_>> =
         stream::iter(platforms.iter().zip(solve_bars.iter().cloned()))
             .map(|(platform, pb)| {
@@ -124,7 +134,7 @@ pub async fn update_lock_file(
                     Ok(result)
                 }
             })
-            .buffer_unordered(2)
+            .buffer_unordered(num_concurrent)
             .try_collect()
             .await;
 
@@ -190,8 +200,7 @@ async fn resolve_platform(
 
     // Solve python packages
     pb.set_message("resolving python");
-    let python_artifacts =
-        python::resolve_pypi_dependencies(project, platform, &mut records).await?;
+    let python_artifacts = pypi::resolve_pypi_dependencies(project, platform, &mut records).await?;
 
     // Clear message
     pb.set_message("");

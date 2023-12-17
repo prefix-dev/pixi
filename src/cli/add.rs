@@ -224,7 +224,7 @@ pub async fn add_pypi_specs_to_project(
         }
     }
 
-    update_lockfile(project, None, no_install, no_update_lockfile).await?;
+    update_environment(project, None, no_install, no_update_lockfile).await?;
 
     project.save()?;
 
@@ -324,7 +324,7 @@ pub async fn add_conda_specs_to_project(
     }
     project.save()?;
 
-    update_lockfile(
+    update_environment(
         project,
         Some(sparse_repo_data),
         no_install,
@@ -335,7 +335,14 @@ pub async fn add_conda_specs_to_project(
     Ok(())
 }
 
-async fn update_lockfile(
+/// Updates the lock file and potentially the prefix to get an up-to-date environment.
+///
+/// We are using this function instead of [`crate::environment::get_up_to_date_prefix`] because we want to be able to
+/// specify if we do not want to update the prefix. Also we know the lock file needs to be updated so `--frozen` and `--locked`
+/// make no sense in this scenario.
+///
+/// Essentially, other than that it does almost the same thing
+async fn update_environment(
     project: &Project,
     sparse_repo_data: Option<Vec<SparseRepoData>>,
     no_install: bool,
@@ -350,24 +357,21 @@ async fn update_lockfile(
 
     if let Some(lock_file) = lock_file {
         if !no_install {
-            let platform = Platform::current();
-            if project.platforms().contains(&platform) {
-                // Get the currently installed packages
-                let prefix = Prefix::new(project.root().join(".pixi/env"))?;
-                let installed_packages = prefix.find_installed_packages(None).await?;
+            crate::environment::sanity_check_project(project)?;
 
-                // Update the prefix
-                update_prefix(
-                    project.pypi_package_db()?,
-                    &prefix,
-                    installed_packages,
-                    &lock_file,
-                    platform,
-                )
-                .await?;
-            } else {
-                eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", console::style("!").yellow().bold())
-            }
+            // Get the currently installed packages
+            let prefix = Prefix::new(project.root().join(".pixi/env"))?;
+            let installed_packages = prefix.find_installed_packages(None).await?;
+
+            // Update the prefix
+            update_prefix(
+                project.pypi_package_db()?,
+                &prefix,
+                installed_packages,
+                &lock_file,
+                Platform::current(),
+            )
+            .await?;
         }
     }
     Ok(())

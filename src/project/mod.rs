@@ -346,6 +346,35 @@ impl Project {
             .collect::<IndexMap<_, _>>()
     }
 
+    /// Returns true if the project contains any pypi dependencies
+    pub fn has_pypi_dependencies(&self) -> bool {
+        // Do we have base pypi dependencies?
+        if !self
+            .manifest
+            .parsed
+            .pypi_dependencies
+            .as_ref()
+            .map(IndexMap::is_empty)
+            .unwrap_or(true)
+        {
+            return true;
+        }
+
+        // Do we have target specific pypi dependencies?
+        for (_, target) in self.manifest.parsed.target.iter() {
+            if !target
+                .pypi_dependencies
+                .as_ref()
+                .map(IndexMap::is_empty)
+                .unwrap_or(true)
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+
     /// Returns the Python index URLs to use for this project.
     pub fn pypi_index_urls(&self) -> Vec<Url> {
         let index_url = normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap());

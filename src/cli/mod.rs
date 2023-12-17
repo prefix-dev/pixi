@@ -71,6 +71,30 @@ pub enum Command {
     Remove(remove::Args),
 }
 
+#[derive(Parser, Debug, Default)]
+#[group(multiple = false)]
+/// Lock file usage from the CLI
+pub struct LockFileUsageArgs {
+    /// Don't check or update the lockfile, continue with previously installed environment.
+    #[clap(long, conflicts_with = "locked")]
+    pub frozen: bool,
+    /// Check if lockfile is up to date, aborts when lockfile isn't up to date with the manifest file.
+    #[clap(long, conflicts_with = "frozen")]
+    pub locked: bool,
+}
+
+impl From<LockFileUsageArgs> for crate::environment::LockFileUsage {
+    fn from(value: LockFileUsageArgs) -> Self {
+        if value.frozen {
+            Self::Frozen
+        } else if value.locked {
+            Self::Locked
+        } else {
+            Self::Update
+        }
+    }
+}
+
 pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
     let use_colors = use_color_output(&args);

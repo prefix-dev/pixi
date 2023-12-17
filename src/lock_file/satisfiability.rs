@@ -1,6 +1,6 @@
 use super::package_identifier;
 use crate::{
-    lock_file::python::{determine_marker_environment, is_python},
+    lock_file::pypi::{determine_marker_environment, is_python_record},
     Project,
 };
 use itertools::Itertools;
@@ -87,7 +87,7 @@ pub fn lock_file_satisfies_project(
             };
 
             // Find the python package
-            let Some(python_record) = conda_packages.into_iter().find(is_python) else {
+            let Some(python_record) = conda_packages.into_iter().find(is_python_record) else {
                 tracing::info!(
                     "there are pypi-dependencies but there is no python version in the lock-file"
                 );

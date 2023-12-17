@@ -24,6 +24,7 @@ use rattler_lock::{CondaLock, LockedDependencyKind};
 
 use miette::{Diagnostic, IntoDiagnostic};
 use pep508_rs::VersionOrUrl;
+use pixi::cli::LockFileUsageArgs;
 use pixi::task::TaskExecutionError;
 use std::{
     collections::HashSet,
@@ -239,8 +240,7 @@ impl PixiControl {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
         let project = self.project()?;
         let task = ExecutableTask::from_cmd_args(&project, args.task, Some(Platform::current()));
-
-        let task_env = get_task_env(&project, args.frozen, args.locked).await?;
+        let task_env = get_task_env(&project, args.lock_file_usage.into()).await?;
 
         #[derive(Error, Debug, Diagnostic)]
         enum RunError {
@@ -279,8 +279,10 @@ impl PixiControl {
         InstallBuilder {
             args: Args {
                 manifest_path: Some(self.manifest_path()),
-                locked: false,
-                frozen: false,
+                lock_file_usage: LockFileUsageArgs {
+                    frozen: false,
+                    locked: false,
+                },
             },
         }
     }
