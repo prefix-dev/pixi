@@ -148,12 +148,12 @@ impl Project {
 
     /// Returns the name of the project
     pub fn name(&self) -> &str {
-        &self.manifest.manifest.project.name
+        &self.manifest.parsed.project.name
     }
 
     /// Returns the version of the project
     pub fn version(&self) -> &Option<Version> {
-        &self.manifest.manifest.project.version
+        &self.manifest.parsed.project.version
     }
 
     /// Returns the root directory of the project
@@ -183,12 +183,12 @@ impl Project {
 
     /// Returns the channels used by this project
     pub fn channels(&self) -> &[Channel] {
-        &self.manifest.manifest.project.channels
+        &self.manifest.parsed.project.channels
     }
 
     /// Returns the platforms this project targets
     pub fn platforms(&self) -> &[Platform] {
-        self.manifest.manifest.project.platforms.as_ref().as_slice()
+        self.manifest.parsed.project.platforms.as_ref().as_slice()
     }
 
     /// Get the tasks of this project
@@ -205,7 +205,7 @@ impl Project {
             }
         }
 
-        self.manifest.manifest.tasks.get(name)
+        self.manifest.parsed.tasks.get(name)
     }
 
     /// Returns all tasks defined in the project for the given platform
@@ -213,7 +213,7 @@ impl Project {
         let mut all_tasks = HashSet::new();
 
         // Get all non-target specific tasks
-        all_tasks.extend(self.manifest.manifest.tasks.keys());
+        all_tasks.extend(self.manifest.parsed.tasks.keys());
 
         // Gather platform-specific tasks and overwrite the keys if they're double.
         if let Some(platform) = platform {
@@ -245,7 +245,7 @@ impl Project {
         platform: Platform,
     ) -> miette::Result<IndexMap<PackageName, NamelessMatchSpec>> {
         // Get the base dependencies (defined in the `[dependencies]` section)
-        let base_dependencies = self.manifest.manifest.dependencies.iter();
+        let base_dependencies = self.manifest.parsed.dependencies.iter();
 
         // Get the platform specific dependencies in the order they were defined.
         let platform_specific = self
@@ -269,7 +269,7 @@ impl Project {
         platform: Platform,
     ) -> miette::Result<IndexMap<PackageName, NamelessMatchSpec>> {
         // Get the base dependencies (defined in the `[build-dependencies]` section)
-        let base_dependencies = self.manifest.manifest.build_dependencies.iter();
+        let base_dependencies = self.manifest.parsed.build_dependencies.iter();
 
         // Get the platform specific dependencies in the order they were defined.
         let platform_specific = self
@@ -294,7 +294,7 @@ impl Project {
         platform: Platform,
     ) -> miette::Result<IndexMap<PackageName, NamelessMatchSpec>> {
         // Get the base dependencies (defined in the `[host-dependencies]` section)
-        let base_dependencies = self.manifest.manifest.host_dependencies.iter();
+        let base_dependencies = self.manifest.parsed.host_dependencies.iter();
 
         // Get the platform specific dependencies in the order they were defined.
         let platform_specific = self
@@ -329,7 +329,7 @@ impl Project {
         platform: Platform,
     ) -> IndexMap<&rip::types::PackageName, &PyPiRequirement> {
         // Get the base pypi dependencies (defined in the `[pypi-dependencies]` section)
-        let base_pypi_dependencies = self.manifest.manifest.pypi_dependencies.iter();
+        let base_pypi_dependencies = self.manifest.parsed.pypi_dependencies.iter();
 
         // Get the platform specific dependencies in the order they were defined.
         let platform_specific = self
@@ -389,7 +389,7 @@ impl Project {
 
         // Gather the main activation scripts if there are no target scripts defined.
         if all_scripts.is_empty() {
-            if let Some(activation) = &self.manifest.manifest.activation {
+            if let Some(activation) = &self.manifest.parsed.activation {
                 if let Some(scripts) = &activation.scripts {
                     all_scripts.extend(scripts.clone());
                 }
@@ -418,7 +418,7 @@ impl Project {
     /// Get the system requirements defined under the `system-requirements` section of the project manifest.
     /// They will act as the description of a reference machine which is minimally needed for this package to be run.
     pub fn system_requirements(&self) -> &SystemRequirements {
-        &self.manifest.manifest.system_requirements
+        &self.manifest.parsed.system_requirements
     }
 
     /// Get the system requirements defined under the `system-requirements` section of the project manifest.

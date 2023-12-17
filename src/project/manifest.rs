@@ -38,7 +38,7 @@ pub struct Manifest {
     pub document: toml_edit::Document,
 
     /// The parsed manifest
-    pub manifest: ProjectManifest,
+    pub parsed: ProjectManifest,
 }
 
 impl Manifest {
@@ -91,7 +91,7 @@ impl Manifest {
             path: root.join(consts::PROJECT_MANIFEST),
             contents,
             document,
-            manifest,
+            parsed: manifest,
         })
     }
 
@@ -109,7 +109,7 @@ impl Manifest {
         &self,
         platform: Platform,
     ) -> impl Iterator<Item = &'_ TargetMetadata> + '_ {
-        self.manifest
+        self.parsed
             .target
             .iter()
             .filter_map(move |(selector, manifest)| match selector.as_ref() {
@@ -155,7 +155,7 @@ impl Manifest {
         let depends_on = task.depends_on();
 
         for depends in depends_on {
-            if !self.manifest.tasks.contains_key(depends) {
+            if !self.parsed.tasks.contains_key(depends) {
                 miette::bail!(
                     "task '{}' for the depends on for '{}' does not exist",
                     depends,
@@ -167,7 +167,7 @@ impl Manifest {
         // Add the task to the table
         table.insert(name.as_ref(), task_as_toml(task.clone()));
 
-        self.manifest.tasks.insert(name.as_ref().to_string(), task);
+        self.parsed.tasks.insert(name.as_ref().to_string(), task);
 
         self.save()?;
 
@@ -179,7 +179,7 @@ impl Manifest {
         let mut all_tasks = HashMap::default();
 
         // Gather non-target specific tasks
-        all_tasks.extend(self.manifest.tasks.iter().map(|(k, v)| (k.as_str(), v)));
+        all_tasks.extend(self.parsed.tasks.iter().map(|(k, v)| (k.as_str(), v)));
 
         // Gather platform-specific tasks and overwrite them if they're double.
         if let Some(platform) = platform {
@@ -238,7 +238,7 @@ impl Manifest {
         }
 
         // Add to manifest
-        self.manifest.project.platforms.value.extend(platforms);
+        self.parsed.project.platforms.value.extend(platforms);
         Ok(())
     }
 
@@ -367,7 +367,7 @@ impl Manifest {
         let (name, nameless) =
             self.add_dep_to_target_table(platform, toml_name.to_string(), spec)?;
         // Add to manifest
-        self.manifest
+        self.parsed
             .target
             .entry(TargetSelector::Platform(platform).into())
             .or_insert(TargetMetadata::default())
@@ -385,7 +385,7 @@ impl Manifest {
         // Add to target table toml
         self.add_pypi_dep_to_target_table(platform, &name.clone(), requirement)?;
         // Add to manifest
-        self.manifest
+        self.parsed
             .target
             .entry(TargetSelector::Platform(platform).into())
             .or_insert(TargetMetadata::default())
@@ -401,7 +401,7 @@ impl Manifest {
         let deps = &mut self.document[spec_type.name()];
         let (name, nameless) = Manifest::add_to_deps_table(deps, spec)?;
 
-        self.manifest
+        self.parsed
             .create_or_get_dependencies(spec_type)
             .insert(name.as_source().into(), nameless);
 
@@ -417,7 +417,7 @@ impl Manifest {
         let deps = &mut self.document[DependencyType::PypiDependency.name()];
         Manifest::add_pypi_dep_to_table(deps, name, requirement)?;
 
-        self.manifest
+        self.parsed
             .create_or_get_pypi_dependencies()
             .insert(name.clone(), requirement.clone());
 
@@ -433,7 +433,7 @@ impl Manifest {
         if let Item::Table(ref mut t) = self.document[spec_type.name()] {
             if t.contains_key(dep.as_normalized()) && t.remove(dep.as_normalized()).is_some() {
                 return self
-                    .manifest
+                    .parsed
                     .remove_dependency(dep.as_normalized(), spec_type);
             }
         }
@@ -454,7 +454,7 @@ impl Manifest {
     ) -> miette::Result<(String, NamelessMatchSpec)> {
         let table = get_toml_target_table(&mut self.document, platform, spec_type.name())?;
         table.remove(dep.as_normalized());
-        self.manifest
+        self.parsed
             .remove_target_dependency(dep.as_normalized(), spec_type, platform)
     }
 
@@ -482,7 +482,7 @@ impl Manifest {
     ) -> miette::Result<()> {
         let mut stored_channels = Vec::new();
         for channel in channels {
-            self.manifest.project.channels.push(
+            self.parsed.project.channels.push(
                 Channel::from_str(channel.as_ref(), &ChannelConfig::default()).into_diagnostic()?,
             );
             stored_channels.push(channel.as_ref().to_owned());
@@ -1290,10 +1290,10 @@ mod test {
         let mut manifest = Manifest::from_str(tmpdir.path(), file_contents).unwrap();
 
         manifest
-            .manifest
+            .parsed
             .remove_target_dependency("baz", &SpecType::Build, &Platform::Linux64)
             .unwrap();
-        assert_debug_snapshot!(manifest.manifest);
+        assert_debug_snapshot!(manifest.parsed);
     }
 
     #[test]
@@ -1324,8 +1324,8 @@ mod test {
                 &SpecType::Run,
             )
             .unwrap();
-        assert!(manifest.manifest.dependencies.is_empty());
+        assert!(manifest.parsed.dependencies.is_empty());
         // Should still contain the fooz dependency in the target table
-        assert_debug_snapshot!(manifest.manifest.target);
+        assert_debug_snapshot!(manifest.parsed.target);
     }
 }

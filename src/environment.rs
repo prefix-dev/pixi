@@ -92,7 +92,7 @@ pub async fn get_up_to_date_prefix(
     // Make sure the project supports the current platform
     let platform = Platform::current();
     if !project.platforms().contains(&platform) {
-        let span = project.manifest.manifest.project.platforms.span();
+        let span = project.manifest.parsed.project.platforms.span();
         return Err(miette::miette!(
             help = format!(
                 "The project needs to be configured to support your platform ({platform})."
