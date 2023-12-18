@@ -276,23 +276,7 @@ impl Manifest {
             .as_array_mut()
             .expect("platforms should be an array");
 
-        println!(
-            "platform_array: {:?}",
-            platform_array
-                .iter()
-                .map(|x| x.as_str().unwrap().to_string())
-                .collect::<Vec<String>>()
-        );
-
         platform_array.retain(|x| !removed_platforms.contains(&x.as_str().unwrap().to_string()));
-
-        println!(
-            "platform_array: {:?}",
-            platform_array
-                .iter()
-                .map(|x| x.as_str().unwrap().to_string())
-                .collect::<Vec<String>>()
-        );
 
         Ok(())
     }
