@@ -156,6 +156,11 @@ impl Project {
         &self.manifest.parsed.project.version
     }
 
+    /// Returns the description of the project
+    pub fn description(&self) -> &Option<String> {
+        &self.manifest.parsed.project.description
+    }
+
     /// Returns the root directory of the project
     pub fn root(&self) -> &Path {
         &self.root

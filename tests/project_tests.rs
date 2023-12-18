@@ -1,6 +1,7 @@
 mod common;
 
 use crate::{common::package_database::PackageDatabase, common::PixiControl};
+use pixi::cli::project::description;
 use rattler_conda_types::{Channel, ChannelConfig};
 use tempfile::TempDir;
 use url::Url;
@@ -49,27 +50,26 @@ async fn add_channel() {
 }
 
 #[tokio::test]
-async fn description() {
+async fn description_set() {
     // Get a pixi instance
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
-    let _command = "project description set \"Hello world\"";
+    let new_description = "Hello description 1234567890!";
 
-    // // Set the description
-    // let result = pixi
-    //     .run(run::Args {
-    //         task: command.split(" ").map(|s| s.to_string()).collect(),
-    //         ..Default::default()
-    //     })
-    //     .await
-    //     .unwrap();
+    // Set the description
+    description::execute(description::Args {
+        command: description::Command::Set(description::set::Args {
+            description: new_description.to_string(),
+        }),
+        manifest_path: Some(pixi.project().unwrap().manifest_path()),
+    })
+    .await
+    .unwrap();
 
-    // println!("{:?}", result);
+    // Load the project
+    let project = pixi.project().unwrap();
 
-    // assert_eq!(result.exit_code, 0);
-    // assert_eq!(result.stdout.trim(), "Python 3.11.0");
-    // assert!(result.stderr.is_empty());
-
-    // let project = pixi.project().unwrap();
+    // Check that the description is set
+    assert_eq!(project.description().as_ref().unwrap(), new_description);
 }

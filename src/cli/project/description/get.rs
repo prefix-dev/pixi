@@ -7,7 +7,7 @@ pub struct Args {}
 
 pub async fn execute(project: Project, _args: Args) -> miette::Result<()> {
     // Print the description if it exists
-    if let Some(description) = project.manifest.parsed.project.description {
+    if let Some(description) = project.description() {
         eprintln!("{}", description);
     }
     Ok(())
