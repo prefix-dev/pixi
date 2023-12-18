@@ -6,6 +6,9 @@ use clap::Parser;
 pub struct Args {}
 
 pub async fn execute(project: Project, _args: Args) -> miette::Result<()> {
-    eprintln!("{}", project.version().as_ref().unwrap());
+    // Print the version if it exists
+    if let Some(version) = project.version() {
+        eprintln!("{}", version);
+    }
     Ok(())
 }
