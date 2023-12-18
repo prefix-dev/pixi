@@ -5,6 +5,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::sparse::SparseRepoData;
+use regex::Regex;
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
@@ -99,11 +100,155 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let repo_data = fetch_sparse_repodata(&channels, &platforms).await?;
 
     let p = PackageName::try_from(package_name.clone()).into_diagnostic()?;
+
+    if contains_wildcard(&package_name) {
+        let result = search_package_by_wildcard(p, &package_name, repo_data, limit).await;
+        return match result {
+            Ok(_) => Ok(()),
+            Err(report) => Err(report),
+        };
+    }
+
+    let result = search_exact_package(p, &package_name, repo_data).await;
+    return match result {
+        Ok(_) => Ok(()),
+        Err(report) => Err(report),
+    };
+}
+
+fn contains_wildcard(string: &str) -> bool {
+    string.contains('*')
+}
+
+async fn search_exact_package(
+    p: PackageName,
+    package_name: &str,
+    repo_data: Vec<SparseRepoData>,
+) -> miette::Result<()> {
+    let packages = await_in_progress(
+        "searching packages",
+        spawn_blocking(move || {
+            let packages =
+                search_package_by_filter(&p, &repo_data, |pn, n| pn == n.as_normalized());
+            match packages {
+                Ok(packages) => Ok(packages),
+                Err(e) => Err(e),
+            }
+        }),
+    )
+    .await
+    .into_diagnostic()??;
+
+    if packages.is_empty() {
+        return Err(miette::miette!("Could not find {package_name}"));
+    }
+
+    let package = packages.last().clone();
+    if let Some(package) = package {
+        print_package_info(package);
+    }
+
+    Ok(())
+}
+
+fn print_package_info(package: &RepoDataRecord) {
+    println!();
+
+    let package = package.clone();
+    let package_name = package.package_record.name.as_source();
+    let build = &package.package_record.build;
+    let package_info = format!("{} {}", console::style(package_name), console::style(build));
+    println!("{}", package_info);
+    println!("{}\n", "-".repeat(package_info.chars().count()));
+
+    println!(
+        "{:19} {:19}",
+        console::style("Name"),
+        console::style(package_name)
+    );
+
+    println!(
+        "{:19} {:19}",
+        console::style("Version"),
+        console::style(package.package_record.version)
+    );
+
+    println!(
+        "{:19} {:19}",
+        console::style("Build"),
+        console::style(build)
+    );
+
+    let size = match package.package_record.size {
+        Some(size) => size.to_string(),
+        None => String::from("Not found."),
+    };
+    println!("{:19} {:19}", console::style("Size"), console::style(size));
+
+    let license = match package.package_record.license {
+        Some(license) => license,
+        None => String::from("Not found."),
+    };
+    println!(
+        "{:19} {:19}",
+        console::style("License"),
+        console::style(license)
+    );
+
+    println!(
+        "{:19} {:19}",
+        console::style("Subdir"),
+        console::style(package.package_record.subdir)
+    );
+
+    println!(
+        "{:19} {:19}",
+        console::style("File Name"),
+        console::style(package.file_name)
+    );
+
+    println!(
+        "{:19} {:19}",
+        console::style("URL"),
+        console::style(package.url)
+    );
+
+    let md5 = match package.package_record.md5 {
+        Some(md5) => hex::encode(md5),
+        None => "Not available".to_string(),
+    };
+    println!("{:19} {:19}", console::style("MD5"), console::style(md5));
+
+    let sha256 = match package.package_record.sha256 {
+        Some(sha256) => hex::encode(sha256),
+        None => "Not available".to_string(),
+    };
+    println!(
+        "{:19} {:19}",
+        console::style("SHA256"),
+        console::style(sha256),
+    );
+
+    println!("\nDependencies:");
+    for dependency in package.package_record.depends {
+        println!(" - {}", dependency);
+    }
+}
+
+async fn search_package_by_wildcard(
+    p: PackageName,
+    package_name: &str,
+    repo_data: Vec<SparseRepoData>,
+    limit: usize,
+) -> miette::Result<()> {
+    let wildcard_pattern = Regex::new(&format!("^{}$", &package_name.replace("*", ".*")))
+        .expect("Expect only characters and * (wildcard).");
+
     let mut packages = await_in_progress(
         "searching packages",
         spawn_blocking(move || {
             let packages =
-                search_package_by_filter(&p, &repo_data, |pn, n| pn.contains(n.as_normalized()));
+                search_package_by_filter(&p, &repo_data, |pn, _| wildcard_pattern.is_match(pn));
             match packages {
                 Ok(packages) => {
                     if packages.is_empty() {
@@ -140,12 +285,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let _ = packages.split_off(limit);
     }
 
+    print_matching_packages(packages);
+
+    Ok(())
+}
+
+fn print_matching_packages(packages: Vec<RepoDataRecord>) {
     println!(
         "{:40} {:19} {:19}",
         console::style("Package").bold(),
         console::style("Version").bold(),
         console::style("Channel").bold(),
     );
+
     for package in packages {
         // TODO: change channel fetch logic to be more robust
         // currently it relies on channel field being a url with trailing slash
@@ -163,6 +315,4 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             console::style(channel_name),
         );
     }
-
-    Ok(())
 }
