@@ -5,14 +5,15 @@ use crate::Project;
 use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, ChannelConfig, Platform};
+use rattler_conda_types::Platform;
+use std::str::FromStr;
 
-/// Remove a channel(s) to the project file and updates the lockfile.
+/// Remove a platform(s) to the project file and updates the lockfile.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
-    /// The channel name(s) or URL
+    /// The platform name(s) to add.
     #[clap(required = true, num_args=1..)]
-    pub channel: Vec<String>,
+    pub platform: Vec<String>,
 
     /// Don't update the environment, only remove the channel(s) to the lock-file.
     #[clap(long)]
@@ -20,25 +21,22 @@ pub struct Args {
 }
 
 pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
-    // Determine which channels are missing
-    let channel_config = ChannelConfig::default();
-    let channels = args
-        .channel
+    // Determine which platforms are missing
+    let platforms = args
+        .platform
         .into_iter()
-        .map(|channel_str| {
-            Channel::from_str(&channel_str, &channel_config).map(|channel| (channel_str, channel))
-        })
+        .map(|platform_str| Platform::from_str(&platform_str))
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
-    let channels_to_remove = channels
+    let platforms_to_remove = platforms
         .into_iter()
-        .filter(|(_name, channel)| project.channels().contains(channel))
+        .filter(|x| project.platforms().contains(x))
         .collect_vec();
 
-    if channels_to_remove.is_empty() {
+    if platforms_to_remove.is_empty() {
         eprintln!(
-            "{}The channel(s) are not present.",
+            "{}The platforms(s) are not present.",
             console::style(console::Emoji("✔ ", "")).green(),
         );
         return Ok(());
@@ -50,7 +48,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     // Add the channels to the lock-file
     project
         .manifest
-        .remove_channels(channels_to_remove.iter().map(|(name, _channel)| name))?;
+        .remove_platforms(platforms_to_remove.iter().map(|p| p.to_string()))?;
 
     // Try to update the lock-file with the new channels
     let lock_file = update_lock_file(&project, lock_file, None).await?;
@@ -74,12 +72,11 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     }
 
     // Report back to the user
-    for (name, channel) in channels_to_remove {
+    for platform in platforms_to_remove {
         eprintln!(
-            "{}Removed {} ({})",
+            "{}Removed {}",
             console::style(console::Emoji("✔ ", "")).green(),
-            name,
-            channel.base_url()
+            platform,
         );
     }
 

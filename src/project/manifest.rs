@@ -17,6 +17,7 @@ use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use toml_edit::{value, Array, Document, Item, Table, TomlError, Value};
 use url::Url;
 
@@ -240,6 +241,59 @@ impl Manifest {
 
         // Add to manifest
         self.parsed.project.platforms.value.extend(platforms);
+        Ok(())
+    }
+
+    /// Remove the platform(s) from the project
+    pub fn remove_platforms(
+        &mut self,
+        platforms: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> miette::Result<()> {
+        let mut removed_platforms = Vec::new();
+
+        for platform in platforms {
+            // Parse the channel to be removed
+            let platform_to_remove = Platform::from_str(platform.as_ref()).into_diagnostic()?;
+
+            // Remove the channel if it exists
+            if let Some(pos) = self
+                .parsed
+                .project
+                .platforms
+                .value
+                .iter()
+                .position(|x| *x == platform_to_remove)
+            {
+                self.parsed.project.platforms.value.remove(pos);
+            }
+
+            removed_platforms.push(platform.as_ref().to_owned());
+        }
+
+        // remove the platforms from the toml
+        let platform_array = &mut self.document["project"]["platforms"];
+        let platform_array = platform_array
+            .as_array_mut()
+            .expect("platforms should be an array");
+
+        println!(
+            "platform_array: {:?}",
+            platform_array
+                .iter()
+                .map(|x| x.as_str().unwrap().to_string())
+                .collect::<Vec<String>>()
+        );
+
+        platform_array.retain(|x| !removed_platforms.contains(&x.as_str().unwrap().to_string()));
+
+        println!(
+            "platform_array: {:?}",
+            platform_array
+                .iter()
+                .map(|x| x.as_str().unwrap().to_string())
+                .collect::<Vec<String>>()
+        );
+
         Ok(())
     }
 
@@ -497,7 +551,7 @@ impl Manifest {
         Ok(())
     }
 
-    /// Adds the specified channels to the manifest.
+    /// Remove the specified channels to the manifest.
     pub fn remove_channels(
         &mut self,
         channels: impl IntoIterator<Item = impl AsRef<str>>,
