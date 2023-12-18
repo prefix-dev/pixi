@@ -1,3 +1,50 @@
 .md-header__topic {
   font-family: 'Dosis', sans-serif;
 }
+
+
+.md-header__topic:first-child {
+  font-weight: normal;
+}
+
+.md-typeset h1 {
+  color: #ffec3d;
+}
+.md-typeset h1, .md-typeset h2, .md-typeset h3, .md-typeset h4, .md-typeset h5, .md-typeset h6 {
+  font-family: 'Dosis', sans-serif;
+  font-weight: 500;
+  color: #ffec3d;
+}
+
+.md-typeset p {
+  /* kerning */
+  text-rendering: optimizeLegibility;
+}
+
+
+:root > * {
+  --md-code-hl-string-color: #ffec3d;
+}
+
+.md-header__button.md-logo {
+  padding: 0;
+  margin: 0;
+}
+
+.md-header__button.md-logo img, .md-header__button.md-logo svg {
+  height: 2.1rem;
+}
+
+[dir=ltr] .md-header__title {
+  margin-left: 0.5rem;
+}
+
+.md-footer-meta__item--prefix-logo {
+  height: 2rem;
+  margin: 0.5rem 0;
+  display: flex;
+}
+
+.md-footer-meta__item--prefix-logo img {
+  height: 100%;
+}

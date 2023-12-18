@@ -4,6 +4,8 @@ title: Getting Started
 description: Package management made easy
 ---
 
+![Pixi with magic wand](assets/pixi.webp)
+
 Pixi is a package management tool for developers.
 It allows the developer to install libraries and applications in a reproducible way.
 Use pixi cross-platform, on Windows, Mac and Linux.
@@ -13,7 +15,7 @@ Use pixi cross-platform, on Windows, Mac and Linux.
 To install `pixi` you can run the following command in your terminal:
 
 === "Linux & macOS"
-    ```shell
+    ```bash
     curl -fsSL https://pixi.sh/install.sh | bash
     ```
 
