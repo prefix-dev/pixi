@@ -23,7 +23,7 @@ pub async fn execute(bump_type: BumpType, mut project: Project, _args: Args) -> 
     };
 
     // Set the version
-    project.manifest.set_version(new_version.to_string())?;
+    project.manifest.set_version(&new_version.to_string())?;
 
     // Save the manifest on disk
     project.save()?;

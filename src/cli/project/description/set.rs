@@ -11,7 +11,7 @@ pub struct Args {
 
 pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     // Set the description
-    project.manifest.set_description(args.description)?;
+    project.manifest.set_description(&args.description)?;
 
     // Save the manifest on disk
     project.save()?;

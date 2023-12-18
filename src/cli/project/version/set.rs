@@ -11,7 +11,7 @@ pub struct Args {
 
 pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     // Set the version
-    project.manifest.set_version(args.version)?;
+    project.manifest.set_version(&args.version)?;
 
     // Save the manifest on disk
     project.save()?;
