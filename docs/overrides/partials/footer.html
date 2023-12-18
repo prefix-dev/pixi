@@ -33,7 +33,7 @@
           aria-label="{{ lang.t('footer') }}"
           {{ hidden }}
         >
-  
+
           <!-- Link to previous page -->
           {% if page.previous_page %}
             {% set direction = lang.t("footer.previous") %}
@@ -56,7 +56,7 @@
               </div>
             </a>
           {% endif %}
-  
+
           <!-- Link to next page -->
           {% if page.next_page %}
             {% set direction = lang.t("footer.next") %}
@@ -82,7 +82,7 @@
         </nav>
       {% endif %}
     {% endif %}
-  
+
     <!-- Further information -->
     <div class="md-footer-meta md-typeset">
       <div class="md-footer-meta__inner md-grid">
@@ -91,7 +91,7 @@
         <!-- prefix logo -->
         <div class="md-footer-meta__item md-footer-meta__item--prefix-logo">
             <a href="https://prefix.dev" target="_blank">
-                <img src="../../assets/logo_dark.svg" alt="">
+                <img src="{{ 'assets/logo_dark.svg' | url }}" alt="">
             </a>
         </div>
 
