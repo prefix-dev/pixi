@@ -3,11 +3,13 @@ use std::path::PathBuf;
 
 pub mod channel;
 pub mod description;
+pub mod platform;
 
 #[derive(Debug, Parser)]
 pub enum Command {
     Channel(channel::Args),
     Description(description::Args),
+    Platform(platform::Args),
 }
 
 /// Modify the project configuration file through the command line.
@@ -24,6 +26,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
     match cmd.command {
         Command::Channel(args) => channel::execute(args).await?,
         Command::Description(args) => description::execute(args).await?,
+        Command::Platform(args) => platform::execute(args).await?,
     };
     Ok(())
 }
