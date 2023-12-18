@@ -586,10 +586,18 @@ impl Manifest {
 
     /// Set the project description
     pub fn set_description(&mut self, description: String) -> miette::Result<()> {
-        // NOTE(hadim): It feels strange to set description on both `parsed` and `document`.
-        // But I am not sure what approach is preferred here.
+        // Update in both the manifest and the toml
         self.parsed.project.description = Some(description.clone());
         self.document["project"]["description"] = value(description);
+
+        Ok(())
+    }
+
+    /// Set the project version
+    pub fn set_version(&mut self, version: String) -> miette::Result<()> {
+        // Update in both the manifest and the toml
+        self.parsed.project.version = Some(Version::from_str(&version).unwrap());
+        self.document["project"]["version"] = value(version);
 
         Ok(())
     }
