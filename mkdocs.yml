@@ -10,7 +10,9 @@ theme:
   logo: assets/logo_light_no_text.svg
   site_url: https://prefix.dev
   palette:
-    primary: custom
+    primary: yellow
+    accent: yellow
+    scheme: slate
   icon:
     edit: material/pencil
     view: material/eye
