@@ -67,7 +67,7 @@ pub async fn resolve_pypi_dependencies<'p>(
     // Determine the compatible tags
     let compatible_tags = project_platform_tags(
         platform,
-        &project.manifest.system_requirements,
+        project.system_requirements(),
         python_record.as_ref(),
     );
 

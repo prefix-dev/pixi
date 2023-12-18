@@ -88,7 +88,7 @@ pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Make sure the project supports the current platform
     let platform = Platform::current();
     if !project.platforms().contains(&platform) {
-        let span = project.manifest.project.platforms.span();
+        let span = project.manifest.parsed.project.platforms.span();
         return Err(miette::miette!(
             help = format!(
                 "The project needs to be configured to support your platform ({platform})."
@@ -99,7 +99,7 @@ pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
             )],
             "the project is not configured for your current platform"
         )
-        .with_source_code(project.source()));
+        .with_source_code(project.manifest_named_source()));
     }
 
     // Make sure the system requirements are met

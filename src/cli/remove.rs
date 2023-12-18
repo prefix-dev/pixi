@@ -45,9 +45,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .iter()
         .map(|dep| {
             if let Some(p) = &args.platform {
-                project.remove_target_dependency(dep, &spec_type, p)
+                project
+                    .manifest
+                    .remove_target_dependency(dep, &spec_type, p)
             } else {
-                project.remove_dependency(dep, &spec_type)
+                project.manifest.remove_dependency(dep, &spec_type)
             }
         })
         .collect::<Vec<_>>();

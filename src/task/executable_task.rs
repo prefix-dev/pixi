@@ -232,6 +232,7 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::project::manifest::Manifest;
     use std::path::Path;
 
     #[tokio::test]
@@ -247,7 +248,8 @@ mod tests {
         task2 = {cmd="echo task2", depends_on=["root"]}
         top = {cmd="echo top", depends_on=["task1","task2"]}
     "#;
-        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
+        let manifest = Manifest::from_str(Path::new(""), file_content.to_string()).unwrap();
+        let project = Project::from_manifest(manifest);
 
         let executable_tasks = ExecutableTask::from_cmd_args(
             &project,
@@ -288,7 +290,8 @@ mod tests {
         task2 = {cmd="echo task2", depends_on=["root"]}
         top = {cmd="echo top", depends_on=["task1","task2"]}
     "#;
-        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
+        let manifest = Manifest::from_str(Path::new(""), file_content.to_string()).unwrap();
+        let project = Project::from_manifest(manifest);
 
         let executable_tasks = ExecutableTask::from_cmd_args(
             &project,
@@ -325,7 +328,8 @@ mod tests {
         [target.linux-64.tasks]
         root = {cmd="echo linux", depends_on=["task1"]}
     "#;
-        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
+        let manifest = Manifest::from_str(Path::new(""), file_content.to_string()).unwrap();
+        let project = Project::from_manifest(manifest);
 
         let executable_tasks = ExecutableTask::from_cmd_args(
             &project,
@@ -355,7 +359,8 @@ mod tests {
         channels = ["conda-forge"]
         platforms = ["linux-64"]
     "#;
-        let project = Project::from_manifest_str(Path::new(""), file_content.to_string()).unwrap();
+        let manifest = Manifest::from_str(Path::new(""), file_content.to_string()).unwrap();
+        let project = Project::from_manifest(manifest);
 
         let executable_tasks = ExecutableTask::from_cmd_args(
             &project,

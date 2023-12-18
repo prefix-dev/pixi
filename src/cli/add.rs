@@ -1,6 +1,5 @@
 use crate::environment::{update_prefix, verify_prefix_location_unchanged};
 use crate::prefix::Prefix;
-use crate::project::DependencyType::CondaDependency;
 use crate::project::{DependencyType, SpecType};
 use crate::{
     consts,
@@ -94,11 +93,11 @@ impl DependencyType {
         if args.pypi {
             Self::PypiDependency
         } else if args.host {
-            CondaDependency(SpecType::Host)
+            DependencyType::CondaDependency(SpecType::Host)
         } else if args.build {
-            CondaDependency(SpecType::Build)
+            DependencyType::CondaDependency(SpecType::Build)
         } else {
-            CondaDependency(SpecType::Run)
+            DependencyType::CondaDependency(SpecType::Run)
         }
     }
 }
@@ -122,7 +121,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .filter(|p| !project.platforms().contains(p))
         .cloned()
         .collect::<Vec<Platform>>();
-    project.add_platforms(platforms_to_add.iter())?;
+    project.manifest.add_platforms(platforms_to_add.iter())?;
 
     match dependency_type {
         DependencyType::CondaDependency(spec_type) => {
@@ -183,7 +182,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Print if it is something different from host and dep
-    if !matches!(dependency_type, CondaDependency(SpecType::Run)) {
+    if !matches!(
+        dependency_type,
+        DependencyType::CondaDependency(SpecType::Run)
+    ) {
         eprintln!(
             "Added these as {}.",
             console::style(dependency_type.name()).bold()
@@ -212,10 +214,12 @@ pub async fn add_pypi_specs_to_project(
         // TODO: Get best version
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.add_pypi_dependency(name, spec)?;
+            project.manifest.add_pypi_dependency(name, spec)?;
         } else {
             for platform in specs_platforms.iter() {
-                project.add_target_pypi_dependency(*platform, name.clone(), spec)?;
+                project
+                    .manifest
+                    .add_target_pypi_dependency(*platform, name.clone(), spec)?;
             }
         }
     }
@@ -309,10 +313,12 @@ pub async fn add_conda_specs_to_project(
 
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.add_dependency(&spec, spec_type)?;
+            project.manifest.add_dependency(&spec, spec_type)?;
         } else {
             for platform in specs_platforms.iter() {
-                project.add_target_dependency(*platform, &spec, spec_type)?;
+                project
+                    .manifest
+                    .add_target_dependency(*platform, &spec, spec_type)?;
             }
         }
     }

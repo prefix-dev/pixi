@@ -197,6 +197,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project_info = project.map(|p| ProjectInfo {
         manifest_path: p.root().to_path_buf().join("pixi.toml"),
         tasks: p
+            .manifest
             .tasks(Some(Platform::current()))
             .into_keys()
             .map(|k| k.to_string())

@@ -131,6 +131,7 @@ async fn execute_task<'p>(
     if status_code == 127 {
         let available_tasks = task
             .project()
+            .manifest
             .tasks(Some(Platform::current()))
             .into_keys()
             .sorted()

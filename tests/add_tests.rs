@@ -93,14 +93,15 @@ async fn add_functionality_union() {
     let project = pixi.project().unwrap();
 
     // Should contain all added dependencies
-    let (name, _) = project.manifest.dependencies.first().unwrap();
-    assert_eq!(name, "rattler");
-    let host_deps = project.manifest.host_dependencies.unwrap();
+    let dependencies = project.dependencies(Platform::current()).unwrap();
+    let (name, _) = dependencies.first().unwrap();
+    assert_eq!(name, &PackageName::try_from("rattler").unwrap());
+    let host_deps = project.host_dependencies(Platform::current()).unwrap();
     let (name, _) = host_deps.first().unwrap();
-    assert_eq!(name, "libcomputer");
-    let build_deps = project.manifest.build_dependencies.unwrap();
+    assert_eq!(name, &PackageName::try_from("libcomputer").unwrap());
+    let build_deps = project.build_dependencies(Platform::current()).unwrap();
     let (name, _) = build_deps.first().unwrap();
-    assert_eq!(name, "libidk");
+    assert_eq!(name, &PackageName::try_from("libidk").unwrap());
 
     // Lock file should contain all packages as well
     let lock = pixi.lock_file().await.unwrap();

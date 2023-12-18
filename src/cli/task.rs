@@ -139,7 +139,9 @@ pub fn execute(args: Args) -> miette::Result<()> {
         Operation::Add(args) => {
             let name = &args.name;
             let task: Task = args.clone().into();
-            project.add_task(name, task.clone(), args.platform)?;
+            project
+                .manifest
+                .add_task(name, task.clone(), args.platform)?;
             eprintln!(
                 "{}Added task {}: {}",
                 console::style(console::Emoji("✔ ", "+")).green(),
@@ -152,6 +154,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
             for name in args.names.iter() {
                 if let Some(platform) = args.platform {
                     if !project
+                        .manifest
                         .target_specific_tasks(platform)
                         .contains_key(name.as_str())
                     {
@@ -163,7 +166,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                         );
                         continue;
                     }
-                } else if !project.tasks(None).contains_key(name.as_str()) {
+                } else if !project.manifest.tasks(None).contains_key(name.as_str()) {
                     eprintln!(
                         "{}Task {} does not exist",
                         console::style(console::Emoji("❌ ", "X")).red(),
@@ -191,7 +194,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
             }
 
             for (name, platform) in to_remove {
-                project.remove_task(name, platform)?;
+                project.manifest.remove_task(name, platform)?;
                 eprintln!(
                     "{}Removed task {} ",
                     console::style(console::Emoji("✔ ", "+")).green(),
@@ -202,7 +205,9 @@ pub fn execute(args: Args) -> miette::Result<()> {
         Operation::Alias(args) => {
             let name = &args.alias;
             let task: Task = args.clone().into();
-            project.add_task(name, task.clone(), args.platform)?;
+            project
+                .manifest
+                .add_task(name, task.clone(), args.platform)?;
             eprintln!(
                 "{} Added alias {}: {}",
                 console::style("@").blue(),

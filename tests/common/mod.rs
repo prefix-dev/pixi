@@ -171,7 +171,7 @@ impl PixiControl {
 
     /// Loads the project manifest and returns it.
     pub fn project(&self) -> miette::Result<Project> {
-        Project::load(&self.manifest_path())
+        Project::load_or_else_discover(Some(&self.manifest_path()))
     }
 
     /// Get the path to the project
@@ -289,7 +289,7 @@ impl PixiControl {
 
     /// Get the associated lock file
     pub async fn lock_file(&self) -> miette::Result<CondaLock> {
-        let project = Project::load(&self.manifest_path())?;
+        let project = Project::load_or_else_discover(Some(&self.manifest_path()))?;
         pixi::lock_file::load_lock_file(&project).await
     }
 
