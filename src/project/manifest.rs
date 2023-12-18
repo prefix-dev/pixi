@@ -24,7 +24,7 @@ use url::Url;
 /// This struct is responsible for reading, parsing, editing, and saving the manifest.
 /// It encapsulates all logic related to the manifest's TOML format and structure.
 /// The manifest data is represented as a [`ProjectManifest`] struct for easy manipulation.
-/// Owned by the [`Project`] struct, which governs its usage.
+/// Owned by the [`crate::project::Project`] struct, which governs its usage.
 ///
 #[derive(Debug, Clone)]
 pub struct Manifest {
