@@ -43,12 +43,13 @@ pub struct Manifest {
 
 impl Manifest {
     /// Create a new manifest from a path
-    pub fn from_path(path: &Path) -> miette::Result<Self> {
-        let contents = std::fs::read_to_string(path).into_diagnostic()?;
-        Self::from_str(
-            path.parent().expect("Path should always have a parent"),
-            contents,
-        )
+    pub fn from_path(path: impl AsRef<Path>) -> miette::Result<Self> {
+        let contents = std::fs::read_to_string(path.as_ref()).into_diagnostic()?;
+        let parent = path
+            .as_ref()
+            .parent()
+            .expect("Path should always have a parent");
+        Self::from_str(parent, contents)
     }
 
     /// Create a new manifest from a string
@@ -1063,6 +1064,26 @@ mod test {
         channels = []
         platforms = []
         "#;
+
+    #[test]
+    fn test_from_path() {
+        // Test the toml from a path
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("pixi.toml");
+        std::fs::write(&path, PROJECT_BOILERPLATE).unwrap();
+        // From &PathBuf
+        let _manifest = Manifest::from_path(&path).unwrap();
+        // From &Path
+        let _manifest = Manifest::from_path(path.as_path()).unwrap();
+        // From PathBuf
+        let manifest = Manifest::from_path(path).unwrap();
+
+        assert_eq!(manifest.parsed.project.name, "foo");
+        assert_eq!(
+            manifest.parsed.project.version,
+            Some(Version::from_str("0.1.0").unwrap())
+        );
+    }
 
     #[test]
     fn test_target_specific() {
