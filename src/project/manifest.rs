@@ -43,8 +43,8 @@ pub struct Manifest {
 
 impl Manifest {
     /// Create a new manifest from a path
-    pub fn from_path(path: PathBuf) -> miette::Result<Self> {
-        let contents = std::fs::read_to_string(&path).into_diagnostic()?;
+    pub fn from_path(path: &Path) -> miette::Result<Self> {
+        let contents = std::fs::read_to_string(path).into_diagnostic()?;
         Self::from_str(
             path.parent().expect("Path should always have a parent"),
             contents,
