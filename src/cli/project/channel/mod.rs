@@ -1,4 +1,6 @@
 pub mod add;
+pub mod list;
+pub mod remove;
 
 use crate::Project;
 use clap::Parser;
@@ -19,6 +21,8 @@ pub struct Args {
 #[derive(Parser, Debug)]
 pub enum Command {
     Add(add::Args),
+    List(list::Args),
+    Remove(remove::Args),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -26,5 +30,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     match args.command {
         Command::Add(args) => add::execute(project, args).await,
+        Command::List(args) => list::execute(project, args).await,
+        Command::Remove(args) => remove::execute(project, args).await,
     }
 }

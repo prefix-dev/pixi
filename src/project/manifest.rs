@@ -497,6 +497,39 @@ impl Manifest {
         Ok(())
     }
 
+    /// Adds the specified channels to the manifest.
+    pub fn remove_channels(
+        &mut self,
+        channels: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> miette::Result<()> {
+        let mut removed_channels = Vec::new();
+
+        for channel in channels {
+            // Parse the channel to be removed
+            let channel_to_remove =
+                Channel::from_str(channel.as_ref(), &ChannelConfig::default()).into_diagnostic()?;
+
+            // Remove the channel if it exists
+            if let Some(pos) = self
+                .parsed
+                .project
+                .channels
+                .iter()
+                .position(|x| *x == channel_to_remove)
+            {
+                self.parsed.project.channels.remove(pos);
+            }
+
+            removed_channels.push(channel.as_ref().to_owned());
+        }
+
+        // remove the channels from the toml
+        let channels_array = self.channels_array_mut()?;
+        channels_array.retain(|x| !removed_channels.contains(&x.as_str().unwrap().to_string()));
+
+        Ok(())
+    }
+
     /// Set the project description
     pub fn set_description(&mut self, description: String) -> miette::Result<()> {
         // NOTE(hadim): It feels strange to set description on both `parsed` and `document`.

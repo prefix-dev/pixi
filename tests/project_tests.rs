@@ -1,7 +1,6 @@
 mod common;
 
 use crate::{common::package_database::PackageDatabase, common::PixiControl};
-use pixi::cli::run;
 use rattler_conda_types::{Channel, ChannelConfig};
 use tempfile::TempDir;
 use url::Url;
