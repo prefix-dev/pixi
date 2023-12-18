@@ -17,7 +17,7 @@ use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use toml_edit::{Array, Document, Item, Table, TomlError, Value};
+use toml_edit::{value, Array, Document, Item, Table, TomlError, Value};
 use url::Url;
 
 /// Handles the project's manifest file.
@@ -493,6 +493,16 @@ impl Manifest {
         for channel in stored_channels {
             channels_array.push(channel);
         }
+
+        Ok(())
+    }
+
+    /// Set the project description
+    pub fn set_description(&mut self, description: String) -> miette::Result<()> {
+        // NOTE(hadim): It feels strange to set description on both `parsed` and `document`.
+        // But I am not sure what approach is preferred here.
+        self.parsed.project.description = Some(description.clone());
+        self.document["project"]["description"] = value(description);
 
         Ok(())
     }

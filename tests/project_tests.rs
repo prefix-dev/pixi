@@ -1,6 +1,7 @@
 mod common;
 
 use crate::{common::package_database::PackageDatabase, common::PixiControl};
+use pixi::cli::run;
 use rattler_conda_types::{Channel, ChannelConfig};
 use tempfile::TempDir;
 use url::Url;
@@ -46,4 +47,30 @@ async fn add_channel() {
     )
     .unwrap();
     assert!(project.channels().contains(&local_channel));
+}
+
+#[tokio::test]
+async fn description() {
+    // Get a pixi instance
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    let _command = "project description set \"Hello world\"";
+
+    // // Set the description
+    // let result = pixi
+    //     .run(run::Args {
+    //         task: command.split(" ").map(|s| s.to_string()).collect(),
+    //         ..Default::default()
+    //     })
+    //     .await
+    //     .unwrap();
+
+    // println!("{:?}", result);
+
+    // assert_eq!(result.exit_code, 0);
+    // assert_eq!(result.stdout.trim(), "Python 3.11.0");
+    // assert!(result.stderr.is_empty());
+
+    // let project = pixi.project().unwrap();
 }
