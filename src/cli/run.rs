@@ -228,7 +228,7 @@ async fn run_activation(
             conda_prefix: None,
 
             // Prepending environment paths so they get found first.
-            path_modification_behaviour: PathModificationBehavior::Prepend,
+            path_modification_behavior: PathModificationBehavior::Prepend,
         })
     })
     .await
