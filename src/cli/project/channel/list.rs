@@ -12,14 +12,14 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
     project.channels().iter().for_each(|channel| {
         if args.urls {
             // Print the channel's url
-            eprintln!("{}", channel.base_url());
+            println!("{}", channel.base_url());
         } else {
             // Print the channel's name and fallback to the url if it doesn't have one
             let name = channel
                 .name
                 .as_deref()
                 .unwrap_or(channel.base_url().as_str());
-            eprintln!("{}", name);
+            println!("{}", name);
         }
     });
 
