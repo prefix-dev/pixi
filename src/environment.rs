@@ -130,7 +130,7 @@ pub async fn get_up_to_date_prefix(
     sanity_check_project(project)?;
 
     // Start loading the installed packages in the background
-    let prefix = Prefix::new(project.root().join(".pixi/env"))?;
+    let prefix = Prefix::new(project.environment_dir())?;
     let installed_packages_future = {
         let prefix = prefix.clone();
         tokio::spawn(async move { prefix.find_installed_packages(None).await })

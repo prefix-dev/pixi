@@ -167,8 +167,15 @@ impl Project {
     }
 
     /// Returns the pixi directory
-    pub fn environment_dir(&self) -> PathBuf {
+    pub fn pixi_dir(&self) -> PathBuf {
         self.root.join(consts::PIXI_DIR)
+    }
+
+    /// Returns the environment directory
+    pub fn environment_dir(&self) -> PathBuf {
+        self.root
+            .join(consts::PIXI_DIR)
+            .join(consts::ENVIRONMENT_DIR)
     }
 
     /// Returns the path to the manifest file.

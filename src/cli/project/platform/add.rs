@@ -56,7 +56,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     // Update the installation if needed
     if !args.no_install {
         // Get the currently installed packages
-        let prefix = Prefix::new(project.root().join(".pixi/env"))?;
+        let prefix = Prefix::new(project.environment_dir())?;
         let installed_packages = prefix.find_installed_packages(None).await?;
 
         // Update the prefix

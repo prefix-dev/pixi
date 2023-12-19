@@ -360,7 +360,7 @@ async fn update_environment(
             crate::environment::sanity_check_project(project)?;
 
             // Get the currently installed packages
-            let prefix = Prefix::new(project.root().join(".pixi/env"))?;
+            let prefix = Prefix::new(project.environment_dir())?;
             let installed_packages = prefix.find_installed_packages(None).await?;
 
             // Update the prefix
