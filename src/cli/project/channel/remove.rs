@@ -51,7 +51,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .manifest
         .remove_channels(channels_to_remove.iter().map(|(name, _channel)| name))?;
 
-    // Try to update the lock-file with the new channels
+    // Try to update the lock-file without the removed channels
     let lock_file = update_lock_file(&project, lock_file, None).await?;
     project.save()?;
 
