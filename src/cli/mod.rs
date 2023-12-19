@@ -18,6 +18,7 @@ pub mod project;
 pub mod remove;
 pub mod run;
 pub mod search;
+pub mod self_update;
 pub mod shell;
 pub mod task;
 pub mod upload;
@@ -69,6 +70,7 @@ pub enum Command {
     Project(project::Args),
     #[clap(alias = "rm")]
     Remove(remove::Args),
+    SelfUpdate(self_update::Args),
 }
 
 #[derive(Parser, Debug, Default)]
@@ -165,6 +167,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Search(cmd) => search::execute(cmd).await,
         Command::Project(cmd) => project::execute(cmd).await,
         Command::Remove(cmd) => remove::execute(cmd).await,
+        Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
     }
 }
 
