@@ -20,7 +20,7 @@ pub struct Args {
 }
 
 pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
-    // Determine which platforms are missing
+    // Determine which platforms to remove
     let platforms = args
         .platform
         .into_iter()

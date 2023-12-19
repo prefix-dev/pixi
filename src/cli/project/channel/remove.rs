@@ -19,7 +19,7 @@ pub struct Args {
 }
 
 pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
-    // Determine which channels are missing
+    // Determine which channels to remove
     let channel_config = ChannelConfig::default();
     let channels = args
         .channel
