@@ -1438,4 +1438,32 @@ mod test {
         // Should still contain the fooz dependency in the target table
         assert_debug_snapshot!(manifest.parsed.target);
     }
+
+    #[test]
+    fn test_set_version() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+        "#;
+
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.version.as_ref().unwrap().clone(),
+            Version::from_str("0.1.0").unwrap()
+        );
+
+        manifest.set_version(&String::from("1.2.3")).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.version.as_ref().unwrap().clone(),
+            Version::from_str("1.2.3").unwrap()
+        );
+    }
 }
