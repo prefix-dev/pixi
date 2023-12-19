@@ -10,7 +10,7 @@ use std::str::FromStr;
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {
-    /// The platform name(s) to add.
+    /// The platform name(s) to remove.
     #[clap(required = true, num_args=1..)]
     pub platform: Vec<String>,
 
