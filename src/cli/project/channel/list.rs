@@ -1,7 +1,6 @@
 use crate::Project;
 use clap::Parser;
 
-/// List the channels in the project file.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     /// Whether to display the channel's names or urls

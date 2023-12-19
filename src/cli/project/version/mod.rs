@@ -19,7 +19,9 @@ pub struct Args {
 
 #[derive(Parser, Debug)]
 pub enum Command {
+    /// Get the project version.
     Get(get::Args),
+    /// Set the project version.
     Set(set::Args),
 }
 

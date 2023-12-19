@@ -1,7 +1,6 @@
 use crate::Project;
 use clap::Parser;
 
-/// Get the project version.
 #[derive(Parser, Debug, Default)]
 pub struct Args {}
 

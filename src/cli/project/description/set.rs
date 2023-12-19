@@ -1,7 +1,6 @@
 use crate::Project;
 use clap::Parser;
 
-/// Set the project description.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     /// The project description

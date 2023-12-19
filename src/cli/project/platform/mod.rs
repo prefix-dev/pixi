@@ -20,8 +20,11 @@ pub struct Args {
 
 #[derive(Parser, Debug)]
 pub enum Command {
+    /// Adds a platform(s) to the project file and updates the lockfile.
     Add(add::Args),
-    List(list::Args),
+    /// List the platforms in the project file.
+    List,
+    /// Remove a platform(s) to the project file and updates the lockfile.
     Remove(remove::Args),
 }
 
@@ -30,7 +33,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     match args.command {
         Command::Add(args) => add::execute(project, args).await,
-        Command::List(args) => list::execute(project, args).await,
+        Command::List => list::execute(project).await,
         Command::Remove(args) => remove::execute(project, args).await,
     }
 }

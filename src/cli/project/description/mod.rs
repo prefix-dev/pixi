@@ -19,7 +19,9 @@ pub struct Args {
 
 #[derive(Parser, Debug)]
 pub enum Command {
-    Get(get::Args),
+    /// Get the project description.
+    Get,
+    /// Set the project description.
     Set(set::Args),
 }
 
@@ -27,7 +29,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     match args.command {
-        Command::Get(args) => get::execute(project, args).await?,
+        Command::Get => get::execute(project).await?,
         Command::Set(args) => set::execute(project, args).await?,
     }
 

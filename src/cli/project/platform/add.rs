@@ -9,7 +9,6 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
 
-/// Adds a platform(s) to the project file and updates the lockfile.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     /// The platform name(s) to add.

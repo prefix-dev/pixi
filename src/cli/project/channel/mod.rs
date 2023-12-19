@@ -20,8 +20,11 @@ pub struct Args {
 
 #[derive(Parser, Debug)]
 pub enum Command {
+    /// Adds a channel to the project file and updates the lockfile.
     Add(add::Args),
+    /// List the channels in the project file.
     List(list::Args),
+    /// Remove a channel(s) to the project file and updates the lockfile.
     Remove(remove::Args),
 }
 

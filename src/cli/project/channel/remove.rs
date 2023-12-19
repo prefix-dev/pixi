@@ -7,7 +7,6 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig, Platform};
 
-/// Remove a channel(s) to the project file and updates the lockfile.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     /// The channel name(s) or URL
