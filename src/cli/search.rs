@@ -94,53 +94,48 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         (None, None) => vec![Channel::from_str("conda-forge", &channel_config).into_diagnostic()?],
     };
 
-    let limit = args.limit;
-    let package_name = args.package;
+    let package_name_filter = args.package;
     let platforms = [Platform::current()];
     let repo_data = fetch_sparse_repodata(&channels, &platforms).await?;
 
-    let p = PackageName::try_from(package_name.clone()).into_diagnostic()?;
+    // When package name filter contains * (wildcard), it will search and display a list of packages matching this filter
+    if package_name_filter.contains('*') {
+        let package_name_without_filter = package_name_filter.replace("*", "");
+        let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
 
-    if contains_wildcard(&package_name) {
-        let result = search_package_by_wildcard(p, &package_name, repo_data, limit).await;
-        return match result {
-            Ok(_) => Ok(()),
-            Err(report) => Err(report),
-        };
+        let limit = args.limit;
+
+        let _ = search_package_by_wildcard(package_name, &package_name_filter, repo_data, limit)
+            .await?;
+    }
+    // If package name filter doesn't contain * (wildcard), it will search and display specific package info (if any package is found)
+    else {
+        let package_name = PackageName::try_from(package_name_filter).into_diagnostic()?;
+        let _ = search_exact_package(package_name, repo_data).await?;
     }
 
-    let result = search_exact_package(p, &package_name, repo_data).await;
-    return match result {
-        Ok(_) => Ok(()),
-        Err(report) => Err(report),
-    };
-}
-
-fn contains_wildcard(string: &str) -> bool {
-    string.contains('*')
+    Ok(())
 }
 
 async fn search_exact_package(
-    p: PackageName,
-    package_name: &str,
+    package_name: PackageName,
     repo_data: Vec<SparseRepoData>,
 ) -> miette::Result<()> {
+    let package_name_search = package_name.clone();
     let packages = await_in_progress(
         "searching packages",
         spawn_blocking(move || {
-            let packages =
-                search_package_by_filter(&p, &repo_data, |pn, n| pn == n.as_normalized());
-            match packages {
-                Ok(packages) => Ok(packages),
-                Err(e) => Err(e),
-            }
+            search_package_by_filter(&package_name_search, &repo_data, |pn, n| {
+                pn == n.as_normalized()
+            })
         }),
     )
     .await
     .into_diagnostic()??;
 
     if packages.is_empty() {
-        return Err(miette::miette!("Could not find {package_name}"));
+        let normalized_package_name = package_name.as_normalized();
+        return Err(miette::miette!("Could not find {normalized_package_name}"));
     }
 
     let package = packages.last().clone();
@@ -236,26 +231,30 @@ fn print_package_info(package: &RepoDataRecord) {
 }
 
 async fn search_package_by_wildcard(
-    p: PackageName,
-    package_name: &str,
+    package_name: PackageName,
+    package_name_filter: &str,
     repo_data: Vec<SparseRepoData>,
     limit: usize,
 ) -> miette::Result<()> {
-    let wildcard_pattern = Regex::new(&format!("^{}$", &package_name.replace("*", ".*")))
-        .expect("Expect only characters and * (wildcard).");
+    let wildcard_pattern = Regex::new(&format!("^{}$", &package_name_filter.replace("*", ".*")))
+        .expect("Expect only characters and/or * (wildcard).");
 
+    let package_name_search = package_name.clone();
     let mut packages = await_in_progress(
         "searching packages",
         spawn_blocking(move || {
-            let packages =
-                search_package_by_filter(&p, &repo_data, |pn, _| wildcard_pattern.is_match(pn));
+            let packages = search_package_by_filter(&package_name_search, &repo_data, |pn, _| {
+                wildcard_pattern.is_match(pn)
+            });
             match packages {
                 Ok(packages) => {
                     if packages.is_empty() {
                         let similarity = 0.6;
-                        return search_package_by_filter(&p, &repo_data, |pn, n| {
-                            jaro(pn, n.as_normalized()) > similarity
-                        });
+                        return search_package_by_filter(
+                            &package_name_search,
+                            &repo_data,
+                            |pn, n| jaro(pn, n.as_normalized()) > similarity,
+                        );
                     }
                     Ok(packages)
                 }
@@ -266,9 +265,16 @@ async fn search_package_by_wildcard(
     .await
     .into_diagnostic()??;
 
+    let normalized_package_name = package_name.as_normalized();
     packages.sort_by(|a, b| {
-        let ord = jaro(b.package_record.name.as_normalized(), &package_name)
-            .partial_cmp(&jaro(a.package_record.name.as_normalized(), &package_name));
+        let ord = jaro(
+            b.package_record.name.as_normalized(),
+            &normalized_package_name,
+        )
+        .partial_cmp(&jaro(
+            a.package_record.name.as_normalized(),
+            &normalized_package_name,
+        ));
         if let Some(ord) = ord {
             ord
         } else {
@@ -277,7 +283,7 @@ async fn search_package_by_wildcard(
     });
 
     if packages.is_empty() {
-        return Err(miette::miette!("Could not find {package_name}"));
+        return Err(miette::miette!("Could not find {normalized_package_name}"));
     }
 
     // split off at `limit`, discard the second half
