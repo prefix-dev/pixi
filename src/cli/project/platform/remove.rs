@@ -49,7 +49,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .manifest
         .remove_platforms(platforms_to_remove.iter().map(|p| p.to_string()))?;
 
-    // Try to update the lock-file with the new channels
+    // Try to update the lock-file without the removed platform(s)
     let lock_file = update_lock_file(&project, lock_file, None).await?;
     project.save()?;
 
