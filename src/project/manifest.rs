@@ -1466,4 +1466,161 @@ mod test {
             Version::from_str("1.2.3").unwrap()
         );
     }
+
+    #[test]
+    fn test_set_description() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            description = "foo description"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+        "#;
+
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        assert_eq!(
+            manifest
+                .parsed
+                .project
+                .description
+                .as_ref()
+                .unwrap()
+                .clone(),
+            String::from("foo description")
+        );
+
+        manifest
+            .set_description(&String::from("my new description"))
+            .unwrap();
+
+        assert_eq!(
+            manifest
+                .parsed
+                .project
+                .description
+                .as_ref()
+                .unwrap()
+                .clone(),
+            String::from("my new description")
+        );
+    }
+
+    #[test]
+    fn test_add_platforms() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            description = "foo description"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+        "#;
+
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.platforms.value,
+            vec![Platform::Linux64, Platform::Win64]
+        );
+
+        manifest
+            .add_platforms(vec![Platform::OsxArm64].iter())
+            .unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.platforms.value,
+            vec![Platform::Linux64, Platform::Win64, Platform::OsxArm64]
+        );
+    }
+
+    #[test]
+    fn test_remove_platforms() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            description = "foo description"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+        "#;
+
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.platforms.value,
+            vec![Platform::Linux64, Platform::Win64]
+        );
+
+        manifest.remove_platforms(&vec!["linux-64"]).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.platforms.value,
+            vec![Platform::Win64]
+        );
+    }
+
+    #[test]
+    fn test_add_channels() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            description = "foo description"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+        "#;
+
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        assert_eq!(manifest.parsed.project.channels, vec![]);
+
+        manifest.add_channels(vec!["conda-forge"].iter()).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.channels,
+            vec![Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap()]
+        );
+    }
+
+    #[test]
+    fn test_remove_channels() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            description = "foo description"
+            channels = ["conda-forge"]
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+        "#;
+
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.channels,
+            vec![Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap()]
+        );
+
+        manifest
+            .remove_channels(vec!["conda-forge"].iter())
+            .unwrap();
+
+        assert_eq!(manifest.parsed.project.channels, vec![]);
+    }
 }
