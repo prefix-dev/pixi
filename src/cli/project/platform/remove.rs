@@ -14,7 +14,7 @@ pub struct Args {
     #[clap(required = true, num_args=1..)]
     pub platform: Vec<String>,
 
-    /// Don't update the environment, only remove the channel(s) to the lock-file.
+    /// Don't update the environment, only remove the platform(s) from the lock-file.
     #[clap(long)]
     pub no_install: bool,
 }
