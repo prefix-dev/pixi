@@ -24,7 +24,7 @@ pub enum Command {
     Add(add::Args),
     /// List the channels in the project file.
     List(list::Args),
-    /// Remove a channel(s) to the project file and updates the lockfile.
+    /// Remove channel(s) from the project file and updates the lockfile.
     Remove(remove::Args),
 }
 
