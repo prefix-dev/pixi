@@ -24,7 +24,7 @@ pub enum Command {
     Add(add::Args),
     /// List the platforms in the project file.
     List,
-    /// Remove a platform(s) to the project file and updates the lockfile.
+    /// Remove platform(s) from the project file and updates the lockfile.
     Remove(remove::Args),
 }
 
