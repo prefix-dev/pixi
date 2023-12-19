@@ -44,7 +44,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     // Load the existing lock-file
     let lock_file = load_lock_file(&project).await?;
 
-    // Add the channels to the lock-file
+    // Remove the platform(s) from the manifest
     project
         .manifest
         .remove_platforms(platforms_to_remove.iter().map(|p| p.to_string()))?;
