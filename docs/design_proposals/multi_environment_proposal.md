@@ -20,7 +20,7 @@ This prepares `pixi` for the use in large projects with multiple use-cases, mult
 1. **User-friendliness**: Pixi is a user focussed tool this goes beyond developers. The feature should have good error reporting and helpful documentation from the start. This is opinionated so the user sided PR's should be checked by multiple developers.
 2. **Keep it simple**: Not understanding the multiple environments feature shouldn't limit a user to use pixi. The feature should be "invisible" to the non-multi env use-cases.
 3. **No Automatic Combinatorial**: To ensure the dependency resolution process remains manageable, the solution should avoid a combinatorial explosion of dependency sets. By making the environments user defined and not automatically inferred by testing a matrix of the features.
-4. **Single Feature Activation**: The design should allow only one feature set to be active at any given time, simplifying the resolution process and preventing conflicts.
+4. **Single environment Activation**: The design should allow only one environment to be active at any given time, simplifying the resolution process and preventing conflicts.
 5. **Fixed Lockfiles**: It's crucial to preserve fixed lockfiles for consistency and predictability. Solutions must ensure reliability not just for authors but also for end-users, particularly at the time of lockfile creation.
 
 ## Proposed Solution
