@@ -14,7 +14,7 @@ There are multiple scenarios where multiple environments are useful.
 - **Multiple machines from one project**, e.g. a `cuda` environment and a `cpu` environment.
 - **And many more.** (If you have a use-case please add it to the list, so we can make sure it's covered)
 
-This prepares `pixi` for the use in large projects with multiple use-cases, multiple developers and different CI needs.
+This prepares `pixi` for use in large projects with multiple use-cases, multiple developers and different CI needs.
 
 ## Design Considerations
 1. **User-friendliness**: Pixi is a user focussed tool this goes beyond developers. The feature should have good error reporting and helpful documentation from the start. This is opinionated so the user sided PR's should be checked by multiple developers.
