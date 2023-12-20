@@ -12,7 +12,7 @@ There are multiple scenarios where multiple environments are useful.
 - **Large developer environments**, that combine all the smaller environments, e.g. `dev`.
 - **Strict supersets of environments**, e.g. `prod` and `test-prod` where `test-prod` is a strict superset of `prod`.
 - **Multiple machines from one project**, e.g. a `cuda` environment and a `cpu` environment.
-- **And many more.** (If you have a use-case please add it to the list, so we can make sure it's covered)
+- **And many more.** (Feel free to edit this document in our GitHub and add your use case.)
 
 This prepares `pixi` for use in large projects with multiple use-cases, multiple developers and different CI needs.
 
