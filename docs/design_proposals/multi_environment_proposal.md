@@ -182,6 +182,96 @@ pixi run test
 # 2. test39
 ```
 
-## Important links:
+## Important links
 - Initial writeup of the proposal: https://gist.github.com/0xbe7a/bbf8a323409be466fe1ad77aa6dd5428
 - GitHub project: https://github.com/orgs/prefix-dev/projects/10
+
+## Real world example use cases
+??? tip "Polarify test setup"
+    In `polarify` they want to test multiple versions combined with multiple versions of polars.
+    This is currently done by using a matrix in GitHub actions.
+    This can be replaced by using multiple environments.
+
+    ```toml title="pixi.toml"
+    [project]
+    name = "polarify"
+    # ...
+    channels = ["conda-forge"]
+    platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
+    [tasks]
+    postinstall = "pip install --no-build-isolation --no-deps --disable-pip-version-check -e ."
+
+    [dependencies]
+    python = ">=3.9"
+    pip = "*"
+    polars = ">=0.14.24,<0.21"
+
+    [feature.py39.dependencies]
+    python = "3.9.*"
+    [feature.py310.dependencies]
+    python = "3.10.*"
+    [feature.py311.dependencies]
+    python = "3.11.*"
+    [feature.py312.dependencies]
+    python = "3.12.*"
+    [feature.pl017.dependencies]
+    polars = "0.17.*"
+    [feature.pl018.dependencies]
+    polars = "0.18.*"
+    [feature.pl019.dependencies]
+    polars = "0.19.*"
+    [feature.pl020.dependencies]
+    polars = "0.20.*"
+
+    [feature.test.dependencies]
+    pytest = "*"
+    pytest-md = "*"
+    pytest-emoji = "*"
+    hypothesis = "*"
+    [feature.test.tasks]
+    test = "pytest"
+
+    [feature.lint.dependencies]
+    pre-commit = "*"
+    [feature.lint.tasks]
+    lint = "pre-commit run --all"
+
+    [environments]
+    pl017 = ["pl017", "py39", "test"]
+    pl018 = ["pl018", "py39", "test"]
+    pl019 = ["pl019", "py39", "test"]
+    pl020 = ["pl020", "py39", "test"]
+    py39 = ["py39", "test"]
+    py310 = ["py310", "test"]
+    py311 = ["py311", "test"]
+    py312 = ["py312", "test"]
+    ```
+
+    ```yaml title=".github/workflows/test.yml"
+    jobs:
+        tests:
+        name: Test ${{ matrix.environment }}
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                environment:
+                    - pl017
+                    - pl018
+                    - pl019
+                    - pl020
+                    - py39
+                    - py310
+                    - py311
+                    - py312
+        steps:
+            - uses: actions/checkout@v4
+            - uses: prefix-dev/setup-pixi@v0.5.0
+              with:
+                    # already installs the corresponding environment and caches it
+                    environments: ${{ matrix.environment }}
+            - name: Install dependencies
+              run: |
+                pixi run --env ${{ matrix.environment }} postinstall
+                pixi run --env ${{ matrix.environment }} test
+    ```
