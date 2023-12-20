@@ -30,6 +30,7 @@ This prepares `pixi` for the use in large projects with multiple use-cases, mult
 ### Feature & Environment Set Definitions
 Introduce environment sets into the `pixi.toml` this describes environments based on `feature`'s. Introduce features into the `pixi.toml` that can describe parts of environments.
 As an environment goes beyond just `dependencies` the `features` should be described including the following fields:
+
 - `dependencies`: The conda package dependencies
 - `pypi-dependencies`: The pypi package dependencies
 - `system-requirements`: The system requirements of the environment
