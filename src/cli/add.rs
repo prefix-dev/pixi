@@ -110,7 +110,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Sanity check of prefix location
     verify_prefix_location_unchanged(
         project
-            .environment_dir()
+            .pixi_dir()
             .join(consts::PREFIX_FILE_NAME)
             .as_path(),
     )?;
