@@ -181,3 +181,7 @@ pixi run test
 # 1. test
 # 2. test39
 ```
+
+## Important links:
+- Initial writeup of the proposal: https://gist.github.com/0xbe7a/bbf8a323409be466fe1ad77aa6dd5428
+- GitHub project: https://github.com/orgs/prefix-dev/projects/10
