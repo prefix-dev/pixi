@@ -78,12 +78,7 @@ fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
 ///     3. It verifies that the system requirements are met.
 pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(
-        project
-            .pixi_dir()
-            .join(consts::PREFIX_FILE_NAME)
-            .as_path(),
-    )?;
+    verify_prefix_location_unchanged(project.pixi_dir().join(consts::PREFIX_FILE_NAME).as_path())?;
 
     // Make sure the project supports the current platform
     let platform = Platform::current();
