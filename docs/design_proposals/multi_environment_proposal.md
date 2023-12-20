@@ -250,28 +250,28 @@ pixi run test
 
     ```yaml title=".github/workflows/test.yml"
     jobs:
-        tests:
-        name: Test ${{ matrix.environment }}
-        runs-on: ubuntu-latest
-        strategy:
-            matrix:
-                environment:
-                    - pl017
-                    - pl018
-                    - pl019
-                    - pl020
-                    - py39
-                    - py310
-                    - py311
-                    - py312
-        steps:
-            - uses: actions/checkout@v4
-            - uses: prefix-dev/setup-pixi@v0.5.0
-              with:
-                    # already installs the corresponding environment and caches it
-                    environments: ${{ matrix.environment }}
-            - name: Install dependencies
-              run: |
-                pixi run --env ${{ matrix.environment }} postinstall
-                pixi run --env ${{ matrix.environment }} test
+      tests:
+      name: Test ${{ matrix.environment }}
+      runs-on: ubuntu-latest
+      strategy:
+        matrix:
+          environment:
+            - pl017
+            - pl018
+            - pl019
+            - pl020
+            - py39
+            - py310
+            - py311
+            - py312
+      steps:
+        - uses: actions/checkout@v4
+        - uses: prefix-dev/setup-pixi@v0.5.0
+          with:
+            # already installs the corresponding environment and caches it
+            environments: ${{ matrix.environment }}
+        - name: Install dependencies
+          run: |
+            pixi run --env ${{ matrix.environment }} postinstall
+            pixi run --env ${{ matrix.environment }} test
     ```
