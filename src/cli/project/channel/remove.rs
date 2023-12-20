@@ -9,17 +9,17 @@ use rattler_conda_types::{Channel, ChannelConfig, Platform};
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {
-    /// The channel name or URL
+    /// The channel name(s) or URL
     #[clap(required = true, num_args=1..)]
     pub channel: Vec<String>,
 
-    /// Don't update the environment, only add changed packages to the lock-file.
+    /// Don't update the environment, only remove the channel(s) from the lock-file.
     #[clap(long)]
     pub no_install: bool,
 }
 
 pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
-    // Determine which channels are missing
+    // Determine which channels to remove
     let channel_config = ChannelConfig::default();
     let channels = args
         .channel
@@ -30,14 +30,14 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
-    let missing_channels = channels
+    let channels_to_remove = channels
         .into_iter()
-        .filter(|(_name, channel)| !project.channels().contains(channel))
+        .filter(|(_name, channel)| project.channels().contains(channel))
         .collect_vec();
 
-    if missing_channels.is_empty() {
+    if channels_to_remove.is_empty() {
         eprintln!(
-            "{}All channel(s) have already been added.",
+            "{}The channel(s) are not present.",
             console::style(console::Emoji("✔ ", "")).green(),
         );
         return Ok(());
@@ -46,12 +46,12 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     // Load the existing lock-file
     let lock_file = load_lock_file(&project).await?;
 
-    // Add the channels to the lock-file
+    // Remove the channels from the manifest
     project
         .manifest
-        .add_channels(missing_channels.iter().map(|(name, _channel)| name))?;
+        .remove_channels(channels_to_remove.iter().map(|(name, _channel)| name))?;
 
-    // Try to update the lock-file with the new channels
+    // Try to update the lock-file without the removed channels
     let lock_file = update_lock_file(&project, lock_file, None).await?;
     project.save()?;
 
@@ -73,9 +73,9 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     }
 
     // Report back to the user
-    for (name, channel) in missing_channels {
+    for (name, channel) in channels_to_remove {
         eprintln!(
-            "{}Added {} ({})",
+            "{}Removed {} ({})",
             console::style(console::Emoji("✔ ", "")).green(),
             name,
             channel.base_url()

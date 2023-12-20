@@ -156,14 +156,24 @@ impl Project {
         &self.manifest.parsed.project.version
     }
 
+    /// Returns the description of the project
+    pub fn description(&self) -> &Option<String> {
+        &self.manifest.parsed.project.description
+    }
+
     /// Returns the root directory of the project
     pub fn root(&self) -> &Path {
         &self.root
     }
 
     /// Returns the pixi directory
-    pub fn environment_dir(&self) -> PathBuf {
+    pub fn pixi_dir(&self) -> PathBuf {
         self.root.join(consts::PIXI_DIR)
+    }
+
+    /// Returns the environment directory
+    pub fn environment_dir(&self) -> PathBuf {
+        self.pixi_dir().join(consts::ENVIRONMENT_DIR)
     }
 
     /// Returns the path to the manifest file.

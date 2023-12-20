@@ -78,12 +78,7 @@ fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
 ///     3. It verifies that the system requirements are met.
 pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(
-        project
-            .environment_dir()
-            .join(consts::PREFIX_FILE_NAME)
-            .as_path(),
-    )?;
+    verify_prefix_location_unchanged(project.pixi_dir().join(consts::PREFIX_FILE_NAME).as_path())?;
 
     // Make sure the project supports the current platform
     let platform = Platform::current();
@@ -130,7 +125,7 @@ pub async fn get_up_to_date_prefix(
     sanity_check_project(project)?;
 
     // Start loading the installed packages in the background
-    let prefix = Prefix::new(project.root().join(".pixi/env"))?;
+    let prefix = Prefix::new(project.environment_dir())?;
     let installed_packages_future = {
         let prefix = prefix.clone();
         tokio::spawn(async move { prefix.find_installed_packages(None).await })
