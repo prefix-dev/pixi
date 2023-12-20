@@ -10,7 +10,7 @@ There are multiple scenarios where multiple environments are useful.
 - **Testing of multiple package versions**, e.g. `py39` and `py310` or polars `0.12` and `0.13`.
 - **Smaller single tool environments**, e.g. `lint` or `docs`.
 - **Large developer environments**, that combine all the smaller environments, e.g. `dev`.
-- **Strict supersets of environments**, e.g. `test` and `test39` where `test39` is a strict superset of `test`.
+- **Strict supersets of environments**, e.g. `prod` and `test-prod` where `test-prod` is a strict superset of `prod`.
 - **Multiple machines from one project**, e.g. a `cuda` environment and a `cpu` environment.
 - **And many more.** (If you have a use-case please add it to the list, so we can make sure it's covered)
 
