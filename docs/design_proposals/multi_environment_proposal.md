@@ -275,3 +275,60 @@ pixi run test
             pixi run --env ${{ matrix.environment }} postinstall
             pixi run --env ${{ matrix.environment }} test
     ```
+??? tip "Test vs Production example"
+    This is an example of a project that has a `test` feature and `prod` environment.
+    The `prod` environment is a production environment that contains the run dependencies.
+    The `test` feature is a set of dependencies and tasks that we want to put on top of the previously solved `prod` environment.
+    This is a common use case where we want to test the production environment with additional dependencies.
+
+    ```toml title="pixi.toml"
+    [project]
+    name = "my-app"
+    # ...
+    channels = ["conda-forge"]
+    platforms = ["osx-arm64", "linux-64"]
+
+    [tasks]
+    postinstall-e = "pip install --no-build-isolation --no-deps --disable-pip-version-check -e ."
+    postinstall = "pip install --no-build-isolation --no-deps --disable-pip-version-check ."
+    dev = "uvicorn my_app.app:main --reload"
+    serve = "uvicorn my_app.app:main"
+
+    [dependencies]
+    python = ">=3.12"
+    pip = "*"
+    pydantic = ">=2"
+    fastapi = ">=0.105.0"
+    sqlalchemy = ">=2,<3"
+    uvicorn = "*"
+    aiofiles = "*"
+
+    [feature.test.dependencies]
+    pytest = "*"
+    pytest-md = "*"
+    pytest-asyncio = "*"
+    [feature.test.tasks]
+    test = "pytest --md=report.md"
+
+    [environments]
+    default = ["test", {environment = "prod"}] # implicit ["default", "test"], overrides default environment
+    prod = [] # implicit for ["default"]
+    ```
+    In ci you would run the following commands:
+    ```shell
+    pixi run postinstall-e && pixi run test
+    ```
+    Locally you would run the following command:
+    ```shell
+    pixi run postinstall-e && pixi run dev
+    ```
+
+    Then in a Dockerfile you would run the following command:
+    ```dockerfile title="Dockerfile"
+    FROM ghcr.io/prefix-dev/pixi:latest # this doesn't exist yet
+    WORKDIR /app
+    COPY . .
+    RUN pixi run --env prod postinstall
+    EXPOSE 8080
+    CMD ["/usr/local/bin/pixi", "run", "--env", "prod", "serve"]
+    ```
