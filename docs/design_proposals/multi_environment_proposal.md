@@ -92,14 +92,11 @@ The environment definition should contain the following fields:
 - `features: Vec<Feature>`: The features that are included in the environment set, which is also the default field in the environments.
 - `environments: Vec<Environment>`: The environments that are included in the environment set. When environments is used, the extra features are **on top** of the included environments.
     Environments are used as a locked base, so the features added to an environment are not allowed to change the locked set. This should result in a failure if the locked set is not compatible with the added features.
-- `default-features: bool`: Whether the default features should be included in the environment set.
 
 ```toml
 [environments]
-# `default` environment is now the `default` feature plus the py39 feature
+# `default` environment is now the `default` feature plus the `py39` feature
 default = ["py39"]
-# `lint` environment is now the `lint` feature without the `default` feature or environment
-lint = {features = ["lint"], default-features = "false"}
 # `dev` environment is now the `default` feature plus the `test` feature, which makes the `default` envriroment is solved without the use of the test feature.
 dev = {environments = ["default"], features = ["test"]}
 ```
@@ -111,7 +108,6 @@ default = ["py39"] # implicit: default = ["py39", "default"]
 py310 = ["py310"] # implicit: py310 = ["py310", "default"]
 test = ["test"] # implicit: test = ["test", "default"]
 test39 = ["test", "py39"] # implicit: test39 = ["test", "py39", "default"]
-lint = {features = ["lint"], default-features = "false"} # no implicit default
 ```
 
 ```toml title="Creating environments from environments" linenums="1"
@@ -119,6 +115,23 @@ lint = {features = ["lint"], default-features = "false"} # no implicit default
 prod = ["py39"]
 # Takes the `prod` environment and adds the `test` feature to it without modifying the `prod` environment requirements, solve should fail if requirements don't comply with locked set.
 test_prod = {environments = ["prod"], features = ["test"]}
+```
+
+```toml title="Creating environments without a default environment" linenums="1"
+[dependencies]
+# Keep empty or undefined to create an empty environment.
+
+[feature.base.dependencies]
+python = "*"
+
+[feature.lint.dependencies]
+pre-commit = "*"
+
+[environments]
+# Create a custom default
+default = ["base"]
+# Create a custom environment which only has the `lint` feature as the default feature is empty.
+lint = ["lint"]
 ```
 
 ### Lockfile Structure
