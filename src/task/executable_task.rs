@@ -376,9 +376,6 @@ mod tests {
         let task = executable_tasks.get(0).unwrap();
         assert!(task.task().is_custom());
 
-        assert_eq!(
-            task.task().as_single_command().unwrap(),
-            r###""echo bla""###
-        );
+        assert_eq!(task.task().as_single_command().unwrap(), r#""echo bla""#);
     }
 }

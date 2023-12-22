@@ -120,7 +120,7 @@ _arguments "${_arguments_options[@]}" \
 ;;
 
         "#;
-        let result = replace_zsh_completion(&mut script);
+        let result = replace_zsh_completion(script);
         insta::assert_snapshot!(result);
     }
 
