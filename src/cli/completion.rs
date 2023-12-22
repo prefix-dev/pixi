@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     pub fn test_zsh_completion() {
-        let mut script = r#"
+        let script = r#"
 (add)
 _arguments "${_arguments_options[@]}" \
 '--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
