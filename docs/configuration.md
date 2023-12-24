@@ -197,7 +197,7 @@ If you want to use `cuda` in your project you need to add the following to your 
 [system-requirements]
 cuda = "11" # or any other version of cuda you want to use
 ```
-This informs the solver that cuda is going to be available, so it can lock it into to lockfile if needed.
+This informs the solver that cuda is going to be available, so it can lock it into the lockfile if needed.
 
 
 ## The `dependencies` table(s)
