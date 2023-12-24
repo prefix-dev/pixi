@@ -209,13 +209,13 @@ fn print_package_info(package: &RepoDataRecord) {
     );
 
     let md5 = match package.package_record.md5 {
-        Some(md5) => hex::encode(md5),
+        Some(md5) => format!("{:x}", md5),
         None => "Not available".to_string(),
     };
     println!("{:19} {:19}", console::style("MD5"), console::style(md5));
 
     let sha256 = match package.package_record.sha256 {
-        Some(sha256) => hex::encode(sha256),
+        Some(sha256) => format!("{:x}", sha256),
         None => "Not available".to_string(),
     };
     println!(

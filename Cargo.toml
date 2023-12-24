@@ -64,7 +64,6 @@ toml_edit = { version = "0.21.0", features = ["serde"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
-hex = "0.4.1"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.27.1", default-features = false, features = ["fs", "signal", "term", "poll"] }
