@@ -84,22 +84,15 @@ test = "pytest"
 [environments]
 test = ["test"]
 
-# `pixi run test` == `pixi run --envrionment test test`
+# `pixi run test` == `pixi run --environments test test`
 ```
 
 The environment definition should contain the following fields:
 
 - `features: Vec<Feature>`: The features that are included in the environment set, which is also the default field in the environments.
-- `environments: Vec<Environment>`: The environments that are included in the environment set. When environments is used, the extra features are **on top** of the included environments.
-    Environments are used as a locked base, so the features added to an environment are not allowed to change the locked set. This should result in a failure if the locked set is not compatible with the added features.
-
-```toml
-[environments]
-# `default` environment is now the `default` feature plus the `py39` feature
-default = ["py39"]
-# `dev` environment is now the `default` feature plus the `test` feature, which makes the `default` envriroment is solved without the use of the test feature.
-dev = {environments = ["default"], features = ["test"]}
-```
+- `solve-group: String`: The solve group is used to group environments together at the solve stage.
+This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
+For instance when testing a production environment with additional test dependencies.
 
 ```toml title="Creating environments from features" linenums="1"
 [environments]
@@ -110,11 +103,14 @@ test = ["test"] # implicit: test = ["test", "default"]
 test39 = ["test", "py39"] # implicit: test39 = ["test", "py39", "default"]
 ```
 
-```toml title="Creating environments from environments" linenums="1"
+```toml title="Testing a production environment with additional dependencies" linenums="1"
 [environments]
-prod = ["py39"]
-# Takes the `prod` environment and adds the `test` feature to it without modifying the `prod` environment requirements, solve should fail if requirements don't comply with locked set.
-test_prod = {environments = ["prod"], features = ["test"]}
+# Creating a `prod` environment which is the minimal set of dependencies used for production.
+prod = {features = ["py39"], solve-group = "prod"}
+# Creating a `test_prod` environment which is the `prod` environment plus the `test` feature.
+test_prod = {features = ["py39", "test"], solve-group = "prod"}
+# Using the `solve-group` to solve the `prod` and `test_prod` environments together
+# Which makes sure the tested environment has the same version of the dependencies as the production environment.
 ```
 
 ```toml title="Creating environments without a default environment" linenums="1"
