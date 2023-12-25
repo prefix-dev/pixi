@@ -1,9 +1,10 @@
 use crate::environment::{update_prefix, verify_prefix_location_unchanged};
+use crate::lock_file::update_lock_file_for_pypi;
 use crate::prefix::Prefix;
 use crate::project::{DependencyType, SpecType};
 use crate::{
     consts,
-    lock_file::{load_lock_file, update_lock_file},
+    lock_file::{load_lock_file, update_lock_file_conda},
     project::python::PyPiRequirement,
     project::Project,
     virtual_packages::get_minimal_virtual_packages,
@@ -345,7 +346,15 @@ async fn update_environment(
 ) -> miette::Result<()> {
     // Update the lock file
     let lock_file = if !no_update_lockfile {
-        Some(update_lock_file(project, load_lock_file(project).await?, sparse_repo_data).await?)
+        let lock =
+            update_lock_file_conda(project, load_lock_file(project).await?, sparse_repo_data)
+                .await?;
+
+        if project.has_pypi_dependencies() {
+            update_lock_file_for_pypi(project, lock).await?.into()
+        } else {
+            lock.into()
+        }
     } else {
         None
     };

@@ -1,5 +1,5 @@
 use crate::environment::update_prefix;
-use crate::lock_file::{load_lock_file, update_lock_file};
+use crate::lock_file::{load_lock_file, update_lock_file_conda};
 use crate::prefix::Prefix;
 use crate::Project;
 use clap::Parser;
@@ -52,7 +52,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .add_channels(missing_channels.iter().map(|(name, _channel)| name))?;
 
     // Try to update the lock-file with the new channels
-    let lock_file = update_lock_file(&project, lock_file, None).await?;
+    let lock_file = update_lock_file_conda(&project, lock_file, None).await?;
     project.save()?;
 
     // Update the installation if needed

@@ -14,20 +14,14 @@ use rip::resolve::{resolve, PinnedPackage, ResolveOptions, SDistResolution};
 use std::{collections::HashMap, str::FromStr, vec};
 
 /// Resolve python packages for the specified project.
-pub async fn resolve_pypi_dependencies<'p>(
+pub async fn resolve_dependencies<'p>(
     project: &'p Project,
     platform: Platform,
-    conda_packages: &mut [RepoDataRecord],
+    conda_packages: &[RepoDataRecord],
 ) -> miette::Result<Vec<PinnedPackage<'p>>> {
     let dependencies = project.pypi_dependencies(platform);
     if dependencies.is_empty() {
         return Ok(vec![]);
-    }
-
-    // Amend the records with pypi purls if they are not present yet.
-    let conda_forge_mapping = pypi_name_mapping::conda_pypi_name_mapping().await?;
-    for record in conda_packages.iter_mut() {
-        pypi_name_mapping::amend_pypi_purls(record, conda_forge_mapping)?;
     }
 
     // Determine the python packages that are installed by the conda packages
@@ -98,6 +92,15 @@ pub async fn resolve_pypi_dependencies<'p>(
     result.retain(|p| !p.artifacts.is_empty());
 
     Ok(result)
+}
+
+/// Amend the records with pypi purls if they are not present yet.
+pub async fn amend_pypi_purls(conda_packages: &mut [RepoDataRecord]) -> miette::Result<()> {
+    let conda_forge_mapping = pypi_name_mapping::conda_pypi_name_mapping().await?;
+    for record in conda_packages.iter_mut() {
+        pypi_name_mapping::amend_pypi_purls(record, conda_forge_mapping)?;
+    }
+    Ok(())
 }
 
 /// Returns true if the specified record refers to a version/variant of python.

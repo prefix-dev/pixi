@@ -121,7 +121,10 @@ pub async fn get_up_to_date_prefix(
     match usage {
         LockFileUsage::Update => {
             if !up_to_date {
-                lock_file = lock_file::update_lock_file(project, lock_file, None).await?
+                lock_file = lock_file::update_lock_file_conda(project, lock_file, None).await?;
+                if project.has_pypi_dependencies() {
+                    lock_file = lock_file::update_lock_file_for_pypi(project, lock_file).await?;
+                }
             }
         }
         LockFileUsage::Locked => {
