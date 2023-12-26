@@ -135,7 +135,7 @@ async fn search_exact_package(
 
     if packages.is_empty() {
         let normalized_package_name = package_name.as_normalized();
-        return Err(miette::miette!("Could not find {normalized_package_name}"));
+        return Err(miette::miette!("Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."));
     }
 
     let package = packages.last().clone();
