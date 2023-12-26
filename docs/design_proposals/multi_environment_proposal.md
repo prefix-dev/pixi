@@ -320,8 +320,9 @@ pixi run test
     test = "pytest --md=report.md"
 
     [environments]
-    default = ["test", {environment = "prod"}] # implicit ["default", "test"], overrides default environment
-    prod = [] # implicit for ["default"]
+    # both default and prod will have exactly the same dependency versions when they share a dependency
+    default = {features = ["test"], solve-group = "prod-group"}
+    prod = {features = [], solve-group = "prod-group"}
     ```
     In ci you would run the following commands:
     ```shell
