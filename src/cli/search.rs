@@ -100,18 +100,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // When package name filter contains * (wildcard), it will search and display a list of packages matching this filter
     if package_name_filter.contains('*') {
-        let package_name_without_filter = package_name_filter.replace("*", "");
+        let package_name_without_filter = package_name_filter.replace('*', "");
         let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
 
         let limit = args.limit;
 
-        let _ = search_package_by_wildcard(package_name, &package_name_filter, repo_data, limit)
-            .await?;
+        search_package_by_wildcard(package_name, &package_name_filter, repo_data, limit).await?;
     }
     // If package name filter doesn't contain * (wildcard), it will search and display specific package info (if any package is found)
     else {
         let package_name = PackageName::try_from(package_name_filter).into_diagnostic()?;
-        let _ = search_exact_package(package_name, repo_data).await?;
+        search_exact_package(package_name, repo_data).await?;
     }
 
     Ok(())
@@ -138,7 +137,7 @@ async fn search_exact_package(
         return Err(miette::miette!("Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."));
     }
 
-    let package = packages.last().clone();
+    let package = packages.last();
     if let Some(package) = package {
         print_package_info(package);
     }
@@ -236,7 +235,7 @@ async fn search_package_by_wildcard(
     repo_data: Vec<SparseRepoData>,
     limit: usize,
 ) -> miette::Result<()> {
-    let wildcard_pattern = Regex::new(&format!("^{}$", &package_name_filter.replace("*", ".*")))
+    let wildcard_pattern = Regex::new(&format!("^{}$", &package_name_filter.replace('*', ".*")))
         .expect("Expect only characters and/or * (wildcard).");
 
     let package_name_search = package_name.clone();
@@ -269,11 +268,11 @@ async fn search_package_by_wildcard(
     packages.sort_by(|a, b| {
         let ord = jaro(
             b.package_record.name.as_normalized(),
-            &normalized_package_name,
+            normalized_package_name,
         )
         .partial_cmp(&jaro(
             a.package_record.name.as_normalized(),
-            &normalized_package_name,
+            normalized_package_name,
         ));
         if let Some(ord) = ord {
             ord
