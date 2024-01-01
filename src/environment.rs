@@ -9,6 +9,8 @@ use rattler::install::Transaction;
 use rattler_conda_types::{Platform, PrefixRecord};
 use rattler_lock::CondaLock;
 use rip::index::PackageDb;
+
+use std::path::PathBuf;
 use std::{io::ErrorKind, path::Path};
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
@@ -99,6 +101,7 @@ pub enum LockFileUsage {
 pub async fn get_up_to_date_prefix(
     project: &Project,
     usage: LockFileUsage,
+    no_install: bool,
 ) -> miette::Result<Prefix> {
     // Make sure the project is in a sane state
     sanity_check_project(project)?;
@@ -117,46 +120,83 @@ pub async fn get_up_to_date_prefix(
 
     let mut lock_file = lock_file::load_lock_file(project).await?;
     let up_to_date = lock_file_satisfies_project(project, &lock_file)?;
+    if matches!(usage, LockFileUsage::Locked) && !up_to_date {
+        miette::bail!("Lockfile not up-to-date with the project");
+    }
+    let update_lock = matches!(usage, LockFileUsage::Update) && !up_to_date;
 
-    match usage {
-        LockFileUsage::Update => {
-            if !up_to_date {
-                lock_file = lock_file::update_lock_file_conda(project, lock_file, None).await?;
-                if project.has_pypi_dependencies() {
-                    lock_file = lock_file::update_lock_file_for_pypi(project, lock_file).await?;
-                }
-            }
-        }
-        LockFileUsage::Locked => {
-            if !up_to_date {
-                miette::bail!("Lockfile not up-to-date with the project");
-            }
-        }
-        // Dont update the lock-file, dont check it
-        LockFileUsage::Frozen => {}
+    // First lock and install the conda environment
+    // After which we should have a usable prefix to use for pypi resolution.
+    if update_lock {
+        lock_file = lock_file::update_lock_file_conda(project, lock_file, None).await?;
     }
 
-    // Update the environment
-    update_prefix(
-        project.pypi_package_db()?,
-        &prefix,
-        installed_packages_future.await.into_diagnostic()??,
-        &lock_file,
-        Platform::current(),
-    )
-    .await?;
+    let python_status = if !no_install {
+        update_prefix_conda(
+            &prefix,
+            installed_packages_future.await.into_diagnostic()??,
+            &lock_file,
+            Platform::current(),
+        )
+        .await?
+    } else {
+        // We don't know and it won't matter because we won't install pypi either
+        PythonStatus::DoesNotExist
+    };
+
+    if project.has_pypi_dependencies() {
+        if update_lock {
+            lock_file = lock_file::update_lock_file_for_pypi(project, lock_file).await?;
+        }
+
+        if !no_install {
+            // Then update the pypi packages.
+            update_prefix_pypi(
+                &prefix,
+                Platform::current(),
+                project.pypi_package_db()?,
+                &lock_file,
+                &python_status,
+            )
+            .await?;
+        }
+    }
 
     Ok(prefix)
 }
 
-/// Updates the environment to contain the packages from the specified lock-file
-pub async fn update_prefix(
+pub async fn update_prefix_pypi(
+    prefix: &Prefix,
+    platform: Platform,
     package_db: &PackageDb,
+    lock_file: &CondaLock,
+    status: &PythonStatus,
+) -> miette::Result<()> {
+    // Remove python packages from a previous python distribution if the python version changed.
+    install_pypi::remove_old_python_distributions(prefix, platform, status)?;
+
+    // Install and/or remove python packages
+    progress::await_in_progress(
+        "updating python packages",
+        install_pypi::update_python_distributions(package_db, prefix, lock_file, platform, status),
+    )
+    .await
+}
+
+#[derive(Clone)]
+pub enum PythonStatus {
+    Changed((u32, u32, u32), PathBuf),
+    Unchanged((u32, u32, u32), PathBuf),
+    DoesNotExist,
+}
+
+/// Updates the environment to contain the packages from the specified lock-file
+pub async fn update_prefix_conda(
     prefix: &Prefix,
     installed_packages: Vec<PrefixRecord>,
     lock_file: &CondaLock,
     platform: Platform,
-) -> miette::Result<()> {
+) -> miette::Result<PythonStatus> {
     // Construct a transaction to bring the environment up to date with the lock-file content
     let desired_conda_packages = lock_file
         .get_conda_packages_by_platform(platform)
@@ -181,22 +221,6 @@ pub async fn update_prefix(
         .await?;
     }
 
-    // Remove python packages from a previous python distribution if the python version changed.
-    install_pypi::remove_old_python_distributions(prefix, platform, &transaction)?;
-
-    // Install and/or remove python packages
-    progress::await_in_progress(
-        "updating python packages",
-        install_pypi::update_python_distributions(
-            package_db,
-            prefix,
-            lock_file,
-            platform,
-            &transaction,
-        ),
-    )
-    .await?;
-
     // Mark the location of the prefix
     create_prefix_location_file(
         &prefix
@@ -207,5 +231,26 @@ pub async fn update_prefix(
     )
     .with_context(|| "failed to create prefix location file.".to_string())?;
 
-    Ok(())
+    // Determine if the python version changed.
+    let python_changed = {
+        if let Some(python_info) = transaction.current_python_info.as_ref() {
+            let python_version = (
+                python_info.short_version.0 as u32,
+                python_info.short_version.1 as u32,
+                0,
+            );
+
+            if Some(python_info.short_version)
+                == transaction.python_info.as_ref().map(|p| p.short_version)
+            {
+                PythonStatus::Unchanged(python_version, python_info.path.clone())
+            } else {
+                // Determine the current python distributions in its install locations
+                PythonStatus::Changed(python_version, python_info.path.clone())
+            }
+        } else {
+            PythonStatus::DoesNotExist
+        }
+    };
+    Ok(python_changed)
 }

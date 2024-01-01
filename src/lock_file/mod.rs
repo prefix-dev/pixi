@@ -157,7 +157,7 @@ pub async fn update_lock_file_conda(
 
 pub async fn update_lock_file_for_pypi(
     project: &Project,
-    new_lock_file: CondaLock,
+    lock_for_conda: CondaLock,
 ) -> miette::Result<CondaLock> {
     let platforms = project.platforms();
     let _top_level_progress =
@@ -166,7 +166,7 @@ pub async fn update_lock_file_for_pypi(
 
     let records = platforms
         .iter()
-        .map(|plat| new_lock_file.get_conda_packages_by_platform(*plat));
+        .map(|plat| lock_for_conda.get_conda_packages_by_platform(*plat));
 
     let result: miette::Result<Vec<_>> =
         stream::iter(izip!(platforms.iter(), solve_bars.iter().cloned(), records))
@@ -225,16 +225,23 @@ pub async fn update_lock_file_for_pypi(
     let conda_lock = builder.build().into_diagnostic()?;
 
     // TODO: think of a better way to do this
-    Ok(CondaLock {
-        metadata: new_lock_file.metadata,
+    // Seeing as we are not using the content-hash anyways this seems to be fine
+    let latest_lock = CondaLock {
+        metadata: lock_for_conda.metadata,
         package: Vec::from_iter(
             conda_lock
                 .package
                 .iter()
-                .chain(new_lock_file.package.iter())
+                .chain(lock_for_conda.package.iter())
                 .cloned(),
         ),
-    })
+    };
+
+    // Write the conda lock to disk
+    conda_lock
+        .to_path(&project.lock_file_path())
+        .into_diagnostic()?;
+    Ok(latest_lock)
 }
 
 async fn resolve_pypi(

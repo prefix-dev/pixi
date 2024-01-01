@@ -1,4 +1,4 @@
-use crate::environment::{update_prefix, verify_prefix_location_unchanged};
+use crate::environment::{update_prefix_conda, verify_prefix_location_unchanged};
 use crate::lock_file::update_lock_file_for_pypi;
 use crate::prefix::Prefix;
 use crate::project::{DependencyType, SpecType};
@@ -368,14 +368,8 @@ async fn update_environment(
             let installed_packages = prefix.find_installed_packages(None).await?;
 
             // Update the prefix
-            update_prefix(
-                project.pypi_package_db()?,
-                &prefix,
-                installed_packages,
-                &lock_file,
-                Platform::current(),
-            )
-            .await?;
+            update_prefix_conda(&prefix, installed_packages, &lock_file, Platform::current())
+                .await?;
         }
     }
     Ok(())

@@ -163,7 +163,7 @@ pub async fn get_task_env(
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
-    let prefix = get_up_to_date_prefix(project, lock_file_usage).await?;
+    let prefix = get_up_to_date_prefix(project, lock_file_usage, false).await?;
 
     // Get environment variables from the activation
     let activation_env = run_activation_async(project, prefix).await?;
