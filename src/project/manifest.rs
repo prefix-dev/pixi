@@ -86,7 +86,12 @@ impl Manifest {
             .as_ref()
             .map_or(false, |deps| !deps.is_empty())
         {
-            tracing::warn!("ALPHA feature enabled!\n\nIt looks like your project contains `[pypi-dependencies]`. This feature is currently still in an ALPHA state!\n\nYou may encounter bugs or weird behavior. Please report any and all issues you encounter on our github repository:\n\n\thttps://github.com/prefix-dev/pixi.\n");
+            match std::env::var("PIXI_BETA_WARNING_OFF") {
+                Ok(var) if var == *"true" => {}
+                _ => {
+                    tracing::warn!("BETA feature `[pypi-dependencies]` enabled!\n\nPlease report any and all issues here:\n\n\thttps://github.com/prefix-dev/pixi.\n\nTurn this warning off by setting the environment variable `PIXI_BETA_WARNING_OFF` to `true`.\n");
+                }
+            }
         }
 
         Ok(Self {
