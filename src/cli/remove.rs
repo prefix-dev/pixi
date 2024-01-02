@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use clap::Parser;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
@@ -36,8 +37,8 @@ pub struct Args {
 }
 
 enum DependencyRemovalResult {
-    PixiDeps(miette::Result<(String, NamelessMatchSpec)>),
-    PyPiDeps(miette::Result<(rip::types::PackageName, PyPiRequirement)>),
+    Conda(miette::Result<(String, NamelessMatchSpec)>),
+    PyPi(miette::Result<(rip::types::PackageName, PyPiRequirement)>),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -55,9 +56,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .iter()
         .map(|dep| {
             if args.pypi {
-                DependencyRemovalResult::PyPiDeps(project.manifest.remove_pypi_dependency(dep))
+                let pkg_name = rip::types::PackageName::from_str(dep.as_source())
+                    .expect("Expected dependency name.");
+                DependencyRemovalResult::PyPi(project.manifest.remove_pypi_dependency(&pkg_name))
             } else {
-                DependencyRemovalResult::PixiDeps(if let Some(p) = &args.platform {
+                DependencyRemovalResult::Conda(if let Some(p) = &args.platform {
                     project
                         .manifest
                         .remove_target_dependency(dep, &spec_type, p)
@@ -74,20 +77,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let _ = get_up_to_date_prefix(&project, LockFileUsage::Update, false, None).await?;
 
     for result in results.iter() {
-        let removed = match result {
-            DependencyRemovalResult::PixiDeps(pixi_result) => {
-                pixi_result.as_ref().unwrap().0.to_string()
+        let removed_and_spec = match result {
+            DependencyRemovalResult::Conda(Ok(pixi_result)) => {
+                (pixi_result.0.to_string(), pixi_result.1.to_string())
             }
-            DependencyRemovalResult::PyPiDeps(pypi_result) => {
-                pypi_result.as_ref().unwrap().0.as_str().to_string()
-            }
-        };
-        let spec = match result {
-            DependencyRemovalResult::PixiDeps(pixi_result) => {
-                pixi_result.as_ref().unwrap().1.to_string()
-            }
-            DependencyRemovalResult::PyPiDeps(pypi_result) => {
-                pypi_result.as_ref().unwrap().1.to_string()
+            DependencyRemovalResult::PyPi(Ok(pypi_result)) => (
+                pypi_result.0.as_str().to_string(),
+                pypi_result.1.to_string(),
+            ),
+            DependencyRemovalResult::Conda(Err(e)) | DependencyRemovalResult::PyPi(Err(e)) => {
+                eprintln!("{e}");
+                return Ok(());
             }
         };
 
@@ -99,19 +99,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         eprintln!(
             "Removed {} from [{}]",
-            console::style(format!("{removed} {spec}")).bold(),
+            console::style(format!("{} {}", removed_and_spec.0, removed_and_spec.1)).bold(),
             console::style(table_name).bold(),
         );
-    }
-
-    for result in &results {
-        match result {
-            DependencyRemovalResult::PixiDeps(Err(e))
-            | DependencyRemovalResult::PyPiDeps(Err(e)) => {
-                eprintln!("{e}");
-            }
-            _ => {}
-        }
     }
 
     Ok(())

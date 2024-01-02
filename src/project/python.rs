@@ -28,17 +28,8 @@ pub enum ParsePyPiRequirementError {
 
 impl fmt::Display for PyPiRequirement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let all_extras = self
-            .extras
-            .clone()
-            .map(|each_str| each_str.join(", "))
-            .unwrap_or_default();
-        write!(
-            f,
-            "version=\"{}\", extras=\"{}\"",
-            self.version.clone().unwrap(),
-            all_extras
-        )
+        let item: Item = self.clone().into();
+        write!(f, "{item}")
     }
 }
 
@@ -198,10 +189,12 @@ mod test {
 
     #[test]
     fn test_pypi_to_string() {
-        let pypi = PyPiRequirement::from_str(">=1.0.0,<2.0.0");
+        let req = pep508_rs::Requirement::from_str("numpy[testing]==1.0.0; os_name == \"posix\"")
+            .unwrap();
+        let pypi = PyPiRequirement::from(req);
         assert_eq!(
-            pypi.unwrap().to_string(),
-            "version=\">=1.0.0, <2.0.0\", extras=\"\""
+            pypi.to_string(),
+            "{ version = \"==1.0.0\", extras = [\"testing\"] }"
         );
     }
 

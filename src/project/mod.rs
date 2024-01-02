@@ -41,7 +41,7 @@ impl DependencyType {
     pub fn name(&self) -> &'static str {
         match self {
             DependencyType::CondaDependency(dep) => dep.name(),
-            DependencyType::PypiDependency => "pypi-dependencies",
+            DependencyType::PypiDependency => consts::PYPI_DEPENDENCIES,
         }
     }
 }

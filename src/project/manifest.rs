@@ -470,17 +470,18 @@ impl Manifest {
 
     pub fn remove_pypi_dependency(
         &mut self,
-        dep: &rattler_conda_types::PackageName,
-    ) -> miette::Result<(PackageName, PyPiRequirement)> {
+        dep: &rip::types::PackageName,
+    ) -> miette::Result<(rip::types::PackageName, PyPiRequirement)> {
         if let Item::Table(ref mut t) = self.document[consts::PYPI_DEPENDENCIES] {
-            if t.contains_key(dep.as_normalized()) && t.remove(dep.as_normalized()).is_some() {
-                return self.parsed.remove_pypi_dependencies(dep.as_normalized());
+            if t.contains_key(dep.as_str()) && t.remove(dep.as_str()).is_some() {
+                return self.parsed.remove_pypi_dependencies(dep.as_str());
             }
         }
 
         Err(miette::miette!(
-            "Couldn't find {} in PyPi",
-            console::style(dep.as_normalized()).bold(),
+            "Couldn't find {} in {}",
+            console::style(dep.as_str()).bold(),
+            consts::PYPI_DEPENDENCIES,
         ))
     }
 
@@ -1497,12 +1498,26 @@ python = ">=3.12.1,<3.13"
 
 [pypi-dependencies]
 jax = { version = "*", extras = ["cpu"] }
+requests = "*"
+xpackage = "==1.2.3"
+ypackage = {version = ">=1.2.3"}
 "#;
-        let mut manifest = Manifest::from_str(Path::new(""), pixi_cfg).unwrap();
+        let tmpdir = tempdir().unwrap();
+        let mut manifest = Manifest::from_str(tmpdir.path(), pixi_cfg).unwrap();
         manifest
-            .remove_pypi_dependency(&rattler_conda_types::PackageName::try_from("jax").unwrap())
+            .remove_pypi_dependency(&rip::types::PackageName::from_str("jax").unwrap())
             .unwrap();
-        assert!(manifest.parsed.pypi_dependencies.unwrap().is_empty())
+        let unwrapped_pypi = manifest.parsed.pypi_dependencies.as_ref().unwrap();
+        assert!(!unwrapped_pypi.contains_key(&rip::types::PackageName::from_str("jax").unwrap()));
+        assert!(
+            unwrapped_pypi.contains_key(&rip::types::PackageName::from_str("requests").unwrap())
+        );
+        assert!(
+            unwrapped_pypi.contains_key(&rip::types::PackageName::from_str("xpackage").unwrap())
+        );
+        assert!(
+            unwrapped_pypi.contains_key(&rip::types::PackageName::from_str("ypackage").unwrap())
+        );
     }
 
     #[test]
