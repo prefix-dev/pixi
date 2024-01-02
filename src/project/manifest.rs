@@ -17,7 +17,8 @@ use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use toml_edit::{Array, Document, Item, Table, TomlError, Value};
+use std::str::FromStr;
+use toml_edit::{value, Array, Document, Item, Table, TomlError, Value};
 use url::Url;
 
 /// Handles the project's manifest file.
@@ -240,6 +241,43 @@ impl Manifest {
 
         // Add to manifest
         self.parsed.project.platforms.value.extend(platforms);
+        Ok(())
+    }
+
+    /// Remove the platform(s) from the project
+    pub fn remove_platforms(
+        &mut self,
+        platforms: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> miette::Result<()> {
+        let mut removed_platforms = Vec::new();
+
+        for platform in platforms {
+            // Parse the channel to be removed
+            let platform_to_remove = Platform::from_str(platform.as_ref()).into_diagnostic()?;
+
+            // Remove the channel if it exists
+            if let Some(pos) = self
+                .parsed
+                .project
+                .platforms
+                .value
+                .iter()
+                .position(|x| *x == platform_to_remove)
+            {
+                self.parsed.project.platforms.value.remove(pos);
+            }
+
+            removed_platforms.push(platform.as_ref().to_owned());
+        }
+
+        // remove the platforms from the toml
+        let platform_array = &mut self.document["project"]["platforms"];
+        let platform_array = platform_array
+            .as_array_mut()
+            .expect("platforms should be an array");
+
+        platform_array.retain(|x| !removed_platforms.contains(&x.as_str().unwrap().to_string()));
+
         Ok(())
     }
 
@@ -493,6 +531,57 @@ impl Manifest {
         for channel in stored_channels {
             channels_array.push(channel);
         }
+
+        Ok(())
+    }
+
+    /// Remove the specified channels to the manifest.
+    pub fn remove_channels(
+        &mut self,
+        channels: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> miette::Result<()> {
+        let mut removed_channels = Vec::new();
+
+        for channel in channels {
+            // Parse the channel to be removed
+            let channel_to_remove =
+                Channel::from_str(channel.as_ref(), &ChannelConfig::default()).into_diagnostic()?;
+
+            // Remove the channel if it exists
+            if let Some(pos) = self
+                .parsed
+                .project
+                .channels
+                .iter()
+                .position(|x| *x == channel_to_remove)
+            {
+                self.parsed.project.channels.remove(pos);
+            }
+
+            removed_channels.push(channel.as_ref().to_owned());
+        }
+
+        // remove the channels from the toml
+        let channels_array = self.channels_array_mut()?;
+        channels_array.retain(|x| !removed_channels.contains(&x.as_str().unwrap().to_string()));
+
+        Ok(())
+    }
+
+    /// Set the project description
+    pub fn set_description(&mut self, description: &String) -> miette::Result<()> {
+        // Update in both the manifest and the toml
+        self.parsed.project.description = Some(description.to_string());
+        self.document["project"]["description"] = value(description);
+
+        Ok(())
+    }
+
+    /// Set the project version
+    pub fn set_version(&mut self, version: &String) -> miette::Result<()> {
+        // Update in both the manifest and the toml
+        self.parsed.project.version = Some(Version::from_str(version).unwrap());
+        self.document["project"]["version"] = value(version);
 
         Ok(())
     }
@@ -1348,5 +1437,186 @@ mod test {
         assert!(manifest.parsed.dependencies.is_empty());
         // Should still contain the fooz dependency in the target table
         assert_debug_snapshot!(manifest.parsed.target);
+    }
+
+    #[test]
+    fn test_set_version() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+        "#;
+
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.version.as_ref().unwrap().clone(),
+            Version::from_str("0.1.0").unwrap()
+        );
+
+        manifest.set_version(&String::from("1.2.3")).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.version.as_ref().unwrap().clone(),
+            Version::from_str("1.2.3").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_set_description() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            description = "foo description"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+        "#;
+
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        assert_eq!(
+            manifest
+                .parsed
+                .project
+                .description
+                .as_ref()
+                .unwrap()
+                .clone(),
+            String::from("foo description")
+        );
+
+        manifest
+            .set_description(&String::from("my new description"))
+            .unwrap();
+
+        assert_eq!(
+            manifest
+                .parsed
+                .project
+                .description
+                .as_ref()
+                .unwrap()
+                .clone(),
+            String::from("my new description")
+        );
+    }
+
+    #[test]
+    fn test_add_platforms() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            description = "foo description"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+        "#;
+
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.platforms.value,
+            vec![Platform::Linux64, Platform::Win64]
+        );
+
+        manifest.add_platforms([Platform::OsxArm64].iter()).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.platforms.value,
+            vec![Platform::Linux64, Platform::Win64, Platform::OsxArm64]
+        );
+    }
+
+    #[test]
+    fn test_remove_platforms() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            description = "foo description"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+        "#;
+
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.platforms.value,
+            vec![Platform::Linux64, Platform::Win64]
+        );
+
+        manifest.remove_platforms(&vec!["linux-64"]).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.platforms.value,
+            vec![Platform::Win64]
+        );
+    }
+
+    #[test]
+    fn test_add_channels() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            description = "foo description"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+        "#;
+
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        assert_eq!(manifest.parsed.project.channels, vec![]);
+
+        manifest.add_channels(["conda-forge"].iter()).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.channels,
+            vec![Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap()]
+        );
+    }
+
+    #[test]
+    fn test_remove_channels() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            description = "foo description"
+            channels = ["conda-forge"]
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+        "#;
+
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.channels,
+            vec![Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap()]
+        );
+
+        manifest.remove_channels(["conda-forge"].iter()).unwrap();
+
+        assert_eq!(manifest.parsed.project.channels, vec![]);
     }
 }

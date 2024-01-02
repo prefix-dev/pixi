@@ -3,6 +3,7 @@ pub mod config;
 pub mod consts;
 pub mod environment;
 pub mod install;
+pub mod install_pypi;
 pub mod lock_file;
 pub mod prefix;
 pub mod progress;

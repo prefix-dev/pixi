@@ -108,12 +108,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let spec_platforms = &args.platform;
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(
-        project
-            .environment_dir()
-            .join(consts::PREFIX_FILE_NAME)
-            .as_path(),
-    )?;
+    verify_prefix_location_unchanged(project.pixi_dir().join(consts::PREFIX_FILE_NAME).as_path())?;
 
     // Add the platform if it is not already present
     let platforms_to_add = spec_platforms
@@ -360,7 +355,7 @@ async fn update_environment(
             crate::environment::sanity_check_project(project)?;
 
             // Get the currently installed packages
-            let prefix = Prefix::new(project.root().join(".pixi/env"))?;
+            let prefix = Prefix::new(project.environment_dir())?;
             let installed_packages = prefix.find_installed_packages(None).await?;
 
             // Update the prefix
