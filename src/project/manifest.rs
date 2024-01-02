@@ -1531,9 +1531,7 @@ mod test {
             vec![Platform::Linux64, Platform::Win64]
         );
 
-        manifest
-            .add_platforms(vec![Platform::OsxArm64].iter())
-            .unwrap();
+        manifest.add_platforms([Platform::OsxArm64].iter()).unwrap();
 
         assert_eq!(
             manifest.parsed.project.platforms.value,
@@ -1588,7 +1586,7 @@ mod test {
 
         assert_eq!(manifest.parsed.project.channels, vec![]);
 
-        manifest.add_channels(vec!["conda-forge"].iter()).unwrap();
+        manifest.add_channels(["conda-forge"].iter()).unwrap();
 
         assert_eq!(
             manifest.parsed.project.channels,
@@ -1617,9 +1615,7 @@ mod test {
             vec![Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap()]
         );
 
-        manifest
-            .remove_channels(vec!["conda-forge"].iter())
-            .unwrap();
+        manifest.remove_channels(["conda-forge"].iter()).unwrap();
 
         assert_eq!(manifest.parsed.project.channels, vec![]);
     }

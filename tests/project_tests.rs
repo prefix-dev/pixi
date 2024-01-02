@@ -39,9 +39,7 @@ async fn add_channel() {
 
     // Our channel should be in the list of channels
     let local_channel = Channel::from_str(
-        Url::from_directory_path(additional_channel_dir.path())
-            .unwrap()
-            .to_string(),
+        &Url::from_directory_path(additional_channel_dir.path()).unwrap(),
         &ChannelConfig::default(),
     )
     .unwrap();

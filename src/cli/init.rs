@@ -236,7 +236,7 @@ mod tests {
         assert_eq!(read_file_content(&file_path), original_content);
 
         // Scenario 4: Path is a folder not a file, give an error.
-        assert!(create_or_append_file(&dir.path(), template).is_err());
+        assert!(create_or_append_file(dir.path(), template).is_err());
 
         dir.close().unwrap();
     }
