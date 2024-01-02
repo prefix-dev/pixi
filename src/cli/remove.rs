@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 
 use crate::environment::LockFileUsage;
+use crate::project::python::PyPiRequirement;
 use crate::{environment::get_up_to_date_prefix, project::SpecType, Project};
 
 /// Remove the dependency from the project
@@ -25,9 +26,18 @@ pub struct Args {
     #[arg(long, conflicts_with = "host")]
     pub build: bool,
 
+    /// Whether the dependency is a pypi package
+    #[arg(long)]
+    pub pypi: bool,
+
     /// The platform for which the dependency should be removed
     #[arg(long, short)]
     pub platform: Option<Platform>,
+}
+
+enum DependencyRemovalResult {
+    PixiDeps(miette::Result<(String, NamelessMatchSpec)>),
+    PyPiDeps(miette::Result<(rip::types::PackageName, PyPiRequirement)>),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -44,22 +54,43 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let results = deps
         .iter()
         .map(|dep| {
-            if let Some(p) = &args.platform {
-                project
-                    .manifest
-                    .remove_target_dependency(dep, &spec_type, p)
+            if args.pypi {
+                DependencyRemovalResult::PyPiDeps(project.manifest.remove_pypi_dependency(dep))
             } else {
-                project.manifest.remove_dependency(dep, &spec_type)
+                DependencyRemovalResult::PixiDeps(if let Some(p) = &args.platform {
+                    project
+                        .manifest
+                        .remove_target_dependency(dep, &spec_type, p)
+                } else {
+                    project.manifest.remove_dependency(dep, &spec_type)
+                })
             }
         })
-        .collect::<Vec<_>>();
+        .collect::<Vec<DependencyRemovalResult>>();
 
     project.save()?;
 
     // updating prefix after removing from toml
     let _ = get_up_to_date_prefix(&project, LockFileUsage::Update, false, None).await?;
 
-    for (removed, spec) in results.iter().flatten() {
+    for result in results.iter() {
+        let removed = match result {
+            DependencyRemovalResult::PixiDeps(pixi_result) => {
+                pixi_result.as_ref().unwrap().0.to_string()
+            }
+            DependencyRemovalResult::PyPiDeps(pypi_result) => {
+                pypi_result.as_ref().unwrap().0.as_str().to_string()
+            }
+        };
+        let spec = match result {
+            DependencyRemovalResult::PixiDeps(pixi_result) => {
+                pixi_result.as_ref().unwrap().1.to_string()
+            }
+            DependencyRemovalResult::PyPiDeps(pypi_result) => {
+                pypi_result.as_ref().unwrap().1.to_string()
+            }
+        };
+
         let table_name = if let Some(p) = &args.platform {
             format!("target.{}.{}", p.as_str(), spec_type.name())
         } else {
@@ -74,8 +105,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     for result in &results {
-        if let Err(e) = result {
-            eprintln!("{e}");
+        match result {
+            DependencyRemovalResult::PixiDeps(Err(e))
+            | DependencyRemovalResult::PyPiDeps(Err(e)) => {
+                eprintln!("{e}");
+            }
+            _ => {}
         }
     }
 

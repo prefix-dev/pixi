@@ -468,6 +468,22 @@ impl Manifest {
         Ok(())
     }
 
+    pub fn remove_pypi_dependency(
+        &mut self,
+        dep: &rattler_conda_types::PackageName,
+    ) -> miette::Result<(PackageName, PyPiRequirement)> {
+        if let Item::Table(ref mut t) = self.document[consts::PYPI_DEPENDENCIES] {
+            if t.contains_key(dep.as_normalized()) && t.remove(dep.as_normalized()).is_some() {
+                return self.parsed.remove_pypi_dependencies(dep.as_normalized());
+            }
+        }
+
+        Err(miette::miette!(
+            "Couldn't find {} in PyPi",
+            console::style(dep.as_normalized()).bold(),
+        ))
+    }
+
     /// Removes a dependency from `pixi.toml` based on `SpecType`.
     pub fn remove_dependency(
         &mut self,
@@ -800,6 +816,30 @@ impl ProjectManifest {
         } else {
             self.pypi_dependencies.insert(IndexMap::new())
         }
+    }
+
+    /// Remove PyPi dependencies
+    pub fn remove_pypi_dependencies(
+        &mut self,
+        dep: &str,
+    ) -> miette::Result<(PackageName, PyPiRequirement)> {
+        self.pypi_dependencies
+            .as_mut()
+            .and_then(|pypi_deps| {
+                let key_to_remove = pypi_deps
+                    .keys()
+                    .find(|&pkg_name| pkg_name.as_str() == dep)
+                    .cloned();
+
+                // Step 2: Use the key to remove the entry
+                key_to_remove.and_then(|pkg_key| pypi_deps.shift_remove_entry(&pkg_key))
+            })
+            .ok_or_else(|| {
+                miette::miette!(
+                    "Couldn't remove PyPi dependency: {}",
+                    console::style(dep).bold(),
+                )
+            })
     }
 
     /// Remove dependency given a `SpecType`.
@@ -1442,6 +1482,27 @@ mod test {
         assert!(manifest.parsed.dependencies.is_empty());
         // Should still contain the fooz dependency in the target table
         assert_debug_snapshot!(manifest.parsed.target);
+    }
+
+    #[test]
+    fn test_remove_pypi_dependencies() {
+        let pixi_cfg = r#"[project]
+name = "pixi_fun"
+version = "0.1.0"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[dependencies]
+python = ">=3.12.1,<3.13"
+
+[pypi-dependencies]
+jax = { version = "*", extras = ["cpu"] }
+"#;
+        let mut manifest = Manifest::from_str(Path::new(""), pixi_cfg).unwrap();
+        manifest
+            .remove_pypi_dependency(&rattler_conda_types::PackageName::try_from("jax").unwrap())
+            .unwrap();
+        assert!(manifest.parsed.pypi_dependencies.unwrap().is_empty())
     }
 
     #[test]
