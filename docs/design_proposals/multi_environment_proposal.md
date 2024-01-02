@@ -36,7 +36,7 @@ As an environment goes beyond just `dependencies` the `features` should be descr
 - `system-requirements`: The system requirements of the environment
 - `activation`: The activation information for the environment
 - `platforms`: The platforms the environment can be run on.
-- `channels`: The channels used to create the environment.
+- `channels`: The channels used to create the environment. Adding the `priority` field to the channels to allow concatenation of channels instead of overwriting.
 - `target`: All the above features but also separated by targets.
 - `tasks`: Feature specific tasks, tasks in one environment are selected as default tasks for the environment.
 
@@ -72,7 +72,9 @@ pypi-dependencies = {torch = "1.9.0"}
 platforms = ["linux-64", "osx-arm64"]
 activation = {scripts = ["cuda_activation.sh"]}
 system-requirements = {cuda = "12"}
-channels = ["nvidia"] # Would concat instead of overwrite, so the default channels are still used.
+# Channels concatenate using a priority instead of overwrite, so the default channels are still used.
+# Using the priority the concatenation is controlled, default is 0, so the default channels are used first.
+channels = [{name = "nvidia", priority = "-1"}, "pytorch"] # Results in:  ["nvidia", "conda-forge", "pytorch"] if the default is `conda-forge`
 tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
