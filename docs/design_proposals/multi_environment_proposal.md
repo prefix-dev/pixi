@@ -71,6 +71,7 @@ dependencies = {cuda = "x.y.z", cudnn = "12.0"}
 pypi-dependencies = {torch = "1.9.0"}
 platforms = ["linux-64", "osx-arm64"]
 activation = {scripts = ["cuda_activation.sh"]}
+system-requirements = {cuda = "12"}
 channels = ["nvidia"] # Would concat instead of overwrite, so the default channels are still used.
 tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
