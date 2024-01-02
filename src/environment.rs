@@ -9,7 +9,6 @@ use rattler::install::Transaction;
 use rattler_conda_types::{Platform, PrefixRecord};
 use rattler_lock::CondaLock;
 use rip::index::PackageDb;
-
 use std::path::PathBuf;
 use std::{io::ErrorKind, path::Path};
 

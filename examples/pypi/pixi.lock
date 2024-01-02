@@ -99,6 +99,74 @@ package:
     md5: null
     sha256: 9a28abb62774ae4e8edbe2dd4c49ffcd45a6a848952a5eccc6a49f3f0fc1e2f3
 - platform: linux-64
+  name: asttokens
+  version: 2.4.1
+  category: main
+  manager: pypi
+  requires_dist:
+  - six >=1.12.0
+  - typing ; python_version < '3.5'
+  - astroid <2, >=1 ; python_version < '3' and extra == 'astroid'
+  - astroid <4, >=2 ; python_version >= '3' and extra == 'astroid'
+  - pytest ; extra == 'test'
+  - astroid <2, >=1 ; python_version < '3' and extra == 'test'
+  - astroid <4, >=2 ; python_version >= '3' and extra == 'test'
+  url: https://files.pythonhosted.org/packages/45/86/4736ac618d82a20d87d2f92ae19441ebc7ac9e7a581d7e58bbe79233b24a/asttokens-2.4.1-py2.py3-none-any.whl#sha256=051ed49c3dcae8913ea7cd08e46a606dba30b79993209636c4875bc1d637bc24
+  hash:
+    md5: null
+    sha256: 051ed49c3dcae8913ea7cd08e46a606dba30b79993209636c4875bc1d637bc24
+- platform: osx-64
+  name: asttokens
+  version: 2.4.1
+  category: main
+  manager: pypi
+  requires_dist:
+  - six >=1.12.0
+  - typing ; python_version < '3.5'
+  - astroid <2, >=1 ; python_version < '3' and extra == 'astroid'
+  - astroid <4, >=2 ; python_version >= '3' and extra == 'astroid'
+  - pytest ; extra == 'test'
+  - astroid <2, >=1 ; python_version < '3' and extra == 'test'
+  - astroid <4, >=2 ; python_version >= '3' and extra == 'test'
+  url: https://files.pythonhosted.org/packages/45/86/4736ac618d82a20d87d2f92ae19441ebc7ac9e7a581d7e58bbe79233b24a/asttokens-2.4.1-py2.py3-none-any.whl#sha256=051ed49c3dcae8913ea7cd08e46a606dba30b79993209636c4875bc1d637bc24
+  hash:
+    md5: null
+    sha256: 051ed49c3dcae8913ea7cd08e46a606dba30b79993209636c4875bc1d637bc24
+- platform: osx-arm64
+  name: asttokens
+  version: 2.4.1
+  category: main
+  manager: pypi
+  requires_dist:
+  - six >=1.12.0
+  - typing ; python_version < '3.5'
+  - astroid <2, >=1 ; python_version < '3' and extra == 'astroid'
+  - astroid <4, >=2 ; python_version >= '3' and extra == 'astroid'
+  - pytest ; extra == 'test'
+  - astroid <2, >=1 ; python_version < '3' and extra == 'test'
+  - astroid <4, >=2 ; python_version >= '3' and extra == 'test'
+  url: https://files.pythonhosted.org/packages/45/86/4736ac618d82a20d87d2f92ae19441ebc7ac9e7a581d7e58bbe79233b24a/asttokens-2.4.1-py2.py3-none-any.whl#sha256=051ed49c3dcae8913ea7cd08e46a606dba30b79993209636c4875bc1d637bc24
+  hash:
+    md5: null
+    sha256: 051ed49c3dcae8913ea7cd08e46a606dba30b79993209636c4875bc1d637bc24
+- platform: win-64
+  name: asttokens
+  version: 2.4.1
+  category: main
+  manager: pypi
+  requires_dist:
+  - six >=1.12.0
+  - typing ; python_version < '3.5'
+  - astroid <2, >=1 ; python_version < '3' and extra == 'astroid'
+  - astroid <4, >=2 ; python_version >= '3' and extra == 'astroid'
+  - pytest ; extra == 'test'
+  - astroid <2, >=1 ; python_version < '3' and extra == 'test'
+  - astroid <4, >=2 ; python_version >= '3' and extra == 'test'
+  url: https://files.pythonhosted.org/packages/45/86/4736ac618d82a20d87d2f92ae19441ebc7ac9e7a581d7e58bbe79233b24a/asttokens-2.4.1-py2.py3-none-any.whl#sha256=051ed49c3dcae8913ea7cd08e46a606dba30b79993209636c4875bc1d637bc24
+  hash:
+    md5: null
+    sha256: 051ed49c3dcae8913ea7cd08e46a606dba30b79993209636c4875bc1d637bc24
+- platform: linux-64
   name: astunparse
   version: 1.6.3
   category: main
@@ -148,7 +216,7 @@ package:
     sha256: c2652417f2c8b5bb325c885ae329bdf3f86424075c4fd1a128674bc6fba4b8e8
 - platform: linux-64
   name: black
-  version: 23.11.0
+  version: 23.12.1
   category: main
   manager: pypi
   requires_dist:
@@ -160,18 +228,21 @@ package:
   - tomli >=1.1.0 ; python_version < '3.11'
   - typing-extensions >=4.0.1 ; python_version < '3.11'
   - colorama >=0.4.3 ; extra == 'colorama'
-  - aiohttp >=3.7.4 ; extra == 'd'
+  - aiohttp !=3.9.0, >=3.7.4 ; (sys_platform == 'win32' and implementation_name == 'pypy') and extra == 'd'
+  - aiohttp >=3.7.4 ; (sys_platform != 'win32' or implementation_name != 'pypy') and extra == 'd'
   - ipython >=7.8.0 ; extra == 'jupyter'
   - tokenize-rt >=3.2.0 ; extra == 'jupyter'
   - uvloop >=0.15.2 ; extra == 'uvloop'
   requires_python: '>=3.8'
-  url: https://files.pythonhosted.org/packages/46/0a/964b242c01b8dbadec60afd2f1d3e08ad574315d34a33a692e96f121a32b/black-23.11.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=760415ccc20f9e8747084169110ef75d545f3b0932ee21368f63ac0fee86b221
+  extras:
+  - jupyter
+  url: https://files.pythonhosted.org/packages/eb/59/1f5c8eb7bba8a8b1bb5c87f097d16410c93a48a6655be3773db5d2783deb/black-23.12.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=9c4352800f14be5b4864016882cdba10755bd50805c95f728011bcb47a4afd59
   hash:
     md5: null
-    sha256: 760415ccc20f9e8747084169110ef75d545f3b0932ee21368f63ac0fee86b221
+    sha256: 9c4352800f14be5b4864016882cdba10755bd50805c95f728011bcb47a4afd59
 - platform: osx-64
   name: black
-  version: 23.11.0
+  version: 23.12.1
   category: main
   manager: pypi
   requires_dist:
@@ -183,18 +254,21 @@ package:
   - tomli >=1.1.0 ; python_version < '3.11'
   - typing-extensions >=4.0.1 ; python_version < '3.11'
   - colorama >=0.4.3 ; extra == 'colorama'
-  - aiohttp >=3.7.4 ; extra == 'd'
+  - aiohttp !=3.9.0, >=3.7.4 ; (sys_platform == 'win32' and implementation_name == 'pypy') and extra == 'd'
+  - aiohttp >=3.7.4 ; (sys_platform != 'win32' or implementation_name != 'pypy') and extra == 'd'
   - ipython >=7.8.0 ; extra == 'jupyter'
   - tokenize-rt >=3.2.0 ; extra == 'jupyter'
   - uvloop >=0.15.2 ; extra == 'uvloop'
   requires_python: '>=3.8'
-  url: https://files.pythonhosted.org/packages/3b/d8/ea841502c79d85675e56c40d77de59aae44e311f17b463815d6a9659608c/black-23.11.0-cp311-cp311-macosx_10_9_x86_64.whl#sha256=cf57719e581cfd48c4efe28543fea3d139c6b6f1238b3f0102a9c73992cbb479
+  extras:
+  - jupyter
+  url: https://files.pythonhosted.org/packages/ed/2c/d9b1a77101e6e5f294f6553d76c39322122bfea2a438aeea4eb6d4b22749/black-23.12.1-cp311-cp311-macosx_10_9_x86_64.whl#sha256=8d4df77958a622f9b5a4c96edb4b8c0034f8434032ab11077ec6c56ae9f384ba
   hash:
     md5: null
-    sha256: cf57719e581cfd48c4efe28543fea3d139c6b6f1238b3f0102a9c73992cbb479
+    sha256: 8d4df77958a622f9b5a4c96edb4b8c0034f8434032ab11077ec6c56ae9f384ba
 - platform: osx-arm64
   name: black
-  version: 23.11.0
+  version: 23.12.1
   category: main
   manager: pypi
   requires_dist:
@@ -206,18 +280,21 @@ package:
   - tomli >=1.1.0 ; python_version < '3.11'
   - typing-extensions >=4.0.1 ; python_version < '3.11'
   - colorama >=0.4.3 ; extra == 'colorama'
-  - aiohttp >=3.7.4 ; extra == 'd'
+  - aiohttp !=3.9.0, >=3.7.4 ; (sys_platform == 'win32' and implementation_name == 'pypy') and extra == 'd'
+  - aiohttp >=3.7.4 ; (sys_platform != 'win32' or implementation_name != 'pypy') and extra == 'd'
   - ipython >=7.8.0 ; extra == 'jupyter'
   - tokenize-rt >=3.2.0 ; extra == 'jupyter'
   - uvloop >=0.15.2 ; extra == 'uvloop'
   requires_python: '>=3.8'
-  url: https://files.pythonhosted.org/packages/4e/09/75c374a20c458230ed8288d1e68ba38ecf508e948b8bf8980e8b0fd4c3b1/black-23.11.0-cp311-cp311-macosx_11_0_arm64.whl#sha256=698c1e0d5c43354ec5d6f4d914d0d553a9ada56c85415700b81dc90125aac244
+  extras:
+  - jupyter
+  url: https://files.pythonhosted.org/packages/72/e2/d981a3ff05ba9abe3cfa33e70c986facb0614fd57c4f802ef435f4dd1697/black-23.12.1-cp311-cp311-macosx_11_0_arm64.whl#sha256=602cfb1196dc692424c70b6507593a2b29aac0547c1be9a1d1365f0d964c353b
   hash:
     md5: null
-    sha256: 698c1e0d5c43354ec5d6f4d914d0d553a9ada56c85415700b81dc90125aac244
+    sha256: 602cfb1196dc692424c70b6507593a2b29aac0547c1be9a1d1365f0d964c353b
 - platform: win-64
   name: black
-  version: 23.11.0
+  version: 23.12.1
   category: main
   manager: pypi
   requires_dist:
@@ -229,15 +306,18 @@ package:
   - tomli >=1.1.0 ; python_version < '3.11'
   - typing-extensions >=4.0.1 ; python_version < '3.11'
   - colorama >=0.4.3 ; extra == 'colorama'
-  - aiohttp >=3.7.4 ; extra == 'd'
+  - aiohttp !=3.9.0, >=3.7.4 ; (sys_platform == 'win32' and implementation_name == 'pypy') and extra == 'd'
+  - aiohttp >=3.7.4 ; (sys_platform != 'win32' or implementation_name != 'pypy') and extra == 'd'
   - ipython >=7.8.0 ; extra == 'jupyter'
   - tokenize-rt >=3.2.0 ; extra == 'jupyter'
   - uvloop >=0.15.2 ; extra == 'uvloop'
   requires_python: '>=3.8'
-  url: https://files.pythonhosted.org/packages/37/0b/2cf6d012a3cdb3f76d5c4e0c311b39f311a265d7dda315800ae34fb639c6/black-23.11.0-cp311-cp311-win_amd64.whl#sha256=58e5f4d08a205b11800332920e285bd25e1a75c54953e05502052738fe16b3b5
+  extras:
+  - jupyter
+  url: https://files.pythonhosted.org/packages/37/bf/a80abc6fcdb00f0d4d3d74184b172adbf2197f6b002913fa0fb6af4dc6db/black-23.12.1-cp311-cp311-win_amd64.whl#sha256=0808494f2b2df923ffc5723ed3c7b096bd76341f6213989759287611e9837d50
   hash:
     md5: null
-    sha256: 58e5f4d08a205b11800332920e285bd25e1a75c54953e05502052738fe16b3b5
+    sha256: 0808494f2b2df923ffc5723ed3c7b096bd76341f6213989759287611e9837d50
 - platform: linux-64
   name: blinker
   version: 1.7.0
@@ -605,6 +685,118 @@ package:
     md5: null
     sha256: 4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
 - platform: linux-64
+  name: decorator
+  version: 5.1.1
+  category: main
+  manager: pypi
+  requires_python: '>=3.5'
+  url: https://files.pythonhosted.org/packages/d5/50/83c593b07763e1161326b3b8c6686f0f4b0f24d5526546bee538c89837d6/decorator-5.1.1-py3-none-any.whl#sha256=b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186
+  hash:
+    md5: null
+    sha256: b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186
+- platform: osx-64
+  name: decorator
+  version: 5.1.1
+  category: main
+  manager: pypi
+  requires_python: '>=3.5'
+  url: https://files.pythonhosted.org/packages/d5/50/83c593b07763e1161326b3b8c6686f0f4b0f24d5526546bee538c89837d6/decorator-5.1.1-py3-none-any.whl#sha256=b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186
+  hash:
+    md5: null
+    sha256: b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186
+- platform: osx-arm64
+  name: decorator
+  version: 5.1.1
+  category: main
+  manager: pypi
+  requires_python: '>=3.5'
+  url: https://files.pythonhosted.org/packages/d5/50/83c593b07763e1161326b3b8c6686f0f4b0f24d5526546bee538c89837d6/decorator-5.1.1-py3-none-any.whl#sha256=b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186
+  hash:
+    md5: null
+    sha256: b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186
+- platform: win-64
+  name: decorator
+  version: 5.1.1
+  category: main
+  manager: pypi
+  requires_python: '>=3.5'
+  url: https://files.pythonhosted.org/packages/d5/50/83c593b07763e1161326b3b8c6686f0f4b0f24d5526546bee538c89837d6/decorator-5.1.1-py3-none-any.whl#sha256=b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186
+  hash:
+    md5: null
+    sha256: b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186
+- platform: linux-64
+  name: executing
+  version: 2.0.1
+  category: main
+  manager: pypi
+  requires_dist:
+  - asttokens >=2.1.0 ; extra == 'tests'
+  - ipython ; extra == 'tests'
+  - pytest ; extra == 'tests'
+  - coverage ; extra == 'tests'
+  - coverage-enable-subprocess ; extra == 'tests'
+  - littleutils ; extra == 'tests'
+  - rich ; python_version >= '3.11' and extra == 'tests'
+  requires_python: '>=3.5'
+  url: https://files.pythonhosted.org/packages/80/03/6ea8b1b2a5ab40a7a60dc464d3daa7aa546e0a74d74a9f8ff551ea7905db/executing-2.0.1-py2.py3-none-any.whl#sha256=eac49ca94516ccc753f9fb5ce82603156e590b27525a8bc32cce8ae302eb61bc
+  hash:
+    md5: null
+    sha256: eac49ca94516ccc753f9fb5ce82603156e590b27525a8bc32cce8ae302eb61bc
+- platform: osx-64
+  name: executing
+  version: 2.0.1
+  category: main
+  manager: pypi
+  requires_dist:
+  - asttokens >=2.1.0 ; extra == 'tests'
+  - ipython ; extra == 'tests'
+  - pytest ; extra == 'tests'
+  - coverage ; extra == 'tests'
+  - coverage-enable-subprocess ; extra == 'tests'
+  - littleutils ; extra == 'tests'
+  - rich ; python_version >= '3.11' and extra == 'tests'
+  requires_python: '>=3.5'
+  url: https://files.pythonhosted.org/packages/80/03/6ea8b1b2a5ab40a7a60dc464d3daa7aa546e0a74d74a9f8ff551ea7905db/executing-2.0.1-py2.py3-none-any.whl#sha256=eac49ca94516ccc753f9fb5ce82603156e590b27525a8bc32cce8ae302eb61bc
+  hash:
+    md5: null
+    sha256: eac49ca94516ccc753f9fb5ce82603156e590b27525a8bc32cce8ae302eb61bc
+- platform: osx-arm64
+  name: executing
+  version: 2.0.1
+  category: main
+  manager: pypi
+  requires_dist:
+  - asttokens >=2.1.0 ; extra == 'tests'
+  - ipython ; extra == 'tests'
+  - pytest ; extra == 'tests'
+  - coverage ; extra == 'tests'
+  - coverage-enable-subprocess ; extra == 'tests'
+  - littleutils ; extra == 'tests'
+  - rich ; python_version >= '3.11' and extra == 'tests'
+  requires_python: '>=3.5'
+  url: https://files.pythonhosted.org/packages/80/03/6ea8b1b2a5ab40a7a60dc464d3daa7aa546e0a74d74a9f8ff551ea7905db/executing-2.0.1-py2.py3-none-any.whl#sha256=eac49ca94516ccc753f9fb5ce82603156e590b27525a8bc32cce8ae302eb61bc
+  hash:
+    md5: null
+    sha256: eac49ca94516ccc753f9fb5ce82603156e590b27525a8bc32cce8ae302eb61bc
+- platform: win-64
+  name: executing
+  version: 2.0.1
+  category: main
+  manager: pypi
+  requires_dist:
+  - asttokens >=2.1.0 ; extra == 'tests'
+  - ipython ; extra == 'tests'
+  - pytest ; extra == 'tests'
+  - coverage ; extra == 'tests'
+  - coverage-enable-subprocess ; extra == 'tests'
+  - littleutils ; extra == 'tests'
+  - rich ; python_version >= '3.11' and extra == 'tests'
+  requires_python: '>=3.5'
+  url: https://files.pythonhosted.org/packages/80/03/6ea8b1b2a5ab40a7a60dc464d3daa7aa546e0a74d74a9f8ff551ea7905db/executing-2.0.1-py2.py3-none-any.whl#sha256=eac49ca94516ccc753f9fb5ce82603156e590b27525a8bc32cce8ae302eb61bc
+  hash:
+    md5: null
+    sha256: eac49ca94516ccc753f9fb5ce82603156e590b27525a8bc32cce8ae302eb61bc
+- platform: linux-64
   name: flask
   version: 3.0.0
   category: main
@@ -758,7 +950,7 @@ package:
     sha256: 6fc4fa5fa10b72fb8aab4ae58bcb023058386e67b6fa2e3e34cec5c769360316
 - platform: linux-64
   name: google-auth
-  version: 2.23.4
+  version: 2.25.2
   category: main
   manager: pypi
   requires_dist:
@@ -774,13 +966,13 @@ package:
   - pyu2f >=0.1.5 ; extra == 'reauth'
   - requests <3.0.0.dev0, >=2.20.0 ; extra == 'requests'
   requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/86/a7/75911c13a242735d5aeaca6a272da380335ff4ba5f26d6b2ae20ff682d13/google_auth-2.23.4-py2.py3-none-any.whl#sha256=d4bbc92fe4b8bfd2f3e8d88e5ba7085935da208ee38a134fc280e7ce682a05f2
+  url: https://files.pythonhosted.org/packages/f4/d2/9f6f3b9c0fd486617816cff42e856afea079d0bad99f0e60dc186c76b881/google_auth-2.25.2-py2.py3-none-any.whl#sha256=473a8dfd0135f75bb79d878436e568f2695dce456764bf3a02b6f8c540b1d256
   hash:
     md5: null
-    sha256: d4bbc92fe4b8bfd2f3e8d88e5ba7085935da208ee38a134fc280e7ce682a05f2
+    sha256: 473a8dfd0135f75bb79d878436e568f2695dce456764bf3a02b6f8c540b1d256
 - platform: osx-64
   name: google-auth
-  version: 2.23.4
+  version: 2.25.2
   category: main
   manager: pypi
   requires_dist:
@@ -796,13 +988,13 @@ package:
   - pyu2f >=0.1.5 ; extra == 'reauth'
   - requests <3.0.0.dev0, >=2.20.0 ; extra == 'requests'
   requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/86/a7/75911c13a242735d5aeaca6a272da380335ff4ba5f26d6b2ae20ff682d13/google_auth-2.23.4-py2.py3-none-any.whl#sha256=d4bbc92fe4b8bfd2f3e8d88e5ba7085935da208ee38a134fc280e7ce682a05f2
+  url: https://files.pythonhosted.org/packages/f4/d2/9f6f3b9c0fd486617816cff42e856afea079d0bad99f0e60dc186c76b881/google_auth-2.25.2-py2.py3-none-any.whl#sha256=473a8dfd0135f75bb79d878436e568f2695dce456764bf3a02b6f8c540b1d256
   hash:
     md5: null
-    sha256: d4bbc92fe4b8bfd2f3e8d88e5ba7085935da208ee38a134fc280e7ce682a05f2
+    sha256: 473a8dfd0135f75bb79d878436e568f2695dce456764bf3a02b6f8c540b1d256
 - platform: osx-arm64
   name: google-auth
-  version: 2.23.4
+  version: 2.25.2
   category: main
   manager: pypi
   requires_dist:
@@ -818,13 +1010,13 @@ package:
   - pyu2f >=0.1.5 ; extra == 'reauth'
   - requests <3.0.0.dev0, >=2.20.0 ; extra == 'requests'
   requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/86/a7/75911c13a242735d5aeaca6a272da380335ff4ba5f26d6b2ae20ff682d13/google_auth-2.23.4-py2.py3-none-any.whl#sha256=d4bbc92fe4b8bfd2f3e8d88e5ba7085935da208ee38a134fc280e7ce682a05f2
+  url: https://files.pythonhosted.org/packages/f4/d2/9f6f3b9c0fd486617816cff42e856afea079d0bad99f0e60dc186c76b881/google_auth-2.25.2-py2.py3-none-any.whl#sha256=473a8dfd0135f75bb79d878436e568f2695dce456764bf3a02b6f8c540b1d256
   hash:
     md5: null
-    sha256: d4bbc92fe4b8bfd2f3e8d88e5ba7085935da208ee38a134fc280e7ce682a05f2
+    sha256: 473a8dfd0135f75bb79d878436e568f2695dce456764bf3a02b6f8c540b1d256
 - platform: win-64
   name: google-auth
-  version: 2.23.4
+  version: 2.25.2
   category: main
   manager: pypi
   requires_dist:
@@ -840,10 +1032,10 @@ package:
   - pyu2f >=0.1.5 ; extra == 'reauth'
   - requests <3.0.0.dev0, >=2.20.0 ; extra == 'requests'
   requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/86/a7/75911c13a242735d5aeaca6a272da380335ff4ba5f26d6b2ae20ff682d13/google_auth-2.23.4-py2.py3-none-any.whl#sha256=d4bbc92fe4b8bfd2f3e8d88e5ba7085935da208ee38a134fc280e7ce682a05f2
+  url: https://files.pythonhosted.org/packages/f4/d2/9f6f3b9c0fd486617816cff42e856afea079d0bad99f0e60dc186c76b881/google_auth-2.25.2-py2.py3-none-any.whl#sha256=473a8dfd0135f75bb79d878436e568f2695dce456764bf3a02b6f8c540b1d256
   hash:
     md5: null
-    sha256: d4bbc92fe4b8bfd2f3e8d88e5ba7085935da208ee38a134fc280e7ce682a05f2
+    sha256: 473a8dfd0135f75bb79d878436e568f2695dce456764bf3a02b6f8c540b1d256
 - platform: linux-64
   name: google-auth-oauthlib
   version: 1.0.0
@@ -946,52 +1138,52 @@ package:
     sha256: b32482794a366b5366a32c92a9a9201b107821889935a02b3e51f6b432ea84ed
 - platform: linux-64
   name: grpcio
-  version: 1.59.3
+  version: 1.60.0
   category: main
   manager: pypi
   requires_dist:
-  - grpcio-tools >=1.59.3 ; extra == 'protobuf'
+  - grpcio-tools >=1.60.0 ; extra == 'protobuf'
   requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/bb/7e/0eb6cdadb2df7190a6854f03caaec9b43b4c7a22753f212858c5f52450ca/grpcio-1.59.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=8239b853226e4824e769517e1b5232e7c4dda3815b200534500338960fcc6118
+  url: https://files.pythonhosted.org/packages/de/01/a8d9bcc59526f22b8fef29c234cc63434f05dae1154d979222c02b31a557/grpcio-1.60.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=3b36a2c6d4920ba88fa98075fdd58ff94ebeb8acc1215ae07d01a418af4c0253
   hash:
     md5: null
-    sha256: 8239b853226e4824e769517e1b5232e7c4dda3815b200534500338960fcc6118
+    sha256: 3b36a2c6d4920ba88fa98075fdd58ff94ebeb8acc1215ae07d01a418af4c0253
 - platform: osx-64
   name: grpcio
-  version: 1.59.3
+  version: 1.60.0
   category: main
   manager: pypi
   requires_dist:
-  - grpcio-tools >=1.59.3 ; extra == 'protobuf'
+  - grpcio-tools >=1.60.0 ; extra == 'protobuf'
   requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/92/93/3cbc00a269b46277ff26355074a8315eeb4c87240c27d6f7efeabe818fd9/grpcio-1.59.3-cp311-cp311-macosx_10_10_universal2.whl#sha256=cb4e9cbd9b7388fcb06412da9f188c7803742d06d6f626304eb838d1707ec7e3
+  url: https://files.pythonhosted.org/packages/5c/45/8708497bc482cc7bf3779df9cf00c8e9efe1df5cd29b77e3eb060c141f84/grpcio-1.60.0-cp311-cp311-macosx_10_10_universal2.whl#sha256=4b44d7e39964e808b071714666a812049765b26b3ea48c4434a3b317bac82f14
   hash:
     md5: null
-    sha256: cb4e9cbd9b7388fcb06412da9f188c7803742d06d6f626304eb838d1707ec7e3
+    sha256: 4b44d7e39964e808b071714666a812049765b26b3ea48c4434a3b317bac82f14
 - platform: osx-arm64
   name: grpcio
-  version: 1.59.3
+  version: 1.60.0
   category: main
   manager: pypi
   requires_dist:
-  - grpcio-tools >=1.59.3 ; extra == 'protobuf'
+  - grpcio-tools >=1.60.0 ; extra == 'protobuf'
   requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/92/93/3cbc00a269b46277ff26355074a8315eeb4c87240c27d6f7efeabe818fd9/grpcio-1.59.3-cp311-cp311-macosx_10_10_universal2.whl#sha256=cb4e9cbd9b7388fcb06412da9f188c7803742d06d6f626304eb838d1707ec7e3
+  url: https://files.pythonhosted.org/packages/5c/45/8708497bc482cc7bf3779df9cf00c8e9efe1df5cd29b77e3eb060c141f84/grpcio-1.60.0-cp311-cp311-macosx_10_10_universal2.whl#sha256=4b44d7e39964e808b071714666a812049765b26b3ea48c4434a3b317bac82f14
   hash:
     md5: null
-    sha256: cb4e9cbd9b7388fcb06412da9f188c7803742d06d6f626304eb838d1707ec7e3
+    sha256: 4b44d7e39964e808b071714666a812049765b26b3ea48c4434a3b317bac82f14
 - platform: win-64
   name: grpcio
-  version: 1.59.3
+  version: 1.60.0
   category: main
   manager: pypi
   requires_dist:
-  - grpcio-tools >=1.59.3 ; extra == 'protobuf'
+  - grpcio-tools >=1.60.0 ; extra == 'protobuf'
   requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/bc/e5/f656b17fe1ccda1e2a4fe20298b8bcf7c804561c90ee763e39efc1c3772f/grpcio-1.59.3-cp311-cp311-win_amd64.whl#sha256=ed26826ee423b11477297b187371cdf4fa1eca874eb1156422ef3c9a60590dd9
+  url: https://files.pythonhosted.org/packages/6a/b9/f94bea4c6f0e322a239f7ba66ba3b0ce766d1c6a2d50055f7c8acf0fba38/grpcio-1.60.0-cp311-cp311-win_amd64.whl#sha256=467a7d31554892eed2aa6c2d47ded1079fc40ea0b9601d9f79204afa8902274b
   hash:
     md5: null
-    sha256: ed26826ee423b11477297b187371cdf4fa1eca874eb1156422ef3c9a60590dd9
+    sha256: 467a7d31554892eed2aa6c2d47ded1079fc40ea0b9601d9f79204afa8902274b
 - platform: linux-64
   name: h5py
   version: 3.10.0
@@ -1155,6 +1347,334 @@ package:
   size: 2523079
   timestamp: 1698351323119
 - platform: linux-64
+  name: ipython
+  version: 8.19.0
+  category: main
+  manager: pypi
+  requires_dist:
+  - decorator
+  - jedi >=0.16
+  - matplotlib-inline
+  - prompt-toolkit <3.1.0, >=3.0.41
+  - pygments >=2.4.0
+  - stack-data
+  - traitlets >=5
+  - typing-extensions ; python_version < '3.10'
+  - exceptiongroup ; python_version < '3.11'
+  - pexpect >4.3 ; sys_platform != 'win32'
+  - colorama ; sys_platform == 'win32'
+  - black ; extra == 'all'
+  - ipykernel ; extra == 'all'
+  - setuptools >=18.5 ; extra == 'all'
+  - sphinx >=1.3 ; extra == 'all'
+  - sphinx-rtd-theme ; extra == 'all'
+  - docrepr ; extra == 'all'
+  - matplotlib ; extra == 'all'
+  - stack-data ; extra == 'all'
+  - pytest ; extra == 'all'
+  - typing-extensions ; extra == 'all'
+  - exceptiongroup ; extra == 'all'
+  - pytest-asyncio <0.22 ; extra == 'all'
+  - testpath ; extra == 'all'
+  - pickleshare ; extra == 'all'
+  - nbconvert ; extra == 'all'
+  - nbformat ; extra == 'all'
+  - ipywidgets ; extra == 'all'
+  - notebook ; extra == 'all'
+  - ipyparallel ; extra == 'all'
+  - qtconsole ; extra == 'all'
+  - curio ; extra == 'all'
+  - matplotlib !=3.2.0 ; extra == 'all'
+  - numpy >=1.23 ; extra == 'all'
+  - pandas ; extra == 'all'
+  - trio ; extra == 'all'
+  - black ; extra == 'black'
+  - ipykernel ; extra == 'doc'
+  - setuptools >=18.5 ; extra == 'doc'
+  - sphinx >=1.3 ; extra == 'doc'
+  - sphinx-rtd-theme ; extra == 'doc'
+  - docrepr ; extra == 'doc'
+  - matplotlib ; extra == 'doc'
+  - stack-data ; extra == 'doc'
+  - pytest ; extra == 'doc'
+  - typing-extensions ; extra == 'doc'
+  - exceptiongroup ; extra == 'doc'
+  - pytest-asyncio <0.22 ; extra == 'doc'
+  - testpath ; extra == 'doc'
+  - pickleshare ; extra == 'doc'
+  - ipykernel ; extra == 'kernel'
+  - nbconvert ; extra == 'nbconvert'
+  - nbformat ; extra == 'nbformat'
+  - ipywidgets ; extra == 'notebook'
+  - notebook ; extra == 'notebook'
+  - ipyparallel ; extra == 'parallel'
+  - qtconsole ; extra == 'qtconsole'
+  - pytest ; extra == 'test'
+  - pytest-asyncio <0.22 ; extra == 'test'
+  - testpath ; extra == 'test'
+  - pickleshare ; extra == 'test'
+  - pytest ; extra == 'test_extra'
+  - pytest-asyncio <0.22 ; extra == 'test_extra'
+  - testpath ; extra == 'test_extra'
+  - pickleshare ; extra == 'test_extra'
+  - curio ; extra == 'test_extra'
+  - matplotlib !=3.2.0 ; extra == 'test_extra'
+  - nbformat ; extra == 'test_extra'
+  - numpy >=1.23 ; extra == 'test_extra'
+  - pandas ; extra == 'test_extra'
+  - trio ; extra == 'test_extra'
+  requires_python: '>=3.10'
+  url: https://files.pythonhosted.org/packages/1d/c6/c29c0509ce3235fa392779db476396e7e5d0a9c854967fdf411f168187a5/ipython-8.19.0-py3-none-any.whl#sha256=2f55d59370f59d0d2b2212109fe0e6035cfea436b1c0e6150ad2244746272ec5
+  hash:
+    md5: null
+    sha256: 2f55d59370f59d0d2b2212109fe0e6035cfea436b1c0e6150ad2244746272ec5
+- platform: osx-64
+  name: ipython
+  version: 8.19.0
+  category: main
+  manager: pypi
+  requires_dist:
+  - decorator
+  - jedi >=0.16
+  - matplotlib-inline
+  - prompt-toolkit <3.1.0, >=3.0.41
+  - pygments >=2.4.0
+  - stack-data
+  - traitlets >=5
+  - typing-extensions ; python_version < '3.10'
+  - exceptiongroup ; python_version < '3.11'
+  - pexpect >4.3 ; sys_platform != 'win32'
+  - colorama ; sys_platform == 'win32'
+  - black ; extra == 'all'
+  - ipykernel ; extra == 'all'
+  - setuptools >=18.5 ; extra == 'all'
+  - sphinx >=1.3 ; extra == 'all'
+  - sphinx-rtd-theme ; extra == 'all'
+  - docrepr ; extra == 'all'
+  - matplotlib ; extra == 'all'
+  - stack-data ; extra == 'all'
+  - pytest ; extra == 'all'
+  - typing-extensions ; extra == 'all'
+  - exceptiongroup ; extra == 'all'
+  - pytest-asyncio <0.22 ; extra == 'all'
+  - testpath ; extra == 'all'
+  - pickleshare ; extra == 'all'
+  - nbconvert ; extra == 'all'
+  - nbformat ; extra == 'all'
+  - ipywidgets ; extra == 'all'
+  - notebook ; extra == 'all'
+  - ipyparallel ; extra == 'all'
+  - qtconsole ; extra == 'all'
+  - curio ; extra == 'all'
+  - matplotlib !=3.2.0 ; extra == 'all'
+  - numpy >=1.23 ; extra == 'all'
+  - pandas ; extra == 'all'
+  - trio ; extra == 'all'
+  - black ; extra == 'black'
+  - ipykernel ; extra == 'doc'
+  - setuptools >=18.5 ; extra == 'doc'
+  - sphinx >=1.3 ; extra == 'doc'
+  - sphinx-rtd-theme ; extra == 'doc'
+  - docrepr ; extra == 'doc'
+  - matplotlib ; extra == 'doc'
+  - stack-data ; extra == 'doc'
+  - pytest ; extra == 'doc'
+  - typing-extensions ; extra == 'doc'
+  - exceptiongroup ; extra == 'doc'
+  - pytest-asyncio <0.22 ; extra == 'doc'
+  - testpath ; extra == 'doc'
+  - pickleshare ; extra == 'doc'
+  - ipykernel ; extra == 'kernel'
+  - nbconvert ; extra == 'nbconvert'
+  - nbformat ; extra == 'nbformat'
+  - ipywidgets ; extra == 'notebook'
+  - notebook ; extra == 'notebook'
+  - ipyparallel ; extra == 'parallel'
+  - qtconsole ; extra == 'qtconsole'
+  - pytest ; extra == 'test'
+  - pytest-asyncio <0.22 ; extra == 'test'
+  - testpath ; extra == 'test'
+  - pickleshare ; extra == 'test'
+  - pytest ; extra == 'test_extra'
+  - pytest-asyncio <0.22 ; extra == 'test_extra'
+  - testpath ; extra == 'test_extra'
+  - pickleshare ; extra == 'test_extra'
+  - curio ; extra == 'test_extra'
+  - matplotlib !=3.2.0 ; extra == 'test_extra'
+  - nbformat ; extra == 'test_extra'
+  - numpy >=1.23 ; extra == 'test_extra'
+  - pandas ; extra == 'test_extra'
+  - trio ; extra == 'test_extra'
+  requires_python: '>=3.10'
+  url: https://files.pythonhosted.org/packages/1d/c6/c29c0509ce3235fa392779db476396e7e5d0a9c854967fdf411f168187a5/ipython-8.19.0-py3-none-any.whl#sha256=2f55d59370f59d0d2b2212109fe0e6035cfea436b1c0e6150ad2244746272ec5
+  hash:
+    md5: null
+    sha256: 2f55d59370f59d0d2b2212109fe0e6035cfea436b1c0e6150ad2244746272ec5
+- platform: osx-arm64
+  name: ipython
+  version: 8.19.0
+  category: main
+  manager: pypi
+  requires_dist:
+  - decorator
+  - jedi >=0.16
+  - matplotlib-inline
+  - prompt-toolkit <3.1.0, >=3.0.41
+  - pygments >=2.4.0
+  - stack-data
+  - traitlets >=5
+  - typing-extensions ; python_version < '3.10'
+  - exceptiongroup ; python_version < '3.11'
+  - pexpect >4.3 ; sys_platform != 'win32'
+  - colorama ; sys_platform == 'win32'
+  - black ; extra == 'all'
+  - ipykernel ; extra == 'all'
+  - setuptools >=18.5 ; extra == 'all'
+  - sphinx >=1.3 ; extra == 'all'
+  - sphinx-rtd-theme ; extra == 'all'
+  - docrepr ; extra == 'all'
+  - matplotlib ; extra == 'all'
+  - stack-data ; extra == 'all'
+  - pytest ; extra == 'all'
+  - typing-extensions ; extra == 'all'
+  - exceptiongroup ; extra == 'all'
+  - pytest-asyncio <0.22 ; extra == 'all'
+  - testpath ; extra == 'all'
+  - pickleshare ; extra == 'all'
+  - nbconvert ; extra == 'all'
+  - nbformat ; extra == 'all'
+  - ipywidgets ; extra == 'all'
+  - notebook ; extra == 'all'
+  - ipyparallel ; extra == 'all'
+  - qtconsole ; extra == 'all'
+  - curio ; extra == 'all'
+  - matplotlib !=3.2.0 ; extra == 'all'
+  - numpy >=1.23 ; extra == 'all'
+  - pandas ; extra == 'all'
+  - trio ; extra == 'all'
+  - black ; extra == 'black'
+  - ipykernel ; extra == 'doc'
+  - setuptools >=18.5 ; extra == 'doc'
+  - sphinx >=1.3 ; extra == 'doc'
+  - sphinx-rtd-theme ; extra == 'doc'
+  - docrepr ; extra == 'doc'
+  - matplotlib ; extra == 'doc'
+  - stack-data ; extra == 'doc'
+  - pytest ; extra == 'doc'
+  - typing-extensions ; extra == 'doc'
+  - exceptiongroup ; extra == 'doc'
+  - pytest-asyncio <0.22 ; extra == 'doc'
+  - testpath ; extra == 'doc'
+  - pickleshare ; extra == 'doc'
+  - ipykernel ; extra == 'kernel'
+  - nbconvert ; extra == 'nbconvert'
+  - nbformat ; extra == 'nbformat'
+  - ipywidgets ; extra == 'notebook'
+  - notebook ; extra == 'notebook'
+  - ipyparallel ; extra == 'parallel'
+  - qtconsole ; extra == 'qtconsole'
+  - pytest ; extra == 'test'
+  - pytest-asyncio <0.22 ; extra == 'test'
+  - testpath ; extra == 'test'
+  - pickleshare ; extra == 'test'
+  - pytest ; extra == 'test_extra'
+  - pytest-asyncio <0.22 ; extra == 'test_extra'
+  - testpath ; extra == 'test_extra'
+  - pickleshare ; extra == 'test_extra'
+  - curio ; extra == 'test_extra'
+  - matplotlib !=3.2.0 ; extra == 'test_extra'
+  - nbformat ; extra == 'test_extra'
+  - numpy >=1.23 ; extra == 'test_extra'
+  - pandas ; extra == 'test_extra'
+  - trio ; extra == 'test_extra'
+  requires_python: '>=3.10'
+  url: https://files.pythonhosted.org/packages/1d/c6/c29c0509ce3235fa392779db476396e7e5d0a9c854967fdf411f168187a5/ipython-8.19.0-py3-none-any.whl#sha256=2f55d59370f59d0d2b2212109fe0e6035cfea436b1c0e6150ad2244746272ec5
+  hash:
+    md5: null
+    sha256: 2f55d59370f59d0d2b2212109fe0e6035cfea436b1c0e6150ad2244746272ec5
+- platform: win-64
+  name: ipython
+  version: 8.19.0
+  category: main
+  manager: pypi
+  requires_dist:
+  - decorator
+  - jedi >=0.16
+  - matplotlib-inline
+  - prompt-toolkit <3.1.0, >=3.0.41
+  - pygments >=2.4.0
+  - stack-data
+  - traitlets >=5
+  - typing-extensions ; python_version < '3.10'
+  - exceptiongroup ; python_version < '3.11'
+  - pexpect >4.3 ; sys_platform != 'win32'
+  - colorama ; sys_platform == 'win32'
+  - black ; extra == 'all'
+  - ipykernel ; extra == 'all'
+  - setuptools >=18.5 ; extra == 'all'
+  - sphinx >=1.3 ; extra == 'all'
+  - sphinx-rtd-theme ; extra == 'all'
+  - docrepr ; extra == 'all'
+  - matplotlib ; extra == 'all'
+  - stack-data ; extra == 'all'
+  - pytest ; extra == 'all'
+  - typing-extensions ; extra == 'all'
+  - exceptiongroup ; extra == 'all'
+  - pytest-asyncio <0.22 ; extra == 'all'
+  - testpath ; extra == 'all'
+  - pickleshare ; extra == 'all'
+  - nbconvert ; extra == 'all'
+  - nbformat ; extra == 'all'
+  - ipywidgets ; extra == 'all'
+  - notebook ; extra == 'all'
+  - ipyparallel ; extra == 'all'
+  - qtconsole ; extra == 'all'
+  - curio ; extra == 'all'
+  - matplotlib !=3.2.0 ; extra == 'all'
+  - numpy >=1.23 ; extra == 'all'
+  - pandas ; extra == 'all'
+  - trio ; extra == 'all'
+  - black ; extra == 'black'
+  - ipykernel ; extra == 'doc'
+  - setuptools >=18.5 ; extra == 'doc'
+  - sphinx >=1.3 ; extra == 'doc'
+  - sphinx-rtd-theme ; extra == 'doc'
+  - docrepr ; extra == 'doc'
+  - matplotlib ; extra == 'doc'
+  - stack-data ; extra == 'doc'
+  - pytest ; extra == 'doc'
+  - typing-extensions ; extra == 'doc'
+  - exceptiongroup ; extra == 'doc'
+  - pytest-asyncio <0.22 ; extra == 'doc'
+  - testpath ; extra == 'doc'
+  - pickleshare ; extra == 'doc'
+  - ipykernel ; extra == 'kernel'
+  - nbconvert ; extra == 'nbconvert'
+  - nbformat ; extra == 'nbformat'
+  - ipywidgets ; extra == 'notebook'
+  - notebook ; extra == 'notebook'
+  - ipyparallel ; extra == 'parallel'
+  - qtconsole ; extra == 'qtconsole'
+  - pytest ; extra == 'test'
+  - pytest-asyncio <0.22 ; extra == 'test'
+  - testpath ; extra == 'test'
+  - pickleshare ; extra == 'test'
+  - pytest ; extra == 'test_extra'
+  - pytest-asyncio <0.22 ; extra == 'test_extra'
+  - testpath ; extra == 'test_extra'
+  - pickleshare ; extra == 'test_extra'
+  - curio ; extra == 'test_extra'
+  - matplotlib !=3.2.0 ; extra == 'test_extra'
+  - nbformat ; extra == 'test_extra'
+  - numpy >=1.23 ; extra == 'test_extra'
+  - pandas ; extra == 'test_extra'
+  - trio ; extra == 'test_extra'
+  requires_python: '>=3.10'
+  url: https://files.pythonhosted.org/packages/1d/c6/c29c0509ce3235fa392779db476396e7e5d0a9c854967fdf411f168187a5/ipython-8.19.0-py3-none-any.whl#sha256=2f55d59370f59d0d2b2212109fe0e6035cfea436b1c0e6150ad2244746272ec5
+  hash:
+    md5: null
+    sha256: 2f55d59370f59d0d2b2212109fe0e6035cfea436b1c0e6150ad2244746272ec5
+- platform: linux-64
   name: itsdangerous
   version: 2.1.2
   category: main
@@ -1194,6 +1714,186 @@ package:
   hash:
     md5: null
     sha256: 2c2349112351b88699d8d4b6b075022c0808887cb7ad10069318a8b0bc88db44
+- platform: linux-64
+  name: jedi
+  version: 0.19.1
+  category: main
+  manager: pypi
+  requires_dist:
+  - parso <0.9.0, >=0.8.3
+  - Jinja2 ==2.11.3 ; extra == 'docs'
+  - MarkupSafe ==1.1.1 ; extra == 'docs'
+  - Pygments ==2.8.1 ; extra == 'docs'
+  - alabaster ==0.7.12 ; extra == 'docs'
+  - babel ==2.9.1 ; extra == 'docs'
+  - chardet ==4.0.0 ; extra == 'docs'
+  - commonmark ==0.8.1 ; extra == 'docs'
+  - docutils ==0.17.1 ; extra == 'docs'
+  - future ==0.18.2 ; extra == 'docs'
+  - idna ==2.10 ; extra == 'docs'
+  - imagesize ==1.2.0 ; extra == 'docs'
+  - mock ==1.0.1 ; extra == 'docs'
+  - packaging ==20.9 ; extra == 'docs'
+  - pyparsing ==2.4.7 ; extra == 'docs'
+  - pytz ==2021.1 ; extra == 'docs'
+  - readthedocs-sphinx-ext ==2.1.4 ; extra == 'docs'
+  - recommonmark ==0.5.0 ; extra == 'docs'
+  - requests ==2.25.1 ; extra == 'docs'
+  - six ==1.15.0 ; extra == 'docs'
+  - snowballstemmer ==2.1.0 ; extra == 'docs'
+  - sphinx-rtd-theme ==0.4.3 ; extra == 'docs'
+  - sphinx ==1.8.5 ; extra == 'docs'
+  - sphinxcontrib-serializinghtml ==1.1.4 ; extra == 'docs'
+  - sphinxcontrib-websupport ==1.2.4 ; extra == 'docs'
+  - urllib3 ==1.26.4 ; extra == 'docs'
+  - flake8 ==5.0.4 ; extra == 'qa'
+  - mypy ==0.971 ; extra == 'qa'
+  - types-setuptools ==67.2.0.1 ; extra == 'qa'
+  - Django ; extra == 'testing'
+  - attrs ; extra == 'testing'
+  - colorama ; extra == 'testing'
+  - docopt ; extra == 'testing'
+  - pytest <7.0.0 ; extra == 'testing'
+  requires_python: '>=3.6'
+  url: https://files.pythonhosted.org/packages/20/9f/bc63f0f0737ad7a60800bfd472a4836661adae21f9c2535f3957b1e54ceb/jedi-0.19.1-py2.py3-none-any.whl#sha256=e983c654fe5c02867aef4cdfce5a2fbb4a50adc0af145f70504238f18ef5e7e0
+  hash:
+    md5: null
+    sha256: e983c654fe5c02867aef4cdfce5a2fbb4a50adc0af145f70504238f18ef5e7e0
+- platform: osx-64
+  name: jedi
+  version: 0.19.1
+  category: main
+  manager: pypi
+  requires_dist:
+  - parso <0.9.0, >=0.8.3
+  - Jinja2 ==2.11.3 ; extra == 'docs'
+  - MarkupSafe ==1.1.1 ; extra == 'docs'
+  - Pygments ==2.8.1 ; extra == 'docs'
+  - alabaster ==0.7.12 ; extra == 'docs'
+  - babel ==2.9.1 ; extra == 'docs'
+  - chardet ==4.0.0 ; extra == 'docs'
+  - commonmark ==0.8.1 ; extra == 'docs'
+  - docutils ==0.17.1 ; extra == 'docs'
+  - future ==0.18.2 ; extra == 'docs'
+  - idna ==2.10 ; extra == 'docs'
+  - imagesize ==1.2.0 ; extra == 'docs'
+  - mock ==1.0.1 ; extra == 'docs'
+  - packaging ==20.9 ; extra == 'docs'
+  - pyparsing ==2.4.7 ; extra == 'docs'
+  - pytz ==2021.1 ; extra == 'docs'
+  - readthedocs-sphinx-ext ==2.1.4 ; extra == 'docs'
+  - recommonmark ==0.5.0 ; extra == 'docs'
+  - requests ==2.25.1 ; extra == 'docs'
+  - six ==1.15.0 ; extra == 'docs'
+  - snowballstemmer ==2.1.0 ; extra == 'docs'
+  - sphinx-rtd-theme ==0.4.3 ; extra == 'docs'
+  - sphinx ==1.8.5 ; extra == 'docs'
+  - sphinxcontrib-serializinghtml ==1.1.4 ; extra == 'docs'
+  - sphinxcontrib-websupport ==1.2.4 ; extra == 'docs'
+  - urllib3 ==1.26.4 ; extra == 'docs'
+  - flake8 ==5.0.4 ; extra == 'qa'
+  - mypy ==0.971 ; extra == 'qa'
+  - types-setuptools ==67.2.0.1 ; extra == 'qa'
+  - Django ; extra == 'testing'
+  - attrs ; extra == 'testing'
+  - colorama ; extra == 'testing'
+  - docopt ; extra == 'testing'
+  - pytest <7.0.0 ; extra == 'testing'
+  requires_python: '>=3.6'
+  url: https://files.pythonhosted.org/packages/20/9f/bc63f0f0737ad7a60800bfd472a4836661adae21f9c2535f3957b1e54ceb/jedi-0.19.1-py2.py3-none-any.whl#sha256=e983c654fe5c02867aef4cdfce5a2fbb4a50adc0af145f70504238f18ef5e7e0
+  hash:
+    md5: null
+    sha256: e983c654fe5c02867aef4cdfce5a2fbb4a50adc0af145f70504238f18ef5e7e0
+- platform: osx-arm64
+  name: jedi
+  version: 0.19.1
+  category: main
+  manager: pypi
+  requires_dist:
+  - parso <0.9.0, >=0.8.3
+  - Jinja2 ==2.11.3 ; extra == 'docs'
+  - MarkupSafe ==1.1.1 ; extra == 'docs'
+  - Pygments ==2.8.1 ; extra == 'docs'
+  - alabaster ==0.7.12 ; extra == 'docs'
+  - babel ==2.9.1 ; extra == 'docs'
+  - chardet ==4.0.0 ; extra == 'docs'
+  - commonmark ==0.8.1 ; extra == 'docs'
+  - docutils ==0.17.1 ; extra == 'docs'
+  - future ==0.18.2 ; extra == 'docs'
+  - idna ==2.10 ; extra == 'docs'
+  - imagesize ==1.2.0 ; extra == 'docs'
+  - mock ==1.0.1 ; extra == 'docs'
+  - packaging ==20.9 ; extra == 'docs'
+  - pyparsing ==2.4.7 ; extra == 'docs'
+  - pytz ==2021.1 ; extra == 'docs'
+  - readthedocs-sphinx-ext ==2.1.4 ; extra == 'docs'
+  - recommonmark ==0.5.0 ; extra == 'docs'
+  - requests ==2.25.1 ; extra == 'docs'
+  - six ==1.15.0 ; extra == 'docs'
+  - snowballstemmer ==2.1.0 ; extra == 'docs'
+  - sphinx-rtd-theme ==0.4.3 ; extra == 'docs'
+  - sphinx ==1.8.5 ; extra == 'docs'
+  - sphinxcontrib-serializinghtml ==1.1.4 ; extra == 'docs'
+  - sphinxcontrib-websupport ==1.2.4 ; extra == 'docs'
+  - urllib3 ==1.26.4 ; extra == 'docs'
+  - flake8 ==5.0.4 ; extra == 'qa'
+  - mypy ==0.971 ; extra == 'qa'
+  - types-setuptools ==67.2.0.1 ; extra == 'qa'
+  - Django ; extra == 'testing'
+  - attrs ; extra == 'testing'
+  - colorama ; extra == 'testing'
+  - docopt ; extra == 'testing'
+  - pytest <7.0.0 ; extra == 'testing'
+  requires_python: '>=3.6'
+  url: https://files.pythonhosted.org/packages/20/9f/bc63f0f0737ad7a60800bfd472a4836661adae21f9c2535f3957b1e54ceb/jedi-0.19.1-py2.py3-none-any.whl#sha256=e983c654fe5c02867aef4cdfce5a2fbb4a50adc0af145f70504238f18ef5e7e0
+  hash:
+    md5: null
+    sha256: e983c654fe5c02867aef4cdfce5a2fbb4a50adc0af145f70504238f18ef5e7e0
+- platform: win-64
+  name: jedi
+  version: 0.19.1
+  category: main
+  manager: pypi
+  requires_dist:
+  - parso <0.9.0, >=0.8.3
+  - Jinja2 ==2.11.3 ; extra == 'docs'
+  - MarkupSafe ==1.1.1 ; extra == 'docs'
+  - Pygments ==2.8.1 ; extra == 'docs'
+  - alabaster ==0.7.12 ; extra == 'docs'
+  - babel ==2.9.1 ; extra == 'docs'
+  - chardet ==4.0.0 ; extra == 'docs'
+  - commonmark ==0.8.1 ; extra == 'docs'
+  - docutils ==0.17.1 ; extra == 'docs'
+  - future ==0.18.2 ; extra == 'docs'
+  - idna ==2.10 ; extra == 'docs'
+  - imagesize ==1.2.0 ; extra == 'docs'
+  - mock ==1.0.1 ; extra == 'docs'
+  - packaging ==20.9 ; extra == 'docs'
+  - pyparsing ==2.4.7 ; extra == 'docs'
+  - pytz ==2021.1 ; extra == 'docs'
+  - readthedocs-sphinx-ext ==2.1.4 ; extra == 'docs'
+  - recommonmark ==0.5.0 ; extra == 'docs'
+  - requests ==2.25.1 ; extra == 'docs'
+  - six ==1.15.0 ; extra == 'docs'
+  - snowballstemmer ==2.1.0 ; extra == 'docs'
+  - sphinx-rtd-theme ==0.4.3 ; extra == 'docs'
+  - sphinx ==1.8.5 ; extra == 'docs'
+  - sphinxcontrib-serializinghtml ==1.1.4 ; extra == 'docs'
+  - sphinxcontrib-websupport ==1.2.4 ; extra == 'docs'
+  - urllib3 ==1.26.4 ; extra == 'docs'
+  - flake8 ==5.0.4 ; extra == 'qa'
+  - mypy ==0.971 ; extra == 'qa'
+  - types-setuptools ==67.2.0.1 ; extra == 'qa'
+  - Django ; extra == 'testing'
+  - attrs ; extra == 'testing'
+  - colorama ; extra == 'testing'
+  - docopt ; extra == 'testing'
+  - pytest <7.0.0 ; extra == 'testing'
+  requires_python: '>=3.6'
+  url: https://files.pythonhosted.org/packages/20/9f/bc63f0f0737ad7a60800bfd472a4836661adae21f9c2535f3957b1e54ceb/jedi-0.19.1-py2.py3-none-any.whl#sha256=e983c654fe5c02867aef4cdfce5a2fbb4a50adc0af145f70504238f18ef5e7e0
+  hash:
+    md5: null
+    sha256: e983c654fe5c02867aef4cdfce5a2fbb4a50adc0af145f70504238f18ef5e7e0
 - platform: linux-64
   name: jinja2
   version: 3.1.2
@@ -2814,6 +3514,54 @@ package:
   hash:
     md5: null
     sha256: 134da1eca9ec0ae528110ccc9e48041e0828d79f24121a1a146161103c76e686
+- platform: linux-64
+  name: matplotlib-inline
+  version: 0.1.6
+  category: main
+  manager: pypi
+  requires_dist:
+  - traitlets
+  requires_python: '>=3.5'
+  url: https://files.pythonhosted.org/packages/f2/51/c34d7a1d528efaae3d8ddb18ef45a41f284eacf9e514523b191b7d0872cc/matplotlib_inline-0.1.6-py3-none-any.whl#sha256=f1f41aab5328aa5aaea9b16d083b128102f8712542f819fe7e6a420ff581b311
+  hash:
+    md5: null
+    sha256: f1f41aab5328aa5aaea9b16d083b128102f8712542f819fe7e6a420ff581b311
+- platform: osx-64
+  name: matplotlib-inline
+  version: 0.1.6
+  category: main
+  manager: pypi
+  requires_dist:
+  - traitlets
+  requires_python: '>=3.5'
+  url: https://files.pythonhosted.org/packages/f2/51/c34d7a1d528efaae3d8ddb18ef45a41f284eacf9e514523b191b7d0872cc/matplotlib_inline-0.1.6-py3-none-any.whl#sha256=f1f41aab5328aa5aaea9b16d083b128102f8712542f819fe7e6a420ff581b311
+  hash:
+    md5: null
+    sha256: f1f41aab5328aa5aaea9b16d083b128102f8712542f819fe7e6a420ff581b311
+- platform: osx-arm64
+  name: matplotlib-inline
+  version: 0.1.6
+  category: main
+  manager: pypi
+  requires_dist:
+  - traitlets
+  requires_python: '>=3.5'
+  url: https://files.pythonhosted.org/packages/f2/51/c34d7a1d528efaae3d8ddb18ef45a41f284eacf9e514523b191b7d0872cc/matplotlib_inline-0.1.6-py3-none-any.whl#sha256=f1f41aab5328aa5aaea9b16d083b128102f8712542f819fe7e6a420ff581b311
+  hash:
+    md5: null
+    sha256: f1f41aab5328aa5aaea9b16d083b128102f8712542f819fe7e6a420ff581b311
+- platform: win-64
+  name: matplotlib-inline
+  version: 0.1.6
+  category: main
+  manager: pypi
+  requires_dist:
+  - traitlets
+  requires_python: '>=3.5'
+  url: https://files.pythonhosted.org/packages/f2/51/c34d7a1d528efaae3d8ddb18ef45a41f284eacf9e514523b191b7d0872cc/matplotlib_inline-0.1.6-py3-none-any.whl#sha256=f1f41aab5328aa5aaea9b16d083b128102f8712542f819fe7e6a420ff581b311
+  hash:
+    md5: null
+    sha256: f1f41aab5328aa5aaea9b16d083b128102f8712542f819fe7e6a420ff581b311
 - platform: win-64
   name: mkl
   version: 2023.2.0
@@ -3387,52 +4135,144 @@ package:
     md5: null
     sha256: 8c491190033a9af7e1d931d0b5dacc2ef47509b34dd0de67ed209b5203fc88c7
 - platform: linux-64
-  name: pathspec
-  version: 0.11.2
+  name: parso
+  version: 0.8.3
   category: main
   manager: pypi
-  requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/b4/2a/9b1be29146139ef459188f5e420a66e835dda921208db600b7037093891f/pathspec-0.11.2-py3-none-any.whl#sha256=1d6ed233af05e679efb96b1851550ea95bbb64b7c490b0f5aa52996c11e92a20
+  requires_dist:
+  - flake8 ==3.8.3 ; extra == 'qa'
+  - mypy ==0.782 ; extra == 'qa'
+  - docopt ; extra == 'testing'
+  - pytest <6.0.0 ; extra == 'testing'
+  requires_python: '>=3.6'
+  url: https://files.pythonhosted.org/packages/05/63/8011bd08a4111858f79d2b09aad86638490d62fbf881c44e434a6dfca87b/parso-0.8.3-py2.py3-none-any.whl#sha256=c001d4636cd3aecdaf33cbb40aebb59b094be2a74c556778ef5576c175e19e75
   hash:
     md5: null
-    sha256: 1d6ed233af05e679efb96b1851550ea95bbb64b7c490b0f5aa52996c11e92a20
+    sha256: c001d4636cd3aecdaf33cbb40aebb59b094be2a74c556778ef5576c175e19e75
+- platform: osx-64
+  name: parso
+  version: 0.8.3
+  category: main
+  manager: pypi
+  requires_dist:
+  - flake8 ==3.8.3 ; extra == 'qa'
+  - mypy ==0.782 ; extra == 'qa'
+  - docopt ; extra == 'testing'
+  - pytest <6.0.0 ; extra == 'testing'
+  requires_python: '>=3.6'
+  url: https://files.pythonhosted.org/packages/05/63/8011bd08a4111858f79d2b09aad86638490d62fbf881c44e434a6dfca87b/parso-0.8.3-py2.py3-none-any.whl#sha256=c001d4636cd3aecdaf33cbb40aebb59b094be2a74c556778ef5576c175e19e75
+  hash:
+    md5: null
+    sha256: c001d4636cd3aecdaf33cbb40aebb59b094be2a74c556778ef5576c175e19e75
+- platform: osx-arm64
+  name: parso
+  version: 0.8.3
+  category: main
+  manager: pypi
+  requires_dist:
+  - flake8 ==3.8.3 ; extra == 'qa'
+  - mypy ==0.782 ; extra == 'qa'
+  - docopt ; extra == 'testing'
+  - pytest <6.0.0 ; extra == 'testing'
+  requires_python: '>=3.6'
+  url: https://files.pythonhosted.org/packages/05/63/8011bd08a4111858f79d2b09aad86638490d62fbf881c44e434a6dfca87b/parso-0.8.3-py2.py3-none-any.whl#sha256=c001d4636cd3aecdaf33cbb40aebb59b094be2a74c556778ef5576c175e19e75
+  hash:
+    md5: null
+    sha256: c001d4636cd3aecdaf33cbb40aebb59b094be2a74c556778ef5576c175e19e75
+- platform: win-64
+  name: parso
+  version: 0.8.3
+  category: main
+  manager: pypi
+  requires_dist:
+  - flake8 ==3.8.3 ; extra == 'qa'
+  - mypy ==0.782 ; extra == 'qa'
+  - docopt ; extra == 'testing'
+  - pytest <6.0.0 ; extra == 'testing'
+  requires_python: '>=3.6'
+  url: https://files.pythonhosted.org/packages/05/63/8011bd08a4111858f79d2b09aad86638490d62fbf881c44e434a6dfca87b/parso-0.8.3-py2.py3-none-any.whl#sha256=c001d4636cd3aecdaf33cbb40aebb59b094be2a74c556778ef5576c175e19e75
+  hash:
+    md5: null
+    sha256: c001d4636cd3aecdaf33cbb40aebb59b094be2a74c556778ef5576c175e19e75
+- platform: linux-64
+  name: pathspec
+  version: 0.12.1
+  category: main
+  manager: pypi
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/cc/20/ff623b09d963f88bfde16306a54e12ee5ea43e9b597108672ff3a408aad6/pathspec-0.12.1-py3-none-any.whl#sha256=a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08
+  hash:
+    md5: null
+    sha256: a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08
 - platform: osx-64
   name: pathspec
-  version: 0.11.2
+  version: 0.12.1
   category: main
   manager: pypi
-  requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/b4/2a/9b1be29146139ef459188f5e420a66e835dda921208db600b7037093891f/pathspec-0.11.2-py3-none-any.whl#sha256=1d6ed233af05e679efb96b1851550ea95bbb64b7c490b0f5aa52996c11e92a20
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/cc/20/ff623b09d963f88bfde16306a54e12ee5ea43e9b597108672ff3a408aad6/pathspec-0.12.1-py3-none-any.whl#sha256=a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08
   hash:
     md5: null
-    sha256: 1d6ed233af05e679efb96b1851550ea95bbb64b7c490b0f5aa52996c11e92a20
+    sha256: a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08
 - platform: osx-arm64
   name: pathspec
-  version: 0.11.2
+  version: 0.12.1
   category: main
   manager: pypi
-  requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/b4/2a/9b1be29146139ef459188f5e420a66e835dda921208db600b7037093891f/pathspec-0.11.2-py3-none-any.whl#sha256=1d6ed233af05e679efb96b1851550ea95bbb64b7c490b0f5aa52996c11e92a20
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/cc/20/ff623b09d963f88bfde16306a54e12ee5ea43e9b597108672ff3a408aad6/pathspec-0.12.1-py3-none-any.whl#sha256=a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08
   hash:
     md5: null
-    sha256: 1d6ed233af05e679efb96b1851550ea95bbb64b7c490b0f5aa52996c11e92a20
+    sha256: a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08
 - platform: win-64
   name: pathspec
-  version: 0.11.2
+  version: 0.12.1
   category: main
   manager: pypi
-  requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/b4/2a/9b1be29146139ef459188f5e420a66e835dda921208db600b7037093891f/pathspec-0.11.2-py3-none-any.whl#sha256=1d6ed233af05e679efb96b1851550ea95bbb64b7c490b0f5aa52996c11e92a20
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/cc/20/ff623b09d963f88bfde16306a54e12ee5ea43e9b597108672ff3a408aad6/pathspec-0.12.1-py3-none-any.whl#sha256=a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08
   hash:
     md5: null
-    sha256: 1d6ed233af05e679efb96b1851550ea95bbb64b7c490b0f5aa52996c11e92a20
+    sha256: a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08
+- platform: linux-64
+  name: pexpect
+  version: 4.9.0
+  category: main
+  manager: pypi
+  requires_dist:
+  - ptyprocess >=0.5
+  url: https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl#sha256=7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523
+  hash:
+    md5: null
+    sha256: 7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523
+- platform: osx-64
+  name: pexpect
+  version: 4.9.0
+  category: main
+  manager: pypi
+  requires_dist:
+  - ptyprocess >=0.5
+  url: https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl#sha256=7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523
+  hash:
+    md5: null
+    sha256: 7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523
+- platform: osx-arm64
+  name: pexpect
+  version: 4.9.0
+  category: main
+  manager: pypi
+  requires_dist:
+  - ptyprocess >=0.5
+  url: https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl#sha256=7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523
+  hash:
+    md5: null
+    sha256: 7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523
 - platform: linux-64
   name: platformdirs
-  version: 4.0.0
+  version: 4.1.0
   category: main
   manager: pypi
   requires_dist:
-  - typing-extensions >=4.7.1 ; python_version < '3.8'
   - furo >=2023.7.26 ; extra == 'docs'
   - proselint >=0.13 ; extra == 'docs'
   - sphinx-autodoc-typehints >=1.24 ; extra == 'docs'
@@ -3442,18 +4282,17 @@ package:
   - pytest-cov >=4.1 ; extra == 'test'
   - pytest-mock >=3.11.1 ; extra == 'test'
   - pytest >=7.4 ; extra == 'test'
-  requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/31/16/70be3b725073035aa5fc3229321d06e22e73e3e09f6af78dcfdf16c7636c/platformdirs-4.0.0-py3-none-any.whl#sha256=118c954d7e949b35437270383a3f2531e99dd93cf7ce4dc8340d3356d30f173b
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/be/53/42fe5eab4a09d251a76d0043e018172db324a23fcdac70f77a551c11f618/platformdirs-4.1.0-py3-none-any.whl#sha256=11c8f37bcca40db96d8144522d925583bdb7a31f7b0e37e3ed4318400a8e2380
   hash:
     md5: null
-    sha256: 118c954d7e949b35437270383a3f2531e99dd93cf7ce4dc8340d3356d30f173b
+    sha256: 11c8f37bcca40db96d8144522d925583bdb7a31f7b0e37e3ed4318400a8e2380
 - platform: osx-64
   name: platformdirs
-  version: 4.0.0
+  version: 4.1.0
   category: main
   manager: pypi
   requires_dist:
-  - typing-extensions >=4.7.1 ; python_version < '3.8'
   - furo >=2023.7.26 ; extra == 'docs'
   - proselint >=0.13 ; extra == 'docs'
   - sphinx-autodoc-typehints >=1.24 ; extra == 'docs'
@@ -3463,18 +4302,17 @@ package:
   - pytest-cov >=4.1 ; extra == 'test'
   - pytest-mock >=3.11.1 ; extra == 'test'
   - pytest >=7.4 ; extra == 'test'
-  requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/31/16/70be3b725073035aa5fc3229321d06e22e73e3e09f6af78dcfdf16c7636c/platformdirs-4.0.0-py3-none-any.whl#sha256=118c954d7e949b35437270383a3f2531e99dd93cf7ce4dc8340d3356d30f173b
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/be/53/42fe5eab4a09d251a76d0043e018172db324a23fcdac70f77a551c11f618/platformdirs-4.1.0-py3-none-any.whl#sha256=11c8f37bcca40db96d8144522d925583bdb7a31f7b0e37e3ed4318400a8e2380
   hash:
     md5: null
-    sha256: 118c954d7e949b35437270383a3f2531e99dd93cf7ce4dc8340d3356d30f173b
+    sha256: 11c8f37bcca40db96d8144522d925583bdb7a31f7b0e37e3ed4318400a8e2380
 - platform: osx-arm64
   name: platformdirs
-  version: 4.0.0
+  version: 4.1.0
   category: main
   manager: pypi
   requires_dist:
-  - typing-extensions >=4.7.1 ; python_version < '3.8'
   - furo >=2023.7.26 ; extra == 'docs'
   - proselint >=0.13 ; extra == 'docs'
   - sphinx-autodoc-typehints >=1.24 ; extra == 'docs'
@@ -3484,18 +4322,17 @@ package:
   - pytest-cov >=4.1 ; extra == 'test'
   - pytest-mock >=3.11.1 ; extra == 'test'
   - pytest >=7.4 ; extra == 'test'
-  requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/31/16/70be3b725073035aa5fc3229321d06e22e73e3e09f6af78dcfdf16c7636c/platformdirs-4.0.0-py3-none-any.whl#sha256=118c954d7e949b35437270383a3f2531e99dd93cf7ce4dc8340d3356d30f173b
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/be/53/42fe5eab4a09d251a76d0043e018172db324a23fcdac70f77a551c11f618/platformdirs-4.1.0-py3-none-any.whl#sha256=11c8f37bcca40db96d8144522d925583bdb7a31f7b0e37e3ed4318400a8e2380
   hash:
     md5: null
-    sha256: 118c954d7e949b35437270383a3f2531e99dd93cf7ce4dc8340d3356d30f173b
+    sha256: 11c8f37bcca40db96d8144522d925583bdb7a31f7b0e37e3ed4318400a8e2380
 - platform: win-64
   name: platformdirs
-  version: 4.0.0
+  version: 4.1.0
   category: main
   manager: pypi
   requires_dist:
-  - typing-extensions >=4.7.1 ; python_version < '3.8'
   - furo >=2023.7.26 ; extra == 'docs'
   - proselint >=0.13 ; extra == 'docs'
   - sphinx-autodoc-typehints >=1.24 ; extra == 'docs'
@@ -3505,11 +4342,59 @@ package:
   - pytest-cov >=4.1 ; extra == 'test'
   - pytest-mock >=3.11.1 ; extra == 'test'
   - pytest >=7.4 ; extra == 'test'
-  requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/31/16/70be3b725073035aa5fc3229321d06e22e73e3e09f6af78dcfdf16c7636c/platformdirs-4.0.0-py3-none-any.whl#sha256=118c954d7e949b35437270383a3f2531e99dd93cf7ce4dc8340d3356d30f173b
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/be/53/42fe5eab4a09d251a76d0043e018172db324a23fcdac70f77a551c11f618/platformdirs-4.1.0-py3-none-any.whl#sha256=11c8f37bcca40db96d8144522d925583bdb7a31f7b0e37e3ed4318400a8e2380
   hash:
     md5: null
-    sha256: 118c954d7e949b35437270383a3f2531e99dd93cf7ce4dc8340d3356d30f173b
+    sha256: 11c8f37bcca40db96d8144522d925583bdb7a31f7b0e37e3ed4318400a8e2380
+- platform: linux-64
+  name: prompt-toolkit
+  version: 3.0.43
+  category: main
+  manager: pypi
+  requires_dist:
+  - wcwidth
+  requires_python: '>=3.7.0'
+  url: https://files.pythonhosted.org/packages/ee/fd/ca7bf3869e7caa7a037e23078539467b433a4e01eebd93f77180ab927766/prompt_toolkit-3.0.43-py3-none-any.whl#sha256=a11a29cb3bf0a28a387fe5122cdb649816a957cd9261dcedf8c9f1fef33eacf6
+  hash:
+    md5: null
+    sha256: a11a29cb3bf0a28a387fe5122cdb649816a957cd9261dcedf8c9f1fef33eacf6
+- platform: osx-64
+  name: prompt-toolkit
+  version: 3.0.43
+  category: main
+  manager: pypi
+  requires_dist:
+  - wcwidth
+  requires_python: '>=3.7.0'
+  url: https://files.pythonhosted.org/packages/ee/fd/ca7bf3869e7caa7a037e23078539467b433a4e01eebd93f77180ab927766/prompt_toolkit-3.0.43-py3-none-any.whl#sha256=a11a29cb3bf0a28a387fe5122cdb649816a957cd9261dcedf8c9f1fef33eacf6
+  hash:
+    md5: null
+    sha256: a11a29cb3bf0a28a387fe5122cdb649816a957cd9261dcedf8c9f1fef33eacf6
+- platform: osx-arm64
+  name: prompt-toolkit
+  version: 3.0.43
+  category: main
+  manager: pypi
+  requires_dist:
+  - wcwidth
+  requires_python: '>=3.7.0'
+  url: https://files.pythonhosted.org/packages/ee/fd/ca7bf3869e7caa7a037e23078539467b433a4e01eebd93f77180ab927766/prompt_toolkit-3.0.43-py3-none-any.whl#sha256=a11a29cb3bf0a28a387fe5122cdb649816a957cd9261dcedf8c9f1fef33eacf6
+  hash:
+    md5: null
+    sha256: a11a29cb3bf0a28a387fe5122cdb649816a957cd9261dcedf8c9f1fef33eacf6
+- platform: win-64
+  name: prompt-toolkit
+  version: 3.0.43
+  category: main
+  manager: pypi
+  requires_dist:
+  - wcwidth
+  requires_python: '>=3.7.0'
+  url: https://files.pythonhosted.org/packages/ee/fd/ca7bf3869e7caa7a037e23078539467b433a4e01eebd93f77180ab927766/prompt_toolkit-3.0.43-py3-none-any.whl#sha256=a11a29cb3bf0a28a387fe5122cdb649816a957cd9261dcedf8c9f1fef33eacf6
+  hash:
+    md5: null
+    sha256: a11a29cb3bf0a28a387fe5122cdb649816a957cd9261dcedf8c9f1fef33eacf6
 - platform: linux-64
   name: protobuf
   version: 4.25.1
@@ -3568,6 +4453,77 @@ package:
   license: LGPL 2
   size: 144301
   timestamp: 1537755684331
+- platform: linux-64
+  name: ptyprocess
+  version: 0.7.0
+  category: main
+  manager: pypi
+  url: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl#sha256=4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35
+  hash:
+    md5: null
+    sha256: 4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35
+- platform: osx-64
+  name: ptyprocess
+  version: 0.7.0
+  category: main
+  manager: pypi
+  url: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl#sha256=4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35
+  hash:
+    md5: null
+    sha256: 4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35
+- platform: osx-arm64
+  name: ptyprocess
+  version: 0.7.0
+  category: main
+  manager: pypi
+  url: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl#sha256=4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35
+  hash:
+    md5: null
+    sha256: 4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35
+- platform: linux-64
+  name: pure-eval
+  version: 0.2.2
+  category: main
+  manager: pypi
+  requires_dist:
+  - pytest ; extra == 'tests'
+  url: https://files.pythonhosted.org/packages/2b/27/77f9d5684e6bce929f5cfe18d6cfbe5133013c06cb2fbf5933670e60761d/pure_eval-0.2.2-py3-none-any.whl#sha256=01eaab343580944bc56080ebe0a674b39ec44a945e6d09ba7db3cb8cec289350
+  hash:
+    md5: null
+    sha256: 01eaab343580944bc56080ebe0a674b39ec44a945e6d09ba7db3cb8cec289350
+- platform: osx-64
+  name: pure-eval
+  version: 0.2.2
+  category: main
+  manager: pypi
+  requires_dist:
+  - pytest ; extra == 'tests'
+  url: https://files.pythonhosted.org/packages/2b/27/77f9d5684e6bce929f5cfe18d6cfbe5133013c06cb2fbf5933670e60761d/pure_eval-0.2.2-py3-none-any.whl#sha256=01eaab343580944bc56080ebe0a674b39ec44a945e6d09ba7db3cb8cec289350
+  hash:
+    md5: null
+    sha256: 01eaab343580944bc56080ebe0a674b39ec44a945e6d09ba7db3cb8cec289350
+- platform: osx-arm64
+  name: pure-eval
+  version: 0.2.2
+  category: main
+  manager: pypi
+  requires_dist:
+  - pytest ; extra == 'tests'
+  url: https://files.pythonhosted.org/packages/2b/27/77f9d5684e6bce929f5cfe18d6cfbe5133013c06cb2fbf5933670e60761d/pure_eval-0.2.2-py3-none-any.whl#sha256=01eaab343580944bc56080ebe0a674b39ec44a945e6d09ba7db3cb8cec289350
+  hash:
+    md5: null
+    sha256: 01eaab343580944bc56080ebe0a674b39ec44a945e6d09ba7db3cb8cec289350
+- platform: win-64
+  name: pure-eval
+  version: 0.2.2
+  category: main
+  manager: pypi
+  requires_dist:
+  - pytest ; extra == 'tests'
+  url: https://files.pythonhosted.org/packages/2b/27/77f9d5684e6bce929f5cfe18d6cfbe5133013c06cb2fbf5933670e60761d/pure_eval-0.2.2-py3-none-any.whl#sha256=01eaab343580944bc56080ebe0a674b39ec44a945e6d09ba7db3cb8cec289350
+  hash:
+    md5: null
+    sha256: 01eaab343580944bc56080ebe0a674b39ec44a945e6d09ba7db3cb8cec289350
 - platform: linux-64
   name: pyasn1
   version: 0.5.1
@@ -3729,6 +4685,58 @@ package:
     md5: null
     sha256: bc10363e3b83330c1bb19fc9a16590a6308f94f37df12b0db93ff1c164c1a43c
 - platform: linux-64
+  name: pygments
+  version: 2.17.2
+  category: main
+  manager: pypi
+  requires_dist:
+  - importlib-metadata ; python_version < '3.8' and extra == 'plugins'
+  - colorama >=0.4.6 ; extra == 'windows-terminal'
+  requires_python: '>=3.7'
+  url: https://files.pythonhosted.org/packages/97/9c/372fef8377a6e340b1704768d20daaded98bf13282b5327beb2e2fe2c7ef/pygments-2.17.2-py3-none-any.whl#sha256=b27c2826c47d0f3219f29554824c30c5e8945175d888647acd804ddd04af846c
+  hash:
+    md5: null
+    sha256: b27c2826c47d0f3219f29554824c30c5e8945175d888647acd804ddd04af846c
+- platform: osx-64
+  name: pygments
+  version: 2.17.2
+  category: main
+  manager: pypi
+  requires_dist:
+  - importlib-metadata ; python_version < '3.8' and extra == 'plugins'
+  - colorama >=0.4.6 ; extra == 'windows-terminal'
+  requires_python: '>=3.7'
+  url: https://files.pythonhosted.org/packages/97/9c/372fef8377a6e340b1704768d20daaded98bf13282b5327beb2e2fe2c7ef/pygments-2.17.2-py3-none-any.whl#sha256=b27c2826c47d0f3219f29554824c30c5e8945175d888647acd804ddd04af846c
+  hash:
+    md5: null
+    sha256: b27c2826c47d0f3219f29554824c30c5e8945175d888647acd804ddd04af846c
+- platform: osx-arm64
+  name: pygments
+  version: 2.17.2
+  category: main
+  manager: pypi
+  requires_dist:
+  - importlib-metadata ; python_version < '3.8' and extra == 'plugins'
+  - colorama >=0.4.6 ; extra == 'windows-terminal'
+  requires_python: '>=3.7'
+  url: https://files.pythonhosted.org/packages/97/9c/372fef8377a6e340b1704768d20daaded98bf13282b5327beb2e2fe2c7ef/pygments-2.17.2-py3-none-any.whl#sha256=b27c2826c47d0f3219f29554824c30c5e8945175d888647acd804ddd04af846c
+  hash:
+    md5: null
+    sha256: b27c2826c47d0f3219f29554824c30c5e8945175d888647acd804ddd04af846c
+- platform: win-64
+  name: pygments
+  version: 2.17.2
+  category: main
+  manager: pypi
+  requires_dist:
+  - importlib-metadata ; python_version < '3.8' and extra == 'plugins'
+  - colorama >=0.4.6 ; extra == 'windows-terminal'
+  requires_python: '>=3.7'
+  url: https://files.pythonhosted.org/packages/97/9c/372fef8377a6e340b1704768d20daaded98bf13282b5327beb2e2fe2c7ef/pygments-2.17.2-py3-none-any.whl#sha256=b27c2826c47d0f3219f29554824c30c5e8945175d888647acd804ddd04af846c
+  hash:
+    md5: null
+    sha256: b27c2826c47d0f3219f29554824c30c5e8945175d888647acd804ddd04af846c
+- platform: linux-64
   name: pysdl2
   version: 0.9.12
   category: main
@@ -3766,40 +4774,40 @@ package:
     sha256: e5e766e3551eae82ba8a406a34e78a512eadd427524b2110b26809e0cb6aab85
 - platform: linux-64
   name: pysdl2-dll
-  version: 2.28.4
+  version: 2.28.5
   category: main
   manager: pypi
-  url: https://files.pythonhosted.org/packages/8e/19/c7bd736204ed2b08f0e3fc993d1d83d84a77bf69c740314498cf9a03e700/pysdl2_dll-2.28.4-py2.py3-none-manylinux2014_x86_64.whl#sha256=d77f13a0f411abb3abd6d49f8b41c1373f72b86b1973236023dc37d563c2d0db
+  url: https://files.pythonhosted.org/packages/3f/68/e3c846eb6c9836226b622a9b736af2794be1fec000572d72740555942432/pysdl2_dll-2.28.5-py2.py3-none-manylinux2014_x86_64.whl#sha256=99e3baa4155fa1a6e544daeca81c136e6b5ea4915b2c1574fa821c819021878a
   hash:
     md5: null
-    sha256: d77f13a0f411abb3abd6d49f8b41c1373f72b86b1973236023dc37d563c2d0db
+    sha256: 99e3baa4155fa1a6e544daeca81c136e6b5ea4915b2c1574fa821c819021878a
 - platform: osx-64
   name: pysdl2-dll
-  version: 2.28.4
+  version: 2.28.5
   category: main
   manager: pypi
-  url: https://files.pythonhosted.org/packages/c4/6d/d126e2f31422a8fecdcd72f1d4a2ef744744cabeefddb9fa7fdfbe904597/pysdl2_dll-2.28.4-py2.py3-none-macosx_10_11_universal2.whl#sha256=1acff652e62f906109a6ca4874ff1e210eebb4989df651955c48add43f89c077
+  url: https://files.pythonhosted.org/packages/b0/fb/c0d905219175422849b8a92c2c33b3bbde5a4294bdbced99b6fb2c87727e/pysdl2_dll-2.28.5-py2.py3-none-macosx_10_11_x86_64.whl#sha256=e8d7688173b30a77067011ad2b7d30f4c2ed417613ed489a117a3a608f9479b3
   hash:
     md5: null
-    sha256: 1acff652e62f906109a6ca4874ff1e210eebb4989df651955c48add43f89c077
+    sha256: e8d7688173b30a77067011ad2b7d30f4c2ed417613ed489a117a3a608f9479b3
 - platform: osx-arm64
   name: pysdl2-dll
-  version: 2.28.4
+  version: 2.28.5
   category: main
   manager: pypi
-  url: https://files.pythonhosted.org/packages/c4/6d/d126e2f31422a8fecdcd72f1d4a2ef744744cabeefddb9fa7fdfbe904597/pysdl2_dll-2.28.4-py2.py3-none-macosx_10_11_universal2.whl#sha256=1acff652e62f906109a6ca4874ff1e210eebb4989df651955c48add43f89c077
+  url: https://files.pythonhosted.org/packages/76/05/dc74ba07d99c8c3959005cca3160ec111dc159b6325d61799fee44210546/pysdl2_dll-2.28.5-py2.py3-none-macosx_10_11_universal2.whl#sha256=2242a86f86e1170145d485911803a814cb2c1e17b44aca42290e71f9d839ccf7
   hash:
     md5: null
-    sha256: 1acff652e62f906109a6ca4874ff1e210eebb4989df651955c48add43f89c077
+    sha256: 2242a86f86e1170145d485911803a814cb2c1e17b44aca42290e71f9d839ccf7
 - platform: win-64
   name: pysdl2-dll
-  version: 2.28.4
+  version: 2.28.5
   category: main
   manager: pypi
-  url: https://files.pythonhosted.org/packages/51/05/8ed2f36afe7deebb019d23c6ea4925d3db880beb2bedc2b590cc7c8ed203/pysdl2_dll-2.28.4-py2.py3-none-win_amd64.whl#sha256=667628a119e00f45aed279e480516ccc484c2f9a5d03c901dd1996c3af4c5840
+  url: https://files.pythonhosted.org/packages/1f/3b/ed26592de6c3da645a6e61d3f4ab637e72996ad83a510ca7e99664896b5b/pysdl2_dll-2.28.5-py2.py3-none-win_amd64.whl#sha256=5c245e18249b6c458a7b93b120afdd06487dfa4f19c8174b4d6de970f63e3142
   hash:
     md5: null
-    sha256: 667628a119e00f45aed279e480516ccc484c2f9a5d03c901dd1996c3af4c5840
+    sha256: 5c245e18249b6c458a7b93b120afdd06487dfa4f19c8174b4d6de970f63e3142
 - platform: linux-64
   name: python
   version: 3.11.6
@@ -4237,7 +5245,7 @@ package:
     sha256: 90260d9058e514786967344d0ef75fa8727eed8a7d2e43ce9f4bcf1b536174f7
 - platform: linux-64
   name: setuptools
-  version: 69.0.2
+  version: 69.0.3
   category: main
   manager: pypi
   requires_dist:
@@ -4287,13 +5295,13 @@ package:
   - pytest-ruff ; sys_platform != 'cygwin' and extra == 'testing'
   - pytest-perf ; sys_platform != 'cygwin' and extra == 'testing'
   requires_python: '>=3.8'
-  url: https://files.pythonhosted.org/packages/bb/e1/ed2dd0850446b8697ad28d118df885ad04140c64ace06c4bd559f7c8a94f/setuptools-69.0.2-py3-none-any.whl#sha256=1e8fdff6797d3865f37397be788a4e3cba233608e9b509382a2777d25ebde7f2
+  url: https://files.pythonhosted.org/packages/55/3a/5121b58b578a598b269537e09a316ad2a94fdd561a2c6eb75cd68578cc6b/setuptools-69.0.3-py3-none-any.whl#sha256=385eb4edd9c9d5c17540511303e39a147ce2fc04bc55289c322b9e5904fe2c05
   hash:
     md5: null
-    sha256: 1e8fdff6797d3865f37397be788a4e3cba233608e9b509382a2777d25ebde7f2
+    sha256: 385eb4edd9c9d5c17540511303e39a147ce2fc04bc55289c322b9e5904fe2c05
 - platform: osx-64
   name: setuptools
-  version: 69.0.2
+  version: 69.0.3
   category: main
   manager: pypi
   requires_dist:
@@ -4343,13 +5351,13 @@ package:
   - pytest-ruff ; sys_platform != 'cygwin' and extra == 'testing'
   - pytest-perf ; sys_platform != 'cygwin' and extra == 'testing'
   requires_python: '>=3.8'
-  url: https://files.pythonhosted.org/packages/bb/e1/ed2dd0850446b8697ad28d118df885ad04140c64ace06c4bd559f7c8a94f/setuptools-69.0.2-py3-none-any.whl#sha256=1e8fdff6797d3865f37397be788a4e3cba233608e9b509382a2777d25ebde7f2
+  url: https://files.pythonhosted.org/packages/55/3a/5121b58b578a598b269537e09a316ad2a94fdd561a2c6eb75cd68578cc6b/setuptools-69.0.3-py3-none-any.whl#sha256=385eb4edd9c9d5c17540511303e39a147ce2fc04bc55289c322b9e5904fe2c05
   hash:
     md5: null
-    sha256: 1e8fdff6797d3865f37397be788a4e3cba233608e9b509382a2777d25ebde7f2
+    sha256: 385eb4edd9c9d5c17540511303e39a147ce2fc04bc55289c322b9e5904fe2c05
 - platform: osx-arm64
   name: setuptools
-  version: 69.0.2
+  version: 69.0.3
   category: main
   manager: pypi
   requires_dist:
@@ -4399,13 +5407,13 @@ package:
   - pytest-ruff ; sys_platform != 'cygwin' and extra == 'testing'
   - pytest-perf ; sys_platform != 'cygwin' and extra == 'testing'
   requires_python: '>=3.8'
-  url: https://files.pythonhosted.org/packages/bb/e1/ed2dd0850446b8697ad28d118df885ad04140c64ace06c4bd559f7c8a94f/setuptools-69.0.2-py3-none-any.whl#sha256=1e8fdff6797d3865f37397be788a4e3cba233608e9b509382a2777d25ebde7f2
+  url: https://files.pythonhosted.org/packages/55/3a/5121b58b578a598b269537e09a316ad2a94fdd561a2c6eb75cd68578cc6b/setuptools-69.0.3-py3-none-any.whl#sha256=385eb4edd9c9d5c17540511303e39a147ce2fc04bc55289c322b9e5904fe2c05
   hash:
     md5: null
-    sha256: 1e8fdff6797d3865f37397be788a4e3cba233608e9b509382a2777d25ebde7f2
+    sha256: 385eb4edd9c9d5c17540511303e39a147ce2fc04bc55289c322b9e5904fe2c05
 - platform: win-64
   name: setuptools
-  version: 69.0.2
+  version: 69.0.3
   category: main
   manager: pypi
   requires_dist:
@@ -4455,10 +5463,10 @@ package:
   - pytest-ruff ; sys_platform != 'cygwin' and extra == 'testing'
   - pytest-perf ; sys_platform != 'cygwin' and extra == 'testing'
   requires_python: '>=3.8'
-  url: https://files.pythonhosted.org/packages/bb/e1/ed2dd0850446b8697ad28d118df885ad04140c64ace06c4bd559f7c8a94f/setuptools-69.0.2-py3-none-any.whl#sha256=1e8fdff6797d3865f37397be788a4e3cba233608e9b509382a2777d25ebde7f2
+  url: https://files.pythonhosted.org/packages/55/3a/5121b58b578a598b269537e09a316ad2a94fdd561a2c6eb75cd68578cc6b/setuptools-69.0.3-py3-none-any.whl#sha256=385eb4edd9c9d5c17540511303e39a147ce2fc04bc55289c322b9e5904fe2c05
   hash:
     md5: null
-    sha256: 1e8fdff6797d3865f37397be788a4e3cba233608e9b509382a2777d25ebde7f2
+    sha256: 385eb4edd9c9d5c17540511303e39a147ce2fc04bc55289c322b9e5904fe2c05
 - platform: linux-64
   name: six
   version: 1.16.0
@@ -4499,6 +5507,78 @@ package:
   hash:
     md5: null
     sha256: 8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254
+- platform: linux-64
+  name: stack-data
+  version: 0.6.3
+  category: main
+  manager: pypi
+  requires_dist:
+  - executing >=1.2.0
+  - asttokens >=2.1.0
+  - pure-eval
+  - pytest ; extra == 'tests'
+  - typeguard ; extra == 'tests'
+  - pygments ; extra == 'tests'
+  - littleutils ; extra == 'tests'
+  - cython ; extra == 'tests'
+  url: https://files.pythonhosted.org/packages/f1/7b/ce1eafaf1a76852e2ec9b22edecf1daa58175c090266e9f6c64afcd81d91/stack_data-0.6.3-py3-none-any.whl#sha256=d5558e0c25a4cb0853cddad3d77da9891a08cb85dd9f9f91b9f8cd66e511e695
+  hash:
+    md5: null
+    sha256: d5558e0c25a4cb0853cddad3d77da9891a08cb85dd9f9f91b9f8cd66e511e695
+- platform: osx-64
+  name: stack-data
+  version: 0.6.3
+  category: main
+  manager: pypi
+  requires_dist:
+  - executing >=1.2.0
+  - asttokens >=2.1.0
+  - pure-eval
+  - pytest ; extra == 'tests'
+  - typeguard ; extra == 'tests'
+  - pygments ; extra == 'tests'
+  - littleutils ; extra == 'tests'
+  - cython ; extra == 'tests'
+  url: https://files.pythonhosted.org/packages/f1/7b/ce1eafaf1a76852e2ec9b22edecf1daa58175c090266e9f6c64afcd81d91/stack_data-0.6.3-py3-none-any.whl#sha256=d5558e0c25a4cb0853cddad3d77da9891a08cb85dd9f9f91b9f8cd66e511e695
+  hash:
+    md5: null
+    sha256: d5558e0c25a4cb0853cddad3d77da9891a08cb85dd9f9f91b9f8cd66e511e695
+- platform: osx-arm64
+  name: stack-data
+  version: 0.6.3
+  category: main
+  manager: pypi
+  requires_dist:
+  - executing >=1.2.0
+  - asttokens >=2.1.0
+  - pure-eval
+  - pytest ; extra == 'tests'
+  - typeguard ; extra == 'tests'
+  - pygments ; extra == 'tests'
+  - littleutils ; extra == 'tests'
+  - cython ; extra == 'tests'
+  url: https://files.pythonhosted.org/packages/f1/7b/ce1eafaf1a76852e2ec9b22edecf1daa58175c090266e9f6c64afcd81d91/stack_data-0.6.3-py3-none-any.whl#sha256=d5558e0c25a4cb0853cddad3d77da9891a08cb85dd9f9f91b9f8cd66e511e695
+  hash:
+    md5: null
+    sha256: d5558e0c25a4cb0853cddad3d77da9891a08cb85dd9f9f91b9f8cd66e511e695
+- platform: win-64
+  name: stack-data
+  version: 0.6.3
+  category: main
+  manager: pypi
+  requires_dist:
+  - executing >=1.2.0
+  - asttokens >=2.1.0
+  - pure-eval
+  - pytest ; extra == 'tests'
+  - typeguard ; extra == 'tests'
+  - pygments ; extra == 'tests'
+  - littleutils ; extra == 'tests'
+  - cython ; extra == 'tests'
+  url: https://files.pythonhosted.org/packages/f1/7b/ce1eafaf1a76852e2ec9b22edecf1daa58175c090266e9f6c64afcd81d91/stack_data-0.6.3-py3-none-any.whl#sha256=d5558e0c25a4cb0853cddad3d77da9891a08cb85dd9f9f91b9f8cd66e511e695
+  hash:
+    md5: null
+    sha256: d5558e0c25a4cb0853cddad3d77da9891a08cb85dd9f9f91b9f8cd66e511e695
 - platform: win-64
   name: tbb
   version: 2021.10.0
@@ -4879,36 +5959,36 @@ package:
     sha256: 51f96c729d61ff8e2e340df5b3b4db81a938258f1c9282ab09277896d0c408ae
 - platform: linux-64
   name: tensorflow-io-gcs-filesystem
-  version: 0.34.0
+  version: 0.35.0
   category: main
   manager: pypi
   requires_dist:
-  - tensorflow <2.14.0, >=2.13.0 ; extra == 'tensorflow'
-  - tensorflow-aarch64 <2.14.0, >=2.13.0 ; extra == 'tensorflow-aarch64'
-  - tensorflow-cpu <2.14.0, >=2.13.0 ; extra == 'tensorflow-cpu'
-  - tensorflow-gpu <2.14.0, >=2.13.0 ; extra == 'tensorflow-gpu'
-  - tensorflow-rocm <2.14.0, >=2.13.0 ; extra == 'tensorflow-rocm'
+  - tensorflow <2.15.0, >=2.14.0 ; extra == 'tensorflow'
+  - tensorflow-aarch64 <2.15.0, >=2.14.0 ; extra == 'tensorflow-aarch64'
+  - tensorflow-cpu <2.15.0, >=2.14.0 ; extra == 'tensorflow-cpu'
+  - tensorflow-gpu <2.15.0, >=2.14.0 ; extra == 'tensorflow-gpu'
+  - tensorflow-rocm <2.15.0, >=2.14.0 ; extra == 'tensorflow-rocm'
   requires_python: '>=3.7, <3.12'
-  url: https://files.pythonhosted.org/packages/4c/64/245746084cdd5fafa680a6e7effeecf87abeeac2796decfa835a99b397c7/tensorflow_io_gcs_filesystem-0.34.0-cp311-cp311-manylinux_2_12_x86_64.manylinux2010_x86_64.whl#sha256=cbe26c4a3332589c7b724f147df453b5c226993aa8d346a15536358d77b364c4
+  url: https://files.pythonhosted.org/packages/7b/d7/733aed9a2844a3947ef78eb5fbf22c1f64883779891d31a68d09ac7b651e/tensorflow_io_gcs_filesystem-0.35.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=b8fb3402fb1457482c386ea19371bc76383412ae9ea4396edb1e8adb4ba76f21
   hash:
     md5: null
-    sha256: cbe26c4a3332589c7b724f147df453b5c226993aa8d346a15536358d77b364c4
+    sha256: b8fb3402fb1457482c386ea19371bc76383412ae9ea4396edb1e8adb4ba76f21
 - platform: osx-64
   name: tensorflow-io-gcs-filesystem
-  version: 0.34.0
+  version: 0.35.0
   category: main
   manager: pypi
   requires_dist:
-  - tensorflow <2.14.0, >=2.13.0 ; extra == 'tensorflow'
-  - tensorflow-aarch64 <2.14.0, >=2.13.0 ; extra == 'tensorflow-aarch64'
-  - tensorflow-cpu <2.14.0, >=2.13.0 ; extra == 'tensorflow-cpu'
-  - tensorflow-gpu <2.14.0, >=2.13.0 ; extra == 'tensorflow-gpu'
-  - tensorflow-rocm <2.14.0, >=2.13.0 ; extra == 'tensorflow-rocm'
+  - tensorflow <2.15.0, >=2.14.0 ; extra == 'tensorflow'
+  - tensorflow-aarch64 <2.15.0, >=2.14.0 ; extra == 'tensorflow-aarch64'
+  - tensorflow-cpu <2.15.0, >=2.14.0 ; extra == 'tensorflow-cpu'
+  - tensorflow-gpu <2.15.0, >=2.14.0 ; extra == 'tensorflow-gpu'
+  - tensorflow-rocm <2.15.0, >=2.14.0 ; extra == 'tensorflow-rocm'
   requires_python: '>=3.7, <3.12'
-  url: https://files.pythonhosted.org/packages/3d/34/252794e3f737594f8ac4ac9f2ee9ba7b806b6825832af3ff9b2fd893ce8f/tensorflow_io_gcs_filesystem-0.34.0-cp311-cp311-macosx_10_14_x86_64.whl#sha256=a17a616d2c7fae83de4424404815843507d40d4eb0d507c636a5493a20c3d958
+  url: https://files.pythonhosted.org/packages/92/e5/25a9be2e211f6ed313105ebd0446b35382e62487c0a9c66fcf795556e671/tensorflow_io_gcs_filesystem-0.35.0-cp311-cp311-macosx_10_14_x86_64.whl#sha256=35b6eca7225c815d962254327195f191d88c3c9c2278a5ab23e0ac834acbadbb
   hash:
     md5: null
-    sha256: a17a616d2c7fae83de4424404815843507d40d4eb0d507c636a5493a20c3d958
+    sha256: 35b6eca7225c815d962254327195f191d88c3c9c2278a5ab23e0ac834acbadbb
 - platform: osx-arm64
   name: tensorflow-io-gcs-filesystem
   version: 0.34.0
@@ -4987,56 +6067,56 @@ package:
     sha256: 064e98b67d7a89e72c37c90254c0a322a0b8d0ce9b68f23286816210e3ef6685
 - platform: linux-64
   name: termcolor
-  version: 2.3.0
+  version: 2.4.0
   category: main
   manager: pypi
   requires_dist:
   - pytest ; extra == 'tests'
   - pytest-cov ; extra == 'tests'
-  requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/67/e1/434566ffce04448192369c1a282931cf4ae593e91907558eaecd2e9f2801/termcolor-2.3.0-py3-none-any.whl#sha256=3afb05607b89aed0ffe25202399ee0867ad4d3cb4180d98aaf8eefa6a5f7d475
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/d9/5f/8c716e47b3a50cbd7c146f45881e11d9414def768b7cd9c5e6650ec2a80a/termcolor-2.4.0-py3-none-any.whl#sha256=9297c0df9c99445c2412e832e882a7884038a25617c60cea2ad69488d4040d63
   hash:
     md5: null
-    sha256: 3afb05607b89aed0ffe25202399ee0867ad4d3cb4180d98aaf8eefa6a5f7d475
+    sha256: 9297c0df9c99445c2412e832e882a7884038a25617c60cea2ad69488d4040d63
 - platform: osx-64
   name: termcolor
-  version: 2.3.0
+  version: 2.4.0
   category: main
   manager: pypi
   requires_dist:
   - pytest ; extra == 'tests'
   - pytest-cov ; extra == 'tests'
-  requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/67/e1/434566ffce04448192369c1a282931cf4ae593e91907558eaecd2e9f2801/termcolor-2.3.0-py3-none-any.whl#sha256=3afb05607b89aed0ffe25202399ee0867ad4d3cb4180d98aaf8eefa6a5f7d475
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/d9/5f/8c716e47b3a50cbd7c146f45881e11d9414def768b7cd9c5e6650ec2a80a/termcolor-2.4.0-py3-none-any.whl#sha256=9297c0df9c99445c2412e832e882a7884038a25617c60cea2ad69488d4040d63
   hash:
     md5: null
-    sha256: 3afb05607b89aed0ffe25202399ee0867ad4d3cb4180d98aaf8eefa6a5f7d475
+    sha256: 9297c0df9c99445c2412e832e882a7884038a25617c60cea2ad69488d4040d63
 - platform: osx-arm64
   name: termcolor
-  version: 2.3.0
+  version: 2.4.0
   category: main
   manager: pypi
   requires_dist:
   - pytest ; extra == 'tests'
   - pytest-cov ; extra == 'tests'
-  requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/67/e1/434566ffce04448192369c1a282931cf4ae593e91907558eaecd2e9f2801/termcolor-2.3.0-py3-none-any.whl#sha256=3afb05607b89aed0ffe25202399ee0867ad4d3cb4180d98aaf8eefa6a5f7d475
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/d9/5f/8c716e47b3a50cbd7c146f45881e11d9414def768b7cd9c5e6650ec2a80a/termcolor-2.4.0-py3-none-any.whl#sha256=9297c0df9c99445c2412e832e882a7884038a25617c60cea2ad69488d4040d63
   hash:
     md5: null
-    sha256: 3afb05607b89aed0ffe25202399ee0867ad4d3cb4180d98aaf8eefa6a5f7d475
+    sha256: 9297c0df9c99445c2412e832e882a7884038a25617c60cea2ad69488d4040d63
 - platform: win-64
   name: termcolor
-  version: 2.3.0
+  version: 2.4.0
   category: main
   manager: pypi
   requires_dist:
   - pytest ; extra == 'tests'
   - pytest-cov ; extra == 'tests'
-  requires_python: '>=3.7'
-  url: https://files.pythonhosted.org/packages/67/e1/434566ffce04448192369c1a282931cf4ae593e91907558eaecd2e9f2801/termcolor-2.3.0-py3-none-any.whl#sha256=3afb05607b89aed0ffe25202399ee0867ad4d3cb4180d98aaf8eefa6a5f7d475
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/d9/5f/8c716e47b3a50cbd7c146f45881e11d9414def768b7cd9c5e6650ec2a80a/termcolor-2.4.0-py3-none-any.whl#sha256=9297c0df9c99445c2412e832e882a7884038a25617c60cea2ad69488d4040d63
   hash:
     md5: null
-    sha256: 3afb05607b89aed0ffe25202399ee0867ad4d3cb4180d98aaf8eefa6a5f7d475
+    sha256: 9297c0df9c99445c2412e832e882a7884038a25617c60cea2ad69488d4040d63
 - platform: linux-64
   name: tk
   version: 8.6.13
@@ -5117,45 +6197,165 @@ package:
   size: 3503410
   timestamp: 1699202577803
 - platform: linux-64
-  name: typing-extensions
-  version: 4.8.0
+  name: tokenize-rt
+  version: 5.2.0
   category: main
   manager: pypi
   requires_python: '>=3.8'
-  url: https://files.pythonhosted.org/packages/24/21/7d397a4b7934ff4028987914ac1044d3b7d52712f30e2ac7a2ae5bc86dd0/typing_extensions-4.8.0-py3-none-any.whl#sha256=8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0
+  url: https://files.pythonhosted.org/packages/8d/35/78f03aa48cfebd13646707f64477bc7eacf1081edcdcd1b4d57cb1b5d0a8/tokenize_rt-5.2.0-py2.py3-none-any.whl#sha256=b79d41a65cfec71285433511b50271b05da3584a1da144a0752e9c621a285289
   hash:
     md5: null
-    sha256: 8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0
+    sha256: b79d41a65cfec71285433511b50271b05da3584a1da144a0752e9c621a285289
+- platform: osx-64
+  name: tokenize-rt
+  version: 5.2.0
+  category: main
+  manager: pypi
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/8d/35/78f03aa48cfebd13646707f64477bc7eacf1081edcdcd1b4d57cb1b5d0a8/tokenize_rt-5.2.0-py2.py3-none-any.whl#sha256=b79d41a65cfec71285433511b50271b05da3584a1da144a0752e9c621a285289
+  hash:
+    md5: null
+    sha256: b79d41a65cfec71285433511b50271b05da3584a1da144a0752e9c621a285289
+- platform: osx-arm64
+  name: tokenize-rt
+  version: 5.2.0
+  category: main
+  manager: pypi
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/8d/35/78f03aa48cfebd13646707f64477bc7eacf1081edcdcd1b4d57cb1b5d0a8/tokenize_rt-5.2.0-py2.py3-none-any.whl#sha256=b79d41a65cfec71285433511b50271b05da3584a1da144a0752e9c621a285289
+  hash:
+    md5: null
+    sha256: b79d41a65cfec71285433511b50271b05da3584a1da144a0752e9c621a285289
+- platform: win-64
+  name: tokenize-rt
+  version: 5.2.0
+  category: main
+  manager: pypi
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/8d/35/78f03aa48cfebd13646707f64477bc7eacf1081edcdcd1b4d57cb1b5d0a8/tokenize_rt-5.2.0-py2.py3-none-any.whl#sha256=b79d41a65cfec71285433511b50271b05da3584a1da144a0752e9c621a285289
+  hash:
+    md5: null
+    sha256: b79d41a65cfec71285433511b50271b05da3584a1da144a0752e9c621a285289
+- platform: linux-64
+  name: traitlets
+  version: 5.14.0
+  category: main
+  manager: pypi
+  requires_dist:
+  - myst-parser ; extra == 'docs'
+  - pydata-sphinx-theme ; extra == 'docs'
+  - sphinx ; extra == 'docs'
+  - argcomplete >=3.0.3 ; extra == 'test'
+  - mypy >=1.7.0 ; extra == 'test'
+  - pre-commit ; extra == 'test'
+  - pytest-mock ; extra == 'test'
+  - pytest-mypy-testing ; extra == 'test'
+  - pytest <7.5, >=7.0 ; extra == 'test'
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/a7/1d/7d07e1b152b419a8a9c7f812eeefd408a0610d869489ee2e86973486713f/traitlets-5.14.0-py3-none-any.whl#sha256=f14949d23829023013c47df20b4a76ccd1a85effb786dc060f34de7948361b33
+  hash:
+    md5: null
+    sha256: f14949d23829023013c47df20b4a76ccd1a85effb786dc060f34de7948361b33
+- platform: osx-64
+  name: traitlets
+  version: 5.14.0
+  category: main
+  manager: pypi
+  requires_dist:
+  - myst-parser ; extra == 'docs'
+  - pydata-sphinx-theme ; extra == 'docs'
+  - sphinx ; extra == 'docs'
+  - argcomplete >=3.0.3 ; extra == 'test'
+  - mypy >=1.7.0 ; extra == 'test'
+  - pre-commit ; extra == 'test'
+  - pytest-mock ; extra == 'test'
+  - pytest-mypy-testing ; extra == 'test'
+  - pytest <7.5, >=7.0 ; extra == 'test'
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/a7/1d/7d07e1b152b419a8a9c7f812eeefd408a0610d869489ee2e86973486713f/traitlets-5.14.0-py3-none-any.whl#sha256=f14949d23829023013c47df20b4a76ccd1a85effb786dc060f34de7948361b33
+  hash:
+    md5: null
+    sha256: f14949d23829023013c47df20b4a76ccd1a85effb786dc060f34de7948361b33
+- platform: osx-arm64
+  name: traitlets
+  version: 5.14.0
+  category: main
+  manager: pypi
+  requires_dist:
+  - myst-parser ; extra == 'docs'
+  - pydata-sphinx-theme ; extra == 'docs'
+  - sphinx ; extra == 'docs'
+  - argcomplete >=3.0.3 ; extra == 'test'
+  - mypy >=1.7.0 ; extra == 'test'
+  - pre-commit ; extra == 'test'
+  - pytest-mock ; extra == 'test'
+  - pytest-mypy-testing ; extra == 'test'
+  - pytest <7.5, >=7.0 ; extra == 'test'
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/a7/1d/7d07e1b152b419a8a9c7f812eeefd408a0610d869489ee2e86973486713f/traitlets-5.14.0-py3-none-any.whl#sha256=f14949d23829023013c47df20b4a76ccd1a85effb786dc060f34de7948361b33
+  hash:
+    md5: null
+    sha256: f14949d23829023013c47df20b4a76ccd1a85effb786dc060f34de7948361b33
+- platform: win-64
+  name: traitlets
+  version: 5.14.0
+  category: main
+  manager: pypi
+  requires_dist:
+  - myst-parser ; extra == 'docs'
+  - pydata-sphinx-theme ; extra == 'docs'
+  - sphinx ; extra == 'docs'
+  - argcomplete >=3.0.3 ; extra == 'test'
+  - mypy >=1.7.0 ; extra == 'test'
+  - pre-commit ; extra == 'test'
+  - pytest-mock ; extra == 'test'
+  - pytest-mypy-testing ; extra == 'test'
+  - pytest <7.5, >=7.0 ; extra == 'test'
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/a7/1d/7d07e1b152b419a8a9c7f812eeefd408a0610d869489ee2e86973486713f/traitlets-5.14.0-py3-none-any.whl#sha256=f14949d23829023013c47df20b4a76ccd1a85effb786dc060f34de7948361b33
+  hash:
+    md5: null
+    sha256: f14949d23829023013c47df20b4a76ccd1a85effb786dc060f34de7948361b33
+- platform: linux-64
+  name: typing-extensions
+  version: 4.9.0
+  category: main
+  manager: pypi
+  requires_python: '>=3.8'
+  url: https://files.pythonhosted.org/packages/b7/f4/6a90020cd2d93349b442bfcb657d0dc91eee65491600b2cb1d388bc98e6b/typing_extensions-4.9.0-py3-none-any.whl#sha256=af72aea155e91adfc61c3ae9e0e342dbc0cba726d6cba4b6c72c1f34e47291cd
+  hash:
+    md5: null
+    sha256: af72aea155e91adfc61c3ae9e0e342dbc0cba726d6cba4b6c72c1f34e47291cd
 - platform: osx-64
   name: typing-extensions
-  version: 4.8.0
+  version: 4.9.0
   category: main
   manager: pypi
   requires_python: '>=3.8'
-  url: https://files.pythonhosted.org/packages/24/21/7d397a4b7934ff4028987914ac1044d3b7d52712f30e2ac7a2ae5bc86dd0/typing_extensions-4.8.0-py3-none-any.whl#sha256=8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0
+  url: https://files.pythonhosted.org/packages/b7/f4/6a90020cd2d93349b442bfcb657d0dc91eee65491600b2cb1d388bc98e6b/typing_extensions-4.9.0-py3-none-any.whl#sha256=af72aea155e91adfc61c3ae9e0e342dbc0cba726d6cba4b6c72c1f34e47291cd
   hash:
     md5: null
-    sha256: 8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0
+    sha256: af72aea155e91adfc61c3ae9e0e342dbc0cba726d6cba4b6c72c1f34e47291cd
 - platform: osx-arm64
   name: typing-extensions
-  version: 4.8.0
+  version: 4.9.0
   category: main
   manager: pypi
   requires_python: '>=3.8'
-  url: https://files.pythonhosted.org/packages/24/21/7d397a4b7934ff4028987914ac1044d3b7d52712f30e2ac7a2ae5bc86dd0/typing_extensions-4.8.0-py3-none-any.whl#sha256=8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0
+  url: https://files.pythonhosted.org/packages/b7/f4/6a90020cd2d93349b442bfcb657d0dc91eee65491600b2cb1d388bc98e6b/typing_extensions-4.9.0-py3-none-any.whl#sha256=af72aea155e91adfc61c3ae9e0e342dbc0cba726d6cba4b6c72c1f34e47291cd
   hash:
     md5: null
-    sha256: 8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0
+    sha256: af72aea155e91adfc61c3ae9e0e342dbc0cba726d6cba4b6c72c1f34e47291cd
 - platform: win-64
   name: typing-extensions
-  version: 4.8.0
+  version: 4.9.0
   category: main
   manager: pypi
   requires_python: '>=3.8'
-  url: https://files.pythonhosted.org/packages/24/21/7d397a4b7934ff4028987914ac1044d3b7d52712f30e2ac7a2ae5bc86dd0/typing_extensions-4.8.0-py3-none-any.whl#sha256=8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0
+  url: https://files.pythonhosted.org/packages/b7/f4/6a90020cd2d93349b442bfcb657d0dc91eee65491600b2cb1d388bc98e6b/typing_extensions-4.9.0-py3-none-any.whl#sha256=af72aea155e91adfc61c3ae9e0e342dbc0cba726d6cba4b6c72c1f34e47291cd
   hash:
     md5: null
-    sha256: 8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0
+    sha256: af72aea155e91adfc61c3ae9e0e342dbc0cba726d6cba4b6c72c1f34e47291cd
 - platform: linux-64
   name: tzdata
   version: 2023c
@@ -5368,6 +6568,50 @@ package:
   license_family: BSD
   size: 17207
   timestamp: 1688020635322
+- platform: linux-64
+  name: wcwidth
+  version: 0.2.12
+  category: main
+  manager: pypi
+  requires_dist:
+  - backports.functools-lru-cache >=1.2.1 ; python_version < '3.2'
+  url: https://files.pythonhosted.org/packages/31/b1/a59de0ad3aabb17523a39804f4c6df3ae87ead053a4e25362ae03d73d03a/wcwidth-0.2.12-py2.py3-none-any.whl#sha256=f26ec43d96c8cbfed76a5075dac87680124fa84e0855195a6184da9c187f133c
+  hash:
+    md5: null
+    sha256: f26ec43d96c8cbfed76a5075dac87680124fa84e0855195a6184da9c187f133c
+- platform: osx-64
+  name: wcwidth
+  version: 0.2.12
+  category: main
+  manager: pypi
+  requires_dist:
+  - backports.functools-lru-cache >=1.2.1 ; python_version < '3.2'
+  url: https://files.pythonhosted.org/packages/31/b1/a59de0ad3aabb17523a39804f4c6df3ae87ead053a4e25362ae03d73d03a/wcwidth-0.2.12-py2.py3-none-any.whl#sha256=f26ec43d96c8cbfed76a5075dac87680124fa84e0855195a6184da9c187f133c
+  hash:
+    md5: null
+    sha256: f26ec43d96c8cbfed76a5075dac87680124fa84e0855195a6184da9c187f133c
+- platform: osx-arm64
+  name: wcwidth
+  version: 0.2.12
+  category: main
+  manager: pypi
+  requires_dist:
+  - backports.functools-lru-cache >=1.2.1 ; python_version < '3.2'
+  url: https://files.pythonhosted.org/packages/31/b1/a59de0ad3aabb17523a39804f4c6df3ae87ead053a4e25362ae03d73d03a/wcwidth-0.2.12-py2.py3-none-any.whl#sha256=f26ec43d96c8cbfed76a5075dac87680124fa84e0855195a6184da9c187f133c
+  hash:
+    md5: null
+    sha256: f26ec43d96c8cbfed76a5075dac87680124fa84e0855195a6184da9c187f133c
+- platform: win-64
+  name: wcwidth
+  version: 0.2.12
+  category: main
+  manager: pypi
+  requires_dist:
+  - backports.functools-lru-cache >=1.2.1 ; python_version < '3.2'
+  url: https://files.pythonhosted.org/packages/31/b1/a59de0ad3aabb17523a39804f4c6df3ae87ead053a4e25362ae03d73d03a/wcwidth-0.2.12-py2.py3-none-any.whl#sha256=f26ec43d96c8cbfed76a5075dac87680124fa84e0855195a6184da9c187f133c
+  hash:
+    md5: null
+    sha256: f26ec43d96c8cbfed76a5075dac87680124fa84e0855195a6184da9c187f133c
 - platform: linux-64
   name: werkzeug
   version: 3.0.1
