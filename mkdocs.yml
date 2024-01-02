@@ -81,6 +81,8 @@ nav:
       - C++/Cmake: examples/cpp-sdl.md
       - OpenCV: examples/opencv.md
       - ROS2: examples/ros2-nav2.md
+  - Design Proposals:
+      - Multi Env: design_proposals/multi_environment_proposal.md
   - Community: Community.md
   - FAQ: FAQ.md
 
