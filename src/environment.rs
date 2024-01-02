@@ -5,11 +5,10 @@ use crate::{
 use miette::{Context, IntoDiagnostic, LabeledSpan};
 
 use crate::lock_file::lock_file_satisfies_project;
-use rattler::install::Transaction;
-use rattler_conda_types::{Platform, PrefixRecord};
+use rattler::install::{PythonInfo, Transaction};
+use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::CondaLock;
 use rip::index::PackageDb;
-use std::path::PathBuf;
 use std::{io::ErrorKind, path::Path};
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
@@ -84,7 +83,7 @@ pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
 }
 
 /// Specifies how the lock-file should be updated.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq, Copy, Clone)]
 pub enum LockFileUsage {
     /// Update the lock-file if it is out of date.
     #[default]
@@ -93,6 +92,24 @@ pub enum LockFileUsage {
     Locked,
     /// Don't update the lock-file and don't check if it is out of date
     Frozen,
+}
+
+impl LockFileUsage {
+    /// Returns true if the lock-file should be updated if it is out of date.
+    pub fn allows_lock_file_updates(self) -> bool {
+        match self {
+            LockFileUsage::Update => true,
+            LockFileUsage::Locked | LockFileUsage::Frozen => false,
+        }
+    }
+
+    /// Returns true if the lock-file should be checked if it is out of date.
+    pub fn should_check_if_out_of_date(self) -> bool {
+        match self {
+            LockFileUsage::Update | LockFileUsage::Locked => true,
+            LockFileUsage::Frozen => false,
+        }
+    }
 }
 
 /// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
@@ -112,21 +129,29 @@ pub async fn get_up_to_date_prefix(
         tokio::spawn(async move { prefix.find_installed_packages(None).await })
     };
 
-    // Update the lock-file if it is out of date.
-    if matches!(usage, LockFileUsage::Frozen) && !project.lock_file_path().is_file() {
-        miette::bail!("No lockfile available, can't do a frozen installation.");
+    // If there is no lock-file and we are also not allowed to update it, we can bail immediately.
+    if !project.lock_file_path().is_file() && !usage.allows_lock_file_updates() {
+        miette::bail!("no lockfile available, can't do a frozen installation.");
     }
 
+    // Load the lock-file into memory.
     let mut lock_file = lock_file::load_lock_file(project).await?;
-    let up_to_date = lock_file_satisfies_project(project, &lock_file)?;
-    if matches!(usage, LockFileUsage::Locked) && !up_to_date {
-        miette::bail!("Lockfile not up-to-date with the project");
-    }
-    let update_lock = matches!(usage, LockFileUsage::Update) && !up_to_date;
+
+    // Check if the lock-file is up to date, but only if the current usage allows it.
+    let update_lock_file = if usage.should_check_if_out_of_date()
+        && !lock_file_satisfies_project(project, &lock_file)?
+    {
+        if !usage.allows_lock_file_updates() {
+            miette::bail!("lockfile not up-to-date with the project");
+        }
+        true
+    } else {
+        false
+    };
 
     // First lock and install the conda environment
     // After which we should have a usable prefix to use for pypi resolution.
-    if update_lock {
+    if update_lock_file {
         lock_file = lock_file::update_lock_file_conda(project, lock_file, None).await?;
     }
 
@@ -144,7 +169,7 @@ pub async fn get_up_to_date_prefix(
     };
 
     if project.has_pypi_dependencies() {
-        if update_lock {
+        if update_lock_file {
             lock_file = lock_file::update_lock_file_for_pypi(project, lock_file).await?;
         }
 
@@ -184,9 +209,41 @@ pub async fn update_prefix_pypi(
 
 #[derive(Clone)]
 pub enum PythonStatus {
-    Changed((u32, u32, u32), PathBuf),
-    Unchanged((u32, u32, u32), PathBuf),
+    /// The python interpreter changed from `old` to `new`.
+    Changed { old: PythonInfo, new: PythonInfo },
+
+    /// The python interpreter remained the same.
+    Unchanged(PythonInfo),
+
+    /// The python interpreter was removed from the environment
+    Removed { old: PythonInfo },
+
+    /// The python interpreter was added to the environment
+    Added { new: PythonInfo },
+
+    /// There is no python interpreter in the environment.
     DoesNotExist,
+}
+
+impl PythonStatus {
+    /// Determine the [`PythonStatus`] from a [`Transaction`].
+    pub fn from_transaction(transaction: &Transaction<PrefixRecord, RepoDataRecord>) -> Self {
+        match (
+            transaction.current_python_info.as_ref(),
+            transaction.python_info.as_ref(),
+        ) {
+            (Some(old), Some(new)) if old.short_version != new.short_version => {
+                PythonStatus::Changed {
+                    old: old.clone(),
+                    new: new.clone(),
+                }
+            }
+            (Some(_), Some(new)) => PythonStatus::Unchanged(new.clone()),
+            (None, Some(new)) => PythonStatus::Added { new: new.clone() },
+            (Some(old), None) => PythonStatus::Removed { old: old.clone() },
+            (None, None) => PythonStatus::DoesNotExist,
+        }
+    }
 }
 
 /// Updates the environment to contain the packages from the specified lock-file
@@ -231,25 +288,5 @@ pub async fn update_prefix_conda(
     .with_context(|| "failed to create prefix location file.".to_string())?;
 
     // Determine if the python version changed.
-    let python_changed = {
-        if let Some(python_info) = transaction.current_python_info.as_ref() {
-            let python_version = (
-                python_info.short_version.0 as u32,
-                python_info.short_version.1 as u32,
-                0,
-            );
-
-            if Some(python_info.short_version)
-                == transaction.python_info.as_ref().map(|p| p.short_version)
-            {
-                PythonStatus::Unchanged(python_version, python_info.path.clone())
-            } else {
-                // Determine the current python distributions in its install locations
-                PythonStatus::Changed(python_version, python_info.path.clone())
-            }
-        } else {
-            PythonStatus::DoesNotExist
-        }
-    };
-    Ok(python_changed)
+    Ok(PythonStatus::from_transaction(&transaction))
 }

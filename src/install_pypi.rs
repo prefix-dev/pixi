@@ -35,20 +35,23 @@ pub async fn update_python_distributions(
     platform: Platform,
     status: &PythonStatus,
 ) -> miette::Result<()> {
-    // Get the python info from the transaction
-    let PythonStatus::DoesNotExist = status else {
-        return Ok(());
-    };
-
-    let (version, path) = match status {
-        PythonStatus::Changed(version, path) | PythonStatus::Unchanged(version, path) => {
-            (*version, path)
+    let python_info = match status {
+        PythonStatus::Changed { new, .. }
+        | PythonStatus::Unchanged(new)
+        | PythonStatus::Added { new } => new,
+        PythonStatus::Removed { .. } | PythonStatus::DoesNotExist => {
+            // No python interpreter in the environment, so there is nothing to do here.
+            return Ok(());
         }
-        PythonStatus::DoesNotExist => return Ok(()),
     };
 
     // Determine where packages would have been installed
-    let install_paths = InstallPaths::for_venv(version, platform.is_windows());
+    let python_version = (
+        python_info.short_version.0 as u32,
+        python_info.short_version.1 as u32,
+        0,
+    );
+    let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
 
     // Determine the current python distributions in those locations
     let current_python_packages = find_distributions_in_venv(prefix.root(), &install_paths)
@@ -90,7 +93,7 @@ pub async fn update_python_distributions(
     let package_install_pb = install_python_distributions(
         prefix,
         install_paths,
-        &prefix.root().join(path),
+        &prefix.root().join(python_info.path()),
         package_stream,
     )
     .await?;
@@ -302,12 +305,18 @@ pub fn remove_old_python_distributions(
 ) -> miette::Result<()> {
     // If the python version didn't change, there is nothing to do here.
     let python_version = match python_changed {
-        PythonStatus::Changed(python_version, _) => *python_version,
-        PythonStatus::Unchanged(_, _) | PythonStatus::DoesNotExist => {
-            return Ok(());
+        PythonStatus::Removed { old } | PythonStatus::Changed { old, .. } => old,
+        PythonStatus::Added { .. } | PythonStatus::DoesNotExist | PythonStatus::Unchanged(_) => {
+            return Ok(())
         }
     };
 
+    // Get the interpreter version from the info
+    let python_version = (
+        python_version.short_version.0 as u32,
+        python_version.short_version.1 as u32,
+        0,
+    );
     let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
 
     // Locate the packages that are installed in the previous environment
