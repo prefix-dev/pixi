@@ -519,6 +519,18 @@ impl Manifest {
             .remove_target_dependency(dep.as_normalized(), spec_type, platform)
     }
 
+    /// Removes a target specific dependency from `pixi.toml` based on pypi-dependencies
+    pub fn remove_target_pypi_dependency(
+        &mut self,
+        dep: &rip::types::PackageName,
+        platform: &Platform,
+    ) -> miette::Result<(rip::types::PackageName, PyPiRequirement)> {
+        let table = get_toml_target_table(&mut self.document, platform, consts::PYPI_DEPENDENCIES)?;
+        table.remove(dep.as_str());
+        self.parsed
+            .remove_target_pypi_dependency(dep.as_str(), platform)
+    }
+
     /// Returns a mutable reference to the channels array.
     fn channels_array_mut(&mut self) -> miette::Result<&mut Array> {
         let project = &mut self.document["project"];
@@ -832,7 +844,6 @@ impl ProjectManifest {
                     .find(|&pkg_name| pkg_name.as_str() == dep)
                     .cloned();
 
-                // Step 2: Use the key to remove the entry
                 key_to_remove.and_then(|pkg_key| pypi_deps.shift_remove_entry(&pkg_key))
             })
             .ok_or_else(|| {
@@ -865,6 +876,57 @@ impl ProjectManifest {
             Err(miette::miette!(
                 "[{}] doesn't exist",
                 console::style(spec_type.name()).bold()
+            ))
+        }
+    }
+
+    pub fn remove_target_pypi_dependency(
+        &mut self,
+        dep: &str,
+        platform: &Platform,
+    ) -> miette::Result<(PackageName, PyPiRequirement)> {
+        let target = PixiSpanned::from(TargetSelector::Platform(*platform));
+        let target_metadata = self.target.get_mut(&target).ok_or(miette::miette!(
+            "Platform: {} is not configured for this project",
+            console::style(platform.as_str()).bold(),
+        ))?;
+        let dependencies = target_metadata.pypi_dependencies.as_mut();
+
+        if let Some(deps) = dependencies {
+            let key_to_remove = deps.keys().find(|k| k.as_str() == dep);
+            if let Some(key_dep) = key_to_remove {
+                deps.shift_remove_entry(&key_dep.clone())
+                    .ok_or(miette::miette!(
+                        "Couldn't find {} in [{}]",
+                        console::style(dep).bold(),
+                        console::style(format!(
+                            "target.{}.{}",
+                            platform.as_str(),
+                            consts::PYPI_DEPENDENCIES
+                        ))
+                        .bold(),
+                    ))
+            } else {
+                Err(miette::miette!(
+                    "Couldn't find {} in [{}]",
+                    console::style(dep).bold(),
+                    console::style(format!(
+                        "target.{}.{}",
+                        platform.as_str(),
+                        consts::PYPI_DEPENDENCIES
+                    ))
+                    .bold(),
+                ))
+            }
+        } else {
+            Err(miette::miette!(
+                "[{}] doesn't exist",
+                console::style(format!(
+                    "target.{}.{}",
+                    platform.as_str(),
+                    consts::PYPI_DEPENDENCIES
+                ))
+                .bold(),
             ))
         }
     }
@@ -1483,6 +1545,38 @@ mod test {
         assert!(manifest.parsed.dependencies.is_empty());
         // Should still contain the fooz dependency in the target table
         assert_debug_snapshot!(manifest.parsed.target);
+    }
+
+    #[test]
+    fn test_remove_target_pypi_dependency() {
+        let pixi_cfg = r#"[project]
+name = "pixi_fun"
+version = "0.1.0"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[dependencies]
+python = ">=3.12.1,<3.13"
+
+[target.win-64.pypi-dependencies]
+jax = { version = "*", extras = ["cpu"] }
+requests = "*"
+
+[target.linux-64.pypi-dependencies]
+xpackage = "==1.2.3"
+ypackage = {version = ">=1.2.3"}
+"#;
+        let tmpdir = tempdir().unwrap();
+        let mut manifest = Manifest::from_str(tmpdir.path(), pixi_cfg).unwrap();
+        manifest
+            .parsed
+            .remove_target_pypi_dependency("xpackage", &Platform::Linux64)
+            .unwrap();
+        manifest
+            .parsed
+            .remove_target_pypi_dependency("jax", &Platform::Win64)
+            .unwrap();
+        assert_debug_snapshot!(manifest.parsed);
     }
 
     #[test]

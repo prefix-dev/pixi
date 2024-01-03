@@ -58,7 +58,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if args.pypi {
                 let pkg_name = rip::types::PackageName::from_str(dep.as_source())
                     .expect("Expected dependency name.");
-                DependencyRemovalResult::PyPi(project.manifest.remove_pypi_dependency(&pkg_name))
+                DependencyRemovalResult::PyPi(if let Some(p) = &args.platform {
+                    project.manifest.remove_target_pypi_dependency(&pkg_name, p)
+                } else {
+                    project.manifest.remove_pypi_dependency(&pkg_name)
+                })
             } else {
                 DependencyRemovalResult::Conda(if let Some(p) = &args.platform {
                     project
