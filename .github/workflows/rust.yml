@@ -35,7 +35,7 @@ jobs:
     name: Check intra-doc links
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - run: |
           for package in $(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | .name'); do
@@ -46,7 +46,7 @@ jobs:
     name: Format and Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -61,7 +61,7 @@ jobs:
     name: Extract crate metadata
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Extract crate information
         id: crate_metadata
         run: |
@@ -111,7 +111,7 @@ jobs:
       CARGO_PROFILE_OPT_LEVEL: s
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -326,7 +326,7 @@ jobs:
       - name: "Artifact upload: windows installer"
         continue-on-error: true
         if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pixi-${{ matrix.target }}.msi
           path: target/wix/pixi-${{ matrix.target }}.msi
