@@ -375,7 +375,6 @@ pixi run test
     system-requirements = {cuda = "12.1"}
 
     [feature.cuda.tasks]
-    # these tasks override the default tasks
     train-model = "python train.py --cuda"
     evaluate-model = "python test.py --cuda"
 
@@ -386,7 +385,6 @@ pixi run test
     platforms = ["osx-arm64"]
 
     [feature.mlx.tasks]
-    # these tasks override the default tasks
     train-model = "python train.py --mlx"
     evaluate-model = "python test.py --mlx"
 
