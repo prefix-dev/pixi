@@ -75,34 +75,34 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // updating prefix after removing from toml
     let _ = get_up_to_date_prefix(&project, LockFileUsage::Update, false, None).await?;
-
-    for result in results.iter() {
-        let removed_and_spec = match result {
-            DependencyRemovalResult::Conda(Ok(pixi_result)) => {
-                (pixi_result.0.to_string(), pixi_result.1.to_string())
-            }
-            DependencyRemovalResult::PyPi(Ok(pypi_result)) => (
-                pypi_result.0.as_str().to_string(),
-                pypi_result.1.to_string(),
-            ),
-            DependencyRemovalResult::Conda(Err(e)) | DependencyRemovalResult::PyPi(Err(e)) => {
-                eprintln!("{e}");
-                return Ok(());
-            }
-        };
-
-        let table_name = if let Some(p) = &args.platform {
-            format!("target.{}.{}", p.as_str(), spec_type.name())
-        } else {
-            spec_type.name().to_string()
-        };
-
+    let table_name = if let Some(p) = &args.platform {
+        format!("target.{}.{}", p.as_str(), spec_type.name())
+    } else {
+        spec_type.name().to_string()
+    };
+    fn print_ok_dep_removal(pkg_name: &String, pkg_extras: &String, table_name: &String) {
         eprintln!(
             "Removed {} from [{}]",
-            console::style(format!("{} {}", removed_and_spec.0, removed_and_spec.1)).bold(),
-            console::style(table_name).bold(),
-        );
+            console::style(format!("{pkg_name} {pkg_extras}")).bold(),
+            console::style(table_name).bold()
+        )
     }
-
+    for result in results.iter() {
+        match result {
+            DependencyRemovalResult::Conda(Ok(pixi_result)) => print_ok_dep_removal(
+                &pixi_result.0.to_string(),
+                &pixi_result.1.to_string(),
+                &table_name,
+            ),
+            DependencyRemovalResult::PyPi(Ok(pypi_result)) => print_ok_dep_removal(
+                &pypi_result.0.as_str().to_string(),
+                &pypi_result.1.to_string(),
+                &table_name,
+            ),
+            DependencyRemovalResult::Conda(Err(e)) | DependencyRemovalResult::PyPi(Err(e)) => {
+                eprintln!("{e}")
+            }
+        }
+    }
     Ok(())
 }
