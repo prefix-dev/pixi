@@ -4,8 +4,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    labels:
-      - dependencies
     commit-message:
       prefix: bump
     ignore:
@@ -18,8 +16,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    labels:
-      - dependencies
     commit-message:
       prefix: chore(ci)
     groups:
