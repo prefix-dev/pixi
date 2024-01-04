@@ -2,7 +2,7 @@ All logic regarding the decision which dependencies can be installed from which 
 
 The actual code regarding this is in the [`rattler_solve`](https://github.com/mamba-org/rattler/blob/02e68c9539c6009cc1370fbf46dc69ca5361d12d/crates/rattler_solve/src/resolvo/mod.rs) crate.
 This might however be hard to read.
-Therefore, this document will continue with pseudocode.
+Therefore, this document will continue with simplified flow charts.
 
 # Channel specific dependencies
 When a user defines a channel per dependency, the solver needs to know the other channels are unusable for this dependency.
@@ -13,57 +13,49 @@ channels = ["conda-forge", "my-channel"]
 [dependencies]
 packgex = { version = "*", channel = "my-channel" }
 ```
-This will ensure you will only get that package from that channel.
-The pseudocode of the logic that excludes all other channels looks like this:
-```rust
-// Given a set of requirements and channels
-let requirements = vec![packgex];
-let channels = vec![conda_forge, my_channel];
+In the `packagex` example, the solver will understand that the package is only available in `my-channel` and will not look for it in `conda-forge`.
 
-// Check each channel
-for channel in channels {
-    // Search for the required package in the channel
-    for requirement in requirements {
-        let package = channel.packages.find(requirement.name);
-        if package.is_some() && requirement.channel != channel {
-            // Exclude packages from other channels
-            candidates.excluded.push(package);
-        }
-    }
-}
+The flowchart of the logic that excludes all other channels:
+
+``` mermaid
+flowchart TD
+    A[Start] --> B[Given a Dependency]
+    B --> C{Channel Specific Dependency?}
+    C -->|Yes| D[Exclude All Other Channels for This Package]
+    C -->|No| E{Any Other Dependencies?}
+    E -->|Yes| B
+    E -->|No| F[End]
+    D --> E
 ```
-This ensures that if a dependency's channel is specified, the solver only considers that channel for the dependency.
 
 # Channel priority
 Channel priority is dictated by the order in the `project.channels` array, where the first channel is the highest priority.
 For instance:
 ```toml
 [project]
-channels = ["conda-forge", "my-channel"]
+channels = ["conda-forge", "my-channel", "your-channel"]
 ```
-If the package is found in `conda-forge` the solver will not look for it in `my-channel`, because we tell the solver they are excluded.
-Here is the pseudocode for that logic:
-```rust
-// Given a set of requirements and channels
-let requirements = vec![packgex];
-let channels = vec![conda_forge, my_channel];
-
-for requirement in requirements{
-    let mut first_channel = None;
-
-    for channel in channels{
-        if channel.packages.find(requirement.name) != None {
-            if first_channel.is_none() || channel.name == first_channel {
-                first_channel = Some(channel.name);
-                candidates.push(package);
-            } else {
-                // If the package is found in a different channel, add it to the excluded candidates
-                candidates.excluded.push(package);
-            }
-        }
-    }
-}
+If the package is found in `conda-forge` the solver will not look for it in `my-channel` and `your-channel`, because it tells the solver they are excluded.
+If the package is not found in `conda-forge` the solver will look for it in `my-channel` and if it **is** found there it will tell the solver to exclude `your-channel` for this package.
+This diagram explains the logic:
+``` mermaid
+flowchart TD
+    A[Start] --> B[Given a Dependency]
+    B --> C{Loop Over Channels}
+    C --> D{Package in This Channel?}
+    D -->|No| C
+    D -->|Yes| E{"This the first channel
+     for this package?"}
+    E -->|Yes| F[Include Package in Candidates]
+    E -->|No| G[Exclude Package from Candidates]
+    F --> H{Any Other Channels?}
+    G --> H
+    H -->|Yes| C
+    H -->|No| I{Any Other Dependencies?}
+    I -->|No| J[End]
+    I -->|Yes| B
 ```
+
 This method ensures the solver only adds a package to the candidates if it's found in the highest priority channel available.
 If you have 10 channels and the package is found in the 5th channel it will exclude the next 5 channels from the candidates if they also contain the package.
 
