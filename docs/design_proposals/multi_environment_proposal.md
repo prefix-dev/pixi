@@ -195,8 +195,9 @@ pixi run test
 ```
 
 ## Important links
-- Initial writeup of the proposal: https://gist.github.com/0xbe7a/bbf8a323409be466fe1ad77aa6dd5428
-- GitHub project: https://github.com/orgs/prefix-dev/projects/10
+
+- Initial writeup of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.com/0xbe7a/bbf8a323409be466fe1ad77aa6dd5428)
+- GitHub project: [#10](https://github.com/orgs/prefix-dev/projects/10)
 
 ## Real world example use cases
 ??? tip "Polarify test setup"
@@ -344,4 +345,73 @@ pixi run test
     RUN pixi run --env prod postinstall
     EXPOSE 8080
     CMD ["/usr/local/bin/pixi", "run", "--env", "prod", "serve"]
+    ```
+
+??? tip "Multiple machines from one project"
+    This is an example for an ML project that should be executable on a machine that supports `cuda` and `mlx`. It should also be executable on machines that don't support `cuda` or `mlx`, we use the `cpu` feature for this.
+    ```toml title="pixi.toml"
+    [project]
+    name = "my-ml-project"
+    description = "A project that does ML stuff"
+    authors = ["Your Name <your.name@gmail.com>"]
+    channels = ["conda-forge", "pytorch"]
+    platforms = [] # there is no platform that supports all features
+
+    [tasks]
+    train-model = "python train.py"
+    evaluate-model = "python test.py"
+
+    [dependencies]
+    python = "3.11.*"
+    pytorch = {version = ">=2.0.1", channel = "pytorch"}
+    torchvision = {version = ">=0.15", channel = "pytorch"}
+    polars = ">=0.20,<0.21"
+    matplotlib-base = ">=3.8.2,<3.9"
+    ipykernel = ">=6.28.0,<6.29"
+
+    [feature.cuda]
+    platforms = ["win-64", "linux-64"]
+    channels = [{name = "nvidia", priority = "-1"}, "pytorch"]
+    system-requirements = {cuda = "12.1"}
+
+    [feature.cuda.tasks]
+    train-model = "python train.py --cuda"
+    evaluate-model = "python test.py --cuda"
+
+    [feature.cuda.dependencies]
+    pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
+
+    [feature.mlx]
+    platforms = ["osx-arm64"]
+
+    [feature.mlx.tasks]
+    train-model = "python train.py --mlx"
+    evaluate-model = "python test.py --mlx"
+
+    [feature.mlx.dependencies]
+    mlx = ">=0.5.0,<0.6.0"
+
+    [feature.cpu]
+    platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
+    [environments]
+    cuda = ["cuda"]
+    mlx = ["mlx"]
+    default = ["cpu"]
+    ```
+
+    ```shell title="Running the project on a cuda machine"
+    pixi run train-model --env cuda
+    # will execute `python train.py --cuda`
+    # fails if not on linux-64 or win-64 with cuda 12.1
+    ```
+
+    ```shell title="Running the project with mlx"
+    pixi run train-model --env mlx
+    # will execute `python train.py --mlx`
+    # fails if not on osx-arm64
+    ```
+
+    ```shell title="Running the project on a machine without cuda or mlx"
+    pixi run train-model
     ```
