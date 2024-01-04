@@ -352,9 +352,6 @@ async fn resolve_platform(
         locked_packages.add_locked_package(locked_package);
     }
 
-    // Add pypi packages
-    // let locked_packages =
-    //     resolve_pypi(project, &mut records, locked_packages, platform, &pb).await?;
 
     Ok(locked_packages)
 }
