@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::Parser;
-use miette::miette;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 
 use crate::environment::LockFileUsage;
@@ -100,6 +99,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             console::style(table_name).bold()
         )
     }
+    let mut all_errors: Vec<String> = Vec::new();
     for result in results.iter() {
         match result {
             DependencyRemovalResult::Conda(Ok(pixi_result)) => print_ok_dep_removal(
@@ -115,9 +115,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             DependencyRemovalResult::Conda(Err(e))
             | DependencyRemovalResult::PyPi(Err(e))
             | DependencyRemovalResult::Error(e) => {
-                return Err(miette!("{e}"));
+                all_errors.push(format!("{e}"));
             }
         }
     }
-    Ok(())
+
+    if all_errors.is_empty() {
+        Ok(())
+    } else {
+        Err(miette::miette!(all_errors.join("\n")))
+    }
 }
