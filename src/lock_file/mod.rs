@@ -352,7 +352,6 @@ async fn resolve_platform(
         locked_packages.add_locked_package(locked_package);
     }
 
-
     Ok(locked_packages)
 }
 
