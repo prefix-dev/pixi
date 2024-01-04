@@ -57,7 +57,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     project.save()?;
 
     // updating prefix after removing from toml
-    let _ = get_up_to_date_prefix(&project, LockFileUsage::Update).await?;
+    let _ = get_up_to_date_prefix(&project, LockFileUsage::Update, false, None).await?;
 
     for (removed, spec) in results.iter().flatten() {
         let table_name = if let Some(p) = &args.platform {

@@ -1,3 +1,4 @@
+use crate::environment::PythonStatus;
 use crate::prefix::Prefix;
 use crate::progress;
 use crate::progress::ProgressBarMessageFormatter;
@@ -6,8 +7,8 @@ use indexmap::IndexSet;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
-use rattler::install::Transaction;
-use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
+
+use rattler_conda_types::Platform;
 use rattler_lock::{CondaLock, LockedDependency};
 use rip::artifacts::wheel::{InstallPaths, UnpackWheelOptions};
 use rip::artifacts::Wheel;
@@ -32,22 +33,25 @@ pub async fn update_python_distributions(
     prefix: &Prefix,
     lock_file: &CondaLock,
     platform: Platform,
-    transaction: &Transaction<PrefixRecord, RepoDataRecord>,
+    status: &PythonStatus,
 ) -> miette::Result<()> {
-    // Get the python info from the transaction
-    let Some(python_info) = transaction.python_info.as_ref() else {
-        return Ok(());
+    let python_info = match status {
+        PythonStatus::Changed { new, .. }
+        | PythonStatus::Unchanged(new)
+        | PythonStatus::Added { new } => new,
+        PythonStatus::Removed { .. } | PythonStatus::DoesNotExist => {
+            // No python interpreter in the environment, so there is nothing to do here.
+            return Ok(());
+        }
     };
 
     // Determine where packages would have been installed
-    let install_paths = InstallPaths::for_venv(
-        (
-            python_info.short_version.0 as u32,
-            python_info.short_version.1 as u32,
-            0,
-        ),
-        platform.is_windows(),
+    let python_version = (
+        python_info.short_version.0 as u32,
+        python_info.short_version.1 as u32,
+        0,
     );
+    let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
 
     // Determine the current python distributions in those locations
     let current_python_packages = find_distributions_in_venv(prefix.root(), &install_paths)
@@ -89,7 +93,7 @@ pub async fn update_python_distributions(
     let package_install_pb = install_python_distributions(
         prefix,
         install_paths,
-        &prefix.root().join(&python_info.path),
+        &prefix.root().join(python_info.path()),
         package_stream,
     )
     .await?;
@@ -297,22 +301,20 @@ fn stream_python_artifacts<'a>(
 pub fn remove_old_python_distributions(
     prefix: &Prefix,
     platform: Platform,
-    transaction: &Transaction<PrefixRecord, RepoDataRecord>,
+    python_changed: &PythonStatus,
 ) -> miette::Result<()> {
-    // Determine if the current distribution is the same as the desired distribution.
-    let Some(previous_python_installation) = transaction.current_python_info.as_ref() else {
-        return Ok(());
+    // If the python version didn't change, there is nothing to do here.
+    let python_version = match python_changed {
+        PythonStatus::Removed { old } | PythonStatus::Changed { old, .. } => old,
+        PythonStatus::Added { .. } | PythonStatus::DoesNotExist | PythonStatus::Unchanged(_) => {
+            return Ok(())
+        }
     };
-    if Some(previous_python_installation.short_version)
-        == transaction.python_info.as_ref().map(|p| p.short_version)
-    {
-        return Ok(());
-    }
 
-    // Determine the current python distributions in its install locations
+    // Get the interpreter version from the info
     let python_version = (
-        previous_python_installation.short_version.0 as u32,
-        previous_python_installation.short_version.1 as u32,
+        python_version.short_version.0 as u32,
+        python_version.short_version.1 as u32,
         0,
     );
     let install_paths = InstallPaths::for_venv(python_version, platform.is_windows());
