@@ -9,7 +9,9 @@ use dirs::home_dir;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord};
+use rattler_conda_types::{
+    Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
+};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -329,12 +331,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Find the MatchSpec we want to install
     let package_matchspec = MatchSpec::from_str(&args.package).into_diagnostic()?;
-    let package_name = package_matchspec.name.clone().ok_or_else(|| {
-        miette::miette!(
-            "could not find package name in MatchSpec {}",
-            package_matchspec
-        )
-    })?;
+    let package_name = package_name(&package_matchspec)?;
+
     let platform = Platform::current();
 
     // Fetch sparse repodata
@@ -347,6 +345,66 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .into_diagnostic()?;
 
+    // Install the package
+    let (prefix_package, channel, scripts) = install_package(
+        package_matchspec,
+        available_packages,
+        &channel_config,
+        platform,
+    )
+    .await?;
+
+    let whitespace = console::Emoji("  ", "").to_string();
+    eprintln!(
+        "{}Installed package {} {} {} from {}",
+        console::style(console::Emoji("✔ ", "")).green(),
+        console::style(
+            prefix_package
+                .repodata_record
+                .package_record
+                .name
+                .as_source()
+        )
+        .bold(),
+        console::style(prefix_package.repodata_record.package_record.version).bold(),
+        console::style(prefix_package.repodata_record.package_record.build).bold(),
+        channel,
+    );
+
+    let BinDir(bin_dir) = BinDir::from_existing().await?;
+    let script_names = scripts
+        .into_iter()
+        .map(|path| {
+            path.strip_prefix(&bin_dir)
+                .expect("script paths were constructed by joining onto BinDir")
+                .to_string_lossy()
+                .to_string()
+        })
+        .join(&format!("\n{whitespace} -  "));
+
+    if is_bin_folder_on_path() {
+        eprintln!(
+            "{whitespace}These apps are now globally available:\n{whitespace} -  {script_names}",
+        )
+    } else {
+        let bin_dir = format!("~/{BIN_DIR}");
+        eprintln!("{whitespace}These apps have been added to {}\n{whitespace} -  {script_names}\n\n{} To use them, make sure to add {} to your PATH",
+                      console::style(&bin_dir).bold(),
+                      console::style("!").yellow().bold(),
+                      console::style(&bin_dir).bold()
+            )
+    }
+
+    Ok(())
+}
+
+pub(super) async fn install_package(
+    package_matchspec: MatchSpec,
+    available_packages: Vec<Vec<RepoDataRecord>>,
+    channel_config: &ChannelConfig,
+    platform: Platform,
+) -> miette::Result<(PrefixRecord, String, Vec<PathBuf>)> {
+    let package_name = package_name(&package_matchspec)?;
     // Solve for environment
     // Construct a solver task that we can start solving.
     let task = rattler_solve::SolverTask {
@@ -395,7 +453,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Find the installed package in the environment
     let prefix_package = find_designated_package(&prefix, &package_name).await?;
-    let channel = Channel::from_str(&prefix_package.repodata_record.channel, &channel_config)
+    let channel = Channel::from_str(&prefix_package.repodata_record.channel, channel_config)
         .map(|ch| friendly_channel_name(&ch))
         .unwrap_or_else(|_| prefix_package.repodata_record.channel.clone());
 
@@ -433,50 +491,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             console::style(prefix_package.repodata_record.package_record.build).bold(),
             channel,
         );
-    } else {
-        let whitespace = console::Emoji("  ", "").to_string();
-        eprintln!(
-            "{}Installed package {} {} {} from {}",
-            console::style(console::Emoji("✔ ", "")).green(),
-            console::style(
-                prefix_package
-                    .repodata_record
-                    .package_record
-                    .name
-                    .as_source()
-            )
-            .bold(),
-            console::style(prefix_package.repodata_record.package_record.version).bold(),
-            console::style(prefix_package.repodata_record.package_record.build).bold(),
-            channel,
-        );
-
-        let BinDir(bin_dir) = BinDir::from_existing().await?;
-        let script_names = scripts
-            .into_iter()
-            .map(|path| {
-                path.strip_prefix(&bin_dir)
-                    .expect("script paths were constructed by joining onto BinDir")
-                    .to_string_lossy()
-                    .to_string()
-            })
-            .join(&format!("\n{whitespace} -  "));
-
-        if is_bin_folder_on_path() {
-            eprintln!(
-                "{whitespace}These apps are now globally available:\n{whitespace} -  {script_names}",
-            )
-        } else {
-            let bin_dir = format!("~/{BIN_DIR}");
-            eprintln!("{whitespace}These apps have been added to {}\n{whitespace} -  {script_names}\n\n{} To use them, make sure to add {} to your PATH",
-                      console::style(&bin_dir).bold(),
-                      console::style("!").yellow().bold(),
-                      console::style(&bin_dir).bold()
-            )
-        }
     }
 
-    Ok(())
+    Ok((prefix_package, channel, scripts))
+}
+
+pub(super) fn package_name(package_matchspec: &MatchSpec) -> miette::Result<PackageName> {
+    package_matchspec.name.clone().ok_or_else(|| {
+        miette::miette!(
+            "could not find package name in MatchSpec {}",
+            package_matchspec
+        )
+    })
 }
 
 /// Returns the string to add for all arguments passed to the script
