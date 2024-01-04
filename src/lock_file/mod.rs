@@ -17,7 +17,7 @@ use rattler_lock::{
         CondaLockedDependencyBuilder, LockFileBuilder, LockedPackagesBuilder,
         PypiLockedDependencyBuilder,
     },
-    CondaLock, PackageHashes,
+    CondaLock, LockedDependencyKind, PackageHashes,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
@@ -222,25 +222,29 @@ pub async fn update_lock_file_for_pypi(
     for locked_packages in result? {
         builder = builder.add_locked_packages(locked_packages);
     }
-    let conda_lock = builder.build().into_diagnostic()?;
+    let conda_lock_pypi_only = builder.build().into_diagnostic()?;
 
     // TODO: think of a better way to do this
     // Seeing as we are not using the content-hash anyways this seems to be fine
     let latest_lock = CondaLock {
         metadata: lock_for_conda.metadata,
-        package: Vec::from_iter(
-            conda_lock
-                .package
-                .iter()
-                .chain(lock_for_conda.package.iter())
-                .cloned(),
-        ),
+        package: conda_lock_pypi_only
+            .package
+            .into_iter()
+            .chain(
+                lock_for_conda
+                    .package
+                    .into_iter()
+                    .filter(|p| matches!(p.kind, LockedDependencyKind::Conda(_))),
+            )
+            .collect(),
     };
 
     // Write the conda lock to disk
-    conda_lock
+    latest_lock
         .to_path(&project.lock_file_path())
         .into_diagnostic()?;
+
     Ok(latest_lock)
 }
 
