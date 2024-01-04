@@ -39,6 +39,7 @@ pub struct Args {
 enum DependencyRemovalResult {
     Conda(miette::Result<(String, NamelessMatchSpec)>),
     PyPi(miette::Result<(rip::types::PackageName, PyPiRequirement)>),
+    Error(miette::Report),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -56,13 +57,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .iter()
         .map(|dep| {
             if args.pypi {
-                let pkg_name = rip::types::PackageName::from_str(dep.as_source())
-                    .expect("Expected dependency name.");
-                DependencyRemovalResult::PyPi(if let Some(p) = &args.platform {
-                    project.manifest.remove_target_pypi_dependency(&pkg_name, p)
-                } else {
-                    project.manifest.remove_pypi_dependency(&pkg_name)
-                })
+                match rip::types::PackageName::from_str(dep.as_source()) {
+                    Ok(pkg_name) => {
+                        if let Some(p) = &args.platform {
+                            DependencyRemovalResult::PyPi(
+                                project.manifest.remove_target_pypi_dependency(&pkg_name, p),
+                            )
+                        } else {
+                            DependencyRemovalResult::PyPi(
+                                project.manifest.remove_pypi_dependency(&pkg_name),
+                            )
+                        }
+                    }
+                    Err(e) => DependencyRemovalResult::Error(e.into()),
+                }
             } else {
                 DependencyRemovalResult::Conda(if let Some(p) = &args.platform {
                     project
@@ -103,7 +111,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &pypi_result.1.to_string(),
                 &table_name,
             ),
-            DependencyRemovalResult::Conda(Err(e)) | DependencyRemovalResult::PyPi(Err(e)) => {
+            DependencyRemovalResult::Conda(Err(e))
+            | DependencyRemovalResult::PyPi(Err(e))
+            | DependencyRemovalResult::Error(e) => {
                 eprintln!("{e}")
             }
         }
