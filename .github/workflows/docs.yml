@@ -35,13 +35,13 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: prefix-dev/setup-pixi@v0.3.0
+      - uses: prefix-dev/setup-pixi@v0.4.1
         with:
           pixi-version: v0.6.0
           cache: true
 
       - name: Setup Pages
-        uses: actions/configure-pages@v3
+        uses: actions/configure-pages@v4
 
       - name: Build pixi Documentation
         run: pixi run build-docs
@@ -58,7 +58,7 @@ jobs:
       - run: chmod -c -R +rX site/
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v2
+        uses: actions/upload-pages-artifact@v3
         with:
           path: "site"
 
@@ -73,4 +73,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v2
+        uses: actions/deploy-pages@v4

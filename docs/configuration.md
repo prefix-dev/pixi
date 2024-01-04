@@ -244,7 +244,7 @@ Even if the dependency defines a channel that channel should be added to the `pr
 [dependencies]
 python = ">3.9,<=3.11"
 rust = "1.72"
-pytoch-cpu = { version = "~=1.1", channel = "pytorch" }
+pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 ```
 
 ### `pypi-dependencies` (Beta feature)
@@ -299,7 +299,7 @@ Different from `dependencies` and `host-dependencies` these packages are install
 This enables cross-compiling from one machine architecture to another.
 
 ```toml
-[build-depencencies]
+[build-dependencies]
 cmake = "~=3.24"
 ```
 
@@ -371,7 +371,7 @@ scripts = ["setup.bat"]
 [target.win-64.dependencies]
 msmpi = "~=10.1.1"
 
-[target.win-64.build-dependecies]
+[target.win-64.build-dependencies]
 vs2022_win-64 = "19.36.32532"
 
 [target.win-64.tasks]
