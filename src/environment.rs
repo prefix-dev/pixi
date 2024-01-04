@@ -8,6 +8,7 @@ use crate::lock_file::lock_file_satisfies_project;
 use rattler::install::{PythonInfo, Transaction};
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::CondaLock;
+use rattler_repodata_gateway::sparse::SparseRepoData;
 use rip::index::PackageDb;
 use std::{io::ErrorKind, path::Path};
 
@@ -114,10 +115,16 @@ impl LockFileUsage {
 
 /// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
 /// up to date it is updated.
+///
+/// The `sparse_repo_data` is used when the lock-file is update. We pass it into this function to
+/// make sure the data is not loaded twice since the repodata takes up a lot of memory and takes a
+/// while to load. If `sparse_repo_data` is `None` it will be downloaded. If the lock-file is not
+/// updated, the `sparse_repo_data` is ignored.
 pub async fn get_up_to_date_prefix(
     project: &Project,
     usage: LockFileUsage,
     no_install: bool,
+    sparse_repo_data: Option<Vec<SparseRepoData>>,
 ) -> miette::Result<Prefix> {
     // Make sure the project is in a sane state
     sanity_check_project(project)?;
@@ -152,7 +159,7 @@ pub async fn get_up_to_date_prefix(
     // First lock and install the conda environment
     // After which we should have a usable prefix to use for pypi resolution.
     if update_lock_file {
-        lock_file = lock_file::update_lock_file_conda(project, lock_file, None).await?;
+        lock_file = lock_file::update_lock_file_conda(project, lock_file, sparse_repo_data).await?;
     }
 
     let python_status = if !no_install {

@@ -222,7 +222,7 @@ pub async fn add_pypi_specs_to_project(
         LockFileUsage::Update
     };
 
-    get_up_to_date_prefix(project, lock_file_usage, no_install).await?;
+    get_up_to_date_prefix(project, lock_file_usage, no_install, None).await?;
 
     project.save()?;
 
@@ -325,7 +325,7 @@ pub async fn add_conda_specs_to_project(
     } else {
         LockFileUsage::Update
     };
-    get_up_to_date_prefix(project, lock_file_usage, no_install).await?;
+    get_up_to_date_prefix(project, lock_file_usage, no_install, Some(sparse_repo_data)).await?;
     project.save()?;
 
     Ok(())

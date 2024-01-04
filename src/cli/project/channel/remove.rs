@@ -48,7 +48,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .remove_channels(channels_to_remove.iter().map(|(name, _channel)| name))?;
 
     // Try to update the lock-file without the removed channels
-    get_up_to_date_prefix(&project, LockFileUsage::Update, args.no_install).await?;
+    get_up_to_date_prefix(&project, LockFileUsage::Update, args.no_install, None).await?;
     project.save()?;
 
     // Report back to the user

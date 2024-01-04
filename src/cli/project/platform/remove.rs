@@ -45,7 +45,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .manifest
         .remove_platforms(platforms_to_remove.iter().map(|p| p.to_string()))?;
 
-    get_up_to_date_prefix(&project, LockFileUsage::Update, args.no_install).await?;
+    get_up_to_date_prefix(&project, LockFileUsage::Update, args.no_install, None).await?;
     project.save()?;
 
     // Report back to the user
