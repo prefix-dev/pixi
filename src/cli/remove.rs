@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::Parser;
+use miette::miette;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 
 use crate::environment::LockFileUsage;
@@ -114,7 +115,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             DependencyRemovalResult::Conda(Err(e))
             | DependencyRemovalResult::PyPi(Err(e))
             | DependencyRemovalResult::Error(e) => {
-                eprintln!("{e}")
+                return Err(miette!("{e}"));
             }
         }
     }
