@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use rattler_conda_types::{PackageName, Platform};
 
+use crate::environment::LockFileUsage;
 use crate::{environment::get_up_to_date_prefix, project::SpecType, Project};
 
 /// Remove the dependency from the project
@@ -44,9 +45,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .iter()
         .map(|dep| {
             if let Some(p) = &args.platform {
-                project.remove_target_dependency(dep, &spec_type, p)
+                project
+                    .manifest
+                    .remove_target_dependency(dep, &spec_type, p)
             } else {
-                project.remove_dependency(dep, &spec_type)
+                project.manifest.remove_dependency(dep, &spec_type)
             }
         })
         .collect::<Vec<_>>();
@@ -54,7 +57,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     project.save()?;
 
     // updating prefix after removing from toml
-    let _ = get_up_to_date_prefix(&project, false, false).await?;
+    let _ = get_up_to_date_prefix(&project, LockFileUsage::Update, false, None).await?;
 
     for (removed, spec) in results.iter().flatten() {
         let table_name = if let Some(p) = &args.platform {

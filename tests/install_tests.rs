@@ -3,7 +3,7 @@ mod common;
 use crate::common::builders::string_from_iter;
 use crate::common::package_database::{Package, PackageDatabase};
 use common::{LockFileExt, PixiControl};
-use pixi::cli::run;
+use pixi::cli::{run, LockFileUsageArgs};
 use serial_test::serial;
 use tempfile::TempDir;
 
@@ -163,7 +163,10 @@ async fn install_frozen() {
     // Check if running with frozen doesn't suddenly install the latest update.
     let result = pixi
         .run(run::Args {
-            frozen: true,
+            lock_file_usage: LockFileUsageArgs {
+                frozen: true,
+                ..Default::default()
+            },
             task: string_from_iter(["python", "--version"]),
             ..Default::default()
         })

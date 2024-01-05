@@ -5,6 +5,7 @@ use itertools::Itertools;
 use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use rattler_conda_types::Platform;
 
+use crate::environment::LockFileUsage;
 use crate::task::{
     ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TraversalError,
 };
@@ -30,13 +31,8 @@ pub struct Args {
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
-    /// Require pixi.lock is up-to-date
-    #[clap(long, conflicts_with = "frozen")]
-    pub locked: bool,
-
-    /// Don't check if pixi.lock is up-to-date, install as lockfile states
-    #[clap(long, conflicts_with = "locked")]
-    pub frozen: bool,
+    #[clap(flatten)]
+    pub lock_file_usage: super::LockFileUsageArgs,
 }
 
 /// CLI entry point for `pixi run`
@@ -61,7 +57,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ExecutableTask::from_cmd_args(&project, task_args, Some(Platform::current()));
 
     // Get the environment to run the commands in.
-    let command_env = get_task_env(&project, args.locked, args.frozen).await?;
+    let command_env = get_task_env(&project, args.lock_file_usage.into()).await?;
 
     // Traverse the task and its dependencies. Execute each task in order.
     match executable_task
@@ -135,6 +131,7 @@ async fn execute_task<'p>(
     if status_code == 127 {
         let available_tasks = task
             .project()
+            .manifest
             .tasks(Some(Platform::current()))
             .into_keys()
             .sorted()
@@ -163,11 +160,10 @@ async fn execute_task<'p>(
 /// variables.
 pub async fn get_task_env(
     project: &Project,
-    frozen: bool,
-    locked: bool,
+    lock_file_usage: LockFileUsage,
 ) -> miette::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
-    let prefix = get_up_to_date_prefix(project, frozen, locked).await?;
+    let prefix = get_up_to_date_prefix(project, lock_file_usage, false, None).await?;
 
     // Get environment variables from the activation
     let activation_env = run_activation_async(project, prefix).await?;
@@ -232,7 +228,7 @@ async fn run_activation(
             conda_prefix: None,
 
             // Prepending environment paths so they get found first.
-            path_modification_behaviour: PathModificationBehavior::Prepend,
+            path_modification_behavior: PathModificationBehavior::Prepend,
         })
     })
     .await

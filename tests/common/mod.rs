@@ -24,6 +24,7 @@ use rattler_lock::{CondaLock, LockedDependencyKind};
 
 use miette::{Diagnostic, IntoDiagnostic};
 use pep508_rs::VersionOrUrl;
+use pixi::cli::LockFileUsageArgs;
 use pixi::task::TaskExecutionError;
 use std::{
     collections::HashSet,
@@ -170,7 +171,7 @@ impl PixiControl {
 
     /// Loads the project manifest and returns it.
     pub fn project(&self) -> miette::Result<Project> {
-        Project::load(&self.manifest_path())
+        Project::load_or_else_discover(Some(&self.manifest_path()))
     }
 
     /// Get the path to the project
@@ -239,8 +240,7 @@ impl PixiControl {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
         let project = self.project()?;
         let task = ExecutableTask::from_cmd_args(&project, args.task, Some(Platform::current()));
-
-        let task_env = get_task_env(&project, args.frozen, args.locked).await?;
+        let task_env = get_task_env(&project, args.lock_file_usage.into()).await?;
 
         #[derive(Error, Debug, Diagnostic)]
         enum RunError {
@@ -279,15 +279,17 @@ impl PixiControl {
         InstallBuilder {
             args: Args {
                 manifest_path: Some(self.manifest_path()),
-                locked: false,
-                frozen: false,
+                lock_file_usage: LockFileUsageArgs {
+                    frozen: false,
+                    locked: false,
+                },
             },
         }
     }
 
     /// Get the associated lock file
     pub async fn lock_file(&self) -> miette::Result<CondaLock> {
-        let project = Project::load(&self.manifest_path())?;
+        let project = Project::load_or_else_discover(Some(&self.manifest_path()))?;
         pixi::lock_file::load_lock_file(&project).await
     }
 

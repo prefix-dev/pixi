@@ -20,12 +20,13 @@ pub async fn add_remove_task() {
         .unwrap();
 
     let project = pixi.project().unwrap();
-    let task = project.manifest.tasks.get("test").unwrap();
+    let tasks = project.tasks(None);
+    let task = tasks.get("test").unwrap();
     assert!(matches!(task, Task::Plain(s) if s == "echo hello"));
 
     // Remove the task
     pixi.tasks().remove("test", None).await.unwrap();
-    assert_eq!(pixi.project().unwrap().manifest.tasks.len(), 0);
+    assert_eq!(pixi.project().unwrap().tasks(None).len(), 0);
 }
 
 #[tokio::test]
@@ -47,8 +48,9 @@ pub async fn add_command_types() {
         .unwrap();
 
     let project = pixi.project().unwrap();
-    let task2 = project.manifest.tasks.get("test2").unwrap();
-    let task = project.manifest.tasks.get("test").unwrap();
+    let tasks = project.tasks(None);
+    let task2 = tasks.get("test2").unwrap();
+    let task = tasks.get("test").unwrap();
     assert!(matches!(task2, Task::Execute(cmd) if matches!(cmd.cmd, CmdArgs::Single(_))));
     assert!(matches!(task2, Task::Execute(cmd) if !cmd.depends_on.is_empty()));
 
@@ -65,7 +67,8 @@ pub async fn add_command_types() {
         .execute()
         .unwrap();
     let project = pixi.project().unwrap();
-    let task = project.manifest.tasks.get("testing").unwrap();
+    let tasks = project.tasks(None);
+    let task = tasks.get("testing").unwrap();
     assert!(matches!(task, Task::Alias(a) if a.depends_on.get(0).unwrap() == "test"));
 }
 
@@ -96,8 +99,7 @@ async fn test_alias() {
         .run(Args {
             task: vec!["helloworld".to_string()],
             manifest_path: None,
-            locked: false,
-            frozen: false,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -137,11 +139,9 @@ pub async fn add_remove_target_specific_task() {
         .await
         .unwrap();
     assert_eq!(
-        pixi.project()
-            .unwrap()
-            .target_specific_tasks(Platform::Win64)
-            .len(),
-        0
+        project.tasks(Some(Platform::Win64)).len(),
+        // The default task is still there
+        1
     );
 }
 
@@ -164,8 +164,7 @@ async fn test_cwd() {
         .run(Args {
             task: vec!["pwd-test".to_string()],
             manifest_path: None,
-            locked: false,
-            frozen: false,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -185,8 +184,7 @@ async fn test_cwd() {
         .run(Args {
             task: vec!["unknown-cwd".to_string()],
             manifest_path: None,
-            locked: false,
-            frozen: false,
+            ..Default::default()
         })
         .await
         .is_err());

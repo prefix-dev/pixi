@@ -1,27 +1,24 @@
-use crate::environment::{update_prefix, verify_prefix_location_unchanged};
-use crate::prefix::Prefix;
-use crate::project::DependencyType::CondaDependency;
-use crate::project::{DependencyType, SpecType};
 use crate::{
     consts,
-    lock_file::{load_lock_file, update_lock_file},
-    project::python::PyPiRequirement,
-    project::Project,
-    virtual_packages::get_minimal_virtual_packages,
+    environment::{get_up_to_date_prefix, verify_prefix_location_unchanged, LockFileUsage},
+    project::{python::PyPiRequirement, DependencyType, Project, SpecType},
 };
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
+
 use miette::{IntoDiagnostic, WrapErr};
-use rattler_conda_types::version_spec::{LogicalOperator, RangeOperator};
 use rattler_conda_types::{
+    version_spec::{LogicalOperator, RangeOperator},
     MatchSpec, NamelessMatchSpec, PackageName, Platform, Version, VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    str::FromStr,
+};
 
 /// Adds a dependency to the project
 #[derive(Parser, Debug, Default)]
@@ -94,11 +91,11 @@ impl DependencyType {
         if args.pypi {
             Self::PypiDependency
         } else if args.host {
-            CondaDependency(SpecType::Host)
+            DependencyType::CondaDependency(SpecType::Host)
         } else if args.build {
-            CondaDependency(SpecType::Build)
+            DependencyType::CondaDependency(SpecType::Build)
         } else {
-            CondaDependency(SpecType::Run)
+            DependencyType::CondaDependency(SpecType::Run)
         }
     }
 }
@@ -109,12 +106,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let spec_platforms = &args.platform;
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(
-        project
-            .environment_dir()
-            .join(consts::PREFIX_FILE_NAME)
-            .as_path(),
-    )?;
+    verify_prefix_location_unchanged(project.pixi_dir().join(consts::PREFIX_FILE_NAME).as_path())?;
 
     // Add the platform if it is not already present
     let platforms_to_add = spec_platforms
@@ -122,7 +114,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .filter(|p| !project.platforms().contains(p))
         .cloned()
         .collect::<Vec<Platform>>();
-    project.add_platforms(platforms_to_add.iter())?;
+    project.manifest.add_platforms(platforms_to_add.iter())?;
 
     match dependency_type {
         DependencyType::CondaDependency(spec_type) => {
@@ -183,7 +175,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Print if it is something different from host and dep
-    if !matches!(dependency_type, CondaDependency(SpecType::Run)) {
+    if !matches!(
+        dependency_type,
+        DependencyType::CondaDependency(SpecType::Run)
+    ) {
         eprintln!(
             "Added these as {}.",
             console::style(dependency_type.name()).bold()
@@ -212,15 +207,22 @@ pub async fn add_pypi_specs_to_project(
         // TODO: Get best version
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.add_pypi_dependency(name, spec)?;
+            project.manifest.add_pypi_dependency(name, spec)?;
         } else {
             for platform in specs_platforms.iter() {
-                project.add_target_pypi_dependency(*platform, name.clone(), spec)?;
+                project
+                    .manifest
+                    .add_target_pypi_dependency(*platform, name.clone(), spec)?;
             }
         }
     }
+    let lock_file_usage = if no_update_lockfile {
+        LockFileUsage::Frozen
+    } else {
+        LockFileUsage::Update
+    };
 
-    update_lockfile(project, None, no_install, no_update_lockfile).await?;
+    get_up_to_date_prefix(project, lock_file_usage, no_install, None).await?;
 
     project.save()?;
 
@@ -272,6 +274,7 @@ pub async fn add_conda_specs_to_project(
 
         // Solve the environment with the new specs added
         let solved_versions = match determine_best_version(
+            project,
             &new_specs,
             &current_specs,
             &sparse_repo_data,
@@ -309,65 +312,29 @@ pub async fn add_conda_specs_to_project(
 
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.add_dependency(&spec, spec_type)?;
+            project.manifest.add_dependency(&spec, spec_type)?;
         } else {
             for platform in specs_platforms.iter() {
-                project.add_target_dependency(*platform, &spec, spec_type)?;
+                project
+                    .manifest
+                    .add_target_dependency(*platform, &spec, spec_type)?;
             }
         }
     }
+    let lock_file_usage = if no_update_lockfile {
+        LockFileUsage::Frozen
+    } else {
+        LockFileUsage::Update
+    };
+    get_up_to_date_prefix(project, lock_file_usage, no_install, Some(sparse_repo_data)).await?;
     project.save()?;
 
-    update_lockfile(
-        project,
-        Some(sparse_repo_data),
-        no_install,
-        no_update_lockfile,
-    )
-    .await?;
-
     Ok(())
 }
 
-async fn update_lockfile(
-    project: &Project,
-    sparse_repo_data: Option<Vec<SparseRepoData>>,
-    no_install: bool,
-    no_update_lockfile: bool,
-) -> miette::Result<()> {
-    // Update the lock file
-    let lock_file = if !no_update_lockfile {
-        Some(update_lock_file(project, load_lock_file(project).await?, sparse_repo_data).await?)
-    } else {
-        None
-    };
-
-    if let Some(lock_file) = lock_file {
-        if !no_install {
-            let platform = Platform::current();
-            if project.platforms().contains(&platform) {
-                // Get the currently installed packages
-                let prefix = Prefix::new(project.root().join(".pixi/env"))?;
-                let installed_packages = prefix.find_installed_packages(None).await?;
-
-                // Update the prefix
-                update_prefix(
-                    project.pypi_package_db()?,
-                    &prefix,
-                    installed_packages,
-                    &lock_file,
-                    platform,
-                )
-                .await?;
-            } else {
-                eprintln!("{} skipping installation of environment because your platform ({platform}) is not supported by this project.", console::style("!").yellow().bold())
-            }
-        }
-    }
-    Ok(())
-}
 /// Given several specs determines the highest installable version for them.
 pub fn determine_best_version(
+    project: &Project,
     new_specs: &HashMap<PackageName, NamelessMatchSpec>,
     current_specs: &IndexMap<PackageName, NamelessMatchSpec>,
     sparse_repo_data: &[SparseRepoData],
@@ -404,10 +371,7 @@ pub fn determine_best_version(
 
         available_packages: &available_packages,
 
-        virtual_packages: get_minimal_virtual_packages(platform)
-            .into_iter()
-            .map(Into::into)
-            .collect(),
+        virtual_packages: project.virtual_packages(platform)?,
 
         // TODO: Add the information from the current lock file here.
         locked_packages: vec![],

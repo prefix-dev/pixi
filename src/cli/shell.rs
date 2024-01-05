@@ -11,7 +11,9 @@ use std::path::PathBuf;
 #[cfg(target_family = "unix")]
 use crate::unix::PtySession;
 
+use crate::cli::LockFileUsageArgs;
 use crate::environment::get_up_to_date_prefix;
+use crate::environment::LockFileUsage;
 use crate::project::environment::get_metadata_env;
 #[cfg(target_family = "windows")]
 use rattler_shell::shell::CmdExe;
@@ -25,13 +27,8 @@ pub struct Args {
     #[arg(long)]
     manifest_path: Option<PathBuf>,
 
-    /// Require pixi.lock is up-to-date
-    #[clap(long, conflicts_with = "frozen")]
-    locked: bool,
-
-    /// Don't check if pixi.lock is up-to-date, install as lockfile states
-    #[clap(long, conflicts_with = "locked")]
-    frozen: bool,
+    #[clap(flatten)]
+    lock_file_usage: LockFileUsageArgs,
 }
 
 fn start_powershell(
@@ -203,11 +200,10 @@ async fn start_nu_shell(
 /// variables from the project.
 pub async fn get_shell_env(
     project: &Project,
-    frozen: bool,
-    locked: bool,
+    lock_file_usage: LockFileUsage,
 ) -> miette::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
-    let prefix = get_up_to_date_prefix(project, frozen, locked).await?;
+    let prefix = get_up_to_date_prefix(project, lock_file_usage, false, None).await?;
 
     // Get environment variables from the activation
     let activation_env = run_activation_async(project, prefix).await?;
@@ -231,7 +227,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     // Get the environment variables we need to set activate the project in the shell.
-    let env = get_shell_env(&project, args.frozen, args.locked).await?;
+    let env = get_shell_env(&project, args.lock_file_usage.into()).await?;
     tracing::debug!("Pixi environment activation:\n{:?}", env);
 
     // Start the shell as the last part of the activation script based on the default shell.

@@ -1,19 +1,25 @@
 site_name: "Pixi by prefix.dev"
 site_url: https://prefix-dev.github.io/pixi
 
-extra:
-  homepage: https://prefix.dev
-
 theme:
   name: material
-  favicon: assets/logo_light_no_text.svg
-  logo: assets/logo_light_no_text.svg
+  custom_dir: docs/overrides
+  favicon: assets/pixi.png
+  logo: assets/pixi.png
   site_url: https://prefix.dev
+  font:
+    text: Red Hat Text
+    code: JetBrains Mono
+
   palette:
-    primary: custom
+    primary: yellow
+    accent: yellow
+    scheme: slate
+
   icon:
     edit: material/pencil
     view: material/eye
+
   features:
     - content.tabs.link
     - content.code.copy
@@ -24,6 +30,7 @@ theme:
     - navigation.tracking
     - navigation.sections
     - navigation.top
+    - navigation.footer
 
 extra_css:
   - stylesheets/extra.css
@@ -48,6 +55,17 @@ markdown_extensions:
       toc_depth: 3
       permalink: "#"
 
+extra:
+  homepage: https://prefix.dev
+  social:
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/prefix_dev
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/company/prefix-dev
+    - icon: fontawesome/brands/github
+      link: https://github.com/prefix-dev
+
+
 nav:
   - Getting Started : index.md
   - Basic Usage: basic_usage.md
@@ -63,6 +81,8 @@ nav:
       - C++/Cmake: examples/cpp-sdl.md
       - OpenCV: examples/opencv.md
       - ROS2: examples/ros2-nav2.md
+  - Design Proposals:
+      - Multi Env: design_proposals/multi_environment_proposal.md
   - Community: Community.md
   - FAQ: FAQ.md
 

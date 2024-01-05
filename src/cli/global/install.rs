@@ -141,7 +141,7 @@ pub(crate) fn create_activation_script(
         .activation(ActivationVariables {
             conda_prefix: None,
             path: None,
-            path_modification_behaviour: PathModificationBehavior::Prepend,
+            path_modification_behavior: PathModificationBehavior::Prepend,
         })
         .into_diagnostic()?;
 

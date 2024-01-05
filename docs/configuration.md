@@ -148,36 +148,34 @@ This will be the minimal system specification for the project.
 System specifications are directly related to the [virtual packages](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html).
 
 Currently, the specified **defaults** are the same as [conda-lock](https://github.com/conda/conda-lock)'s implementation:
-<Tabs groupId="Platforms">
-    <TabItem value="Linux">
-        ```toml title="default system requirements"
-        [system-requirements]
-        unix = true
-        linux = "5.10"
-        libc = { family="glibc", version="2.17" }
-        ```
-    </TabItem>
-    <TabItem value="Windows">
-        ```toml title="default system requirements"
-        [system-requirements]
-        windows = true
-        ```
-    </TabItem>
-    <TabItem value="Osx-64">
-        ```toml title="default system requirements"
-        [system-requirements]
-        unix = true
-        macos = "10.15"
-        ```
-    </TabItem>
-    <TabItem value="Osx-arm64">
-        ```toml title="default system requirements"
-        [system-requirements]
-        unix = true
-        macos = "11.0"
-        ```
-    </TabItem>
-</Tabs>
+
+=== "Linux"
+    ```toml title="default system requirements for linux"
+    [system-requirements]
+    unix = true
+    linux = "5.10"
+    libc = { family="glibc", version="2.17" }
+    ```
+
+=== "Windows"
+    ```toml title="default system requirements for windows"
+    [system-requirements]
+    windows = true
+    ```
+
+=== "Osx"
+    ```toml title="default system requirements for osx"
+    [system-requirements]
+    unix = true
+    macos = "10.15"
+    ```
+
+=== "Osx-arm64"
+    ```toml title="default system requirements for osx-arm64"
+    [system-requirements]
+    unix = true
+    macos = "11.0"
+    ```
 
 Only if a project requires a different set should you define them.
 
@@ -188,10 +186,19 @@ You may encounter the following error:
 ```
 This suggests that the system requirements for the project should be lowered.
 To fix this, add the following table to your configuration:
-```
+```toml
 [system-requirements]
 linux = "4.12.14"
 ```
+
+#### Using Cuda in pixi
+If you want to use `cuda` in your project you need to add the following to your `system-requirements` table:
+```toml
+[system-requirements]
+cuda = "11" # or any other version of cuda you want to use
+```
+This informs the solver that cuda is going to be available, so it can lock it into the lockfile if needed.
+
 
 ## The `dependencies` table(s)
 This section defines what dependencies you would like to use for your project.
@@ -237,7 +244,7 @@ Even if the dependency defines a channel that channel should be added to the `pr
 [dependencies]
 python = ">3.9,<=3.11"
 rust = "1.72"
-pytoch-cpu = { version = "~=1.1", channel = "pytorch" }
+pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 ```
 
 ### `pypi-dependencies` (Beta feature)
@@ -292,7 +299,7 @@ Different from `dependencies` and `host-dependencies` these packages are install
 This enables cross-compiling from one machine architecture to another.
 
 ```toml
-[build-depencencies]
+[build-dependencies]
 cmake = "~=3.24"
 ```
 
@@ -364,7 +371,7 @@ scripts = ["setup.bat"]
 [target.win-64.dependencies]
 msmpi = "~=10.1.1"
 
-[target.win-64.build-dependecies]
+[target.win-64.build-dependencies]
 vs2022_win-64 = "19.36.32532"
 
 [target.win-64.tasks]

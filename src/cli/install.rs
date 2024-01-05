@@ -10,19 +10,14 @@ pub struct Args {
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
-    /// Require pixi.lock is up-to-date
-    #[clap(long, conflicts_with = "frozen")]
-    pub locked: bool,
-
-    /// Don't check if pixi.lock is up-to-date, install as lockfile states
-    #[clap(long, conflicts_with = "locked")]
-    pub frozen: bool,
+    #[clap(flatten)]
+    pub lock_file_usage: super::LockFileUsageArgs,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
-    get_up_to_date_prefix(&project, args.frozen, args.locked).await?;
+    get_up_to_date_prefix(&project, args.lock_file_usage.into(), false, None).await?;
 
     // Emit success
     eprintln!(

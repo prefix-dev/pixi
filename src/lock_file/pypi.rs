@@ -1,6 +1,6 @@
 use crate::{
     consts::PROJECT_MANIFEST,
-    lock_file::{package_identifier, python_name_mapping},
+    lock_file::{package_identifier, pypi_name_mapping},
     project::{manifest::LibCSystemRequirement, manifest::SystemRequirements},
     virtual_packages::{default_glibc_version, default_mac_os_version},
     Project,
@@ -14,20 +14,14 @@ use rip::resolve::{resolve, PinnedPackage, ResolveOptions, SDistResolution};
 use std::{collections::HashMap, str::FromStr, vec};
 
 /// Resolve python packages for the specified project.
-pub async fn resolve_pypi_dependencies<'p>(
+pub async fn resolve_dependencies<'p>(
     project: &'p Project,
     platform: Platform,
-    conda_packages: &mut [RepoDataRecord],
+    conda_packages: &[RepoDataRecord],
 ) -> miette::Result<Vec<PinnedPackage<'p>>> {
     let dependencies = project.pypi_dependencies(platform);
     if dependencies.is_empty() {
         return Ok(vec![]);
-    }
-
-    // Amend the records with pypi purls if they are not present yet.
-    let conda_forge_mapping = python_name_mapping::conda_pypi_name_mapping().await?;
-    for record in conda_packages.iter_mut() {
-        python_name_mapping::amend_pypi_purls(record, conda_forge_mapping)?;
     }
 
     // Determine the python packages that are installed by the conda packages
@@ -58,7 +52,7 @@ pub async fn resolve_pypi_dependencies<'p>(
     // Determine the python interpreter that is installed as part of the conda packages.
     let python_record = conda_packages
         .iter()
-        .find(|r| is_python(r))
+        .find(|r| is_python_record(r))
         .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
 
     // Determine the environment markers
@@ -67,7 +61,7 @@ pub async fn resolve_pypi_dependencies<'p>(
     // Determine the compatible tags
     let compatible_tags = project_platform_tags(
         platform,
-        &project.manifest.system_requirements,
+        project.system_requirements(),
         python_record.as_ref(),
     );
 
@@ -100,14 +94,23 @@ pub async fn resolve_pypi_dependencies<'p>(
     Ok(result)
 }
 
+/// Amend the records with pypi purls if they are not present yet.
+pub async fn amend_pypi_purls(conda_packages: &mut [RepoDataRecord]) -> miette::Result<()> {
+    let conda_forge_mapping = pypi_name_mapping::conda_pypi_name_mapping().await?;
+    for record in conda_packages.iter_mut() {
+        pypi_name_mapping::amend_pypi_purls(record, conda_forge_mapping)?;
+    }
+    Ok(())
+}
+
 /// Returns true if the specified record refers to a version/variant of python.
-pub fn is_python(record: &RepoDataRecord) -> bool {
-    is_python_name(&record.package_record.name)
+pub fn is_python_record(record: &RepoDataRecord) -> bool {
+    package_name_is_python(&record.package_record.name)
 }
 
 /// Returns true if the specified name refers to a version/variant of python.
 /// TODO: Add support for more variants.
-pub fn is_python_name(record: &rattler_conda_types::PackageName) -> bool {
+pub fn package_name_is_python(record: &rattler_conda_types::PackageName) -> bool {
     record.as_normalized() == "python"
 }
 
