@@ -44,13 +44,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let results = deps
         .iter()
         .map(|dep| {
-            if let Some(p) = &args.platform {
-                project
-                    .manifest
-                    .remove_target_dependency(dep, &spec_type, p)
-            } else {
-                project.manifest.remove_dependency(dep, &spec_type)
-            }
+            project
+                .manifest
+                .remove_dependency(dep, spec_type, args.platform)
         })
         .collect::<Vec<_>>();
 
@@ -68,7 +64,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         eprintln!(
             "Removed {} from [{}]",
-            console::style(format!("{removed} {spec}")).bold(),
+            console::style(format!("{} {spec}", removed.as_source())).bold(),
             console::style(table_name).bold(),
         );
     }

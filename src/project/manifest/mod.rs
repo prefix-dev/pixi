@@ -1,25 +1,36 @@
-use crate::project::python::PyPiRequirement;
-use crate::project::{DependencyType, SpecType};
-use crate::task::CmdArgs;
-use crate::utils::spanned::PixiSpanned;
-use crate::{consts, task::Task};
+mod environment;
+mod error;
+mod feature;
+mod target;
+
+use crate::{
+    consts,
+    project::{manifest::target::Targets, python::PyPiRequirement, DependencyType, SpecType},
+    task::Task,
+    utils::spanned::PixiSpanned,
+};
 use ::serde::Deserialize;
 use indexmap::IndexMap;
+use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use rattler_conda_types::{
-    Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, Platform, Version,
+    Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
 };
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
-use rip::types::PackageName;
 use serde::Deserializer;
-use serde_with::de::DeserializeAsWrap;
-use serde_with::{serde_as, DeserializeAs, DisplayFromStr, PickFirst};
-use std::collections::HashMap;
-use std::ops::Range;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use serde_with::{serde_as, DisplayFromStr};
+use std::{
+    collections::HashMap,
+    ops::Range,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 use toml_edit::{value, Array, Document, Item, Table, TomlError, Value};
 use url::Url;
+
+pub use environment::{Environment, EnvironmentName};
+pub use feature::{Feature, FeatureName};
+pub use target::{Target, TargetSelector};
 
 /// Handles the project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the manifest.
@@ -56,8 +67,7 @@ impl Manifest {
     /// Create a new manifest from a string
     pub fn from_str(root: &Path, contents: impl Into<String>) -> miette::Result<Self> {
         let contents = contents.into();
-        let (manifest, document) = match toml_edit::de::from_str::<ProjectManifest>(&contents)
-            .map_err(TomlError::from)
+        let (manifest, document) = match ProjectManifest::from_toml_str(&contents)
             .and_then(|manifest| contents.parse::<Document>().map(|doc| (manifest, doc)))
         {
             Ok(result) => result,
@@ -82,9 +92,10 @@ impl Manifest {
 
         // Notify the user that pypi-dependencies are still experimental
         if manifest
-            .pypi_dependencies
-            .as_ref()
-            .map_or(false, |deps| !deps.is_empty())
+            .features
+            .values()
+            .flat_map(|f| f.targets.targets())
+            .any(|f| f.pypi_dependencies.is_some())
         {
             match std::env::var("PIXI_BETA_WARNING_OFF") {
                 Ok(var) if var == *"true" => {}
@@ -109,31 +120,18 @@ impl Manifest {
         Ok(())
     }
 
-    /// Returns all the targets specific metadata that apply with the given context.
-    /// TODO: Add more context here?
-    /// TODO: Should we return the selector too to provide better diagnostics later?
-    pub fn target_specific_metadata(
-        &self,
-        platform: Platform,
-    ) -> impl Iterator<Item = &'_ TargetMetadata> + '_ {
-        self.parsed
-            .target
-            .iter()
-            .filter_map(move |(selector, manifest)| match selector.as_ref() {
-                TargetSelector::Platform(p) if p == &platform => Some(manifest),
-                _ => None,
-            })
-    }
-
-    /// Returns a hashmap of the tasks that should run only the given platform.
-    pub fn target_specific_tasks(&self, platform: Platform) -> HashMap<&str, &Task> {
-        let mut tasks = HashMap::default();
-        // Gather platform-specific tasks and overwrite them if they're double.
-        for target_metadata in self.target_specific_metadata(platform) {
-            tasks.extend(target_metadata.tasks.iter().map(|(k, v)| (k.as_str(), v)));
-        }
-
-        tasks
+    /// Returns a hashmap of the tasks that should run only the given platform. If the platform is
+    /// `None`, only the default targets tasks are returned.
+    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&str, &Task> {
+        self.default_feature()
+            .targets
+            .resolve(platform)
+            .collect_vec()
+            .into_iter()
+            .rev()
+            .flat_map(|target| target.tasks.iter())
+            .map(|(name, task)| (name.as_str(), task))
+            .collect()
     }
 
     /// Add a task to the project
@@ -143,59 +141,25 @@ impl Manifest {
         task: Task,
         platform: Option<Platform>,
     ) -> miette::Result<()> {
-        let table = if let Some(platform) = platform {
-            if self
-                .target_specific_tasks(platform)
-                .contains_key(name.as_ref())
-            {
-                miette::bail!("task {} already exists", name.as_ref());
-            }
-            ensure_toml_target_table(&mut self.document, platform, "tasks")?
-        } else {
-            self.document["tasks"]
-                .or_insert(Item::Table(Table::new()))
-                .as_table_mut()
-                .ok_or_else(|| {
-                    miette::miette!("target table in {} is malformed", consts::PROJECT_MANIFEST)
-                })?
-        };
-        let depends_on = task.depends_on();
-
-        for depends in depends_on {
-            if !self.parsed.tasks.contains_key(depends) {
-                miette::bail!(
-                    "task '{}' for the depends on for '{}' does not exist",
-                    depends,
-                    name.as_ref(),
-                );
-            }
+        // Check if the task already exists
+        if self.tasks(platform).contains_key(name.as_ref()) {
+            miette::bail!("task {} already exists", name.as_ref());
         }
+
+        // Get the table that contains the tasks.
+        let table = ensure_toml_target_table(&mut self.document, platform, "tasks")?;
 
         // Add the task to the table
-        table.insert(name.as_ref(), task_as_toml(task.clone()));
+        table.insert(name.as_ref(), task.clone().into());
 
-        self.parsed.tasks.insert(name.as_ref().to_string(), task);
-
-        self.save()?;
+        // Add the task to the manifest
+        self.default_feature_mut()
+            .targets
+            .for_opt_target_mut_or_default(platform.map(TargetSelector::from).as_ref())
+            .tasks
+            .insert(name.as_ref().to_string(), task);
 
         Ok(())
-    }
-
-    /// Returns a hashmap of the tasks that should run on the given platform.
-    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&str, &Task> {
-        let mut all_tasks = HashMap::default();
-
-        // Gather non-target specific tasks
-        all_tasks.extend(self.parsed.tasks.iter().map(|(k, v)| (k.as_str(), v)));
-
-        // Gather platform-specific tasks and overwrite them if they're double.
-        if let Some(platform) = platform {
-            for target_metadata in self.target_specific_metadata(platform) {
-                all_tasks.extend(target_metadata.tasks.iter().map(|(k, v)| (k.as_str(), v)));
-            }
-        }
-
-        all_tasks
     }
 
     /// Remove a task from the project, and the tasks that depend on it
@@ -209,22 +173,16 @@ impl Manifest {
             .ok_or_else(|| miette::miette!("task {} does not exist", name.as_ref()))?;
 
         // Get the task table either from the target platform or the default tasks.
-        let tasks_table = if let Some(platform) = platform {
-            ensure_toml_target_table(&mut self.document, platform, "tasks")?
-        } else {
-            let tasks_table = &mut self.document["tasks"];
-            if tasks_table.is_none() {
-                miette::bail!("internal data-structure inconsistent with toml");
-            }
-            tasks_table.as_table_like_mut().ok_or_else(|| {
-                miette::miette!("tasks in {} are malformed", consts::PROJECT_MANIFEST)
-            })?
-        };
+        let tasks_table = ensure_toml_target_table(&mut self.document, platform, "tasks")?;
 
         // If it does not exist in toml, consider this ok as we want to remove it anyways
         tasks_table.remove(name.as_ref());
 
-        self.save()?;
+        // Remove the task from the internal manifest
+        self.default_feature_mut()
+            .targets
+            .for_opt_target_mut(platform.map(TargetSelector::from).as_ref())
+            .map(|target| target.tasks.remove(name.as_ref()));
 
         Ok(())
     }
@@ -286,168 +244,33 @@ impl Manifest {
         Ok(())
     }
 
-    /// Add match spec to the specified table
-    fn add_to_deps_table(
-        deps_table: &mut Item,
-        spec: &MatchSpec,
-    ) -> miette::Result<(rattler_conda_types::PackageName, NamelessMatchSpec)> {
-        // If it doesn't exist create a proper table
-        if deps_table.is_none() {
-            *deps_table = Item::Table(Table::new());
-        }
-
-        // Cast the item into a table
-        let deps_table = deps_table.as_table_like_mut().ok_or_else(|| {
-            miette::miette!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
-        })?;
-
-        // Determine the name of the package to add
-        let name = spec
-            .name
-            .clone()
-            .ok_or_else(|| miette::miette!("* package specifier is not supported"))?;
-
-        // Format the requirement
-        // TODO: Do this smarter. E.g.:
-        //  - split this into an object if exotic properties (like channel) are specified.
-        //  - split the name from the rest of the requirement.
-        let nameless = NamelessMatchSpec::from(spec.to_owned());
-
-        // Store (or replace) in the document
-        deps_table.insert(name.as_source(), Item::Value(nameless.to_string().into()));
-
-        Ok((name, nameless))
-    }
-
-    /// Add PyPI requirement to the specified table
-    fn add_pypi_dep_to_table(
-        deps_table: &mut Item,
-        name: &rip::types::PackageName,
-        requirement: &PyPiRequirement,
-    ) -> miette::Result<()> {
-        // If it doesn't exist create a proper table
-        if deps_table.is_none() {
-            *deps_table = Item::Table(Table::new());
-        }
-
-        // Cast the item into a table
-        let deps_table = deps_table.as_table_like_mut().ok_or_else(|| {
-            miette::miette!("dependencies in {} are malformed", consts::PROJECT_MANIFEST)
-        })?;
-
-        deps_table.insert(name.as_str(), (*requirement).clone().into());
-        Ok(())
-    }
-
-    /// Add match spec to the target specific table
-    fn add_dep_to_target_table(
+    /// Add a matchspec to the manifest
+    pub fn add_dependency(
         &mut self,
-        platform: Platform,
-        dep_type: String,
-        spec: &MatchSpec,
-    ) -> miette::Result<(rattler_conda_types::PackageName, NamelessMatchSpec)> {
-        let target = self.document["target"]
-            .or_insert(Item::Table(Table::new()))
-            .as_table_mut()
-            .ok_or_else(|| {
-                miette::miette!("target table in {} is malformed", consts::PROJECT_MANIFEST)
-            })?;
-        target.set_dotted(true);
-        let platform_table = self.document["target"][platform.as_str()]
-            .or_insert(Item::Table(Table::new()))
-            .as_table_mut()
-            .ok_or_else(|| {
-                miette::miette!(
-                    "platform table in {} is malformed",
-                    consts::PROJECT_MANIFEST
-                )
-            })?;
-        platform_table.set_dotted(true);
-
-        let dependencies = platform_table[dep_type.as_str()].or_insert(Item::Table(Table::new()));
-
-        Self::add_to_deps_table(dependencies, spec)
-    }
-
-    /// Add PyPI requirement to the target specific table
-    fn add_pypi_dep_to_target_table(
-        &mut self,
-        platform: Platform,
-        name: &rip::types::PackageName,
-        requirement: &PyPiRequirement,
-    ) -> miette::Result<()> {
-        let target = self.document["target"]
-            .or_insert(Item::Table(Table::new()))
-            .as_table_mut()
-            .ok_or_else(|| {
-                miette::miette!("target table in {} is malformed", consts::PROJECT_MANIFEST)
-            })?;
-        target.set_dotted(true);
-        let platform_table = self.document["target"][platform.as_str()]
-            .or_insert(Item::Table(Table::new()))
-            .as_table_mut()
-            .ok_or_else(|| {
-                miette::miette!(
-                    "platform table in {} is malformed",
-                    consts::PROJECT_MANIFEST
-                )
-            })?;
-        platform_table.set_dotted(true);
-
-        let dependencies = platform_table[DependencyType::PypiDependency.name()]
-            .or_insert(Item::Table(Table::new()));
-
-        Self::add_pypi_dep_to_table(dependencies, name, requirement)
-    }
-
-    pub fn add_target_dependency(
-        &mut self,
-        platform: Platform,
         spec: &MatchSpec,
         spec_type: SpecType,
+        platform: Option<Platform>,
     ) -> miette::Result<()> {
-        let toml_name = spec_type.name();
-        // Add to target table toml
-        let (name, nameless) =
-            self.add_dep_to_target_table(platform, toml_name.to_string(), spec)?;
-        // Add to manifest
-        self.parsed
-            .target
-            .entry(TargetSelector::Platform(platform).into())
-            .or_insert(TargetMetadata::default())
+        // Find the table toml table to add the dependency to.
+        let dependency_table =
+            ensure_toml_target_table(&mut self.document, platform, spec_type.name())?;
+
+        // Determine the name of the package to add
+        let (Some(name), spec) = spec.clone().into_nameless() else {
+            miette::bail!("pixi does not support wildcard dependencies")
+        };
+
+        // Store (or replace) in the document
+        dependency_table.insert(name.as_source(), Item::Value(spec.to_string().into()));
+
+        // Add the dependency to the manifest as well
+        self.default_feature_mut()
+            .targets
+            .for_opt_target_mut_or_default(platform.map(TargetSelector::from).as_ref())
             .dependencies
-            .insert(name.as_source().into(), nameless);
-        Ok(())
-    }
-    /// Add target specific PyPI requirement to the manifest
-    pub fn add_target_pypi_dependency(
-        &mut self,
-        platform: Platform,
-        name: rip::types::PackageName,
-        requirement: &PyPiRequirement,
-    ) -> miette::Result<()> {
-        // Add to target table toml
-        self.add_pypi_dep_to_target_table(platform, &name.clone(), requirement)?;
-        // Add to manifest
-        self.parsed
-            .target
-            .entry(TargetSelector::Platform(platform).into())
-            .or_insert(TargetMetadata::default())
-            .pypi_dependencies
-            .get_or_insert(IndexMap::new())
-            .insert(name, requirement.clone());
-        Ok(())
-    }
-
-    /// Add a matchspec to the manifest
-    pub fn add_dependency(&mut self, spec: &MatchSpec, spec_type: SpecType) -> miette::Result<()> {
-        // Find the dependencies table
-        let deps = &mut self.document[spec_type.name()];
-        let (name, nameless) = Manifest::add_to_deps_table(deps, spec)?;
-
-        self.parsed
-            .create_or_get_dependencies(spec_type)
-            .insert(name.as_source().into(), nameless);
+            .entry(spec_type)
+            .or_default()
+            .insert(name, spec);
 
         Ok(())
     }
@@ -456,13 +279,24 @@ impl Manifest {
         &mut self,
         name: &rip::types::PackageName,
         requirement: &PyPiRequirement,
+        platform: Option<Platform>,
     ) -> miette::Result<()> {
-        // Find the dependencies table
-        let deps = &mut self.document[DependencyType::PypiDependency.name()];
-        Manifest::add_pypi_dep_to_table(deps, name, requirement)?;
+        // Find the table toml table to add the dependency to.
+        let dependency_table = ensure_toml_target_table(
+            &mut self.document,
+            platform,
+            DependencyType::PypiDependency.name(),
+        )?;
 
-        self.parsed
-            .create_or_get_pypi_dependencies()
+        // Add the pypi dependency to the table
+        dependency_table.insert(name.as_str(), (*requirement).clone().into());
+
+        // Add the dependency to the manifest as well
+        self.default_feature_mut()
+            .targets
+            .for_opt_target_mut_or_default(platform.map(TargetSelector::from).as_ref())
+            .pypi_dependencies
+            .get_or_insert_with(Default::default)
             .insert(name.clone(), requirement.clone());
 
         Ok(())
@@ -471,35 +305,38 @@ impl Manifest {
     /// Removes a dependency from `pixi.toml` based on `SpecType`.
     pub fn remove_dependency(
         &mut self,
-        dep: &rattler_conda_types::PackageName,
-        spec_type: &SpecType,
-    ) -> miette::Result<(String, NamelessMatchSpec)> {
-        if let Item::Table(ref mut t) = self.document[spec_type.name()] {
-            if t.contains_key(dep.as_normalized()) && t.remove(dep.as_normalized()).is_some() {
-                return self
-                    .parsed
-                    .remove_dependency(dep.as_normalized(), spec_type);
-            }
-        }
+        dep: &PackageName,
+        spec_type: SpecType,
+        platform: Option<Platform>,
+    ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
+        get_toml_target_table(&mut self.document, platform, spec_type.name())?
+            .remove(dep.as_normalized())
+            .ok_or_else(|| {
+                miette::miette!(
+                    "Couldn't find {} in [{}]",
+                    console::style(dep.as_normalized()).bold(),
+                    console::style(spec_type.name()).bold(),
+                )
+            })?;
 
-        Err(miette::miette!(
-            "Couldn't find {} in [{}]",
-            console::style(dep.as_normalized()).bold(),
-            console::style(spec_type.name()).bold(),
-        ))
+        Ok(self
+            .default_feature_mut()
+            .targets
+            .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
+            .expect("target should exist")
+            .remove_dependency(dep.as_source(), spec_type)
+            .expect("dependency should exist"))
     }
 
-    /// Removes a target specific dependency from `pixi.toml` based on `SpecType`.
-    pub fn remove_target_dependency(
-        &mut self,
-        dep: &rattler_conda_types::PackageName,
-        spec_type: &SpecType,
-        platform: &Platform,
-    ) -> miette::Result<(String, NamelessMatchSpec)> {
-        let table = get_toml_target_table(&mut self.document, platform, spec_type.name())?;
-        table.remove(dep.as_normalized());
+    /// Returns true if any of the features has pypi dependencies defined.
+    ///
+    /// This also returns true if the `pypi-dependencies` key is defined but empty.
+    pub fn has_pypi_dependencies(&self) -> bool {
         self.parsed
-            .remove_target_dependency(dep.as_normalized(), spec_type, platform)
+            .features
+            .values()
+            .flat_map(|f| f.targets.targets())
+            .any(|f| f.pypi_dependencies.is_some())
     }
 
     /// Returns a mutable reference to the channels array.
@@ -590,6 +427,27 @@ impl Manifest {
 
         Ok(())
     }
+
+    /// Returns the default feature.
+    ///
+    /// This is the feature that is added implicitly by the tables at the root of the project
+    /// manifest.
+    pub fn default_feature(&self) -> &Feature {
+        self.parsed.default_feature()
+    }
+
+    /// Returns a mutable reference to the default feature.
+    fn default_feature_mut(&mut self) -> &mut Feature {
+        self.parsed.default_feature_mut()
+    }
+
+    /// Returns the default environment
+    ///
+    /// This is the environment that is added implicitly as the environment with only the default
+    /// feature. The default environment can be overwritten by a environment named `default`.
+    pub fn default_environment(&self) -> &Environment {
+        self.parsed.default_environment()
+    }
 }
 
 /// Ensures that the specified TOML target table exists within a given document,
@@ -598,38 +456,43 @@ impl Manifest {
 /// goes as expected.
 pub fn ensure_toml_target_table<'a>(
     doc: &'a mut Document,
-    platform: Platform,
+    platform: Option<Platform>,
     table_name: &str,
 ) -> miette::Result<&'a mut Table> {
-    // Create target table
-    let target = doc["target"]
-        .or_insert(Item::Table(Table::new()))
-        .as_table_mut()
-        .ok_or_else(|| {
-            miette::miette!("target table in {} is malformed", consts::PROJECT_MANIFEST)
-        })?;
-    target.set_dotted(true);
+    let root_table = if let Some(platform) = platform {
+        // Get or create the target table (e.g. [target])
+        let target = doc["target"]
+            .or_insert(Item::Table(Table::new()))
+            .as_table_mut()
+            .ok_or_else(|| {
+                miette::miette!("target table in {} is malformed", consts::PROJECT_MANIFEST)
+            })?;
+        target.set_dotted(true);
 
-    // Create platform table on target table
-    let platform_table = doc["target"][platform.as_str()]
-        .or_insert(Item::Table(Table::new()))
-        .as_table_mut()
-        .ok_or_else(|| {
-            miette::miette!(
-                "platform table in {} is malformed",
-                consts::PROJECT_MANIFEST
-            )
-        })?;
-    platform_table.set_dotted(true);
+        // Add a specific platform table (e.g. [target.linux-64])
+        let platform_table = doc["target"][platform.as_str()]
+            .or_insert(Item::Table(Table::new()))
+            .as_table_mut()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "platform table in {} is malformed",
+                    consts::PROJECT_MANIFEST
+                )
+            })?;
+        platform_table.set_dotted(true);
+        platform_table
+    } else {
+        doc.as_table_mut()
+    };
 
     // Return final table on target platform table.
-    platform_table[table_name]
+    root_table[table_name]
         .or_insert(Item::Table(Table::new()))
         .as_table_mut()
         .ok_or_else(|| {
             miette::miette!(
-                "platform table in {} is malformed",
-                consts::PROJECT_MANIFEST
+                "{table_name} table in {} is malformed",
+                consts::PROJECT_MANIFEST,
             )
         })
 }
@@ -638,99 +501,154 @@ pub fn ensure_toml_target_table<'a>(
 /// for a specific platform.
 fn get_toml_target_table<'a>(
     doc: &'a mut Document,
-    platform: &Platform,
+    platform: Option<Platform>,
     table_name: &str,
 ) -> miette::Result<&'a mut Table> {
-    let platform_table = doc["target"][platform.as_str()]
-        .as_table_mut()
-        .ok_or(miette::miette!(
-            "could not find {} in {}",
-            console::style(platform.as_str()).bold(),
-            consts::PROJECT_MANIFEST,
-        ))?;
+    let target_table = if let Some(platform) = platform {
+        doc["target"][platform.as_str()]
+            .as_table_mut()
+            .ok_or(miette::miette!(
+                "could not find {} in {}",
+                console::style(platform.as_str()).bold(),
+                consts::PROJECT_MANIFEST,
+            ))?
+    } else {
+        doc.as_table_mut()
+    };
 
-    platform_table.set_dotted(true);
-
-    platform_table[table_name]
-        .as_table_mut()
-        .ok_or(miette::miette!(
+    target_table[table_name].as_table_mut().ok_or_else(|| {
+        let table_name = match platform {
+            Some(platform) => format!("target.{}.{}", platform.as_str(), table_name),
+            None => table_name.to_string(),
+        };
+        miette::miette!(
             "could not find {} in {}",
-            console::style(format!("[target.{}.{}]", platform.as_str(), table_name)).bold(),
+            console::style(format!("[{table_name}]")).bold(),
             consts::PROJECT_MANIFEST,
-        ))
+        )
+    })
 }
 
 /// Describes the contents of a project manifest.
-#[serde_as]
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone)]
 pub struct ProjectManifest {
     /// Information about the project
     pub project: ProjectMetadata,
 
-    /// Tasks defined in the project
-    #[serde(default)]
-    pub tasks: HashMap<String, Task>,
+    /// All the features defined in the project.
+    pub features: IndexMap<FeatureName, Feature>,
 
-    /// Additional system requirements
-    #[serde(default, rename = "system-requirements")]
-    pub system_requirements: SystemRequirements,
+    /// All the environments defined in the project.
+    pub environments: IndexMap<EnvironmentName, Environment>,
+}
 
-    /// The dependencies of the project.
+impl ProjectManifest {
+    /// Parses a toml string into a project manifest.
+    pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
+        toml_edit::de::from_str(source).map_err(TomlError::from)
+    }
+
+    /// Returns the default feature.
     ///
-    /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
+    /// This is the feature that is added implicitly by the tables at the root of the project
     /// manifest.
-    #[serde(default)]
-    #[serde_as(as = "IndexMap<_, PickFirst<(_, DisplayFromStr)>>")]
-    pub dependencies: IndexMap<String, NamelessMatchSpec>,
+    pub fn default_feature(&self) -> &Feature {
+        self.features
+            .get(&FeatureName::Default)
+            .expect("default feature should always exist")
+    }
 
-    /// The host-dependencies of the project.
+    /// Returns a mutable reference to the default feature.
+    fn default_feature_mut(&mut self) -> &mut Feature {
+        self.features
+            .get_mut(&FeatureName::Default)
+            .expect("default feature should always exist")
+    }
+
+    /// Returns the default environment
     ///
-    /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
-    /// manifest.
-    #[serde(default, rename = "host-dependencies")]
-    #[serde_as(as = "Option<IndexMap<_, PickFirst<(_, DisplayFromStr)>>>")]
-    pub host_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
+    /// This is the environment that is added implicitly as the environment with only the default
+    /// feature. The default environment can be overwritten by a environment named `default`.
+    pub fn default_environment(&self) -> &Environment {
+        let envs = &self.environments;
+        envs.get(&EnvironmentName::Named(String::from("default")))
+            .or_else(|| envs.get(&EnvironmentName::Default))
+            .expect("default environment should always exist")
+    }
+}
 
-    /// The build-dependencies of the project.
-    ///
-    /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
-    /// manifest.
-    #[serde(default, rename = "build-dependencies")]
-    #[serde_as(as = "Option<IndexMap<_, PickFirst<(_, DisplayFromStr)>>>")]
-    pub build_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
+impl<'de> Deserialize<'de> for ProjectManifest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields, rename_all = "kebab-case")]
+        pub struct TomlProjectManifest {
+            project: ProjectMetadata,
+            #[serde(default)]
+            system_requirements: SystemRequirements,
+            #[serde(default)]
+            target: IndexMap<PixiSpanned<TargetSelector>, Target>,
+            #[serde(flatten)]
+            default_target: Target,
+        }
 
-    /// Target specific configuration.
-    ///
-    /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
-    /// manifest.
-    #[serde(default)]
-    pub target: IndexMap<PixiSpanned<TargetSelector>, TargetMetadata>,
+        let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
 
-    /// Environment activation information.
-    ///
-    /// We use an [`IndexMap`] to preserve the order in which the items where defined in the
-    /// manifest.
-    pub activation: Option<Activation>,
+        // Construct a default feature
+        let default_feature = Feature {
+            name: FeatureName::Default,
 
-    /// Optional python requirements
-    #[serde(default, rename = "pypi-dependencies")]
-    pub pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
+            // The default feature does not overwrite the platforms or channels from the project
+            // metadata.
+            platforms: None,
+            channels: None,
+
+            system_requirements: toml_manifest.system_requirements,
+
+            // Combine the default target with all user specified targets
+            targets: Targets::from_default_and_user_defined(
+                toml_manifest.default_target,
+                toml_manifest.target,
+            ),
+        };
+
+        // Construct a default environment
+        let default_environment = Environment {
+            name: EnvironmentName::Default,
+            features: Vec::new().into(),
+            solve_group: None,
+        };
+
+        Ok(Self {
+            project: toml_manifest.project,
+            features: IndexMap::from_iter([(FeatureName::Default, default_feature)]),
+            environments: IndexMap::from_iter([(EnvironmentName::Default, default_environment)]),
+        })
+    }
 }
 
 impl ProjectManifest {
     /// Validate the
     pub fn validate(&self, source: NamedSource, root_folder: &Path) -> miette::Result<()> {
         // Check if the targets are defined for existing platforms
-        for target_sel in self.target.keys() {
-            match target_sel.as_ref() {
-                TargetSelector::Platform(p) => {
-                    if !self.project.platforms.as_ref().contains(p) {
-                        return Err(create_unsupported_platform_report(
-                            source,
-                            target_sel.span().unwrap_or_default(),
-                            p,
-                        ));
+        for feature in self.features.values() {
+            let platforms = feature
+                .platforms
+                .as_ref()
+                .unwrap_or(&self.project.platforms);
+            for target_sel in feature.targets.user_defined_selectors() {
+                match target_sel {
+                    TargetSelector::Platform(p) => {
+                        if !platforms.as_ref().contains(p) {
+                            return Err(create_unsupported_platform_report(
+                                source,
+                                feature.targets.source_loc(target_sel).unwrap_or_default(),
+                                p,
+                                feature,
+                            ));
+                        }
                     }
                 }
             }
@@ -766,165 +684,6 @@ impl ProjectManifest {
 
         Ok(())
     }
-
-    /// Get the map of dependencies for a given spec type.
-    pub fn create_or_get_dependencies(
-        &mut self,
-        spec_type: SpecType,
-    ) -> &'_ mut IndexMap<String, NamelessMatchSpec> {
-        match spec_type {
-            SpecType::Run => &mut self.dependencies,
-            SpecType::Host => {
-                if let Some(ref mut deps) = self.host_dependencies {
-                    deps
-                } else {
-                    self.host_dependencies.insert(IndexMap::new())
-                }
-            }
-            SpecType::Build => {
-                if let Some(ref mut deps) = self.build_dependencies {
-                    deps
-                } else {
-                    self.build_dependencies.insert(IndexMap::new())
-                }
-            }
-        }
-    }
-
-    /// Get the map of dependencies for a given spec type.
-    pub fn create_or_get_pypi_dependencies(
-        &mut self,
-    ) -> &mut IndexMap<PackageName, PyPiRequirement> {
-        if let Some(ref mut deps) = self.pypi_dependencies {
-            deps
-        } else {
-            self.pypi_dependencies.insert(IndexMap::new())
-        }
-    }
-
-    /// Remove dependency given a `SpecType`.
-    pub fn remove_dependency(
-        &mut self,
-        dep: &str,
-        spec_type: &SpecType,
-    ) -> miette::Result<(String, NamelessMatchSpec)> {
-        let dependencies = match spec_type {
-            SpecType::Run => Some(&mut self.dependencies),
-            SpecType::Build => self.build_dependencies.as_mut(),
-            SpecType::Host => self.host_dependencies.as_mut(),
-        };
-
-        if let Some(deps) = dependencies {
-            deps.shift_remove_entry(dep).ok_or(miette::miette!(
-                "Couldn't find {} in [{}]",
-                console::style(dep).bold(),
-                console::style(spec_type.name()).bold(),
-            ))
-        } else {
-            Err(miette::miette!(
-                "[{}] doesn't exist",
-                console::style(spec_type.name()).bold()
-            ))
-        }
-    }
-
-    /// Remove a dependency for a `Platform`.
-    pub fn remove_target_dependency(
-        &mut self,
-        dep: &str,
-        spec_type: &SpecType,
-        platform: &Platform,
-    ) -> miette::Result<(String, NamelessMatchSpec)> {
-        let target = PixiSpanned::from(TargetSelector::Platform(*platform));
-        let target_metadata = self.target.get_mut(&target).ok_or(miette::miette!(
-            "Platform: {} is not configured for this project",
-            console::style(platform.as_str()).bold(),
-        ))?;
-
-        let dependencies = match spec_type {
-            SpecType::Run => Some(&mut target_metadata.dependencies),
-            SpecType::Build => target_metadata.build_dependencies.as_mut(),
-            SpecType::Host => target_metadata.host_dependencies.as_mut(),
-        };
-
-        if let Some(deps) = dependencies {
-            deps.shift_remove_entry(dep).ok_or(miette::miette!(
-                "Couldn't find {} in [{}]",
-                console::style(dep).bold(),
-                console::style(format!("target.{}.{}", platform.as_str(), spec_type.name())).bold(),
-            ))
-        } else {
-            Err(miette::miette!(
-                "[{}] doesn't exist",
-                console::style(format!("target.{}.{}", platform.as_str(), spec_type.name())).bold(),
-            ))
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum TargetSelector {
-    // Platform specific configuration
-    Platform(Platform),
-    // TODO: Add minijinja coolness here.
-}
-
-struct PlatformTargetSelector;
-
-impl<'de> DeserializeAs<'de, TargetSelector> for PlatformTargetSelector {
-    fn deserialize_as<D>(deserializer: D) -> Result<TargetSelector, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(TargetSelector::Platform(Platform::deserialize(
-            deserializer,
-        )?))
-    }
-}
-
-impl<'de> Deserialize<'de> for TargetSelector {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(
-            DeserializeAsWrap::<Self, PickFirst<(PlatformTargetSelector,)>>::deserialize(
-                deserializer,
-            )?
-            .into_inner(),
-        )
-    }
-}
-
-#[serde_as]
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TargetMetadata {
-    /// Target specific dependencies
-    #[serde(default)]
-    #[serde_as(as = "IndexMap<_, PickFirst<(_, DisplayFromStr)>>")]
-    pub dependencies: IndexMap<String, NamelessMatchSpec>,
-
-    /// The host-dependencies of the project.
-    #[serde(default, rename = "host-dependencies")]
-    #[serde_as(as = "Option<IndexMap<_, PickFirst<(_, DisplayFromStr)>>>")]
-    pub host_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
-
-    /// The build-dependencies of the project.
-    #[serde(default, rename = "build-dependencies")]
-    #[serde_as(as = "Option<IndexMap<_, PickFirst<(_, DisplayFromStr)>>>")]
-    pub build_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
-
-    #[serde(default, rename = "pypi-dependencies")]
-    pub pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
-
-    /// Additional information to activate an environment.
-    #[serde(default)]
-    pub activation: Option<Activation>,
-
-    /// Target specific tasks to run in the environment
-    #[serde(default)]
-    pub tasks: HashMap<String, Task>,
 }
 
 /// Describes the contents of the `[package]` section of the project manifest.
@@ -1092,6 +851,7 @@ fn create_unsupported_platform_report(
     source: NamedSource,
     span: Range<usize>,
     platform: &Platform,
+    feature: &Feature,
 ) -> Report {
     miette::miette!(
         labels = vec![LabeledSpan::at(
@@ -1099,55 +859,29 @@ fn create_unsupported_platform_report(
             format!("'{}' is not a supported platform", platform)
         )],
         help = format!(
-            "Add '{platform}' to the `project.platforms` array of the {} manifest.",
-            consts::PROJECT_MANIFEST
+            "Add '{platform}' to the `{}` array of the {} manifest.",
+            consts::PROJECT_MANIFEST,
+            if feature.platforms.is_some() {
+                format!(
+                    "feature.{}.platforms",
+                    feature
+                        .name
+                        .name()
+                        .expect("default feature never defines custom platforms")
+                )
+            } else {
+                String::from("project.platforms")
+            }
         ),
         "targeting a platform that this project does not support"
     )
     .with_source_code(source)
 }
 
-/// Returns a task as a toml item
-fn task_as_toml(task: Task) -> Item {
-    match task {
-        Task::Plain(str) => Item::Value(str.into()),
-        Task::Execute(process) => {
-            let mut table = Table::new().into_inline_table();
-            match process.cmd {
-                CmdArgs::Single(cmd_str) => {
-                    table.insert("cmd", cmd_str.into());
-                }
-                CmdArgs::Multiple(cmd_strs) => {
-                    table.insert("cmd", Value::Array(Array::from_iter(cmd_strs)));
-                }
-            }
-            if !process.depends_on.is_empty() {
-                table.insert(
-                    "depends_on",
-                    Value::Array(Array::from_iter(process.depends_on)),
-                );
-            }
-            if let Some(cwd) = process.cwd {
-                table.insert("cwd", cwd.to_string_lossy().to_string().into());
-            }
-            Item::Value(Value::InlineTable(table))
-        }
-        Task::Alias(alias) => {
-            let mut table = Table::new().into_inline_table();
-            table.insert(
-                "depends_on",
-                Value::Array(Array::from_iter(alias.depends_on)),
-            );
-            Item::Value(Value::InlineTable(table))
-        }
-        _ => Item::None,
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use insta::{assert_debug_snapshot, assert_display_snapshot};
+    use insta::assert_display_snapshot;
     use std::str::FromStr;
     use tempfile::tempdir;
 
@@ -1192,8 +926,40 @@ mod test {
         foo = "1.2.3"
         "#
         );
-        assert_debug_snapshot!(
-            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
+
+        let manifest = ProjectManifest::from_toml_str(&contents).unwrap();
+        let targets = &manifest.default_feature().targets;
+        assert_eq!(
+            targets.user_defined_selectors().cloned().collect_vec(),
+            vec![
+                TargetSelector::Platform(Platform::Win64),
+                TargetSelector::Platform(Platform::Osx64)
+            ]
+        );
+
+        let win64_target = targets
+            .for_target(&TargetSelector::Platform(Platform::Win64))
+            .unwrap();
+        let osx64_target = targets
+            .for_target(&TargetSelector::Platform(Platform::Osx64))
+            .unwrap();
+        assert_eq!(
+            win64_target
+                .run_dependencies()
+                .unwrap()
+                .get("foo")
+                .unwrap()
+                .to_string(),
+            "==3.4.5"
+        );
+        assert_eq!(
+            osx64_target
+                .run_dependencies()
+                .unwrap()
+                .get("foo")
+                .unwrap()
+                .to_string(),
+            "==1.2.3"
         );
     }
 
@@ -1212,9 +978,48 @@ mod test {
             "#
         );
 
-        assert_debug_snapshot!(
-            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
+        let manifest = ProjectManifest::from_toml_str(&contents).unwrap();
+        let deps = manifest
+            .default_feature()
+            .targets
+            .default()
+            .run_dependencies()
+            .unwrap();
+        let test_map_spec = deps.get("test_map").unwrap();
+
+        assert_eq!(test_map_spec.to_string(), ">=1.2.3 py34_0");
+        assert_eq!(
+            test_map_spec
+                .channel
+                .as_deref()
+                .map(Channel::canonical_name),
+            Some(String::from("https://conda.anaconda.org/conda-forge/"))
         );
+
+        assert_eq!(deps.get("test_build").unwrap().to_string(), "* bla");
+
+        let test_channel = deps.get("test_channel").unwrap();
+        assert_eq!(test_channel.to_string(), "*");
+        assert_eq!(
+            test_channel.channel.as_deref().map(Channel::canonical_name),
+            Some(String::from("https://conda.anaconda.org/conda-forge/"))
+        );
+
+        let test_version = deps.get("test_version").unwrap();
+        assert_eq!(test_version.to_string(), ">=1.2.3");
+
+        let test_version_channel = deps.get("test_version_channel").unwrap();
+        assert_eq!(test_version_channel.to_string(), ">=1.2.3");
+        assert_eq!(
+            test_version_channel
+                .channel
+                .as_deref()
+                .map(Channel::canonical_name),
+            Some(String::from("https://conda.anaconda.org/conda-forge/"))
+        );
+
+        let test_version_build = deps.get("test_version_build").unwrap();
+        assert_eq!(test_version_build.to_string(), ">=1.2.3 py34_0");
     }
 
     #[test]
@@ -1233,9 +1038,18 @@ mod test {
             "#
         );
 
-        assert_debug_snapshot!(
-            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
+        let manifest = ProjectManifest::from_toml_str(&contents).unwrap();
+        let default_target = manifest.default_feature().targets.default();
+        let run_dependencies = default_target.run_dependencies().unwrap();
+        let build_dependencies = default_target.build_dependencies().unwrap();
+        let host_dependencies = default_target.host_dependencies().unwrap();
+
+        assert_eq!(
+            run_dependencies.get("my-game").unwrap().to_string(),
+            "==1.0.0"
         );
+        assert_eq!(build_dependencies.get("cmake").unwrap().to_string(), "*");
+        assert_eq!(host_dependencies.get("sdl2").unwrap().to_string(), "*");
     }
 
     #[test]
@@ -1245,22 +1059,23 @@ mod test {
 
         assert_display_snapshot!(examples
             .into_iter()
-            .map(
-                |example| toml_edit::de::from_str::<ProjectManifest>(&format!(
-                    "{PROJECT_BOILERPLATE}\n{example}"
-                ))
-                .unwrap_err()
-                .to_string()
-            )
+            .map(|example| ProjectManifest::from_toml_str(&format!(
+                "{PROJECT_BOILERPLATE}\n{example}"
+            ))
+            .unwrap_err()
+            .to_string())
             .collect::<Vec<_>>()
             .join("\n"))
     }
 
     #[test]
     fn test_activation_scripts() {
-        let contents = format!(
-            r#"
-            {PROJECT_BOILERPLATE}
+        let contents = r#"
+            [project]
+            name = "foo"
+            channels = []
+            platforms = ["win-64", "linux-64"]
+
             [activation]
             scripts = [".pixi/install/setup.sh"]
 
@@ -1269,11 +1084,47 @@ mod test {
 
             [target.linux-64.activation]
             scripts = [".pixi/install/setup.sh", "test"]
-            "#
-        );
+            "#;
 
-        assert_debug_snapshot!(
-            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
+        let manifest = Manifest::from_str(Path::new(""), contents).unwrap();
+        let default_activation_scripts = manifest
+            .default_feature()
+            .targets
+            .default()
+            .activation
+            .as_ref()
+            .and_then(|a| a.scripts.as_ref());
+        let win64_activation_scripts = manifest
+            .default_feature()
+            .targets
+            .for_target(&TargetSelector::Platform(Platform::Win64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.scripts.as_ref());
+        let linux64_activation_scripts = manifest
+            .default_feature()
+            .targets
+            .for_target(&TargetSelector::Platform(Platform::Linux64))
+            .unwrap()
+            .activation
+            .as_ref()
+            .and_then(|a| a.scripts.as_ref());
+
+        assert_eq!(
+            default_activation_scripts,
+            Some(&vec![String::from(".pixi/install/setup.sh")])
+        );
+        assert_eq!(
+            win64_activation_scripts,
+            Some(&vec![String::from(".pixi/install/setup.ps1")])
+        );
+        assert_eq!(
+            linux64_activation_scripts,
+            Some(&vec![
+                String::from(".pixi/install/setup.sh"),
+                String::from("test")
+            ])
         );
     }
 
@@ -1293,9 +1144,24 @@ mod test {
             "#
         );
 
-        assert_debug_snapshot!(
-            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
-        );
+        let manifest = ProjectManifest::from_toml_str(&contents).unwrap();
+
+        assert_display_snapshot!(manifest
+            .default_feature()
+            .targets
+            .iter()
+            .flat_map(|(target, selector)| {
+                let selector_name =
+                    selector.map_or_else(|| String::from("default"), ToString::to_string);
+                target.tasks.iter().filter_map(move |(name, task)| {
+                    Some(format!(
+                        "{}/{name} = {}",
+                        &selector_name,
+                        task.as_single_command()?
+                    ))
+                })
+            })
+            .join("\n"));
     }
 
     #[test]
@@ -1309,9 +1175,21 @@ mod test {
             "#
         );
 
-        assert_debug_snapshot!(
-            toml_edit::de::from_str::<ProjectManifest>(&contents).expect("parsing should succeed!")
-        );
+        assert_display_snapshot!(toml_edit::de::from_str::<ProjectManifest>(&contents)
+            .expect("parsing should succeed!")
+            .default_feature()
+            .targets
+            .default()
+            .pypi_dependencies
+            .clone()
+            .into_iter()
+            .flat_map(|d| d.into_iter())
+            .map(|(name, spec)| format!(
+                "{} = {}",
+                name.as_source_str(),
+                Item::from(spec).to_string()
+            ))
+            .join("\n"));
     }
 
     #[test]
@@ -1385,6 +1263,42 @@ mod test {
         }
     }
 
+    fn test_remove(file_contents: &str, name: &str, kind: SpecType, platform: Option<Platform>) {
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        // Initially the dependency should exist
+        assert!(manifest
+            .default_feature()
+            .targets
+            .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+            .unwrap()
+            .dependencies
+            .get(&kind)
+            .unwrap()
+            .get(name)
+            .is_some());
+
+        // Remove the dependency from the manifest
+        manifest
+            .remove_dependency(&PackageName::new_unchecked(name), kind, platform)
+            .unwrap();
+
+        // The dependency should no longer exist
+        assert!(manifest
+            .default_feature()
+            .targets
+            .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+            .unwrap()
+            .dependencies
+            .get(&kind)
+            .unwrap()
+            .get(name)
+            .is_none());
+
+        // Write the toml to string and verify the content
+        assert_display_snapshot!(manifest.document.to_string());
+    }
+
     #[test]
     fn test_remove_target_dependencies() {
         // Using known files in the project so the test succeed including the file check.
@@ -1405,15 +1319,14 @@ mod test {
             baz = "*"
         "#;
 
-        let tmpdir = tempdir().unwrap();
-
-        let mut manifest = Manifest::from_str(tmpdir.path(), file_contents).unwrap();
-
-        manifest
-            .parsed
-            .remove_target_dependency("baz", &SpecType::Build, &Platform::Linux64)
-            .unwrap();
-        assert_debug_snapshot!(manifest.parsed);
+        test_remove(
+            file_contents,
+            "baz",
+            SpecType::Build,
+            Some(Platform::Linux64),
+        );
+        test_remove(file_contents, "bar", SpecType::Run, Some(Platform::Win64));
+        test_remove(file_contents, "fooz", SpecType::Run, None);
     }
 
     #[test]
@@ -1439,14 +1352,34 @@ mod test {
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
 
         manifest
-            .remove_dependency(
-                &rattler_conda_types::PackageName::try_from("fooz").unwrap(),
-                &SpecType::Run,
-            )
+            .remove_dependency(&PackageName::new_unchecked("fooz"), SpecType::Run, None)
             .unwrap();
-        assert!(manifest.parsed.dependencies.is_empty());
-        // Should still contain the fooz dependency in the target table
-        assert_debug_snapshot!(manifest.parsed.target);
+
+        // The dependency should be removed from the default feature
+        assert!(manifest
+            .default_feature()
+            .targets
+            .default()
+            .run_dependencies()
+            .map(|d| d.is_empty())
+            .unwrap_or(true));
+
+        // Should still contain the fooz dependency for the different platforms
+        for (platform, kind) in [
+            (Platform::Linux64, SpecType::Build),
+            (Platform::Win64, SpecType::Run),
+        ] {
+            assert!(manifest
+                .default_feature()
+                .targets
+                .for_target(&TargetSelector::Platform(platform))
+                .unwrap()
+                .dependencies
+                .get(&kind)
+                .into_iter()
+                .flat_map(|x| x.keys())
+                .any(|x| x.as_normalized() == "fooz"));
+        }
     }
 
     #[test]

@@ -207,12 +207,12 @@ pub async fn add_pypi_specs_to_project(
         // TODO: Get best version
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.manifest.add_pypi_dependency(name, spec)?;
+            project.manifest.add_pypi_dependency(name, spec, None)?;
         } else {
             for platform in specs_platforms.iter() {
                 project
                     .manifest
-                    .add_target_pypi_dependency(*platform, name.clone(), spec)?;
+                    .add_pypi_dependency(name, spec, Some(*platform))?;
             }
         }
     }
@@ -268,9 +268,7 @@ pub async fn add_conda_specs_to_project(
         //     SpecType::Build => project.build_dependencies(platform)?,
         //     SpecType::Run => project.dependencies(platform)?,
         // };
-        let mut current_specs = project.dependencies(platform)?;
-        current_specs.extend(project.host_dependencies(platform)?);
-        current_specs.extend(project.build_dependencies(platform)?);
+        let current_specs = project.all_dependencies(platform);
 
         // Solve the environment with the new specs added
         let solved_versions = match determine_best_version(
@@ -312,12 +310,12 @@ pub async fn add_conda_specs_to_project(
 
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.manifest.add_dependency(&spec, spec_type)?;
+            project.manifest.add_dependency(&spec, spec_type, None)?;
         } else {
             for platform in specs_platforms.iter() {
                 project
                     .manifest
-                    .add_target_dependency(*platform, &spec, spec_type)?;
+                    .add_dependency(&spec, spec_type, Some(*platform))?;
             }
         }
     }

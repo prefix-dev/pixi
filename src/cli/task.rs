@@ -4,6 +4,7 @@ use clap::Parser;
 use itertools::Itertools;
 use rattler_conda_types::Platform;
 use std::path::PathBuf;
+use toml_edit::{Array, Item, Table, Value};
 
 #[derive(Parser, Debug)]
 pub enum Operation {
@@ -142,6 +143,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
             project
                 .manifest
                 .add_task(name, task.clone(), args.platform)?;
+            project.save()?;
             eprintln!(
                 "{}Added task {}: {}",
                 console::style(console::Emoji("✔ ", "+")).green(),
@@ -155,7 +157,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 if let Some(platform) = args.platform {
                     if !project
                         .manifest
-                        .target_specific_tasks(platform)
+                        .tasks(Some(platform))
                         .contains_key(name.as_str())
                     {
                         eprintln!(
@@ -195,6 +197,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
 
             for (name, platform) in to_remove {
                 project.manifest.remove_task(name, platform)?;
+                project.save()?;
                 eprintln!(
                     "{}Removed task {} ",
                     console::style(console::Emoji("✔ ", "+")).green(),
@@ -208,6 +211,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
             project
                 .manifest
                 .add_task(name, task.clone(), args.platform)?;
+            project.save()?;
             eprintln!(
                 "{} Added alias {}: {}",
                 console::style("@").blue(),
@@ -238,4 +242,42 @@ pub fn execute(args: Args) -> miette::Result<()> {
     };
 
     Ok(())
+}
+
+impl From<Task> for Item {
+    fn from(value: Task) -> Self {
+        match value {
+            Task::Plain(str) => Item::Value(str.into()),
+            Task::Execute(process) => {
+                let mut table = Table::new().into_inline_table();
+                match process.cmd {
+                    CmdArgs::Single(cmd_str) => {
+                        table.insert("cmd", cmd_str.into());
+                    }
+                    CmdArgs::Multiple(cmd_strs) => {
+                        table.insert("cmd", Value::Array(Array::from_iter(cmd_strs)));
+                    }
+                }
+                if !process.depends_on.is_empty() {
+                    table.insert(
+                        "depends_on",
+                        Value::Array(Array::from_iter(process.depends_on)),
+                    );
+                }
+                if let Some(cwd) = process.cwd {
+                    table.insert("cwd", cwd.to_string_lossy().to_string().into());
+                }
+                Item::Value(Value::InlineTable(table))
+            }
+            Task::Alias(alias) => {
+                let mut table = Table::new().into_inline_table();
+                table.insert(
+                    "depends_on",
+                    Value::Array(Array::from_iter(alias.depends_on)),
+                );
+                Item::Value(Value::InlineTable(table))
+            }
+            _ => Item::None,
+        }
+    }
 }

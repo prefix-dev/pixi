@@ -14,7 +14,7 @@ use crate::unix::PtySession;
 use crate::cli::LockFileUsageArgs;
 use crate::environment::get_up_to_date_prefix;
 use crate::environment::LockFileUsage;
-use crate::project::environment::get_metadata_env;
+use crate::project::metadata::get_metadata_env;
 #[cfg(target_family = "windows")]
 use rattler_shell::shell::CmdExe;
 

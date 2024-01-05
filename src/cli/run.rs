@@ -11,7 +11,7 @@ use crate::task::{
 };
 use crate::{
     environment::get_up_to_date_prefix, prefix::Prefix, progress::await_in_progress,
-    project::environment::get_metadata_env, Project,
+    project::metadata::get_metadata_env, Project,
 };
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
