@@ -2,8 +2,54 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2024-01-05
+### ✨ Highlights
+
+- Lots of important
+
+### 📃 Details
+#### Added
+- Add new commands for `pixi project {version|channel|platform|description}` by @hadim in [#579](https://github.com/prefix-dev/pixi/pull/579)
+- Add dependabot.yml by @pavelzw in [#606](https://github.com/prefix-dev/pixi/pull/606)
+
+#### Changed
+- `winget-releaser` gets correct identifier by @ruben-arts in [#561](https://github.com/prefix-dev/pixi/pull/561)
+- Task run code by @baszalmstra in [#556](https://github.com/prefix-dev/pixi/pull/556)
+- No ps1 in activation scripts by @ruben-arts in [#563](https://github.com/prefix-dev/pixi/pull/563)
+- Changed some names for clarity by @tdejager in [#568](https://github.com/prefix-dev/pixi/pull/568)
+- Change font and make it dark mode by @ruben-arts in [#576](https://github.com/prefix-dev/pixi/pull/576)
+- Moved pypi installation into its own module by @tdejager in [#589](https://github.com/prefix-dev/pixi/pull/589)
+- Move alpha to beta feature and toggle it off with env var by @ruben-arts in [#604](https://github.com/prefix-dev/pixi/pull/604)
+- Improve UX activation scripts by @ruben-arts in [#560](https://github.com/prefix-dev/pixi/pull/560)
+- Add sanity check by @tdejager in [#569](https://github.com/prefix-dev/pixi/pull/569)
+- Refactor manifest by @ruben-arts in [#572](https://github.com/prefix-dev/pixi/pull/572)
+- Improve search by @Johnwillliam in [#578](https://github.com/prefix-dev/pixi/pull/578)
+- Split pypi and conda solve steps by @tdejager in [#601](https://github.com/prefix-dev/pixi/pull/601)
+
+#### Fixed
+- Save file after lockfile is correctly updated by @ruben-arts in [#555](https://github.com/prefix-dev/pixi/pull/555)
+- Limit the number of concurrent solves by @baszalmstra in [#571](https://github.com/prefix-dev/pixi/pull/571)
+- Use project virtual packages in add command by @msegado in [#609](https://github.com/prefix-dev/pixi/pull/609)
+- Improved mapped dependency by @ruben-arts in [#574](https://github.com/prefix-dev/pixi/pull/574)
+
+#### Documentation
+- Change font and make it dark mode by @ruben-arts in [#576](https://github.com/prefix-dev/pixi/pull/576)
+- typo: no ps1 in activation scripts by @ruben-arts in [#563](https://github.com/prefix-dev/pixi/pull/563)
+- Document adding CUDA to `system-requirements` by @ruben-arts in [#595](https://github.com/prefix-dev/pixi/pull/595)
+- Multi env proposal documentation by @ruben-arts in [#584](https://github.com/prefix-dev/pixi/pull/584)
+- Fix multiple typos in configuration.md by @SeaOtocinclus in [#608](https://github.com/prefix-dev/pixi/pull/608)
+- Add multiple machines from one project example by @pavelzw in [#605](https://github.com/prefix-dev/pixi/pull/605)
+
+## New Contributors
+* @hadim made their first contribution in [#579](https://github.com/prefix-dev/pixi/pull/579)
+* @msegado made their first contribution in [#609](https://github.com/prefix-dev/pixi/pull/609)
+* @Johnwillliam made their first contribution in [#578](https://github.com/prefix-dev/pixi/pull/578)
+* @SeaOtocinclus made their first contribution in [#608](https://github.com/prefix-dev/pixi/pull/608)
+
+**Full Changelog**: https://github.com/prefix-dev/pixi/compare/v0.10.0...v0.11.0
 
 ## [0.10.0] - 2023-12-8
 ### Highlights
