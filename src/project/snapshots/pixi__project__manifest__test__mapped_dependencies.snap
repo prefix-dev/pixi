@@ -83,6 +83,137 @@ ProjectManifest {
             md5: None,
             sha256: None,
         },
+        "test_build": NamelessMatchSpec {
+            version: None,
+            build: Some(
+                Exact(
+                    "bla",
+                ),
+            ),
+            build_number: None,
+            file_name: None,
+            channel: None,
+            subdir: None,
+            namespace: None,
+            md5: None,
+            sha256: None,
+        },
+        "test_channel": NamelessMatchSpec {
+            version: None,
+            build: None,
+            build_number: None,
+            file_name: None,
+            channel: Some(
+                Channel {
+                    platforms: None,
+                    base_url: Url {
+                        scheme: "https",
+                        cannot_be_a_base: false,
+                        username: "",
+                        password: None,
+                        host: Some(
+                            Domain(
+                                "conda.anaconda.org",
+                            ),
+                        ),
+                        port: None,
+                        path: "/conda-forge/",
+                        query: None,
+                        fragment: None,
+                    },
+                    name: Some(
+                        "conda-forge",
+                    ),
+                },
+            ),
+            subdir: None,
+            namespace: None,
+            md5: None,
+            sha256: None,
+        },
+        "test_version": NamelessMatchSpec {
+            version: Some(
+                Range(
+                    GreaterEquals,
+                    Version {
+                        version: [[0], [1], [2], [3]],
+                        local: [],
+                    },
+                ),
+            ),
+            build: None,
+            build_number: None,
+            file_name: None,
+            channel: None,
+            subdir: None,
+            namespace: None,
+            md5: None,
+            sha256: None,
+        },
+        "test_version_channel": NamelessMatchSpec {
+            version: Some(
+                Range(
+                    GreaterEquals,
+                    Version {
+                        version: [[0], [1], [2], [3]],
+                        local: [],
+                    },
+                ),
+            ),
+            build: None,
+            build_number: None,
+            file_name: None,
+            channel: Some(
+                Channel {
+                    platforms: None,
+                    base_url: Url {
+                        scheme: "https",
+                        cannot_be_a_base: false,
+                        username: "",
+                        password: None,
+                        host: Some(
+                            Domain(
+                                "conda.anaconda.org",
+                            ),
+                        ),
+                        port: None,
+                        path: "/conda-forge/",
+                        query: None,
+                        fragment: None,
+                    },
+                    name: Some(
+                        "conda-forge",
+                    ),
+                },
+            ),
+            subdir: None,
+            namespace: None,
+            md5: None,
+            sha256: None,
+        },
+        "test_version_build": NamelessMatchSpec {
+            version: Some(
+                Range(
+                    GreaterEquals,
+                    Version {
+                        version: [[0], [1], [2], [3]],
+                        local: [],
+                    },
+                ),
+            ),
+            build: Some(
+                Exact(
+                    "py34_0",
+                ),
+            ),
+            build_number: None,
+            file_name: None,
+            channel: None,
+            subdir: None,
+            namespace: None,
+            md5: None,
+            sha256: None,
+        },
     },
     host_dependencies: None,
     build_dependencies: None,

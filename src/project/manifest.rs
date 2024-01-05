@@ -1204,6 +1204,11 @@ mod test {
             {PROJECT_BOILERPLATE}
             [dependencies]
             test_map = {{ version = ">=1.2.3", channel="conda-forge", build="py34_0" }}
+            test_build = {{ build = "bla" }}
+            test_channel = {{ channel = "conda-forge" }}
+            test_version = {{ version = ">=1.2.3" }}
+            test_version_channel = {{ version = ">=1.2.3", channel = "conda-forge" }}
+            test_version_build = {{ version = ">=1.2.3", build = "py34_0" }}
             "#
         );
 
