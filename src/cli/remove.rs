@@ -70,14 +70,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         section_name
     };
 
-    fn print_ok_dep_removal(pkg_name: &String, pkg_extras: &String, table_name: &String) {
-        eprintln!(
+    fn format_ok_message(pkg_name: &String, pkg_extras: &String, table_name: &String) -> String {
+        format!(
             "Removed {} from [{}]",
             console::style(format!("{pkg_name} {pkg_extras}")).bold(),
             console::style(table_name).bold()
         )
     }
-
+    let mut sucessful_output: Vec<String> = Vec::with_capacity(deps.len());
     if args.pypi {
         let all_pkg_name = convert_pkg_name::<rip::types::PackageName>(&deps)?;
         for dep in all_pkg_name.iter() {
@@ -86,11 +86,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             } else {
                 project.manifest.remove_pypi_dependency(dep)?
             };
-            print_ok_dep_removal(
+            sucessful_output.push(format_ok_message(
                 &result.0.as_str().to_string(),
                 &result.1.to_string(),
                 &table_name,
-            );
+            ));
         }
     } else {
         let all_pkg_name = convert_pkg_name::<rattler_conda_types::PackageName>(&deps)?;
@@ -102,10 +102,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             } else {
                 project.manifest.remove_dependency(dep, &spec_type)?
             };
-            print_ok_dep_removal(&result.0, &result.1.to_string(), &table_name);
+            sucessful_output.push(format_ok_message(
+                &result.0,
+                &result.1.to_string(),
+                &table_name,
+            ));
         }
     };
     project.save()?;
+    eprintln!("{}", sucessful_output.join("\n"));
 
     // updating prefix after removing from toml
     let _ = get_up_to_date_prefix(&project, LockFileUsage::Update, false, None).await?;
