@@ -9,9 +9,7 @@ use dirs::home_dir;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
-use rattler_conda_types::{
-    Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
-};
+use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -331,30 +329,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Find the MatchSpec we want to install
     let package_matchspec = MatchSpec::from_str(&args.package).into_diagnostic()?;
-    let package_name = package_name(&package_matchspec)?;
-
-    let platform = Platform::current();
 
     // Fetch sparse repodata
-    let platform_sparse_repodata = fetch_sparse_repodata(&channels, &[platform]).await?;
-
-    let available_packages = SparseRepoData::load_records_recursive(
-        platform_sparse_repodata.iter(),
-        vec![package_name.clone()],
-        None,
-    )
-    .into_diagnostic()?;
+    let platform_sparse_repodata = fetch_sparse_repodata(&channels, &[Platform::current()]).await?;
 
     // Install the package
-    let (prefix_package, channel, scripts) = install_package(
+    let (prefix_package, scripts, _) = globally_install_package(
         package_matchspec,
-        available_packages,
+        &platform_sparse_repodata,
         &channel_config,
-        platform,
     )
     .await?;
 
+    let channel_name = channel_name_from_prefix(&prefix_package, &channel_config);
     let whitespace = console::Emoji("  ", "").to_string();
+
     eprintln!(
         "{}Installed package {} {} {} from {}",
         console::style(console::Emoji("✔ ", "")).green(),
@@ -368,7 +357,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .bold(),
         console::style(prefix_package.repodata_record.package_record.version).bold(),
         console::style(prefix_package.repodata_record.package_record.build).bold(),
-        channel,
+        channel_name,
     );
 
     let BinDir(bin_dir) = BinDir::from_existing().await?;
@@ -398,13 +387,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-pub(super) async fn install_package(
+pub(super) async fn globally_install_package(
     package_matchspec: MatchSpec,
-    available_packages: Vec<Vec<RepoDataRecord>>,
+    platform_sparse_repodata: &[SparseRepoData],
     channel_config: &ChannelConfig,
-    platform: Platform,
-) -> miette::Result<(PrefixRecord, String, Vec<PathBuf>)> {
+) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
+    let platform = Platform::current();
     let package_name = package_name(&package_matchspec)?;
+
+    let available_packages = SparseRepoData::load_records_recursive(
+        platform_sparse_repodata,
+        vec![package_name.clone()],
+        None,
+    )
+    .into_diagnostic()?;
+
     // Solve for environment
     // Construct a solver task that we can start solving.
     let task = rattler_solve::SolverTask {
@@ -435,8 +432,10 @@ pub(super) async fn install_package(
         Transaction::from_current_and_desired(prefix_records, records.iter().cloned(), platform)
             .into_diagnostic()?;
 
+    let has_transactions = !transaction.operations.is_empty();
+
     // Execute the transaction if there is work to do
-    if !transaction.operations.is_empty() {
+    if has_transactions {
         // Execute the operations that are returned by the solver.
         await_in_progress(
             "creating virtual environment",
@@ -453,9 +452,6 @@ pub(super) async fn install_package(
 
     // Find the installed package in the environment
     let prefix_package = find_designated_package(&prefix, &package_name).await?;
-    let channel = Channel::from_str(&prefix_package.repodata_record.channel, channel_config)
-        .map(|ch| friendly_channel_name(&ch))
-        .unwrap_or_else(|_| prefix_package.repodata_record.channel.clone());
 
     // Determine the shell to use for the invocation script
     let shell: ShellEnum = if cfg!(windows) {
@@ -484,6 +480,7 @@ pub(super) async fn install_package(
 
     // Check if the bin path is on the path
     if scripts.is_empty() {
+        let channel = channel_name_from_prefix(&prefix_package, channel_config);
         miette::bail!(
             "could not find an executable entrypoint in package {} {} {} from {}, are you sure it exists?",
             console::style(prefix_package.repodata_record.package_record.name.as_source()).bold(),
@@ -493,7 +490,16 @@ pub(super) async fn install_package(
         );
     }
 
-    Ok((prefix_package, channel, scripts))
+    Ok((prefix_package, scripts, has_transactions))
+}
+
+fn channel_name_from_prefix(
+    prefix_package: &PrefixRecord,
+    channel_config: &ChannelConfig,
+) -> String {
+    Channel::from_str(&prefix_package.repodata_record.channel, channel_config)
+        .map(|ch| friendly_channel_name(&ch))
+        .unwrap_or_else(|_| prefix_package.repodata_record.channel.clone())
 }
 
 pub(super) fn package_name(package_matchspec: &MatchSpec) -> miette::Result<PackageName> {

@@ -3,14 +3,10 @@ use std::str::FromStr;
 use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
-use rattler_repodata_gateway::sparse::SparseRepoData;
 
 use crate::repodata::fetch_sparse_repodata;
 
-use super::{
-    install::{install_package, package_name},
-    list::list_global_packages,
-};
+use super::{install::globally_install_package, list::list_global_packages};
 
 /// Upgrade specific package which is installed globally.
 #[derive(Parser, Debug)]
@@ -44,7 +40,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Find the MatchSpec we want to install
     let package_matchspec = MatchSpec::from_str(&package).into_diagnostic()?;
-    let package_name = package_name(&package_matchspec)?;
 
     // Return with error if this package is not globally installed.
     if !list_global_packages()
@@ -52,39 +47,36 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .iter()
         .any(|global_package| global_package.as_source() == package)
     {
-        // TODO: Maybe this can be an error
         miette::bail!(
-            "{} Package is not globally installed",
+            "{} package is not globally installed",
             console::style("!").yellow().bold()
         );
     }
 
-    let platform = Platform::current();
-
     // Fetch sparse repodata
-    let platform_sparse_repodata = fetch_sparse_repodata(&channels, &[platform]).await?;
-
-    let available_packages = SparseRepoData::load_records_recursive(
-        platform_sparse_repodata.iter(),
-        vec![package_name.clone()],
-        None,
-    )
-    .into_diagnostic()?;
+    let platform_sparse_repodata = fetch_sparse_repodata(&channels, &[Platform::current()]).await?;
 
     // Install the package
-    let (package_record, _, _) = install_package(
+    let (package_record, _, upgraded) = globally_install_package(
         package_matchspec,
-        available_packages,
+        &platform_sparse_repodata,
         &channel_config,
-        platform,
     )
     .await?;
 
-    eprintln!(
-        "Updated package {} to version {}",
-        package_name.as_source(),
-        package_record.repodata_record.package_record.version
-    );
+    let package_record = package_record.repodata_record.package_record;
+    if upgraded {
+        eprintln!(
+            "Updated package {} to version {}",
+            package_record.name.as_normalized(),
+            package_record.version
+        );
+    } else {
+        eprintln!(
+            "Package {} is already up-to-date",
+            package_record.name.as_normalized(),
+        );
+    }
 
     Ok(())
 }
