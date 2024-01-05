@@ -10,7 +10,7 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{
     version_spec::{LogicalOperator, RangeOperator},
-    MatchSpec, NamelessMatchSpec, PackageName, Platform, Version, VersionSpec,
+    MatchSpec, NamelessMatchSpec, PackageName, Platform, Version, VersionBumpType, VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
@@ -403,7 +403,8 @@ fn determine_version_constraint<'a>(
     let upper_bound = max_version
         .pop_segments(1)
         .unwrap_or_else(|| max_version.clone())
-        .bump();
+        .bump(VersionBumpType::Last)
+        .ok()?;
     Some(VersionSpec::Group(
         LogicalOperator::And,
         vec![

@@ -95,7 +95,9 @@ fn login(args: LoginArgs, storage: AuthenticationStorage) -> miette::Result<()> 
         miette::bail!("Authentication with anaconda.org requires a conda token. Use `--conda-token` to provide one.");
     }
 
-    storage.store(&host, &auth).into_diagnostic()?;
+    storage
+        .store(&host, &auth)
+        .map_err(|e| miette::miette!(e.to_string()))?;
     Ok(())
 }
 
@@ -104,7 +106,9 @@ fn logout(args: LogoutArgs, storage: AuthenticationStorage) -> miette::Result<()
 
     println!("Removing authentication for {}", host);
 
-    storage.delete(&host).into_diagnostic()?;
+    storage
+        .delete(&host)
+        .map_err(|e| miette::miette!(e.to_string()))?;
     Ok(())
 }
 
