@@ -18,7 +18,7 @@ use rattler_conda_types::{
 };
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Deserializer;
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use std::{
     collections::HashMap,
     ops::Range,
@@ -582,6 +582,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
     where
         D: Deserializer<'de>,
     {
+        #[serde_as]
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields, rename_all = "kebab-case")]
         pub struct TomlProjectManifest {
@@ -590,11 +591,55 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             system_requirements: SystemRequirements,
             #[serde(default)]
             target: IndexMap<PixiSpanned<TargetSelector>, Target>,
-            #[serde(flatten)]
-            default_target: Target,
+
+            // HACK: If we use `flatten`, unknown keys will point to the wrong location in the file.
+            //  When https://github.com/toml-rs/toml/issues/589 is fixed we should use that
+            //
+            // Instead we currently copy the keys from the Target deserialize implementation which
+            // is really ugly.
+            //
+            // #[serde(flatten)]
+            // default_target: Target,
+            #[serde(default)]
+            #[serde_as(as = "IndexMap<_, PickFirst<(DisplayFromStr, _)>>")]
+            dependencies: IndexMap<PackageName, NamelessMatchSpec>,
+
+            #[serde(default)]
+            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
+            host_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+
+            #[serde(default)]
+            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
+            build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+
+            #[serde(default)]
+            pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
+
+            /// Additional information to activate an environment.
+            #[serde(default)]
+            activation: Option<Activation>,
+
+            /// Target specific tasks to run in the environment
+            #[serde(default)]
+            tasks: HashMap<String, Task>,
         }
 
         let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
+
+        let mut dependencies = HashMap::from_iter([(SpecType::Run, toml_manifest.dependencies)]);
+        if let Some(host_deps) = toml_manifest.host_dependencies {
+            dependencies.insert(SpecType::Host, host_deps);
+        }
+        if let Some(build_deps) = toml_manifest.build_dependencies {
+            dependencies.insert(SpecType::Build, build_deps);
+        }
+
+        let default_target = Target {
+            dependencies,
+            pypi_dependencies: toml_manifest.pypi_dependencies,
+            activation: toml_manifest.activation,
+            tasks: toml_manifest.tasks,
+        };
 
         // Construct a default feature
         let default_feature = Feature {
@@ -608,10 +653,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             system_requirements: toml_manifest.system_requirements,
 
             // Combine the default target with all user specified targets
-            targets: Targets::from_default_and_user_defined(
-                toml_manifest.default_target,
-                toml_manifest.target,
-            ),
+            targets: Targets::from_default_and_user_defined(default_target, toml_manifest.target),
         };
 
         // Construct a default environment
@@ -1064,6 +1106,21 @@ mod test {
             ))
             .unwrap_err()
             .to_string())
+            .collect::<Vec<_>>()
+            .join("\n"))
+    }
+
+    #[test]
+    fn test_invalid_key() {
+        let examples = [
+            format!("{PROJECT_BOILERPLATE}\n[foobar]"),
+            format!("{PROJECT_BOILERPLATE}\n[target.win-64.hostdependencies]"),
+        ];
+        assert_display_snapshot!(examples
+            .into_iter()
+            .map(|example| ProjectManifest::from_toml_str(&example)
+                .unwrap_err()
+                .to_string())
             .collect::<Vec<_>>()
             .join("\n"))
     }

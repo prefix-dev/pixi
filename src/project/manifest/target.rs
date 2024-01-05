@@ -117,20 +117,21 @@ impl<'de> Deserialize<'de> for Target {
         #[serde_as]
         #[derive(Debug, Clone, Default, Deserialize)]
         #[serde(rename_all = "kebab-case")]
+        #[serde(deny_unknown_fields)]
         pub struct TomlTarget {
             #[serde(default)]
             #[serde_as(as = "IndexMap<_, PickFirst<(DisplayFromStr, _)>>")]
             dependencies: IndexMap<PackageName, NamelessMatchSpec>,
 
-            #[serde(default, rename = "host-dependencies")]
+            #[serde(default)]
             #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
             host_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
-            #[serde(default, rename = "build-dependencies")]
+            #[serde(default)]
             #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
             build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
-            #[serde(default, rename = "pypi-dependencies")]
+            #[serde(default)]
             pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
 
             /// Additional information to activate an environment.
