@@ -1,9 +1,10 @@
 use pep440_rs::VersionSpecifiers;
-use serde::de::{Error, MapAccess, Visitor};
-use serde::{de, Deserialize, Deserializer};
-use std::fmt;
-use std::fmt::Formatter;
-use std::str::FromStr;
+use serde::{
+    de,
+    de::{Error, MapAccess, Visitor},
+    Deserialize, Deserializer,
+};
+use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
 

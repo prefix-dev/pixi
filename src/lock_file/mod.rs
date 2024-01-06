@@ -306,7 +306,7 @@ async fn resolve_platform(
     platform: Platform,
     pb: ProgressBar,
 ) -> miette::Result<LockedPackagesBuilder> {
-    let dependencies = project.all_dependencies(platform)?;
+    let dependencies = project.all_dependencies(platform);
     let match_specs = dependencies
         .iter()
         .map(|(name, constraint)| MatchSpec::from_nameless(constraint.clone(), Some(name.clone())))

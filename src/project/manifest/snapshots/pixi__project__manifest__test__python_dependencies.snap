@@ -1,0 +1,6 @@
+---
+source: src/project/manifest/mod.rs
+expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\").default_feature().targets.default().pypi_dependencies.clone().into_iter().flat_map(|d|\n                d.into_iter()).map(|(name, spec)|\n            format!(\"{} = {}\", name.as_source_str(), Item ::\n                from(spec).to_string())).join(\"\\n\")"
+---
+foo = ">=3.12"
+bar = { version = ">=3.12", extras = ["baz"] }

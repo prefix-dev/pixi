@@ -1,17 +1,15 @@
-pub mod environment;
 pub mod manifest;
-pub(crate) mod python;
-mod serde;
+pub mod metadata;
 
 use indexmap::IndexMap;
+use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
-use rattler_conda_types::{Channel, NamelessMatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{Channel, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
 use rattler_virtual_packages::VirtualPackage;
 use rip::{index::PackageDb, normalize_index_url};
 use std::collections::HashMap;
 use std::{
-    collections::HashSet,
     env,
     ffi::OsStr,
     fs,
@@ -19,14 +17,15 @@ use std::{
     sync::Arc,
 };
 
-use crate::project::manifest::{Manifest, SystemRequirements};
-use crate::project::python::PyPiRequirement;
 use crate::{
     consts::{self, PROJECT_MANIFEST},
     default_client,
     task::Task,
     virtual_packages::non_relevant_virtual_packages_for_platform,
 };
+use manifest::{Manifest, PyPiRequirement, SystemRequirements};
+use rip::types::NormalizedPackageName;
+use std::fmt::{Display, Formatter};
 use url::Url;
 
 /// The dependency types we support
@@ -45,7 +44,7 @@ impl DependencyType {
         }
     }
 }
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 /// What kind of dependency spec do we have
 pub enum SpecType {
     /// Host dependencies are used that are needed by the host environment when running the project
@@ -205,33 +204,17 @@ impl Project {
     pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&str, &Task> {
         self.manifest.tasks(platform)
     }
+
     /// Get the task with the specified `name` or `None` if no such task exists. If `platform` is
     /// specified then the task will first be looked up in the target specific tasks for the given
     /// platform.
     pub fn task_opt(&self, name: &str, platform: Option<Platform>) -> Option<&Task> {
-        if let Some(platform) = platform {
-            if let Some(task) = self.manifest.target_specific_tasks(platform).get(name) {
-                return Some(*task);
-            }
-        }
-
-        self.manifest.parsed.tasks.get(name)
+        self.manifest.tasks(platform).get(name).copied()
     }
 
     /// Returns all tasks defined in the project for the given platform
-    pub fn task_names(&self, platform: Option<Platform>) -> Vec<&String> {
-        let mut all_tasks = HashSet::new();
-
-        // Get all non-target specific tasks
-        all_tasks.extend(self.manifest.parsed.tasks.keys());
-
-        // Gather platform-specific tasks and overwrite the keys if they're double.
-        if let Some(platform) = platform {
-            for target_metadata in self.manifest.target_specific_metadata(platform) {
-                all_tasks.extend(target_metadata.tasks.keys());
-            }
-        }
-        Vec::from_iter(all_tasks)
+    pub fn task_names(&self, platform: Option<Platform>) -> Vec<&str> {
+        self.manifest.tasks(platform).keys().copied().collect_vec()
     }
 
     /// Returns names of the tasks that depend on the given task.
@@ -253,136 +236,47 @@ impl Project {
     pub fn dependencies(
         &self,
         platform: Platform,
-    ) -> miette::Result<IndexMap<PackageName, NamelessMatchSpec>> {
-        // Get the base dependencies (defined in the `[dependencies]` section)
-        let base_dependencies = self.manifest.parsed.dependencies.iter();
-
-        // Get the platform specific dependencies in the order they were defined.
-        let platform_specific = self
-            .manifest
-            .target_specific_metadata(platform)
-            .flat_map(|target| target.dependencies.iter());
-
-        // Combine the specs.
-        //
-        // Note that if a dependency was specified twice the platform specific one "wins".
-        base_dependencies
-            .chain(platform_specific)
-            .map(|(name, spec)| PackageName::try_from(name).map(|name| (name, spec.clone())))
-            .collect::<Result<_, _>>()
-            .into_diagnostic()
-    }
-
-    /// Returns the build dependencies of the project.
-    pub fn build_dependencies(
-        &self,
-        platform: Platform,
-    ) -> miette::Result<IndexMap<PackageName, NamelessMatchSpec>> {
-        // Get the base dependencies (defined in the `[build-dependencies]` section)
-        let base_dependencies = self.manifest.parsed.build_dependencies.iter();
-
-        // Get the platform specific dependencies in the order they were defined.
-        let platform_specific = self
-            .manifest
-            .target_specific_metadata(platform)
-            .flat_map(|target| target.build_dependencies.iter());
-
-        // Combine the specs.
-        //
-        // Note that if a dependency was specified twice the platform specific one "wins".
-        base_dependencies
-            .chain(platform_specific)
-            .flatten()
-            .map(|(name, spec)| PackageName::try_from(name).map(|name| (name, spec.clone())))
-            .collect::<Result<_, _>>()
-            .into_diagnostic()
-    }
-
-    /// Returns the host dependencies of the project.
-    pub fn host_dependencies(
-        &self,
-        platform: Platform,
-    ) -> miette::Result<IndexMap<PackageName, NamelessMatchSpec>> {
-        // Get the base dependencies (defined in the `[host-dependencies]` section)
-        let base_dependencies = self.manifest.parsed.host_dependencies.iter();
-
-        // Get the platform specific dependencies in the order they were defined.
-        let platform_specific = self
-            .manifest
-            .target_specific_metadata(platform)
-            .flat_map(|target| target.host_dependencies.iter());
-
-        // Combine the specs.
-        //
-        // Note that if a dependency was specified twice the platform specific one "wins".
-        base_dependencies
-            .chain(platform_specific)
-            .flatten()
-            .map(|(name, spec)| PackageName::try_from(name).map(|name| (name, spec.clone())))
-            .collect::<Result<_, _>>()
-            .into_diagnostic()
+        kind: SpecType,
+    ) -> IndexMap<PackageName, NamelessMatchSpec> {
+        self.manifest
+            .default_feature()
+            .targets
+            .resolve(Some(platform))
+            .collect_vec()
+            .into_iter()
+            .rev() // We rev this so that the most specific target is last.
+            .flat_map(|t| t.dependencies.get(&kind).into_iter().flatten())
+            .map(|(name, spec)| (name.clone(), spec.clone()))
+            .collect()
     }
 
     /// Returns all dependencies of the project. These are the run, host, build dependency sets combined.
-    pub fn all_dependencies(
-        &self,
-        platform: Platform,
-    ) -> miette::Result<IndexMap<PackageName, NamelessMatchSpec>> {
-        let mut dependencies = self.dependencies(platform)?;
-        dependencies.extend(self.host_dependencies(platform)?);
-        dependencies.extend(self.build_dependencies(platform)?);
-        Ok(dependencies)
+    pub fn all_dependencies(&self, platform: Platform) -> IndexMap<PackageName, NamelessMatchSpec> {
+        let mut dependencies = self.dependencies(platform, SpecType::Run);
+        dependencies.extend(self.dependencies(platform, SpecType::Host));
+        dependencies.extend(self.dependencies(platform, SpecType::Build));
+        dependencies
     }
 
     pub fn pypi_dependencies(
         &self,
         platform: Platform,
-    ) -> IndexMap<&rip::types::PackageName, &PyPiRequirement> {
-        // Get the base pypi dependencies (defined in the `[pypi-dependencies]` section)
-        let base_pypi_dependencies = self.manifest.parsed.pypi_dependencies.iter();
-
-        // Get the platform specific dependencies in the order they were defined.
-        let platform_specific = self
-            .manifest
-            .target_specific_metadata(platform)
-            .flat_map(|target| target.pypi_dependencies.iter());
-
-        // Combine the specs.
-        //
-        // Note that if a dependency was specified twice the platform specific one "wins".
-        base_pypi_dependencies
-            .chain(platform_specific)
-            .flatten()
-            .collect::<IndexMap<_, _>>()
+    ) -> IndexMap<rip::types::PackageName, PyPiRequirement> {
+        self.manifest
+            .default_feature()
+            .targets
+            .resolve(Some(platform))
+            .collect_vec()
+            .into_iter()
+            .rev() // We rev this so that the most specific target is last.
+            .flat_map(|t| t.pypi_dependencies.iter().flatten())
+            .map(|(name, spec)| (name.clone(), spec.clone()))
+            .collect()
     }
 
     /// Returns true if the project contains any pypi dependencies
     pub fn has_pypi_dependencies(&self) -> bool {
-        // Do we have base pypi dependencies?
-        if !self
-            .manifest
-            .parsed
-            .pypi_dependencies
-            .as_ref()
-            .map(IndexMap::is_empty)
-            .unwrap_or(true)
-        {
-            return true;
-        }
-
-        // Do we have target specific pypi dependencies?
-        for (_, target) in self.manifest.parsed.target.iter() {
-            if !target
-                .pypi_dependencies
-                .as_ref()
-                .map(IndexMap::is_empty)
-                .unwrap_or(true)
-            {
-                return true;
-            }
-        }
-
-        false
+        self.manifest.has_pypi_dependencies()
     }
 
     /// Returns the Python index URLs to use for this project.
@@ -414,28 +308,23 @@ impl Project {
 
     /// Returns the all specified activation scripts that are used in the current platform.
     pub fn activation_scripts(&self, platform: Platform) -> miette::Result<Vec<PathBuf>> {
-        let mut full_paths = Vec::new();
-        let mut all_scripts = Vec::new();
+        let feature = self.manifest.default_feature();
 
-        // Gather platform-specific activation scripts
-        for target_metadata in self.manifest.target_specific_metadata(platform) {
-            if let Some(activation) = &target_metadata.activation {
-                if let Some(scripts) = &activation.scripts {
-                    all_scripts.extend(scripts.clone());
-                }
-            }
-        }
+        // Select the platform-specific activation scripts that is most specific
+        let activation = feature
+            .targets
+            .resolve(Some(platform))
+            .filter_map(|target| target.activation.as_ref())
+            .next();
 
-        // Gather the main activation scripts if there are no target scripts defined.
-        if all_scripts.is_empty() {
-            if let Some(activation) = &self.manifest.parsed.activation {
-                if let Some(scripts) = &activation.scripts {
-                    all_scripts.extend(scripts.clone());
-                }
-            }
-        }
+        // Get the activation scripts
+        let all_scripts = activation
+            .into_iter()
+            .flat_map(|activation| activation.scripts.iter().flatten())
+            .collect_vec();
 
         // Check if scripts exist
+        let mut full_paths = Vec::new();
         let mut missing_scripts = Vec::new();
         for script_name in &all_scripts {
             let script_path = self.root().join(script_name);
@@ -457,7 +346,7 @@ impl Project {
     /// Get the system requirements defined under the `system-requirements` section of the project manifest.
     /// They will act as the description of a reference machine which is minimally needed for this package to be run.
     pub fn system_requirements(&self) -> &SystemRequirements {
-        &self.manifest.parsed.system_requirements
+        &self.manifest.default_feature().system_requirements
     }
 
     /// Get the system requirements defined under the `system-requirements` section of the project manifest.
@@ -487,7 +376,7 @@ pub fn find_project_root() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use insta::assert_debug_snapshot;
+    use insta::{assert_debug_snapshot, assert_display_snapshot};
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use std::str::FromStr;
 
@@ -537,6 +426,12 @@ mod tests {
         }
     }
 
+    fn format_dependencies(deps: IndexMap<PackageName, NamelessMatchSpec>) -> String {
+        deps.iter()
+            .map(|(name, spec)| format!("{} = \"{}\"", name.as_source(), spec))
+            .join("\n")
+    }
+
     #[test]
     fn test_dependency_sets() {
         let file_contents = r#"
@@ -557,7 +452,9 @@ mod tests {
         .unwrap();
         let project = Project::from_manifest(manifest);
 
-        assert_debug_snapshot!(project.all_dependencies(Platform::Linux64).unwrap());
+        assert_display_snapshot!(format_dependencies(
+            project.all_dependencies(Platform::Linux64)
+        ));
     }
 
     #[test]
@@ -588,10 +485,20 @@ mod tests {
         .unwrap();
         let project = Project::from_manifest(manifest);
 
-        assert_debug_snapshot!(project.all_dependencies(Platform::Linux64).unwrap());
+        assert_display_snapshot!(format_dependencies(
+            project.all_dependencies(Platform::Linux64)
+        ));
     }
+
     #[test]
     fn test_activation_scripts() {
+        fn fmt_activation_scripts(scripts: Vec<PathBuf>) -> String {
+            scripts
+                .iter()
+                .format_with("\n", |p, f| f(&format_args!("{}", p.display())))
+                .to_string()
+        }
+
         // Using known files in the project so the test succeed including the file check.
         let file_contents = r#"
             [target.linux-64.activation]
@@ -610,9 +517,12 @@ mod tests {
         .unwrap();
         let project = Project::from_manifest(manifest);
 
-        assert_debug_snapshot!(project.activation_scripts(Platform::Linux64).unwrap());
-        assert_debug_snapshot!(project.activation_scripts(Platform::Win64).unwrap());
-        assert_debug_snapshot!(project.activation_scripts(Platform::OsxArm64).unwrap());
+        assert_display_snapshot!(format!(
+            "= Linux64\n{}\n\n= Win64\n{}\n\n= OsxArm64\n{}",
+            fmt_activation_scripts(project.activation_scripts(Platform::Linux64).unwrap()),
+            fmt_activation_scripts(project.activation_scripts(Platform::Win64).unwrap()),
+            fmt_activation_scripts(project.activation_scripts(Platform::OsxArm64).unwrap())
+        ));
     }
 
     #[test]
@@ -639,5 +549,26 @@ mod tests {
         assert_debug_snapshot!(project.manifest.tasks(Some(Platform::Osx64)));
         assert_debug_snapshot!(project.manifest.tasks(Some(Platform::Win64)));
         assert_debug_snapshot!(project.manifest.tasks(Some(Platform::Linux64)));
+    }
+}
+
+#[derive(Eq, PartialEq, Hash)]
+pub enum DependencyName {
+    Conda(PackageName),
+    PyPi(NormalizedPackageName),
+}
+
+#[derive(Clone)]
+pub enum DependencyKind {
+    Conda(MatchSpec),
+    PyPi(pep508_rs::Requirement),
+}
+
+impl Display for DependencyKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DependencyKind::Conda(spec) => write!(f, "{}", spec),
+            DependencyKind::PyPi(req) => write!(f, "{}", req),
+        }
     }
 }

@@ -1,4 +1,5 @@
 use super::package_identifier;
+use crate::project::{DependencyKind, DependencyName};
 use crate::{
     lock_file::pypi::{determine_marker_environment, is_python_record},
     Project,
@@ -6,35 +7,13 @@ use crate::{
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
-use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{MatchSpec, Platform, Version};
 use rattler_lock::{CondaLock, LockedDependency, LockedDependencyKind};
 use rip::types::NormalizedPackageName;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    fmt::{Display, Formatter},
     str::FromStr,
 };
-
-#[derive(Clone)]
-enum DependencyKind {
-    Conda(MatchSpec),
-    PyPi(pep508_rs::Requirement),
-}
-
-impl Display for DependencyKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DependencyKind::Conda(spec) => write!(f, "{}", spec),
-            DependencyKind::PyPi(req) => write!(f, "{}", req),
-        }
-    }
-}
-
-#[derive(Eq, PartialEq, Hash)]
-enum DependencyName {
-    Conda(PackageName),
-    PyPi(NormalizedPackageName),
-}
 
 /// Returns true if the locked packages match the dependencies in the project.
 pub fn lock_file_satisfies_project(
@@ -66,7 +45,7 @@ pub fn lock_file_satisfies_project(
     for platform in platforms.iter().cloned() {
         // Check if all dependencies exist in the lock-file.
         let conda_dependencies = project
-            .all_dependencies(platform)?
+            .all_dependencies(platform)
             .into_iter()
             .map(|(name, spec)| DependencyKind::Conda(MatchSpec::from_nameless(spec, Some(name))))
             .collect::<Vec<_>>();
@@ -74,7 +53,7 @@ pub fn lock_file_satisfies_project(
         let mut pypi_dependencies = project
             .pypi_dependencies(platform)
             .into_iter()
-            .map(|(name, requirement)| requirement.as_pep508(name))
+            .map(|(name, requirement)| requirement.as_pep508(&name))
             .map(DependencyKind::PyPi)
             .peekable();
 
