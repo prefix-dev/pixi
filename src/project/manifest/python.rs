@@ -1,7 +1,7 @@
 use pep440_rs::VersionSpecifiers;
 use serde::{
     de,
-    de::{Error, MapAccess, Visitor},
+    de::{Error, Visitor},
     Deserialize, Deserializer,
 };
 use std::{fmt, fmt::Formatter, str::FromStr};
@@ -132,54 +132,64 @@ impl PyPiRequirement {
         }
     }
 }
+
 impl<'de> Deserialize<'de> for PyPiRequirement {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        struct RequirementVisitor;
-        impl<'de> Visitor<'de> for RequirementVisitor {
-            type Value = PyPiRequirement;
+        deserializer.deserialize_any(PyPiRequirementVisitor)
+    }
+}
 
-            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-                formatter.write_str("a mapping from package names to a pypi requirement")
-            }
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: Error,
-            {
-                PyPiRequirement::from_str(v).map_err(Error::custom)
-            }
-            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
-            where
-                A: MapAccess<'de>,
-            {
-                // Use a temp struct to deserialize into when it is a map.
-                #[derive(Deserialize)]
-                struct RawPyPiRequirement {
-                    version: Option<String>,
-                    extras: Option<Vec<String>>,
-                }
-                let raw_requirement =
-                    RawPyPiRequirement::deserialize(de::value::MapAccessDeserializer::new(map))?;
+struct PyPiRequirementVisitor;
 
-                // Parse the * in version or allow for no version with extras.
-                let mut version = None;
-                if let Some(raw_version) = raw_requirement.version {
-                    if raw_version != "*" {
-                        version = Some(
-                            VersionSpecifiers::from_str(raw_version.as_str())
-                                .map_err(A::Error::custom)?,
-                        );
-                    }
-                }
-                Ok(PyPiRequirement {
-                    version,
-                    extras: raw_requirement.extras,
-                })
-            }
+impl<'de> Visitor<'de> for PyPiRequirementVisitor {
+    type Value = PyPiRequirement;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a string or a map representing a PyPi requirement")
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        let version = if value == "*" {
+            None
+        } else {
+            Some(VersionSpecifiers::from_str(value).map_err(E::custom)?)
+        };
+        Ok(PyPiRequirement {
+            version,
+            extras: None,
+        })
+    }
+
+    fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+    where
+        V: serde::de::MapAccess<'de>,
+    {
+        #[derive(Deserialize)]
+        struct TempRequirement {
+            version: Option<String>,
+            extras: Option<Vec<String>>,
         }
-        deserializer.deserialize_any(RequirementVisitor {})
+
+        let TempRequirement { version, extras } =
+            TempRequirement::deserialize(de::value::MapAccessDeserializer::new(&mut map))?;
+        let version = match version {
+            Some(v) => {
+                if v == "*" {
+                    None
+                } else {
+                    Some(VersionSpecifiers::from_str(&v).map_err(V::Error::custom)?)
+                }
+            }
+            None => None,
+        };
+
+        Ok(PyPiRequirement { version, extras })
     }
 }
 
