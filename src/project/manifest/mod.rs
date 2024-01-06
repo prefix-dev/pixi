@@ -1,6 +1,9 @@
+mod activation;
 mod environment;
 mod error;
 mod feature;
+mod metadata;
+mod system_requirements;
 mod target;
 
 use crate::{
@@ -10,13 +13,16 @@ use crate::{
     utils::spanned::PixiSpanned,
 };
 use ::serde::Deserialize;
+pub use activation::Activation;
+pub use environment::{Environment, EnvironmentName};
+pub use feature::{Feature, FeatureName};
 use indexmap::IndexMap;
 use itertools::Itertools;
+pub use metadata::ProjectMetadata;
 use miette::{Context, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
 };
-use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Deserializer;
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use std::{
@@ -25,12 +31,9 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
-use toml_edit::{value, Array, Document, Item, Table, TomlError, Value};
-use url::Url;
-
-pub use environment::{Environment, EnvironmentName};
-pub use feature::{Feature, FeatureName};
+pub use system_requirements::{LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector};
+use toml_edit::{value, Array, Document, Item, Table, TomlError, Value};
 
 /// Handles the project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the manifest.
@@ -728,166 +731,6 @@ impl ProjectManifest {
     }
 }
 
-/// Describes the contents of the `[package]` section of the project manifest.
-#[serde_as]
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ProjectMetadata {
-    /// The name of the project
-    pub name: String,
-
-    /// The version of the project
-    #[serde_as(as = "Option<DisplayFromStr>")]
-    pub version: Option<Version>,
-
-    /// An optional project description
-    pub description: Option<String>,
-
-    /// Optional authors
-    #[serde(default)]
-    pub authors: Vec<String>,
-
-    /// The channels used by the project
-    #[serde_as(deserialize_as = "Vec<super::serde::ChannelStr>")]
-    pub channels: Vec<Channel>,
-
-    /// The platforms this project supports
-    // TODO: This is actually slightly different from the rattler_conda_types::Platform because it
-    //     should not include noarch.
-    pub platforms: PixiSpanned<Vec<Platform>>,
-
-    /// The license as a valid SPDX string (e.g. MIT AND Apache-2.0)
-    pub license: Option<String>,
-
-    /// The license file (relative to the project root)
-    #[serde(rename = "license-file")]
-    pub license_file: Option<PathBuf>,
-
-    /// Path to the README file of the project (relative to the project root)
-    pub readme: Option<PathBuf>,
-
-    /// URL of the project homepage
-    pub homepage: Option<Url>,
-
-    /// URL of the project source repository
-    pub repository: Option<Url>,
-
-    /// URL of the project documentation
-    pub documentation: Option<Url>,
-}
-
-#[serde_as]
-#[derive(Debug, Clone, Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-pub struct SystemRequirements {
-    pub windows: Option<bool>,
-
-    pub unix: Option<bool>,
-
-    #[serde_as(as = "Option<DisplayFromStr>")]
-    pub macos: Option<Version>,
-
-    #[serde_as(as = "Option<DisplayFromStr>")]
-    pub linux: Option<Version>,
-
-    #[serde_as(as = "Option<DisplayFromStr>")]
-    pub cuda: Option<Version>,
-
-    pub libc: Option<LibCSystemRequirement>,
-
-    pub archspec: Option<String>,
-}
-
-impl SystemRequirements {
-    pub fn virtual_packages(&self) -> Vec<VirtualPackage> {
-        let mut result = Vec::new();
-        if self.windows == Some(true) {
-            result.push(VirtualPackage::Win);
-        }
-        if self.unix == Some(true) {
-            result.push(VirtualPackage::Unix);
-        }
-        if let Some(version) = self.linux.clone() {
-            result.push(VirtualPackage::Linux(Linux { version }));
-        }
-        if let Some(version) = self.cuda.clone() {
-            result.push(VirtualPackage::Cuda(Cuda { version }));
-        }
-        if let Some(version) = self.macos.clone() {
-            result.push(VirtualPackage::Osx(Osx { version }))
-        }
-        if let Some(spec) = self.archspec.clone() {
-            result.push(VirtualPackage::Archspec(Archspec { spec }))
-        }
-        if let Some(libc) = self.libc.clone() {
-            result.push(VirtualPackage::LibC(libc.into()))
-        }
-
-        result
-    }
-}
-
-#[serde_as]
-#[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-pub enum LibCSystemRequirement {
-    /// Only a version was specified, we assume glibc.
-    GlibC(#[serde_as(as = "DisplayFromStr")] Version),
-
-    /// Specified both a family and a version.
-    OtherFamily(LibCFamilyAndVersion),
-}
-
-impl LibCSystemRequirement {
-    /// Returns the family and version of this libc requirement.
-    pub fn family_and_version(&self) -> (&str, &Version) {
-        match self {
-            LibCSystemRequirement::GlibC(version) => ("glibc", version),
-            LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion { family, version: v }) => {
-                (family.as_deref().unwrap_or("glibc"), v)
-            }
-        }
-    }
-}
-
-#[serde_as]
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct LibCFamilyAndVersion {
-    /// The libc family, e.g. glibc
-    pub family: Option<String>,
-
-    /// The minimum version of the libc family
-    #[serde_as(as = "DisplayFromStr")]
-    pub version: Version,
-}
-
-impl From<LibCSystemRequirement> for LibC {
-    fn from(value: LibCSystemRequirement) -> Self {
-        match value {
-            LibCSystemRequirement::GlibC(version) => LibC {
-                version,
-                family: String::from("glibc"),
-            },
-            LibCSystemRequirement::OtherFamily(libc) => libc.into(),
-        }
-    }
-}
-
-impl From<LibCFamilyAndVersion> for LibC {
-    fn from(value: LibCFamilyAndVersion) -> Self {
-        LibC {
-            version: value.version,
-            family: value.family.unwrap_or_else(|| String::from("glibc")),
-        }
-    }
-}
-#[derive(Default, Clone, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct Activation {
-    pub scripts: Option<Vec<String>>,
-}
-
 // Create an error report for using a platform that is not supported by the project.
 fn create_unsupported_platform_report(
     source: NamedSource,
@@ -1247,77 +1090,6 @@ mod test {
                 Item::from(spec).to_string()
             ))
             .join("\n"));
-    }
-
-    #[test]
-    fn system_requirements_works() {
-        let file_content = r#"
-        windows = true
-        unix = true
-        linux = "5.11"
-        cuda = "12.2"
-        macos = "10.15"
-        archspec = "arm64"
-        libc = { family = "glibc", version = "2.12" }
-        "#;
-
-        let system_requirements: SystemRequirements =
-            toml_edit::de::from_str(file_content).unwrap();
-
-        let expected_requirements: Vec<VirtualPackage> = vec![
-            VirtualPackage::Win,
-            VirtualPackage::Unix,
-            VirtualPackage::Linux(Linux {
-                version: Version::from_str("5.11").unwrap(),
-            }),
-            VirtualPackage::Cuda(Cuda {
-                version: Version::from_str("12.2").unwrap(),
-            }),
-            VirtualPackage::Osx(Osx {
-                version: Version::from_str("10.15").unwrap(),
-            }),
-            VirtualPackage::Archspec(Archspec {
-                spec: "arm64".to_string(),
-            }),
-            VirtualPackage::LibC(LibC {
-                version: Version::from_str("2.12").unwrap(),
-                family: "glibc".to_string(),
-            }),
-        ];
-
-        assert_eq!(
-            system_requirements.virtual_packages(),
-            expected_requirements
-        );
-    }
-
-    #[test]
-    fn test_system_requirements_failing_edge_cases() {
-        let file_contents = [
-            r#"
-        [system-requirements]
-        libc = { verion = "2.12" }
-        "#,
-            r#"
-        [system-requirements]
-        lib = "2.12"
-        "#,
-            r#"
-        [system-requirements.libc]
-        version = "2.12"
-        fam = "glibc"
-        "#,
-            r#"
-        [system-requirements.lic]
-        version = "2.12"
-        family = "glibc"
-        "#,
-        ];
-
-        for file_content in file_contents {
-            let file_content = format!("{PROJECT_BOILERPLATE}\n{file_content}");
-            assert!(toml_edit::de::from_str::<ProjectManifest>(&file_content).is_err());
-        }
     }
 
     fn test_remove(file_contents: &str, name: &str, kind: SpecType, platform: Option<Platform>) {
