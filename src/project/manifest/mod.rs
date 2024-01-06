@@ -3,17 +3,18 @@ mod environment;
 mod error;
 mod feature;
 mod metadata;
+mod python;
+mod serde;
 mod system_requirements;
 mod target;
 
-use crate::consts::PYPI_DEPENDENCIES;
 use crate::{
     consts,
-    project::{manifest::target::Targets, python::PyPiRequirement, SpecType},
+    project::{manifest::target::Targets, SpecType},
     task::Task,
     utils::spanned::PixiSpanned,
 };
-use ::serde::Deserialize;
+use ::serde::{Deserialize, Deserializer};
 pub use activation::Activation;
 pub use environment::{Environment, EnvironmentName};
 pub use feature::{Feature, FeatureName};
@@ -21,10 +22,10 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{Context, IntoDiagnostic, LabeledSpan, NamedSource, Report};
+pub use python::PyPiRequirement;
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
 };
-use serde::Deserializer;
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use std::{
     collections::HashMap,
@@ -287,7 +288,7 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Find the table toml table to add the dependency to.
         let dependency_table =
-            ensure_toml_target_table(&mut self.document, platform, PYPI_DEPENDENCIES)?;
+            ensure_toml_target_table(&mut self.document, platform, consts::PYPI_DEPENDENCIES)?;
 
         // Add the pypi dependency to the table
         dependency_table.insert(name.as_str(), (*requirement).clone().into());
@@ -340,12 +341,14 @@ impl Manifest {
         dep: &rip::types::PackageName,
         platform: Option<Platform>,
     ) -> miette::Result<(rip::types::PackageName, PyPiRequirement)> {
-        get_toml_target_table(&mut self.document, platform, PYPI_DEPENDENCIES)?
+        get_toml_target_table(&mut self.document, platform, consts::PYPI_DEPENDENCIES)?
             .remove(dep.as_str())
             .ok_or_else(|| {
                 let table_name = match platform {
-                    Some(platform) => format!("target.{}.{}", platform.as_str(), PYPI_DEPENDENCIES),
-                    None => PYPI_DEPENDENCIES.to_string(),
+                    Some(platform) => {
+                        format!("target.{}.{}", platform.as_str(), consts::PYPI_DEPENDENCIES)
+                    }
+                    None => consts::PYPI_DEPENDENCIES.to_string(),
                 };
 
                 miette::miette!(

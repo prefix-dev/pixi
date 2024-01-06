@@ -1,7 +1,7 @@
 use crate::{
     consts,
     environment::{get_up_to_date_prefix, verify_prefix_location_unchanged, LockFileUsage},
-    project::{python::PyPiRequirement, DependencyType, Project, SpecType},
+    project::{manifest::PyPiRequirement, DependencyType, Project, SpecType},
 };
 use clap::Parser;
 use indexmap::IndexMap;

@@ -8,7 +8,7 @@ use url::Url;
 /// Describes the contents of the `[package]` section of the project manifest.
 #[serde_as]
 #[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ProjectMetadata {
     /// The name of the project
     pub name: String,
@@ -25,7 +25,7 @@ pub struct ProjectMetadata {
     pub authors: Vec<String>,
 
     /// The channels used by the project
-    #[serde_as(deserialize_as = "Vec<crate::project::serde::ChannelStr>")]
+    #[serde_as(deserialize_as = "Vec<super::serde::ChannelStr>")]
     pub channels: Vec<Channel>,
 
     /// The platforms this project supports
@@ -37,7 +37,6 @@ pub struct ProjectMetadata {
     pub license: Option<String>,
 
     /// The license file (relative to the project root)
-    #[serde(rename = "license-file")]
     pub license_file: Option<PathBuf>,
 
     /// Path to the README file of the project (relative to the project root)

@@ -1,7 +1,7 @@
 use crate::project::manifest::activation::Activation;
 use crate::utils::spanned::PixiSpanned;
 use crate::{
-    project::{manifest::error::SpecIsMissing, python::PyPiRequirement, SpecType},
+    project::{manifest::error::SpecIsMissing, manifest::PyPiRequirement, SpecType},
     task::Task,
 };
 use indexmap::map::Entry;

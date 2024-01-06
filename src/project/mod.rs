@@ -1,7 +1,5 @@
 pub mod manifest;
 pub mod metadata;
-pub(crate) mod python;
-mod serde;
 
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -19,14 +17,13 @@ use std::{
     sync::Arc,
 };
 
-use crate::project::python::PyPiRequirement;
 use crate::{
     consts::{self, PROJECT_MANIFEST},
     default_client,
     task::Task,
     virtual_packages::non_relevant_virtual_packages_for_platform,
 };
-use manifest::{Manifest, SystemRequirements};
+use manifest::{Manifest, PyPiRequirement, SystemRequirements};
 use rip::types::NormalizedPackageName;
 use std::fmt::{Display, Formatter};
 use url::Url;

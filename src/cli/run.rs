@@ -10,8 +10,7 @@ use crate::task::{
     ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TraversalError,
 };
 use crate::{
-    environment::get_up_to_date_prefix, prefix::Prefix, progress::await_in_progress,
-    project::metadata::get_metadata_env, Project,
+    environment::get_up_to_date_prefix, prefix::Prefix, progress::await_in_progress, Project,
 };
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -169,7 +168,7 @@ pub async fn get_task_env(
     let activation_env = run_activation_async(project, prefix).await?;
 
     // Get environment variables from the manifest
-    let manifest_env = get_metadata_env(project);
+    let manifest_env = project.get_metadata_env();
 
     // Construct command environment by concatenating the environments
     Ok(std::env::vars()
