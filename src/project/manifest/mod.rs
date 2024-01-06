@@ -6,9 +6,10 @@ mod metadata;
 mod system_requirements;
 mod target;
 
+use crate::consts::PYPI_DEPENDENCIES;
 use crate::{
     consts,
-    project::{manifest::target::Targets, python::PyPiRequirement, DependencyType, SpecType},
+    project::{manifest::target::Targets, python::PyPiRequirement, SpecType},
     task::Task,
     utils::spanned::PixiSpanned,
 };
@@ -285,11 +286,8 @@ impl Manifest {
         platform: Option<Platform>,
     ) -> miette::Result<()> {
         // Find the table toml table to add the dependency to.
-        let dependency_table = ensure_toml_target_table(
-            &mut self.document,
-            platform,
-            DependencyType::PypiDependency.name(),
-        )?;
+        let dependency_table =
+            ensure_toml_target_table(&mut self.document, platform, PYPI_DEPENDENCIES)?;
 
         // Add the pypi dependency to the table
         dependency_table.insert(name.as_str(), (*requirement).clone().into());
@@ -315,10 +313,15 @@ impl Manifest {
         get_toml_target_table(&mut self.document, platform, spec_type.name())?
             .remove(dep.as_normalized())
             .ok_or_else(|| {
+                let table_name = match platform {
+                    Some(platform) => format!("target.{}.{}", platform.as_str(), spec_type.name()),
+                    None => spec_type.name().to_string(),
+                };
+
                 miette::miette!(
                     "Couldn't find {} in [{}]",
-                    console::style(dep.as_normalized()).bold(),
-                    console::style(spec_type.name()).bold(),
+                    console::style(dep.as_source()).bold(),
+                    console::style(table_name).bold(),
                 )
             })?;
 
@@ -328,6 +331,39 @@ impl Manifest {
             .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
             .expect("target should exist")
             .remove_dependency(dep.as_source(), spec_type)
+            .expect("dependency should exist"))
+    }
+
+    /// Removes a pypi dependency from `pixi.toml`.
+    pub fn remove_pypi_dependency(
+        &mut self,
+        dep: &rip::types::PackageName,
+        platform: Option<Platform>,
+    ) -> miette::Result<(rip::types::PackageName, PyPiRequirement)> {
+        get_toml_target_table(&mut self.document, platform, PYPI_DEPENDENCIES)?
+            .remove(dep.as_str())
+            .ok_or_else(|| {
+                let table_name = match platform {
+                    Some(platform) => format!("target.{}.{}", platform.as_str(), PYPI_DEPENDENCIES),
+                    None => PYPI_DEPENDENCIES.to_string(),
+                };
+
+                miette::miette!(
+                    "Couldn't find {} in [{}]",
+                    console::style(dep.as_source_str()).bold(),
+                    console::style(table_name).bold(),
+                )
+            })?;
+
+        Ok(self
+            .default_feature_mut()
+            .targets
+            .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
+            .expect("target should exist")
+            .pypi_dependencies
+            .as_mut()
+            .expect("pypi-dependencies should exist")
+            .shift_remove_entry(dep)
             .expect("dependency should exist"))
     }
 
@@ -1126,6 +1162,70 @@ mod test {
 
         // Write the toml to string and verify the content
         assert_display_snapshot!(manifest.document.to_string());
+    }
+
+    fn test_remove_pypi(file_contents: &str, name: &str, platform: Option<Platform>) {
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        let name = rip::types::PackageName::from_str(name).unwrap();
+
+        // Initially the dependency should exist
+        assert!(manifest
+            .default_feature()
+            .targets
+            .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+            .unwrap()
+            .pypi_dependencies
+            .as_ref()
+            .unwrap()
+            .get(&name)
+            .is_some());
+
+        // Remove the dependency from the manifest
+        manifest.remove_pypi_dependency(&name, platform).unwrap();
+
+        // The dependency should no longer exist
+        assert!(manifest
+            .default_feature()
+            .targets
+            .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+            .unwrap()
+            .pypi_dependencies
+            .as_ref()
+            .unwrap()
+            .get(&name)
+            .is_none());
+
+        // Write the toml to string and verify the content
+        assert_display_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_remove_pypi_dependencies() {
+        let pixi_cfg = r#"[project]
+name = "pixi_fun"
+version = "0.1.0"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[dependencies]
+python = ">=3.12.1,<3.13"
+
+[pypi-dependencies]
+requests = "*"
+
+[target.win-64.pypi-dependencies]
+jax = { version = "*", extras = ["cpu"] }
+requests = "*"
+
+[target.linux-64.pypi-dependencies]
+xpackage = "==1.2.3"
+ypackage = {version = ">=1.2.3"}
+"#;
+
+        test_remove_pypi(pixi_cfg, "xpackage", Some(Platform::Linux64));
+        test_remove_pypi(pixi_cfg, "jax", Some(Platform::Win64));
+        test_remove_pypi(pixi_cfg, "requests", None);
     }
 
     #[test]

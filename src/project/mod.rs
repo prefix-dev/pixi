@@ -7,7 +7,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
-use rattler_conda_types::{Channel, NamelessMatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{Channel, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
 use rattler_virtual_packages::VirtualPackage;
 use rip::{index::PackageDb, normalize_index_url};
 use std::collections::HashMap;
@@ -19,7 +19,6 @@ use std::{
     sync::Arc,
 };
 
-use crate::project::manifest::{Manifest, SystemRequirements};
 use crate::project::python::PyPiRequirement;
 use crate::{
     consts::{self, PROJECT_MANIFEST},
@@ -27,6 +26,9 @@ use crate::{
     task::Task,
     virtual_packages::non_relevant_virtual_packages_for_platform,
 };
+use manifest::{Manifest, SystemRequirements};
+use rip::types::NormalizedPackageName;
+use std::fmt::{Display, Formatter};
 use url::Url;
 
 /// The dependency types we support
@@ -41,7 +43,7 @@ impl DependencyType {
     pub fn name(&self) -> &'static str {
         match self {
             DependencyType::CondaDependency(dep) => dep.name(),
-            DependencyType::PypiDependency => "pypi-dependencies",
+            DependencyType::PypiDependency => consts::PYPI_DEPENDENCIES,
         }
     }
 }
@@ -550,5 +552,26 @@ mod tests {
         assert_debug_snapshot!(project.manifest.tasks(Some(Platform::Osx64)));
         assert_debug_snapshot!(project.manifest.tasks(Some(Platform::Win64)));
         assert_debug_snapshot!(project.manifest.tasks(Some(Platform::Linux64)));
+    }
+}
+
+#[derive(Eq, PartialEq, Hash)]
+pub enum DependencyName {
+    Conda(PackageName),
+    PyPi(NormalizedPackageName),
+}
+
+#[derive(Clone)]
+pub enum DependencyKind {
+    Conda(MatchSpec),
+    PyPi(pep508_rs::Requirement),
+}
+
+impl Display for DependencyKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DependencyKind::Conda(spec) => write!(f, "{}", spec),
+            DependencyKind::PyPi(req) => write!(f, "{}", req),
+        }
     }
 }

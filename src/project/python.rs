@@ -1,6 +1,7 @@
 use pep440_rs::VersionSpecifiers;
 use serde::de::{Error, MapAccess, Visitor};
 use serde::{de, Deserialize, Deserializer};
+use std::fmt;
 use std::fmt::Formatter;
 use std::str::FromStr;
 use thiserror::Error;
@@ -23,6 +24,13 @@ pub enum ParsePyPiRequirementError {
 
     #[error("missing operator in version specifier, did you mean '~={0}'?")]
     MissingOperator(String),
+}
+
+impl fmt::Display for PyPiRequirement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let item: Item = self.clone().into();
+        write!(f, "{item}")
+    }
 }
 
 impl From<PyPiRequirement> for Item {
@@ -178,6 +186,17 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
 mod test {
     use super::*;
     use indexmap::IndexMap;
+
+    #[test]
+    fn test_pypi_to_string() {
+        let req = pep508_rs::Requirement::from_str("numpy[testing]==1.0.0; os_name == \"posix\"")
+            .unwrap();
+        let pypi = PyPiRequirement::from(req);
+        assert_eq!(
+            pypi.to_string(),
+            "{ version = \"==1.0.0\", extras = [\"testing\"] }"
+        );
+    }
 
     #[test]
     fn test_only_version() {
