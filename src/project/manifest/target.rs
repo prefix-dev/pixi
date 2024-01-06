@@ -162,7 +162,7 @@ impl<'de> Deserialize<'de> for Target {
 }
 
 /// A collect of targets including a default target.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Targets {
     default_target: Target,
 

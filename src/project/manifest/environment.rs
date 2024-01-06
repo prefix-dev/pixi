@@ -1,4 +1,4 @@
-use crate::utils::spanned::PixiSpanned;
+use crate::consts;
 
 /// The name of an environment. This is either a string or default for the default environment.
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -8,11 +8,12 @@ pub enum EnvironmentName {
 }
 
 impl EnvironmentName {
-    /// Returns the name of the environment or `None` if this is the default environment.
-    pub fn name(&self) -> Option<&str> {
+    /// Returns the name of the environment. This is either the name of the environment or the name
+    /// of the default environment.
+    pub fn as_str(&self) -> &str {
         match self {
-            EnvironmentName::Default => None,
-            EnvironmentName::Named(name) => Some(name),
+            EnvironmentName::Default => consts::DEFAULT_ENVIRONMENT_NAME,
+            EnvironmentName::Named(name) => name.as_str(),
         }
     }
 }
@@ -30,7 +31,10 @@ pub struct Environment {
     ///
     /// Note that the default feature is always added to the set of features that make up the
     /// environment.
-    pub features: PixiSpanned<Vec<String>>,
+    pub features: Vec<String>,
+
+    /// The optional location of where the features are defined in the manifest toml.
+    pub features_source_loc: Option<std::ops::Range<usize>>,
 
     /// An optional solver-group. Multiple environments can share the same solve-group. All the
     /// dependencies of the environment that share the same solve-group will be solved together.

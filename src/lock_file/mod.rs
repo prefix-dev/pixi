@@ -48,12 +48,11 @@ fn main_progress_bar(num_bars: u64, message: &'static str) -> ProgressBar {
     top_level_progress
 }
 
-fn platform_solve_bars(platforms: &[Platform]) -> Vec<ProgressBar> {
+fn platform_solve_bars(platforms: impl IntoIterator<Item = Platform>) -> Vec<ProgressBar> {
     platforms
-        .iter()
+        .into_iter()
         .map(|platform| {
-            let pb =
-                progress::global_multi_progress().add(ProgressBar::new(platforms.len() as u64));
+            let pb = progress::global_multi_progress().add(ProgressBar::new(0));
             pb.set_style(
                 indicatif::ProgressStyle::with_template(&format!(
                     "    {:<9} ..",
@@ -87,12 +86,12 @@ pub async fn update_lock_file_conda(
     let _top_level_progress =
         main_progress_bar(platforms.len() as u64, "resolving conda dependencies");
     // Create progress bars for each platform
-    let solve_bars = platform_solve_bars(platforms);
+    let solve_bars = platform_solve_bars(platforms.iter().copied());
 
     // Construct a conda lock file
     let channels = project
         .channels()
-        .iter()
+        .into_iter()
         .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()));
 
     let result: miette::Result<Vec<_>> =
@@ -162,7 +161,7 @@ pub async fn update_lock_file_for_pypi(
     let platforms = project.platforms();
     let _top_level_progress =
         main_progress_bar(platforms.len() as u64, "resolving pypi dependencies");
-    let solve_bars = platform_solve_bars(platforms);
+    let solve_bars = platform_solve_bars(platforms.iter().copied());
 
     let records = platforms
         .iter()
@@ -216,7 +215,7 @@ pub async fn update_lock_file_for_pypi(
 
     let channels = project
         .channels()
-        .iter()
+        .into_iter()
         .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()));
     let mut builder = LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
     for locked_packages in result? {

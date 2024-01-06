@@ -1,14 +1,15 @@
+mod environment;
 pub mod manifest;
 pub mod metadata;
 
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
 use rattler_conda_types::{Channel, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
 use rattler_virtual_packages::VirtualPackage;
 use rip::{index::PackageDb, normalize_index_url};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::{
     env,
     ffi::OsStr,
@@ -23,6 +24,7 @@ use crate::{
     task::Task,
     virtual_packages::non_relevant_virtual_packages_for_platform,
 };
+use environment::Environment;
 use manifest::{Manifest, PyPiRequirement, SystemRequirements};
 use rip::types::NormalizedPackageName;
 use std::fmt::{Display, Formatter};
@@ -86,6 +88,12 @@ impl Project {
             package_db: Default::default(),
             manifest,
         }
+    }
+
+    /// Constructs a project from a manifest.
+    pub fn from_str(root: &Path, content: &str) -> miette::Result<Self> {
+        let manifest = Manifest::from_str(root, content)?;
+        Ok(Self::from_manifest(manifest))
     }
 
     /// Discovers the project manifest file in the current directory or any of the parent
@@ -190,14 +198,26 @@ impl Project {
         self.manifest.save()
     }
 
-    /// Returns the channels used by this project
-    pub fn channels(&self) -> &[Channel] {
-        &self.manifest.parsed.project.channels
+    /// Returns the default environment of the project.
+    pub fn default_environment(&self) -> Environment<'_> {
+        Environment {
+            project: self,
+            environment: self.manifest.default_environment(),
+        }
+    }
+
+    /// Returns the channels used by this project.
+    ///
+    /// TODO: Remove this function and use the channels from the default environment instead.
+    pub fn channels(&self) -> IndexSet<&Channel> {
+        self.default_environment().channels()
     }
 
     /// Returns the platforms this project targets
-    pub fn platforms(&self) -> &[Platform] {
-        self.manifest.parsed.project.platforms.as_ref().as_slice()
+    ///
+    /// TODO: Remove this function and use the channels from the default environment instead.
+    pub fn platforms(&self) -> HashSet<Platform> {
+        self.default_environment().platforms()
     }
 
     /// Get the tasks of this project

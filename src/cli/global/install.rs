@@ -338,7 +338,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let platform = Platform::current();
 
     // Fetch sparse repodata
-    let platform_sparse_repodata = fetch_sparse_repodata(&channels, &[platform]).await?;
+    let platform_sparse_repodata = fetch_sparse_repodata(&channels, [platform]).await?;
 
     let available_packages = SparseRepoData::load_records_recursive(
         platform_sparse_repodata.iter(),

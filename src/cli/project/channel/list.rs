@@ -9,7 +9,7 @@ pub struct Args {
 }
 
 pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
-    project.channels().iter().for_each(|channel| {
+    project.channels().into_iter().for_each(|channel| {
         if args.urls {
             // Print the channel's url
             println!("{}", channel.base_url());

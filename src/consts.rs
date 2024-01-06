@@ -4,3 +4,5 @@ pub const PIXI_DIR: &str = ".pixi";
 pub const PREFIX_FILE_NAME: &str = "prefix";
 pub const ENVIRONMENT_DIR: &str = "env";
 pub const PYPI_DEPENDENCIES: &str = "pypi-dependencies";
+
+pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
