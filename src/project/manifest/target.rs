@@ -258,7 +258,8 @@ impl Targets {
         }
     }
 
-    /// Returns the target for the given target selector or the default target if no target is specified.
+    /// Returns the target for the given target selector or the default target if no target is
+    /// specified.
     pub fn for_opt_target_mut(&mut self, target: Option<&TargetSelector>) -> Option<&mut Target> {
         if let Some(sel) = target {
             self.targets.get_mut(sel)
@@ -267,10 +268,23 @@ impl Targets {
         }
     }
 
-    /// Returns the target for the given target selector or the default target if no target is specified.
+    /// Returns the target for the given target selector or the default target if no target is
+    /// specified.
+    ///
+    /// If a target is specified and it does not exist the default target is returned instead.
+    pub fn for_opt_target_or_default(&self, target: Option<&TargetSelector>) -> &Target {
+        if let Some(sel) = target {
+            self.targets.get(sel).unwrap_or(&self.default_target)
+        } else {
+            &self.default_target
+        }
+    }
+
+    /// Returns a mutable reference to the target for the given target selector or the default
+    /// target if no target is specified.
     ///
     /// If a target is specified and it does not exist, it will be created.
-    pub fn for_opt_target_mut_or_default(
+    pub fn for_opt_target_or_default_mut(
         &mut self,
         target: Option<&TargetSelector>,
     ) -> &mut Target {

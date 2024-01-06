@@ -155,7 +155,7 @@ impl Manifest {
         // Add the task to the manifest
         self.default_feature_mut()
             .targets
-            .for_opt_target_mut_or_default(platform.map(TargetSelector::from).as_ref())
+            .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
             .tasks
             .insert(name.as_ref().to_string(), task);
 
@@ -266,7 +266,7 @@ impl Manifest {
         // Add the dependency to the manifest as well
         self.default_feature_mut()
             .targets
-            .for_opt_target_mut_or_default(platform.map(TargetSelector::from).as_ref())
+            .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
             .dependencies
             .entry(spec_type)
             .or_default()
@@ -294,7 +294,7 @@ impl Manifest {
         // Add the dependency to the manifest as well
         self.default_feature_mut()
             .targets
-            .for_opt_target_mut_or_default(platform.map(TargetSelector::from).as_ref())
+            .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
             .pypi_dependencies
             .get_or_insert_with(Default::default)
             .insert(name.clone(), requirement.clone());
