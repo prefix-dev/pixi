@@ -1,4 +1,5 @@
 use crate::Project;
+use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::VersionBumpType;
 
 pub async fn execute(mut project: Project, bump_type: VersionBumpType) -> miette::Result<()> {
@@ -12,7 +13,8 @@ pub async fn execute(mut project: Project, bump_type: VersionBumpType) -> miette
     // bump version
     let new_version = current_version
         .bump(bump_type)
-        .map_err(|_| miette::miette!("Unable to bump version."))?;
+        .into_diagnostic()
+        .context("Failed to bump version.")?;
 
     // Set the version
     project.manifest.set_version(&new_version.to_string())?;
