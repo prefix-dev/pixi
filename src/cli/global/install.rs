@@ -72,7 +72,9 @@ fn home_path() -> miette::Result<PathBuf> {
     if let Some(path) = std::env::var_os("PIXI_HOME") {
         Ok(PathBuf::from(path))
     } else {
-        home_dir().map(|path| path.join(".pixi")).ok_or_else(|| miette::miette!("could not find home directory"))
+        home_dir()
+            .map(|path| path.join(".pixi"))
+            .ok_or_else(|| miette::miette!("could not find home directory"))
     }
 }
 
