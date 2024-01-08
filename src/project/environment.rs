@@ -64,7 +64,7 @@ impl<'p> Environment<'p> {
                     .parsed
                     .features
                     .get(&FeatureName::Named(feature_name.clone()))
-                    .expect("fea")
+                    .expect("feature usage should have been validated upfront")
             })
             .chain([self.project.manifest.default_feature()])
     }
@@ -114,7 +114,9 @@ impl<'p> Environment<'p> {
                 .copied()
                 .collect::<HashSet<_>>()
             })
-            .reduce(|value, feat| value.intersection(&feat).copied().collect())
+            .reduce(|accumulated_platforms, feat| {
+                accumulated_platforms.intersection(&feat).copied().collect()
+            })
             .unwrap_or_default()
     }
 
