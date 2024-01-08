@@ -1,5 +1,5 @@
 mod environment;
-mod errors;
+pub mod errors;
 pub mod manifest;
 pub mod metadata;
 pub mod virtual_packages;
