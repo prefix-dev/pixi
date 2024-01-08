@@ -1,7 +1,6 @@
 mod common;
 
 use crate::common::PixiControl;
-use itertools::Itertools;
 use rattler_conda_types::{Channel, ChannelConfig, Version};
 use std::str::FromStr;
 

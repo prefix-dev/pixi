@@ -1,9 +1,13 @@
+use crate::project::errors::{UnknownTask, UnsupportedPlatformError};
 use crate::project::manifest;
 use crate::project::manifest::{EnvironmentName, Feature, FeatureName};
+use crate::task::Task;
 use crate::Project;
 use indexmap::IndexSet;
+use itertools::Itertools;
 use rattler_conda_types::{Channel, Platform};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
 
 /// Describes a single environment from a project manifest. This is used to describe environments
 /// that can be installed and activated.
@@ -17,12 +21,22 @@ use std::collections::HashSet;
 /// interact with the manifest instead.
 ///
 /// The lifetime `'p` refers to the lifetime of the project that this environment belongs to.
+#[derive(Clone)]
 pub struct Environment<'p> {
     /// The project this environment belongs to.
     pub(super) project: &'p Project,
 
     /// The environment that this environment is based on.
     pub(super) environment: &'p manifest::Environment,
+}
+
+impl Debug for Environment<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Environment")
+            .field("project", &self.project.name())
+            .field("environment", &self.environment.name)
+            .finish()
+    }
 }
 
 impl<'p> Environment<'p> {
@@ -103,6 +117,61 @@ impl<'p> Environment<'p> {
             .reduce(|value, feat| value.intersection(&feat).copied().collect())
             .unwrap_or_default()
     }
+
+    /// Returns the tasks defined for this environment.
+    ///
+    /// Tasks are defined on a per-target per-feature per-environment basis.
+    ///
+    /// If a `platform` is specified but this environment doesn't support the specified platform,
+    /// an [`UnsupportedPlatformError`] error is returned.
+    pub fn tasks(
+        &self,
+        platform: Option<Platform>,
+    ) -> Result<HashMap<&'p str, &'p Task>, UnsupportedPlatformError> {
+        self.validate_platform_support(platform)?;
+        let result = self
+            .features()
+            .flat_map(|feature| feature.targets.resolve(platform))
+            .collect_vec()
+            .into_iter()
+            .rev() // Reverse to get the most specific targets last.
+            .flat_map(|target| target.tasks.iter())
+            .map(|(name, task)| (name.as_str(), task))
+            .collect();
+        Ok(result)
+    }
+
+    /// Returns the task with the given `name` and for the specified `platform` or an `UnknownTask`
+    /// which explains why the task was not available.
+    pub fn task(&self, name: &str, platform: Option<Platform>) -> Result<&'p Task, UnknownTask> {
+        match self.tasks(platform).map(|tasks| tasks.get(name).copied()) {
+            Err(_) | Ok(None) => Err(UnknownTask {
+                project: self.project,
+                environment: self.name().clone(),
+                platform,
+                task_name: name.to_string(),
+            }),
+            Ok(Some(task)) => Ok(task),
+        }
+    }
+
+    /// Validates that the given platform is supported by this environment.
+    fn validate_platform_support(
+        &self,
+        platform: Option<Platform>,
+    ) -> Result<(), UnsupportedPlatformError> {
+        if let Some(platform) = platform {
+            if !self.platforms().contains(&platform) {
+                return Err(UnsupportedPlatformError {
+                    project: self.project,
+                    environment: self.name().clone(),
+                    platform,
+                });
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -159,5 +228,48 @@ mod test {
             channels,
             HashSet::from_iter([Platform::Linux64, Platform::Osx64,])
         );
+    }
+
+    #[test]
+    fn test_default_tasks() {
+        let manifest = Project::from_str(
+            Path::new(""),
+            r#"
+        [project]
+        name = "foobar"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks]
+        foo = "echo default"
+
+        [target.linux-64.tasks]
+        foo = "echo linux"
+        "#,
+        )
+        .unwrap();
+
+        let task = manifest
+            .default_environment()
+            .task("foo", None)
+            .unwrap()
+            .as_single_command()
+            .unwrap();
+
+        assert_eq!(task, "echo default");
+
+        let task_osx = manifest
+            .default_environment()
+            .task("foo", Some(Platform::Linux64))
+            .unwrap()
+            .as_single_command()
+            .unwrap();
+
+        assert_eq!(task_osx, "echo linux");
+
+        assert!(manifest
+            .default_environment()
+            .tasks(Some(Platform::Osx64))
+            .is_err())
     }
 }

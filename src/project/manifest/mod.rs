@@ -485,6 +485,11 @@ impl Manifest {
     pub fn default_environment(&self) -> &Environment {
         self.parsed.default_environment()
     }
+
+    /// Returns the environment with the given name or `None` if it does not exist.
+    pub fn environment(&self, name: &EnvironmentName) -> Option<&Environment> {
+        self.parsed.environments.get(name)
+    }
 }
 
 /// Ensures that the specified TOML target table exists within a given document,

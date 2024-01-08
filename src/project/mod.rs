@@ -1,4 +1,5 @@
 mod environment;
+mod errors;
 pub mod manifest;
 pub mod metadata;
 
@@ -18,6 +19,7 @@ use std::{
     sync::Arc,
 };
 
+use crate::project::manifest::EnvironmentName;
 use crate::{
     consts::{self, PROJECT_MANIFEST},
     default_client,
@@ -27,7 +29,7 @@ use crate::{
 use environment::Environment;
 use manifest::{Manifest, PyPiRequirement, SystemRequirements};
 use rip::types::NormalizedPackageName;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use url::Url;
 
 /// The dependency types we support
@@ -78,6 +80,15 @@ pub struct Project {
     package_db: OnceCell<Arc<PackageDb>>,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
+}
+
+impl Debug for Project {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Project")
+            .field("root", &self.root)
+            .field("manifest", &self.manifest)
+            .finish()
+    }
 }
 
 impl Project {
@@ -206,6 +217,14 @@ impl Project {
         }
     }
 
+    /// Returns the environment with the given name or `None` if no such environment exists.
+    pub fn environment(&self, name: &EnvironmentName) -> Option<Environment<'_>> {
+        Some(Environment {
+            project: self,
+            environment: self.manifest.environment(name)?,
+        })
+    }
+
     /// Returns the channels used by this project.
     ///
     /// TODO: Remove this function and use the channels from the default environment instead.
@@ -215,41 +234,27 @@ impl Project {
 
     /// Returns the platforms this project targets
     ///
-    /// TODO: Remove this function and use the channels from the default environment instead.
+    /// TODO: Remove this function and use the platforms from the default environment instead.
     pub fn platforms(&self) -> HashSet<Platform> {
         self.default_environment().platforms()
     }
 
     /// Get the tasks of this project
+    ///
+    /// TODO: Remove this function and use the tasks from the default environment instead.
     pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&str, &Task> {
-        self.manifest.tasks(platform)
+        self.default_environment()
+            .tasks(platform)
+            .unwrap_or_default()
     }
 
     /// Get the task with the specified `name` or `None` if no such task exists. If `platform` is
     /// specified then the task will first be looked up in the target specific tasks for the given
     /// platform.
+    ///
+    /// TODO: Remove this function and use the `task` function from the default environment instead.
     pub fn task_opt(&self, name: &str, platform: Option<Platform>) -> Option<&Task> {
-        self.manifest.tasks(platform).get(name).copied()
-    }
-
-    /// Returns all tasks defined in the project for the given platform
-    pub fn task_names(&self, platform: Option<Platform>) -> Vec<&str> {
-        self.manifest.tasks(platform).keys().copied().collect_vec()
-    }
-
-    /// Returns names of the tasks that depend on the given task.
-    pub fn task_names_depending_on(&self, name: impl AsRef<str>) -> Vec<&str> {
-        let mut tasks = self.manifest.tasks(Some(Platform::current()));
-        let task = tasks.remove(name.as_ref());
-        if task.is_some() {
-            tasks
-                .into_iter()
-                .filter(|(_, c)| c.depends_on().contains(&name.as_ref().to_string()))
-                .map(|(name, _)| name)
-                .collect()
-        } else {
-            vec![]
-        }
+        self.default_environment().task(name, platform).ok()
     }
 
     /// Returns the dependencies of the project.
