@@ -27,7 +27,6 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Figure out what channels we are using
     let channel_config = ChannelConfig::default();
-    let platform = Platform::current();
     let channels = args
         .channel
         .iter()
@@ -38,7 +37,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let packages = list_global_packages().await?;
 
     // Fetch sparse repodata
-    let platform_sparse_repodata = fetch_sparse_repodata(&channels, &[platform]).await?;
+    let platform_sparse_repodata = fetch_sparse_repodata(&channels, [Platform::current()]).await?;
 
     let tasks = packages
         .iter()

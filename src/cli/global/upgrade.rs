@@ -54,7 +54,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Fetch sparse repodata
-    let platform_sparse_repodata = fetch_sparse_repodata(&channels, &[Platform::current()]).await?;
+    let platform_sparse_repodata = fetch_sparse_repodata(&channels, [Platform::current()]).await?;
 
     // Install the package
     let (package_record, _, upgraded) = globally_install_package(

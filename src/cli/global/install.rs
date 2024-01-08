@@ -331,7 +331,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let package_matchspec = MatchSpec::from_str(&args.package).into_diagnostic()?;
 
     // Fetch sparse repodata
-    let platform_sparse_repodata = fetch_sparse_repodata(&channels, [platform]).await?;
+    let platform_sparse_repodata = fetch_sparse_repodata(&channels, [Platform::current()]).await?;
 
     // Install the package
     let (prefix_package, scripts, _) = globally_install_package(
@@ -392,7 +392,6 @@ pub(super) async fn globally_install_package(
     platform_sparse_repodata: &[SparseRepoData],
     channel_config: &ChannelConfig,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
-    let platform = Platform::current();
     let package_name = package_name(&package_matchspec)?;
 
     let available_packages = SparseRepoData::load_records_recursive(
@@ -428,9 +427,12 @@ pub(super) async fn globally_install_package(
     let prefix_records = prefix.find_installed_packages(None).await?;
 
     // Create the transaction that we need
-    let transaction =
-        Transaction::from_current_and_desired(prefix_records, records.iter().cloned(), platform)
-            .into_diagnostic()?;
+    let transaction = Transaction::from_current_and_desired(
+        prefix_records,
+        records.iter().cloned(),
+        Platform::current(),
+    )
+    .into_diagnostic()?;
 
     let has_transactions = !transaction.operations.is_empty();
 
