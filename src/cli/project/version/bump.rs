@@ -6,17 +6,13 @@ pub async fn execute(mut project: Project, bump_type: VersionBumpType) -> miette
     let current_version = project
         .version()
         .as_ref()
-        .ok_or_else(|| {
-            eprintln!(
-                "{}No version found in manifest.",
-                console::style(console::Emoji("✖ ", "")).red(),
-            );
-        })
-        .unwrap()
+        .ok_or_else(|| miette::miette!("No version found in manifest."))?
         .clone(); // NOTE(hadim): ideas are welcome to get rid of that clone.
 
     // bump version
-    let new_version = current_version.bump(bump_type).unwrap();
+    let new_version = current_version
+        .bump(bump_type)
+        .map_err(|_| miette::miette!("Unable to bump version."))?;
 
     // Set the version
     project.manifest.set_version(&new_version.to_string())?;
