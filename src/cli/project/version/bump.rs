@@ -7,7 +7,7 @@ pub async fn execute(mut project: Project, bump_type: VersionBumpType) -> miette
         .version()
         .as_ref()
         .ok_or_else(|| miette::miette!("No version found in manifest."))?
-        .clone(); // NOTE(hadim): ideas are welcome to get rid of that clone.
+        .clone();
 
     // bump version
     let new_version = current_version
