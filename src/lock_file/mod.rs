@@ -315,7 +315,7 @@ async fn resolve_platform(
     let package_names = dependencies.keys().cloned().collect_vec();
 
     // Get the virtual packages for this platform
-    let virtual_packages = project.virtual_packages(platform)?;
+    let virtual_packages = project.virtual_packages(platform);
 
     // Get the packages that were contained in the last lock-file. We use these as favored packages
     // for the solver (which is called `locked` for rattler_solve).

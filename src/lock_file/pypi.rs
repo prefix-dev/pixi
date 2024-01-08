@@ -1,8 +1,11 @@
 use crate::{
     consts::PROJECT_MANIFEST,
     lock_file::{package_identifier, pypi_name_mapping},
-    project::{manifest::LibCSystemRequirement, manifest::SystemRequirements},
-    virtual_packages::{default_glibc_version, default_mac_os_version},
+    project::{
+        manifest::LibCSystemRequirement,
+        manifest::SystemRequirements,
+        virtual_packages::{default_glibc_version, default_mac_os_version},
+    },
     Project,
 };
 use itertools::Itertools;

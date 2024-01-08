@@ -2,13 +2,15 @@ mod environment;
 mod errors;
 pub mod manifest;
 pub mod metadata;
+pub mod virtual_packages;
 
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
-use rattler_conda_types::{Channel, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
-use rattler_virtual_packages::VirtualPackage;
+use rattler_conda_types::{
+    Channel, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
+};
 use rip::{index::PackageDb, normalize_index_url};
 use std::collections::{HashMap, HashSet};
 use std::{
@@ -24,9 +26,8 @@ use crate::{
     consts::{self, PROJECT_MANIFEST},
     default_client,
     task::Task,
-    virtual_packages::non_relevant_virtual_packages_for_platform,
 };
-use environment::Environment;
+pub use environment::Environment;
 use manifest::{Manifest, PyPiRequirement, SystemRequirements};
 use rip::types::NormalizedPackageName;
 use std::fmt::{Debug, Display, Formatter};
@@ -257,6 +258,11 @@ impl Project {
         self.default_environment().task(name, platform).ok()
     }
 
+    /// TODO: Remove this method and use the one from Environment instead.
+    pub fn virtual_packages(&self, platform: Platform) -> Vec<GenericVirtualPackage> {
+        self.default_environment().virtual_packages(platform)
+    }
+
     /// Get the system requirements defined under the `system-requirements` section of the project manifest.
     /// They will act as the description of a reference machine which is minimally needed for this package to be run.
     ///
@@ -374,20 +380,6 @@ impl Project {
         }
 
         Ok(full_paths)
-    }
-
-    /// Get the system requirements defined under the `system-requirements` section of the project manifest.
-    /// Excluding packages that are not relevant for the specified platform.
-    pub fn virtual_packages_for_platform(&self, platform: Platform) -> Vec<VirtualPackage> {
-        // Filter system requirements based on the relevant packages for the current OS.
-        self.system_requirements()
-            .virtual_packages()
-            .iter()
-            .filter(|requirement| {
-                !non_relevant_virtual_packages_for_platform(requirement, platform)
-            })
-            .cloned()
-            .collect()
     }
 }
 

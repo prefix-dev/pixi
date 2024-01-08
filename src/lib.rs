@@ -15,7 +15,6 @@ pub mod task;
 pub mod unix;
 pub mod util;
 pub mod utils;
-pub mod virtual_packages;
 
 use once_cell::sync::Lazy;
 pub use project::Project;

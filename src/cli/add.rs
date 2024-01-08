@@ -369,7 +369,7 @@ pub fn determine_best_version(
 
         available_packages: &available_packages,
 
-        virtual_packages: project.virtual_packages(platform)?,
+        virtual_packages: project.virtual_packages(platform),
 
         // TODO: Add the information from the current lock file here.
         locked_packages: vec![],
