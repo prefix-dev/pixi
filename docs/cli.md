@@ -328,7 +328,7 @@ Globally installed binary packages:
 
 ### `global upgrade`
 
-This command upgrades a globally installed package to the latest version. 
+This command upgrades a globally installed package to the latest version.
 
 ##### Options
 
@@ -350,7 +350,7 @@ This command upgrades all globally installed packages to their latest version.
 - `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 
 ```shell
-pixi global upgrade-all 
+pixi global upgrade-all
 pixi global upgrade-all --channel conda-forge --channel bioconda
 # Or in a more concise form
 pixi global upgrade-all -c conda-forge -c bioconda trackplot
