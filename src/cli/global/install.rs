@@ -331,7 +331,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let package_matchspec = MatchSpec::from_str(&args.package).into_diagnostic()?;
 
     // Fetch sparse repodata
-    let platform_sparse_repodata = fetch_sparse_repodata(&channels, &[Platform::current()]).await?;
+    let platform_sparse_repodata = fetch_sparse_repodata(&channels, [platform]).await?;
 
     // Install the package
     let (prefix_package, scripts, _) = globally_install_package(

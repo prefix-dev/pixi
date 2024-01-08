@@ -178,19 +178,22 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 }
 
                 // Check if task has dependencies
-                let depends_on = project.task_names_depending_on(name);
-                if !depends_on.is_empty() && !args.names.contains(name) {
-                    eprintln!(
-                        "{}: {}",
-                        console::style("Warning, the following task/s depend on this task")
-                            .yellow(),
-                        console::style(depends_on.iter().to_owned().join(", ")).bold()
-                    );
-                    eprintln!(
-                        "{}",
-                        console::style("Be sure to modify these after the removal\n").yellow()
-                    );
-                }
+                // TODO: Make this properly work by inspecting which actual tasks depend on the task
+                //  we just removed taking into account environments and features.
+                // let depends_on = project.task_names_depending_on(name);
+                // if !depends_on.is_empty() && !args.names.contains(name) {
+                //     eprintln!(
+                //         "{}: {}",
+                //         console::style("Warning, the following task/s depend on this task")
+                //             .yellow(),
+                //         console::style(depends_on.iter().to_owned().join(", ")).bold()
+                //     );
+                //     eprintln!(
+                //         "{}",
+                //         console::style("Be sure to modify these after the removal\n").yellow()
+                //     );
+                // }
+
                 // Safe to remove
                 to_remove.push((name, args.platform));
             }
@@ -220,7 +223,10 @@ pub fn execute(args: Args) -> miette::Result<()> {
             );
         }
         Operation::List(args) => {
-            let tasks = project.task_names(Some(Platform::current()));
+            let tasks = project
+                .tasks(Some(Platform::current()))
+                .into_keys()
+                .collect_vec();
             if tasks.is_empty() {
                 eprintln!("No tasks found",);
             } else {

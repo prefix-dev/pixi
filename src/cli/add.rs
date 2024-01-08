@@ -5,7 +5,7 @@ use crate::{
 };
 use clap::Parser;
 use indexmap::IndexMap;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{
@@ -255,11 +255,11 @@ pub async fn add_conda_specs_to_project(
     let mut package_versions = HashMap::<PackageName, HashSet<Version>>::new();
 
     let platforms = if specs_platforms.is_empty() {
-        project.platforms()
+        Either::Left(project.platforms().into_iter())
     } else {
-        specs_platforms
-    }
-    .to_vec();
+        Either::Right(specs_platforms.iter().copied())
+    };
+
     for platform in platforms {
         // TODO: `build` and `host` has to be separated when we have separated environments for them.
         //       While we combine them on install we should also do that on getting the best version.
