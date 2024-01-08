@@ -1,6 +1,6 @@
 use crate::project::errors::{UnknownTask, UnsupportedPlatformError};
 use crate::project::manifest;
-use crate::project::manifest::{EnvironmentName, Feature, FeatureName};
+use crate::project::manifest::{EnvironmentName, Feature, FeatureName, SystemRequirements};
 use crate::task::Task;
 use crate::Project;
 use indexmap::IndexSet;
@@ -155,6 +155,20 @@ impl<'p> Environment<'p> {
             }),
             Ok(Some(task)) => Ok(task),
         }
+    }
+
+    /// Returns the system requirements for this environment.
+    ///
+    /// The system requirements of the environment are the union of the system requirements of all
+    /// the features that make up the environment. If multiple features specify a requirement for
+    /// the same system package, the highest is chosen.
+    pub fn system_requirements(&self) -> SystemRequirements {
+        self.features()
+            .map(|feature| &feature.system_requirements)
+            .fold(SystemRequirements::default(), |acc, req| {
+                acc.union(req)
+                    .expect("system requirements should have been validated upfront")
+            })
     }
 
     /// Validates that the given platform is supported by this environment.

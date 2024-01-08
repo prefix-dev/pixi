@@ -61,7 +61,7 @@ pub async fn resolve_dependencies<'p>(
     // Determine the compatible tags
     let compatible_tags = project_platform_tags(
         platform,
-        project.system_requirements(),
+        &project.system_requirements(),
         python_record.as_ref(),
     );
 

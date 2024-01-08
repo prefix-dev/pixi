@@ -257,6 +257,14 @@ impl Project {
         self.default_environment().task(name, platform).ok()
     }
 
+    /// Get the system requirements defined under the `system-requirements` section of the project manifest.
+    /// They will act as the description of a reference machine which is minimally needed for this package to be run.
+    ///
+    /// TODO: Remove this function and use the `system_requirements` function from the default environment instead.
+    pub fn system_requirements(&self) -> SystemRequirements {
+        self.default_environment().system_requirements()
+    }
+
     /// Returns the dependencies of the project.
     pub fn dependencies(
         &self,
@@ -366,12 +374,6 @@ impl Project {
         }
 
         Ok(full_paths)
-    }
-
-    /// Get the system requirements defined under the `system-requirements` section of the project manifest.
-    /// They will act as the description of a reference machine which is minimally needed for this package to be run.
-    pub fn system_requirements(&self) -> &SystemRequirements {
-        &self.manifest.default_feature().system_requirements
     }
 
     /// Get the system requirements defined under the `system-requirements` section of the project manifest.

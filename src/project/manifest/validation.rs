@@ -1,4 +1,4 @@
-use crate::project::manifest::{Environment, FeatureName};
+use crate::project::manifest::{Environment, FeatureName, SystemRequirements};
 use crate::{
     consts,
     project::manifest::{Feature, ProjectManifest, TargetSelector},
@@ -77,7 +77,7 @@ impl ProjectManifest {
     /// Validates that the given environment is valid.
     fn validate_environment(&self, env: &Environment) -> Result<(), Report> {
         let mut features_seen = HashSet::new();
-
+        let mut features = Vec::with_capacity(env.features.len());
         for feature in env.features.iter() {
             // Make sure that the environment does not have any duplicate features.
             if !features_seen.insert(feature) {
@@ -95,20 +95,35 @@ impl ProjectManifest {
             }
 
             // Make sure that every feature actually exists.
-            if !self
-                .features
-                .contains_key(&FeatureName::Named(feature.clone()))
-            {
-                return Err(miette::miette!(
-                    labels = vec![LabeledSpan::at(
-                        env.features_source_loc.clone().unwrap_or_default(),
-                        format!("unknown feature '{}'", feature)
-                    )],
-                    help = "add the feature to the project manifest",
-                    "the feature '{}' is not defined in the project manifest",
-                    feature
-                ));
+            match self.features.get(&FeatureName::Named(feature.clone())) {
+                Some(feature) => features.push(feature),
+                None => {
+                    return Err(miette::miette!(
+                        labels = vec![LabeledSpan::at(
+                            env.features_source_loc.clone().unwrap_or_default(),
+                            format!("unknown feature '{}'", feature)
+                        )],
+                        help = "add the feature to the project manifest",
+                        "the feature '{}' is not defined in the project manifest",
+                        feature
+                    ));
+                }
             }
+        }
+
+        // Check if there are conflicts in system requirements between features
+        if let Err(e) = features
+            .iter()
+            .map(|feature| &feature.system_requirements)
+            .try_fold(SystemRequirements::default(), |acc, req| acc.union(req))
+        {
+            return Err(miette::miette!(
+                labels = vec![LabeledSpan::at(
+                    env.features_source_loc.clone().unwrap_or_default(),
+                    "while resolving system requirements of features defined here"
+                )],
+                "{e}",
+            ));
         }
 
         Ok(())
@@ -145,4 +160,9 @@ fn create_unsupported_platform_report(
         "targeting a platform that this project does not support"
     )
     .with_source_code(source)
+}
+
+#[cfg(test)]
+mod test {
+    // TODO: add a test to verify that conflicting system requirements result in an error.
 }
