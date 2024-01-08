@@ -204,7 +204,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         package_count: dependency_count(&p).ok(),
         environment_size,
         last_updated: last_updated(p.lock_file_path()).ok(),
-        platforms: p.platforms().to_vec(),
+        platforms: p.platforms().into_iter().collect(),
     });
 
     let virtual_packages = VirtualPackage::current()

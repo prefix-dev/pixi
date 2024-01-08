@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::{cmp::Ordering, path::PathBuf};
 
 use clap::Parser;
@@ -81,22 +82,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let channel_config = ChannelConfig::default();
 
-    let channels = match (args.channel, project) {
+    let channels = match (args.channel, project.as_ref()) {
         // if user passes channels through the channel flag
         (Some(c), _) => c
             .iter()
             .map(|c| Channel::from_str(c, &channel_config))
-            .collect::<Result<Vec<Channel>, _>>()
+            .map_ok(Cow::Owned)
+            .collect::<Result<Vec<_>, _>>()
             .into_diagnostic()?,
         // if user doesn't pass channels and we are in a project
-        (None, Some(p)) => p.channels().to_owned(),
+        (None, Some(p)) => p.channels().into_iter().map(Cow::Borrowed).collect(),
         // if user doesn't pass channels and we are not in project
-        (None, None) => vec![Channel::from_str("conda-forge", &channel_config).into_diagnostic()?],
+        (None, None) => vec![Cow::Owned(
+            Channel::from_str("conda-forge", &channel_config).into_diagnostic()?,
+        )],
     };
 
     let package_name_filter = args.package;
-    let platforms = [Platform::current()];
-    let repo_data = fetch_sparse_repodata(&channels, &platforms).await?;
+    let repo_data =
+        fetch_sparse_repodata(channels.iter().map(AsRef::as_ref), [Platform::current()]).await?;
 
     // When package name filter contains * (wildcard), it will search and display a list of packages matching this filter
     if package_name_filter.contains('*') {

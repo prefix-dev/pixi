@@ -34,7 +34,7 @@ pub fn lock_file_satisfies_project(
     // result.
     let channels = project
         .channels()
-        .iter()
+        .into_iter()
         .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()))
         .collect_vec();
     if lock_file.metadata.channels.iter().ne(channels.iter()) {
