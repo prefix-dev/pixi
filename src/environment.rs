@@ -1,10 +1,11 @@
 use crate::{
     consts, default_authenticated_client, install, install_pypi, lock_file, prefix::Prefix,
-    progress, virtual_packages::verify_current_platform_has_required_virtual_packages, Project,
+    progress, Project,
 };
 use miette::{Context, IntoDiagnostic, LabeledSpan};
 
 use crate::lock_file::lock_file_satisfies_project;
+use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use rattler::install::{PythonInfo, Transaction};
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::CondaLock;
@@ -78,7 +79,7 @@ pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
     }
 
     // Make sure the system requirements are met
-    verify_current_platform_has_required_virtual_packages(project)?;
+    verify_current_platform_has_required_virtual_packages(&project.default_environment())?;
 
     Ok(())
 }

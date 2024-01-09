@@ -100,7 +100,7 @@ pub fn lock_file_satisfies_project(
 
         // Get the virtual packages for the system
         let virtual_packages = project
-            .virtual_packages(platform)?
+            .virtual_packages(platform)
             .into_iter()
             .map(|vpkg| (vpkg.name.clone(), vpkg))
             .collect::<HashMap<_, _>>();
