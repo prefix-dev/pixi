@@ -1,6 +1,5 @@
 ---
-source: src/virtual_packages.rs
-assertion_line: 186
+source: src/project/virtual_packages.rs
 expression: packages
 ---
 [
@@ -24,7 +23,7 @@ expression: packages
     ),
     Archspec(
         Archspec {
-            spec: "x86_64",
+            spec: "aarch64",
         },
     ),
 ]

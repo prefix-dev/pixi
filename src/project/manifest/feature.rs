@@ -1,9 +1,14 @@
-use super::SystemRequirements;
+use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelector};
 use crate::project::manifest::target::Targets;
+use crate::project::SpecType;
+use crate::task::Task;
 use crate::utils::spanned::PixiSpanned;
-use rattler_conda_types::{Channel, Platform};
+use indexmap::IndexMap;
+use rattler_conda_types::{Channel, NamelessMatchSpec, PackageName, Platform};
 use serde::de::Error;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+use serde_with::{serde_as, DisplayFromStr, PickFirst};
+use std::collections::HashMap;
 
 /// The name of a feature. This is either a string or default for the default feature.
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -63,4 +68,73 @@ pub struct Feature {
 
     /// Target specific configuration.
     pub targets: Targets,
+}
+
+impl<'de> Deserialize<'de> for Feature {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[serde_as]
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields, rename_all = "kebab-case")]
+        struct FeatureInner {
+            #[serde(default)]
+            platforms: Option<PixiSpanned<Vec<Platform>>>,
+            #[serde_as(deserialize_as = "Option<Vec<super::serde::ChannelStr>>")]
+            channels: Option<Vec<Channel>>,
+            #[serde(default)]
+            system_requirements: SystemRequirements,
+            #[serde(default)]
+            target: IndexMap<PixiSpanned<TargetSelector>, Target>,
+
+            #[serde(default)]
+            #[serde_as(as = "IndexMap<_, PickFirst<(DisplayFromStr, _)>>")]
+            dependencies: IndexMap<PackageName, NamelessMatchSpec>,
+
+            #[serde(default)]
+            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
+            host_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+
+            #[serde(default)]
+            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
+            build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+
+            #[serde(default)]
+            pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
+
+            /// Additional information to activate an environment.
+            #[serde(default)]
+            activation: Option<Activation>,
+
+            /// Target specific tasks to run in the environment
+            #[serde(default)]
+            tasks: HashMap<String, Task>,
+        }
+
+        let inner = FeatureInner::deserialize(deserializer)?;
+
+        let mut dependencies = HashMap::from_iter([(SpecType::Run, inner.dependencies)]);
+        if let Some(host_deps) = inner.host_dependencies {
+            dependencies.insert(SpecType::Host, host_deps);
+        }
+        if let Some(build_deps) = inner.build_dependencies {
+            dependencies.insert(SpecType::Build, build_deps);
+        }
+
+        let default_target = Target {
+            dependencies,
+            pypi_dependencies: inner.pypi_dependencies,
+            activation: inner.activation,
+            tasks: inner.tasks,
+        };
+
+        Ok(Feature {
+            name: FeatureName::Default,
+            platforms: inner.platforms,
+            channels: inner.channels,
+            system_requirements: inner.system_requirements,
+            targets: Targets::from_default_and_user_defined(default_target, inner.target),
+        })
+    }
 }
