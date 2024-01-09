@@ -152,7 +152,6 @@ Currently, the specified **defaults** are the same as [conda-lock](https://githu
 === "Linux"
     ```toml title="default system requirements for linux"
     [system-requirements]
-    unix = true
     linux = "5.10"
     libc = { family="glibc", version="2.17" }
     ```
@@ -160,20 +159,17 @@ Currently, the specified **defaults** are the same as [conda-lock](https://githu
 === "Windows"
     ```toml title="default system requirements for windows"
     [system-requirements]
-    windows = true
     ```
 
 === "Osx"
     ```toml title="default system requirements for osx"
     [system-requirements]
-    unix = true
     macos = "10.15"
     ```
 
 === "Osx-arm64"
     ```toml title="default system requirements for osx-arm64"
     [system-requirements]
-    unix = true
     macos = "11.0"
     ```
 
