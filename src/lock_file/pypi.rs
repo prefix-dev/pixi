@@ -1,8 +1,11 @@
 use crate::{
     consts::PROJECT_MANIFEST,
     lock_file::{package_identifier, pypi_name_mapping},
-    project::{manifest::LibCSystemRequirement, manifest::SystemRequirements},
-    virtual_packages::{default_glibc_version, default_mac_os_version},
+    project::{
+        manifest::LibCSystemRequirement,
+        manifest::SystemRequirements,
+        virtual_packages::{default_glibc_version, default_mac_os_version},
+    },
     Project,
 };
 use itertools::Itertools;
@@ -61,7 +64,7 @@ pub async fn resolve_dependencies<'p>(
     // Determine the compatible tags
     let compatible_tags = project_platform_tags(
         platform,
-        project.system_requirements(),
+        &project.system_requirements(),
         python_record.as_ref(),
     );
 

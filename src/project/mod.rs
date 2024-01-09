@@ -1,14 +1,18 @@
+mod environment;
+pub mod errors;
 pub mod manifest;
 pub mod metadata;
+pub mod virtual_packages;
 
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
-use rattler_conda_types::{Channel, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
-use rattler_virtual_packages::VirtualPackage;
+use rattler_conda_types::{
+    Channel, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
+};
 use rip::{index::PackageDb, normalize_index_url};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::{
     env,
     ffi::OsStr,
@@ -17,15 +21,16 @@ use std::{
     sync::Arc,
 };
 
+use crate::project::manifest::EnvironmentName;
 use crate::{
     consts::{self, PROJECT_MANIFEST},
     default_client,
     task::Task,
-    virtual_packages::non_relevant_virtual_packages_for_platform,
 };
+pub use environment::Environment;
 use manifest::{Manifest, PyPiRequirement, SystemRequirements};
 use rip::types::NormalizedPackageName;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use url::Url;
 
 /// The dependency types we support
@@ -78,6 +83,15 @@ pub struct Project {
     pub(crate) manifest: Manifest,
 }
 
+impl Debug for Project {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Project")
+            .field("root", &self.root)
+            .field("manifest", &self.manifest)
+            .finish()
+    }
+}
+
 impl Project {
     /// Constructs a new instance from an internal manifest representation
     pub fn from_manifest(manifest: Manifest) -> Self {
@@ -86,6 +100,12 @@ impl Project {
             package_db: Default::default(),
             manifest,
         }
+    }
+
+    /// Constructs a project from a manifest.
+    pub fn from_str(root: &Path, content: &str) -> miette::Result<Self> {
+        let manifest = Manifest::from_str(root, content)?;
+        Ok(Self::from_manifest(manifest))
     }
 
     /// Discovers the project manifest file in the current directory or any of the parent
@@ -190,46 +210,65 @@ impl Project {
         self.manifest.save()
     }
 
-    /// Returns the channels used by this project
-    pub fn channels(&self) -> &[Channel] {
-        &self.manifest.parsed.project.channels
+    /// Returns the default environment of the project.
+    pub fn default_environment(&self) -> Environment<'_> {
+        Environment {
+            project: self,
+            environment: self.manifest.default_environment(),
+        }
+    }
+
+    /// Returns the environment with the given name or `None` if no such environment exists.
+    pub fn environment(&self, name: &EnvironmentName) -> Option<Environment<'_>> {
+        Some(Environment {
+            project: self,
+            environment: self.manifest.environment(name)?,
+        })
+    }
+
+    /// Returns the channels used by this project.
+    ///
+    /// TODO: Remove this function and use the channels from the default environment instead.
+    pub fn channels(&self) -> IndexSet<&Channel> {
+        self.default_environment().channels()
     }
 
     /// Returns the platforms this project targets
-    pub fn platforms(&self) -> &[Platform] {
-        self.manifest.parsed.project.platforms.as_ref().as_slice()
+    ///
+    /// TODO: Remove this function and use the platforms from the default environment instead.
+    pub fn platforms(&self) -> HashSet<Platform> {
+        self.default_environment().platforms()
     }
 
     /// Get the tasks of this project
+    ///
+    /// TODO: Remove this function and use the tasks from the default environment instead.
     pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&str, &Task> {
-        self.manifest.tasks(platform)
+        self.default_environment()
+            .tasks(platform)
+            .unwrap_or_default()
     }
 
     /// Get the task with the specified `name` or `None` if no such task exists. If `platform` is
     /// specified then the task will first be looked up in the target specific tasks for the given
     /// platform.
+    ///
+    /// TODO: Remove this function and use the `task` function from the default environment instead.
     pub fn task_opt(&self, name: &str, platform: Option<Platform>) -> Option<&Task> {
-        self.manifest.tasks(platform).get(name).copied()
+        self.default_environment().task(name, platform).ok()
     }
 
-    /// Returns all tasks defined in the project for the given platform
-    pub fn task_names(&self, platform: Option<Platform>) -> Vec<&str> {
-        self.manifest.tasks(platform).keys().copied().collect_vec()
+    /// TODO: Remove this method and use the one from Environment instead.
+    pub fn virtual_packages(&self, platform: Platform) -> Vec<GenericVirtualPackage> {
+        self.default_environment().virtual_packages(platform)
     }
 
-    /// Returns names of the tasks that depend on the given task.
-    pub fn task_names_depending_on(&self, name: impl AsRef<str>) -> Vec<&str> {
-        let mut tasks = self.manifest.tasks(Some(Platform::current()));
-        let task = tasks.remove(name.as_ref());
-        if task.is_some() {
-            tasks
-                .into_iter()
-                .filter(|(_, c)| c.depends_on().contains(&name.as_ref().to_string()))
-                .map(|(name, _)| name)
-                .collect()
-        } else {
-            vec![]
-        }
+    /// Get the system requirements defined under the `system-requirements` section of the project manifest.
+    /// They will act as the description of a reference machine which is minimally needed for this package to be run.
+    ///
+    /// TODO: Remove this function and use the `system_requirements` function from the default environment instead.
+    pub fn system_requirements(&self) -> SystemRequirements {
+        self.default_environment().system_requirements()
     }
 
     /// Returns the dependencies of the project.
@@ -341,26 +380,6 @@ impl Project {
         }
 
         Ok(full_paths)
-    }
-
-    /// Get the system requirements defined under the `system-requirements` section of the project manifest.
-    /// They will act as the description of a reference machine which is minimally needed for this package to be run.
-    pub fn system_requirements(&self) -> &SystemRequirements {
-        &self.manifest.default_feature().system_requirements
-    }
-
-    /// Get the system requirements defined under the `system-requirements` section of the project manifest.
-    /// Excluding packages that are not relevant for the specified platform.
-    pub fn virtual_packages_for_platform(&self, platform: Platform) -> Vec<VirtualPackage> {
-        // Filter system requirements based on the relevant packages for the current OS.
-        self.system_requirements()
-            .virtual_packages()
-            .iter()
-            .filter(|requirement| {
-                !non_relevant_virtual_packages_for_platform(requirement, platform)
-            })
-            .cloned()
-            .collect()
     }
 }
 

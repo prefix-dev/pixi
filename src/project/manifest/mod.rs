@@ -7,13 +7,9 @@ mod python;
 mod serde;
 mod system_requirements;
 mod target;
+mod validation;
 
-use crate::{
-    consts,
-    project::{manifest::target::Targets, SpecType},
-    task::Task,
-    utils::spanned::PixiSpanned,
-};
+use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 use ::serde::{Deserialize, Deserializer};
 pub use activation::Activation;
 pub use environment::{Environment, EnvironmentName};
@@ -21,7 +17,7 @@ pub use feature::{Feature, FeatureName};
 use indexmap::IndexMap;
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
-use miette::{Context, IntoDiagnostic, LabeledSpan, NamedSource, Report};
+use miette::{IntoDiagnostic, LabeledSpan, NamedSource};
 pub use python::PyPiRequirement;
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
@@ -29,12 +25,11 @@ use rattler_conda_types::{
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use std::{
     collections::HashMap,
-    ops::Range,
     path::{Path, PathBuf},
     str::FromStr,
 };
 pub use system_requirements::{LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};
-pub use target::{Target, TargetSelector};
+pub use target::{Target, TargetSelector, Targets};
 use toml_edit::{value, Array, Document, Item, Table, TomlError, Value};
 
 /// Handles the project's manifest file.
@@ -490,6 +485,11 @@ impl Manifest {
     pub fn default_environment(&self) -> &Environment {
         self.parsed.default_environment()
     }
+
+    /// Returns the environment with the given name or `None` if it does not exist.
+    pub fn environment(&self, name: &EnvironmentName) -> Option<&Environment> {
+        self.parsed.environments.get(name)
+    }
 }
 
 /// Ensures that the specified TOML target table exists within a given document,
@@ -613,9 +613,11 @@ impl ProjectManifest {
     /// feature. The default environment can be overwritten by a environment named `default`.
     pub fn default_environment(&self) -> &Environment {
         let envs = &self.environments;
-        envs.get(&EnvironmentName::Named(String::from("default")))
-            .or_else(|| envs.get(&EnvironmentName::Default))
-            .expect("default environment should always exist")
+        envs.get(&EnvironmentName::Named(String::from(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+        )))
+        .or_else(|| envs.get(&EnvironmentName::Default))
+        .expect("default environment should always exist")
     }
 }
 
@@ -701,7 +703,8 @@ impl<'de> Deserialize<'de> for ProjectManifest {
         // Construct a default environment
         let default_environment = Environment {
             name: EnvironmentName::Default,
-            features: Vec::new().into(),
+            features: Vec::new(),
+            features_source_loc: None,
             solve_group: None,
         };
 
@@ -711,95 +714,6 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             environments: IndexMap::from_iter([(EnvironmentName::Default, default_environment)]),
         })
     }
-}
-
-impl ProjectManifest {
-    /// Validate the
-    pub fn validate(&self, source: NamedSource, root_folder: &Path) -> miette::Result<()> {
-        // Check if the targets are defined for existing platforms
-        for feature in self.features.values() {
-            let platforms = feature
-                .platforms
-                .as_ref()
-                .unwrap_or(&self.project.platforms);
-            for target_sel in feature.targets.user_defined_selectors() {
-                match target_sel {
-                    TargetSelector::Platform(p) => {
-                        if !platforms.as_ref().contains(p) {
-                            return Err(create_unsupported_platform_report(
-                                source,
-                                feature.targets.source_loc(target_sel).unwrap_or_default(),
-                                p,
-                                feature,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-
-        // parse the SPDX license expression to make sure that it is a valid expression.
-        if let Some(spdx_expr) = &self.project.license {
-            spdx::Expression::parse(spdx_expr)
-                .into_diagnostic()
-                .with_context(|| {
-                    format!(
-                        "failed to parse the SPDX license expression '{}'",
-                        spdx_expr
-                    )
-                })?;
-        }
-
-        let check_file_existence = |x: &Option<PathBuf>| {
-            if let Some(path) = x {
-                let full_path = root_folder.join(path);
-                if !full_path.exists() {
-                    return Err(miette::miette!(
-                        "the file '{}' does not exist",
-                        full_path.display()
-                    ));
-                }
-            }
-            Ok(())
-        };
-
-        check_file_existence(&self.project.license_file)?;
-        check_file_existence(&self.project.readme)?;
-
-        Ok(())
-    }
-}
-
-// Create an error report for using a platform that is not supported by the project.
-fn create_unsupported_platform_report(
-    source: NamedSource,
-    span: Range<usize>,
-    platform: &Platform,
-    feature: &Feature,
-) -> Report {
-    miette::miette!(
-        labels = vec![LabeledSpan::at(
-            span,
-            format!("'{}' is not a supported platform", platform)
-        )],
-        help = format!(
-            "Add '{platform}' to the `{}` array of the {} manifest.",
-            consts::PROJECT_MANIFEST,
-            if feature.platforms.is_some() {
-                format!(
-                    "feature.{}.platforms",
-                    feature
-                        .name
-                        .name()
-                        .expect("default feature never defines custom platforms")
-                )
-            } else {
-                String::from("project.platforms")
-            }
-        ),
-        "targeting a platform that this project does not support"
-    )
-    .with_source_code(source)
 }
 
 #[cfg(test)]
