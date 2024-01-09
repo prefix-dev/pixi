@@ -393,6 +393,87 @@ pixi project channel add https://repo.prefix.dev/conda-forge
 pixi project channel add --no-install robostack
 ```
 
+### `project channel list`
+
+List the channels in the project file
+
+##### Options
+
+- `--no-install`: do not update the environment, only add changed packages to the lock-file.
+
+```sh
+$ pixi project channel list
+conda-forge
+$ pixi project channel list --urls
+https://conda.anaconda.org/conda-forge/
+```
+
+### `project channel remove`
+
+List the channels in the project file
+
+##### Options
+
+- `--no-install`: do not update the environment, only add changed packages to the lock-file.
+
+```sh
+pixi project channel remove conda-forge
+pixi project channel remove https://conda.anaconda.org/conda-forge/
+```
+
+### `project description get`
+
+Get the project description.
+
+```sh
+$ pixi project description get
+Package management made easy!
+```
+
+### `project description set`
+
+Set the project description.
+
+```sh
+pixi project description set "my new description"
+```
+
+### `project platform add`
+
+Adds a platform(s) to the project file and updates the lockfile.
+
+##### Options
+
+- `--no-install`: do not update the environment, only add changed packages to the lock-file.
+
+```sh
+pixi project platform add win-64
+```
+
+### `project platform list`
+
+List the platforms in the project file.
+
+```sh
+$ pixi project platform list
+osx-64
+linux-64
+win-64
+osx-arm64
+```
+
+### `project platform remove`
+
+Remove platform(s) from the project file and updates the lockfile.
+
+##### Options
+
+- `--no-install`: do not update the environment, only add changed packages to the lock-file.
+
+```sh
+pixi project platform remove win-64
+```
+
 [^1]: An __up-to-date__ lockfile means that the dependencies in the lockfile are allowed by the dependencies in the manifest file.
       For example
 
