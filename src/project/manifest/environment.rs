@@ -1,6 +1,6 @@
 use crate::consts;
-use serde::de::{self, MapAccess, Visitor};
-use serde::{Deserialize, Deserializer};
+use crate::utils::spanned::PixiSpanned;
+use serde::{self, Deserialize, Deserializer};
 
 /// The name of an environment. This is either a string or default for the default environment.
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -25,8 +25,10 @@ impl<'de> Deserialize<'de> for EnvironmentName {
     where
         D: Deserializer<'de>,
     {
-        let name = String::deserialize(deserializer)?;
-        Ok(EnvironmentName::Named(name))
+        match String::deserialize(deserializer)? {
+            name if name == consts::DEFAULT_ENVIRONMENT_NAME => Ok(EnvironmentName::Default),
+            name => Ok(EnvironmentName::Named(name)),
+        }
     }
 }
 
@@ -45,7 +47,7 @@ pub struct Environment {
     /// environment.
     pub features: Vec<String>,
 
-    /// The optional location of where the features are defined in the manifest toml.
+    /// The optional location of where the features of the environment are defined in the manifest toml.
     pub features_source_loc: Option<std::ops::Range<usize>>,
 
     /// An optional solver-group. Multiple environments can share the same solve-group. All the
@@ -53,70 +55,49 @@ pub struct Environment {
     pub solve_group: Option<String>,
 }
 
-impl<'de> Deserialize<'de> for Environment {
+/// Helper struct to deserialize the environment from TOML.
+/// The environment description can only hold these values.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub(super) struct TomlEnvironment {
+    pub features: PixiSpanned<Vec<String>>,
+    pub solve_group: Option<String>,
+}
+
+pub(super) enum TomlEnvironmentMapOrSeq {
+    Map(TomlEnvironment),
+    Seq(Vec<String>),
+}
+impl TomlEnvironmentMapOrSeq {
+    pub fn into_environment(self, name: EnvironmentName) -> Environment {
+        match self {
+            TomlEnvironmentMapOrSeq::Map(TomlEnvironment {
+                features,
+                solve_group,
+            }) => Environment {
+                name,
+                features: features.value,
+                features_source_loc: features.span,
+                solve_group,
+            },
+            TomlEnvironmentMapOrSeq::Seq(features) => Environment {
+                name,
+                features,
+                features_source_loc: None,
+                solve_group: None,
+            },
+        }
+    }
+}
+impl<'de> Deserialize<'de> for TomlEnvironmentMapOrSeq {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_any(EnvironmentVisitor)
-    }
-}
-
-struct EnvironmentVisitor;
-
-impl<'de> Visitor<'de> for EnvironmentVisitor {
-    type Value = Environment;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("a list of features or a map with additional fields")
-    }
-
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-    where
-        A: de::SeqAccess<'de>,
-    {
-        let mut features = Vec::new();
-        while let Some(feature) = seq.next_element()? {
-            features.push(feature);
-        }
-        Ok(Environment {
-            name: EnvironmentName::Default, // Adjusted by manifest deserialization
-            features,
-            features_source_loc: None,
-            solve_group: None,
-        })
-    }
-
-    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-    where
-        A: MapAccess<'de>,
-    {
-        let mut features = None;
-        let mut solve_group = None;
-        while let Some(key) = map.next_key::<String>()? {
-            match key.as_str() {
-                "features" => {
-                    if features.is_some() {
-                        return Err(de::Error::duplicate_field("features"));
-                    }
-                    features = Some(map.next_value()?); // Deserialize the value associated with the key
-                }
-                "solve-group" => {
-                    if solve_group.is_some() {
-                        return Err(de::Error::duplicate_field("solve-group"));
-                    }
-                    let sg: String = map.next_value()?; // Directly deserialize the value as a String
-                    solve_group = Some(sg);
-                }
-                _ => return Err(de::Error::unknown_field(&key, &["features", "solve-group"])),
-            }
-        }
-        let features = features.ok_or_else(|| de::Error::missing_field("features"))?;
-        Ok(Environment {
-            name: EnvironmentName::Default, // Adjusted by manifest deserialization
-            features,
-            features_source_loc: None,
-            solve_group,
-        })
+        serde_untagged::UntaggedEnumVisitor::new()
+            .map(|map| map.deserialize().map(TomlEnvironmentMapOrSeq::Map))
+            .seq(|seq| seq.deserialize().map(TomlEnvironmentMapOrSeq::Seq))
+            .expecting("either a map or a sequence")
+            .deserialize(deserializer)
     }
 }

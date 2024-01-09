@@ -77,6 +77,7 @@ impl<'de> Deserialize<'de> for Feature {
     {
         #[serde_as]
         #[derive(Deserialize)]
+        #[serde(deny_unknown_fields, rename_all = "kebab-case")]
         struct FeatureInner {
             #[serde(default)]
             platforms: Option<PixiSpanned<Vec<Platform>>>,
