@@ -666,6 +666,14 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             /// Target specific tasks to run in the environment
             #[serde(default)]
             tasks: HashMap<String, Task>,
+
+            /// The features defined in the project.
+            #[serde(default)]
+            feature: IndexMap<FeatureName, Feature>,
+
+            /// The environments the project can create.
+            #[serde(default)]
+            environments: IndexMap<EnvironmentName, Environment>,
         }
 
         let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
@@ -708,10 +716,36 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             solve_group: None,
         };
 
+        // Construct the features including the default feature
+        let features: IndexMap<FeatureName, Feature> =
+            IndexMap::from_iter([(FeatureName::Default, default_feature)]);
+        let named_features = toml_manifest
+            .feature
+            .into_iter()
+            .map(|(name, mut feature)| {
+                feature.name = name.clone();
+                (name, feature)
+            })
+            .collect::<IndexMap<FeatureName, Feature>>();
+        let features = features.into_iter().chain(named_features).collect();
+
+        // Construct the environments including the default environment
+        let environments: IndexMap<EnvironmentName, Environment> =
+            IndexMap::from_iter([(EnvironmentName::Default, default_environment)]);
+        let named_environments = toml_manifest
+            .environments
+            .into_iter()
+            .map(|(name, mut env)| {
+                env.name = name.clone();
+                (name, env)
+            })
+            .collect::<IndexMap<EnvironmentName, Environment>>();
+        let environments = environments.into_iter().chain(named_environments).collect();
+
         Ok(Self {
             project: toml_manifest.project,
-            features: IndexMap::from_iter([(FeatureName::Default, default_feature)]),
-            environments: IndexMap::from_iter([(EnvironmentName::Default, default_environment)]),
+            features,
+            environments,
         })
     }
 }
@@ -1407,5 +1441,55 @@ ypackage = {version = ">=1.2.3"}
         manifest.remove_channels(["conda-forge"].iter()).unwrap();
 
         assert_eq!(manifest.parsed.project.channels, vec![]);
+    }
+
+    #[test]
+    fn test_feature_and_environments() {
+        // Using known files in the project so the test succeed including the file check.
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            channels = ["conda-forge"]
+            platforms = ["linux-64", "win-64"]
+
+            [dependencies]
+            fooz = "*"
+
+            [target.win-64.dependencies]
+            fooz = "*"
+
+            [target.linux-64.build-dependencies]
+            fooz = "*"
+
+            [feature.cuda]
+            dependencies = {cuda = "x.y.z", cudnn = "12.0"}
+            pypi-dependencies = {torch = "1.9.0"}
+            platforms = ["linux-64", "osx-arm64"]
+            activation = {scripts = ["cuda_activation.sh"]}
+            system-requirements = {cuda = "12"}
+            channels = ["nvidia", "pytorch"]
+            tasks = { warmup = "python warmup.py" }
+            target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
+
+            [feature.py39.dependencies]
+            python = "~=3.9.0"
+            [feature.py310.dependencies]
+            python = "~=3.10.0"
+            [feature.test.dependencies]
+            pytest = "*"
+
+            [environments]
+            cuda = ["cuda"]
+            py39 = ["py39"]
+            py310 = ["py310"]
+            default = ["py39"]
+            test = {features = ["test"]}
+            test2 = {features = ["test", "py310"], solve-group = "test"}
+            test3 = {features = ["py39"], solve-group = "test"}
+
+        "#;
+        // Test if it can be deserialized
+        let _ = Manifest::from_str(Path::new(""), file_contents).unwrap();
     }
 }
