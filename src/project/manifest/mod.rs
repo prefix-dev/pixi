@@ -9,6 +9,7 @@ mod system_requirements;
 mod target;
 mod validation;
 
+use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 use ::serde::{Deserialize, Deserializer};
 pub use activation::Activation;
@@ -22,7 +23,7 @@ pub use python::PyPiRequirement;
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
 };
-use serde_with::{serde_as, DisplayFromStr, PickFirst};
+use serde_with::{serde_as, DisplayFromStr, Map, PickFirst};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -673,7 +674,8 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 
             /// The environments the project can create.
             #[serde(default)]
-            environments: IndexMap<EnvironmentName, Environment>,
+            #[serde_as(as = "Map<_, _>")]
+            environments: Vec<(EnvironmentName, TomlEnvironmentMapOrSeq)>,
         }
 
         let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
@@ -735,8 +737,8 @@ impl<'de> Deserialize<'de> for ProjectManifest {
         let named_environments = toml_manifest
             .environments
             .into_iter()
-            .map(|(name, mut env)| {
-                env.name = name.clone();
+            .map(|(name, t_env)| {
+                let env = t_env.into_environment(name.clone());
                 (name, env)
             })
             .collect::<IndexMap<EnvironmentName, Environment>>();
@@ -1271,8 +1273,6 @@ ypackage = {version = ">=1.2.3"}
             version = "0.1.0"
             channels = []
             platforms = ["linux-64", "win-64"]
-
-            [dependencies]
         "#;
 
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
@@ -1300,8 +1300,6 @@ ypackage = {version = ">=1.2.3"}
             description = "foo description"
             channels = []
             platforms = ["linux-64", "win-64"]
-
-            [dependencies]
         "#;
 
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
@@ -1343,8 +1341,6 @@ ypackage = {version = ">=1.2.3"}
             description = "foo description"
             channels = []
             platforms = ["linux-64", "win-64"]
-
-            [dependencies]
         "#;
 
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
@@ -1427,8 +1423,6 @@ ypackage = {version = ">=1.2.3"}
             description = "foo description"
             channels = ["conda-forge"]
             platforms = ["linux-64", "win-64"]
-
-            [dependencies]
         "#;
 
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
@@ -1444,8 +1438,7 @@ ypackage = {version = ">=1.2.3"}
     }
 
     #[test]
-    fn test_feature_and_environments() {
-        // Using known files in the project so the test succeed including the file check.
+    fn test_environments_definition() {
         let file_contents = r#"
             [project]
             name = "foo"
@@ -1453,18 +1446,60 @@ ypackage = {version = ">=1.2.3"}
             channels = ["conda-forge"]
             platforms = ["linux-64", "win-64"]
 
-            [dependencies]
-            fooz = "*"
+            [feature.py39.dependencies]
+            python = "~=3.9.0"
 
-            [target.win-64.dependencies]
-            fooz = "*"
+            [feature.py310.dependencies]
+            python = "~=3.10.0"
 
-            [target.linux-64.build-dependencies]
-            fooz = "*"
+            [feature.cuda.dependencies]
+            cudatoolkit = ">=11.0,<12.0"
+
+            [feature.test.dependencies]
+            pytest = "*"
+
+            [environments]
+            default = ["py39"]
+            cuda = ["cuda", "py310"]
+            test1 = {features = ["test", "py310"], solve-group = "test"}
+            test2 = {features = ["py39"], solve-group = "test"}
+        "#;
+        let manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let default_env = manifest.default_environment();
+        assert_eq!(default_env.name, EnvironmentName::Default);
+        assert_eq!(default_env.features, vec!["py39"]);
+
+        let cuda_env = manifest
+            .environment(&EnvironmentName::Named("cuda".to_string()))
+            .unwrap();
+        assert_eq!(cuda_env.features, vec!["cuda", "py310"]);
+        assert_eq!(cuda_env.solve_group, None);
+
+        let test1_env = manifest
+            .environment(&EnvironmentName::Named("test1".to_string()))
+            .unwrap();
+        assert_eq!(test1_env.features, vec!["test", "py310"]);
+        assert_eq!(test1_env.solve_group, Some(String::from("test")));
+
+        let test2_env = manifest
+            .environment(&EnvironmentName::Named("test2".to_string()))
+            .unwrap();
+        assert_eq!(test2_env.features, vec!["py39"]);
+        assert_eq!(test2_env.solve_group, Some(String::from("test")));
+    }
+
+    #[test]
+    fn test_feature_definition() {
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            channels = []
+            platforms = []
 
             [feature.cuda]
             dependencies = {cuda = "x.y.z", cudnn = "12.0"}
-            pypi-dependencies = {torch = "1.9.0"}
+            pypi-dependencies = {torch = "~=1.9.0"}
+            build-dependencies = {cmake = "*"}
             platforms = ["linux-64", "osx-arm64"]
             activation = {scripts = ["cuda_activation.sh"]}
             system-requirements = {cuda = "12"}
@@ -1472,24 +1507,123 @@ ypackage = {version = ">=1.2.3"}
             tasks = { warmup = "python warmup.py" }
             target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 
-            [feature.py39.dependencies]
-            python = "~=3.9.0"
-            [feature.py310.dependencies]
-            python = "~=3.10.0"
-            [feature.test.dependencies]
-            pytest = "*"
-
-            [environments]
-            cuda = ["cuda"]
-            py39 = ["py39"]
-            py310 = ["py310"]
-            default = ["py39"]
-            test = {features = ["test"]}
-            test2 = {features = ["test", "py310"], solve-group = "test"}
-            test3 = {features = ["py39"], solve-group = "test"}
-
         "#;
-        // Test if it can be deserialized
-        let _ = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        let cuda_feature = manifest
+            .parsed
+            .features
+            .get(&FeatureName::Named("cuda".to_string()))
+            .unwrap();
+        assert_eq!(cuda_feature.name, FeatureName::Named("cuda".to_string()));
+        assert_eq!(
+            cuda_feature
+                .targets
+                .default()
+                .dependencies
+                .get(&SpecType::Run)
+                .unwrap()
+                .get(&PackageName::from_str("cuda").unwrap())
+                .unwrap()
+                .to_string(),
+            "==x.y.z"
+        );
+        assert_eq!(
+            cuda_feature
+                .targets
+                .default()
+                .dependencies
+                .get(&SpecType::Run)
+                .unwrap()
+                .get(&PackageName::from_str("cudnn").unwrap())
+                .unwrap()
+                .to_string(),
+            "==12.0"
+        );
+        assert_eq!(
+            cuda_feature
+                .targets
+                .default()
+                .pypi_dependencies
+                .as_ref()
+                .unwrap()
+                .get(
+                    &rip::types::PackageName::from_str("torch")
+                        .expect("torch should be a valid name")
+                )
+                .expect("pypi requirement should be available")
+                .version
+                .clone()
+                .unwrap()
+                .to_string(),
+            "~=1.9.0"
+        );
+        assert_eq!(
+            cuda_feature
+                .targets
+                .default()
+                .dependencies
+                .get(&SpecType::Build)
+                .unwrap()
+                .get(&PackageName::from_str("cmake").unwrap())
+                .unwrap()
+                .to_string(),
+            "*"
+        );
+        assert_eq!(
+            cuda_feature
+                .targets
+                .default()
+                .activation
+                .as_ref()
+                .unwrap()
+                .scripts
+                .as_ref()
+                .unwrap(),
+            &vec![String::from("cuda_activation.sh")]
+        );
+        assert_eq!(
+            cuda_feature
+                .system_requirements
+                .cuda
+                .as_ref()
+                .unwrap()
+                .to_string(),
+            "12"
+        );
+        assert_eq!(
+            cuda_feature
+                .channels
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect::<Vec<_>>(),
+            vec!["nvidia", "pytorch"]
+        );
+        assert_eq!(
+            cuda_feature
+                .targets
+                .for_target(&TargetSelector::Platform(Platform::OsxArm64))
+                .unwrap()
+                .dependencies
+                .get(&SpecType::Run)
+                .unwrap()
+                .get(&PackageName::from_str("mlx").unwrap())
+                .unwrap()
+                .to_string(),
+            "==x.y.z"
+        );
+        assert_eq!(
+            cuda_feature
+                .targets
+                .default()
+                .tasks
+                .get("warmup")
+                .unwrap()
+                .as_single_command()
+                .unwrap(),
+            "python warmup.py"
+        );
     }
 }
