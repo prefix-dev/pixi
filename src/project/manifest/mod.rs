@@ -15,7 +15,7 @@ use ::serde::{Deserialize, Deserializer};
 pub use activation::Activation;
 pub use environment::{Environment, EnvironmentName};
 pub use feature::{Feature, FeatureName};
-use indexmap::IndexMap;
+use indexmap::{Equivalent, IndexMap};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{IntoDiagnostic, LabeledSpan, NamedSource};
@@ -24,6 +24,7 @@ use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
 };
 use serde_with::{serde_as, DisplayFromStr, Map, PickFirst};
+use std::hash::Hash;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -488,7 +489,10 @@ impl Manifest {
     }
 
     /// Returns the environment with the given name or `None` if it does not exist.
-    pub fn environment(&self, name: &EnvironmentName) -> Option<&Environment> {
+    pub fn environment<Q: ?Sized>(&self, name: &Q) -> Option<&Environment>
+    where
+        Q: Hash + Equivalent<EnvironmentName>,
+    {
         self.parsed.environments.get(name)
     }
 }

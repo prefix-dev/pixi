@@ -178,21 +178,21 @@ impl<'p> Environment<'p> {
     /// requirement for the same package that both requirements are returned. The different
     /// requirements per package are sorted from the most specific feature/target to the least
     /// specific.
-    pub fn dependencies(&self, kind: SpecType, platform: Option<Platform>) -> Dependencies {
+    pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
         self.features()
             .filter_map(|f| {
                 f.targets
                     .resolve(platform)
                     .rev()
-                    .filter_map(|t| t.dependencies.get(&kind))
-                    .fold(None, |acc, deps| {
-                        Some(acc.map_or_else(
-                            || Dependencies::from(deps.clone()),
-                            |mut acc: Dependencies| {
-                                acc.extend_overwrite(deps.clone());
+                    .map(|t| t.dependencies(kind))
+                    .fold(None, |acc: Option<Dependencies>, deps| {
+                        Some(match acc {
+                            None => Dependencies::from(deps.into_owned()),
+                            Some(mut acc) => {
+                                acc.extend_overwrite(deps.into_owned());
                                 acc
-                            },
-                        ))
+                            }
+                        })
                     })
             })
             .reduce(|acc, deps| acc.union(&deps))
@@ -221,6 +221,7 @@ impl<'p> Environment<'p> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use insta::assert_display_snapshot;
     use itertools::Itertools;
     use std::path::Path;
 
@@ -315,5 +316,51 @@ mod test {
             .default_environment()
             .tasks(Some(Platform::Osx64))
             .is_err())
+    }
+
+    fn format_dependencies(dependencies: Dependencies) -> String {
+        dependencies
+            .into_specs()
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec))
+            .join("\n")
+    }
+
+    #[test]
+    fn test_dependencies() {
+        let manifest = Project::from_str(
+            Path::new(""),
+            r#"
+        [project]
+        name = "foobar"
+        channels = []
+        platforms = ["linux-64", "osx-64"]
+
+        [dependencies]
+        foo = "*"
+
+        [build-dependencies]
+        foo = "<4.0"
+
+        [target.osx-64.dependencies]
+        foo = "<5.0"
+
+        [feature.foo.dependencies]
+        foo = ">=1.0"
+
+        [feature.bar.dependencies]
+        bar = ">=1.0"
+        foo = "<2.0"
+
+        [environments]
+        foobar = ["foo", "bar"]
+        "#,
+        )
+        .unwrap();
+
+        let deps = manifest
+            .environment("foobar")
+            .unwrap()
+            .dependencies(None, None);
+        assert_display_snapshot!(format_dependencies(deps));
     }
 }

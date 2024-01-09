@@ -5,7 +5,7 @@ pub mod manifest;
 pub mod metadata;
 pub mod virtual_packages;
 
-use indexmap::{IndexMap, IndexSet};
+use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
@@ -13,6 +13,7 @@ use rattler_conda_types::{
     Channel, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
 };
 use rip::{index::PackageDb, normalize_index_url};
+use std::hash::Hash;
 use std::{
     collections::{HashMap, HashSet},
     env,
@@ -226,7 +227,10 @@ impl Project {
     }
 
     /// Returns the environment with the given name or `None` if no such environment exists.
-    pub fn environment(&self, name: &EnvironmentName) -> Option<Environment<'_>> {
+    pub fn environment<Q: ?Sized>(&self, name: &Q) -> Option<Environment<'_>>
+    where
+        Q: Hash + Equivalent<EnvironmentName>,
+    {
         Some(Environment {
             project: self,
             environment: self.manifest.environment(name)?,
@@ -279,17 +283,10 @@ impl Project {
     }
 
     /// Returns the dependencies of the project.
-    pub fn dependencies(&self, kind: SpecType, platform: Option<Platform>) -> Dependencies {
+    ///
+    /// TODO: Remove this function and use the `dependencies` function from the default environment instead.
+    pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
         self.default_environment().dependencies(kind, platform)
-    }
-
-    /// Returns all dependencies of the project. These are the run, host, build dependency sets
-    /// combined.
-    pub fn all_dependencies(&self, platform: Option<Platform>) -> Dependencies {
-        let run_deps = self.dependencies(SpecType::Run, platform);
-        let host_deps = self.dependencies(SpecType::Host, platform);
-        let build_deps = self.dependencies(SpecType::Build, platform);
-        run_deps.overwrite(&host_deps).overwrite(&build_deps)
     }
 
     pub fn pypi_dependencies(
@@ -467,7 +464,7 @@ mod tests {
         let project = Project::from_manifest(manifest);
 
         assert_display_snapshot!(format_dependencies(
-            project.all_dependencies(Some(Platform::Linux64))
+            project.dependencies(None, Some(Platform::Linux64))
         ));
     }
 
@@ -500,7 +497,7 @@ mod tests {
         let project = Project::from_manifest(manifest);
 
         assert_display_snapshot!(format_dependencies(
-            project.all_dependencies(Some(Platform::Linux64))
+            project.dependencies(None, Some(Platform::Linux64))
         ));
     }
 

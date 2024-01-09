@@ -1,12 +1,20 @@
 use crate::consts;
 use crate::utils::spanned::PixiSpanned;
 use serde::{self, Deserialize, Deserializer};
+use std::borrow::Borrow;
+use std::hash::{Hash, Hasher};
 
 /// The name of an environment. This is either a string or default for the default environment.
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EnvironmentName {
     Default,
     Named(String),
+}
+
+impl Hash for EnvironmentName {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state)
+    }
 }
 
 impl EnvironmentName {
@@ -17,6 +25,12 @@ impl EnvironmentName {
             EnvironmentName::Default => consts::DEFAULT_ENVIRONMENT_NAME,
             EnvironmentName::Named(name) => name.as_str(),
         }
+    }
+}
+
+impl Borrow<str> for EnvironmentName {
+    fn borrow(&self) -> &str {
+        self.as_str()
     }
 }
 

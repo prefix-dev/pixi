@@ -329,7 +329,7 @@ pub fn determine_best_version(
     // Build the combined set of specs while updating the dependencies with the new specs.
     let dependencies = SpecType::all()
         .map(|spec_type| {
-            let mut deps = project.dependencies(spec_type, Some(platform));
+            let mut deps = project.dependencies(Some(spec_type), Some(platform));
             if spec_type == new_specs_type {
                 for (new_name, new_spec) in new_specs.iter() {
                     deps.remove(new_name); // Remove any existing specs

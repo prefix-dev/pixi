@@ -161,7 +161,7 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
 /// Returns number of dependencies on current platform
 fn dependency_count(project: &Project) -> u64 {
     project
-        .all_dependencies(Some(Platform::current()))
+        .dependencies(None, Some(Platform::current()))
         .names()
         .count() as _
 }
