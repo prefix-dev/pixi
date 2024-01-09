@@ -474,6 +474,33 @@ Remove platform(s) from the project file and updates the lockfile.
 pixi project platform remove win-64
 ```
 
+### `project version get`
+
+Get the project version.
+
+```sh
+$ pixi project version get
+0.11.0
+```
+
+### `project version set`
+
+Set the project version.
+
+```sh
+pixi project version set "0.12.0"
+```
+
+### `project version {major|minor|patch}`
+
+Bump the project version to {MAJOR|MINOR|PATCH}.
+
+```sh
+pixi project version major
+pixi project version minor
+pixi project version patch
+```
+
 [^1]: An __up-to-date__ lockfile means that the dependencies in the lockfile are allowed by the dependencies in the manifest file.
       For example
 
