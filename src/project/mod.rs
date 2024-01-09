@@ -1,3 +1,4 @@
+mod dependencies;
 mod environment;
 pub mod errors;
 pub mod manifest;
@@ -9,29 +10,30 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
 use rattler_conda_types::{
-    Channel, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
+    Channel, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
 };
 use rip::{index::PackageDb, normalize_index_url};
-use std::collections::{HashMap, HashSet};
 use std::{
+    collections::{HashMap, HashSet},
     env,
     ffi::OsStr,
+    fmt::{Debug, Display, Formatter},
     fs,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-use crate::project::manifest::EnvironmentName;
 use crate::{
     consts::{self, PROJECT_MANIFEST},
     default_client,
     task::Task,
 };
-pub use environment::Environment;
-use manifest::{Manifest, PyPiRequirement, SystemRequirements};
+use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
 use rip::types::NormalizedPackageName;
-use std::fmt::{Debug, Display, Formatter};
 use url::Url;
+
+pub use dependencies::Dependencies;
+pub use environment::Environment;
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -68,6 +70,11 @@ impl SpecType {
             SpecType::Build => "build-dependencies",
             SpecType::Run => "dependencies",
         }
+    }
+
+    /// Returns all the variants of the enum
+    pub fn all() -> impl Iterator<Item = SpecType> {
+        [SpecType::Run, SpecType::Host, SpecType::Build].into_iter()
     }
 }
 
@@ -272,29 +279,17 @@ impl Project {
     }
 
     /// Returns the dependencies of the project.
-    pub fn dependencies(
-        &self,
-        platform: Platform,
-        kind: SpecType,
-    ) -> IndexMap<PackageName, NamelessMatchSpec> {
-        self.manifest
-            .default_feature()
-            .targets
-            .resolve(Some(platform))
-            .collect_vec()
-            .into_iter()
-            .rev() // We rev this so that the most specific target is last.
-            .flat_map(|t| t.dependencies.get(&kind).into_iter().flatten())
-            .map(|(name, spec)| (name.clone(), spec.clone()))
-            .collect()
+    pub fn dependencies(&self, kind: SpecType, platform: Option<Platform>) -> Dependencies {
+        self.default_environment().dependencies(kind, platform)
     }
 
-    /// Returns all dependencies of the project. These are the run, host, build dependency sets combined.
-    pub fn all_dependencies(&self, platform: Platform) -> IndexMap<PackageName, NamelessMatchSpec> {
-        let mut dependencies = self.dependencies(platform, SpecType::Run);
-        dependencies.extend(self.dependencies(platform, SpecType::Host));
-        dependencies.extend(self.dependencies(platform, SpecType::Build));
-        dependencies
+    /// Returns all dependencies of the project. These are the run, host, build dependency sets
+    /// combined.
+    pub fn all_dependencies(&self, platform: Option<Platform>) -> Dependencies {
+        let run_deps = self.dependencies(SpecType::Run, platform);
+        let host_deps = self.dependencies(SpecType::Host, platform);
+        let build_deps = self.dependencies(SpecType::Build, platform);
+        run_deps.overwrite(&host_deps).overwrite(&build_deps)
     }
 
     pub fn pypi_dependencies(
@@ -445,8 +440,8 @@ mod tests {
         }
     }
 
-    fn format_dependencies(deps: IndexMap<PackageName, NamelessMatchSpec>) -> String {
-        deps.iter()
+    fn format_dependencies(deps: Dependencies) -> String {
+        deps.iter_specs()
             .map(|(name, spec)| format!("{} = \"{}\"", name.as_source(), spec))
             .join("\n")
     }
@@ -472,7 +467,7 @@ mod tests {
         let project = Project::from_manifest(manifest);
 
         assert_display_snapshot!(format_dependencies(
-            project.all_dependencies(Platform::Linux64)
+            project.all_dependencies(Some(Platform::Linux64))
         ));
     }
 
@@ -505,7 +500,7 @@ mod tests {
         let project = Project::from_manifest(manifest);
 
         assert_display_snapshot!(format_dependencies(
-            project.all_dependencies(Platform::Linux64)
+            project.all_dependencies(Some(Platform::Linux64))
         ));
     }
 

@@ -213,7 +213,10 @@ impl Targets {
     /// order, with the most specific selector first and the default target last.
     ///
     /// This also always includes the default target.
-    pub fn resolve(&self, platform: Option<Platform>) -> impl Iterator<Item = &'_ Target> + '_ {
+    pub fn resolve(
+        &self,
+        platform: Option<Platform>,
+    ) -> impl Iterator<Item = &'_ Target> + DoubleEndedIterator + '_ {
         if let Some(platform) = platform {
             Either::Left(self.resolve_for_platform(platform))
         } else {
@@ -229,7 +232,10 @@ impl Targets {
     /// This also always includes the default target.
     ///
     /// You should use the [`Self::resolve`] function.
-    fn resolve_for_platform(&self, platform: Platform) -> impl Iterator<Item = &'_ Target> + '_ {
+    fn resolve_for_platform(
+        &self,
+        platform: Platform,
+    ) -> impl Iterator<Item = &'_ Target> + DoubleEndedIterator + '_ {
         std::iter::once(&self.default_target)
             .chain(self.targets.iter().filter_map(move |(selector, target)| {
                 if selector.matches(platform) {

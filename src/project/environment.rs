@@ -1,13 +1,16 @@
-use crate::project::errors::{UnknownTask, UnsupportedPlatformError};
-use crate::project::manifest;
-use crate::project::manifest::{EnvironmentName, Feature, FeatureName, SystemRequirements};
-use crate::task::Task;
-use crate::Project;
+use super::{
+    dependencies::Dependencies,
+    errors::{UnknownTask, UnsupportedPlatformError},
+    manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
+    SpecType,
+};
+use crate::{task::Task, Project};
 use indexmap::IndexSet;
-use itertools::Itertools;
 use rattler_conda_types::{Channel, Platform};
-use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+};
 
 /// Describes a single environment from a project manifest. This is used to describe environments
 /// that can be installed and activated.
@@ -54,7 +57,7 @@ impl<'p> Environment<'p> {
 
     /// Returns references to the features that make up this environment. The default feature is
     /// always added at the end.
-    pub fn features(&self) -> impl Iterator<Item = &'p Feature> + '_ {
+    pub fn features(&self) -> impl Iterator<Item = &'p Feature> + DoubleEndedIterator + '_ {
         self.environment
             .features
             .iter()
@@ -134,8 +137,6 @@ impl<'p> Environment<'p> {
         let result = self
             .features()
             .flat_map(|feature| feature.targets.resolve(platform))
-            .collect_vec()
-            .into_iter()
             .rev() // Reverse to get the most specific targets last.
             .flat_map(|target| target.tasks.iter())
             .map(|(name, task)| (name.as_str(), task))
@@ -169,6 +170,33 @@ impl<'p> Environment<'p> {
                 acc.union(req)
                     .expect("system requirements should have been validated upfront")
             })
+    }
+
+    /// Returns the dependencies to install for this environment.
+    ///
+    /// The dependencies of all features are combined this means that if two features define a
+    /// requirement for the same package that both requirements are returned. The different
+    /// requirements per package are sorted from the most specific feature/target to the least
+    /// specific.
+    pub fn dependencies(&self, kind: SpecType, platform: Option<Platform>) -> Dependencies {
+        self.features()
+            .filter_map(|f| {
+                f.targets
+                    .resolve(platform)
+                    .rev()
+                    .filter_map(|t| t.dependencies.get(&kind))
+                    .fold(None, |acc, deps| {
+                        Some(acc.map_or_else(
+                            || Dependencies::from(deps.clone()),
+                            |mut acc: Dependencies| {
+                                acc.extend_overwrite(deps.clone());
+                                acc
+                            },
+                        ))
+                    })
+            })
+            .reduce(|acc, deps| acc.union(&deps))
+            .unwrap_or_default()
     }
 
     /// Validates that the given platform is supported by this environment.

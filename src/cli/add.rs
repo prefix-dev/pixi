@@ -4,7 +4,6 @@ use crate::{
     project::{manifest::PyPiRequirement, DependencyType, Project, SpecType},
 };
 use clap::Parser;
-use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 
 use miette::{IntoDiagnostic, WrapErr};
@@ -246,8 +245,6 @@ pub async fn add_conda_specs_to_project(
         })
         .collect::<miette::Result<HashMap<PackageName, NamelessMatchSpec>>>()?;
 
-    // Get the current specs
-
     // Fetch the repodata for the project
     let sparse_repo_data = project.fetch_sparse_repodata().await?;
 
@@ -261,20 +258,11 @@ pub async fn add_conda_specs_to_project(
     };
 
     for platform in platforms {
-        // TODO: `build` and `host` has to be separated when we have separated environments for them.
-        //       While we combine them on install we should also do that on getting the best version.
-        // let current_specs = match spec_type {
-        //     SpecType::Host => project.host_dependencies(platform)?,
-        //     SpecType::Build => project.build_dependencies(platform)?,
-        //     SpecType::Run => project.dependencies(platform)?,
-        // };
-        let current_specs = project.all_dependencies(platform);
-
         // Solve the environment with the new specs added
         let solved_versions = match determine_best_version(
             project,
             &new_specs,
-            &current_specs,
+            spec_type,
             &sparse_repo_data,
             platform,
         ) {
@@ -334,18 +322,27 @@ pub async fn add_conda_specs_to_project(
 pub fn determine_best_version(
     project: &Project,
     new_specs: &HashMap<PackageName, NamelessMatchSpec>,
-    current_specs: &IndexMap<PackageName, NamelessMatchSpec>,
+    new_specs_type: SpecType,
     sparse_repo_data: &[SparseRepoData],
     platform: Platform,
 ) -> miette::Result<HashMap<PackageName, Version>> {
-    let combined_specs = current_specs
-        .iter()
-        .chain(new_specs.iter())
-        .map(|(name, spec)| (name.clone(), spec.clone()))
-        .collect::<HashMap<_, _>>();
+    // Build the combined set of specs while updating the dependencies with the new specs.
+    let dependencies = SpecType::all()
+        .map(|spec_type| {
+            let mut deps = project.dependencies(spec_type, Some(platform));
+            if spec_type == new_specs_type {
+                for (new_name, new_spec) in new_specs.iter() {
+                    deps.remove(new_name); // Remove any existing specs
+                    deps.insert(new_name.clone(), new_spec.clone()); // Add the new specs
+                }
+            }
+            deps
+        })
+        .reduce(|acc, deps| acc.overwrite(&deps))
+        .unwrap_or_default();
 
     // Extract the package names from all the dependencies
-    let package_names = combined_specs.keys().cloned().collect_vec();
+    let package_names = dependencies.names().cloned().collect_vec();
 
     // Get the repodata for the current platform and for NoArch
     let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
@@ -362,8 +359,8 @@ pub fn determine_best_version(
 
     // Construct a solver task to start solving.
     let task = rattler_solve::SolverTask {
-        specs: combined_specs
-            .iter()
+        specs: dependencies
+            .iter_specs()
             .map(|(name, spec)| MatchSpec::from_nameless(spec.clone(), Some(name.clone())))
             .collect(),
 
