@@ -380,11 +380,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             "{whitespace}These apps are now globally available:\n{whitespace} -  {script_names}",
         )
     } else {
-        let bin_dir = format!("~/{BIN_DIR}");
         eprintln!("{whitespace}These apps have been added to {}\n{whitespace} -  {script_names}\n\n{} To use them, make sure to add {} to your PATH",
-                      console::style(&bin_dir).bold(),
+                      console::style(&bin_dir.display()).bold(),
                       console::style("!").yellow().bold(),
-                      console::style(&bin_dir).bold()
+                      console::style(&bin_dir.display()).bold()
             )
     }
 
