@@ -326,6 +326,36 @@ Globally installed binary packages:
      -  [bin] zsh-5
 ```
 
+### `global upgrade`
+
+This command upgrades a globally installed package to the latest version.
+
+##### Options
+
+- `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+
+```shell
+pixi global upgrade ruff
+pixi global upgrade --channel conda-forge --channel bioconda trackplot
+# Or in a more concise form
+pixi global upgrade -c conda-forge -c bioconda trackplot
+```
+
+### `global upgrade-all`
+
+This command upgrades all globally installed packages to their latest version.
+
+##### Options
+
+- `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+
+```shell
+pixi global upgrade-all
+pixi global upgrade-all --channel conda-forge --channel bioconda
+# Or in a more concise form
+pixi global upgrade-all -c conda-forge -c bioconda trackplot
+```
+
 ### `global remove`
 
 Removes a package previously installed into a globally accessible location via
@@ -361,6 +391,114 @@ pixi project channel add bioconda conda-forge robostack
 pixi project channel add file:///home/user/local_channel
 pixi project channel add https://repo.prefix.dev/conda-forge
 pixi project channel add --no-install robostack
+```
+
+### `project channel list`
+
+List the channels in the project file
+
+##### Options
+
+- `--no-install`: do not update the environment, only add changed packages to the lock-file.
+
+```sh
+$ pixi project channel list
+conda-forge
+$ pixi project channel list --urls
+https://conda.anaconda.org/conda-forge/
+```
+
+### `project channel remove`
+
+List the channels in the project file
+
+##### Options
+
+- `--no-install`: do not update the environment, only add changed packages to the lock-file.
+
+```sh
+pixi project channel remove conda-forge
+pixi project channel remove https://conda.anaconda.org/conda-forge/
+```
+
+### `project description get`
+
+Get the project description.
+
+```sh
+$ pixi project description get
+Package management made easy!
+```
+
+### `project description set`
+
+Set the project description.
+
+```sh
+pixi project description set "my new description"
+```
+
+### `project platform add`
+
+Adds a platform(s) to the project file and updates the lockfile.
+
+##### Options
+
+- `--no-install`: do not update the environment, only add changed packages to the lock-file.
+
+```sh
+pixi project platform add win-64
+```
+
+### `project platform list`
+
+List the platforms in the project file.
+
+```sh
+$ pixi project platform list
+osx-64
+linux-64
+win-64
+osx-arm64
+```
+
+### `project platform remove`
+
+Remove platform(s) from the project file and updates the lockfile.
+
+##### Options
+
+- `--no-install`: do not update the environment, only add changed packages to the lock-file.
+
+```sh
+pixi project platform remove win-64
+```
+
+### `project version get`
+
+Get the project version.
+
+```sh
+$ pixi project version get
+0.11.0
+```
+
+### `project version set`
+
+Set the project version.
+
+```sh
+pixi project version set "0.12.0"
+```
+
+### `project version {major|minor|patch}`
+
+Bump the project version to {MAJOR|MINOR|PATCH}.
+
+```sh
+pixi project version major
+pixi project version minor
+pixi project version patch
 ```
 
 [^1]: An __up-to-date__ lockfile means that the dependencies in the lockfile are allowed by the dependencies in the manifest file.

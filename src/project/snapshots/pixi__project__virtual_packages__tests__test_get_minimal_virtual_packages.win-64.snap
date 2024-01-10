@@ -1,5 +1,5 @@
 ---
-source: src/virtual_packages.rs
+source: src/project/virtual_packages.rs
 expression: packages
 ---
 [
