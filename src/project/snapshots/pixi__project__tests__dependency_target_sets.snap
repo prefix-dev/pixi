@@ -1,10 +1,10 @@
 ---
 source: src/project/mod.rs
-expression: "format_dependencies(project.all_dependencies(Platform::Linux64))"
+expression: "format_dependencies(project.dependencies(None, Some(Platform::Linux64)))"
 ---
 foo = "==1.0"
-wolflib = "==1.0"
 libc = "==2.12"
-banksy = "==1.0"
 bar = "==1.0"
+wolflib = "==1.0"
+banksy = "==1.0"
 baz = "==1.0"

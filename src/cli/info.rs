@@ -33,7 +33,7 @@ pub struct Args {
 pub struct ProjectInfo {
     tasks: Vec<String>,
     manifest_path: PathBuf,
-    package_count: Option<u64>,
+    package_count: u64,
     environment_size: Option<String>,
     last_updated: Option<String>,
     platforms: Vec<Platform>,
@@ -93,9 +93,7 @@ impl Display for Info {
                 pi.manifest_path.to_string_lossy()
             )?;
 
-            if let Some(count) = pi.package_count {
-                writeln!(f, "{:20}: {}", "Dependency count", count)?;
-            }
+            writeln!(f, "{:20}: {}", "Dependency count", pi.package_count)?;
 
             if let Some(size) = &pi.environment_size {
                 writeln!(f, "{:20}: {}", "Environment size", size)?;
@@ -161,14 +159,11 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
 }
 
 /// Returns number of dependencies on current platform
-fn dependency_count(project: &Project) -> miette::Result<u64> {
-    let dep_count = project
-        .all_dependencies(Platform::current())
-        .keys()
-        .cloned()
-        .fold(0, |acc, _| acc + 1);
-
-    Ok(dep_count)
+fn dependency_count(project: &Project) -> u64 {
+    project
+        .dependencies(None, Some(Platform::current()))
+        .names()
+        .count() as _
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -201,7 +196,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_keys()
             .map(|k| k.to_string())
             .collect(),
-        package_count: dependency_count(&p).ok(),
+        package_count: dependency_count(&p),
         environment_size,
         last_updated: last_updated(p.lock_file_path()).ok(),
         platforms: p.platforms().into_iter().collect(),

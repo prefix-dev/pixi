@@ -1,0 +1,7 @@
+---
+source: src/project/manifest/target.rs
+expression: "manifest.manifest.default_feature().targets.default().combined_dependencies().iter().map(|(name,\n                spec)| format!(\"{} = {}\", name.as_source(), spec)).join(\"\\n\")"
+---
+run = ==1.0
+host = ==1.0
+build = ==1.0

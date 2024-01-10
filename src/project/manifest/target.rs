@@ -10,6 +10,7 @@ use itertools::Either;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -44,6 +45,44 @@ impl Target {
     /// Returns the build dependencies of the target
     pub fn build_dependencies(&self) -> Option<&IndexMap<PackageName, NamelessMatchSpec>> {
         self.dependencies.get(&SpecType::Build)
+    }
+
+    /// Returns the dependencies to use for the given `spec_type`. If `None` is specified, the
+    /// combined dependencies are returned.
+    ///
+    /// The `build` dependencies overwrite the `host` dependencies which overwrite the `run`
+    /// dependencies.
+    pub fn dependencies(
+        &self,
+        spec_type: Option<SpecType>,
+    ) -> Cow<'_, IndexMap<PackageName, NamelessMatchSpec>> {
+        if let Some(spec_type) = spec_type {
+            self.dependencies
+                .get(&spec_type)
+                .map(Cow::Borrowed)
+                .unwrap_or(Cow::Owned(IndexMap::new()))
+        } else {
+            Cow::Owned(self.combined_dependencies())
+        }
+    }
+
+    /// Determines the combined set of dependencies.
+    ///
+    /// The `build` dependencies overwrite the `host` dependencies which overwrite the `run`
+    /// dependencies.
+    fn combined_dependencies(&self) -> IndexMap<PackageName, NamelessMatchSpec> {
+        let mut all_deps = IndexMap::new();
+        for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
+            for (name, spec) in self.dependencies.get(&spec_type).into_iter().flatten() {
+                match all_deps.get_mut(name) {
+                    Some(existing_spec) => *existing_spec = spec.clone(),
+                    None => {
+                        all_deps.insert(name.clone(), spec.clone());
+                    }
+                }
+            }
+        }
+        all_deps
     }
 
     /// Removes a dependency from this target.
@@ -213,7 +252,10 @@ impl Targets {
     /// order, with the most specific selector first and the default target last.
     ///
     /// This also always includes the default target.
-    pub fn resolve(&self, platform: Option<Platform>) -> impl Iterator<Item = &'_ Target> + '_ {
+    pub fn resolve(
+        &self,
+        platform: Option<Platform>,
+    ) -> impl Iterator<Item = &'_ Target> + DoubleEndedIterator + '_ {
         if let Some(platform) = platform {
             Either::Left(self.resolve_for_platform(platform))
         } else {
@@ -229,7 +271,10 @@ impl Targets {
     /// This also always includes the default target.
     ///
     /// You should use the [`Self::resolve`] function.
-    fn resolve_for_platform(&self, platform: Platform) -> impl Iterator<Item = &'_ Target> + '_ {
+    fn resolve_for_platform(
+        &self,
+        platform: Platform,
+    ) -> impl Iterator<Item = &'_ Target> + DoubleEndedIterator + '_ {
         std::iter::once(&self.default_target)
             .chain(self.targets.iter().filter_map(move |(selector, target)| {
                 if selector.matches(platform) {
@@ -318,5 +363,53 @@ impl Targets {
     /// Returns the source location of the target selector in the manifest.
     pub fn source_loc(&self, selector: &TargetSelector) -> Option<std::ops::Range<usize>> {
         self.source_locs.get(selector).cloned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Project;
+    use insta::assert_snapshot;
+    use itertools::Itertools;
+    use std::path::Path;
+
+    #[test]
+    fn test_targets_overwrite_order() {
+        let manifest = Project::from_str(
+            Path::new(""),
+            r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        run = "1.0"
+
+        [build-dependencies]
+        run = "2.0"
+        host = "2.0"
+        build = "1.0"
+
+        [host-dependencies]
+        run = "3.0"
+        host = "1.0"
+        "#,
+        )
+        .unwrap();
+
+        assert_snapshot!(manifest
+            .manifest
+            .default_feature()
+            .targets
+            .default()
+            .dependencies(None)
+            .iter()
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec))
+            .join("\n"), @r###"
+        run = ==2.0
+        host = ==2.0
+        build = ==1.0
+        "###);
     }
 }

@@ -305,14 +305,14 @@ async fn resolve_platform(
     platform: Platform,
     pb: ProgressBar,
 ) -> miette::Result<LockedPackagesBuilder> {
-    let dependencies = project.all_dependencies(platform);
+    let dependencies = project.dependencies(None, Some(platform));
     let match_specs = dependencies
-        .iter()
+        .iter_specs()
         .map(|(name, constraint)| MatchSpec::from_nameless(constraint.clone(), Some(name.clone())))
         .collect_vec();
 
     // Extract the package names from the dependencies
-    let package_names = dependencies.keys().cloned().collect_vec();
+    let package_names = dependencies.names().cloned().collect_vec();
 
     // Get the virtual packages for this platform
     let virtual_packages = project.virtual_packages(platform);

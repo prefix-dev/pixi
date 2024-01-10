@@ -1,13 +1,16 @@
-use crate::project::errors::{UnknownTask, UnsupportedPlatformError};
-use crate::project::manifest;
-use crate::project::manifest::{EnvironmentName, Feature, FeatureName, SystemRequirements};
-use crate::task::Task;
-use crate::Project;
+use super::{
+    dependencies::Dependencies,
+    errors::{UnknownTask, UnsupportedPlatformError},
+    manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
+    SpecType,
+};
+use crate::{task::Task, Project};
 use indexmap::IndexSet;
-use itertools::Itertools;
 use rattler_conda_types::{Channel, Platform};
-use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+};
 
 /// Describes a single environment from a project manifest. This is used to describe environments
 /// that can be installed and activated.
@@ -54,7 +57,7 @@ impl<'p> Environment<'p> {
 
     /// Returns references to the features that make up this environment. The default feature is
     /// always added at the end.
-    pub fn features(&self) -> impl Iterator<Item = &'p Feature> + '_ {
+    pub fn features(&self) -> impl Iterator<Item = &'p Feature> + DoubleEndedIterator + '_ {
         self.environment
             .features
             .iter()
@@ -134,8 +137,6 @@ impl<'p> Environment<'p> {
         let result = self
             .features()
             .flat_map(|feature| feature.targets.resolve(platform))
-            .collect_vec()
-            .into_iter()
             .rev() // Reverse to get the most specific targets last.
             .flat_map(|target| target.tasks.iter())
             .map(|(name, task)| (name.as_str(), task))
@@ -171,6 +172,33 @@ impl<'p> Environment<'p> {
             })
     }
 
+    /// Returns the dependencies to install for this environment.
+    ///
+    /// The dependencies of all features are combined this means that if two features define a
+    /// requirement for the same package that both requirements are returned. The different
+    /// requirements per package are sorted from the most specific feature/target to the least
+    /// specific.
+    pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
+        self.features()
+            .filter_map(|f| {
+                f.targets
+                    .resolve(platform)
+                    .rev()
+                    .map(|t| t.dependencies(kind))
+                    .fold(None, |acc: Option<Dependencies>, deps| {
+                        Some(match acc {
+                            None => Dependencies::from(deps.into_owned()),
+                            Some(mut acc) => {
+                                acc.extend_overwrite(deps.into_owned());
+                                acc
+                            }
+                        })
+                    })
+            })
+            .reduce(|acc, deps| acc.union(&deps))
+            .unwrap_or_default()
+    }
+
     /// Validates that the given platform is supported by this environment.
     fn validate_platform_support(
         &self,
@@ -193,6 +221,7 @@ impl<'p> Environment<'p> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use insta::assert_display_snapshot;
     use itertools::Itertools;
     use std::path::Path;
 
@@ -287,5 +316,51 @@ mod test {
             .default_environment()
             .tasks(Some(Platform::Osx64))
             .is_err())
+    }
+
+    fn format_dependencies(dependencies: Dependencies) -> String {
+        dependencies
+            .into_specs()
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec))
+            .join("\n")
+    }
+
+    #[test]
+    fn test_dependencies() {
+        let manifest = Project::from_str(
+            Path::new(""),
+            r#"
+        [project]
+        name = "foobar"
+        channels = []
+        platforms = ["linux-64", "osx-64"]
+
+        [dependencies]
+        foo = "*"
+
+        [build-dependencies]
+        foo = "<4.0"
+
+        [target.osx-64.dependencies]
+        foo = "<5.0"
+
+        [feature.foo.dependencies]
+        foo = ">=1.0"
+
+        [feature.bar.dependencies]
+        bar = ">=1.0"
+        foo = "<2.0"
+
+        [environments]
+        foobar = ["foo", "bar"]
+        "#,
+        )
+        .unwrap();
+
+        let deps = manifest
+            .environment("foobar")
+            .unwrap()
+            .dependencies(None, None);
+        assert_display_snapshot!(format_dependencies(deps));
     }
 }

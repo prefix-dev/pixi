@@ -45,9 +45,11 @@ pub fn lock_file_satisfies_project(
     for platform in platforms.iter().cloned() {
         // Check if all dependencies exist in the lock-file.
         let conda_dependencies = project
-            .all_dependencies(platform)
-            .into_iter()
-            .map(|(name, spec)| DependencyKind::Conda(MatchSpec::from_nameless(spec, Some(name))))
+            .dependencies(None, Some(platform))
+            .iter_specs()
+            .map(|(name, spec)| {
+                DependencyKind::Conda(MatchSpec::from_nameless(spec.clone(), Some(name.clone())))
+            })
             .collect::<Vec<_>>();
 
         let mut pypi_dependencies = project
