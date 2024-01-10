@@ -5,10 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2024-01-06
+
+### 📃 Details
+#### Fixed
+- Upgrading rattler to fix `pixi auth` in [#642](https://github.com/prefix-dev/pixi/pull/642)
+
 ## [0.11.0] - 2024-01-05
 ### ✨ Highlights
 
-- Lots of important
+Lots of important and preparations for the pypi `sdist` and multi environment feature
+Lots of new contributors that help `pixi` improve!
 
 ### 📃 Details
 #### Added

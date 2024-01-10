@@ -2619,7 +2619,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "async-once-cell",
  "async-recursion",
