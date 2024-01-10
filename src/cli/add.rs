@@ -1,11 +1,11 @@
 use crate::{
     consts,
     environment::{get_up_to_date_prefix, verify_prefix_location_unchanged, LockFileUsage},
-    project::{manifest::PyPiRequirement, DependencyType, Project, SpecType},
+    project::{python::PyPiRequirement, DependencyType, Project, SpecType},
 };
 use clap::Parser;
 use indexmap::IndexMap;
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{
@@ -207,12 +207,12 @@ pub async fn add_pypi_specs_to_project(
         // TODO: Get best version
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.manifest.add_pypi_dependency(name, spec, None)?;
+            project.manifest.add_pypi_dependency(name, spec)?;
         } else {
             for platform in specs_platforms.iter() {
                 project
                     .manifest
-                    .add_pypi_dependency(name, spec, Some(*platform))?;
+                    .add_target_pypi_dependency(*platform, name.clone(), spec)?;
             }
         }
     }
@@ -255,11 +255,11 @@ pub async fn add_conda_specs_to_project(
     let mut package_versions = HashMap::<PackageName, HashSet<Version>>::new();
 
     let platforms = if specs_platforms.is_empty() {
-        Either::Left(project.platforms().into_iter())
+        project.platforms()
     } else {
-        Either::Right(specs_platforms.iter().copied())
-    };
-
+        specs_platforms
+    }
+    .to_vec();
     for platform in platforms {
         // TODO: `build` and `host` has to be separated when we have separated environments for them.
         //       While we combine them on install we should also do that on getting the best version.
@@ -268,7 +268,9 @@ pub async fn add_conda_specs_to_project(
         //     SpecType::Build => project.build_dependencies(platform)?,
         //     SpecType::Run => project.dependencies(platform)?,
         // };
-        let current_specs = project.all_dependencies(platform);
+        let mut current_specs = project.dependencies(platform)?;
+        current_specs.extend(project.host_dependencies(platform)?);
+        current_specs.extend(project.build_dependencies(platform)?);
 
         // Solve the environment with the new specs added
         let solved_versions = match determine_best_version(
@@ -310,12 +312,12 @@ pub async fn add_conda_specs_to_project(
 
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.manifest.add_dependency(&spec, spec_type, None)?;
+            project.manifest.add_dependency(&spec, spec_type)?;
         } else {
             for platform in specs_platforms.iter() {
                 project
                     .manifest
-                    .add_dependency(&spec, spec_type, Some(*platform))?;
+                    .add_target_dependency(*platform, &spec, spec_type)?;
             }
         }
     }
@@ -369,7 +371,7 @@ pub fn determine_best_version(
 
         available_packages: &available_packages,
 
-        virtual_packages: project.virtual_packages(platform),
+        virtual_packages: project.virtual_packages(platform)?,
 
         // TODO: Add the information from the current lock file here.
         locked_packages: vec![],

@@ -28,7 +28,7 @@ scripts = ["setup.sh"]
 
 [target.win-64.activation]
 # Overwrite activation scripts only for windows
-scripts = ["setup.bat"]
+scripts = ["setup.ps1"]
 ```
 
 ## Platform definition
@@ -101,7 +101,7 @@ clang = "16.0.6.*"
 ### Activation
 
 Pixi's vision is to enable completely cross-platform projects, but you often need to run tools that are not built by your projects.
-Generated activation scripts are often in this category, default scripts in unix are `bash` and for windows they are `bat`
+Generated activation scripts are often in this category, default scripts in unix are `bash` and for windows they are `bat` or `ps1`
 
 To deal with this, you can define your activation scripts using the target definition.
 
@@ -110,6 +110,6 @@ To deal with this, you can define your activation scripts using the target defin
 scripts = ["setup.sh", "local_setup.bash"]
 
 [target.win-64.activation]
-scripts = ["setup.bat", "local_setup.bat"]
+scripts = ["setup.ps1", "setup.bat", "local_setup.bat"]
 ```
 When this project is run on `win-64` it will only execute the target scripts not the scripts specified in the default `activation.scripts`

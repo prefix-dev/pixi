@@ -1,13 +1,7 @@
 ---
 source: src/project/mod.rs
-expression: "format!(\"= Linux64\\n{}\\n\\n= Win64\\n{}\\n\\n= OsxArm64\\n{}\",\n    fmt_activation_scripts(project.activation_scripts(Platform ::\n    Linux64).unwrap()),\n    fmt_activation_scripts(project.activation_scripts(Platform ::\n    Win64).unwrap()),\n    fmt_activation_scripts(project.activation_scripts(Platform ::\n    OsxArm64).unwrap()))"
+expression: "project.activation_scripts(Platform::Linux64).unwrap()"
 ---
-= Linux64
-Cargo.toml
-
-= Win64
-Cargo.lock
-
-= OsxArm64
-pixi.toml
-pixi.lock
+[
+    "Cargo.toml",
+]

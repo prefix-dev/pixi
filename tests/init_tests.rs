@@ -46,12 +46,12 @@ async fn specific_channel() {
     let project = pixi.project().unwrap();
 
     // The only channel should be the "random" channel
-    let channels = Vec::from_iter(project.channels());
+    let channels = project.channels();
     assert_eq!(
         channels,
-        [
-            &Channel::from_str("random", &ChannelConfig::default()).unwrap(),
-            &Channel::from_str("foobar", &ChannelConfig::default()).unwrap()
+        &[
+            Channel::from_str("random", &ChannelConfig::default()).unwrap(),
+            Channel::from_str("foobar", &ChannelConfig::default()).unwrap()
         ]
     )
 }
@@ -68,9 +68,9 @@ async fn default_channel() {
     let project = pixi.project().unwrap();
 
     // The only channel should be the "conda-forge" channel
-    let channels = Vec::from_iter(project.channels());
+    let channels = project.channels();
     assert_eq!(
         channels,
-        [&Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap()]
+        &[Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap()]
     )
 }

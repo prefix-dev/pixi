@@ -46,7 +46,19 @@ fn print_no_packages_found_message() {
 }
 
 pub async fn execute(_args: Args) -> miette::Result<()> {
-    let packages = list_global_packages().await?;
+    let mut packages = vec![];
+    let mut dir_contents = tokio::fs::read_dir(bin_env_dir()?)
+        .await
+        .into_diagnostic()?;
+    while let Some(entry) = dir_contents.next_entry().await.into_diagnostic()? {
+        if entry.file_type().await.into_diagnostic()?.is_dir() {
+            let Ok(name) = PackageName::from_str(entry.file_name().to_string_lossy().as_ref())
+            else {
+                continue;
+            };
+            packages.push(name);
+        }
+    }
 
     let mut package_info = vec![];
 
@@ -105,23 +117,4 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
     }
 
     Ok(())
-}
-
-pub(super) async fn list_global_packages() -> Result<Vec<PackageName>, miette::ErrReport> {
-    let mut packages = vec![];
-    let mut dir_contents = tokio::fs::read_dir(bin_env_dir()?)
-        .await
-        .into_diagnostic()?;
-
-    while let Some(entry) = dir_contents.next_entry().await.into_diagnostic()? {
-        if entry.file_type().await.into_diagnostic()?.is_dir() {
-            let Ok(name) = PackageName::from_str(entry.file_name().to_string_lossy().as_ref())
-            else {
-                continue;
-            };
-            packages.push(name);
-        }
-    }
-
-    Ok(packages)
 }

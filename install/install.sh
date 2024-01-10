@@ -32,8 +32,8 @@ fi
 
 printf "This script will automatically download and install Pixi (${VERSION}) for you.\nGetting it from this url: $DOWNLOAD_URL\nThe binary will be installed into '$INSTALL_DIR'\n"
 
-if ! hash curl 2> /dev/null && ! hash wget 2> /dev/null; then
-  echo "error: you need either 'curl' or 'wget' installed for this script."
+if ! hash curl 2> /dev/null; then
+  echo "error: you do not have 'curl' installed which is required for this script."
   exit 1
 fi
 
@@ -50,17 +50,10 @@ cleanup() {
 
 trap cleanup EXIT
 
-if hash curl 2> /dev/null; then
-  HTTP_CODE=$(curl -SL --progress-bar "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")
-  if [[ ${HTTP_CODE} -lt 200 || ${HTTP_CODE} -gt 299 ]]; then
-    echo "error: '${DOWNLOAD_URL}' is not available"
-    exit 1
-  fi
-elif hash wget 2> /dev/null; then
-  if ! wget -q --show-progress --output-document="$TEMP_FILE" "$DOWNLOAD_URL"; then
-    echo "error: '${DOWNLOAD_URL}' is not available"
-    exit 1
-  fi
+HTTP_CODE=$(curl -SL --progress-bar "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")
+if [[ ${HTTP_CODE} -lt 200 || ${HTTP_CODE} -gt 299 ]]; then
+  echo "error: '${DOWNLOAD_URL}' is not available"
+  exit 1
 fi
 
 # Check that file was correctly created (https://github.com/prefix-dev/pixi/issues/446)

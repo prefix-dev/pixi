@@ -1,7 +1,6 @@
 use crate::{default_authenticated_client, progress, project::Project};
 use futures::{stream, StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
-use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, Platform};
 use rattler_networking::AuthenticatedClient;
@@ -17,17 +16,18 @@ impl Project {
 }
 
 pub async fn fetch_sparse_repodata(
-    channels: impl IntoIterator<Item = &'_ Channel>,
-    target_platforms: impl IntoIterator<Item = Platform>,
+    channels: &[Channel],
+    target_platforms: &[Platform],
 ) -> miette::Result<Vec<SparseRepoData>> {
-    let channels = channels.into_iter();
-    let target_platforms = target_platforms.into_iter().collect_vec();
+    if channels.is_empty() {
+        return Ok(vec![]);
+    }
 
     // Determine all the repodata that requires fetching.
-    let mut fetch_targets = Vec::with_capacity(channels.size_hint().0 * target_platforms.len());
+    let mut fetch_targets = Vec::with_capacity(channels.len() * target_platforms.len());
     for channel in channels {
         // Determine the platforms to use for this channel.
-        let platforms = channel.platforms.as_deref().unwrap_or(&target_platforms);
+        let platforms = channel.platforms.as_deref().unwrap_or(target_platforms);
         for platform in platforms {
             fetch_targets.push((channel.clone(), *platform));
         }
@@ -37,10 +37,6 @@ pub async fn fetch_sparse_repodata(
         if noarch_missing {
             fetch_targets.push((channel.clone(), Platform::NoArch));
         }
-    }
-
-    if fetch_targets.is_empty() {
-        return Ok(vec![]);
     }
 
     // Construct a top-level progress bar

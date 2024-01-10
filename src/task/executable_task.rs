@@ -254,7 +254,7 @@ mod tests {
         let executable_tasks = ExecutableTask::from_cmd_args(
             &project,
             vec!["top".to_string(), "--test".to_string()],
-            None,
+            Some(Platform::current()),
         )
         .get_ordered_dependencies()
         .await
@@ -293,11 +293,14 @@ mod tests {
         let manifest = Manifest::from_str(Path::new(""), file_content.to_string()).unwrap();
         let project = Project::from_manifest(manifest);
 
-        let executable_tasks =
-            ExecutableTask::from_cmd_args(&project, vec!["top".to_string()], None)
-                .get_ordered_dependencies()
-                .await
-                .unwrap();
+        let executable_tasks = ExecutableTask::from_cmd_args(
+            &project,
+            vec!["top".to_string()],
+            Some(Platform::current()),
+        )
+        .get_ordered_dependencies()
+        .await
+        .unwrap();
 
         let ordered_task_names: Vec<_> = executable_tasks
             .iter()

@@ -93,13 +93,13 @@ async fn add_functionality_union() {
     let project = pixi.project().unwrap();
 
     // Should contain all added dependencies
-    let dependencies = project.dependencies(Platform::current(), SpecType::Run);
+    let dependencies = project.dependencies(Platform::current()).unwrap();
     let (name, _) = dependencies.first().unwrap();
     assert_eq!(name, &PackageName::try_from("rattler").unwrap());
-    let host_deps = project.dependencies(Platform::current(), SpecType::Host);
+    let host_deps = project.host_dependencies(Platform::current()).unwrap();
     let (name, _) = host_deps.first().unwrap();
     assert_eq!(name, &PackageName::try_from("libcomputer").unwrap());
-    let build_deps = project.dependencies(Platform::current(), SpecType::Build);
+    let build_deps = project.build_dependencies(Platform::current()).unwrap();
     let (name, _) = build_deps.first().unwrap();
     assert_eq!(name, &PackageName::try_from("libidk").unwrap());
 

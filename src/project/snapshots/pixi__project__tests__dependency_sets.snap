@@ -1,7 +1,72 @@
 ---
 source: src/project/mod.rs
-expression: "format_dependencies(project.all_dependencies(Platform::Linux64))"
+expression: "project.all_dependencies(Platform::Linux64).unwrap()"
 ---
-foo = "==1.0"
-libc = "==2.12"
-bar = "==1.0"
+{
+    PackageName {
+        normalized: None,
+        source: "foo",
+    }: NamelessMatchSpec {
+        version: Some(
+            Exact(
+                Equals,
+                Version {
+                    version: [[0], [1], [0]],
+                    local: [],
+                },
+            ),
+        ),
+        build: None,
+        build_number: None,
+        file_name: None,
+        channel: None,
+        subdir: None,
+        namespace: None,
+        md5: None,
+        sha256: None,
+    },
+    PackageName {
+        normalized: None,
+        source: "libc",
+    }: NamelessMatchSpec {
+        version: Some(
+            Exact(
+                Equals,
+                Version {
+                    version: [[0], [2], [12]],
+                    local: [],
+                },
+            ),
+        ),
+        build: None,
+        build_number: None,
+        file_name: None,
+        channel: None,
+        subdir: None,
+        namespace: None,
+        md5: None,
+        sha256: None,
+    },
+    PackageName {
+        normalized: None,
+        source: "bar",
+    }: NamelessMatchSpec {
+        version: Some(
+            Exact(
+                Equals,
+                Version {
+                    version: [[0], [1], [0]],
+                    local: [],
+                },
+            ),
+        ),
+        build: None,
+        build_number: None,
+        file_name: None,
+        channel: None,
+        subdir: None,
+        namespace: None,
+        md5: None,
+        sha256: None,
+    },
+}
