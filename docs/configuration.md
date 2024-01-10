@@ -15,7 +15,6 @@ The minimally required information in the `project` table is:
 ```toml
 [project]
 name = "project-name"
-authors = ["John Doe <j.doe@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 ```
@@ -36,7 +35,7 @@ See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattl
 version = "1.2.3"
 ```
 
-### `authors`
+### `authors` (optional)
 This is a list of authors of the project.
 ```toml
 [project]
