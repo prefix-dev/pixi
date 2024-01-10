@@ -2646,7 +2646,7 @@ dependencies = [
  "pep508_rs",
  "rattler",
  "rattler_conda_types",
- "rattler_digest 0.15.0",
+ "rattler_digest 0.16.1",
  "rattler_installs_packages",
  "rattler_lock",
  "rattler_networking",
@@ -2871,9 +2871,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.15.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e9f2b5505b7244ff2641a3ac16261164daf1107b4079ea4bfa01ea90c33c8bd"
+checksum = "22a6c1192d31ee135df17b68b784a4682e062047a065a0d71d778df76f98fa82"
 dependencies = [
  "anyhow",
  "async-compression 0.4.5",
@@ -2891,9 +2891,10 @@ dependencies = [
  "once_cell",
  "pin-project-lite",
  "rattler_conda_types",
- "rattler_digest 0.15.0",
+ "rattler_digest 0.16.1",
  "rattler_networking",
  "rattler_package_streaming",
+ "reflink-copy",
  "regex",
  "reqwest",
  "serde",
@@ -2912,9 +2913,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.15.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "369a250714e19587d74e77d450723184a5531f52014f9e2ebee469190b32d72a"
+checksum = "7cfa3127a0d3d21424330f857dc1bce81a146d28a4062a89cb36726bba215e1f"
 dependencies = [
  "chrono",
  "fxhash",
@@ -2925,7 +2926,7 @@ dependencies = [
  "lazy-regex",
  "nom",
  "purl",
- "rattler_digest 0.15.0",
+ "rattler_digest 0.16.1",
  "rattler_macros",
  "regex",
  "serde",
@@ -2957,9 +2958,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_digest"
-version = "0.15.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e960e1db7e55759820edb86fa4f88b523bdc1b125d1bde081519c98a4eaaf1d"
+checksum = "963194c32bcadf6861eea4babae3caa0bab7798dd86fab96dd8edc365cc34c74"
 dependencies = [
  "blake2",
  "digest",
@@ -3031,9 +3032,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.15.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45897c97fefc5eae13ce3a1fbac2a310c81f0cfe31686b7f21bdb7c4f2adfccb"
+checksum = "2f2d631d12f70ecf635ef81207453816c7286a6332aa32c05143d9ee0ee9aa72"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3041,7 +3042,7 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "rattler_conda_types",
- "rattler_digest 0.15.0",
+ "rattler_digest 0.16.1",
  "serde",
  "serde-json-python-formatter",
  "serde_json",
@@ -3053,9 +3054,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_macros"
-version = "0.15.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a2ce9ce6df32e0ad4d5bf28d9479d1eaff5fd605db086dfb13e8b22fc03e3cc"
+checksum = "4f02f63455dd86b058d373b494fddec2b083120b23512e32c645190922296505"
 dependencies = [
  "quote",
  "syn 2.0.47",
@@ -3063,9 +3064,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.15.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad3ea077d782ddf5a97db26c969faf5857ef5c68bc11bd6ab783c701bb8a1806"
+checksum = "1050b2d9906daaa46126e243910176ff673872cb8b101817cdd8f426378f67eb"
 dependencies = [
  "anyhow",
  "dirs",
@@ -3088,20 +3089,22 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.15.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9f07000a08adb1004ae9ac2f293d4f2b5f7913ca4f4399c81ba028b493d703c"
+checksum = "f28e94fab083116ac81c71f33a28c2222691d5e18e4f3fd149e4570633056bea"
 dependencies = [
  "bzip2",
  "chrono",
  "futures-util",
  "itertools 0.11.0",
+ "num_cpus",
  "rattler_conda_types",
- "rattler_digest 0.15.0",
+ "rattler_digest 0.16.1",
  "rattler_networking",
  "reqwest",
  "serde_json",
  "tar",
+ "tempfile",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -3112,9 +3115,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.15.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2dd0069125dc8972be182948b7c8b19486cc40b48b3e0e921e0014009ff9c6b"
+checksum = "e5e38eea289f9c9701f6a0f8c0cec9dc8026b6c3b9a57f808315187dd751871f"
 dependencies = [
  "anyhow",
  "async-compression 0.4.5",
@@ -3133,7 +3136,7 @@ dependencies = [
  "ouroboros",
  "pin-project-lite",
  "rattler_conda_types",
- "rattler_digest 0.15.0",
+ "rattler_digest 0.16.1",
  "rattler_networking",
  "reqwest",
  "serde",
@@ -3151,9 +3154,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.15.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "450adbb1d12c6bba18d0a2f56132e0b98b5fede6915761f5899efa65fa6a00c8"
+checksum = "38f3837df7177f49b4a0ffeba2abcf79bc0751270b19f9c8004d9f7267981b56"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.1.0",
@@ -3169,16 +3172,16 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "0.15.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86fe5b9a9d69555026576dfc6ba06df303a81eb0492b7ed42afb1796d1f7e286"
+checksum = "1bb7a410dad29f732e1c0ef986241e95e821f841343d5780281ed142d16b1fe3"
 dependencies = [
  "anyhow",
  "chrono",
  "hex",
  "itertools 0.11.0",
  "rattler_conda_types",
- "rattler_digest 0.15.0",
+ "rattler_digest 0.16.1",
  "resolvo",
  "serde",
  "tempfile",
@@ -3189,9 +3192,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "0.15.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f50d5d460859382bfde6cf830d4c00a77b80a65c3cc0179134b00482c1d9386d"
+checksum = "7c9baec7b36b55f9181cc00f5921e91e2d771006342d199cff051203c1254c87"
 dependencies = [
  "cfg-if",
  "libloading",
@@ -3247,9 +3250,9 @@ dependencies = [
 
 [[package]]
 name = "reflink-copy"
-version = "0.1.12"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "248fbed6f59e99c8ef6c6ecadc9b09c6e93713b8f921d73e41d6ed6017bf0624"
+checksum = "767be24c0da52e7448d495b8d162506a9aa125426651d547d545d6c2b4b65b62"
 dependencies = [
  "cfg-if",
  "rustix 0.38.28",
