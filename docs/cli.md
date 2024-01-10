@@ -280,6 +280,11 @@ pixi auth logout anaconda.org
 Global is the main entry point for the part of pixi that executes on the
 global(system) level.
 
+!!! tip
+      Binaries and environments installed globally are stored in `~/.pixi`
+      by default, this can be changed by setting the `PIXI_HOME` environment
+      variable.
+
 ### `global install`
 
 This command installs a package into its own environment and adds the binary to `PATH`, allowing you to access it anywhere on your system without activating the environment.

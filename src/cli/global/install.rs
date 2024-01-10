@@ -23,9 +23,6 @@ use std::{
     str::FromStr,
 };
 
-const BIN_DIR: &str = ".pixi/bin";
-const BIN_ENVS_DIR: &str = ".pixi/envs";
-
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true)]
@@ -70,11 +67,20 @@ impl BinDir {
     }
 }
 
-/// Binaries are installed in ~/.pixi/bin
+/// Get pixi home directory, default to `$HOME/.pixi`
+fn home_path() -> miette::Result<PathBuf> {
+    if let Some(path) = std::env::var_os("PIXI_HOME") {
+        Ok(PathBuf::from(path))
+    } else {
+        home_dir()
+            .map(|path| path.join(".pixi"))
+            .ok_or_else(|| miette::miette!("could not find home directory"))
+    }
+}
+
+/// Global binaries directory, default to `$HOME/.pixi/bin`
 fn bin_dir() -> miette::Result<PathBuf> {
-    Ok(home_dir()
-        .ok_or_else(|| miette::miette!("could not find home directory"))?
-        .join(BIN_DIR))
+    home_path().map(|path| path.join("bin"))
 }
 
 pub(crate) struct BinEnvDir(pub PathBuf);
@@ -111,11 +117,9 @@ impl BinEnvDir {
     }
 }
 
-/// Binary environments are installed in ~/.pixi/envs
+/// GLobal binary environments directory, default to `$HOME/.pixi/envs`
 pub(crate) fn bin_env_dir() -> miette::Result<PathBuf> {
-    Ok(home_dir()
-        .ok_or_else(|| miette::miette!("could not find home directory"))?
-        .join(BIN_ENVS_DIR))
+    home_path().map(|path| path.join("envs"))
 }
 
 /// Find the designated package in the prefix
@@ -376,11 +380,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             "{whitespace}These apps are now globally available:\n{whitespace} -  {script_names}",
         )
     } else {
-        let bin_dir = format!("~/{BIN_DIR}");
         eprintln!("{whitespace}These apps have been added to {}\n{whitespace} -  {script_names}\n\n{} To use them, make sure to add {} to your PATH",
-                      console::style(&bin_dir).bold(),
+                      console::style(&bin_dir.display()).bold(),
                       console::style("!").yellow().bold(),
-                      console::style(&bin_dir).bold()
+                      console::style(&bin_dir.display()).bold()
             )
     }
 
