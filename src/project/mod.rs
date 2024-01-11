@@ -373,6 +373,7 @@ impl Display for DependencyKind {
 mod tests {
     use super::*;
     use insta::{assert_debug_snapshot, assert_display_snapshot};
+    use itertools::Itertools;
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use std::str::FromStr;
 
