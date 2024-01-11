@@ -2,13 +2,14 @@ use super::{
     dependencies::Dependencies,
     errors::{UnknownTask, UnsupportedPlatformError},
     manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
-    SpecType,
+    PyPiRequirement, SpecType,
 };
 use crate::{task::Task, Project};
-use indexmap::IndexSet;
-use itertools::Itertools;
+use indexmap::{IndexMap, IndexSet};
+use itertools::{Either, Itertools};
 use rattler_conda_types::{Channel, Platform};
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::Debug,
 };
@@ -183,29 +184,46 @@ impl<'p> Environment<'p> {
 
     /// Returns the dependencies to install for this environment.
     ///
-    /// The dependencies of all features are combined this means that if two features define a
+    /// The dependencies of all features are combined. This means that if two features define a
     /// requirement for the same package that both requirements are returned. The different
-    /// requirements per package are sorted from the most specific feature/target to the least
-    /// specific.
+    /// requirements per package are sorted in the same order as the features they came from.
     pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
         self.features()
-            .filter_map(|f| {
-                f.targets
-                    .resolve(platform)
-                    .rev()
-                    .map(|t| t.dependencies(kind))
-                    .fold(None, |acc: Option<Dependencies>, deps| {
-                        Some(match acc {
-                            None => Dependencies::from(deps.into_owned()),
-                            Some(mut acc) => {
-                                acc.extend_overwrite(deps.into_owned());
-                                acc
-                            }
-                        })
-                    })
-            })
+            .filter_map(|f| f.dependencies(kind, platform))
+            .map(|deps| Dependencies::from(deps.into_owned()))
             .reduce(|acc, deps| acc.union(&deps))
             .unwrap_or_default()
+    }
+
+    /// Returns the PyPi dependencies to install for this environment.
+    ///
+    /// The dependencies of all features are combined. This means that if two features define a
+    /// requirement for the same package that both requirements are returned. The different
+    /// requirements per package are sorted in the same order as the features they came from.
+    pub fn pypi_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> IndexMap<rip::types::PackageName, Vec<PyPiRequirement>> {
+        self.features()
+            .filter_map(|f| f.pypi_dependencies(platform))
+            .fold(IndexMap::default(), |mut acc, deps| {
+                // Either clone the values from the Cow or move the values from the owned map.
+                let deps_iter = match deps {
+                    Cow::Borrowed(borrowed) => Either::Left(
+                        borrowed
+                            .into_iter()
+                            .map(|(name, spec)| (name.clone(), spec.clone())),
+                    ),
+                    Cow::Owned(owned) => Either::Right(owned.into_iter()),
+                };
+
+                // Add the requirements to the accumulator.
+                for (name, spec) in deps_iter {
+                    acc.entry(name).or_default().push(spec);
+                }
+
+                acc
+            })
     }
 
     /// Validates that the given platform is supported by this environment.

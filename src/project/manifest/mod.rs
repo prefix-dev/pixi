@@ -764,6 +764,7 @@ mod test {
     use super::*;
     use crate::project::manifest::channel::PrioritizedChannel;
     use insta::assert_display_snapshot;
+    use rstest::*;
     use std::str::FromStr;
     use tempfile::tempdir;
 
@@ -772,7 +773,7 @@ mod test {
         name = "foo"
         version = "0.1.0"
         channels = []
-        platforms = []
+        platforms = ["linux-64", "win-64", "osx-64"]
         "#;
 
     #[test]
@@ -1645,6 +1646,27 @@ ypackage = {version = ">=1.2.3"}
                 .as_single_command()
                 .unwrap(),
             "python warmup.py"
+        );
+    }
+
+    #[rstest]
+    #[case::empty("", false)]
+    #[case::just_dependencies("[dependencies]", false)]
+    #[case::with_pypi_dependencies("[pypi-dependencies]\nfoo=\"*\"", true)]
+    #[case::empty_pypi_dependencies("[pypi-dependencies]", true)]
+    #[case::nested_in_feature_and_target("[feature.foo.target.linux-64.pypi-dependencies]", true)]
+    fn test_has_pypi_dependencies(
+        #[case] file_contents: &str,
+        #[case] should_have_pypi_dependencies: bool,
+    ) {
+        let manifest = Manifest::from_str(
+            Path::new(""),
+            format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+        )
+        .unwrap();
+        assert_eq!(
+            manifest.has_pypi_dependencies(),
+            should_have_pypi_dependencies,
         );
     }
 }
