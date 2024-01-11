@@ -52,17 +52,19 @@ impl Target {
     ///
     /// The `build` dependencies overwrite the `host` dependencies which overwrite the `run`
     /// dependencies.
+    ///
+    /// This function returns `None` if no dependencies are specified for the given `spec_type`.
+    ///
+    /// This function returns a `Cow` to avoid cloning the dependencies if they can be returned
+    /// directly from the underlying map.
     pub fn dependencies(
         &self,
         spec_type: Option<SpecType>,
-    ) -> Cow<'_, IndexMap<PackageName, NamelessMatchSpec>> {
+    ) -> Option<Cow<'_, IndexMap<PackageName, NamelessMatchSpec>>> {
         if let Some(spec_type) = spec_type {
-            self.dependencies
-                .get(&spec_type)
-                .map(Cow::Borrowed)
-                .unwrap_or(Cow::Owned(IndexMap::new()))
+            self.dependencies.get(&spec_type).map(Cow::Borrowed)
         } else {
-            Cow::Owned(self.combined_dependencies())
+            self.combined_dependencies()
         }
     }
 
@@ -70,15 +72,32 @@ impl Target {
     ///
     /// The `build` dependencies overwrite the `host` dependencies which overwrite the `run`
     /// dependencies.
-    fn combined_dependencies(&self) -> IndexMap<PackageName, NamelessMatchSpec> {
-        let mut all_deps = IndexMap::new();
+    ///
+    /// This function returns `None` if no dependencies are specified for the given `spec_type`.
+    ///
+    /// This function returns a `Cow` to avoid cloning the dependencies if they can be returned
+    /// directly from the underlying map.
+    fn combined_dependencies(&self) -> Option<Cow<'_, IndexMap<PackageName, NamelessMatchSpec>>> {
+        let mut all_deps = None;
         for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
-            for (name, spec) in self.dependencies.get(&spec_type).into_iter().flatten() {
-                match all_deps.get_mut(name) {
-                    Some(existing_spec) => *existing_spec = spec.clone(),
-                    None => {
-                        all_deps.insert(name.clone(), spec.clone());
-                    }
+            let Some(specs) = self.dependencies.get(&spec_type) else {
+                // If the specific dependencies don't exist we can skip them.
+                continue;
+            };
+            if specs.is_empty() {
+                // If the dependencies are empty, we can skip them.
+                continue;
+            }
+
+            all_deps = match all_deps {
+                None => Some(Cow::Borrowed(specs)),
+                Some(mut all_deps) => {
+                    all_deps.to_mut().extend(
+                        specs
+                            .into_iter()
+                            .map(|(name, spec)| (name.clone(), spec.clone())),
+                    );
+                    Some(all_deps)
                 }
             }
         }
@@ -404,6 +423,7 @@ mod tests {
             .targets
             .default()
             .dependencies(None)
+            .unwrap_or_default()
             .iter()
             .map(|(name, spec)| format!("{} = {}", name.as_source(), spec))
             .join("\n"), @r###"

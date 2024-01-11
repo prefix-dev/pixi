@@ -289,23 +289,18 @@ impl Project {
         self.default_environment().dependencies(kind, platform)
     }
 
+    /// Returns the PyPi dependencies of the project
+    ///
+    /// TODO: Remove this function and use the `dependencies` function from the default environment instead.
     pub fn pypi_dependencies(
         &self,
-        platform: Platform,
-    ) -> IndexMap<rip::types::PackageName, PyPiRequirement> {
-        self.manifest
-            .default_feature()
-            .targets
-            .resolve(Some(platform))
-            .collect_vec()
-            .into_iter()
-            .rev() // We rev this so that the most specific target is last.
-            .flat_map(|t| t.pypi_dependencies.iter().flatten())
-            .map(|(name, spec)| (name.clone(), spec.clone()))
-            .collect()
+        platform: Option<Platform>,
+    ) -> IndexMap<rip::types::PackageName, Vec<PyPiRequirement>> {
+        self.default_environment().pypi_dependencies(platform)
     }
 
-    /// Returns true if the project contains any pypi dependencies
+    /// Returns true if the project contains any reference pypi dependencies. Even if just
+    /// `[pypi-dependencies]` is specified without any requirements this will return true.
     pub fn has_pypi_dependencies(&self) -> bool {
         self.manifest.has_pypi_dependencies()
     }
@@ -382,6 +377,27 @@ pub fn find_project_root() -> Option<PathBuf> {
     std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent())
         .find(|dir| dir.join(consts::PROJECT_MANIFEST).is_file())
         .map(Path::to_path_buf)
+}
+
+#[derive(Eq, PartialEq, Hash)]
+pub enum DependencyName {
+    Conda(PackageName),
+    PyPi(NormalizedPackageName),
+}
+
+#[derive(Clone)]
+pub enum DependencyKind {
+    Conda(MatchSpec),
+    PyPi(pep508_rs::Requirement),
+}
+
+impl Display for DependencyKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DependencyKind::Conda(spec) => write!(f, "{}", spec),
+            DependencyKind::PyPi(req) => write!(f, "{}", req),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -560,26 +576,5 @@ mod tests {
         assert_debug_snapshot!(project.manifest.tasks(Some(Platform::Osx64)));
         assert_debug_snapshot!(project.manifest.tasks(Some(Platform::Win64)));
         assert_debug_snapshot!(project.manifest.tasks(Some(Platform::Linux64)));
-    }
-}
-
-#[derive(Eq, PartialEq, Hash)]
-pub enum DependencyName {
-    Conda(PackageName),
-    PyPi(NormalizedPackageName),
-}
-
-#[derive(Clone)]
-pub enum DependencyKind {
-    Conda(MatchSpec),
-    PyPi(pep508_rs::Requirement),
-}
-
-impl Display for DependencyKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DependencyKind::Conda(spec) => write!(f, "{}", spec),
-            DependencyKind::PyPi(req) => write!(f, "{}", req),
-        }
     }
 }

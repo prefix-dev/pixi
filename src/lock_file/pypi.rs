@@ -22,7 +22,7 @@ pub async fn resolve_dependencies<'p>(
     platform: Platform,
     conda_packages: &[RepoDataRecord],
 ) -> miette::Result<Vec<PinnedPackage<'p>>> {
-    let dependencies = project.pypi_dependencies(platform);
+    let dependencies = project.pypi_dependencies(Some(platform));
     if dependencies.is_empty() {
         return Ok(vec![]);
     }
@@ -70,6 +70,7 @@ pub async fn resolve_dependencies<'p>(
 
     let requirements = dependencies
         .iter()
+        .flat_map(|(name, req)| req.iter().map(move |req| (name, req)))
         .map(|(name, req)| req.as_pep508(name))
         .collect::<Vec<pep508_rs::Requirement>>();
 
