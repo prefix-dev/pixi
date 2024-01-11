@@ -1,14 +1,15 @@
 mod activation;
+mod channel;
 mod environment;
 mod error;
 mod feature;
 mod metadata;
 mod python;
-mod serde;
 mod system_requirements;
 mod target;
 mod validation;
 
+use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 use ::serde::{Deserialize, Deserializer};
@@ -402,9 +403,11 @@ impl Manifest {
     ) -> miette::Result<()> {
         let mut stored_channels = Vec::new();
         for channel in channels {
-            self.parsed.project.channels.push(
-                Channel::from_str(channel.as_ref(), &ChannelConfig::default()).into_diagnostic()?,
-            );
+            self.parsed.project.channels.push(PrioritizedChannel {
+                channel: Channel::from_str(channel.as_ref(), &ChannelConfig::default())
+                    .into_diagnostic()?,
+                priority: None,
+            });
             stored_channels.push(channel.as_ref().to_owned());
         }
 
@@ -434,7 +437,7 @@ impl Manifest {
                 .project
                 .channels
                 .iter()
-                .position(|x| *x == channel_to_remove)
+                .position(|x| x.channel == channel_to_remove)
             {
                 self.parsed.project.channels.remove(pos);
             }
@@ -759,6 +762,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::project::manifest::channel::PrioritizedChannel;
     use insta::assert_display_snapshot;
     use std::str::FromStr;
     use tempfile::tempdir;
@@ -1413,7 +1417,10 @@ ypackage = {version = ">=1.2.3"}
 
         assert_eq!(
             manifest.parsed.project.channels,
-            vec![Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap()]
+            vec![PrioritizedChannel {
+                channel: Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
+                priority: None
+            }]
         );
     }
 
@@ -1433,7 +1440,9 @@ ypackage = {version = ">=1.2.3"}
 
         assert_eq!(
             manifest.parsed.project.channels,
-            vec![Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap()]
+            vec![PrioritizedChannel::from_channel(
+                Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap()
+            )]
         );
 
         manifest.remove_channels(["conda-forge"].iter()).unwrap();
@@ -1507,7 +1516,7 @@ ypackage = {version = ">=1.2.3"}
             platforms = ["linux-64", "osx-arm64"]
             activation = {scripts = ["cuda_activation.sh"]}
             system-requirements = {cuda = "12"}
-            channels = ["nvidia", "pytorch"]
+            channels = ["pytorch", {channel = "nvidia", priority = -1}]
             tasks = { warmup = "python warmup.py" }
             target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 
@@ -1601,9 +1610,17 @@ ypackage = {version = ">=1.2.3"}
                 .as_ref()
                 .unwrap()
                 .iter()
-                .map(|c| c.name.clone().unwrap())
                 .collect::<Vec<_>>(),
-            vec!["nvidia", "pytorch"]
+            vec![
+                &PrioritizedChannel {
+                    channel: Channel::from_str("pytorch", &ChannelConfig::default()).unwrap(),
+                    priority: None
+                },
+                &PrioritizedChannel {
+                    channel: Channel::from_str("nvidia", &ChannelConfig::default()).unwrap(),
+                    priority: Some(-1)
+                }
+            ]
         );
         assert_eq!(
             cuda_feature

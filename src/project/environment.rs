@@ -6,6 +6,7 @@ use super::{
 };
 use crate::{task::Task, Project};
 use indexmap::IndexSet;
+use itertools::Itertools;
 use rattler_conda_types::{Channel, Platform};
 use std::{
     collections::{HashMap, HashSet},
@@ -95,6 +96,14 @@ impl<'p> Environment<'p> {
                     .or(Some(&self.project.manifest.parsed.project.channels)),
             })
             .flatten()
+            // The prioritized channels contain a priority, sort on this priority.
+            // Higher priority comes first. [-10, 1, 0 ,2] -> [2, 1, 0, -10]
+            .sorted_by(|a, b| {
+                let a = a.priority.unwrap_or(0);
+                let b = b.priority.unwrap_or(0);
+                b.cmp(&a)
+            })
+            .map(|prioritized_channel| &prioritized_channel.channel)
             .collect()
     }
 
@@ -362,5 +371,56 @@ mod test {
             .unwrap()
             .dependencies(None, None);
         assert_display_snapshot!(format_dependencies(deps));
+    }
+
+    #[test]
+    fn test_channel_priorities() {
+        let manifest = Project::from_str(
+            Path::new(""),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "osx-64"]
+
+        [feature.foo]
+        channels = [{channel = "nvidia", priority = 1}, "pytorch"]
+
+        [feature.bar]
+        channels = [{ channel = "bar", priority = -10 }, "barry"]
+
+        [environments]
+        foo = ["foo"]
+        bar = ["bar"]
+        foobar = ["foo", "bar"]
+        "#,
+        )
+        .unwrap();
+
+        let foobar_channels = manifest.environment("foobar").unwrap().channels();
+        assert_eq!(
+            foobar_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["nvidia", "pytorch", "barry", "conda-forge", "bar"]
+        );
+        let foo_channels = manifest.environment("foo").unwrap().channels();
+        assert_eq!(
+            foo_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["nvidia", "pytorch", "conda-forge"]
+        );
+
+        let bar_channels = manifest.environment("bar").unwrap().channels();
+        assert_eq!(
+            bar_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["barry", "conda-forge", "bar"]
+        );
     }
 }

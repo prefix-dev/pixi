@@ -1,10 +1,11 @@
 use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelector};
+use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
 use crate::project::manifest::target::Targets;
 use crate::project::SpecType;
 use crate::task::Task;
 use crate::utils::spanned::PixiSpanned;
 use indexmap::IndexMap;
-use rattler_conda_types::{Channel, NamelessMatchSpec, PackageName, Platform};
+use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
@@ -61,7 +62,7 @@ pub struct Feature {
     ///
     /// This value is `None` if this feature does not specify any channels and the default
     /// channels from the project should be used.
-    pub channels: Option<Vec<Channel>>,
+    pub channels: Option<Vec<PrioritizedChannel>>,
 
     /// Additional system requirements
     pub system_requirements: SystemRequirements,
@@ -81,8 +82,8 @@ impl<'de> Deserialize<'de> for Feature {
         struct FeatureInner {
             #[serde(default)]
             platforms: Option<PixiSpanned<Vec<Platform>>>,
-            #[serde_as(deserialize_as = "Option<Vec<super::serde::ChannelStr>>")]
-            channels: Option<Vec<Channel>>,
+            #[serde(default)]
+            channels: Option<Vec<TomlPrioritizedChannelStrOrMap>>,
             #[serde(default)]
             system_requirements: SystemRequirements,
             #[serde(default)]
@@ -132,7 +133,12 @@ impl<'de> Deserialize<'de> for Feature {
         Ok(Feature {
             name: FeatureName::Default,
             platforms: inner.platforms,
-            channels: inner.channels,
+            channels: inner.channels.map(|channels| {
+                channels
+                    .into_iter()
+                    .map(|channel| channel.into_prioritized_channel())
+                    .collect()
+            }),
             system_requirements: inner.system_requirements,
             targets: Targets::from_default_and_user_defined(default_target, inner.target),
         })

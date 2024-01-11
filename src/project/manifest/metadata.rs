@@ -1,5 +1,5 @@
 use crate::utils::spanned::PixiSpanned;
-use rattler_conda_types::{Channel, Platform, Version};
+use rattler_conda_types::{Platform, Version};
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 use std::path::PathBuf;
@@ -25,8 +25,8 @@ pub struct ProjectMetadata {
     pub authors: Vec<String>,
 
     /// The channels used by the project
-    #[serde_as(deserialize_as = "Vec<super::serde::ChannelStr>")]
-    pub channels: Vec<Channel>,
+    #[serde_as(as = "Vec<super::channel::TomlPrioritizedChannelStrOrMap>")]
+    pub channels: Vec<super::channel::PrioritizedChannel>,
 
     /// The platforms this project supports
     // TODO: This is actually slightly different from the rattler_conda_types::Platform because it
