@@ -318,7 +318,7 @@ jobs:
           path: ${{ steps.package.outputs.PKG_PATH }}
 
       - name: "Artifact upload: binary"
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
           name: pixi
           path: ${{ steps.package.outputs.BIN_PATH }}
