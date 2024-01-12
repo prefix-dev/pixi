@@ -367,6 +367,8 @@ jobs:
         run: |
           ls -R
           chmod +x pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
+          pwd
+          ls -R ../
       - name: Setup windows binary
         if: matrix.os == 'windows-latest' || matrix.target == 'aarch64-pc-windows-msvc'
         run: |
