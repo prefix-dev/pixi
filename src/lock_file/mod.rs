@@ -339,8 +339,10 @@ async fn resolve_platform(
     )
     .await?;
 
-    // Add purl's for the conda packages that are also available as pypi packages
-    pypi::amend_pypi_purls(&mut records).await?;
+    // Add purl's for the conda packages that are also available as pypi packages if we need them.
+    if project.manifest.has_pypi_dependencies() {
+        pypi::amend_pypi_purls(&mut records).await?;
+    }
 
     // Update lock file
     let mut locked_packages = LockedPackagesBuilder::new(platform);
