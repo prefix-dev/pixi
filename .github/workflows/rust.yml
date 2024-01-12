@@ -362,6 +362,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
+      - name: view binary
+        run: |
+          ls -R
       - name: Run binary
         run: |
           ./pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }} --help
