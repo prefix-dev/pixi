@@ -362,6 +362,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
+      - name: checkout repo
+        uses: actions/checkout@v4
       - name: Setup unix binary
         if: matrix.os != 'windows-latest' || matrix.target != 'aarch64-pc-windows-msvc'
         run: |
