@@ -40,7 +40,7 @@ struct PackageToOutput {
     version: String,
     build: Option<String>,
     kind: String,
-    // channel: String,
+    channel: Option<String>,
     is_explicit: bool,
 }
 
@@ -86,6 +86,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     let version = p.version.clone();
                     let kind = "conda".to_string();
                     let build = p.as_conda().unwrap().build.clone();
+                    // NOTE(hadim): channel is not available, only the source url...
+                    // let channel = Some(p.as_conda().unwrap().url.to_string().clone());
+                    let channel = Some("".to_string());
                     let is_explicit = project_dependency_names.contains(&name);
 
                     PackageToOutput {
@@ -93,6 +96,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         version,
                         build,
                         kind,
+                        channel,
                         is_explicit,
                     }
                 }
@@ -102,6 +106,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     let version = p.version.clone();
                     let kind = "pypi".to_string();
                     let build = p.as_pypi().unwrap().build.clone();
+                    let channel = Some("".to_string());
                     let is_explicit = project_dependency_names.contains(&name);
 
                     PackageToOutput {
@@ -109,6 +114,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         version,
                         build,
                         kind,
+                        channel,
                         is_explicit,
                     }
                 }
@@ -135,17 +141,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 fn print_packages(packages: Vec<PackageToOutput>) {
+    // NOTE(hadim): maybe switch to a third party package or a custom dynamic printing logic
+    // to adapt the table column width to the content of the table and the terminal.
+
     println!(
-        "{:40} {:19} {:19} {:19}",
+        "{:40} {:14} {:19} {:6} {:19}",
         console::style("Package").bold(),
         console::style("Version").bold(),
         console::style("Build").bold(),
         console::style("Kind").bold(),
+        console::style("Channel").bold(),
     );
 
     for package in packages {
         println!(
-            "{:40} {:19} {:19} {:19}",
+            "{:40} {:14} {:19} {:6} {:19}",
             if package.is_explicit {
                 console::style(package.name).green().bright().bold()
             } else {
@@ -154,6 +164,7 @@ fn print_packages(packages: Vec<PackageToOutput>) {
             console::style(package.version),
             console::style(package.build.unwrap_or_else(|| "".to_string())),
             console::style(package.kind),
+            console::style(package.channel.unwrap_or_else(|| "".to_string())),
         );
     }
 }
