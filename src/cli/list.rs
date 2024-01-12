@@ -13,6 +13,10 @@ use crate::Project;
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
 pub struct Args {
+    /// List only packages matching a regular expression
+    #[arg()]
+    pub regex: Option<String>,
+
     /// The platform to list packages for. Defaults to the current platform.
     #[arg(long)]
     pub platform: Option<Platform>,
@@ -121,6 +125,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         })
         .collect::<Vec<_>>();
+
+    // Filter packages by regex if needed
+    if let Some(regex) = args.regex {
+        let regex = regex::Regex::new(&regex).map_err(|_| miette::miette!("Invalid regex"))?;
+        packages_to_output = packages_to_output
+            .into_iter()
+            .filter(|p| regex.is_match(&p.name))
+            .collect::<Vec<_>>();
+    }
 
     // Sort packages by name if needed
     if !args.no_sort {
