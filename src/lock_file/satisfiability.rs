@@ -1,9 +1,8 @@
 use super::package_identifier;
 use crate::project::{DependencyKind, DependencyName};
-use crate::{
-    lock_file::pypi::{determine_marker_environment, is_python_record},
-    Project,
-};
+use crate::pypi_marker_env::determine_marker_environment;
+use crate::pypi_tags::is_python_record;
+use crate::Project;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pep508_rs::Requirement;

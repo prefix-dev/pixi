@@ -1,5 +1,5 @@
 ---
-source: src/lock_file/pypi.rs
+source: src/pypi_tags.rs
 expression: tags
 ---
 [

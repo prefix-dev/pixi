@@ -21,6 +21,7 @@ use rattler_lock::{
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
+use rip::python_env::PythonLocation;
 use std::{sync::Arc, time::Duration};
 
 pub use satisfiability::lock_file_satisfies_project;
@@ -157,6 +158,7 @@ pub async fn update_lock_file_conda(
 pub async fn update_lock_file_for_pypi(
     project: &Project,
     lock_for_conda: CondaLock,
+    python_location: &PythonLocation,
 ) -> miette::Result<CondaLock> {
     let platforms = project.platforms();
     let _top_level_progress =
@@ -187,6 +189,7 @@ pub async fn update_lock_file_for_pypi(
                         locked_packages,
                         *platform,
                         &pb,
+                        python_location,
                     )
                     .await?;
 
@@ -253,10 +256,12 @@ async fn resolve_pypi(
     mut locked_packages: LockedPackagesBuilder,
     platform: Platform,
     pb: &ProgressBar,
+    python_location: &PythonLocation,
 ) -> miette::Result<LockedPackagesBuilder> {
     // Solve python packages
-    pb.set_message("resolving python");
-    let python_artifacts = pypi::resolve_dependencies(project, platform, records).await?;
+    pb.set_message("resolving pypi dependencies");
+    let python_artifacts =
+        pypi::resolve_dependencies(project, platform, records, python_location).await?;
 
     // Clear message
     pb.set_message("");

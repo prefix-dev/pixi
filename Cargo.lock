@@ -1447,15 +1447,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "home"
-version = "0.5.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3d1354bf6b7235cb4a0576c2619fd4ed18183f689b12b006a0ee7329eeff9a5"
-dependencies = [
- "windows-sys 0.52.0",
-]
-
-[[package]]
 name = "html-escape"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1559,7 +1550,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.5",
  "tokio",
  "tower-service",
  "tracing",
@@ -2980,9 +2971,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_installs_packages"
-version = "0.1.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae67cf7e1c4a7f35bf82b38fed677ba56e4540a70a94bea91d29443ba0d136c6"
+checksum = "1e162a7221ad6717b0b52ff513bd22e628d31c7e3cfb79972b80bd0f9d7f1e5e"
 dependencies = [
  "async-once-cell",
  "async-recursion",
@@ -3032,7 +3023,6 @@ dependencies = [
  "tokio-util",
  "tracing",
  "url",
- "which",
  "zip",
 ]
 
@@ -4614,18 +4604,6 @@ name = "webpki-roots"
 version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1778a42e8b3b90bff8d0f5032bf22250792889a5cdc752aa0020c84abe3aaf10"
-
-[[package]]
-name = "which"
-version = "4.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87ba24419a2078cd2b0f2ede2691b6c66d8e47836da3b6db8265ebad47afbfc7"
-dependencies = [
- "either",
- "home",
- "once_cell",
- "rustix 0.38.28",
-]
 
 [[package]]
 name = "winapi"
