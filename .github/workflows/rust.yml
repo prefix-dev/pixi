@@ -345,7 +345,7 @@ jobs:
   test-binary:
     name: Integration test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    needs: [ build ]
+    needs: build
     strategy:
       fail-fast: false
       matrix:
@@ -359,7 +359,7 @@ jobs:
 #          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
     steps:
       - name: Download binary from build
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: pixi
       - name: Run binary
