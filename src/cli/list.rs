@@ -45,7 +45,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let prefix = Prefix::new(project.environment_dir())?;
 
     // Load the installed packages
-    // NOTE(hadim): remove unwrap.
     let prefix_records = prefix
         .find_installed_packages(None)
         .await
