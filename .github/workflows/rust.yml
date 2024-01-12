@@ -320,7 +320,7 @@ jobs:
       - name: "Artifact upload: binary"
         uses: actions/upload-artifact@master
         with:
-          name: pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
+          name: pixi
           path: ${{ steps.package.outputs.BIN_PATH }}
 
       - name: "Artifact upload: windows installer"
@@ -361,7 +361,7 @@ jobs:
       - name: Download binary from build
         uses: actions/download-artifact@v3
         with:
-          name: pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
+          name: pixi
       - name: Run binary
         run: |
           ./pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }} --help
