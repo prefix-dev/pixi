@@ -2,16 +2,21 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use rattler_conda_types::Platform;
+use rattler_lock::LockedDependencyKind;
 use serde::Serialize;
 
-use crate::prefix::Prefix;
+use crate::lock_file::load_lock_file;
 use crate::project::SpecType;
 use crate::Project;
 
-/// List installed packages in the current environment. Highlighted packages are explicit dependencies.
+/// List project's packages. Highlighted packages are explicit dependencies.
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
 pub struct Args {
+    /// The platform to list packages for. Defaults to the current platform.
+    #[arg(long)]
+    pub platform: Option<Platform>,
+
     /// Whether to output in json format
     #[arg(long)]
     pub json: bool,
@@ -33,8 +38,9 @@ pub struct Args {
 struct PackageToOutput {
     name: String,
     version: String,
-    build: String,
-    channel: String,
+    build: Option<String>,
+    kind: String,
+    // channel: String,
     is_explicit: bool,
 }
 
@@ -44,65 +50,77 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .ok()
         .ok_or_else(|| miette::miette!("No project found"))?;
 
-    // Load the prefix
-    let prefix = Prefix::new(project.environment_dir())?;
+    // Load the platform
+    let platform = args.platform.unwrap_or_else(Platform::current);
 
-    // Load the installed packages
-    let prefix_records = prefix
-        .find_installed_packages(None)
+    // Load the environment
+    // NOTE(hadim): make it an argument once environments are implemented.
+    // let environment = project.default_environment();
+
+    // Load the lockfile
+    let lockfile = load_lock_file(&project)
         .await
-        .map_err(|_| miette::miette!("Cannot find installed packages"))?;
+        .map_err(|_| miette::miette!("Cannot load lockfile. Did you run `pixi install` first?"))?;
 
-    let mut repodata_records = prefix_records
-        .iter()
-        .map(|p| &p.repodata_record)
-        .collect::<Vec<_>>();
-
-    // Sort packages by name if needed
-    if !args.no_sort {
-        // Sort packages by name
-        repodata_records.sort_by(|a, b| {
-            a.package_record
-                .name
-                .as_source()
-                .cmp(b.package_record.name.as_source())
-        });
-    }
+    let locked_deps = lockfile.packages_for_platform(platform).collect::<Vec<_>>();
 
     // Get the explicit project dependencies
     let project_dependency_names: Vec<String> = {
         let dependencies = project
             .default_environment()
-            .dependencies(Some(SpecType::Run), Some(Platform::current()));
+            .dependencies(Some(SpecType::Run), Some(platform));
         dependencies
             .names()
             .map(|p| p.as_source().to_string())
             .collect()
     };
 
-    // Convert the the list of package record to a hashmap so it's agnostic to the output logic.
-    let packages_to_output = repodata_records
+    // Convert the the list of package record to specific output format
+    let mut packages_to_output = locked_deps
         .iter()
         .map(|p| {
-            let channel = p.channel.split('/').collect::<Vec<_>>();
-            let channel_name = channel[channel.len() - 1];
+            match p.kind {
+                // Conda package
+                LockedDependencyKind::Conda(_) => {
+                    let name = p.name.clone();
+                    let version = p.version.clone();
+                    let kind = "conda".to_string();
+                    let build = p.as_conda().unwrap().build.clone();
+                    let is_explicit = project_dependency_names.contains(&name);
 
-            let package_name = p.package_record.name.as_source();
-            let version = p.package_record.version.as_str().clone();
-            let build = p.package_record.build.as_str();
+                    PackageToOutput {
+                        name,
+                        version,
+                        build,
+                        kind,
+                        is_explicit,
+                    }
+                }
+                // Pypi package
+                LockedDependencyKind::Pypi(_) => {
+                    let name = p.name.clone();
+                    let version = p.version.clone();
+                    let kind = "pypi".to_string();
+                    let build = p.as_pypi().unwrap().build.clone();
+                    let is_explicit = project_dependency_names.contains(&name);
 
-            // Check if the package is an explicit dependency
-            let is_explicit = project_dependency_names.contains(&package_name.to_string());
-
-            PackageToOutput {
-                name: package_name.to_string(),
-                version: version.to_string(),
-                build: build.to_string(),
-                channel: channel_name.to_string(),
-                is_explicit,
+                    PackageToOutput {
+                        name,
+                        version,
+                        build,
+                        kind,
+                        is_explicit,
+                    }
+                }
             }
         })
         .collect::<Vec<_>>();
+
+    // Sort packages by name if needed
+    if !args.no_sort {
+        // Sort packages by name
+        packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
+    }
 
     // Print as table string or JSON
     if args.json {
@@ -122,20 +140,20 @@ fn print_packages(packages: Vec<PackageToOutput>) {
         console::style("Package").bold(),
         console::style("Version").bold(),
         console::style("Build").bold(),
-        console::style("Channel").bold(),
+        console::style("Kind").bold(),
     );
 
     for package in packages {
         println!(
             "{:40} {:19} {:19} {:19}",
             if package.is_explicit {
-                console::style(package.name).green().bright()
+                console::style(package.name).green().bright().bold()
             } else {
                 console::style(package.name)
             },
             console::style(package.version),
-            console::style(package.build),
-            console::style(package.channel),
+            console::style(package.build.unwrap_or_else(|| "".to_string())),
+            console::style(package.kind),
         );
     }
 }
