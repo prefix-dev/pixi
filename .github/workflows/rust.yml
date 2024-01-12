@@ -362,9 +362,17 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
-      - name: view binary
+      - name: Setup unix binary
+        if: matrix.os != 'windows-latest' || matrix.target != 'aarch64-pc-windows-msvc'
         run: |
           ls -R
+          chmod +x pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
+      - name: Setup windows binary
+        if: matrix.os == 'windows-latest' || matrix.target == 'aarch64-pc-windows-msvc'
+        run: |
+          # view binary
+          ls -R
+
       - name: Run binary
         run: |
           ./pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }} --help
