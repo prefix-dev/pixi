@@ -73,12 +73,12 @@ platforms = ["linux-64", "osx-arm64"]
 activation = {scripts = ["cuda_activation.sh"]}
 system-requirements = {cuda = "12"}
 # Channels concatenate using a priority instead of overwrite, so the default channels are still used.
-# Using the priority the concatenation is controlled, default is 0, so the default channels are used first.
-channels = [{name = "nvidia", priority = "-1"}, "pytorch"] # Results in:  ["nvidia", "conda-forge", "pytorch"] if the default is `conda-forge`
+# Using the priority the concatenation is controlled, default is 0, the default channels are used last.
+# Highest priority comes first.
+channels = ["nvidia", {channel = "pytorch", priority = "-1"}] # Results in:  ["nvidia", "conda-forge", "pytorch"] when the default is `conda-forge`
 tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
-
 
 ```toml title="Define tasks as defaults of an environment" linenums="1"
 [feature.test.tasks]
@@ -371,7 +371,7 @@ pixi run test
 
     [feature.cuda]
     platforms = ["win-64", "linux-64"]
-    channels = [{name = "nvidia", priority = "-1"}, "pytorch"]
+    channels = ["nvidia", {channel = "pytorch", priority = "-1"}]
     system-requirements = {cuda = "12.1"}
 
     [feature.cuda.tasks]

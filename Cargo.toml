@@ -74,6 +74,7 @@ signal-hook = "0.3.17"
 
 [dev-dependencies]
 rattler_digest = "0.16.2"
+rstest = "0.18.2"
 serde_json = "1.0.111"
 serial_test = "2.0.0"
 tokio = { version = "1.35.1", features = ["rt"] }

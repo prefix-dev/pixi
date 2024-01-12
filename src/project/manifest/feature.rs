@@ -1,13 +1,16 @@
 use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelector};
+use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
 use crate::project::manifest::target::Targets;
 use crate::project::SpecType;
 use crate::task::Task;
 use crate::utils::spanned::PixiSpanned;
 use indexmap::IndexMap;
-use rattler_conda_types::{Channel, NamelessMatchSpec, PackageName, Platform};
+use itertools::Either;
+use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 /// The name of a feature. This is either a string or default for the default feature.
@@ -61,13 +64,92 @@ pub struct Feature {
     ///
     /// This value is `None` if this feature does not specify any channels and the default
     /// channels from the project should be used.
-    pub channels: Option<Vec<Channel>>,
+    pub channels: Option<Vec<PrioritizedChannel>>,
 
     /// Additional system requirements
     pub system_requirements: SystemRequirements,
 
     /// Target specific configuration.
     pub targets: Targets,
+}
+
+impl Feature {
+    /// Returns the dependencies of the feature for a given `spec_type` and `platform`.
+    ///
+    /// This function returns a [`Cow`]. If the dependencies are not combined or overwritten by
+    /// multiple targets than this function returns a reference to the internal dependencies.
+    ///
+    /// Returns `None` if this feature does not define any target that has any of the requested
+    /// dependencies.
+    pub fn dependencies(
+        &self,
+        spec_type: Option<SpecType>,
+        platform: Option<Platform>,
+    ) -> Option<Cow<'_, IndexMap<PackageName, NamelessMatchSpec>>> {
+        self.targets
+            .resolve(platform)
+            // Get the targets in reverse order, from least specific to most specific.
+            // This is required because the extend function will overwrite existing keys.
+            .rev()
+            .filter_map(|t| t.dependencies(spec_type))
+            .filter(|deps| !deps.is_empty())
+            .fold(None, |acc, deps| match acc {
+                None => Some(deps),
+                Some(mut acc) => {
+                    let deps_iter = match deps {
+                        Cow::Borrowed(deps) => Either::Left(
+                            deps.iter().map(|(name, spec)| (name.clone(), spec.clone())),
+                        ),
+                        Cow::Owned(deps) => Either::Right(deps.into_iter()),
+                    };
+
+                    acc.to_mut().extend(deps_iter);
+                    Some(acc)
+                }
+            })
+    }
+
+    /// Returns the PyPi dependencies of the feature for a given `platform`.
+    ///
+    /// This function returns a [`Cow`]. If the dependencies are not combined or overwritten by
+    /// multiple targets than this function returns a reference to the internal dependencies.
+    ///
+    /// Returns `None` if this feature does not define any target that has any of the requested
+    /// dependencies.
+    pub fn pypi_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> Option<Cow<'_, IndexMap<rip::types::PackageName, PyPiRequirement>>> {
+        self.targets
+            .resolve(platform)
+            // Get the targets in reverse order, from least specific to most specific.
+            // This is required because the extend function will overwrite existing keys.
+            .rev()
+            .filter_map(|t| t.pypi_dependencies.as_ref())
+            .filter(|deps| !deps.is_empty())
+            .fold(None, |acc, deps| match acc {
+                None => Some(Cow::Borrowed(deps)),
+                Some(mut acc) => {
+                    acc.to_mut().extend(
+                        deps.into_iter()
+                            .map(|(name, spec)| (name.clone(), spec.clone())),
+                    );
+                    Some(acc)
+                }
+            })
+    }
+
+    /// Returns the activation scripts for the most specific target that matches the given
+    /// `platform`.
+    ///
+    /// Returns `None` if this feature does not define any target with an activation.
+    pub fn activation_scripts(&self, platform: Option<Platform>) -> Option<&Vec<String>> {
+        self.targets
+            .resolve(platform)
+            .filter_map(|t| t.activation.as_ref())
+            .filter_map(|a| a.scripts.as_ref())
+            .next()
+    }
 }
 
 impl<'de> Deserialize<'de> for Feature {
@@ -81,8 +163,8 @@ impl<'de> Deserialize<'de> for Feature {
         struct FeatureInner {
             #[serde(default)]
             platforms: Option<PixiSpanned<Vec<Platform>>>,
-            #[serde_as(deserialize_as = "Option<Vec<super::serde::ChannelStr>>")]
-            channels: Option<Vec<Channel>>,
+            #[serde(default)]
+            channels: Option<Vec<TomlPrioritizedChannelStrOrMap>>,
             #[serde(default)]
             system_requirements: SystemRequirements,
             #[serde(default)]
@@ -132,9 +214,123 @@ impl<'de> Deserialize<'de> for Feature {
         Ok(Feature {
             name: FeatureName::Default,
             platforms: inner.platforms,
-            channels: inner.channels,
+            channels: inner.channels.map(|channels| {
+                channels
+                    .into_iter()
+                    .map(|channel| channel.into_prioritized_channel())
+                    .collect()
+            }),
             system_requirements: inner.system_requirements,
             targets: Targets::from_default_and_user_defined(default_target, inner.target),
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::project::manifest::Manifest;
+    use assert_matches::assert_matches;
+    use std::path::Path;
+
+    #[test]
+    fn test_dependencies_borrowed() {
+        let manifest = Manifest::from_str(
+            Path::new(""),
+            r#"
+        [project]
+        name = "foo"
+        platforms = ["linux-64", "osx-64", "win-64"]
+        channels = []
+
+        [dependencies]
+        foo = "1.0"
+
+        [host-dependencies]
+        foo = "2.0"
+
+        [feature.bla.dependencies]
+        foo = "2.0"
+
+        [feature.bla.host-dependencies]
+        # empty on purpose
+        "#,
+        )
+        .unwrap();
+
+        assert_matches!(
+            manifest
+                .default_feature()
+                .dependencies(Some(SpecType::Host), None)
+                .unwrap(),
+            Cow::Borrowed(_),
+            "[host-dependencies] should be borrowed"
+        );
+
+        assert_matches!(
+            manifest
+                .default_feature()
+                .dependencies(Some(SpecType::Run), None)
+                .unwrap(),
+            Cow::Borrowed(_),
+            "[dependencies] should be borrowed"
+        );
+
+        assert_matches!(
+            manifest.default_feature().dependencies(None, None).unwrap(),
+            Cow::Owned(_),
+            "combined dependencies should be owned"
+        );
+
+        let bla_feature = manifest
+            .parsed
+            .features
+            .get(&FeatureName::Named(String::from("bla")))
+            .unwrap();
+        assert_matches!(
+            bla_feature.dependencies(Some(SpecType::Run), None).unwrap(),
+            Cow::Borrowed(_),
+            "[feature.bla.dependencies] should be borrowed"
+        );
+
+        assert_matches!(
+            bla_feature.dependencies(None, None).unwrap(),
+            Cow::Borrowed(_),
+            "[feature.bla] combined dependencies should also be borrowed"
+        );
+    }
+
+    #[test]
+    fn test_activation() {
+        let manifest = Manifest::from_str(
+            Path::new(""),
+            r#"
+        [project]
+        name = "foo"
+        platforms = ["linux-64", "osx-64", "win-64"]
+        channels = []
+
+        [activation]
+        scripts = ["run.bat"]
+
+        [target.linux-64.activation]
+        scripts = ["linux-64.bat"]
+        "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            manifest.default_feature().activation_scripts(None).unwrap(),
+            &vec!["run.bat".to_string()],
+            "should have selected the activation from the [activation] section"
+        );
+        assert_eq!(
+            manifest
+                .default_feature()
+                .activation_scripts(Some(Platform::Linux64))
+                .unwrap(),
+            &vec!["linux-64.bat".to_string()],
+            "should have selected the activation from the [linux-64] section"
+        );
     }
 }

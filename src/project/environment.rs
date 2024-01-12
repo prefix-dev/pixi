@@ -2,12 +2,14 @@ use super::{
     dependencies::Dependencies,
     errors::{UnknownTask, UnsupportedPlatformError},
     manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
-    SpecType,
+    PyPiRequirement, SpecType,
 };
 use crate::{task::Task, Project};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
+use itertools::{Either, Itertools};
 use rattler_conda_types::{Channel, Platform};
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::Debug,
 };
@@ -95,6 +97,14 @@ impl<'p> Environment<'p> {
                     .or(Some(&self.project.manifest.parsed.project.channels)),
             })
             .flatten()
+            // The prioritized channels contain a priority, sort on this priority.
+            // Higher priority comes first. [-10, 1, 0 ,2] -> [2, 1, 0, -10]
+            .sorted_by(|a, b| {
+                let a = a.priority.unwrap_or(0);
+                let b = b.priority.unwrap_or(0);
+                b.cmp(&a)
+            })
+            .map(|prioritized_channel| &prioritized_channel.channel)
             .collect()
     }
 
@@ -174,29 +184,58 @@ impl<'p> Environment<'p> {
 
     /// Returns the dependencies to install for this environment.
     ///
-    /// The dependencies of all features are combined this means that if two features define a
+    /// The dependencies of all features are combined. This means that if two features define a
     /// requirement for the same package that both requirements are returned. The different
-    /// requirements per package are sorted from the most specific feature/target to the least
-    /// specific.
+    /// requirements per package are sorted in the same order as the features they came from.
     pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
         self.features()
-            .filter_map(|f| {
-                f.targets
-                    .resolve(platform)
-                    .rev()
-                    .map(|t| t.dependencies(kind))
-                    .fold(None, |acc: Option<Dependencies>, deps| {
-                        Some(match acc {
-                            None => Dependencies::from(deps.into_owned()),
-                            Some(mut acc) => {
-                                acc.extend_overwrite(deps.into_owned());
-                                acc
-                            }
-                        })
-                    })
-            })
+            .filter_map(|f| f.dependencies(kind, platform))
+            .map(|deps| Dependencies::from(deps.into_owned()))
             .reduce(|acc, deps| acc.union(&deps))
             .unwrap_or_default()
+    }
+
+    /// Returns the PyPi dependencies to install for this environment.
+    ///
+    /// The dependencies of all features are combined. This means that if two features define a
+    /// requirement for the same package that both requirements are returned. The different
+    /// requirements per package are sorted in the same order as the features they came from.
+    pub fn pypi_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> IndexMap<rip::types::PackageName, Vec<PyPiRequirement>> {
+        self.features()
+            .filter_map(|f| f.pypi_dependencies(platform))
+            .fold(IndexMap::default(), |mut acc, deps| {
+                // Either clone the values from the Cow or move the values from the owned map.
+                let deps_iter = match deps {
+                    Cow::Borrowed(borrowed) => Either::Left(
+                        borrowed
+                            .into_iter()
+                            .map(|(name, spec)| (name.clone(), spec.clone())),
+                    ),
+                    Cow::Owned(owned) => Either::Right(owned.into_iter()),
+                };
+
+                // Add the requirements to the accumulator.
+                for (name, spec) in deps_iter {
+                    acc.entry(name).or_default().push(spec);
+                }
+
+                acc
+            })
+    }
+
+    /// Returns the activation scripts that should be run when activating this environment.
+    ///
+    /// The activation scripts of all features are combined in the order they are defined for the
+    /// environment.
+    pub fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
+        self.features()
+            .filter_map(|f| f.activation_scripts(platform))
+            .flatten()
+            .cloned()
+            .collect()
     }
 
     /// Validates that the given platform is supported by this environment.
@@ -362,5 +401,92 @@ mod test {
             .unwrap()
             .dependencies(None, None);
         assert_display_snapshot!(format_dependencies(deps));
+    }
+
+    #[test]
+    fn test_activation() {
+        let manifest = Project::from_str(
+            Path::new(""),
+            r#"
+        [project]
+        name = "foobar"
+        channels = []
+        platforms = ["linux-64", "osx-64"]
+
+        [activation]
+        scripts = ["default.bat"]
+
+        [target.linux-64.activation]
+        scripts = ["linux.bat"]
+
+        [feature.foo.activation]
+        scripts = ["foo.bat"]
+
+        [environments]
+        foo = ["foo"]
+                "#,
+        )
+        .unwrap();
+
+        let foo_env = manifest.environment("foo").unwrap();
+        assert_eq!(
+            foo_env.activation_scripts(None),
+            vec!["foo.bat".to_string(), "default.bat".to_string()]
+        );
+        assert_eq!(
+            foo_env.activation_scripts(Some(Platform::Linux64)),
+            vec!["foo.bat".to_string(), "linux.bat".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_channel_priorities() {
+        let manifest = Project::from_str(
+            Path::new(""),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "osx-64"]
+
+        [feature.foo]
+        channels = [{channel = "nvidia", priority = 1}, "pytorch"]
+
+        [feature.bar]
+        channels = [{ channel = "bar", priority = -10 }, "barry"]
+
+        [environments]
+        foo = ["foo"]
+        bar = ["bar"]
+        foobar = ["foo", "bar"]
+        "#,
+        )
+        .unwrap();
+
+        let foobar_channels = manifest.environment("foobar").unwrap().channels();
+        assert_eq!(
+            foobar_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["nvidia", "pytorch", "barry", "conda-forge", "bar"]
+        );
+        let foo_channels = manifest.environment("foo").unwrap().channels();
+        assert_eq!(
+            foo_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["nvidia", "pytorch", "conda-forge"]
+        );
+
+        let bar_channels = manifest.environment("bar").unwrap().channels();
+        assert_eq!(
+            bar_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["barry", "conda-forge", "bar"]
+        );
     }
 }
