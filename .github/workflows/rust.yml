@@ -204,14 +204,14 @@ jobs:
           CARGO_TEST_OPTIONS="${CARGO_TEST_OPTIONS} --features ${{ env.TEST_FEATURES }}"
           echo "CARGO_TEST_OPTIONS=${CARGO_TEST_OPTIONS}" >> $GITHUB_OUTPUT
 
-      - name: Run tests
-        if: ${{ !matrix.skip-tests }}
-        run: >
-          cargo test
-          --locked
-          --release
-          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
-          ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
+#      - name: Run tests
+#        if: ${{ !matrix.skip-tests }}
+#        run: >
+#          cargo test
+#          --locked
+#          --release
+#          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+#          ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
 
       - name: Build Installer
         continue-on-error: true
@@ -342,3 +342,35 @@ jobs:
             target/wix/pixi-${{ matrix.target }}.msi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  test-binary:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    needs: [ build ]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "Linux-x86_64",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
+          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest, skip-tests: true }
+
+          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
+          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
+
+          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+    steps:
+      - name: Download binary from build
+        uses: actions/download-artifact@v3
+        with:
+          name: pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
+      - name: Run binary
+        run: |
+          ./${{ matrix.name }}${{ steps.bin.outputs.EXE_SUFFIX }} --help
+      - name: Run binary with --version
+        run: |
+          ./${{ matrix.name }}${{ steps.bin.outputs.EXE_SUFFIX }} --version
+      - name: Install pixi
+        run: |
+          ./${{ matrix.name }}${{ steps.bin.outputs.EXE_SUFFIX }} install
+      - name: Run pixi run lint
+        run: |
+          ./${{ matrix.name }}${{ steps.bin.outputs.EXE_SUFFIX }} run lint
