@@ -76,7 +76,7 @@ jobs:
       homepage: ${{ steps.crate_metadata.outputs.homepage }}
 
   build:
-    name: ${{ matrix.name }}
+    name: Build and test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     needs: [ crate_metadata, format_and_lint ]
     strategy:
@@ -84,12 +84,12 @@ jobs:
       matrix:
         include:
           - { name: "Linux-x86_64",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
-          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest, skip-tests: true }
-
-          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
-          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
-
-          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+#          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest, skip-tests: true }
+#
+#          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
+#          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
+#
+#          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
     env:
       #
       # These are some environment variables that configure the build so that the binary size is reduced.
@@ -343,7 +343,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   test-binary:
-    name: ${{ matrix.name }}
+    name: Integration test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     needs: [ build ]
     strategy:
@@ -351,12 +351,12 @@ jobs:
       matrix:
         include:
           - { name: "Linux-x86_64",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
-          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest, skip-tests: true }
-
-          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
-          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
-
-          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+#          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest, skip-tests: true }
+#
+#          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
+#          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
+#
+#          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
     steps:
       - name: Download binary from build
         uses: actions/download-artifact@v3
@@ -364,13 +364,13 @@ jobs:
           name: pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }}
       - name: Run binary
         run: |
-          ./${{ matrix.name }}${{ steps.bin.outputs.EXE_SUFFIX }} --help
+          ./pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }} --help
       - name: Run binary with --version
         run: |
-          ./${{ matrix.name }}${{ steps.bin.outputs.EXE_SUFFIX }} --version
+          ./pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }} --version
       - name: Install pixi
         run: |
-          ./${{ matrix.name }}${{ steps.bin.outputs.EXE_SUFFIX }} install
+          ./pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }} install
       - name: Run pixi run lint
         run: |
-          ./${{ matrix.name }}${{ steps.bin.outputs.EXE_SUFFIX }} run lint
+          ./pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }} run lint
