@@ -138,6 +138,18 @@ impl Feature {
                 }
             })
     }
+
+    /// Returns the activation scripts for the most specific target that matches the given
+    /// `platform`.
+    ///
+    /// Returns `None` if this feature does not define any target with an activation.
+    pub fn activation_scripts(&self, platform: Option<Platform>) -> Option<&Vec<String>> {
+        self.targets
+            .resolve(platform)
+            .filter_map(|t| t.activation.as_ref())
+            .filter_map(|a| a.scripts.as_ref())
+            .next()
+    }
 }
 
 impl<'de> Deserialize<'de> for Feature {
@@ -285,6 +297,40 @@ mod test {
             bla_feature.dependencies(None, None).unwrap(),
             Cow::Borrowed(_),
             "[feature.bla] combined dependencies should also be borrowed"
+        );
+    }
+
+    #[test]
+    fn test_activation() {
+        let manifest = Manifest::from_str(
+            Path::new(""),
+            r#"
+        [project]
+        name = "foo"
+        platforms = ["linux-64", "osx-64", "win-64"]
+        channels = []
+
+        [activation]
+        scripts = ["run.bat"]
+
+        [target.linux-64.activation]
+        scripts = ["linux-64.bat"]
+        "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            manifest.default_feature().activation_scripts(None).unwrap(),
+            &vec!["run.bat".to_string()],
+            "should have selected the activation from the [activation] section"
+        );
+        assert_eq!(
+            manifest
+                .default_feature()
+                .activation_scripts(Some(Platform::Linux64))
+                .unwrap(),
+            &vec!["linux-64.bat".to_string()],
+            "should have selected the activation from the [linux-64] section"
         );
     }
 }

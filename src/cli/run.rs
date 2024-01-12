@@ -183,7 +183,21 @@ pub async fn run_activation_async(
     prefix: Prefix,
 ) -> miette::Result<HashMap<String, String>> {
     let platform = Platform::current();
-    let additional_activation_scripts = project.activation_scripts(platform)?;
+    let additional_activation_scripts = project.activation_scripts(Some(platform));
+
+    // Make sure the scripts exists
+    let (additional_activation_scripts, missing_scripts): (Vec<_>, _) =
+        additional_activation_scripts
+            .into_iter()
+            .map(|script| project.root().join(script))
+            .partition(|full_path| full_path.is_file());
+
+    if !missing_scripts.is_empty() {
+        tracing::warn!(
+            "Could not find activation scripts: {}",
+            missing_scripts.iter().map(|p| p.display()).format(", ")
+        );
+    }
 
     // Check if the platform and activation script extension match. For Platform::Windows the extension should be .bat and for All other platforms it should be .sh or .bash.
     for script in additional_activation_scripts.iter() {

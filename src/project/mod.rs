@@ -6,7 +6,6 @@ pub mod metadata;
 pub mod virtual_packages;
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
-use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
 use rattler_conda_types::{
@@ -299,6 +298,13 @@ impl Project {
         self.default_environment().pypi_dependencies(platform)
     }
 
+    /// Returns the all specified activation scripts that are used in the current platform.
+    ///
+    /// TODO: Remove this function and use the `activation_scripts function from the default environment instead.
+    pub fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
+        self.default_environment().activation_scripts(platform)
+    }
+
     /// Returns true if the project contains any reference pypi dependencies. Even if just
     /// `[pypi-dependencies]` is specified without any requirements this will return true.
     pub fn has_pypi_dependencies(&self) -> bool {
@@ -330,43 +336,6 @@ impl Project {
                 .map(Arc::new)
             })?
             .as_ref())
-    }
-
-    /// Returns the all specified activation scripts that are used in the current platform.
-    pub fn activation_scripts(&self, platform: Platform) -> miette::Result<Vec<PathBuf>> {
-        let feature = self.manifest.default_feature();
-
-        // Select the platform-specific activation scripts that is most specific
-        let activation = feature
-            .targets
-            .resolve(Some(platform))
-            .filter_map(|target| target.activation.as_ref())
-            .next();
-
-        // Get the activation scripts
-        let all_scripts = activation
-            .into_iter()
-            .flat_map(|activation| activation.scripts.iter().flatten())
-            .collect_vec();
-
-        // Check if scripts exist
-        let mut full_paths = Vec::new();
-        let mut missing_scripts = Vec::new();
-        for script_name in &all_scripts {
-            let script_path = self.root().join(script_name);
-            if script_path.exists() {
-                full_paths.push(script_path);
-                tracing::debug!("Found activation script: {:?}", script_name);
-            } else {
-                missing_scripts.push(script_name);
-            }
-        }
-
-        if !missing_scripts.is_empty() {
-            tracing::warn!("can't find activation scripts: {:?}", missing_scripts);
-        }
-
-        Ok(full_paths)
     }
 }
 
@@ -404,6 +373,7 @@ impl Display for DependencyKind {
 mod tests {
     use super::*;
     use insta::{assert_debug_snapshot, assert_display_snapshot};
+    use itertools::Itertools;
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use std::str::FromStr;
 
@@ -519,11 +489,8 @@ mod tests {
 
     #[test]
     fn test_activation_scripts() {
-        fn fmt_activation_scripts(scripts: Vec<PathBuf>) -> String {
-            scripts
-                .iter()
-                .format_with("\n", |p, f| f(&format_args!("{}", p.display())))
-                .to_string()
+        fn fmt_activation_scripts(scripts: Vec<String>) -> String {
+            scripts.iter().join("\n")
         }
 
         // Using known files in the project so the test succeed including the file check.
@@ -546,9 +513,9 @@ mod tests {
 
         assert_display_snapshot!(format!(
             "= Linux64\n{}\n\n= Win64\n{}\n\n= OsxArm64\n{}",
-            fmt_activation_scripts(project.activation_scripts(Platform::Linux64).unwrap()),
-            fmt_activation_scripts(project.activation_scripts(Platform::Win64).unwrap()),
-            fmt_activation_scripts(project.activation_scripts(Platform::OsxArm64).unwrap())
+            fmt_activation_scripts(project.activation_scripts(Some(Platform::Linux64))),
+            fmt_activation_scripts(project.activation_scripts(Some(Platform::Win64))),
+            fmt_activation_scripts(project.activation_scripts(Some(Platform::OsxArm64)))
         ));
     }
 

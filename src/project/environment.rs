@@ -226,6 +226,18 @@ impl<'p> Environment<'p> {
             })
     }
 
+    /// Returns the activation scripts that should be run when activating this environment.
+    ///
+    /// The activation scripts of all features are combined in the order they are defined for the
+    /// environment.
+    pub fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
+        self.features()
+            .filter_map(|f| f.activation_scripts(platform))
+            .flatten()
+            .cloned()
+            .collect()
+    }
+
     /// Validates that the given platform is supported by this environment.
     fn validate_platform_support(
         &self,
@@ -389,6 +401,42 @@ mod test {
             .unwrap()
             .dependencies(None, None);
         assert_display_snapshot!(format_dependencies(deps));
+    }
+
+    #[test]
+    fn test_activation() {
+        let manifest = Project::from_str(
+            Path::new(""),
+            r#"
+        [project]
+        name = "foobar"
+        channels = []
+        platforms = ["linux-64", "osx-64"]
+
+        [activation]
+        scripts = ["default.bat"]
+
+        [target.linux-64.activation]
+        scripts = ["linux.bat"]
+
+        [feature.foo.activation]
+        scripts = ["foo.bat"]
+
+        [environments]
+        foo = ["foo"]
+                "#,
+        )
+        .unwrap();
+
+        let foo_env = manifest.environment("foo").unwrap();
+        assert_eq!(
+            foo_env.activation_scripts(None),
+            vec!["foo.bat".to_string(), "default.bat".to_string()]
+        );
+        assert_eq!(
+            foo_env.activation_scripts(Some(Platform::Linux64)),
+            vec!["foo.bat".to_string(), "linux.bat".to_string()]
+        );
     }
 
     #[test]
