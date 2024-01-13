@@ -12,6 +12,13 @@ use crate::lock_file::load_lock_file;
 use crate::project::SpecType;
 use crate::Project;
 
+// an enum to sort by size or name
+#[derive(clap::ValueEnum, Clone, Debug, Serialize)]
+pub enum SortBy {
+    Size,
+    Name,
+}
+
 /// List project's packages. Highlighted packages are explicit dependencies.
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
@@ -32,9 +39,9 @@ pub struct Args {
     #[arg(long)]
     pub json_pretty: bool,
 
-    /// Whether to sort the package list by name
-    #[arg(long)]
-    pub no_sort: bool,
+    /// Sorting strategy
+    #[arg(long, default_value = "name", value_enum)]
+    pub sort_by: SortBy,
 
     /// The path to 'pixi.toml'
     #[arg(long)]
@@ -98,9 +105,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .collect::<Vec<_>>();
     }
 
-    // Sort packages by name if needed
-    if !args.no_sort {
-        packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
+    // Sort according to the sorting strategy
+    match args.sort_by {
+        SortBy::Size => {
+            packages_to_output
+                .sort_by(|a, b| a.size_bytes.unwrap_or(0).cmp(&b.size_bytes.unwrap_or(0)));
+        }
+        SortBy::Name => {
+            packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
+        }
     }
 
     // Print as table string or JSON
