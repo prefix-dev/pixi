@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use rattler_conda_types::Platform;
-use rattler_lock::LockedDependencyKind;
+use rattler_lock::{LockedDependency, LockedDependencyKind};
 use serde::Serialize;
 
 use crate::lock_file::load_lock_file;
@@ -82,49 +82,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Convert the the list of package record to specific output format
     let mut packages_to_output = locked_deps
         .iter()
-        .map(|p| {
-            match p.kind {
-                // Conda package
-                LockedDependencyKind::Conda(_) => {
-                    let name = p.name.clone();
-                    let version = p.version.clone();
-                    let kind = "conda".to_string();
-                    let build = p.as_conda().unwrap().build.clone();
-                    // NOTE(hadim): channel is not available, only the source url...
-                    // let channel = Some(p.as_conda().unwrap().url.to_string().clone());
-                    let channel = Some("".to_string());
-                    let is_explicit = project_dependency_names.contains(&name);
-
-                    PackageToOutput {
-                        name,
-                        version,
-                        build,
-                        kind,
-                        channel,
-                        is_explicit,
-                    }
-                }
-                // Pypi package
-                LockedDependencyKind::Pypi(_) => {
-                    let name = p.name.clone();
-                    let version = p.version.clone();
-                    let kind = "pypi".to_string();
-                    let build = p.as_pypi().unwrap().build.clone();
-                    let channel = Some("".to_string());
-                    let is_explicit = project_dependency_names.contains(&name);
-
-                    PackageToOutput {
-                        name,
-                        version,
-                        build,
-                        kind,
-                        channel,
-                        is_explicit,
-                    }
-                }
-            }
-        })
-        .collect::<Vec<_>>();
+        .map(|p| create_package_to_output(p, &project_dependency_names))
+        .collect::<Vec<PackageToOutput>>();
 
     // Filter packages by regex if needed
     if let Some(regex) = args.regex {
@@ -137,12 +96,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Sort packages by name if needed
     if !args.no_sort {
-        // Sort packages by name
         packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
     }
 
     // Print as table string or JSON
-    if args.json {
+    if args.json || args.json_pretty {
         // print packages as json
         json_packages(packages_to_output, args.json_pretty);
     } else {
@@ -156,6 +114,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 fn print_packages(packages: Vec<PackageToOutput>) {
     // NOTE(hadim): maybe switch to a third party package or a custom dynamic printing logic
     // to adapt the table column width to the content of the table and the terminal.
+    // https://github.com/Nukesor/comfy-table/ could be a good candidate.
 
     println!(
         "{:40} {:14} {:19} {:6} {:19}",
@@ -192,4 +151,47 @@ fn json_packages(packages: Vec<PackageToOutput>, json_pretty: bool) {
     .unwrap();
 
     println!("{}", json_string);
+}
+
+fn create_package_to_output(
+    p: &LockedDependency,
+    project_dependency_names: &[String],
+) -> PackageToOutput {
+    let name = p.name.clone();
+    let version = p.version.clone();
+
+    let kind = match p.kind {
+        LockedDependencyKind::Conda(_) => "conda".to_string(),
+        LockedDependencyKind::Pypi(_) => "pypi".to_string(),
+    };
+    let build = match p.kind {
+        LockedDependencyKind::Conda(_) => p.as_conda().unwrap().build.clone(),
+        LockedDependencyKind::Pypi(_) => p.as_pypi().unwrap().build.clone(),
+    };
+
+    let channel = Some("".to_string());
+
+    // NOTE(hadim): does not work - returns `conda-forge/osx-arm64/tk-8.6.13-h5083fa2_1.conda`
+    // let channel = match p.kind {
+    //     LockedDependencyKind::Conda(_) => {
+    //         Channel::from_url(
+    //             p.as_conda().unwrap().url.clone(),
+    //             Some(vec![Platform::current()]),
+    //             &ChannelConfig::default(),
+    //         )
+    //         .name
+    //     }
+    //     LockedDependencyKind::Pypi(_) => Some("".to_string()),
+    // };
+
+    let is_explicit = project_dependency_names.contains(&name);
+
+    PackageToOutput {
+        name,
+        version,
+        build,
+        kind,
+        channel,
+        is_explicit,
+    }
 }
