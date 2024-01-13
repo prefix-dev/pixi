@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use comfy_table::presets::NOTHING;
+use comfy_table::{Attribute, Cell, Color, ContentArrangement, Table};
+use human_bytes::human_bytes;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockedDependency, LockedDependencyKind};
 use serde::Serialize;
@@ -43,6 +46,7 @@ struct PackageToOutput {
     name: String,
     version: String,
     build: Option<String>,
+    size_bytes: Option<u64>,
     kind: String,
     channel: Option<String>,
     is_explicit: bool,
@@ -105,40 +109,95 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         json_packages(packages_to_output, args.json_pretty);
     } else {
         // print packages as table
-        print_packages(packages_to_output);
+        print_packages_as_table(packages_to_output);
     }
 
     Ok(())
 }
 
-fn print_packages(packages: Vec<PackageToOutput>) {
-    // NOTE(hadim): maybe switch to a third party package or a custom dynamic printing logic
-    // to adapt the table column width to the content of the table and the terminal.
-    // https://github.com/Nukesor/comfy-table/ could be a good candidate.
+// fn print_packages(packages: Vec<PackageToOutput>) {
+//     // NOTE(hadim): maybe switch to a third party package or a custom dynamic printing logic
+//     // to adapt the table column width to the content of the table and the terminal.
+//     // https://github.com/Nukesor/comfy-table/ could be a good candidate.
 
-    println!(
-        "{:40} {:14} {:19} {:6} {:19}",
-        console::style("Package").bold(),
-        console::style("Version").bold(),
-        console::style("Build").bold(),
-        console::style("Kind").bold(),
-        console::style("Channel").bold(),
-    );
+//     println!(
+//         "{:40} {:14} {:19} {:12} {:6} {:19}",
+//         console::style("Package").bold(),
+//         console::style("Version").bold(),
+//         console::style("Build").bold(),
+//         console::style("Size").bold(),
+//         console::style("Kind").bold(),
+//         console::style("Channel").bold(),
+//     );
+
+//     for package in packages {
+//         // Convert size to human readable format
+//         let size_human = match package.size_bytes {
+//             Some(size_bytes) => human_bytes(size_bytes as f64).to_string(),
+//             None => "".to_string(),
+//         };
+
+//         println!(
+//             "{:40} {:14} {:19} {:12} {:6} {:19}",
+//             if package.is_explicit {
+//                 console::style(package.name).green().bright().bold()
+//             } else {
+//                 console::style(package.name)
+//             },
+//             console::style(package.version),
+//             console::style(package.build.unwrap_or_else(|| "".to_string())),
+//             console::style(size_human),
+//             console::style(package.kind),
+//             console::style(package.channel.unwrap_or_else(|| "".to_string())),
+//         );
+//     }
+// }
+
+fn print_packages_as_table(packages: Vec<PackageToOutput>) {
+    // Initialize table
+    let mut table = Table::new();
+
+    table
+        .load_preset(NOTHING)
+        // .apply_modifier(UTF8_NO_BORDERS)
+        .set_content_arrangement(ContentArrangement::Dynamic);
+
+    // Add headers
+    table.set_header(vec![
+        Cell::new("Package").add_attribute(Attribute::Bold),
+        Cell::new("Version").add_attribute(Attribute::Bold),
+        Cell::new("Build").add_attribute(Attribute::Bold),
+        Cell::new("Size").add_attribute(Attribute::Bold),
+        Cell::new("Kind").add_attribute(Attribute::Bold),
+        Cell::new("Channel").add_attribute(Attribute::Bold),
+    ]);
 
     for package in packages {
-        println!(
-            "{:40} {:14} {:19} {:6} {:19}",
-            if package.is_explicit {
-                console::style(package.name).green().bright().bold()
-            } else {
-                console::style(package.name)
-            },
-            console::style(package.version),
-            console::style(package.build.unwrap_or_else(|| "".to_string())),
-            console::style(package.kind),
-            console::style(package.channel.unwrap_or_else(|| "".to_string())),
-        );
+        // Convert size to human readable format
+        let size_human = match package.size_bytes {
+            Some(size_bytes) => human_bytes(size_bytes as f64).to_string(),
+            None => "".to_string(),
+        };
+
+        let package_name = if package.is_explicit {
+            Cell::new(package.name)
+                .fg(Color::Green)
+                .add_attribute(Attribute::Bold)
+        } else {
+            Cell::new(package.name)
+        };
+
+        table.add_row(vec![
+            package_name,
+            Cell::new(package.version),
+            Cell::new(package.build.unwrap_or_else(|| "".to_string())),
+            Cell::new(size_human),
+            Cell::new(package.kind),
+            Cell::new(package.channel.unwrap_or_else(|| "".to_string())),
+        ]);
     }
+
+    println!("{table}");
 }
 
 fn json_packages(packages: Vec<PackageToOutput>, json_pretty: bool) {
@@ -169,6 +228,11 @@ fn create_package_to_output(
         LockedDependencyKind::Pypi(_) => p.as_pypi().unwrap().build.clone(),
     };
 
+    let size_bytes = match p.kind {
+        LockedDependencyKind::Conda(_) => p.as_conda().unwrap().size,
+        LockedDependencyKind::Pypi(_) => None,
+    };
+
     let channel = Some("".to_string());
 
     // NOTE(hadim): does not work - returns `conda-forge/osx-arm64/tk-8.6.13-h5083fa2_1.conda`
@@ -190,6 +254,7 @@ fn create_package_to_output(
         name,
         version,
         build,
+        size_bytes,
         kind,
         channel,
         is_explicit,
