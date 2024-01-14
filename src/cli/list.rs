@@ -116,6 +116,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
+    if packages_to_output.is_empty() {
+        eprintln!(
+            "{}No packages found.",
+            console::style(console::Emoji("✘ ", "")).red(),
+        );
+        return Ok(());
+    }
+
     // Print as table string or JSON
     if args.json || args.json_pretty {
         // print packages as json
