@@ -140,44 +140,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-// fn print_packages(packages: Vec<PackageToOutput>) {
-//     // NOTE(hadim): maybe switch to a third party package or a custom dynamic printing logic
-//     // to adapt the table column width to the content of the table and the terminal.
-//     // https://github.com/Nukesor/comfy-table/ could be a good candidate.
-
-//     println!(
-//         "{:40} {:14} {:19} {:12} {:6} {:19}",
-//         console::style("Package").bold(),
-//         console::style("Version").bold(),
-//         console::style("Build").bold(),
-//         console::style("Size").bold(),
-//         console::style("Kind").bold(),
-//         console::style("Channel").bold(),
-//     );
-
-//     for package in packages {
-//         // Convert size to human readable format
-//         let size_human = match package.size_bytes {
-//             Some(size_bytes) => human_bytes(size_bytes as f64).to_string(),
-//             None => "".to_string(),
-//         };
-
-//         println!(
-//             "{:40} {:14} {:19} {:12} {:6} {:19}",
-//             if package.is_explicit {
-//                 console::style(package.name).green().bright().bold()
-//             } else {
-//                 console::style(package.name)
-//             },
-//             console::style(package.version),
-//             console::style(package.build.unwrap_or_else(|| "".to_string())),
-//             console::style(size_human),
-//             console::style(package.kind),
-//             console::style(package.channel.unwrap_or_else(|| "".to_string())),
-//         );
-//     }
-// }
-
 fn print_packages_as_table(packages: &Vec<PackageToOutput>) {
     // Initialize table
     let mut table = Table::new();
