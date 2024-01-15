@@ -2,7 +2,7 @@ use crate::{
     consts, default_authenticated_client, install, install_pypi, lock_file, prefix::Prefix,
     progress, Project,
 };
-use miette::{Context, IntoDiagnostic, LabeledSpan};
+use miette::{Context, IntoDiagnostic};
 
 use crate::lock_file::lock_file_satisfies_project;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
@@ -57,29 +57,15 @@ fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
 ///     1. It verifies that the prefix location is unchanged.
 ///     2. It verifies that the project supports the current platform.
 ///     3. It verifies that the system requirements are met.
-pub fn sanity_check_project(project: &Project, no_install: bool) -> miette::Result<()> {
+pub fn sanity_check_project(project: &Project, no_install: &mut bool) -> miette::Result<()> {
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.pixi_dir().join(consts::PREFIX_FILE_NAME).as_path())?;
 
     // Make sure the project supports the current platform
     let platform = Platform::current();
     if !project.platforms().contains(&platform) {
-        let span = project.manifest.parsed.project.platforms.span();
-        if no_install {
-            tracing::warn!("Adding dependency for unsupported platform ({platform}).")
-        } else {
-            return Err(miette::miette!(
-                help = format!(
-                    "The project needs to be configured to support your platform ({platform})."
-                ),
-                labels = vec![LabeledSpan::at(
-                    span.unwrap_or_default(),
-                    format!("add '{platform}' here"),
-                )],
-                "the project is not configured for your current platform"
-            )
-            .with_source_code(project.manifest_named_source()));
-        };
+        *no_install = true;
+        tracing::warn!("Adding dependency for unsupported platform ({platform}).")
     }
 
     // Make sure the system requirements are met
@@ -128,11 +114,11 @@ impl LockFileUsage {
 pub async fn get_up_to_date_prefix(
     project: &Project,
     usage: LockFileUsage,
-    no_install: bool,
+    mut no_install: bool,
     sparse_repo_data: Option<Vec<SparseRepoData>>,
 ) -> miette::Result<Prefix> {
     // Make sure the project is in a sane state
-    sanity_check_project(project, no_install)?;
+    sanity_check_project(project, &mut no_install)?;
 
     // Start loading the installed packages in the background
     let prefix = Prefix::new(project.environment_dir())?;
