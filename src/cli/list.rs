@@ -70,7 +70,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let platform = args.platform.unwrap_or_else(Platform::current);
 
     // Load the environment
-    // NOTE(hadim): make it an argument once environments are implemented.
+    // TODO: NOTE(hadim): make it an argument once environments are implemented.
     // let environment = project.default_environment();
 
     // Load the lockfile
