@@ -4,7 +4,7 @@ use clap::Parser;
 use comfy_table::presets::NOTHING;
 use comfy_table::{Attribute, Cell, Color, ContentArrangement, Table};
 use human_bytes::human_bytes;
-use rattler_conda_types::Platform;
+use rattler_conda_types::{Channel, ChannelConfig, Platform};
 use rattler_lock::{LockedDependency, LockedDependencyKind};
 use serde::Serialize;
 
@@ -230,20 +230,38 @@ fn create_package_to_output(
         LockedDependencyKind::Pypi(_) => None,
     };
 
-    let source = Some("".to_string());
+    let source = match p.kind {
+        LockedDependencyKind::Conda(_) => {
+            let dirty_name = Channel::from_url(
+                p.as_conda().unwrap().url.clone(),
+                Some(vec![Platform::current()]),
+                &ChannelConfig::default(),
+            )
+            .name;
 
-    // NOTE(hadim): does not work - returns `conda-forge/osx-arm64/tk-8.6.13-h5083fa2_1.conda`
-    // let source = match p.kind {
-    //     LockedDependencyKind::Conda(_) => {
-    //         Channel::from_url(
-    //             p.as_conda().unwrap().url.clone(),
-    //             Some(vec![Platform::current()]),
-    //             &ChannelConfig::default(),
-    //         )
-    //         .name
-    //     }
-    //     LockedDependencyKind::Pypi(_) => Some("".to_string()),
-    // };
+            // NOTE(hadim): this a bit fragile and custom. Consider making it more robust
+            // with a dedicated upstream function in rattler maybe.
+            let name = match dirty_name {
+                Some(dirty_name) => dirty_name
+                    .split("/")
+                    .nth(0)
+                    .unwrap_or(&dirty_name)
+                    .to_string(),
+                None => "".to_string(),
+            };
+
+            Some(name)
+        }
+        LockedDependencyKind::Pypi(_) => {
+            let source = p.as_pypi().unwrap().source.clone();
+
+            // NOTE(hadim): currently not set at least for `examples/pypi/pixi.toml
+            match source {
+                Some(source) => Some(source.to_string()),
+                None => Some("".to_string()),
+            }
+        }
+    };
 
     let is_explicit = project_dependency_names.contains(&name);
 
