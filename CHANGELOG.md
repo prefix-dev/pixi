@@ -4,6 +4,57 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.12.0] - 2024-01-15
+### ✨ Highlights
+
+- Some great community contributions, `pixi global upgrade`, `pixi project version` commands, a `PIXI_HOME` variable.
+- A ton of refactor work to prepare for the [multi-environment](https://pixi.sh/design_proposals/multi_environment_proposal/) feature.
+  - Note that there are no extra environments created yet, but you can just specify them in the `pixi.toml` file already.
+  - Next we'll build the actual environments.
+
+### 📃 Details
+
+#### Added
+- Add `global upgrade` command to pixi by @trueleo in [#614](https://github.com/prefix-dev/pixi/pull/614)
+- Add configurable `PIXI_HOME` by @chawyehsu in [#627](https://github.com/prefix-dev/pixi/pull/627)
+- Add `--pypi` option to `pixi remove` by @marcelotrevisani in https://github.com/prefix-dev/pixi/pull/602
+- PrioritizedChannels to specify channel priority by @ruben-arts in https://github.com/prefix-dev/pixi/pull/658
+- Add `project version {major,minor,patch}` CLIs by @hadim in https://github.com/prefix-dev/pixi/pull/633
+
+
+#### Changed
+- Refactored project model using targets, features and environments by @baszalmstra in https://github.com/prefix-dev/pixi/pull/616
+- Move code from `Project` to `Environment` by @baszalmstra in [#630](https://github.com/prefix-dev/pixi/pull/630)
+- Refactored `system-requirements` from Environment by @baszalmstra in [#632](https://github.com/prefix-dev/pixi/pull/632)
+- Extract `activation.scripts` into Environment by @baszalmstra in [#659](https://github.com/prefix-dev/pixi/pull/659)
+- Extract `pypi-dependencies` from Environment by @baszalmstra in https://github.com/prefix-dev/pixi/pull/656
+- De-serialization of `features` and `environments` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/636
+
+#### Fixed
+- Make install.sh also work with wget if curl is not available by @wolfv in [#644](https://github.com/prefix-dev/pixi/pull/644)
+- Use source build for rattler by @ruben-arts
+- Check for pypi-dependencies before amending the pypi purls by @ruben-arts in [#661](https://github.com/prefix-dev/pixi/pull/661)
+- Don't allow the use of reflinks by @ruben-arts in [#662](https://github.com/prefix-dev/pixi/pull/662)
+
+#### Removed
+- Remove windows and unix system requirements by @baszalmstra in [#635](https://github.com/prefix-dev/pixi/pull/635)
+
+#### Documentation
+- Document the channel logic by @ruben-arts in https://github.com/prefix-dev/pixi/pull/610
+- Update the instructions for installing on Arch Linux by @orhun in https://github.com/prefix-dev/pixi/pull/653
+- Update Community.md by @KarelZe in https://github.com/prefix-dev/pixi/pull/654
+- Replace contributions.md with contributing.md and make it more standardized by @ruben-arts in https://github.com/prefix-dev/pixi/pull/649
+- Remove `windows` and `unix` system requirements by @baszalmstra in https://github.com/prefix-dev/pixi/pull/635
+- Add `CODE_OF_CONDUCT.md` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/648
+- Removed remaining .ps1 references by @bahugo in https://github.com/prefix-dev/pixi/pull/643
+
+## New Contributors
+* @marcelotrevisani made their first contribution in https://github.com/prefix-dev/pixi/pull/602
+* @trueleo made their first contribution in https://github.com/prefix-dev/pixi/pull/614
+* @bahugo made their first contribution in https://github.com/prefix-dev/pixi/pull/643
+* @KarelZe made their first contribution in https://github.com/prefix-dev/pixi/pull/654
+
+**Full Changelog**: https://github.com/prefix-dev/pixi/compare/v0.11.0...v0.12.0
 
 ## [0.11.1] - 2024-01-06
 
@@ -14,8 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.11.0] - 2024-01-05
 ### ✨ Highlights
 
-Lots of important and preparations for the pypi `sdist` and multi environment feature
-Lots of new contributors that help `pixi` improve!
+- Lots of important and preparations for the pypi `sdist` and multi environment feature
+- Lots of new contributors that help `pixi` improve!
 
 ### 📃 Details
 #### Added
