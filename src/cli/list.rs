@@ -127,10 +127,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Print as table string or JSON
     if args.json || args.json_pretty {
         // print packages as json
-        json_packages(packages_to_output, args.json_pretty);
+        json_packages(&packages_to_output, args.json_pretty);
     } else {
         // print packages as table
-        print_packages_as_table(packages_to_output);
+        print_packages_as_table(&packages_to_output);
     }
 
     Ok(())
@@ -174,7 +174,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 //     }
 // }
 
-fn print_packages_as_table(packages: Vec<PackageToOutput>) {
+fn print_packages_as_table(packages: &Vec<PackageToOutput>) {
     // Initialize table
     let mut table = Table::new();
 
@@ -201,27 +201,37 @@ fn print_packages_as_table(packages: Vec<PackageToOutput>) {
         };
 
         let package_name = if package.is_explicit {
-            Cell::new(package.name)
+            Cell::new(&package.name)
                 .fg(Color::Green)
                 .add_attribute(Attribute::Bold)
         } else {
-            Cell::new(package.name)
+            Cell::new(&package.name)
         };
 
         table.add_row(vec![
             package_name,
-            Cell::new(package.version),
-            Cell::new(package.build.unwrap_or_else(|| "".to_string())),
+            Cell::new(&package.version),
+            Cell::new(
+                package
+                    .build
+                    .as_ref()
+                    .map_or_else(|| "".to_string(), |b| b.to_owned()),
+            ),
             Cell::new(size_human),
-            Cell::new(package.kind),
-            Cell::new(package.source.unwrap_or_else(|| "".to_string())),
+            Cell::new(&package.kind),
+            Cell::new(
+                package
+                    .source
+                    .as_ref()
+                    .map_or_else(|| "".to_string(), |s| s.to_owned()),
+            ),
         ]);
     }
 
     println!("{table}");
 }
 
-fn json_packages(packages: Vec<PackageToOutput>, json_pretty: bool) {
+fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
     let json_string = if json_pretty {
         serde_json::to_string_pretty(&packages)
     } else {
