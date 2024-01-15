@@ -55,7 +55,7 @@ struct PackageToOutput {
     build: Option<String>,
     size_bytes: Option<u64>,
     kind: String,
-    channel: Option<String>,
+    source: Option<String>,
     is_explicit: bool,
 }
 
@@ -190,7 +190,7 @@ fn print_packages_as_table(packages: Vec<PackageToOutput>) {
         Cell::new("Build").add_attribute(Attribute::Bold),
         Cell::new("Size").add_attribute(Attribute::Bold),
         Cell::new("Kind").add_attribute(Attribute::Bold),
-        Cell::new("Channel").add_attribute(Attribute::Bold),
+        Cell::new("Source").add_attribute(Attribute::Bold),
     ]);
 
     for package in packages {
@@ -214,7 +214,7 @@ fn print_packages_as_table(packages: Vec<PackageToOutput>) {
             Cell::new(package.build.unwrap_or_else(|| "".to_string())),
             Cell::new(size_human),
             Cell::new(package.kind),
-            Cell::new(package.channel.unwrap_or_else(|| "".to_string())),
+            Cell::new(package.source.unwrap_or_else(|| "".to_string())),
         ]);
     }
 
@@ -254,10 +254,10 @@ fn create_package_to_output(
         LockedDependencyKind::Pypi(_) => None,
     };
 
-    let channel = Some("".to_string());
+    let source = Some("".to_string());
 
     // NOTE(hadim): does not work - returns `conda-forge/osx-arm64/tk-8.6.13-h5083fa2_1.conda`
-    // let channel = match p.kind {
+    // let source = match p.kind {
     //     LockedDependencyKind::Conda(_) => {
     //         Channel::from_url(
     //             p.as_conda().unwrap().url.clone(),
@@ -277,7 +277,7 @@ fn create_package_to_output(
         build,
         size_bytes,
         kind,
-        channel,
+        source,
         is_explicit,
     }
 }
