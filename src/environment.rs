@@ -53,30 +53,17 @@ fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
     Ok(())
 }
 
-/// Runs a number of different checks to make sure the project is in a sane state:
+/// Runs the following checks to make sure the project is in a sane state:
 ///     1. It verifies that the prefix location is unchanged.
-///     2. It verifies that the project supports the current platform.
-///     3. It verifies that the system requirements are met.
-///
-/// Returns `true` if project supports the current platform.
-pub fn sanity_check_project(project: &Project) -> miette::Result<bool> {
-    // Whether that the dependency will be installed or not.
-    let mut supported_platform = true;
-
+///     2. It verifies that the system requirements are met.
+pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.pixi_dir().join(consts::PREFIX_FILE_NAME).as_path())?;
-
-    // Make sure the project supports the current platform
-    let platform = Platform::current();
-    if !project.platforms().contains(&platform) {
-        supported_platform = false;
-        tracing::warn!("Not installing dependency on current platform: ({platform}) as it is not part of the supported platforms.");
-    }
 
     // Make sure the system requirements are met
     verify_current_platform_has_required_virtual_packages(&project.default_environment())?;
 
-    Ok(supported_platform)
+    Ok(())
 }
 
 /// Specifies how the lock-file should be updated.
@@ -122,11 +109,15 @@ pub async fn get_up_to_date_prefix(
     mut no_install: bool,
     sparse_repo_data: Option<Vec<SparseRepoData>>,
 ) -> miette::Result<Prefix> {
-    // Make sure the project is in a sane state
     // Do not install if the platform is not supported
-    if !sanity_check_project(project)? {
+    let current_platform = Platform::current();
+    if !project.platforms().contains(&current_platform) {
+        tracing::warn!("Not installing dependency on current platform: ({current_platform}) as it is not part of the supported platforms.");
         no_install = true;
     }
+
+    // Make sure the project is in a sane state
+    sanity_check_project(project)?;
 
     // Start loading the installed packages in the background
     let prefix = Prefix::new(project.environment_dir())?;
