@@ -39,8 +39,8 @@ It will only add if the package with its version constraint is able to work with
 - `--host`: Specifies a host dependency, important for building a package.
 - `--build`: Specifies a build dependency, important for building a package.
 - `--pypi`: Specifies a PyPI dependency, not a conda package.
-  Parses dependencies as [PEP508](https://peps.python.org/pep-0508/) requirements, supporting extras and versions.
-  See [configuration](configuration.md) for details.
+    Parses dependencies as [PEP508](https://peps.python.org/pep-0508/) requirements, supporting extras and versions.
+    See [configuration](configuration.md) for details.
 - `--no-install`: Don't install the package to the environment, only add the package to the lock-file.
 - `--platform (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 
@@ -193,9 +193,9 @@ moo = { depends_on = ["cow"] }
 ```
 
 !!! info
-In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the tasks.
-Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
-This is done so that the tasks defined can be run across all platforms.
+      In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the tasks.
+      Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
+      This is done so that the tasks defined can be run across all platforms.
 
 ## `shell`
 
