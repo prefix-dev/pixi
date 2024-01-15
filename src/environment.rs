@@ -13,6 +13,7 @@ use rattler_lock::CondaLock;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rip::index::PackageDb;
 use rip::python_env::PythonLocation;
+use rip::resolve::SDistResolution;
 use std::{io::ErrorKind, path::Path};
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
@@ -128,6 +129,7 @@ pub async fn get_up_to_date_prefix(
     usage: LockFileUsage,
     no_install: bool,
     sparse_repo_data: Option<Vec<SparseRepoData>>,
+    sdist_resolution: SDistResolution,
 ) -> miette::Result<Prefix> {
     // Make sure the project is in a sane state
     sanity_check_project(project)?;
@@ -189,8 +191,13 @@ pub async fn get_up_to_date_prefix(
         };
 
         if update_lock_file {
-            lock_file =
-                lock_file::update_lock_file_for_pypi(project, lock_file, &python_location).await?;
+            lock_file = lock_file::update_lock_file_for_pypi(
+                project,
+                lock_file,
+                &python_location,
+                sdist_resolution,
+            )
+            .await?;
         }
 
         if !no_install {
@@ -203,6 +210,7 @@ pub async fn get_up_to_date_prefix(
                 &python_status,
                 &python_location,
                 &project.system_requirements(),
+                sdist_resolution,
             )
             .await?;
         }
@@ -211,6 +219,8 @@ pub async fn get_up_to_date_prefix(
     Ok(prefix)
 }
 
+#[allow(clippy::too_many_arguments)]
+// TODO: refactor args into struct
 pub async fn update_prefix_pypi(
     prefix: &Prefix,
     platform: Platform,
@@ -219,6 +229,7 @@ pub async fn update_prefix_pypi(
     status: &PythonStatus,
     python_location: &PythonLocation,
     system_requirements: &SystemRequirements,
+    sdist_resolution: SDistResolution,
 ) -> miette::Result<()> {
     // Remove python packages from a previous python distribution if the python version changed.
     install_pypi::remove_old_python_distributions(prefix, platform, status)?;
@@ -234,6 +245,7 @@ pub async fn update_prefix_pypi(
             status,
             python_location,
             system_requirements,
+            sdist_resolution,
         ),
     )
     .await

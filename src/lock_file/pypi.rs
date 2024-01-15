@@ -18,6 +18,7 @@ pub async fn resolve_dependencies<'p>(
     platform: Platform,
     conda_packages: &[RepoDataRecord],
     python_location: &PythonLocation,
+    sdist_resolution: SDistResolution,
 ) -> miette::Result<Vec<PinnedPackage<'p>>> {
     let dependencies = project.pypi_dependencies(Some(platform));
     if dependencies.is_empty() {
@@ -76,7 +77,8 @@ pub async fn resolve_dependencies<'p>(
     // build source dists correctly. Let's skip them for now
     let resolution = match &python_location {
         PythonLocation::System => SDistResolution::OnlyWheels,
-        PythonLocation::Custom(_) => SDistResolution::PreferWheels,
+        // Use the resolution we have been passed in
+        PythonLocation::Custom(_) => sdist_resolution,
     };
 
     // Resolve the PyPi dependencies

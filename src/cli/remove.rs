@@ -108,7 +108,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     eprintln!("{}", sucessful_output.join("\n"));
 
     // updating prefix after removing from toml
-    let _ = get_up_to_date_prefix(&project, LockFileUsage::Update, false, None).await?;
+    let _ = get_up_to_date_prefix(
+        &project,
+        LockFileUsage::Update,
+        false,
+        None,
+        Default::default(),
+    )
+    .await?;
 
     Ok(())
 }

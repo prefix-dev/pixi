@@ -20,7 +20,7 @@ use rip::index::PackageDb;
 use rip::python_env::{
     find_distributions_in_venv, uninstall_distribution, Distribution, PythonLocation, WheelTag,
 };
-use rip::resolve::ResolveOptions;
+use rip::resolve::{ResolveOptions, SDistResolution};
 use rip::types::{
     Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Extra, NormalizedPackageName,
 };
@@ -35,6 +35,8 @@ use tokio::task::JoinError;
 pub(crate) const PIXI_PYPI_INSTALLER: &str = env!("CARGO_PKG_NAME");
 
 /// Installs and/or remove python distributions.
+// TODO: refactor arguments in struct
+#[allow(clippy::too_many_arguments)]
 pub async fn update_python_distributions(
     package_db: &PackageDb,
     prefix: &Prefix,
@@ -43,6 +45,7 @@ pub async fn update_python_distributions(
     status: &PythonStatus,
     python_location: &PythonLocation,
     system_requirements: &SystemRequirements,
+    sdist_resolution: SDistResolution,
 ) -> miette::Result<()> {
     let python_info = match status {
         PythonStatus::Changed { new, .. }
@@ -108,7 +111,7 @@ pub async fn update_python_distributions(
             &marker_environment,
             Some(&compatible_tags),
             &ResolveOptions {
-                sdist_resolution: rip::resolve::SDistResolution::PreferWheels,
+                sdist_resolution,
                 python_location: python_location.clone(),
             },
             package_db.cache_dir(),

@@ -22,6 +22,7 @@ use rattler_lock::{
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
 use rip::python_env::PythonLocation;
+use rip::resolve::SDistResolution;
 use std::{sync::Arc, time::Duration};
 
 pub use satisfiability::lock_file_satisfies_project;
@@ -159,6 +160,7 @@ pub async fn update_lock_file_for_pypi(
     project: &Project,
     lock_for_conda: CondaLock,
     python_location: &PythonLocation,
+    sdist_resolution: SDistResolution,
 ) -> miette::Result<CondaLock> {
     let platforms = project.platforms();
     let _top_level_progress =
@@ -190,6 +192,7 @@ pub async fn update_lock_file_for_pypi(
                         *platform,
                         &pb,
                         python_location,
+                        sdist_resolution,
                     )
                     .await?;
 
@@ -257,11 +260,18 @@ async fn resolve_pypi(
     platform: Platform,
     pb: &ProgressBar,
     python_location: &PythonLocation,
+    sdist_resolution: SDistResolution,
 ) -> miette::Result<LockedPackagesBuilder> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
-    let python_artifacts =
-        pypi::resolve_dependencies(project, platform, records, python_location).await?;
+    let python_artifacts = pypi::resolve_dependencies(
+        project,
+        platform,
+        records,
+        python_location,
+        sdist_resolution,
+    )
+    .await?;
 
     // Clear message
     pb.set_message("");
@@ -270,6 +280,8 @@ async fn resolve_pypi(
     for python_artifact in python_artifacts {
         let (artifact, metadata) = project
             .pypi_package_db()?
+            // No need for a WheelBuilder here since any builds should have been done during the
+            // [`python::resolve_dependencies`] call.
             .get_metadata(&python_artifact.artifacts, None)
             .await
             .expect("failed to get metadata for a package for which we have already fetched metadata during solving.")

@@ -17,7 +17,14 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
-    get_up_to_date_prefix(&project, args.lock_file_usage.into(), false, None).await?;
+    get_up_to_date_prefix(
+        &project,
+        args.lock_file_usage.into(),
+        false,
+        None,
+        Default::default(),
+    )
+    .await?;
 
     // Emit success
     eprintln!(
