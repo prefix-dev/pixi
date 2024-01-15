@@ -243,8 +243,8 @@ fn create_package_to_output(
             // with a dedicated upstream function in rattler maybe.
             let name = match dirty_name {
                 Some(dirty_name) => dirty_name
-                    .split("/")
-                    .nth(0)
+                    .split('/')
+                    .next()
                     .unwrap_or(&dirty_name)
                     .to_string(),
                 None => "".to_string(),
