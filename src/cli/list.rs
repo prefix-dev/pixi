@@ -17,6 +17,7 @@ use crate::Project;
 pub enum SortBy {
     Size,
     Name,
+    Type,
 }
 
 /// List project's packages. Highlighted packages are explicit dependencies.
@@ -113,6 +114,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         SortBy::Name => {
             packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
+        }
+        SortBy::Type => {
+            packages_to_output.sort_by(|a, b| a.kind.cmp(&b.kind));
         }
     }
 
