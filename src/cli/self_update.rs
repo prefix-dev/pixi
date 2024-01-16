@@ -66,26 +66,34 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // If args.force is false and pixi is not installed in the default location, stop here.
     match (args.force, is_pixi_binary_default_location()) {
         (false, false) => {
-            eprintln!(
-                "{}pixi is not installed in the default location:
+            let error_mesage = format!(
+                "pixi is not installed in the default location:
 
 - Default pixi location: {}
 - Pixi location detected: {}
 
 It can happen when pixi has been installed via a dedicated package manager (such as Homebrew on macOS).
 You can always use `pixi self-update --force` to force the update.",
-                console::style(console::Emoji("✘ ", "")).red(),
-                default_pixi_binary_path().to_str().unwrap(),
-                env::current_exe().unwrap().to_str().unwrap()
+                default_pixi_binary_path().to_str().expect("Could not convert the default pixi binary path to a string"),
+                env::current_exe().expect("Failed to retrieve the current pixi binary path").to_str().expect("Could not convert the current pixi binary path to a string")
             );
-            return Ok(());
+            Err(miette::miette!(error_mesage))?
         }
         (false, true) => {}
         (true, _) => {}
     }
 
     // Retrieve the target version information from github.
-    let target_version_json = retrieve_target_version(&args.version).await;
+    let target_version_json = match retrieve_target_version(&args.version).await {
+        Ok(target_version_json) => target_version_json,
+        Err(err) => {
+            let error_mesage = match args.version {
+                Some(version) => format!("The version you specified is not available: {}", version),
+                None => format!("Failed to fetch latest version from github: {}", err),
+            };
+            Err(miette::miette!(error_mesage))?
+        }
+    };
 
     // Get the target version
     let target_version = target_version_json.tag_name.trim_start_matches('v');
@@ -111,28 +119,14 @@ You can always use `pixi self-update --force` to force the update.",
     );
 
     // Get the name of the binary to download and install based on the current platform
-    let archive_name = default_archive_name().unwrap_or_else(|| {
-        eprintln!(
-            "{}Not default archive name for the current platform '{}'.",
-            console::style(console::Emoji("✘ ", "")).red(),
-            std::env::consts::OS
-        );
-        miette::Error::from("Not default archive name for the current platform")
-    });
+    let archive_name = default_archive_name()
+        .expect("Could not find the default archive name for the current platform");
 
     let url = target_version_json
         .assets
         .iter()
         .find(|asset| asset.name == archive_name)
-        .unwrap_or_else(|| {
-            eprintln!(
-                "{}Can't find the archive '{}' for the current platform '{}'.",
-                console::style(console::Emoji("✘ ", "")).red(),
-                archive_name,
-                std::env::consts::OS
-            );
-            std::process::exit(1);
-        })
+        .expect("Could not find the archive in the release")
         .browser_download_url
         .clone();
 
@@ -145,7 +139,7 @@ You can always use `pixi self-update --force` to force the update.",
         .header("User-Agent", user_agent())
         .send()
         .await
-        .unwrap();
+        .expect("Failed to download the archive");
 
     // Download the archive
     while let Some(chunk) = res.chunk().await.into_diagnostic()? {
@@ -174,12 +168,8 @@ You can always use `pixi self-update --force` to force the update.",
         let mut archive = zip::ZipArchive::new(archived_tempfile.as_file()).into_diagnostic()?;
         archive.extract(binary_tempdir).into_diagnostic()?;
     } else {
-        eprintln!(
-            "{}Unsupported archive format: {}",
-            console::style(console::Emoji("✘ ", "")).red(),
-            archive_name
-        );
-        std::process::exit(1);
+        let error_message = format!("Unsupported archive format: {}", archive_name);
+        Err(miette::miette!(error_message))?
     }
 
     println!(
@@ -202,7 +192,7 @@ You can always use `pixi self-update --force` to force the update.",
     Ok(())
 }
 
-async fn retrieve_target_version(version: &Option<String>) -> GithubRelease {
+async fn retrieve_target_version(version: &Option<String>) -> miette::Result<GithubRelease> {
     // Fetch the target version from github.
     // The target version is:
     // - the latest version if no version is specified
@@ -233,24 +223,7 @@ async fn retrieve_target_version(version: &Option<String>) -> GithubRelease {
     // compare target version with current version
     let target_version_json = serde_json::from_str::<GithubRelease>(&body);
 
-    match target_version_json {
-        Ok(target_version_json) => target_version_json,
-        Err(err) => {
-            match version {
-                Some(version) => println!(
-                    "{}The version you specified is not available: {}",
-                    console::style(console::Emoji("✘ ", "")).red(),
-                    version
-                ),
-                None => println!(
-                    "{}Failed to fetch latest version from github: {}",
-                    console::style(console::Emoji("✘ ", "")).red(),
-                    err
-                ),
-            }
-            std::process::exit(1);
-        }
-    }
+    miette::Result::from(target_version_json).into_diagnostic()
 }
 
 fn pixi_binary_name() -> String {
@@ -259,7 +232,7 @@ fn pixi_binary_name() -> String {
 
 fn default_pixi_binary_path() -> std::path::PathBuf {
     dirs::home_dir()
-        .unwrap()
+        .expect("Could not find the home directory")
         .join(".pixi")
         .join("bin")
         .join(pixi_binary_name())
@@ -270,8 +243,12 @@ fn is_pixi_binary_default_location() -> bool {
     let default_binary_path = default_pixi_binary_path();
 
     std::env::current_exe()
-        .unwrap()
+        .expect("Failed to retrieve the current pixi binary path")
         .to_str()
-        .unwrap()
-        .starts_with(default_binary_path.to_str().unwrap())
+        .expect("Could not convert the current pixi binary path to a string")
+        .starts_with(
+            default_binary_path
+                .to_str()
+                .expect("Could not convert the default pixi binary path to a string"),
+        )
 }
