@@ -68,9 +68,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         (false, false) => {
             println!(
                 "{}pixi is not installed in the default location:
+
 - Default pixi location: {}
 - Pixi location detected: {}
-\nIt can happen when pixi has been installed via a dedicated package manager (such as Homebrew on macOS).
+
+It can happen when pixi has been installed via a dedicated package manager (such as Homebrew on macOS).
 You can always use `pixi self-update --force` to force the update.",
                 console::style(console::Emoji("✘ ", "")).red(),
                 default_pixi_binary_path().to_str().unwrap(),
