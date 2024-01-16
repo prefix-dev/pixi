@@ -2677,7 +2677,6 @@ dependencies = [
  "assert_matches",
  "async-once-cell",
  "async-recursion",
- "bzip2",
  "chrono",
  "clap",
  "clap-verbosity-flag",
