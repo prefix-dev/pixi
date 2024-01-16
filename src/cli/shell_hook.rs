@@ -60,8 +60,11 @@ mod tests {
         let script = generate_activation_script().unwrap();
         if cfg!(unix) {
             assert!(script.starts_with("#!/bin/sh"));
+            assert!(script.contains("export PATH="));
+            assert!(script.contains("export CONDA_PREFIX="));
+        } else {
+            assert!(script.contains("PATH="));
+            assert!(script.contains("CONDA_PREFIX="));
         }
-        assert!(script.contains("export PATH="));
-        assert!(script.contains("export CONDA_PREFIX="));
     }
 }
