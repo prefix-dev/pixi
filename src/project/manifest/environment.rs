@@ -1,8 +1,12 @@
 use crate::consts;
 use crate::utils::spanned::PixiSpanned;
+use miette::Diagnostic;
+use regex::Regex;
 use serde::{self, Deserialize, Deserializer};
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
+use std::str::FromStr;
+use thiserror::Error;
 
 /// The name of an environment. This is either a string or default for the default environment.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -33,16 +37,37 @@ impl Borrow<str> for EnvironmentName {
         self.as_str()
     }
 }
+#[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
+#[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes")]
+pub struct ParseEnvironmentNameError {
+    /// The string that was attempted to be parsed.
+    pub attempted_parse: String,
+}
+
+impl FromStr for EnvironmentName {
+    type Err = ParseEnvironmentNameError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let re = Regex::new(r"^[a-z0-9-]+$").unwrap(); // Compile the regex
+        if !re.is_match(s) {
+            // Return an error if the string does not match the regex
+            return Err(ParseEnvironmentNameError {
+                attempted_parse: s.to_string(),
+            });
+        }
+        match s {
+            consts::DEFAULT_ENVIRONMENT_NAME => Ok(EnvironmentName::Default),
+            _ => Ok(EnvironmentName::Named(s.to_string())),
+        }
+    }
+}
 
 impl<'de> Deserialize<'de> for EnvironmentName {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        match String::deserialize(deserializer)? {
-            name if name == consts::DEFAULT_ENVIRONMENT_NAME => Ok(EnvironmentName::Default),
-            name => Ok(EnvironmentName::Named(name)),
-        }
+        let name = String::deserialize(deserializer)?;
+        EnvironmentName::from_str(&name).map_err(serde::de::Error::custom)
     }
 }
 
@@ -113,5 +138,68 @@ impl<'de> Deserialize<'de> for TomlEnvironmentMapOrSeq {
             .seq(|seq| seq.deserialize().map(TomlEnvironmentMapOrSeq::Seq))
             .expecting("either a map or a sequence")
             .deserialize(deserializer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_environment_name_from_str() {
+        assert_eq!(
+            EnvironmentName::from_str("default").unwrap(),
+            EnvironmentName::Default
+        );
+        assert_eq!(
+            EnvironmentName::from_str("foo").unwrap(),
+            EnvironmentName::Named("foo".to_string())
+        );
+        assert_eq!(
+            EnvironmentName::from_str("foo_bar").unwrap_err(),
+            ParseEnvironmentNameError {
+                attempted_parse: "foo_bar".to_string()
+            }
+        );
+
+        assert!(EnvironmentName::from_str("foo-bar").is_ok());
+        assert!(EnvironmentName::from_str("foo1").is_ok());
+        assert!(EnvironmentName::from_str("py39").is_ok());
+
+        assert!(EnvironmentName::from_str("foo bar").is_err());
+        assert!(EnvironmentName::from_str("foo_bar").is_err());
+        assert!(EnvironmentName::from_str("foo/bar").is_err());
+        assert!(EnvironmentName::from_str("foo\\bar").is_err());
+        assert!(EnvironmentName::from_str("foo:bar").is_err());
+        assert!(EnvironmentName::from_str("foo;bar").is_err());
+        assert!(EnvironmentName::from_str("foo?bar").is_err());
+        assert!(EnvironmentName::from_str("foo!bar").is_err());
+        assert!(EnvironmentName::from_str("py3.9").is_err());
+        assert!(EnvironmentName::from_str("py-3.9").is_err());
+        assert!(EnvironmentName::from_str("py_3.9").is_err());
+        assert!(EnvironmentName::from_str("py/3.9").is_err());
+        assert!(EnvironmentName::from_str("py\\3.9").is_err());
+        assert!(EnvironmentName::from_str("Py").is_err());
+        assert!(EnvironmentName::from_str("Py3").is_err());
+        assert!(EnvironmentName::from_str("Py39").is_err());
+        assert!(EnvironmentName::from_str("Py-39").is_err());
+    }
+
+    #[test]
+    fn test_environment_name_as_str() {
+        assert_eq!(EnvironmentName::Default.as_str(), "default");
+        assert_eq!(EnvironmentName::Named("foo".to_string()).as_str(), "foo");
+    }
+
+    #[test]
+    fn test_deserialize_environment_name() {
+        assert_eq!(
+            serde_json::from_str::<EnvironmentName>("\"default\"").unwrap(),
+            EnvironmentName::Default
+        );
+        assert_eq!(
+            serde_json::from_str::<EnvironmentName>("\"foo\"").unwrap(),
+            EnvironmentName::Named("foo".to_string())
+        );
     }
 }
