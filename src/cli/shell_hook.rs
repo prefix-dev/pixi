@@ -58,7 +58,9 @@ mod tests {
     #[test]
     pub fn test_shell_hook() {
         let script = generate_activation_script().unwrap();
-        assert!(script.starts_with("#!/bin/sh"));
+        if cfg!(unix) {
+            assert!(script.starts_with("#!/bin/sh"));
+        }
         assert!(script.contains("export PATH="));
         assert!(script.contains("export CONDA_PREFIX="));
     }
