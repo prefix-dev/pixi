@@ -103,7 +103,7 @@ You can always use `pixi self-update --force` to force the update.",
 
     // Stop here if the target version is the same as the current version
     if target_version == current_version {
-        println!(
+        eprintln!(
             "{}pixi is already up-to-date (version {})",
             console::style(console::Emoji("✔ ", "")).green(),
             current_version
@@ -111,7 +111,7 @@ You can always use `pixi self-update --force` to force the update.",
         return Ok(());
     }
 
-    println!(
+    eprintln!(
         "{}Pixi will be updated from {} to {}",
         console::style(console::Emoji("✔ ", "")).green(),
         current_version,
@@ -149,7 +149,7 @@ You can always use `pixi self-update --force` to force the update.",
             .into_diagnostic()?;
     }
 
-    println!(
+    eprintln!(
         "{}Pixi archive downloaded.",
         console::style(console::Emoji("✔ ", "")).green(),
     );
@@ -172,7 +172,7 @@ You can always use `pixi self-update --force` to force the update.",
         Err(miette::miette!(error_message))?
     }
 
-    println!(
+    eprintln!(
         "{}Pixi archive uncompressed.",
         console::style(console::Emoji("✔ ", "")).green(),
     );
@@ -183,7 +183,7 @@ You can always use `pixi self-update --force` to force the update.",
     // Replace the current binary with the new binary
     self_replace::self_replace(new_binary_path).into_diagnostic()?;
 
-    println!(
+    eprintln!(
         "{}Pixi has been updated to version {}.",
         console::style(console::Emoji("✔ ", "")).green(),
         target_version
