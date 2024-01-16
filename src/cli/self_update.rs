@@ -24,13 +24,9 @@ pub struct Args {
     force: bool,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct GithubRelease {
     tag_name: String,
-    name: String,
-    body: String,
-    html_url: String,
     assets: Vec<GithubReleaseAsset>,
 }
 
