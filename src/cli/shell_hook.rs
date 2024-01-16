@@ -9,8 +9,8 @@ use rattler_shell::{
 
 use crate::prefix::Prefix;
 
-/// Prints the activation script to the stdout.
-pub async fn execute() -> miette::Result<()> {
+/// Generates the activation script.
+fn generate_activation_script() -> miette::Result<String> {
     let prefix = Prefix::new(PathBuf::new())?;
     let shell: ShellEnum = if cfg!(windows) {
         rattler_shell::shell::CmdExe.into()
@@ -41,7 +41,25 @@ pub async fn execute() -> miette::Result<()> {
         result.script
     };
 
-    println!("{script}");
+    Ok(script)
+}
 
+/// Prints the activation script to the stdout.
+pub fn execute() -> miette::Result<()> {
+    let script = generate_activation_script()?;
+    println!("{script}");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    pub fn test_shell_hook() {
+        let script = generate_activation_script().unwrap();
+        assert!(script.starts_with("#!/bin/sh"));
+        assert!(script.contains("export PATH="));
+        assert!(script.contains("export CONDA_PREFIX="));
+    }
 }
