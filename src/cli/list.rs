@@ -84,7 +84,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project_dependency_names: Vec<String> = {
         let dependencies = project
             .default_environment()
-            .dependencies(Some(SpecType::Run), Some(platform));
+            .dependencies(None, Some(platform));
         dependencies
             .names()
             .map(|p| p.as_source().to_string())
