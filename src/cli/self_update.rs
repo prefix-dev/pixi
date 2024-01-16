@@ -1,6 +1,6 @@
 use std::{
     env,
-    io::{Seek, SeekFrom, Write},
+    io::{Seek, Write},
 };
 
 use flate2::read::GzDecoder;
@@ -220,8 +220,6 @@ async fn retrieve_target_version(version: &Option<String>) -> miette::Result<Git
 
     // compare target version with current version
     serde_json::from_str::<GithubRelease>(&body).into_diagnostic()
-
-    miette::Result::from(target_version_json).into_diagnostic()
 }
 
 fn pixi_binary_name() -> String {
