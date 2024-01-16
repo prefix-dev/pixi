@@ -117,7 +117,7 @@ You can always use `pixi self-update --force` to force the update.",
             console::style(console::Emoji("✘ ", "")).red(),
             std::env::consts::OS
         );
-        std::process::exit(1);
+        miette::Error::from("Not default archive name for the current platform")
     });
 
     let url = target_version_json
@@ -254,11 +254,7 @@ async fn retrieve_target_version(version: &Option<String>) -> GithubRelease {
 }
 
 fn pixi_binary_name() -> String {
-    if cfg!(target_os = "windows") {
-        "pixi.exe".to_string()
-    } else {
-        "pixi".to_string()
-    }
+    format!("pixi{}", std::env::consts::EXE_SUFFIX)
 }
 
 fn default_pixi_binary_path() -> std::path::PathBuf {
