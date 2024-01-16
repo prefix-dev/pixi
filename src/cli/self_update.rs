@@ -90,7 +90,6 @@ You can always use `pixi self-update --force` to force the update.",
 
     // Get the current version of the pixi binary
     let current_version = env!("CARGO_PKG_VERSION");
-    // let current_version = "0.1.0"; // NOTE(hadim): for dev purposes
 
     // Stop here if the target version is the same as the current version
     if target_version == current_version {
