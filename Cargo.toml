@@ -28,6 +28,7 @@ console = { version = "0.15.8", features = ["windows-console-colors"] }
 deno_task_shell = "0.14.2"
 dirs = "5.0.1"
 dunce = "1.0.4"
+flate2 = "1.0.28"
 futures = "0.3.30"
 human_bytes = "0.4.3"
 indexmap = { version = "2.1.0", features = ["serde"] }
@@ -52,6 +53,7 @@ rattler_virtual_packages = { version = "0.16.2", default-features = false }
 regex = "1.10.2"
 reqwest = { version = "0.11.23", default-features = false }
 rip = { package = "rattler_installs_packages", version = "0.1.0", default-features = false }
+self-replace = "1.3.7"
 serde = "1.0.195"
 serde-untagged = "0.1.5"
 serde_json = "1.0.111"
@@ -60,6 +62,7 @@ serde_with = { version = "3.4.0", features = ["indexmap"] }
 shlex = "1.2.0"
 spdx = "0.10.3"
 strsim = "0.10.0"
+tar = "0.4.40"
 tempfile = "3.9.0"
 thiserror = "1.0.56"
 tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "signal"] }
@@ -68,6 +71,7 @@ toml_edit = { version = "0.21.0", features = ["serde"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
+zip = { version = "0.6.6", default-features = false, features = ["deflate", "time"] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.27.1", default-features = false, features = ["fs", "signal", "term", "poll"] }
