@@ -66,7 +66,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // If args.force is false and pixi is not installed in the default location, stop here.
     match (args.force, is_pixi_binary_default_location()) {
         (false, false) => {
-            println!(
+            eprintln!(
                 "{}pixi is not installed in the default location:
 
 - Default pixi location: {}
@@ -112,7 +112,7 @@ You can always use `pixi self-update --force` to force the update.",
 
     // Get the name of the binary to download and install based on the current platform
     let archive_name = default_archive_name().unwrap_or_else(|| {
-        println!(
+        eprintln!(
             "{}Not default archive name for the current platform '{}'.",
             console::style(console::Emoji("✘ ", "")).red(),
             std::env::consts::OS
@@ -125,7 +125,7 @@ You can always use `pixi self-update --force` to force the update.",
         .iter()
         .find(|asset| asset.name == archive_name)
         .unwrap_or_else(|| {
-            println!(
+            eprintln!(
                 "{}Can't find the archive '{}' for the current platform '{}'.",
                 console::style(console::Emoji("✘ ", "")).red(),
                 archive_name,
@@ -174,7 +174,7 @@ You can always use `pixi self-update --force` to force the update.",
         let mut archive = zip::ZipArchive::new(archived_tempfile.as_file()).into_diagnostic()?;
         archive.extract(binary_tempdir).into_diagnostic()?;
     } else {
-        println!(
+        eprintln!(
             "{}Unsupported archive format: {}",
             console::style(console::Emoji("✘ ", "")).red(),
             archive_name
