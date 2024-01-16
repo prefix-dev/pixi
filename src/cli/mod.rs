@@ -59,7 +59,7 @@ pub enum Command {
     Run(run::Args),
     #[clap(alias = "s")]
     Shell(shell::Args),
-    #[clap(hide = true)]
+    #[clap(hide = true, about = "Print the activation script")]
     ShellHook,
     #[clap(alias = "g")]
     Global(global::Args),
