@@ -2,7 +2,7 @@ use crate::{
     consts, default_authenticated_client, install, install_pypi, lock_file, prefix::Prefix,
     progress, Project,
 };
-use miette::{Context, IntoDiagnostic};
+use miette::IntoDiagnostic;
 
 use crate::lock_file::lock_file_satisfies_project;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
@@ -58,7 +58,13 @@ fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
 ///     2. It verifies that the system requirements are met.
 pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.pixi_dir().join(consts::PREFIX_FILE_NAME).as_path())?;
+    verify_prefix_location_unchanged(
+        project
+            .default_environment()
+            .dir()
+            .join(consts::PREFIX_FILE_NAME)
+            .as_path(),
+    )?;
 
     // Make sure the system requirements are met
     verify_current_platform_has_required_virtual_packages(&project.default_environment())?;
@@ -122,7 +128,7 @@ pub async fn get_up_to_date_prefix(
     sanity_check_project(project)?;
 
     // Start loading the installed packages in the background
-    let prefix = Prefix::new(project.environment_dir())?;
+    let prefix = Prefix::new(project.default_environment().dir())?;
     let installed_packages_future = {
         let prefix = prefix.clone();
         tokio::spawn(async move { prefix.find_installed_packages(None).await })
@@ -277,14 +283,7 @@ pub async fn update_prefix_conda(
     }
 
     // Mark the location of the prefix
-    create_prefix_location_file(
-        &prefix
-            .root()
-            .parent()
-            .map(|p| p.join(consts::PREFIX_FILE_NAME))
-            .ok_or_else(|| miette::miette!("we should be able to create a prefix file name."))?,
-    )
-    .with_context(|| "failed to create prefix location file.".to_string())?;
+    create_prefix_location_file(&prefix.root().join(consts::PREFIX_FILE_NAME))?;
 
     // Determine if the python version changed.
     Ok(PythonStatus::from_transaction(&transaction))
