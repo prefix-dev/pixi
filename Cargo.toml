@@ -19,6 +19,7 @@ slow_integration_tests = []
 assert_matches = "1.5.0"
 async-once-cell = "0.5.3"
 async-recursion = "1.0.5"
+bzip2 = "0.4.4"
 chrono = "0.4.31"
 clap = { version = "4.4.14", default-features = false, features = ["derive", "usage", "wrap_help", "std", "color", "error-context"] }
 clap-verbosity-flag = "2.1.1"
@@ -27,6 +28,7 @@ console = { version = "0.15.8", features = ["windows-console-colors"] }
 deno_task_shell = "0.14.2"
 dirs = "5.0.1"
 dunce = "1.0.4"
+flate2 = "1.0.28"
 futures = "0.3.30"
 indexmap = { version = "2.1.0", features = ["serde"] }
 indicatif = "0.17.7"
@@ -59,6 +61,7 @@ serde_with = { version = "3.4.0", features = ["indexmap"] }
 shlex = "1.2.0"
 spdx = "0.10.3"
 strsim = "0.10.0"
+tar = "0.4.40"
 tempfile = "3.9.0"
 thiserror = "1.0.56"
 tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "signal"] }
@@ -67,6 +70,7 @@ toml_edit = { version = "0.21.0", features = ["serde"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
+zip = { version = "0.6.6", default-features = false, features = ["deflate", "time"] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.27.1", default-features = false, features = ["fs", "signal", "term", "poll"] }

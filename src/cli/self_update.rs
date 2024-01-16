@@ -1,15 +1,25 @@
-use std::io::Write;
+use std::{
+    env,
+    io::{Seek, SeekFrom, Write},
+};
+
+use flate2::read::GzDecoder;
+use tar::Archive;
 
 use miette::IntoDiagnostic;
 use reqwest::Client;
 use serde::Deserialize;
 
-/// Update pixi to the latest version
+/// Update pixi to the latest version or a specific version. If the pixi binary is not found in the default location (e.g. `~/.pixi/bin/pixi`), pixi won't updated to prevent breaking the current installation (Homebrew, etc). The behaviour can be overridden with the `--force` flag.
 #[derive(Debug, clap::Parser)]
 pub struct Args {
-    /// The desired version (to downgrade or upgrade to)
+    /// The desired version (to downgrade or upgrade to). Update to the latest version if not specified.
     #[clap(long)]
     version: Option<String>,
+
+    /// Force the update even if the pixi binary is not found in the default location.
+    #[clap(long)]
+    force: bool,
 }
 
 #[allow(dead_code)]
@@ -32,20 +42,20 @@ fn user_agent() -> String {
     format!("pixi {}", env!("CARGO_PKG_VERSION"))
 }
 
-fn default_name() -> Option<String> {
+fn default_archive_name() -> Option<String> {
     if cfg!(target_os = "macos") {
         if cfg!(target_arch = "x86_64") {
-            Some("pixi-x86_64-apple-darwin".to_string())
+            Some("pixi-x86_64-apple-darwin.tar.gz".to_string())
         } else {
-            Some("pixi-aarch64-apple-darwin".to_string())
+            Some("pixi-aarch64-apple-darwin.tar.gz".to_string())
         }
     } else if cfg!(target_os = "windows") && cfg!(target_arch = "x86_64") {
-        Some("pixi-x86_64-pc-windows-msvc.exe".to_string())
+        Some("pixi-x86_64-pc-windows-msvc.zip".to_string())
     } else if cfg!(target_os = "linux") {
         if cfg!(target_arch = "x86_64") {
-            Some("pixi-x86_64-unknown-linux-musl".to_string())
+            Some("pixi-x86_64-unknown-linux-musl.tar.gz".to_string())
         } else if cfg!(target_arch = "aarch64") {
-            Some("pixi-aarch64-unknown-linux-musl".to_string())
+            Some("pixi-aarch64-unknown-linux-musl.tar.gz".to_string())
         } else {
             None
         }
@@ -55,8 +65,150 @@ fn default_name() -> Option<String> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    // fetch latest version from github
-    let url = if let Some(version) = args.version {
+    // If args.force is false and pixi is not installed in the default location, stop here.
+    match (args.force, is_pixi_binary_default_location()) {
+        (false, false) => {
+            println!(
+                "{}pixi is not installed in the default location:
+- Default pixi location: {}
+- Pixi location detected: {}
+\nIt can happen when pixi has been installed via a dedicated package manager (such as Homebrew on macOS).
+You can always use `pixi self-update --force` to force the update.",
+                console::style(console::Emoji("✘ ", "")).red(),
+                default_pixi_binary_path().to_str().unwrap(),
+                env::current_exe().unwrap().to_str().unwrap()
+            );
+            return Ok(());
+        }
+        (false, true) => {}
+        (true, _) => {}
+    }
+
+    // Retrieve the target version information from github.
+    let target_version_json = retrieve_target_version(&args.version).await;
+
+    // Get the target version
+    let target_version = target_version_json.tag_name.trim_start_matches('v');
+
+    // Get the current version of the pixi binary
+    let current_version = env!("CARGO_PKG_VERSION");
+    // let current_version = "0.1.0"; // NOTE(hadim): for dev purposes
+
+    // Stop here if the target version is the same as the current version
+    if target_version == current_version {
+        println!(
+            "{}pixi is already up-to-date (version {})",
+            console::style(console::Emoji("✔ ", "")).green(),
+            current_version
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{}Pixi will be updated from {} to {}",
+        console::style(console::Emoji("✔ ", "")).green(),
+        current_version,
+        target_version
+    );
+
+    // Get the name of the binary to download and install based on the current platform
+    let archive_name = default_archive_name().unwrap_or_else(|| {
+        println!(
+            "{}Not default archive name for the current platform '{}'.",
+            console::style(console::Emoji("✘ ", "")).red(),
+            std::env::consts::OS
+        );
+        std::process::exit(1);
+    });
+
+    let url = target_version_json
+        .assets
+        .iter()
+        .find(|asset| asset.name == archive_name)
+        .unwrap_or_else(|| {
+            println!(
+                "{}Can't find the archive '{}' for the current platform '{}'.",
+                console::style(console::Emoji("✘ ", "")).red(),
+                archive_name,
+                std::env::consts::OS
+            );
+            std::process::exit(1);
+        })
+        .browser_download_url
+        .clone();
+
+    // Create a temp file to download the archive
+    let mut archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
+
+    let client = Client::new();
+    let mut res = client
+        .get(&url)
+        .header("User-Agent", user_agent())
+        .send()
+        .await
+        .unwrap();
+
+    // Download the archive
+    while let Some(chunk) = res.chunk().await.into_diagnostic()? {
+        archived_tempfile
+            .as_file()
+            .write_all(&chunk)
+            .into_diagnostic()?;
+    }
+
+    println!(
+        "{}Pixi archive downloaded.",
+        console::style(console::Emoji("✔ ", "")).green(),
+    );
+
+    // Seek to the beginning of the file before uncompressing it
+    let _ = archived_tempfile.seek(SeekFrom::Start(0));
+
+    // Create a temporary directory to unpack the archive
+    let binary_tempdir = &tempfile::tempdir().into_diagnostic()?;
+
+    // Uncompress the archive
+    if archive_name.ends_with(".tar.gz") {
+        let mut archive = Archive::new(GzDecoder::new(archived_tempfile.as_file()));
+        archive.unpack(binary_tempdir).into_diagnostic()?;
+    } else if archive_name.ends_with(".zip") {
+        let mut archive = zip::ZipArchive::new(archived_tempfile.as_file()).into_diagnostic()?;
+        archive.extract(binary_tempdir).into_diagnostic()?;
+    } else {
+        println!(
+            "{}Unsupported archive format: {}",
+            console::style(console::Emoji("✘ ", "")).red(),
+            archive_name
+        );
+        std::process::exit(1);
+    }
+
+    println!(
+        "{}Pixi archive uncompressed.",
+        console::style(console::Emoji("✔ ", "")).green(),
+    );
+
+    // Get the new binary path used for self-replacement
+    let new_binary_path = binary_tempdir.path().join("pixi");
+
+    // Replace the current binary with the new binary
+    self_replace::self_replace(new_binary_path).into_diagnostic()?;
+
+    println!(
+        "{}Pixi has been updated to version {}.",
+        console::style(console::Emoji("✔ ", "")).green(),
+        target_version
+    );
+
+    Ok(())
+}
+
+async fn retrieve_target_version(version: &Option<String>) -> GithubRelease {
+    // Fetch the target version from github.
+    // The target version is:
+    // - the latest version if no version is specified
+    // - the specified version if a version is specified
+    let url = if let Some(version) = version {
         format!(
             "https://api.github.com/repos/prefix-dev/pixi/releases/tags/v{}",
             version
@@ -72,46 +224,51 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .header("User-Agent", user_agent())
         .send()
         .await
-        .unwrap();
-    let body = res.text().await.unwrap();
+        .expect("Failed to fetch latest version from github");
 
-    // compare latest version with current version
-    let json = serde_json::from_str::<GithubRelease>(&body).unwrap();
-
-    let version = json.tag_name.trim_start_matches('v');
-
-    // if latest version is newer, download and replace binary
-    if version != env!("CARGO_PKG_VERSION") {
-        println!("A newer version is available: {}", version);
-    } else {
-        println!("You are already using the latest version: {}", version);
-    }
-
-    let name = default_name().unwrap();
-
-    let url = json
-        .assets
-        .iter()
-        .find(|asset| asset.name == name)
-        .unwrap()
-        .browser_download_url
-        .clone();
-
-    // if latest version is newer, download and replace binary (using self_replace)
-    let tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
-
-    let mut res = client
-        .get(&url)
-        .header("User-Agent", user_agent())
-        .send()
+    let body = res
+        .text()
         .await
-        .unwrap();
+        .expect("Failed to fetch latest version from github");
 
-    while let Some(chunk) = res.chunk().await.into_diagnostic()? {
-        tempfile.as_file().write_all(&chunk).into_diagnostic()?;
+    // compare target version with current version
+    let target_version_json = serde_json::from_str::<GithubRelease>(&body);
+
+    match target_version_json {
+        Ok(target_version_json) => target_version_json,
+        Err(err) => {
+            match version {
+                Some(version) => println!(
+                    "{}The version you specified is not available: {}",
+                    console::style(console::Emoji("✘ ", "")).red(),
+                    version
+                ),
+                None => println!(
+                    "{}Failed to fetch latest version from github: {}",
+                    console::style(console::Emoji("✘ ", "")).red(),
+                    err
+                ),
+            }
+            std::process::exit(1);
+        }
     }
+}
 
-    self_replace::self_replace(&tempfile).into_diagnostic()?;
+fn default_pixi_binary_path() -> std::path::PathBuf {
+    dirs::home_dir()
+        .unwrap()
+        .join(".pixi")
+        .join("bin")
+        .join("pixi")
+}
 
-    Ok(())
+// check current binary is in the default pixi location
+fn is_pixi_binary_default_location() -> bool {
+    let default_binary_path = default_pixi_binary_path();
+
+    std::env::current_exe()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .starts_with(default_binary_path.to_str().unwrap())
 }

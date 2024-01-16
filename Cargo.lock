@@ -2637,6 +2637,7 @@ dependencies = [
  "assert_matches",
  "async-once-cell",
  "async-recursion",
+ "bzip2",
  "chrono",
  "clap",
  "clap-verbosity-flag",
@@ -2645,6 +2646,7 @@ dependencies = [
  "deno_task_shell",
  "dirs",
  "dunce",
+ "flate2",
  "futures 0.3.30",
  "indexmap 2.1.0",
  "indicatif",
@@ -2682,6 +2684,7 @@ dependencies = [
  "signal-hook",
  "spdx",
  "strsim",
+ "tar",
  "tempfile",
  "thiserror",
  "tokio",
@@ -2691,6 +2694,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "zip",
 ]
 
 [[package]]
