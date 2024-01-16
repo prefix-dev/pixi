@@ -14,7 +14,6 @@ use crate::unix::PtySession;
 use crate::cli::LockFileUsageArgs;
 use crate::environment::get_up_to_date_prefix;
 use crate::environment::LockFileUsage;
-use crate::project::environment::get_metadata_env;
 #[cfg(target_family = "windows")]
 use rattler_shell::shell::CmdExe;
 
@@ -203,13 +202,13 @@ pub async fn get_shell_env(
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
-    let prefix = get_up_to_date_prefix(project, lock_file_usage).await?;
+    let prefix = get_up_to_date_prefix(project, lock_file_usage, false, None).await?;
 
     // Get environment variables from the activation
     let activation_env = run_activation_async(project, prefix).await?;
 
     // Get environment variables from the manifest
-    let manifest_env = get_metadata_env(project);
+    let manifest_env = project.get_metadata_env();
 
     // Add the conda default env variable so that the existing tools know about the env.
     let mut shell_env = HashMap::new();

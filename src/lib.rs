@@ -3,6 +3,7 @@ pub mod config;
 pub mod consts;
 pub mod environment;
 pub mod install;
+pub mod install_pypi;
 pub mod lock_file;
 pub mod prefix;
 pub mod progress;
@@ -14,7 +15,6 @@ pub mod task;
 pub mod unix;
 pub mod util;
 pub mod utils;
-pub mod virtual_packages;
 
 use once_cell::sync::Lazy;
 pub use project::Project;

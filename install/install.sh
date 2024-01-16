@@ -4,7 +4,8 @@ set -euo pipefail
 __wrap__() {
 
 VERSION=${PIXI_VERSION:-latest}
-INSTALL_DIR=${PIXI_DIR:-"$HOME/.pixi/bin"}
+PIXI_HOME=${PIXI_HOME:-"$HOME/.pixi"}
+BIN_DIR="$PIXI_HOME/bin"
 
 REPO=prefix-dev/pixi
 PLATFORM=$(uname -s)
@@ -30,10 +31,10 @@ else
   DOWNLOAD_URL=https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}.tar.gz
 fi
 
-printf "This script will automatically download and install Pixi (${VERSION}) for you.\nGetting it from this url: $DOWNLOAD_URL\nThe binary will be installed into '$INSTALL_DIR'\n"
+printf "This script will automatically download and install Pixi (${VERSION}) for you.\nGetting it from this url: $DOWNLOAD_URL\nThe binary will be installed into '$BIN_DIR'\n"
 
-if ! hash curl 2> /dev/null; then
-  echo "error: you do not have 'curl' installed which is required for this script."
+if ! hash curl 2> /dev/null && ! hash wget 2> /dev/null; then
+  echo "error: you need either 'curl' or 'wget' installed for this script."
   exit 1
 fi
 
@@ -50,10 +51,17 @@ cleanup() {
 
 trap cleanup EXIT
 
-HTTP_CODE=$(curl -SL --progress-bar "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")
-if [[ ${HTTP_CODE} -lt 200 || ${HTTP_CODE} -gt 299 ]]; then
-  echo "error: '${DOWNLOAD_URL}' is not available"
-  exit 1
+if hash curl 2> /dev/null; then
+  HTTP_CODE=$(curl -SL --progress-bar "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")
+  if [[ ${HTTP_CODE} -lt 200 || ${HTTP_CODE} -gt 299 ]]; then
+    echo "error: '${DOWNLOAD_URL}' is not available"
+    exit 1
+  fi
+elif hash wget 2> /dev/null; then
+  if ! wget -q --show-progress --output-document="$TEMP_FILE" "$DOWNLOAD_URL"; then
+    echo "error: '${DOWNLOAD_URL}' is not available"
+    exit 1
+  fi
 fi
 
 # Check that file was correctly created (https://github.com/prefix-dev/pixi/issues/446)
@@ -64,8 +72,8 @@ if [[ ! -s $TEMP_FILE ]]; then
 fi
 
 # Extract pixi from the downloaded tar file
-mkdir -p "$INSTALL_DIR"
-tar -xzf "$TEMP_FILE" -C "$INSTALL_DIR"
+mkdir -p "$BIN_DIR"
+tar -xzf "$TEMP_FILE" -C "$BIN_DIR"
 
 update_shell() {
     FILE=$1
@@ -91,17 +99,17 @@ case "$(basename "$SHELL")" in
             # Default to bashrc as that is used in non login shells instead of the profile.
             BASH_FILE=~/.bashrc
         fi
-        LINE="export PATH=\$PATH:${INSTALL_DIR}"
+        LINE="export PATH=\$PATH:${BIN_DIR}"
         update_shell $BASH_FILE "$LINE"
         ;;
 
     fish)
-        LINE="fish_add_path ${INSTALL_DIR}"
+        LINE="fish_add_path ${BIN_DIR}"
         update_shell ~/.config/fish/config.fish "$LINE"
         ;;
 
     zsh)
-        LINE="export PATH=\$PATH:${INSTALL_DIR}"
+        LINE="export PATH=\$PATH:${BIN_DIR}"
         update_shell ~/.zshrc "$LINE"
         ;;
 
@@ -110,7 +118,7 @@ case "$(basename "$SHELL")" in
         ;;
 esac
 
-chmod +x "$INSTALL_DIR/pixi"
+chmod +x "$BIN_DIR/pixi"
 
 echo "Please restart or source your shell."
 

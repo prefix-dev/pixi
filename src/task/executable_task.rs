@@ -254,7 +254,7 @@ mod tests {
         let executable_tasks = ExecutableTask::from_cmd_args(
             &project,
             vec!["top".to_string(), "--test".to_string()],
-            Some(Platform::current()),
+            None,
         )
         .get_ordered_dependencies()
         .await
@@ -293,14 +293,11 @@ mod tests {
         let manifest = Manifest::from_str(Path::new(""), file_content.to_string()).unwrap();
         let project = Project::from_manifest(manifest);
 
-        let executable_tasks = ExecutableTask::from_cmd_args(
-            &project,
-            vec!["top".to_string()],
-            Some(Platform::current()),
-        )
-        .get_ordered_dependencies()
-        .await
-        .unwrap();
+        let executable_tasks =
+            ExecutableTask::from_cmd_args(&project, vec!["top".to_string()], None)
+                .get_ordered_dependencies()
+                .await
+                .unwrap();
 
         let ordered_task_names: Vec<_> = executable_tasks
             .iter()
@@ -376,9 +373,6 @@ mod tests {
         let task = executable_tasks.get(0).unwrap();
         assert!(task.task().is_custom());
 
-        assert_eq!(
-            task.task().as_single_command().unwrap(),
-            r###""echo bla""###
-        );
+        assert_eq!(task.task().as_single_command().unwrap(), r#""echo bla""#);
     }
 }

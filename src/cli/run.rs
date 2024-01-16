@@ -10,8 +10,7 @@ use crate::task::{
     ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TraversalError,
 };
 use crate::{
-    environment::get_up_to_date_prefix, prefix::Prefix, progress::await_in_progress,
-    project::environment::get_metadata_env, Project,
+    environment::get_up_to_date_prefix, prefix::Prefix, progress::await_in_progress, Project,
 };
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -163,13 +162,13 @@ pub async fn get_task_env(
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
-    let prefix = get_up_to_date_prefix(project, lock_file_usage).await?;
+    let prefix = get_up_to_date_prefix(project, lock_file_usage, false, None).await?;
 
     // Get environment variables from the activation
     let activation_env = run_activation_async(project, prefix).await?;
 
     // Get environment variables from the manifest
-    let manifest_env = get_metadata_env(project);
+    let manifest_env = project.get_metadata_env();
 
     // Construct command environment by concatenating the environments
     Ok(std::env::vars()
@@ -184,7 +183,21 @@ pub async fn run_activation_async(
     prefix: Prefix,
 ) -> miette::Result<HashMap<String, String>> {
     let platform = Platform::current();
-    let additional_activation_scripts = project.activation_scripts(platform)?;
+    let additional_activation_scripts = project.activation_scripts(Some(platform));
+
+    // Make sure the scripts exists
+    let (additional_activation_scripts, missing_scripts): (Vec<_>, _) =
+        additional_activation_scripts
+            .into_iter()
+            .map(|script| project.root().join(script))
+            .partition(|full_path| full_path.is_file());
+
+    if !missing_scripts.is_empty() {
+        tracing::warn!(
+            "Could not find activation scripts: {}",
+            missing_scripts.iter().map(|p| p.display()).format(", ")
+        );
+    }
 
     // Check if the platform and activation script extension match. For Platform::Windows the extension should be .bat and for All other platforms it should be .sh or .bash.
     for script in additional_activation_scripts.iter() {

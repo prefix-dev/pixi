@@ -1,0 +1,29 @@
+---
+source: src/project/virtual_packages.rs
+expression: packages
+---
+[
+    Unix,
+    Linux(
+        Linux {
+            version: Version {
+                version: [[0], [5], [10]],
+                local: [],
+            },
+        },
+    ),
+    LibC(
+        LibC {
+            family: "glibc",
+            version: Version {
+                version: [[0], [2], [17]],
+                local: [],
+            },
+        },
+    ),
+    Archspec(
+        Archspec {
+            spec: "x86_64",
+        },
+    ),
+]

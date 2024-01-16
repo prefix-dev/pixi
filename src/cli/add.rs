@@ -1,26 +1,23 @@
-use crate::environment::{update_prefix, verify_prefix_location_unchanged};
-use crate::prefix::Prefix;
-use crate::project::{DependencyType, SpecType};
 use crate::{
     consts,
-    lock_file::{load_lock_file, update_lock_file},
-    project::python::PyPiRequirement,
-    project::Project,
-    virtual_packages::get_minimal_virtual_packages,
+    environment::{get_up_to_date_prefix, verify_prefix_location_unchanged, LockFileUsage},
+    project::{manifest::PyPiRequirement, DependencyType, Project, SpecType},
 };
 use clap::Parser;
-use indexmap::IndexMap;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
+
 use miette::{IntoDiagnostic, WrapErr};
-use rattler_conda_types::version_spec::{LogicalOperator, RangeOperator};
 use rattler_conda_types::{
-    MatchSpec, NamelessMatchSpec, PackageName, Platform, Version, VersionSpec,
+    version_spec::{LogicalOperator, RangeOperator},
+    MatchSpec, NamelessMatchSpec, PackageName, Platform, Version, VersionBumpType, VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    str::FromStr,
+};
 
 /// Adds a dependency to the project
 #[derive(Parser, Debug, Default)]
@@ -108,12 +105,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let spec_platforms = &args.platform;
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(
-        project
-            .environment_dir()
-            .join(consts::PREFIX_FILE_NAME)
-            .as_path(),
-    )?;
+    verify_prefix_location_unchanged(project.pixi_dir().join(consts::PREFIX_FILE_NAME).as_path())?;
 
     // Add the platform if it is not already present
     let platforms_to_add = spec_platforms
@@ -214,17 +206,22 @@ pub async fn add_pypi_specs_to_project(
         // TODO: Get best version
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.manifest.add_pypi_dependency(name, spec)?;
+            project.manifest.add_pypi_dependency(name, spec, None)?;
         } else {
             for platform in specs_platforms.iter() {
                 project
                     .manifest
-                    .add_target_pypi_dependency(*platform, name.clone(), spec)?;
+                    .add_pypi_dependency(name, spec, Some(*platform))?;
             }
         }
     }
+    let lock_file_usage = if no_update_lockfile {
+        LockFileUsage::Frozen
+    } else {
+        LockFileUsage::Update
+    };
 
-    update_environment(project, None, no_install, no_update_lockfile).await?;
+    get_up_to_date_prefix(project, lock_file_usage, no_install, None).await?;
 
     project.save()?;
 
@@ -248,8 +245,6 @@ pub async fn add_conda_specs_to_project(
         })
         .collect::<miette::Result<HashMap<PackageName, NamelessMatchSpec>>>()?;
 
-    // Get the current specs
-
     // Fetch the repodata for the project
     let sparse_repo_data = project.fetch_sparse_repodata().await?;
 
@@ -257,27 +252,17 @@ pub async fn add_conda_specs_to_project(
     let mut package_versions = HashMap::<PackageName, HashSet<Version>>::new();
 
     let platforms = if specs_platforms.is_empty() {
-        project.platforms()
+        Either::Left(project.platforms().into_iter())
     } else {
-        specs_platforms
-    }
-    .to_vec();
-    for platform in platforms {
-        // TODO: `build` and `host` has to be separated when we have separated environments for them.
-        //       While we combine them on install we should also do that on getting the best version.
-        // let current_specs = match spec_type {
-        //     SpecType::Host => project.host_dependencies(platform)?,
-        //     SpecType::Build => project.build_dependencies(platform)?,
-        //     SpecType::Run => project.dependencies(platform)?,
-        // };
-        let mut current_specs = project.dependencies(platform)?;
-        current_specs.extend(project.host_dependencies(platform)?);
-        current_specs.extend(project.build_dependencies(platform)?);
+        Either::Right(specs_platforms.iter().copied())
+    };
 
+    for platform in platforms {
         // Solve the environment with the new specs added
         let solved_versions = match determine_best_version(
+            project,
             &new_specs,
-            &current_specs,
+            spec_type,
             &sparse_repo_data,
             platform,
         ) {
@@ -313,84 +298,51 @@ pub async fn add_conda_specs_to_project(
 
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.manifest.add_dependency(&spec, spec_type)?;
+            project.manifest.add_dependency(&spec, spec_type, None)?;
         } else {
             for platform in specs_platforms.iter() {
                 project
                     .manifest
-                    .add_target_dependency(*platform, &spec, spec_type)?;
+                    .add_dependency(&spec, spec_type, Some(*platform))?;
             }
         }
     }
+    let lock_file_usage = if no_update_lockfile {
+        LockFileUsage::Frozen
+    } else {
+        LockFileUsage::Update
+    };
+    get_up_to_date_prefix(project, lock_file_usage, no_install, Some(sparse_repo_data)).await?;
     project.save()?;
 
-    update_environment(
-        project,
-        Some(sparse_repo_data),
-        no_install,
-        no_update_lockfile,
-    )
-    .await?;
-
     Ok(())
 }
 
-/// Updates the lock file and potentially the prefix to get an up-to-date environment.
-///
-/// We are using this function instead of [`crate::environment::get_up_to_date_prefix`] because we want to be able to
-/// specify if we do not want to update the prefix. Also we know the lock file needs to be updated so `--frozen` and `--locked`
-/// make no sense in this scenario.
-///
-/// Essentially, other than that it does almost the same thing
-async fn update_environment(
-    project: &Project,
-    sparse_repo_data: Option<Vec<SparseRepoData>>,
-    no_install: bool,
-    no_update_lockfile: bool,
-) -> miette::Result<()> {
-    // Update the lock file
-    let lock_file = if !no_update_lockfile {
-        Some(update_lock_file(project, load_lock_file(project).await?, sparse_repo_data).await?)
-    } else {
-        None
-    };
-
-    if let Some(lock_file) = lock_file {
-        if !no_install {
-            crate::environment::sanity_check_project(project)?;
-
-            // Get the currently installed packages
-            let prefix = Prefix::new(project.root().join(".pixi/env"))?;
-            let installed_packages = prefix.find_installed_packages(None).await?;
-
-            // Update the prefix
-            update_prefix(
-                project.pypi_package_db()?,
-                &prefix,
-                installed_packages,
-                &lock_file,
-                Platform::current(),
-            )
-            .await?;
-        }
-    }
-    Ok(())
-}
 /// Given several specs determines the highest installable version for them.
 pub fn determine_best_version(
+    project: &Project,
     new_specs: &HashMap<PackageName, NamelessMatchSpec>,
-    current_specs: &IndexMap<PackageName, NamelessMatchSpec>,
+    new_specs_type: SpecType,
     sparse_repo_data: &[SparseRepoData],
     platform: Platform,
 ) -> miette::Result<HashMap<PackageName, Version>> {
-    let combined_specs = current_specs
-        .iter()
-        .chain(new_specs.iter())
-        .map(|(name, spec)| (name.clone(), spec.clone()))
-        .collect::<HashMap<_, _>>();
+    // Build the combined set of specs while updating the dependencies with the new specs.
+    let dependencies = SpecType::all()
+        .map(|spec_type| {
+            let mut deps = project.dependencies(Some(spec_type), Some(platform));
+            if spec_type == new_specs_type {
+                for (new_name, new_spec) in new_specs.iter() {
+                    deps.remove(new_name); // Remove any existing specs
+                    deps.insert(new_name.clone(), new_spec.clone()); // Add the new specs
+                }
+            }
+            deps
+        })
+        .reduce(|acc, deps| acc.overwrite(&deps))
+        .unwrap_or_default();
 
     // Extract the package names from all the dependencies
-    let package_names = combined_specs.keys().cloned().collect_vec();
+    let package_names = dependencies.names().cloned().collect_vec();
 
     // Get the repodata for the current platform and for NoArch
     let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
@@ -407,17 +359,14 @@ pub fn determine_best_version(
 
     // Construct a solver task to start solving.
     let task = rattler_solve::SolverTask {
-        specs: combined_specs
-            .iter()
+        specs: dependencies
+            .iter_specs()
             .map(|(name, spec)| MatchSpec::from_nameless(spec.clone(), Some(name.clone())))
             .collect(),
 
         available_packages: &available_packages,
 
-        virtual_packages: get_minimal_virtual_packages(platform)
-            .into_iter()
-            .map(Into::into)
-            .collect(),
+        virtual_packages: project.virtual_packages(platform),
 
         // TODO: Add the information from the current lock file here.
         locked_packages: vec![],
@@ -449,7 +398,8 @@ fn determine_version_constraint<'a>(
     let upper_bound = max_version
         .pop_segments(1)
         .unwrap_or_else(|| max_version.clone())
-        .bump();
+        .bump(VersionBumpType::Last)
+        .ok()?;
     Some(VersionSpec::Group(
         LogicalOperator::And,
         vec![

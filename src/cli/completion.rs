@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     pub fn test_zsh_completion() {
-        let mut script = r#"
+        let script = r#"
 (add)
 _arguments "${_arguments_options[@]}" \
 '--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
@@ -120,7 +120,7 @@ _arguments "${_arguments_options[@]}" \
 ;;
 
         "#;
-        let result = replace_zsh_completion(&mut script);
+        let result = replace_zsh_completion(script);
         insta::assert_snapshot!(result);
     }
 

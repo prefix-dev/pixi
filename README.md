@@ -79,10 +79,10 @@ You might need to restart your terminal or source your shell for the changes to 
 
 #### Arch Linux
 
-`pixi` is also available [in the AUR](https://aur.archlinux.org/packages/pixi). If you're using `paru`:
+You can install `pixi` from the [extra repository](https://archlinux.org/packages/extra/x86_64/pixi/) using [pacman](https://wiki.archlinux.org/title/Pacman):
 
 ```sh
-paru -S pixi
+pacman -S pixi
 ```
 
 ## Windows

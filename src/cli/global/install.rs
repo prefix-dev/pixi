@@ -23,9 +23,6 @@ use std::{
     str::FromStr,
 };
 
-const BIN_DIR: &str = ".pixi/bin";
-const BIN_ENVS_DIR: &str = ".pixi/envs";
-
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true)]
@@ -70,11 +67,20 @@ impl BinDir {
     }
 }
 
-/// Binaries are installed in ~/.pixi/bin
+/// Get pixi home directory, default to `$HOME/.pixi`
+fn home_path() -> miette::Result<PathBuf> {
+    if let Some(path) = std::env::var_os("PIXI_HOME") {
+        Ok(PathBuf::from(path))
+    } else {
+        home_dir()
+            .map(|path| path.join(".pixi"))
+            .ok_or_else(|| miette::miette!("could not find home directory"))
+    }
+}
+
+/// Global binaries directory, default to `$HOME/.pixi/bin`
 fn bin_dir() -> miette::Result<PathBuf> {
-    Ok(home_dir()
-        .ok_or_else(|| miette::miette!("could not find home directory"))?
-        .join(BIN_DIR))
+    home_path().map(|path| path.join("bin"))
 }
 
 pub(crate) struct BinEnvDir(pub PathBuf);
@@ -111,11 +117,9 @@ impl BinEnvDir {
     }
 }
 
-/// Binary environments are installed in ~/.pixi/envs
+/// GLobal binary environments directory, default to `$HOME/.pixi/envs`
 pub(crate) fn bin_env_dir() -> miette::Result<PathBuf> {
-    Ok(home_dir()
-        .ok_or_else(|| miette::miette!("could not find home directory"))?
-        .join(BIN_ENVS_DIR))
+    home_path().map(|path| path.join("envs"))
 }
 
 /// Find the designated package in the prefix
@@ -329,19 +333,72 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Find the MatchSpec we want to install
     let package_matchspec = MatchSpec::from_str(&args.package).into_diagnostic()?;
-    let package_name = package_matchspec.name.clone().ok_or_else(|| {
-        miette::miette!(
-            "could not find package name in MatchSpec {}",
-            package_matchspec
-        )
-    })?;
-    let platform = Platform::current();
 
     // Fetch sparse repodata
-    let platform_sparse_repodata = fetch_sparse_repodata(&channels, &[platform]).await?;
+    let platform_sparse_repodata = fetch_sparse_repodata(&channels, [Platform::current()]).await?;
+
+    // Install the package
+    let (prefix_package, scripts, _) = globally_install_package(
+        package_matchspec,
+        &platform_sparse_repodata,
+        &channel_config,
+    )
+    .await?;
+
+    let channel_name = channel_name_from_prefix(&prefix_package, &channel_config);
+    let whitespace = console::Emoji("  ", "").to_string();
+
+    eprintln!(
+        "{}Installed package {} {} {} from {}",
+        console::style(console::Emoji("✔ ", "")).green(),
+        console::style(
+            prefix_package
+                .repodata_record
+                .package_record
+                .name
+                .as_source()
+        )
+        .bold(),
+        console::style(prefix_package.repodata_record.package_record.version).bold(),
+        console::style(prefix_package.repodata_record.package_record.build).bold(),
+        channel_name,
+    );
+
+    let BinDir(bin_dir) = BinDir::from_existing().await?;
+    let script_names = scripts
+        .into_iter()
+        .map(|path| {
+            path.strip_prefix(&bin_dir)
+                .expect("script paths were constructed by joining onto BinDir")
+                .to_string_lossy()
+                .to_string()
+        })
+        .join(&format!("\n{whitespace} -  "));
+
+    if is_bin_folder_on_path() {
+        eprintln!(
+            "{whitespace}These apps are now globally available:\n{whitespace} -  {script_names}",
+        )
+    } else {
+        eprintln!("{whitespace}These apps have been added to {}\n{whitespace} -  {script_names}\n\n{} To use them, make sure to add {} to your PATH",
+                      console::style(&bin_dir.display()).bold(),
+                      console::style("!").yellow().bold(),
+                      console::style(&bin_dir.display()).bold()
+            )
+    }
+
+    Ok(())
+}
+
+pub(super) async fn globally_install_package(
+    package_matchspec: MatchSpec,
+    platform_sparse_repodata: &[SparseRepoData],
+    channel_config: &ChannelConfig,
+) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
+    let package_name = package_name(&package_matchspec)?;
 
     let available_packages = SparseRepoData::load_records_recursive(
-        platform_sparse_repodata.iter(),
+        platform_sparse_repodata,
         vec![package_name.clone()],
         None,
     )
@@ -373,12 +430,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let prefix_records = prefix.find_installed_packages(None).await?;
 
     // Create the transaction that we need
-    let transaction =
-        Transaction::from_current_and_desired(prefix_records, records.iter().cloned(), platform)
-            .into_diagnostic()?;
+    let transaction = Transaction::from_current_and_desired(
+        prefix_records,
+        records.iter().cloned(),
+        Platform::current(),
+    )
+    .into_diagnostic()?;
+
+    let has_transactions = !transaction.operations.is_empty();
 
     // Execute the transaction if there is work to do
-    if !transaction.operations.is_empty() {
+    if has_transactions {
         // Execute the operations that are returned by the solver.
         await_in_progress(
             "creating virtual environment",
@@ -395,9 +457,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Find the installed package in the environment
     let prefix_package = find_designated_package(&prefix, &package_name).await?;
-    let channel = Channel::from_str(&prefix_package.repodata_record.channel, &channel_config)
-        .map(|ch| friendly_channel_name(&ch))
-        .unwrap_or_else(|_| prefix_package.repodata_record.channel.clone());
 
     // Determine the shell to use for the invocation script
     let shell: ShellEnum = if cfg!(windows) {
@@ -426,6 +485,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Check if the bin path is on the path
     if scripts.is_empty() {
+        let channel = channel_name_from_prefix(&prefix_package, channel_config);
         miette::bail!(
             "could not find an executable entrypoint in package {} {} {} from {}, are you sure it exists?",
             console::style(prefix_package.repodata_record.package_record.name.as_source()).bold(),
@@ -433,50 +493,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             console::style(prefix_package.repodata_record.package_record.build).bold(),
             channel,
         );
-    } else {
-        let whitespace = console::Emoji("  ", "").to_string();
-        eprintln!(
-            "{}Installed package {} {} {} from {}",
-            console::style(console::Emoji("✔ ", "")).green(),
-            console::style(
-                prefix_package
-                    .repodata_record
-                    .package_record
-                    .name
-                    .as_source()
-            )
-            .bold(),
-            console::style(prefix_package.repodata_record.package_record.version).bold(),
-            console::style(prefix_package.repodata_record.package_record.build).bold(),
-            channel,
-        );
-
-        let BinDir(bin_dir) = BinDir::from_existing().await?;
-        let script_names = scripts
-            .into_iter()
-            .map(|path| {
-                path.strip_prefix(&bin_dir)
-                    .expect("script paths were constructed by joining onto BinDir")
-                    .to_string_lossy()
-                    .to_string()
-            })
-            .join(&format!("\n{whitespace} -  "));
-
-        if is_bin_folder_on_path() {
-            eprintln!(
-                "{whitespace}These apps are now globally available:\n{whitespace} -  {script_names}",
-            )
-        } else {
-            let bin_dir = format!("~/{BIN_DIR}");
-            eprintln!("{whitespace}These apps have been added to {}\n{whitespace} -  {script_names}\n\n{} To use them, make sure to add {} to your PATH",
-                      console::style(&bin_dir).bold(),
-                      console::style("!").yellow().bold(),
-                      console::style(&bin_dir).bold()
-            )
-        }
     }
 
-    Ok(())
+    Ok((prefix_package, scripts, has_transactions))
+}
+
+fn channel_name_from_prefix(
+    prefix_package: &PrefixRecord,
+    channel_config: &ChannelConfig,
+) -> String {
+    Channel::from_str(&prefix_package.repodata_record.channel, channel_config)
+        .map(|ch| friendly_channel_name(&ch))
+        .unwrap_or_else(|_| prefix_package.repodata_record.channel.clone())
+}
+
+pub(super) fn package_name(package_matchspec: &MatchSpec) -> miette::Result<PackageName> {
+    package_matchspec.name.clone().ok_or_else(|| {
+        miette::miette!(
+            "could not find package name in MatchSpec {}",
+            package_matchspec
+        )
+    })
 }
 
 /// Returns the string to add for all arguments passed to the script

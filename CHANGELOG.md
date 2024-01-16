@@ -2,8 +2,112 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.12.0] - 2024-01-15
+### ✨ Highlights
 
+- Some great community contributions, `pixi global upgrade`, `pixi project version` commands, a `PIXI_HOME` variable.
+- A ton of refactor work to prepare for the [multi-environment](https://pixi.sh/design_proposals/multi_environment_proposal/) feature.
+  - Note that there are no extra environments created yet, but you can just specify them in the `pixi.toml` file already.
+  - Next we'll build the actual environments.
+
+### 📃 Details
+
+#### Added
+- Add `global upgrade` command to pixi by @trueleo in [#614](https://github.com/prefix-dev/pixi/pull/614)
+- Add configurable `PIXI_HOME` by @chawyehsu in [#627](https://github.com/prefix-dev/pixi/pull/627)
+- Add `--pypi` option to `pixi remove` by @marcelotrevisani in https://github.com/prefix-dev/pixi/pull/602
+- PrioritizedChannels to specify channel priority by @ruben-arts in https://github.com/prefix-dev/pixi/pull/658
+- Add `project version {major,minor,patch}` CLIs by @hadim in https://github.com/prefix-dev/pixi/pull/633
+
+
+#### Changed
+- Refactored project model using targets, features and environments by @baszalmstra in https://github.com/prefix-dev/pixi/pull/616
+- Move code from `Project` to `Environment` by @baszalmstra in [#630](https://github.com/prefix-dev/pixi/pull/630)
+- Refactored `system-requirements` from Environment by @baszalmstra in [#632](https://github.com/prefix-dev/pixi/pull/632)
+- Extract `activation.scripts` into Environment by @baszalmstra in [#659](https://github.com/prefix-dev/pixi/pull/659)
+- Extract `pypi-dependencies` from Environment by @baszalmstra in https://github.com/prefix-dev/pixi/pull/656
+- De-serialization of `features` and `environments` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/636
+
+#### Fixed
+- Make install.sh also work with wget if curl is not available by @wolfv in [#644](https://github.com/prefix-dev/pixi/pull/644)
+- Use source build for rattler by @ruben-arts
+- Check for pypi-dependencies before amending the pypi purls by @ruben-arts in [#661](https://github.com/prefix-dev/pixi/pull/661)
+- Don't allow the use of reflinks by @ruben-arts in [#662](https://github.com/prefix-dev/pixi/pull/662)
+
+#### Removed
+- Remove windows and unix system requirements by @baszalmstra in [#635](https://github.com/prefix-dev/pixi/pull/635)
+
+#### Documentation
+- Document the channel logic by @ruben-arts in https://github.com/prefix-dev/pixi/pull/610
+- Update the instructions for installing on Arch Linux by @orhun in https://github.com/prefix-dev/pixi/pull/653
+- Update Community.md by @KarelZe in https://github.com/prefix-dev/pixi/pull/654
+- Replace contributions.md with contributing.md and make it more standardized by @ruben-arts in https://github.com/prefix-dev/pixi/pull/649
+- Remove `windows` and `unix` system requirements by @baszalmstra in https://github.com/prefix-dev/pixi/pull/635
+- Add `CODE_OF_CONDUCT.md` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/648
+- Removed remaining .ps1 references by @bahugo in https://github.com/prefix-dev/pixi/pull/643
+
+## New Contributors
+* @marcelotrevisani made their first contribution in https://github.com/prefix-dev/pixi/pull/602
+* @trueleo made their first contribution in https://github.com/prefix-dev/pixi/pull/614
+* @bahugo made their first contribution in https://github.com/prefix-dev/pixi/pull/643
+* @KarelZe made their first contribution in https://github.com/prefix-dev/pixi/pull/654
+
+**Full Changelog**: https://github.com/prefix-dev/pixi/compare/v0.11.0...v0.12.0
+
+## [0.11.1] - 2024-01-06
+
+### 📃 Details
+#### Fixed
+- Upgrading rattler to fix `pixi auth` in [#642](https://github.com/prefix-dev/pixi/pull/642)
+
+## [0.11.0] - 2024-01-05
+### ✨ Highlights
+
+- Lots of important and preparations for the pypi `sdist` and multi environment feature
+- Lots of new contributors that help `pixi` improve!
+
+### 📃 Details
+#### Added
+- Add new commands for `pixi project {version|channel|platform|description}` by @hadim in [#579](https://github.com/prefix-dev/pixi/pull/579)
+- Add dependabot.yml by @pavelzw in [#606](https://github.com/prefix-dev/pixi/pull/606)
+
+#### Changed
+- `winget-releaser` gets correct identifier by @ruben-arts in [#561](https://github.com/prefix-dev/pixi/pull/561)
+- Task run code by @baszalmstra in [#556](https://github.com/prefix-dev/pixi/pull/556)
+- No ps1 in activation scripts by @ruben-arts in [#563](https://github.com/prefix-dev/pixi/pull/563)
+- Changed some names for clarity by @tdejager in [#568](https://github.com/prefix-dev/pixi/pull/568)
+- Change font and make it dark mode by @ruben-arts in [#576](https://github.com/prefix-dev/pixi/pull/576)
+- Moved pypi installation into its own module by @tdejager in [#589](https://github.com/prefix-dev/pixi/pull/589)
+- Move alpha to beta feature and toggle it off with env var by @ruben-arts in [#604](https://github.com/prefix-dev/pixi/pull/604)
+- Improve UX activation scripts by @ruben-arts in [#560](https://github.com/prefix-dev/pixi/pull/560)
+- Add sanity check by @tdejager in [#569](https://github.com/prefix-dev/pixi/pull/569)
+- Refactor manifest by @ruben-arts in [#572](https://github.com/prefix-dev/pixi/pull/572)
+- Improve search by @Johnwillliam in [#578](https://github.com/prefix-dev/pixi/pull/578)
+- Split pypi and conda solve steps by @tdejager in [#601](https://github.com/prefix-dev/pixi/pull/601)
+
+#### Fixed
+- Save file after lockfile is correctly updated by @ruben-arts in [#555](https://github.com/prefix-dev/pixi/pull/555)
+- Limit the number of concurrent solves by @baszalmstra in [#571](https://github.com/prefix-dev/pixi/pull/571)
+- Use project virtual packages in add command by @msegado in [#609](https://github.com/prefix-dev/pixi/pull/609)
+- Improved mapped dependency by @ruben-arts in [#574](https://github.com/prefix-dev/pixi/pull/574)
+
+#### Documentation
+- Change font and make it dark mode by @ruben-arts in [#576](https://github.com/prefix-dev/pixi/pull/576)
+- typo: no ps1 in activation scripts by @ruben-arts in [#563](https://github.com/prefix-dev/pixi/pull/563)
+- Document adding CUDA to `system-requirements` by @ruben-arts in [#595](https://github.com/prefix-dev/pixi/pull/595)
+- Multi env proposal documentation by @ruben-arts in [#584](https://github.com/prefix-dev/pixi/pull/584)
+- Fix multiple typos in configuration.md by @SeaOtocinclus in [#608](https://github.com/prefix-dev/pixi/pull/608)
+- Add multiple machines from one project example by @pavelzw in [#605](https://github.com/prefix-dev/pixi/pull/605)
+
+## New Contributors
+* @hadim made their first contribution in [#579](https://github.com/prefix-dev/pixi/pull/579)
+* @msegado made their first contribution in [#609](https://github.com/prefix-dev/pixi/pull/609)
+* @Johnwillliam made their first contribution in [#578](https://github.com/prefix-dev/pixi/pull/578)
+* @SeaOtocinclus made their first contribution in [#608](https://github.com/prefix-dev/pixi/pull/608)
+
+**Full Changelog**: https://github.com/prefix-dev/pixi/compare/v0.10.0...v0.11.0
 
 ## [0.10.0] - 2023-12-8
 ### Highlights

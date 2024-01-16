@@ -48,7 +48,10 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
   - pymdownx.tabbed:
       alternate_style: true
   - toc:
@@ -77,10 +80,13 @@ nav:
     - Tasks: advanced/advanced_tasks.md
     - Multi Platform: advanced/multi_platform_configuration.md
     - Info command: advanced/explain_info_command.md
+    - Channel Logic: advanced/channel_priority.md
   - Examples:
       - C++/Cmake: examples/cpp-sdl.md
       - OpenCV: examples/opencv.md
       - ROS2: examples/ros2-nav2.md
+  - Design Proposals:
+      - Multi Env: design_proposals/multi_environment_proposal.md
   - Community: Community.md
   - FAQ: FAQ.md
 
