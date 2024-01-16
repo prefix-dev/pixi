@@ -7,12 +7,13 @@ channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [tasks]
-helium = "python helium_test.py"
+start = "python pycosat_example.py"
 
 [dependencies]
 python = "~=3.11.0"
 numpy = "*"
 libclang = "~=16.0.6"
+scipy = "~=1.11.4"
 
 [pypi-dependencies]
 pyboy = "==1.6.6"
@@ -20,8 +21,8 @@ tensorflow = "==2.14.0"
 flask = "*"
 black = {version = "~=23.10", extras = ["jupyter"]}
 # sdists:
-helium = "*"
 pyliblzfse = "*"
+pycosat = "*"
 
 [system-requirements]
 # Tensorflow on macOS arm64 requires macOS 12.0 or higher
