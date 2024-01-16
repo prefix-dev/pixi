@@ -9,7 +9,6 @@ use rattler_lock::{LockedDependency, LockedDependencyKind};
 use serde::Serialize;
 
 use crate::lock_file::load_lock_file;
-use crate::project::SpecType;
 use crate::Project;
 
 // an enum to sort by size or name
