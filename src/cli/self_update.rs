@@ -187,7 +187,11 @@ You can always use `pixi self-update --force` to force the update.",
     );
 
     // Get the new binary path used for self-replacement
-    let new_binary_path = binary_tempdir.path().join("pixi");
+    let new_binary_path = if cfg!(target_os = "windows") {
+        binary_tempdir.path().join("pixi.exe")
+    } else {
+        binary_tempdir.path().join("pixi")
+    };
 
     // Replace the current binary with the new binary
     self_replace::self_replace(new_binary_path).into_diagnostic()?;
