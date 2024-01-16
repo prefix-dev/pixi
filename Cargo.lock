@@ -2693,6 +2693,7 @@ dependencies = [
  "insta",
  "is_executable",
  "itertools 0.12.0",
+ "lazy_static",
  "libc",
  "miette",
  "minijinja",

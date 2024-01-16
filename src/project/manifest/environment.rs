@@ -1,5 +1,6 @@
 use crate::consts;
 use crate::utils::spanned::PixiSpanned;
+use lazy_static::lazy_static;
 use miette::Diagnostic;
 use regex::Regex;
 use serde::{self, Deserialize, Deserializer};
@@ -47,8 +48,11 @@ pub struct ParseEnvironmentNameError {
 impl FromStr for EnvironmentName {
     type Err = ParseEnvironmentNameError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"^[a-z0-9-]+$").unwrap(); // Compile the regex
-        if !re.is_match(s) {
+        lazy_static! {
+            static ref REGEX: Regex = Regex::new(r"^[a-z0-9-]+$").expect("Regex should be able to compile"); // Compile the regex
+        }
+
+        if !REGEX.is_match(s) {
             // Return an error if the string does not match the regex
             return Err(ParseEnvironmentNameError {
                 attempted_parse: s.to_string(),
