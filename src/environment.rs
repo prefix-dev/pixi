@@ -113,7 +113,7 @@ pub async fn get_up_to_date_prefix(
     if !no_install {
         let current_platform = Platform::current();
         if !project.platforms().contains(&current_platform) {
-            tracing::warn!("Not installing dependency on current platform: ({current_platform}) as it is not part of the supported platforms.");
+            tracing::warn!("Not installing dependency on current platform: ({current_platform}) as it is not part of this project's supported platforms.");
             no_install = true;
         }
     }
