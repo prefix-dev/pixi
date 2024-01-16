@@ -203,8 +203,7 @@ fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
     } else {
         serde_json::to_string(&packages)
     }
-    .map_err(|_| miette::miette!("Cannot serialize packages to JSON"))
-    .unwrap();
+    .expect("Cannot serialize packages to JSON");
 
     println!("{}", json_string);
 }
