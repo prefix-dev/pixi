@@ -153,7 +153,7 @@ You can always use `pixi self-update --force` to force the update.",
     );
 
     // Seek to the beginning of the file before uncompressing it
-    let _ = archived_tempfile.seek(SeekFrom::Start(0));
+    let _ = archived_tempfile.rewind();
 
     // Create a temporary directory to unpack the archive
     let binary_tempdir = &tempfile::tempdir().into_diagnostic()?;
