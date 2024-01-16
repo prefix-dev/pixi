@@ -219,7 +219,7 @@ async fn retrieve_target_version(version: &Option<String>) -> miette::Result<Git
         .expect("Failed to fetch latest version from github");
 
     // compare target version with current version
-    let target_version_json = serde_json::from_str::<GithubRelease>(&body);
+    serde_json::from_str::<GithubRelease>(&body).into_diagnostic()
 
     miette::Result::from(target_version_json).into_diagnostic()
 }
