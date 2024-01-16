@@ -110,10 +110,12 @@ pub async fn get_up_to_date_prefix(
     sparse_repo_data: Option<Vec<SparseRepoData>>,
 ) -> miette::Result<Prefix> {
     // Do not install if the platform is not supported
-    let current_platform = Platform::current();
-    if !project.platforms().contains(&current_platform) {
-        tracing::warn!("Not installing dependency on current platform: ({current_platform}) as it is not part of the supported platforms.");
-        no_install = true;
+    if !no_install {
+        let current_platform = Platform::current();
+        if !project.platforms().contains(&current_platform) {
+            tracing::warn!("Not installing dependency on current platform: ({current_platform}) as it is not part of the supported platforms.");
+            no_install = true;
+        }
     }
 
     // Make sure the project is in a sane state
