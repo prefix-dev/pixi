@@ -66,7 +66,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // If args.force is false and pixi is not installed in the default location, stop here.
     match (args.force, is_pixi_binary_default_location()) {
         (false, false) => {
-            let error_mesage = format!(
+            miette::bail!(
                 "pixi is not installed in the default location:
 
 - Default pixi location: {}
@@ -77,7 +77,6 @@ You can always use `pixi self-update --force` to force the update.",
                 default_pixi_binary_path().to_str().expect("Could not convert the default pixi binary path to a string"),
                 env::current_exe().expect("Failed to retrieve the current pixi binary path").to_str().expect("Could not convert the current pixi binary path to a string")
             );
-            Err(miette::miette!(error_mesage))?
         }
         (false, true) => {}
         (true, _) => {}
@@ -86,13 +85,12 @@ You can always use `pixi self-update --force` to force the update.",
     // Retrieve the target version information from github.
     let target_version_json = match retrieve_target_version(&args.version).await {
         Ok(target_version_json) => target_version_json,
-        Err(err) => {
-            let error_mesage = match args.version {
-                Some(version) => format!("The version you specified is not available: {}", version),
-                None => format!("Failed to fetch latest version from github: {}", err),
-            };
-            Err(miette::miette!(error_mesage))?
-        }
+        Err(err) => match args.version {
+            Some(version) => {
+                miette::bail!("The version you specified is not available: {}", version)
+            }
+            None => miette::bail!("Failed to fetch latest version from github: {}", err),
+        },
     };
 
     // Get the target version
