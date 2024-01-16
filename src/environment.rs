@@ -2,7 +2,7 @@ use crate::{
     consts, default_authenticated_client, install, install_pypi, lock_file, prefix::Prefix,
     progress, Project,
 };
-use miette::{Context, IntoDiagnostic, LabeledSpan};
+use miette::{Context, IntoDiagnostic};
 
 use crate::lock_file::lock_file_satisfies_project;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
@@ -53,30 +53,12 @@ fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
     Ok(())
 }
 
-/// Runs a number of different checks to make sure the project is in a sane state:
+/// Runs the following checks to make sure the project is in a sane state:
 ///     1. It verifies that the prefix location is unchanged.
-///     2. It verifies that the project supports the current platform.
-///     3. It verifies that the system requirements are met.
+///     2. It verifies that the system requirements are met.
 pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.pixi_dir().join(consts::PREFIX_FILE_NAME).as_path())?;
-
-    // Make sure the project supports the current platform
-    let platform = Platform::current();
-    if !project.platforms().contains(&platform) {
-        let span = project.manifest.parsed.project.platforms.span();
-        return Err(miette::miette!(
-            help = format!(
-                "The project needs to be configured to support your platform ({platform})."
-            ),
-            labels = vec![LabeledSpan::at(
-                span.unwrap_or_default(),
-                format!("add '{platform}' here"),
-            )],
-            "the project is not configured for your current platform"
-        )
-        .with_source_code(project.manifest_named_source()));
-    }
 
     // Make sure the system requirements are met
     verify_current_platform_has_required_virtual_packages(&project.default_environment())?;
@@ -124,9 +106,18 @@ impl LockFileUsage {
 pub async fn get_up_to_date_prefix(
     project: &Project,
     usage: LockFileUsage,
-    no_install: bool,
+    mut no_install: bool,
     sparse_repo_data: Option<Vec<SparseRepoData>>,
 ) -> miette::Result<Prefix> {
+    // Do not install if the platform is not supported
+    if !no_install {
+        let current_platform = Platform::current();
+        if !project.platforms().contains(&current_platform) {
+            tracing::warn!("Not installing dependency on current platform: ({current_platform}) as it is not part of this project's supported platforms.");
+            no_install = true;
+        }
+    }
+
     // Make sure the project is in a sane state
     sanity_check_project(project)?;
 
