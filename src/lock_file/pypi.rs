@@ -95,7 +95,9 @@ pub async fn resolve_dependencies<'p>(
         &ResolveOptions {
             sdist_resolution: resolution,
             python_location: python_location.clone(),
+            clean_env: false,
         },
+        HashMap::default(),
     )
     .await?;
 

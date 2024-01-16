@@ -25,7 +25,7 @@ use rip::types::{
     Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Extra, NormalizedPackageName,
 };
 use rip::wheel_builder::WheelBuilder;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
@@ -113,8 +113,9 @@ pub async fn update_python_distributions(
             &ResolveOptions {
                 sdist_resolution,
                 python_location: python_location.clone(),
+                clean_env: false,
             },
-            package_db.cache_dir(),
+            HashMap::default(),
         ))
     } else {
         None

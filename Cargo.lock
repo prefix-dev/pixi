@@ -1178,6 +1178,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-err"
+version = "2.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88a41f105fe1d5b6b34b2055e3dc59bb79b46b48b2040b9e6c7b4b5de097aa41"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "fs4"
 version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2978,9 +2987,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_installs_packages"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e162a7221ad6717b0b52ff513bd22e628d31c7e3cfb79972b80bd0f9d7f1e5e"
+checksum = "aaa570d7d3e432a67708419fc3502cff0889054e341e63180a9fe861314fff46"
 dependencies = [
  "async-once-cell",
  "async-recursion",
@@ -2996,6 +3005,7 @@ dependencies = [
  "dunce",
  "elsa",
  "flate2",
+ "fs-err",
  "fs4",
  "futures 0.3.30",
  "html-escape",
