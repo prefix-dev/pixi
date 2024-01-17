@@ -2,10 +2,13 @@ use std::{collections::HashMap, path::PathBuf, string::String};
 
 use clap::Parser;
 use itertools::Itertools;
-use miette::{miette, Context, Diagnostic, IntoDiagnostic};
+#[cfg(unix)]
+use miette::IntoDiagnostic;
+use miette::{miette, Context, Diagnostic};
 use rattler_conda_types::Platform;
 
 use crate::environment::LockFileUsage;
+#[cfg(unix)]
 use crate::runs::DaemonRunsManager;
 use crate::task::{
     ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TraversalError,
@@ -35,7 +38,7 @@ pub struct Args {
     pub lock_file_usage: super::LockFileUsageArgs,
 
     /// After starting, detach (daemonize) from the shell. This keeps the process running in the background.
-    /// Only available on unix systems and has no effect on windows.
+    /// Only available on unix systems and will fail on non-unix systems.
     #[arg(short, long)]
     pub detach: bool,
 
@@ -49,9 +52,9 @@ pub struct Args {
 pub fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
-    #[cfg(unix)]
-    {
-        if args.detach {
+    if args.detach {
+        #[cfg(unix)]
+        {
             let runs_manager = DaemonRunsManager::new(&project);
 
             let daemon_run = match runs_manager.create_new_run(args.name.clone()) {
@@ -69,6 +72,10 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 Ok(_) => tracing::debug!("Success, daemonized"),
                 Err(e) => miette::bail!("Failed to daemonize: {}", e),
             }
+        }
+        #[cfg(not(unix))]
+        {
+            miette::bail!("Detached mode is only available on unix systems")
         }
     }
 

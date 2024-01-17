@@ -211,6 +211,7 @@ impl DaemonRun {
         }
         #[cfg(not(unix))]
         {
+            let _ = task;
             miette::bail!("The `start` command is only available on Unix systems.");
         }
     }
