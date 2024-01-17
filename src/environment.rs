@@ -69,6 +69,17 @@ pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Make sure the system requirements are met
     verify_current_platform_has_required_virtual_packages(&project.default_environment())?;
 
+    // TODO: remove on a 1.0 release
+    // Check for old `env` folder as we moved to `envs` in 0.13.0
+    let old_pixi_env_dir = project.pixi_dir().join("env");
+    if old_pixi_env_dir.exists() {
+        tracing::warn!(
+            "The `{}` folder is deprecated, please remove it as we now use the `{}` folder",
+            old_pixi_env_dir.display(),
+            consts::ENVIRONMENTS_DIR
+        );
+    }
+
     Ok(())
 }
 
