@@ -182,30 +182,37 @@ impl DaemonRun {
     }
 
     pub fn start(&self, task: Vec<String>) -> miette::Result<()> {
-        // Create stdout and stderr files
-        let stdout = std::fs::File::create(self.stdout_path()).unwrap();
-        let stderr = std::fs::File::create(self.stderr_path()).unwrap();
+        #[cfg(unix)]
+        {
+            // Create stdout and stderr files
+            let stdout = std::fs::File::create(self.stdout_path()).unwrap();
+            let stderr = std::fs::File::create(self.stderr_path()).unwrap();
 
-        // Create and save the infos file
-        let infos = DaemonRunInfos {
-            name: self.name.clone(),
-            task,
-            start_date: Local::now(),
-        };
-        let infos_json = serde_json::to_string_pretty(&infos).unwrap();
-        std::fs::write(self.infos_file_path(), infos_json).unwrap();
+            // Create and save the infos file
+            let infos = DaemonRunInfos {
+                name: self.name.clone(),
+                task,
+                start_date: Local::now(),
+            };
+            let infos_json = serde_json::to_string_pretty(&infos).unwrap();
+            std::fs::write(self.infos_file_path(), infos_json).unwrap();
 
-        // Create the daemon
-        let daemonize = Daemonize::new()
-            .pid_file(self.pid_file_path())
-            .stdout(stdout)
-            .stderr(stderr)
-            .umask(0o027) // Set umask, `0o027` by default.
-            .chown_pid_file(true)
-            .working_directory(self.working_dir.clone());
+            // Create the daemon
+            let daemonize = Daemonize::new()
+                .pid_file(self.pid_file_path())
+                .stdout(stdout)
+                .stderr(stderr)
+                .umask(0o027) // Set umask, `0o027` by default.
+                .chown_pid_file(true)
+                .working_directory(self.working_dir.clone());
 
-        // Start the daemon
-        daemonize.start().into_diagnostic()
+            // Start the daemon
+            daemonize.start().into_diagnostic()
+        }
+        #[cfg(not(unix))]
+        {
+            miette::bail!("The `start` command is only available on Unix systems.");
+        }
     }
 
     pub fn clear(&self) -> miette::Result<()> {
