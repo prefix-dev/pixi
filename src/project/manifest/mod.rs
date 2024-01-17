@@ -1130,16 +1130,19 @@ mod test {
         name: &str,
         kind: SpecType,
         platform: Option<Platform>,
-        feature_name: Option<&FeatureName>,
+        feature_name_opt: Option<&FeatureName>,
     ) {
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
 
-        let f_name = feature_name.unwrap_or(&FeatureName::Default);
+        let feature_name = feature_name_opt.unwrap_or(&FeatureName::Default);
 
         // Initially the dependency should exist
         assert!(manifest
-            .feature_mut(f_name)
-            .expect(&*format!("feature `{}` should exist", f_name.as_str()))
+            .feature_mut(feature_name)
+            .expect(&*format!(
+                "feature `{}` should exist",
+                feature_name.as_str()
+            ))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1155,14 +1158,17 @@ mod test {
                 &PackageName::new_unchecked(name),
                 kind,
                 platform,
-                feature_name,
+                feature_name_opt,
             )
             .unwrap();
 
         // The dependency should no longer exist
         assert!(manifest
-            .feature_mut(f_name)
-            .expect(&*format!("feature `{}` should exist", f_name.as_str()))
+            .feature_mut(feature_name)
+            .expect(&*format!(
+                "feature `{}` should exist",
+                feature_name.as_str()
+            ))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1183,18 +1189,21 @@ mod test {
         file_contents: &str,
         name: &str,
         platform: Option<Platform>,
-        feature_name: Option<&FeatureName>,
+        feature_name_opt: Option<&FeatureName>,
     ) {
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
 
         let package_name = rip::types::PackageName::from_str(name).unwrap();
 
-        let f_name = feature_name.unwrap_or(&FeatureName::Default);
+        let feature_name = feature_name_opt.unwrap_or(&FeatureName::Default);
 
         // Initially the dependency should exist
         assert!(manifest
-            .feature_mut(f_name)
-            .expect(&*format!("feature `{}` should exist", f_name.as_str()))
+            .feature_mut(feature_name)
+            .expect(&*format!(
+                "feature `{}` should exist",
+                feature_name.as_str()
+            ))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1206,13 +1215,16 @@ mod test {
 
         // Remove the dependency from the manifest
         manifest
-            .remove_pypi_dependency(&package_name, platform, feature_name)
+            .remove_pypi_dependency(&package_name, platform, feature_name_opt)
             .unwrap();
 
         // The dependency should no longer exist
         assert!(manifest
-            .feature_mut(f_name)
-            .expect(&*format!("feature `{}` should exist", f_name.as_str()))
+            .feature_mut(feature_name)
+            .expect(&*format!(
+                "feature `{}` should exist",
+                feature_name.as_str()
+            ))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
