@@ -1,11 +1,102 @@
 use clap::Parser;
+use comfy_table::{presets::NOTHING, Attribute, Cell, ContentArrangement, Table};
+
+use crate::{
+    runs::{DaemonRunState, DaemonRunsManager},
+    Project,
+};
 
 /// List all the daemon tasks of the project.
 #[derive(Parser, Debug)]
-pub struct Args {}
+pub struct Args {
+    /// Whether to output in json format
+    #[arg(long)]
+    pub json: bool,
 
-pub async fn execute(_args: Args) -> miette::Result<()> {
-    println!("Hello world!");
+    /// Whether to output in pretty json format
+    #[arg(long)]
+    pub json_pretty: bool,
+}
+
+pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
+    // Init the runs manager
+    let runs_manager = DaemonRunsManager::new(&project);
+
+    // Get all the run states
+    let run_states: Result<Vec<DaemonRunState>, _> = runs_manager
+        .runs()
+        .into_iter()
+        .map(|run| run.state())
+        .collect();
+
+    match run_states {
+        Ok(run_states) => {
+            // Print the runs
+            if run_states.is_empty() {
+                eprintln!(
+                    "{}No runs found",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                );
+            } else {
+                if args.json || args.json_pretty {
+                    print_as_json(&run_states, args.json_pretty);
+                } else {
+                    print_as_table(&run_states);
+                }
+            }
+        }
+        Err(err) => {
+            miette::bail!("Failed to get runs: {}", err);
+        }
+    }
 
     Ok(())
+}
+
+fn print_as_table(run_states: &Vec<DaemonRunState>) {
+    // Initialize table
+    let mut table = Table::new();
+
+    table
+        .load_preset(NOTHING)
+        // .apply_modifier(UTF8_NO_BORDERS)
+        .set_content_arrangement(ContentArrangement::Dynamic);
+
+    // Add headers
+    table.set_header(vec![
+        Cell::new("Name").add_attribute(Attribute::Bold),
+        Cell::new("Status").add_attribute(Attribute::Bold),
+        Cell::new("PID").add_attribute(Attribute::Bold),
+        Cell::new("Start Date").add_attribute(Attribute::Bold),
+        Cell::new("Task").add_attribute(Attribute::Bold),
+        Cell::new("Stdout Size").add_attribute(Attribute::Bold),
+        Cell::new("Stderr Size").add_attribute(Attribute::Bold),
+        Cell::new("<dev>>").add_attribute(Attribute::Bold),
+    ]);
+
+    for state in run_states {
+        table.add_row(vec![
+            Cell::new(&state.name),
+            Cell::new(&state.status.to_string()),
+            Cell::new(&state.pid),
+            Cell::new(&state.start_date.format("%Y-%m-%d %H:%M:%S")),
+            Cell::new(&state.task.join(" ")),
+            Cell::new(&state.stdout_length),
+            Cell::new(&state.stderr_length),
+            Cell::new("dsdsd"),
+        ]);
+    }
+
+    println!("{table}");
+}
+
+fn print_as_json(run_states: &Vec<DaemonRunState>, json_pretty: bool) {
+    // let json_string = if json_pretty {
+    //     serde_json::to_string_pretty(&run_states)
+    // } else {
+    //     serde_json::to_string(&run_states)
+    // }
+    // .expect("Cannot serialize to JSON");
+
+    // println!("{}", json_string);
 }

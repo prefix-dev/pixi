@@ -64,6 +64,7 @@ serde_with = { version = "3.4.0", features = ["indexmap"] }
 shlex = "1.2.0"
 spdx = "0.10.3"
 strsim = "0.10.0"
+sysinfo = "0.30.5"
 tar = "0.4.40"
 tempfile = "3.9.0"
 thiserror = "1.0.56"

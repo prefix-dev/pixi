@@ -8,6 +8,7 @@ use rattler_conda_types::Platform;
 use daemonize::Daemonize;
 
 use crate::environment::LockFileUsage;
+use crate::runs::DaemonRunsManager;
 use crate::task::{
     ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TraversalError,
 };
@@ -39,15 +40,10 @@ pub struct Args {
     #[arg(short, long, requires = "name")]
     pub detach: bool,
 
-    /// teestng
+    /// The name of the run. It is unused when `--detach` is not used and is mandatory otherwise.
+    /// It will be used to name the pid file and the log files.
     #[arg(short, long)]
     pub name: Option<String>,
-}
-
-pub struct DaemonTask {
-    pub pid_file_path: std::path::PathBuf,
-    pub stdout_path: std::path::PathBuf,
-    pub stderr_path: std::path::PathBuf,
 }
 
 /// CLI entry point for `pixi run`
@@ -56,32 +52,22 @@ pub fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     if args.detach {
+        let runs_manager = DaemonRunsManager::new(&project);
+
+        let daemon_run = match runs_manager.create_new_run(args.name.clone()) {
+            Ok(daemon_run) => daemon_run,
+            Err(e) => miette::bail!("Failed to create new run: {}", e),
+        };
+
         eprintln!(
             "{}Starting the task in the background with the name '{}'.",
             console::style(console::Emoji("✔ ", "")).green(),
             args.name.as_deref().unwrap_or("pixi")
         );
 
-        let daemon_task = DaemonTask {
-            pid_file_path: std::path::PathBuf::from("/tmp/pixi.pid"),
-            stdout_path: std::path::PathBuf::from("/tmp/pixi.out"),
-            stderr_path: std::path::PathBuf::from("/tmp/pixi.err"),
-        };
-
-        let stdout = std::fs::File::create(daemon_task.stdout_path.clone()).unwrap();
-        let stderr = std::fs::File::create(daemon_task.stderr_path.clone()).unwrap();
-
-        let daemonize = Daemonize::new()
-            .pid_file(daemon_task.pid_file_path)
-            .stdout(stdout)
-            .stderr(stderr)
-            .umask(0o027) // Set umask, `0o027` by default.
-            .chown_pid_file(true)
-            .working_directory(project.root());
-
-        match daemonize.start() {
+        match daemon_run.start(args.task.clone()) {
             Ok(_) => tracing::debug!("Success, daemonized"),
-            Err(e) => eprintln!("Error, {}", e),
+            Err(e) => miette::bail!("Failed to daemonize: {}", e),
         }
     }
 
