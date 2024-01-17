@@ -27,7 +27,7 @@ impl<'de> Deserialize<'de> for FeatureName {
         D: serde::Deserializer<'de>,
     {
         match String::deserialize(deserializer)?.as_str() {
-            "default" => Err(D::Error::custom(
+            consts::DEFAULT_ENVIRONMENT_NAME => Err(D::Error::custom(
                 "The name 'default' is reserved for the default feature",
             )),
             name => Ok(FeatureName::Named(name.to_string())),
@@ -35,6 +35,14 @@ impl<'de> Deserialize<'de> for FeatureName {
     }
 }
 
+impl<'s> From<&'s str> for FeatureName {
+    fn from(value: &'s str) -> Self {
+        match value {
+            consts::DEFAULT_ENVIRONMENT_NAME => FeatureName::Default,
+            name => FeatureName::Named(name.to_string()),
+        }
+    }
+}
 impl FeatureName {
     /// Returns the name of the feature or `None` if this is the default feature.
     pub fn name(&self) -> Option<&str> {

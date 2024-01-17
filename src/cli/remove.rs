@@ -35,6 +35,10 @@ pub struct Args {
     /// The platform for which the dependency should be removed
     #[arg(long, short)]
     pub platform: Option<Platform>,
+
+    /// The feature for which the dependency should be removed
+    #[arg(long)]
+    pub feature: Option<FeatureName>,
 }
 
 fn convert_pkg_name<T>(deps: &[String]) -> miette::Result<Vec<T>>
@@ -85,7 +89,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let (name, req) = project.manifest.remove_pypi_dependency(
                 dep,
                 args.platform,
-                Some(&FeatureName::Default),
+                args.feature.as_ref(),
             )?;
             sucessful_output.push(format_ok_message(
                 name.as_str(),
@@ -100,7 +104,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 dep,
                 spec_type,
                 args.platform,
-                Some(&FeatureName::Default),
+                args.feature.as_ref(),
             )?;
             sucessful_output.push(format_ok_message(
                 name.as_source(),
