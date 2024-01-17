@@ -1,4 +1,5 @@
 use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelector};
+use crate::consts;
 use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
 use crate::project::manifest::target::Targets;
 use crate::project::SpecType;
@@ -10,7 +11,7 @@ use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
 
 /// The name of a feature. This is either a string or default for the default feature.
@@ -41,6 +42,16 @@ impl FeatureName {
             FeatureName::Default => None,
             FeatureName::Named(name) => Some(name),
         }
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.name().unwrap_or(consts::DEFAULT_ENVIRONMENT_NAME)
+    }
+}
+
+impl Borrow<str> for FeatureName {
+    fn borrow(&self) -> &str {
+        self.as_str()
     }
 }
 

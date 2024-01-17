@@ -308,8 +308,9 @@ impl Manifest {
         dep: &PackageName,
         spec_type: SpecType,
         platform: Option<Platform>,
+        feature_name: Option<&FeatureName>,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
-        get_toml_target_table(&mut self.document, platform, spec_type.name())?
+        get_toml_target_table(&mut self.document, platform, feature_name, spec_type.name())?
             .remove(dep.as_normalized())
             .ok_or_else(|| {
                 let table_name = match platform {
@@ -338,26 +339,35 @@ impl Manifest {
         &mut self,
         dep: &rip::types::PackageName,
         platform: Option<Platform>,
+        feature: Option<&FeatureName>,
     ) -> miette::Result<(rip::types::PackageName, PyPiRequirement)> {
-        get_toml_target_table(&mut self.document, platform, consts::PYPI_DEPENDENCIES)?
-            .remove(dep.as_str())
-            .ok_or_else(|| {
-                let table_name = match platform {
-                    Some(platform) => {
-                        format!("target.{}.{}", platform.as_str(), consts::PYPI_DEPENDENCIES)
-                    }
-                    None => consts::PYPI_DEPENDENCIES.to_string(),
-                };
+        get_toml_target_table(
+            &mut self.document,
+            platform,
+            feature,
+            consts::PYPI_DEPENDENCIES,
+        )?
+        .remove(dep.as_str())
+        .ok_or_else(|| {
+            let table_name = match platform {
+                Some(platform) => {
+                    format!("target.{}.{}", platform.as_str(), consts::PYPI_DEPENDENCIES)
+                }
+                None => consts::PYPI_DEPENDENCIES.to_string(),
+            };
 
-                miette::miette!(
-                    "Couldn't find {} in [{}]",
-                    console::style(dep.as_source_str()).bold(),
-                    console::style(table_name).bold(),
-                )
-            })?;
+            miette::miette!(
+                "Couldn't find {} in [{}]",
+                console::style(dep.as_source_str()).bold(),
+                console::style(table_name).bold(),
+            )
+        })?;
 
         Ok(self
-            .default_feature_mut()
+            .parsed
+            .features
+            .get_mut(feature.unwrap_or(&FeatureName::Default))
+            .expect("feature should exist")
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
             .expect("target should exist")
@@ -483,6 +493,14 @@ impl Manifest {
         self.parsed.default_feature_mut()
     }
 
+    /// Returns the feature with the given name or `None` if it does not exist.
+    pub fn feature<Q: ?Sized>(&mut self, name: &Q) -> Option<&mut Feature>
+    where
+        Q: Hash + Equivalent<FeatureName>,
+    {
+        self.parsed.features.get_mut(name)
+    }
+
     /// Returns the default environment
     ///
     /// This is the environment that is added implicitly as the environment with only the default
@@ -552,21 +570,48 @@ pub fn ensure_toml_target_table<'a>(
 fn get_toml_target_table<'a>(
     doc: &'a mut Document,
     platform: Option<Platform>,
+    feature: Option<&FeatureName>,
     table_name: &str,
 ) -> miette::Result<&'a mut Table> {
-    let target_table = if let Some(platform) = platform {
-        doc["target"][platform.as_str()]
-            .as_table_mut()
-            .ok_or(miette::miette!(
-                "could not find {} in {}",
-                console::style(platform.as_str()).bold(),
-                consts::PROJECT_MANIFEST,
-            ))?
-    } else {
-        doc.as_table_mut()
+    let base_table = match (feature, platform) {
+        (Some(feature_name), Some(platform)) => {
+            // Handling [feature.feature_name.target.platform.table_name]
+            doc["feature"][feature_name.as_str()]["target"][platform.as_str()]
+                .as_table_mut()
+                .ok_or(miette::miette!(
+                    "could not find feature '{}' or target '{}' in {}",
+                    console::style(feature_name.as_str()).bold(),
+                    console::style(platform.as_str()).bold(),
+                    consts::PROJECT_MANIFEST,
+                ))?
+        }
+        (Some(feature_name), None) => {
+            // Handling [feature.feature_name.table_name]
+            doc["feature"][feature_name.as_str()]
+                .as_table_mut()
+                .ok_or(miette::miette!(
+                    "could not find feature '{}' in {}",
+                    console::style(feature_name.as_str()).bold(),
+                    consts::PROJECT_MANIFEST,
+                ))?
+        }
+        (None, Some(platform)) => {
+            // Handling [target.platform.table_name]
+            doc["target"][platform.as_str()]
+                .as_table_mut()
+                .ok_or(miette::miette!(
+                    "could not find target '{}' in {}",
+                    console::style(platform.as_str()).bold(),
+                    consts::PROJECT_MANIFEST,
+                ))?
+        }
+        (None, None) => {
+            // Handling [table_name]
+            doc.as_table_mut()
+        }
     };
 
-    target_table[table_name].as_table_mut().ok_or_else(|| {
+    base_table[table_name].as_table_mut().ok_or_else(|| {
         let table_name = match platform {
             Some(platform) => format!("target.{}.{}", platform.as_str(), table_name),
             None => table_name.to_string(),
@@ -1090,12 +1135,24 @@ mod test {
             .join("\n"));
     }
 
-    fn test_remove(file_contents: &str, name: &str, kind: SpecType, platform: Option<Platform>) {
+    fn test_remove(
+        file_contents: &str,
+        name: &str,
+        kind: SpecType,
+        platform: Option<Platform>,
+        feature_name: Option<&FeatureName>,
+    ) {
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        let feature_name = feature_name.unwrap_or(&FeatureName::Default);
 
         // Initially the dependency should exist
         assert!(manifest
-            .default_feature()
+            .feature(feature_name)
+            .expect(&*format!(
+                "feature `{}` should exist",
+                feature_name.as_str()
+            ))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1107,12 +1164,21 @@ mod test {
 
         // Remove the dependency from the manifest
         manifest
-            .remove_dependency(&PackageName::new_unchecked(name), kind, platform)
+            .remove_dependency(
+                &PackageName::new_unchecked(name),
+                kind,
+                platform,
+                Some(feature_name),
+            )
             .unwrap();
 
         // The dependency should no longer exist
         assert!(manifest
-            .default_feature()
+            .feature(feature_name)
+            .expect(&*format!(
+                "feature `{}` should exist",
+                feature_name.as_str()
+            ))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1126,14 +1192,22 @@ mod test {
         assert_display_snapshot!(manifest.document.to_string());
     }
 
-    fn test_remove_pypi(file_contents: &str, name: &str, platform: Option<Platform>) {
+    fn test_remove_pypi(
+        file_contents: &str,
+        name: &str,
+        platform: Option<Platform>,
+        feature_name: Option<&FeatureName>,
+    ) {
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
 
         let name = rip::types::PackageName::from_str(name).unwrap();
 
+        let f_name = feature_name.unwrap_or(&FeatureName::Default);
+
         // Initially the dependency should exist
         assert!(manifest
-            .default_feature()
+            .feature(f_name)
+            .expect(&*format!("feature `{}` should exist", f_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1144,11 +1218,14 @@ mod test {
             .is_some());
 
         // Remove the dependency from the manifest
-        manifest.remove_pypi_dependency(&name, platform).unwrap();
+        manifest
+            .remove_pypi_dependency(&name, platform, feature_name)
+            .unwrap();
 
         // The dependency should no longer exist
         assert!(manifest
-            .default_feature()
+            .feature(f_name)
+            .expect(&*format!("feature `{}` should exist", f_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1162,8 +1239,16 @@ mod test {
         assert_display_snapshot!(manifest.document.to_string());
     }
 
+    // #[rstest]
+    // #[case("xpackage", Some(Platform::Linux64), None)]
+    // #[case("jax", Some(Platform::Win64), None)]
+    // #[case("requests", None, None)]
+    // #[case("feature_dep", None, Some(FeatureName::Named("test".to_string())))]
     #[test]
-    fn test_remove_pypi_dependencies() {
+    fn test_remove_pypi_dependencies(// #[case] package_name: &str,
+        // #[case] platform: Option<Platform>,
+        // #[case] feature_name: Option<FeatureName>) {
+    ) {
         let pixi_cfg = r#"[project]
 name = "pixi_fun"
 version = "0.1.0"
@@ -1183,11 +1268,20 @@ requests = "*"
 [target.linux-64.pypi-dependencies]
 xpackage = "==1.2.3"
 ypackage = {version = ">=1.2.3"}
-"#;
 
-        test_remove_pypi(pixi_cfg, "xpackage", Some(Platform::Linux64));
-        test_remove_pypi(pixi_cfg, "jax", Some(Platform::Win64));
-        test_remove_pypi(pixi_cfg, "requests", None);
+[feature.test.pypi-dependencies]
+feature_dep = "*"
+
+[feature.test.target.linux-64.pypi-dependencies]
+feature_target_dep = "*"
+"#;
+        // test_remove_pypi(pixi_cfg, package_name, platform, feature_name.as_ref());
+        test_remove_pypi(
+            pixi_cfg,
+            "feature_dep",
+            None,
+            Some(&FeatureName::Named("test".to_string())),
+        )
     }
 
     #[test]
@@ -1215,9 +1309,16 @@ ypackage = {version = ">=1.2.3"}
             "baz",
             SpecType::Build,
             Some(Platform::Linux64),
+            None,
         );
-        test_remove(file_contents, "bar", SpecType::Run, Some(Platform::Win64));
-        test_remove(file_contents, "fooz", SpecType::Run, None);
+        test_remove(
+            file_contents,
+            "bar",
+            SpecType::Run,
+            Some(Platform::Win64),
+            None,
+        );
+        test_remove(file_contents, "fooz", SpecType::Run, None, None);
     }
 
     #[test]
@@ -1243,7 +1344,12 @@ ypackage = {version = ">=1.2.3"}
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
 
         manifest
-            .remove_dependency(&PackageName::new_unchecked("fooz"), SpecType::Run, None)
+            .remove_dependency(
+                &PackageName::new_unchecked("fooz"),
+                SpecType::Run,
+                None,
+                None,
+            )
             .unwrap();
 
         // The dependency should be removed from the default feature

@@ -6,6 +6,7 @@ use miette::miette;
 use rattler_conda_types::Platform;
 
 use crate::environment::LockFileUsage;
+use crate::project::manifest::FeatureName;
 use crate::{consts, environment::get_up_to_date_prefix, project::SpecType, Project};
 
 /// Remove the dependency from the project
@@ -81,9 +82,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.pypi {
         let all_pkg_name = convert_pkg_name::<rip::types::PackageName>(&deps)?;
         for dep in all_pkg_name.iter() {
-            let (name, req) = project
-                .manifest
-                .remove_pypi_dependency(dep, args.platform)?;
+            let (name, req) = project.manifest.remove_pypi_dependency(
+                dep,
+                args.platform,
+                Some(&FeatureName::Default),
+            )?;
             sucessful_output.push(format_ok_message(
                 name.as_str(),
                 &req.to_string(),
@@ -93,9 +96,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else {
         let all_pkg_name = convert_pkg_name::<rattler_conda_types::PackageName>(&deps)?;
         for dep in all_pkg_name.iter() {
-            let (name, req) = project
-                .manifest
-                .remove_dependency(dep, spec_type, args.platform)?;
+            let (name, req) = project.manifest.remove_dependency(
+                dep,
+                spec_type,
+                args.platform,
+                Some(&FeatureName::Default),
+            )?;
             sucessful_output.push(format_ok_message(
                 name.as_source(),
                 &req.to_string(),
