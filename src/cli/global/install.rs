@@ -1,7 +1,7 @@
 use crate::install::execute_transaction;
 use crate::repodata::friendly_channel_name;
 use crate::{
-    default_authenticated_client, prefix::Prefix, progress::await_in_progress,
+    config, default_authenticated_client, prefix::Prefix, progress::await_in_progress,
     repodata::fetch_sparse_repodata,
 };
 use clap::Parser;
@@ -447,8 +447,7 @@ pub(super) async fn globally_install_package(
             execute_transaction(
                 &transaction,
                 prefix.root().to_path_buf(),
-                rattler::default_cache_dir()
-                    .map_err(|_| miette::miette!("could not determine default cache directory"))?,
+                config::get_cache_dir()?,
                 default_authenticated_client(),
             ),
         )
