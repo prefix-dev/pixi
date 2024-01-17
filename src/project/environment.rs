@@ -57,6 +57,13 @@ impl<'p> Environment<'p> {
         self.environment
     }
 
+    /// Returns the directory where this environment is stored.
+    pub fn dir(&self) -> std::path::PathBuf {
+        self.project
+            .environments_dir()
+            .join(self.environment.name.as_str())
+    }
+
     /// Returns references to the features that make up this environment. The default feature is
     /// always added at the end.
     pub fn features(&self) -> impl Iterator<Item = &'p Feature> + DoubleEndedIterator + '_ {
