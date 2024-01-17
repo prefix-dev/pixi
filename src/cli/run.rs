@@ -35,11 +35,10 @@ pub struct Args {
     pub lock_file_usage: super::LockFileUsageArgs,
 
     /// After starting, detach (daemonize) from the shell. This keeps the process running in the background.
-    #[arg(short, long, requires = "name")]
+    #[arg(short, long)]
     pub detach: bool,
 
-    /// The name of the run. It is unused when `--detach` is not used and is mandatory otherwise.
-    /// It will be used to name the pid file and the log files.
+    /// The name of the run. Only used in detached mode (`--detached`)
     #[arg(short, long)]
     pub name: Option<String>,
 }
@@ -60,7 +59,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
         eprintln!(
             "{}Starting the task in the background with the name '{}'.",
             console::style(console::Emoji("✔ ", "")).green(),
-            args.name.as_deref().unwrap_or("pixi")
+            daemon_run.name
         );
 
         match daemon_run.start(args.task.clone()) {

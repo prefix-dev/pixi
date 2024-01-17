@@ -2158,6 +2158,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4519a88847ba2d5ead3dc53f1060ec6a571de93f325d9c5c4968147382b1cbc3"
 
 [[package]]
+name = "names"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bddcd3bf5144b6392de80e04c347cd7fab2508f6df16a85fc496ecd5cec39bc"
+dependencies = [
+ "rand",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2708,6 +2717,7 @@ dependencies = [
  "libc",
  "miette",
  "minijinja",
+ "names",
  "nix 0.27.1",
  "once_cell",
  "pep440_rs",

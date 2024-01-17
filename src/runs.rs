@@ -1,6 +1,7 @@
 use chrono::{DateTime, Local};
 use daemonize::Daemonize;
 use miette::IntoDiagnostic;
+use names::Generator;
 use serde::{Deserialize, Serialize};
 use std::{fmt, path::PathBuf};
 use sysinfo::{Pid, ProcessStatus, System};
@@ -59,7 +60,11 @@ impl<'a> DaemonRunsManager<'a> {
         // Check if a run with the same name already exists
         let name = match name {
             Some(name) => name,
-            None => miette::bail!("You must provide a name for the run."),
+            None => {
+                // We generate a random name for this run
+                let mut generator = Generator::default();
+                generator.next().expect("Failed to generate random name")
+            }
         };
 
         // Check not the same name as an existing run
