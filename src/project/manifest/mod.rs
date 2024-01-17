@@ -313,9 +313,20 @@ impl Manifest {
         get_toml_target_table(&mut self.document, platform, feature_name, spec_type.name())?
             .remove(dep.as_normalized())
             .ok_or_else(|| {
-                let table_name = match platform {
-                    Some(platform) => format!("target.{}.{}", platform.as_str(), spec_type.name()),
-                    None => spec_type.name().to_string(),
+                let table_name = match (platform, feature_name) {
+                    (Some(platform), Some(feature_name)) => format!(
+                        "feature.{}.target.{}.{}",
+                        feature_name.as_str(),
+                        platform.as_str(),
+                        spec_type.name()
+                    ),
+                    (Some(platform), None) => {
+                        format!("target.{}.{}", platform.as_str(), spec_type.name())
+                    }
+                    (None, Some(feature_name)) => {
+                        format!("feature.{}.{}", feature_name.as_str(), spec_type.name())
+                    }
+                    (None, None) => spec_type.name().to_string(),
                 };
 
                 miette::miette!(
@@ -326,7 +337,10 @@ impl Manifest {
             })?;
 
         Ok(self
-            .default_feature_mut()
+            .parsed
+            .features
+            .get_mut(feature_name.unwrap_or(&FeatureName::Default))
+            .expect("feature should exist")
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
             .expect("target should exist")
@@ -339,21 +353,32 @@ impl Manifest {
         &mut self,
         dep: &rip::types::PackageName,
         platform: Option<Platform>,
-        feature: Option<&FeatureName>,
+        feature_name: Option<&FeatureName>,
     ) -> miette::Result<(rip::types::PackageName, PyPiRequirement)> {
         get_toml_target_table(
             &mut self.document,
             platform,
-            feature,
+            feature_name,
             consts::PYPI_DEPENDENCIES,
         )?
-        .remove(dep.as_str())
+        .remove(dep.as_source_str())
         .ok_or_else(|| {
-            let table_name = match platform {
-                Some(platform) => {
+            let table_name = match (platform, feature_name) {
+                (Some(platform), Some(feature_name)) => format!(
+                    "feature.{}.target.{}.{}",
+                    feature_name.as_str(),
+                    platform.as_str(),
+                    consts::PYPI_DEPENDENCIES
+                ),
+                (Some(platform), None) => {
                     format!("target.{}.{}", platform.as_str(), consts::PYPI_DEPENDENCIES)
                 }
-                None => consts::PYPI_DEPENDENCIES.to_string(),
+                (None, Some(feature_name)) => format!(
+                    "feature.{}.{}",
+                    feature_name.as_str(),
+                    consts::PYPI_DEPENDENCIES
+                ),
+                (None, None) => consts::PYPI_DEPENDENCIES.to_string(),
             };
 
             miette::miette!(
@@ -366,7 +391,7 @@ impl Manifest {
         Ok(self
             .parsed
             .features
-            .get_mut(feature.unwrap_or(&FeatureName::Default))
+            .get_mut(feature_name.unwrap_or(&FeatureName::Default))
             .expect("feature should exist")
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
@@ -1144,15 +1169,12 @@ mod test {
     ) {
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
 
-        let feature_name = feature_name.unwrap_or(&FeatureName::Default);
+        let f_name = feature_name.unwrap_or(&FeatureName::Default);
 
         // Initially the dependency should exist
         assert!(manifest
-            .feature(feature_name)
-            .expect(&*format!(
-                "feature `{}` should exist",
-                feature_name.as_str()
-            ))
+            .feature(f_name)
+            .expect(&*format!("feature `{}` should exist", f_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1168,17 +1190,14 @@ mod test {
                 &PackageName::new_unchecked(name),
                 kind,
                 platform,
-                Some(feature_name),
+                feature_name,
             )
             .unwrap();
 
         // The dependency should no longer exist
         assert!(manifest
-            .feature(feature_name)
-            .expect(&*format!(
-                "feature `{}` should exist",
-                feature_name.as_str()
-            ))
+            .feature(f_name)
+            .expect(&*format!("feature `{}` should exist", f_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1189,7 +1208,10 @@ mod test {
             .is_none());
 
         // Write the toml to string and verify the content
-        assert_display_snapshot!(manifest.document.to_string());
+        assert_display_snapshot!(
+            format!("test_remove_{}", name),
+            manifest.document.to_string()
+        );
     }
 
     fn test_remove_pypi(
@@ -1200,7 +1222,7 @@ mod test {
     ) {
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
 
-        let name = rip::types::PackageName::from_str(name).unwrap();
+        let package_name = rip::types::PackageName::from_str(name).unwrap();
 
         let f_name = feature_name.unwrap_or(&FeatureName::Default);
 
@@ -1214,12 +1236,12 @@ mod test {
             .pypi_dependencies
             .as_ref()
             .unwrap()
-            .get(&name)
+            .get(&package_name)
             .is_some());
 
         // Remove the dependency from the manifest
         manifest
-            .remove_pypi_dependency(&name, platform, feature_name)
+            .remove_pypi_dependency(&package_name, platform, feature_name)
             .unwrap();
 
         // The dependency should no longer exist
@@ -1232,22 +1254,26 @@ mod test {
             .pypi_dependencies
             .as_ref()
             .unwrap()
-            .get(&name)
+            .get(&package_name)
             .is_none());
 
         // Write the toml to string and verify the content
-        assert_display_snapshot!(manifest.document.to_string());
+        assert_display_snapshot!(
+            format!("test_remove_pypi_{}", name),
+            manifest.document.to_string()
+        );
     }
 
-    // #[rstest]
-    // #[case("xpackage", Some(Platform::Linux64), None)]
-    // #[case("jax", Some(Platform::Win64), None)]
-    // #[case("requests", None, None)]
-    // #[case("feature_dep", None, Some(FeatureName::Named("test".to_string())))]
-    #[test]
-    fn test_remove_pypi_dependencies(// #[case] package_name: &str,
-        // #[case] platform: Option<Platform>,
-        // #[case] feature_name: Option<FeatureName>) {
+    #[rstest]
+    #[case::xpackage("xpackage", Some(Platform::Linux64), None)]
+    #[case::jax("jax", Some(Platform::Win64), None)]
+    #[case::requests("requests", None, None)]
+    #[case::feature_dep("feature_dep", None, Some(FeatureName::Named("test".to_string())))]
+    #[case::feature_target_dep("feature_target_dep", Some(Platform::Linux64), Some(FeatureName::Named("test".to_string())))]
+    fn test_remove_pypi_dependencies(
+        #[case] package_name: &str,
+        #[case] platform: Option<Platform>,
+        #[case] feature_name: Option<FeatureName>,
     ) {
         let pixi_cfg = r#"[project]
 name = "pixi_fun"
@@ -1275,13 +1301,7 @@ feature_dep = "*"
 [feature.test.target.linux-64.pypi-dependencies]
 feature_target_dep = "*"
 "#;
-        // test_remove_pypi(pixi_cfg, package_name, platform, feature_name.as_ref());
-        test_remove_pypi(
-            pixi_cfg,
-            "feature_dep",
-            None,
-            Some(&FeatureName::Named("test".to_string())),
-        )
+        test_remove_pypi(pixi_cfg, package_name, platform, feature_name.as_ref());
     }
 
     #[test]
