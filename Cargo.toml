@@ -25,6 +25,7 @@ clap-verbosity-flag = "2.1.1"
 clap_complete = "4.4.6"
 comfy-table = "7.1.0"
 console = { version = "0.15.8", features = ["windows-console-colors"] }
+daemonize = "0.5.0"
 deno_task_shell = "0.14.2"
 dirs = "5.0.1"
 dunce = "1.0.4"

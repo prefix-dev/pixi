@@ -10,6 +10,7 @@ pub mod progress;
 pub mod project;
 mod prompt;
 pub mod repodata;
+pub mod runs;
 pub mod task;
 #[cfg(unix)]
 pub mod unix;

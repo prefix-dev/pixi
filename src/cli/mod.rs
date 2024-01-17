@@ -102,7 +102,7 @@ impl From<LockFileUsageArgs> for crate::environment::LockFileUsage {
     }
 }
 
-pub async fn execute() -> miette::Result<()> {
+pub fn execute() -> miette::Result<()> {
     let args = Args::parse();
     let use_colors = use_color_output(&args);
 
@@ -152,30 +152,40 @@ pub async fn execute() -> miette::Result<()> {
         .into_diagnostic()?;
 
     // Execute the command
-    execute_command(args.command).await
+    execute_command(args.command)
 }
 
 /// Execute the actual command
-pub async fn execute_command(command: Command) -> miette::Result<()> {
+pub fn execute_command(command: Command) -> miette::Result<()> {
     match command {
         Command::Completion(cmd) => completion::execute(cmd),
-        Command::Init(cmd) => init::execute(cmd).await,
-        Command::Add(cmd) => add::execute(cmd).await,
-        Command::Run(cmd) => run::execute(cmd).await,
-        Command::Global(cmd) => global::execute(cmd).await,
-        Command::Auth(cmd) => auth::execute(cmd).await,
-        Command::Install(cmd) => install::execute(cmd).await,
-        Command::Shell(cmd) => shell::execute(cmd).await,
-        Command::ShellHook(cmd) => shell_hook::execute(cmd),
+        Command::Run(cmd) => run::execute(cmd),
         Command::Task(cmd) => task::execute(cmd),
-        Command::Info(cmd) => info::execute(cmd).await,
-        Command::Upload(cmd) => upload::execute(cmd).await,
-        Command::Search(cmd) => search::execute(cmd).await,
-        Command::Project(cmd) => project::execute(cmd).await,
-        Command::Remove(cmd) => remove::execute(cmd).await,
-        Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
-        Command::List(cmd) => list::execute(cmd).await,
+        _ => execute_command_async(command),
     }
+}
+
+fn execute_command_async(command: Command) -> miette::Result<()> {
+    let rt = tokio::runtime::Runtime::new().into_diagnostic()?;
+    rt.block_on(async move {
+        match command {
+            Command::Init(cmd) => init::execute(cmd).await,
+            Command::Add(cmd) => add::execute(cmd).await,
+            Command::Global(cmd) => global::execute(cmd).await,
+            Command::Auth(cmd) => auth::execute(cmd).await,
+            Command::Install(cmd) => install::execute(cmd).await,
+            Command::Shell(cmd) => shell::execute(cmd).await,
+            Command::ShellHook(cmd) => shell_hook::execute(cmd),
+            Command::Info(cmd) => info::execute(cmd).await,
+            Command::Upload(cmd) => upload::execute(cmd).await,
+            Command::Search(cmd) => search::execute(cmd).await,
+            Command::Project(cmd) => project::execute(cmd).await,
+            Command::Remove(cmd) => remove::execute(cmd).await,
+            Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
+            Command::List(cmd) => list::execute(cmd).await,
+            _ => unreachable!(),
+        }
+    })
 }
 
 /// Whether to use colored log format.

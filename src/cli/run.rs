@@ -5,6 +5,8 @@ use itertools::Itertools;
 use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use rattler_conda_types::Platform;
 
+use daemonize::Daemonize;
+
 use crate::environment::LockFileUsage;
 use crate::task::{
     ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TraversalError,
@@ -32,13 +34,64 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_usage: super::LockFileUsageArgs,
+
+    /// After starting, detach (daemonize) from the shell. This keeps the process running in the background.
+    #[arg(short, long, requires = "name")]
+    pub detach: bool,
+
+    /// teestng
+    #[arg(short, long)]
+    pub name: Option<String>,
+}
+
+pub struct DaemonTask {
+    pub pid_file_path: std::path::PathBuf,
+    pub stdout_path: std::path::PathBuf,
+    pub stderr_path: std::path::PathBuf,
 }
 
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it pleases.
-pub async fn execute(args: Args) -> miette::Result<()> {
+pub fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
+    if args.detach {
+        eprintln!(
+            "{}Starting the task in the background with the name '{}'.",
+            console::style(console::Emoji("✔ ", "")).green(),
+            args.name.as_deref().unwrap_or("pixi")
+        );
+
+        let daemon_task = DaemonTask {
+            pid_file_path: std::path::PathBuf::from("/tmp/pixi.pid"),
+            stdout_path: std::path::PathBuf::from("/tmp/pixi.out"),
+            stderr_path: std::path::PathBuf::from("/tmp/pixi.err"),
+        };
+
+        let stdout = std::fs::File::create(daemon_task.stdout_path.clone()).unwrap();
+        let stderr = std::fs::File::create(daemon_task.stderr_path.clone()).unwrap();
+
+        let daemonize = Daemonize::new()
+            .pid_file(daemon_task.pid_file_path)
+            .stdout(stdout)
+            .stderr(stderr)
+            .umask(0o027) // Set umask, `0o027` by default.
+            .chown_pid_file(true)
+            .working_directory(project.root());
+
+        match daemonize.start() {
+            Ok(_) => tracing::debug!("Success, daemonized"),
+            Err(e) => eprintln!("Error, {}", e),
+        }
+    }
+
+    // We need to create a new runtime just in case we are a new process
+    // after daemonize fork.
+    let rt = tokio::runtime::Runtime::new().into_diagnostic()?;
+    rt.block_on(async move { inner_execute(args, project).await })
+}
+
+async fn inner_execute(args: Args, project: Project) -> miette::Result<()> {
     // Split 'task' into arguments if it's a single string, supporting commands like:
     // `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or `"echo 'Hello World'"`
     // This prevents shell interpretation of pixi run inputs.
