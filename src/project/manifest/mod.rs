@@ -490,7 +490,7 @@ impl Manifest {
     }
 
     /// Returns the feature with the given name or `None` if it does not exist.
-    pub fn feature<Q: ?Sized>(&mut self, name: &Q) -> Option<&mut Feature>
+    pub fn feature_mut<Q: ?Sized>(&mut self, name: &Q) -> Option<&mut Feature>
     where
         Q: Hash + Equivalent<FeatureName>,
     {
@@ -1138,7 +1138,7 @@ mod test {
 
         // Initially the dependency should exist
         assert!(manifest
-            .feature(f_name)
+            .feature_mut(f_name)
             .expect(&*format!("feature `{}` should exist", f_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
@@ -1161,7 +1161,7 @@ mod test {
 
         // The dependency should no longer exist
         assert!(manifest
-            .feature(f_name)
+            .feature_mut(f_name)
             .expect(&*format!("feature `{}` should exist", f_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
@@ -1193,7 +1193,7 @@ mod test {
 
         // Initially the dependency should exist
         assert!(manifest
-            .feature(f_name)
+            .feature_mut(f_name)
             .expect(&*format!("feature `{}` should exist", f_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
@@ -1211,7 +1211,7 @@ mod test {
 
         // The dependency should no longer exist
         assert!(manifest
-            .feature(f_name)
+            .feature_mut(f_name)
             .expect(&*format!("feature `{}` should exist", f_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
