@@ -163,6 +163,6 @@ fn create_unsupported_platform_report(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     // TODO: add a test to verify that conflicting system requirements result in an error.
 }

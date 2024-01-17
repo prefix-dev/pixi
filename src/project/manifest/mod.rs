@@ -760,7 +760,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::project::manifest::channel::PrioritizedChannel;
     use insta::assert_display_snapshot;
