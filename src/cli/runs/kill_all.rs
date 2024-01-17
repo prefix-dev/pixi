@@ -5,7 +5,7 @@ use crate::{
     Project,
 };
 
-/// Clear all the terminated detached runs. It will remove the pid, the logs and the infos files from the runs directory.
+/// Kill all the detached run that are not terminated. It will send a SIGTERM signals to the processes.
 #[derive(Parser, Debug)]
 pub struct Args {}
 
@@ -15,11 +15,11 @@ pub async fn execute(project: Project, _args: Args) -> miette::Result<()> {
 
     // get all the non running runs
     let all_runs = runs_manager.runs();
-    let runs: Vec<&DaemonRun> = all_runs.iter().filter(|run| !run.is_running()).collect();
+    let runs: Vec<&DaemonRun> = all_runs.iter().filter(|run| run.is_running()).collect();
 
     if runs.is_empty() {
         eprintln!(
-            "{}No terminated runs to clear",
+            "{}No running runs to kill",
             console::style(console::Emoji("✔ ", "")).green(),
         );
         return Ok(());
@@ -27,11 +27,11 @@ pub async fn execute(project: Project, _args: Args) -> miette::Result<()> {
 
     // Clear all the runs
     for run in runs {
-        run.clear()?;
+        run.kill()?;
 
         // Emit success
         eprintln!(
-            "{}Run called '{}' correctly cleared",
+            "{}Run called '{}' correctly killed",
             console::style(console::Emoji("✔ ", "")).green(),
             run.name
         );
@@ -39,7 +39,7 @@ pub async fn execute(project: Project, _args: Args) -> miette::Result<()> {
 
     // Emit success
     eprintln!(
-        "{}All the terminated runs correctly cleared",
+        "{}All the running runs correctly killed",
         console::style(console::Emoji("✔ ", "")).green(),
     );
 

@@ -5,8 +5,6 @@ use itertools::Itertools;
 use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use rattler_conda_types::Platform;
 
-use daemonize::Daemonize;
-
 use crate::environment::LockFileUsage;
 use crate::runs::DaemonRunsManager;
 use crate::task::{

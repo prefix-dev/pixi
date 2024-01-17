@@ -6,6 +6,7 @@ use crate::Project;
 mod clear;
 mod clear_all;
 mod kill;
+mod kill_all;
 mod list;
 mod logs;
 
@@ -13,11 +14,9 @@ mod logs;
 pub enum Command {
     #[clap(alias = "ls")]
     List(list::Args),
-    #[clap()]
     Kill(kill::Args),
-    #[clap()]
+    KillAll(kill_all::Args),
     Logs(logs::Args),
-    #[clap()]
     Clear(clear::Args),
     ClearAll(clear_all::Args),
 }
@@ -44,6 +43,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Command::Logs(args) => logs::execute(project, args).await?,
         Command::Clear(args) => clear::execute(project, args).await?,
         Command::ClearAll(args) => clear_all::execute(project, args).await?,
+        Command::KillAll(args) => kill_all::execute(project, args).await?,
     };
     Ok(())
 }

@@ -30,7 +30,7 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
         .collect();
 
     match run_states {
-        Ok(run_states) => {
+        Ok(mut run_states) => {
             // Print the runs
             if run_states.is_empty() {
                 eprintln!(
@@ -38,6 +38,9 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
                     console::style(console::Emoji("✔ ", "")).green(),
                 );
             } else {
+                // Sort by start date by default
+                run_states.sort_by(|a, b| b.start_date.cmp(&a.start_date));
+
                 if args.json || args.json_pretty {
                     print_as_json(&run_states, args.json_pretty);
                 } else {
@@ -59,7 +62,6 @@ fn print_as_table(run_states: &Vec<DaemonRunState>) {
 
     table
         .load_preset(NOTHING)
-        // .apply_modifier(UTF8_NO_BORDERS)
         .set_content_arrangement(ContentArrangement::Dynamic);
 
     // Add headers
@@ -71,19 +73,17 @@ fn print_as_table(run_states: &Vec<DaemonRunState>) {
         Cell::new("Task").add_attribute(Attribute::Bold),
         Cell::new("Stdout Size").add_attribute(Attribute::Bold),
         Cell::new("Stderr Size").add_attribute(Attribute::Bold),
-        Cell::new("<dev>>").add_attribute(Attribute::Bold),
     ]);
 
     for state in run_states {
         table.add_row(vec![
             Cell::new(&state.name),
-            Cell::new(&state.status.to_string()),
-            Cell::new(&state.pid),
+            Cell::new(&state.status),
+            Cell::new(state.pid),
             Cell::new(&state.start_date.format("%Y-%m-%d %H:%M:%S")),
             Cell::new(&state.task.join(" ")),
-            Cell::new(&state.stdout_length),
-            Cell::new(&state.stderr_length),
-            Cell::new("dsdsd"),
+            Cell::new(state.stdout_length),
+            Cell::new(state.stderr_length),
         ]);
     }
 
@@ -91,12 +91,12 @@ fn print_as_table(run_states: &Vec<DaemonRunState>) {
 }
 
 fn print_as_json(run_states: &Vec<DaemonRunState>, json_pretty: bool) {
-    // let json_string = if json_pretty {
-    //     serde_json::to_string_pretty(&run_states)
-    // } else {
-    //     serde_json::to_string(&run_states)
-    // }
-    // .expect("Cannot serialize to JSON");
+    let json_string = if json_pretty {
+        serde_json::to_string_pretty(&run_states)
+    } else {
+        serde_json::to_string(&run_states)
+    }
+    .expect("Cannot serialize to JSON");
 
-    // println!("{}", json_string);
+    println!("{}", json_string);
 }

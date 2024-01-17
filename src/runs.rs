@@ -1,12 +1,9 @@
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Local};
 use daemonize::Daemonize;
 use miette::IntoDiagnostic;
-use serde::{Deserialize, Serialize, Serializer};
-use std::{
-    fmt::{Display, Formatter},
-    path::PathBuf,
-};
-use sysinfo::{Pid, Process, ProcessStatus, System};
+use serde::{Deserialize, Serialize};
+use std::{fmt, path::PathBuf};
+use sysinfo::{Pid, ProcessStatus, System};
 
 use crate::{consts, Project};
 
@@ -42,7 +39,7 @@ impl<'a> DaemonRunsManager<'a> {
                     .to_str()
                     .expect("Failed to convert file name to str");
                 if file_name.ends_with(".pid") {
-                    let run_name = file_name.replace(".pid", "").into();
+                    let run_name = file_name.replace(".pid", "");
 
                     Some(DaemonRun::new(
                         run_name,
@@ -65,7 +62,7 @@ impl<'a> DaemonRunsManager<'a> {
             None => miette::bail!("You must provide a name for the run."),
         };
 
-        // check not the same name as an existing run
+        // Check not the same name as an existing run
         if self.runs().iter().any(|run| run.name == name) {
             miette::bail!("A run with the same name already exists. You can call `pixi runs clear` to clear all the terminated runs.");
         }
@@ -106,25 +103,16 @@ impl DaemonRun {
     }
 
     pub fn is_running(&self) -> bool {
-        let pid = match self.read_pid() {
-            Some(pid) => pid,
-            None => return false,
-        };
-
-        // TODO: not very efficient to call this every time
-        let mut system = System::new_all();
-        system.refresh_all();
-
-        match system.process(pid) {
-            Some(process) => process.status() == sysinfo::ProcessStatus::Run,
-            None => false,
-        }
+        !matches!(
+            self.process_status(),
+            DaemonRunStatus::Terminated | DaemonRunStatus::UnknownPid
+        )
     }
 
     pub fn process_status(&self) -> DaemonRunStatus {
         let pid = match self.read_pid() {
             Some(pid) => pid,
-            None => return DaemonRunStatus::Unknown,
+            None => return DaemonRunStatus::UnknownPid,
         };
 
         // TODO: not very efficient to call this every time
@@ -132,7 +120,8 @@ impl DaemonRun {
         system.refresh_all();
 
         match system.process(pid) {
-            Some(process) => DaemonRunStatus::ProcessStatus(process.status()),
+            Some(process) => DaemonRunStatus::from_process_status(process.status()),
+            // if no process is associated with the pid, it means the process is terminated
             None => DaemonRunStatus::Terminated,
         }
     }
@@ -233,8 +222,8 @@ impl DaemonRun {
             Some(pid) => pid,
             None => miette::bail!("No pid file with name '{}' found.", self.name),
         };
-        let stdout_length = std::fs::read_to_string(self.stdout_path()).unwrap().len() as usize;
-        let stderr_length = std::fs::read_to_string(self.stderr_path()).unwrap().len() as usize;
+        let stdout_length = std::fs::read_to_string(self.stdout_path()).unwrap().len();
+        let stderr_length = std::fs::read_to_string(self.stderr_path()).unwrap().len();
         let infos = match self.read_infos() {
             Some(infos) => infos,
             None => miette::bail!("No infos file with name '{}' found.", self.name),
@@ -246,9 +235,29 @@ impl DaemonRun {
             pid: pid.as_u32(),
             task: infos.task,
             start_date: infos.start_date,
-            stdout_length: stdout_length,
-            stderr_length: stderr_length,
+            stdout_length,
+            stderr_length,
         })
+    }
+
+    pub fn kill(&self) -> miette::Result<()> {
+        let pid = match self.read_pid() {
+            Some(pid) => pid,
+            None => miette::bail!("No pid file with name '{}' found.", self.name),
+        };
+
+        // TODO: not very efficient to call this every time
+        let mut system = System::new_all();
+        system.refresh_all();
+
+        match system.process(pid) {
+            Some(process) => match process.kill() {
+                true => Ok(()),
+                false => miette::bail!("Failed to kill process with pid '{}'.", pid.as_u32()),
+            },
+            // if no process is associated with the pid, it means the process is terminated
+            None => miette::bail!("No process with pid '{}' found.", pid.as_u32()),
+        }
     }
 }
 
@@ -259,7 +268,7 @@ pub struct DaemonRunInfos {
     pub start_date: DateTime<Local>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DaemonRunState {
     pub name: String,
     pub status: DaemonRunStatus,
@@ -270,89 +279,48 @@ pub struct DaemonRunState {
     pub stderr_length: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DaemonRunStatus {
     Terminated,
-    Unknown,
-    ProcessStatus(ProcessStatus),
+    UnknownPid,
+    // from https://docs.rs/sysinfo/latest/sysinfo/enum.ProcessStatus.html
+    Idle,
+    Run,
+    Sleep,
+    Stop,
+    Zombie,
+    Tracing,
+    Dead,
+    Wakekill,
+    Waking,
+    Parked,
+    LockBlocked,
+    UninterruptibleDiskSleep,
+    Unknown(u32),
 }
 
 impl DaemonRunStatus {
-    pub fn from_string(status_str: String) -> miette::Result<DaemonRunStatus> {
-        let status = match status_str.as_str() {
-            "Terminated" => DaemonRunStatus::Terminated,
-            "Unknown" => DaemonRunStatus::Unknown,
-            "Idle" => DaemonRunStatus::ProcessStatus(ProcessStatus::Idle),
-            "Run" => DaemonRunStatus::ProcessStatus(ProcessStatus::Run),
-            "Sleep" => DaemonRunStatus::ProcessStatus(ProcessStatus::Sleep),
-            "Stop" => DaemonRunStatus::ProcessStatus(ProcessStatus::Stop),
-            "Zombie" => DaemonRunStatus::ProcessStatus(ProcessStatus::Zombie),
-            "Tracing" => DaemonRunStatus::ProcessStatus(ProcessStatus::Tracing),
-            "Dead" => DaemonRunStatus::ProcessStatus(ProcessStatus::Dead),
-            "Wakekill" => DaemonRunStatus::ProcessStatus(ProcessStatus::Wakekill),
-            "Waking" => DaemonRunStatus::ProcessStatus(ProcessStatus::Waking),
-            "Parked" => DaemonRunStatus::ProcessStatus(ProcessStatus::Parked),
-            "LockBlocked" => DaemonRunStatus::ProcessStatus(ProcessStatus::LockBlocked),
-            "UninterruptibleDiskSleep" => {
-                DaemonRunStatus::ProcessStatus(ProcessStatus::UninterruptibleDiskSleep)
-            }
-            "UnknownFromSys" => DaemonRunStatus::ProcessStatus(ProcessStatus::Unknown(0)),
-            _ => miette::bail!("Unknown status '{}'", status_str),
-        };
-
-        Ok(status)
-    }
-}
-
-// implement tostring
-impl ToString for DaemonRunStatus {
-    fn to_string(&self) -> String {
-        match self {
-            DaemonRunStatus::Terminated => "Terminated".to_string(),
-            DaemonRunStatus::Unknown => "Unknown".to_string(),
-            DaemonRunStatus::ProcessStatus(status) => match status {
-                ProcessStatus::Idle => "Idle".to_string(),
-                ProcessStatus::Run => "Run".to_string(),
-                ProcessStatus::Sleep => "Sleep".to_string(),
-                ProcessStatus::Stop => "Stop".to_string(),
-                ProcessStatus::Zombie => "Zombie".to_string(),
-                ProcessStatus::Tracing => "Tracing".to_string(),
-                ProcessStatus::Dead => "Dead".to_string(),
-                ProcessStatus::Wakekill => "Wakekill".to_string(),
-                ProcessStatus::Waking => "Waking".to_string(),
-                ProcessStatus::Parked => "Parked".to_string(),
-                ProcessStatus::LockBlocked => "LockBlocked".to_string(),
-                ProcessStatus::UninterruptibleDiskSleep => "UninterruptibleDiskSleep".to_string(),
-                ProcessStatus::Unknown(_) => "UnknownFromSys".to_string(),
-            },
+    pub fn from_process_status(process_status: ProcessStatus) -> Self {
+        match process_status {
+            ProcessStatus::Idle => DaemonRunStatus::Idle,
+            ProcessStatus::Run => DaemonRunStatus::Run,
+            ProcessStatus::Sleep => DaemonRunStatus::Sleep,
+            ProcessStatus::Stop => DaemonRunStatus::Stop,
+            ProcessStatus::Zombie => DaemonRunStatus::Zombie,
+            ProcessStatus::Tracing => DaemonRunStatus::Tracing,
+            ProcessStatus::Dead => DaemonRunStatus::Dead,
+            ProcessStatus::Wakekill => DaemonRunStatus::Wakekill,
+            ProcessStatus::Waking => DaemonRunStatus::Waking,
+            ProcessStatus::Parked => DaemonRunStatus::Parked,
+            ProcessStatus::LockBlocked => DaemonRunStatus::LockBlocked,
+            ProcessStatus::UninterruptibleDiskSleep => DaemonRunStatus::UninterruptibleDiskSleep,
+            ProcessStatus::Unknown(u32) => DaemonRunStatus::Unknown(u32),
         }
     }
 }
 
-// // implement display
-// impl Display for DaemonRunStatus {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", self.to_string())
-//     }
-// }
-
-// // implement serialize
-// impl Serialize for DaemonRunStatus {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         DaemonRunStatus::to_string(self).serialize(serializer)
-//     }
-// }
-
-// // implement deserialize
-// impl<'de> Deserialize<'de> for DaemonRunStatus {
-//     fn deserialize<D>(deserializer: D) -> Result<DaemonRunStatus, D::Error>
-//     where
-//         D: serde::Deserializer<'de>,
-//     {
-//         let status_str = String::deserialize(deserializer)?;
-//         DaemonRunStatus::from_string(status_str).map_err(serde::de::Error::custom)
-//     }
-// }
+impl fmt::Display for DaemonRunStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
