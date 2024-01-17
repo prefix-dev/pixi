@@ -18,6 +18,7 @@ pub mod list;
 pub mod project;
 pub mod remove;
 pub mod run;
+pub mod runs;
 pub mod search;
 pub mod self_update;
 pub mod shell;
@@ -76,6 +77,7 @@ pub enum Command {
     Remove(remove::Args),
     SelfUpdate(self_update::Args),
     List(list::Args),
+    Runs(runs::Args),
 }
 
 #[derive(Parser, Debug, Default)]
@@ -183,6 +185,7 @@ fn execute_command_async(command: Command) -> miette::Result<()> {
             Command::Remove(cmd) => remove::execute(cmd).await,
             Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
             Command::List(cmd) => list::execute(cmd).await,
+            Command::Runs(cmd) => runs::execute(cmd).await,
             _ => unreachable!(),
         }
     })
