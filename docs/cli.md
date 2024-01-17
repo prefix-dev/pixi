@@ -235,6 +235,23 @@ pixi search -l 30 py
 pixi search -c robostack plotjuggler
 ```
 
+## `self-update`
+
+Update pixi to the latest version or a specific version. If the pixi binary is not found in the default location (e.g.
+`~/.pixi/bin/pixi`), pixi won't updated to prevent breaking the current installation (Homebrew, etc). The behaviour can be
+overridden with the `--force` flag
+
+##### Options
+
+- `--version <VERSION>`: The desired version (to downgrade or upgrade to). Update to the latest version if not specified.
+- `--force`: Force the update even if the pixi binary is not found in the default location.
+
+```shell
+pixi self-update
+pixi self-update --version 0.12.0
+pixi self-update --force
+```
+
 ## `info`
 
 Shows helpful information about the pixi installation, cache directories, disk usage, and more.
