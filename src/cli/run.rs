@@ -35,6 +35,7 @@ pub struct Args {
     pub lock_file_usage: super::LockFileUsageArgs,
 
     /// After starting, detach (daemonize) from the shell. This keeps the process running in the background.
+    /// Only available on unix systems and has no effect on windows.
     #[arg(short, long)]
     pub detach: bool,
 
@@ -48,23 +49,26 @@ pub struct Args {
 pub fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
-    if args.detach {
-        let runs_manager = DaemonRunsManager::new(&project);
+    #[cfg(unix)]
+    {
+        if args.detach {
+            let runs_manager = DaemonRunsManager::new(&project);
 
-        let daemon_run = match runs_manager.create_new_run(args.name.clone()) {
-            Ok(daemon_run) => daemon_run,
-            Err(e) => miette::bail!("Failed to create new run: {}", e),
-        };
+            let daemon_run = match runs_manager.create_new_run(args.name.clone()) {
+                Ok(daemon_run) => daemon_run,
+                Err(e) => miette::bail!("Failed to create new run: {}", e),
+            };
 
-        eprintln!(
-            "{}Starting the task in the background with the name '{}'.",
-            console::style(console::Emoji("✔ ", "")).green(),
-            daemon_run.name
-        );
+            eprintln!(
+                "{}Starting the task in the background with the name '{}'.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                daemon_run.name
+            );
 
-        match daemon_run.start(args.task.clone()) {
-            Ok(_) => tracing::debug!("Success, daemonized"),
-            Err(e) => miette::bail!("Failed to daemonize: {}", e),
+            match daemon_run.start(args.task.clone()) {
+                Ok(_) => tracing::debug!("Success, daemonized"),
+                Err(e) => miette::bail!("Failed to daemonize: {}", e),
+            }
         }
     }
 
