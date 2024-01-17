@@ -1,4 +1,5 @@
 use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelector};
+use crate::consts;
 use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
 use crate::project::manifest::target::Targets;
 use crate::project::SpecType;
@@ -12,6 +13,7 @@ use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fmt;
 
 /// The name of a feature. This is either a string or default for the default feature.
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -40,6 +42,31 @@ impl FeatureName {
         match self {
             FeatureName::Default => None,
             FeatureName::Named(name) => Some(name),
+        }
+    }
+}
+
+impl From<FeatureName> for String {
+    fn from(name: FeatureName) -> Self {
+        match name {
+            FeatureName::Default => consts::DEFAULT_ENVIRONMENT_NAME.to_string(),
+            FeatureName::Named(name) => name,
+        }
+    }
+}
+impl<'a> From<&'a FeatureName> for String {
+    fn from(name: &'a FeatureName) -> Self {
+        match name {
+            FeatureName::Default => consts::DEFAULT_ENVIRONMENT_NAME.to_string(),
+            FeatureName::Named(name) => name.clone(),
+        }
+    }
+}
+impl fmt::Display for FeatureName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FeatureName::Default => write!(f, "{}", consts::DEFAULT_ENVIRONMENT_NAME),
+            FeatureName::Named(name) => write!(f, "{}", name),
         }
     }
 }
