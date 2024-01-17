@@ -1,4 +1,5 @@
 use chrono::{DateTime, Local};
+#[cfg(unix)]
 use daemonize::Daemonize;
 use miette::IntoDiagnostic;
 use names::Generator;
