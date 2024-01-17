@@ -25,7 +25,6 @@ clap-verbosity-flag = "2.1.1"
 clap_complete = "4.4.6"
 comfy-table = "7.1.0"
 console = { version = "0.15.8", features = ["windows-console-colors"] }
-daemonize = "0.5.0"
 deno_task_shell = "0.14.2"
 dirs = "5.0.1"
 dunce = "1.0.4"
@@ -81,6 +80,7 @@ zip = { version = "0.6.6", default-features = false, features = ["deflate", "tim
 nix = { version = "0.27.1", default-features = false, features = ["fs", "signal", "term", "poll"] }
 libc = { version = "0.2.152", default-features = false }
 signal-hook = "0.3.17"
+daemonize = "0.5.0"
 
 [dev-dependencies]
 rattler_digest = "0.16.2"
