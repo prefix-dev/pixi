@@ -1,6 +1,7 @@
 use chrono::{DateTime, Local};
 #[cfg(unix)]
 use daemonize::Daemonize;
+#[cfg(unix)]
 use miette::IntoDiagnostic;
 use names::Generator;
 use serde::{Deserialize, Serialize};

@@ -2,7 +2,6 @@ use std::{collections::HashMap, path::PathBuf, string::String};
 
 use clap::Parser;
 use itertools::Itertools;
-#[cfg(unix)]
 use miette::IntoDiagnostic;
 use miette::{miette, Context, Diagnostic};
 use rattler_conda_types::Platform;
