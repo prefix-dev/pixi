@@ -19,7 +19,7 @@ pub use feature::{Feature, FeatureName};
 use indexmap::{Equivalent, IndexMap};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
-use miette::{IntoDiagnostic, LabeledSpan, NamedSource};
+use miette::{miette, IntoDiagnostic, LabeledSpan, NamedSource};
 pub use python::PyPiRequirement;
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
@@ -313,22 +313,8 @@ impl Manifest {
         get_toml_target_table(&mut self.document, platform, feature_name, spec_type.name())?
             .remove(dep.as_normalized())
             .ok_or_else(|| {
-                let table_name = match (platform, feature_name) {
-                    (Some(platform), Some(feature_name)) => format!(
-                        "feature.{}.target.{}.{}",
-                        feature_name.as_str(),
-                        platform.as_str(),
-                        spec_type.name()
-                    ),
-                    (Some(platform), None) => {
-                        format!("target.{}.{}", platform.as_str(), spec_type.name())
-                    }
-                    (None, Some(feature_name)) => {
-                        format!("feature.{}.{}", feature_name.as_str(), spec_type.name())
-                    }
-                    (None, None) => spec_type.name().to_string(),
-                };
-
+                let table_name =
+                    get_nested_toml_table_name(feature_name, platform, spec_type.name());
                 miette::miette!(
                     "Couldn't find {} in [{}]",
                     console::style(dep.as_source()).bold(),
@@ -363,23 +349,8 @@ impl Manifest {
         )?
         .remove(dep.as_source_str())
         .ok_or_else(|| {
-            let table_name = match (platform, feature_name) {
-                (Some(platform), Some(feature_name)) => format!(
-                    "feature.{}.target.{}.{}",
-                    feature_name.as_str(),
-                    platform.as_str(),
-                    consts::PYPI_DEPENDENCIES
-                ),
-                (Some(platform), None) => {
-                    format!("target.{}.{}", platform.as_str(), consts::PYPI_DEPENDENCIES)
-                }
-                (None, Some(feature_name)) => format!(
-                    "feature.{}.{}",
-                    feature_name.as_str(),
-                    consts::PYPI_DEPENDENCIES
-                ),
-                (None, None) => consts::PYPI_DEPENDENCIES.to_string(),
-            };
+            let table_name =
+                get_nested_toml_table_name(feature_name, platform, consts::PYPI_DEPENDENCIES);
 
             miette::miette!(
                 "Couldn't find {} in [{}]",
@@ -590,6 +561,31 @@ pub fn ensure_toml_target_table<'a>(
         })
 }
 
+/// Returns the name of a nested TOML table.
+/// If `platform` and `feature_name` are `None`, the table name is returned as-is.
+/// Otherwise, the table name is prefixed with the feature, platform, or both.
+fn get_nested_toml_table_name(
+    feature_name: Option<&FeatureName>,
+    platform: Option<Platform>,
+    table: &str,
+) -> String {
+    match (platform, feature_name) {
+        (Some(platform), Some(feature_name)) => format!(
+            "feature.{}.target.{}.{}",
+            feature_name.as_str(),
+            platform.as_str(),
+            table
+        ),
+        (Some(platform), None) => {
+            format!("target.{}.{}", platform.as_str(), table)
+        }
+        (None, Some(feature_name)) => {
+            format!("feature.{}.{}", feature_name.as_str(), table)
+        }
+        (None, None) => table.to_string(),
+    }
+}
+
 /// Retrieve a mutable reference to a target table `table_name`
 /// for a specific platform.
 fn get_toml_target_table<'a>(
@@ -598,55 +594,24 @@ fn get_toml_target_table<'a>(
     feature: Option<&FeatureName>,
     table_name: &str,
 ) -> miette::Result<&'a mut Table> {
-    let base_table = match (feature, platform) {
-        (Some(feature_name), Some(platform)) => {
-            // Handling [feature.feature_name.target.platform.table_name]
-            doc["feature"][feature_name.as_str()]["target"][platform.as_str()]
-                .as_table_mut()
-                .ok_or(miette::miette!(
-                    "could not find feature '{}' or target '{}' in {}",
-                    console::style(feature_name.as_str()).bold(),
-                    console::style(platform.as_str()).bold(),
-                    consts::PROJECT_MANIFEST,
-                ))?
-        }
-        (Some(feature_name), None) => {
-            // Handling [feature.feature_name.table_name]
-            doc["feature"][feature_name.as_str()]
-                .as_table_mut()
-                .ok_or(miette::miette!(
-                    "could not find feature '{}' in {}",
-                    console::style(feature_name.as_str()).bold(),
-                    consts::PROJECT_MANIFEST,
-                ))?
-        }
-        (None, Some(platform)) => {
-            // Handling [target.platform.table_name]
-            doc["target"][platform.as_str()]
-                .as_table_mut()
-                .ok_or(miette::miette!(
-                    "could not find target '{}' in {}",
-                    console::style(platform.as_str()).bold(),
-                    consts::PROJECT_MANIFEST,
-                ))?
-        }
-        (None, None) => {
-            // Handling [table_name]
-            doc.as_table_mut()
-        }
-    };
+    let table_name = get_nested_toml_table_name(feature, platform, table_name);
+    let parts: Vec<&str> = table_name.split('.').collect();
+    let mut current_table = doc.as_table_mut();
 
-    base_table[table_name].as_table_mut().ok_or_else(|| {
-        let table_name = match platform {
-            Some(platform) => format!("target.{}.{}", platform.as_str(), table_name),
-            None => table_name.to_string(),
-        };
-        miette::miette!(
-            "could not find {} in {}",
-            console::style(format!("[{table_name}]")).bold(),
-            consts::PROJECT_MANIFEST,
-        )
-    })
+    for (i, part) in parts.iter().enumerate() {
+        current_table = current_table
+            .get_mut(part)
+            .and_then(|item| item.as_table_mut())
+            .ok_or_else(|| {
+                miette!(
+                    "Could not find or access the part '{}' in the path '{}'",
+                    part,
+                    parts[..i + 1].join(".")
+                )
+            })?;
+    }
+
+    Ok(current_table)
 }
 
 /// Describes the contents of a project manifest.
