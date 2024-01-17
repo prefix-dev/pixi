@@ -72,9 +72,9 @@ dependencies = [
 
 [[package]]
 name = "anstream"
-version = "0.6.5"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d664a92ecae85fd0a7392615844904654d1d5f5514837f471ddef4a057aba1b6"
+checksum = "4cd2405b3ac1faab2990b74d728624cd9fd115651fcecc7c2d8daf01376275ba"
 dependencies = [
  "anstyle",
  "anstyle-parse",
@@ -230,9 +230,9 @@ dependencies = [
 
 [[package]]
 name = "async-io"
-version = "2.2.2"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6afaa937395a620e33dc6a742c593c01aced20aa376ffb0f628121198578ccc7"
+checksum = "fb41eb19024a91746eba0773aa5e16036045bbf45733766661099e182ea6a744"
 dependencies = [
  "async-lock 3.3.0",
  "cfg-if",
@@ -240,8 +240,8 @@ dependencies = [
  "futures-io",
  "futures-lite 2.2.0",
  "parking",
- "polling 3.3.1",
- "rustix 0.38.28",
+ "polling 3.3.2",
+ "rustix 0.38.30",
  "slab",
  "tracing",
  "windows-sys 0.52.0",
@@ -286,7 +286,7 @@ dependencies = [
  "cfg-if",
  "event-listener 3.1.0",
  "futures-lite 1.13.0",
- "rustix 0.38.28",
+ "rustix 0.38.30",
  "windows-sys 0.48.0",
 ]
 
@@ -307,13 +307,13 @@ version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e47d90f65a225c4527103a8d747001fc56e375203592b25ad103e1ca13124c5"
 dependencies = [
- "async-io 2.2.2",
+ "async-io 2.3.0",
  "async-lock 2.8.0",
  "atomic-waker",
  "cfg-if",
  "futures-core",
  "futures-io",
- "rustix 0.38.28",
+ "rustix 0.38.30",
  "signal-hook-registry",
  "slab",
  "windows-sys 0.48.0",
@@ -409,9 +409,9 @@ dependencies = [
 
 [[package]]
 name = "base64"
-version = "0.21.6"
+version = "0.21.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c79fed4cdb43e993fcdadc7e58a09fd0e3e649c4436fa11da71c9f1f3ee7feb9"
+checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
 name = "base64ct"
@@ -662,9 +662,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.4.14"
+version = "4.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33e92c5c1a78c62968ec57dbc2440366a2d6e5a23faf829970ff1585dc6b18e2"
+checksum = "80932e03c33999b9235edb8655bc9df3204adc9887c2f95b50cb1deb9fd54253"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -682,9 +682,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.4.14"
+version = "4.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4323769dc8a61e2c39ad7dc26f6f2800524691a44d74fe3d1071a5c24db6370"
+checksum = "d6c0db58c659eef1c73e444d298c27322a1b52f6927d2ad470c0c0f96fa7b8fa"
 dependencies = [
  "anstream",
  "anstyle",
@@ -694,9 +694,9 @@ dependencies = [
 
 [[package]]
 name = "clap_complete"
-version = "4.4.6"
+version = "4.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97aeaa95557bd02f23fbb662f981670c3d20c5a26e69f7354b28f57092437fcd"
+checksum = "dfb0d4825b75ff281318c393e8e1b80c4da9fb75a6b1d98547d389d6fe1f48d2"
 dependencies = [
  "clap",
 ]
@@ -724,6 +724,18 @@ name = "colorchoice"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
+
+[[package]]
+name = "comfy-table"
+version = "7.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c64043d6c7b7a4c58e39e7efccfdea7b93d885a795d0c054a69dbbf4dd52686"
+dependencies = [
+ "crossterm",
+ "strum",
+ "strum_macros",
+ "unicode-width",
+]
 
 [[package]]
 name = "concurrent-queue"
@@ -817,6 +829,28 @@ name = "crossbeam-utils"
 version = "0.8.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "248e3bacc7dc6baa3b21e405ee045c3047101a49145e7e9eca583ab4c2ca5345"
+
+[[package]]
+name = "crossterm"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f476fe445d41c9e991fd07515a6f463074b782242ccf4a5b7b1d1012e70824df"
+dependencies = [
+ "bitflags 2.4.1",
+ "crossterm_winapi",
+ "libc",
+ "parking_lot",
+ "winapi",
+]
+
+[[package]]
+name = "crossterm_winapi"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acdd7c62a3665c7f6830a51635d9ac9b23ed385797f70a83bb8bafe9c572ab2b"
+dependencies = [
+ "winapi",
+]
 
 [[package]]
 name = "crypto-common"
@@ -1183,7 +1217,7 @@ version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2eeb4ed9e12f43b7fa0baae3f9cdda28352770132ef2e09a23760c29cae8bd47"
 dependencies = [
- "rustix 0.38.28",
+ "rustix 0.38.30",
  "windows-sys 0.48.0",
 ]
 
@@ -1534,6 +1568,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
+name = "human_bytes"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91f255a4535024abf7640cb288260811fc14794f62b063652ed349f9a6c2348e"
+
+[[package]]
 name = "humansize"
 version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1757,7 +1797,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bad00257d07be169d870ab665980b06cdb366d792ad690bf2e76876dc503455"
 dependencies = [
  "hermit-abi",
- "rustix 0.38.28",
+ "rustix 0.38.30",
  "windows-sys 0.52.0",
 ]
 
@@ -1811,9 +1851,9 @@ dependencies = [
 
 [[package]]
 name = "js-sys"
-version = "0.3.66"
+version = "0.3.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cee9c64da59eae3b50095c18d3e74f8b73c0b86d2792824ff01bbce68ba229ca"
+checksum = "9a1d36f1235bc969acba30b7f5990b864423a6068a10f7c90ae8f0112e3a59d1"
 dependencies = [
  "wasm-bindgen",
 ]
@@ -1923,11 +1963,11 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "linux-keyutils"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f27bb67f6dd1d0bb5ab582868e4f65052e58da6401188a08f0da09cf512b84b"
+checksum = "761e49ec5fd8a5a463f9b84e877c373d888935b71c6be78f3767fe2ae6bed18e"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.4.1",
  "libc",
 ]
 
@@ -2641,11 +2681,14 @@ dependencies = [
  "clap",
  "clap-verbosity-flag",
  "clap_complete",
+ "comfy-table",
  "console",
  "deno_task_shell",
  "dirs",
  "dunce",
+ "flate2",
  "futures 0.3.30",
+ "human_bytes",
  "indexmap 2.1.0",
  "indicatif",
  "insta",
@@ -2671,6 +2714,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rstest",
+ "self-replace",
  "serde",
  "serde-untagged",
  "serde_json",
@@ -2681,6 +2725,7 @@ dependencies = [
  "signal-hook",
  "spdx",
  "strsim",
+ "tar",
  "tempfile",
  "thiserror",
  "tokio",
@@ -2690,6 +2735,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "zip",
 ]
 
 [[package]]
@@ -2730,14 +2776,14 @@ dependencies = [
 
 [[package]]
 name = "polling"
-version = "3.3.1"
+version = "3.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf63fa624ab313c11656b4cda960bfc46c410187ad493c41f6ba2d8c1e991c9e"
+checksum = "545c980a3880efd47b2e262f6a4bb6daad6555cf3367aa9c4e52895f69537a41"
 dependencies = [
  "cfg-if",
  "concurrent-queue",
  "pin-project-lite",
- "rustix 0.38.28",
+ "rustix 0.38.30",
  "tracing",
  "windows-sys 0.52.0",
 ]
@@ -2888,7 +2934,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#734ae6029522f2644098868f9dc2f741c8127cfa"
+source = "git+https://github.com/mamba-org/rattler?branch=main#8d94237197c87b03e61c3d5efd39889409da8909"
 dependencies = [
  "anyhow",
  "async-compression 0.4.5",
@@ -2929,7 +2975,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#734ae6029522f2644098868f9dc2f741c8127cfa"
+source = "git+https://github.com/mamba-org/rattler?branch=main#8d94237197c87b03e61c3d5efd39889409da8909"
 dependencies = [
  "chrono",
  "fxhash",
@@ -2973,7 +3019,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#734ae6029522f2644098868f9dc2f741c8127cfa"
+source = "git+https://github.com/mamba-org/rattler?branch=main#8d94237197c87b03e61c3d5efd39889409da8909"
 dependencies = [
  "blake2",
  "digest",
@@ -3046,7 +3092,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#734ae6029522f2644098868f9dc2f741c8127cfa"
+source = "git+https://github.com/mamba-org/rattler?branch=main#8d94237197c87b03e61c3d5efd39889409da8909"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3067,7 +3113,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#734ae6029522f2644098868f9dc2f741c8127cfa"
+source = "git+https://github.com/mamba-org/rattler?branch=main#8d94237197c87b03e61c3d5efd39889409da8909"
 dependencies = [
  "quote",
  "syn 2.0.48",
@@ -3076,7 +3122,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#734ae6029522f2644098868f9dc2f741c8127cfa"
+source = "git+https://github.com/mamba-org/rattler?branch=main#8d94237197c87b03e61c3d5efd39889409da8909"
 dependencies = [
  "anyhow",
  "dirs",
@@ -3100,7 +3146,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#734ae6029522f2644098868f9dc2f741c8127cfa"
+source = "git+https://github.com/mamba-org/rattler?branch=main#8d94237197c87b03e61c3d5efd39889409da8909"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3125,7 +3171,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#734ae6029522f2644098868f9dc2f741c8127cfa"
+source = "git+https://github.com/mamba-org/rattler?branch=main#8d94237197c87b03e61c3d5efd39889409da8909"
 dependencies = [
  "anyhow",
  "async-compression 0.4.5",
@@ -3163,7 +3209,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#734ae6029522f2644098868f9dc2f741c8127cfa"
+source = "git+https://github.com/mamba-org/rattler?branch=main#8d94237197c87b03e61c3d5efd39889409da8909"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.1.0",
@@ -3180,7 +3226,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#734ae6029522f2644098868f9dc2f741c8127cfa"
+source = "git+https://github.com/mamba-org/rattler?branch=main#8d94237197c87b03e61c3d5efd39889409da8909"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3199,7 +3245,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#734ae6029522f2644098868f9dc2f741c8127cfa"
+source = "git+https://github.com/mamba-org/rattler?branch=main#8d94237197c87b03e61c3d5efd39889409da8909"
 dependencies = [
  "cfg-if",
  "libloading",
@@ -3260,7 +3306,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "767be24c0da52e7448d495b8d162506a9aa125426651d547d545d6c2b4b65b62"
 dependencies = [
  "cfg-if",
- "rustix 0.38.28",
+ "rustix 0.38.30",
  "windows",
 ]
 
@@ -3459,9 +3505,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.28"
+version = "0.38.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72e572a5e8ca657d7366229cdde4bd14c4eb5499a9573d4d366fe1b599daa316"
+checksum = "322394588aaf33c24007e8bb3238ee3e4c5c09c084ab32bc73890b99ff326bca"
 dependencies = [
  "bitflags 2.4.1",
  "errno",
@@ -3605,6 +3651,17 @@ checksum = "e932934257d3b408ed8f30db49d85ea163bfe74961f017f405b025af298f0c7a"
 dependencies = [
  "core-foundation-sys",
  "libc",
+]
+
+[[package]]
+name = "self-replace"
+version = "1.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "525db198616b2bcd0f245daf7bfd8130222f7ee6af9ff9984c19a61bf1160c55"
+dependencies = [
+ "fastrand 1.9.0",
+ "tempfile",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -3853,9 +3910,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.11.2"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4dccd0940a2dcdf68d092b8cbab7dc0ad8fa938bf95787e1b916b0e3d0e8e970"
+checksum = "2593d31f82ead8df961d8bd23a64c2ccf2eb5dd34b0a34bfb4dd54011c72009e"
 dependencies = [
  "serde",
 ]
@@ -4093,7 +4150,7 @@ dependencies = [
  "cfg-if",
  "fastrand 2.0.1",
  "redox_syscall",
- "rustix 0.38.28",
+ "rustix 0.38.30",
  "windows-sys 0.52.0",
 ]
 
@@ -4113,7 +4170,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21bebf2b7c9e0a515f6e0f8c51dc0f8e4696391e6f1ff30379559f8365fb0df7"
 dependencies = [
- "rustix 0.38.28",
+ "rustix 0.38.30",
  "windows-sys 0.48.0",
 ]
 
@@ -4579,9 +4636,9 @@ checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.89"
+version = "0.2.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ed0d4f68a3015cc185aff4db9506a015f4b96f95303897bfa23f846db54064e"
+checksum = "b1223296a201415c7fad14792dbefaace9bd52b62d33453ade1c5b5f07555406"
 dependencies = [
  "cfg-if",
  "wasm-bindgen-macro",
@@ -4589,9 +4646,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-backend"
-version = "0.2.89"
+version = "0.2.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b56f625e64f3a1084ded111c4d5f477df9f8c92df113852fa5a374dbda78826"
+checksum = "fcdc935b63408d58a32f8cc9738a0bffd8f05cc7c002086c6ef20b7312ad9dcd"
 dependencies = [
  "bumpalo",
  "log",
@@ -4604,9 +4661,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-futures"
-version = "0.4.39"
+version = "0.4.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac36a15a220124ac510204aec1c3e5db8a22ab06fd6706d881dc6149f8ed9a12"
+checksum = "bde2032aeb86bdfaecc8b261eef3cba735cc426c1f3a3416d1e0791be95fc461"
 dependencies = [
  "cfg-if",
  "js-sys",
@@ -4616,9 +4673,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.89"
+version = "0.2.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0162dbf37223cd2afce98f3d0785506dcb8d266223983e4b5b525859e6e182b2"
+checksum = "3e4c238561b2d428924c49815533a8b9121c664599558a5d9ec51f8a1740a999"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -4626,9 +4683,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.89"
+version = "0.2.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0eb82fcb7930ae6219a7ecfd55b217f5f0893484b7a13022ebb2b2bf20b5283"
+checksum = "bae1abb6806dc1ad9e560ed242107c0f6c84335f1749dd4e8ddb012ebd5e25a7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4639,9 +4696,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.89"
+version = "0.2.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ab9b36309365056cd639da3134bf87fa8f3d86008abf99e612384a6eecd459f"
+checksum = "4d91413b1c31d7539ba5ef2451af3f0b833a005eb27a631cec32bc0635a8602b"
 
 [[package]]
 name = "wasm-streams"
@@ -4658,9 +4715,9 @@ dependencies = [
 
 [[package]]
 name = "web-sys"
-version = "0.3.66"
+version = "0.3.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50c24a44ec86bb68fbecd1b3efed7e85ea5621b39b35ef2766b66cd984f8010f"
+checksum = "58cd2333b6e0be7a39605f0e255892fd7418a682d8da8fe042fe25128794d2ed"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -4681,7 +4738,7 @@ dependencies = [
  "either",
  "home",
  "once_cell",
- "rustix 0.38.28",
+ "rustix 0.38.30",
 ]
 
 [[package]]
@@ -4896,13 +4953,13 @@ dependencies = [
 
 [[package]]
 name = "xattr"
-version = "1.2.0"
+version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "914566e6413e7fa959cc394fb30e563ba80f3541fbd40816d4c05a0fc3f2a0f1"
+checksum = "8da84f1a25939b27f6820d92aed108f83ff920fdf11a7b19366c27c4cda81d4f"
 dependencies = [
  "libc",
  "linux-raw-sys 0.4.12",
- "rustix 0.38.28",
+ "rustix 0.38.30",
 ]
 
 [[package]]
