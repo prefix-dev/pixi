@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
 use rattler_shell::{
@@ -9,16 +10,19 @@ use rattler_shell::{
 
 use crate::prefix::Prefix;
 
-/// Generates the activation script.
-fn generate_activation_script() -> miette::Result<String> {
-    let prefix = Prefix::new(PathBuf::new())?;
-    let shell: ShellEnum = if cfg!(windows) {
-        rattler_shell::shell::CmdExe.into()
-    } else {
-        rattler_shell::shell::Bash.into()
-    };
-    let platform = Platform::current();
+/// Print the activation script
+#[derive(Parser, Debug)]
+pub struct Args {
+    /// Sets the shell
+    #[arg(short, long)]
+    shell: Option<ShellEnum>,
+}
 
+/// Generates the activation script.
+fn generate_activation_script(shell: Option<ShellEnum>) -> miette::Result<String> {
+    let prefix = Prefix::new(PathBuf::new())?;
+    let shell = shell.unwrap_or_default();
+    let platform = Platform::current();
     let activator = Activator::from_path(prefix.root(), shell, platform).into_diagnostic()?;
     let path = std::env::var("PATH")
         .ok()
@@ -45,8 +49,8 @@ fn generate_activation_script() -> miette::Result<String> {
 }
 
 /// Prints the activation script to the stdout.
-pub fn execute() -> miette::Result<()> {
-    let script = generate_activation_script()?;
+pub fn execute(args: Args) -> miette::Result<()> {
+    let script = generate_activation_script(args.shell)?;
     println!("{script}");
     Ok(())
 }
@@ -57,14 +61,14 @@ mod tests {
 
     #[test]
     pub fn test_shell_hook() {
-        let script = generate_activation_script().unwrap();
+        let script = generate_activation_script(None).unwrap();
         if cfg!(unix) {
             assert!(script.starts_with("#!/bin/sh"));
             assert!(script.contains("export PATH="));
             assert!(script.contains("export CONDA_PREFIX="));
         } else {
-            assert!(script.contains("PATH="));
-            assert!(script.contains("CONDA_PREFIX="));
+            assert!(script.contains("@SET \"PATH="));
+            assert!(script.contains("@SET \"CONDA_PREFIX="));
         }
     }
 }
