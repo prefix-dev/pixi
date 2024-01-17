@@ -38,14 +38,7 @@ fn generate_activation_script(shell: Option<ShellEnum>) -> miette::Result<String
         })
         .into_diagnostic()?;
 
-    // Add a shebang on unix based platforms
-    let script = if cfg!(unix) {
-        format!("#!/bin/sh\n{}", result.script)
-    } else {
-        result.script
-    };
-
-    Ok(script)
+    Ok(result.script.clone())
 }
 
 /// Prints the activation script to the stdout.
@@ -63,7 +56,6 @@ mod tests {
     pub fn test_shell_hook() {
         let script = generate_activation_script(None).unwrap();
         if cfg!(unix) {
-            assert!(script.starts_with("#!/bin/sh"));
             assert!(script.contains("export PATH="));
             assert!(script.contains("export CONDA_PREFIX="));
         } else {
