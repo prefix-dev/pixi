@@ -307,17 +307,37 @@ impl DaemonRun {
         })
     }
 
-    /// Kill the run. This will send a SIGTERM signal to the process.
+    /// Kill the run and all its children. This will send a SIGTERM signal to the process.
     pub fn kill(&self) -> miette::Result<()> {
+        // Get the parent PID of the run
         let pid = match self.read_pid() {
             Some(pid) => pid,
             None => miette::bail!("Cannot read the pid file for the run '{}'.", self.name),
         };
 
-        // `SystemInfo::refresh_system()` must have been call before.
+        // Gather all the children PIDs of the run
+        let system = SystemInfo::get();
+        let children_pids = system
+            .processes()
+            .iter()
+            .filter(|(_pid, process)| process.parent() == Some(pid))
+            .map(|(pid, _process)| pid)
+            .collect::<Vec<_>>();
+
+        // Kill the run and all its children
+        for child_pid in children_pids {
+            println!("killing child pid: {}", child_pid.as_u32());
+            self.kill_one_process(child_pid)?;
+        }
+        self.kill_one_process(&pid)?;
+
+        Ok(())
+    }
+
+    pub fn kill_one_process(&self, pid: &Pid) -> miette::Result<()> {
         let system = SystemInfo::get();
 
-        match system.process(pid) {
+        match system.process(*pid) {
             // First try to terminate the process with a SIGTERM signal
             Some(process) => match process.kill_with(sysinfo::Signal::Term) {
                 Some(result) => match result {
@@ -419,29 +439,17 @@ impl fmt::Display for DaemonRunStatus {
 
 lazy_static::lazy_static! {
     /// Get the system info. This is cached.
-    static ref SYSTEM: std::sync::Mutex<System> = std::sync::Mutex::new(System::new_all());
+    static ref SYSTEM: System = System::new_all();
 }
 
 /// System info to help managing `sysinfo::System` as a singleton and also limiting the
 /// number of `system.refresh_all()` calls.
+/// This is NOT thread safe.
 pub struct SystemInfo {}
 
 impl SystemInfo {
-    /// Refresh the system info and return the system.
-    pub fn refresh_and_get() -> std::sync::MutexGuard<'static, System> {
-        let mut system = SYSTEM.lock().expect("Failed to lock system");
-        system.refresh_all();
-        system
-    }
-
     /// Return the system.
-    pub fn get() -> std::sync::MutexGuard<'static, System> {
-        SYSTEM.lock().expect("Failed to lock system")
-    }
-
-    /// Refresh the system info.
-    pub fn refresh() {
-        let mut system = SYSTEM.lock().expect("Failed to lock system");
-        system.refresh_all();
+    pub fn get() -> &'static System {
+        &SYSTEM
     }
 }

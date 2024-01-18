@@ -7,10 +7,7 @@ use clap::Parser;
 use miette::IntoDiagnostic;
 use rev_buf_reader::RevBufReader;
 
-use crate::{
-    runs::{DaemonRunsManager, SystemInfo},
-    Project,
-};
+use crate::{runs::DaemonRunsManager, Project};
 
 /// Print the logs of a daemon task of the project. Print the stdout logs by default. Use `--stderr` to print the stderr logs.
 #[derive(Parser, Debug)]
@@ -34,9 +31,6 @@ pub struct Args {
 pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
     // Init the runs manager
     let runs_manager = DaemonRunsManager::new(&project);
-
-    // Refresh the system info about processes and PIDs
-    SystemInfo::refresh();
 
     // Get the run
     let run = runs_manager.get_run(args.name)?;

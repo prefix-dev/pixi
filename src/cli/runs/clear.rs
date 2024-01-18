@@ -1,9 +1,6 @@
 use clap::Parser;
 
-use crate::{
-    runs::{DaemonRunsManager, SystemInfo},
-    Project,
-};
+use crate::{runs::DaemonRunsManager, Project};
 
 /// Clear a detached run. It only works on terminated runs. It will remove the pid, the logs and the infos files from the runs directory.
 #[derive(Parser, Debug)]
@@ -15,9 +12,6 @@ pub struct Args {
 pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
     // Init the runs manager
     let runs_manager = DaemonRunsManager::new(&project);
-
-    // Refresh the system info about processes and PIDs
-    SystemInfo::refresh();
 
     // Get the run
     let run = runs_manager.get_run(args.name)?;

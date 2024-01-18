@@ -2,7 +2,7 @@ use clap::Parser;
 use comfy_table::{presets::NOTHING, Attribute, Cell, ContentArrangement, Table};
 
 use crate::{
-    runs::{DaemonRunState, DaemonRunsManager, SystemInfo},
+    runs::{DaemonRunState, DaemonRunsManager},
     Project,
 };
 
@@ -21,9 +21,6 @@ pub struct Args {
 pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
     // Init the runs manager
     let runs_manager = DaemonRunsManager::new(&project);
-
-    // Refresh the system info about processes and PIDs
-    SystemInfo::refresh();
 
     // Get all the run states
     let run_states: Result<Vec<DaemonRunState>, _> = runs_manager

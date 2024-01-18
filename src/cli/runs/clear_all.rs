@@ -1,7 +1,7 @@
 use clap::Parser;
 
 use crate::{
-    runs::{DaemonRun, DaemonRunsManager, SystemInfo},
+    runs::{DaemonRun, DaemonRunsManager},
     Project,
 };
 
@@ -12,9 +12,6 @@ pub struct Args {}
 pub async fn execute(project: Project, _args: Args) -> miette::Result<()> {
     // Init the runs manager
     let runs_manager = DaemonRunsManager::new(&project);
-
-    // Refresh the system info about processes and PIDs
-    SystemInfo::refresh();
 
     // get all the non alive runs
     let all_runs = runs_manager.runs();

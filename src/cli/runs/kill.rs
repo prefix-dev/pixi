@@ -1,9 +1,6 @@
 use clap::Parser;
 
-use crate::{
-    runs::{DaemonRunsManager, SystemInfo},
-    Project,
-};
+use crate::{runs::DaemonRunsManager, Project};
 
 /// Kill a detached run. It will send a SIGTERM signal to the process.
 #[derive(Parser, Debug)]
@@ -20,11 +17,21 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
     // Init the runs manager
     let runs_manager = DaemonRunsManager::new(&project);
 
-    // Refresh the system info about processes and PIDs
-    SystemInfo::refresh();
-
     // Get the run
     let run = runs_manager.get_run(args.name)?;
+
+    // let system = SystemInfo::get();
+
+    // let proc = system.process(run.read_pid().unwrap()).unwrap();
+
+    // // find all the child processes of a given pid
+    // let children = system
+    //     .processes()
+    //     .into_iter()
+    //     .filter(|(_pid, process)| process.parent() == Some(proc.pid()))
+    //     .collect::<Vec<_>>();
+
+    // println!("children: {:?}", children.iter().map(|(pid, _)| pid).collect::<Vec<_>>());
 
     // Kill the run
     run.kill()?;
