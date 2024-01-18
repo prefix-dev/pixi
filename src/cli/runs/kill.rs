@@ -20,19 +20,6 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
     // Get the run
     let run = runs_manager.get_run(args.name)?;
 
-    // let system = SystemInfo::get();
-
-    // let proc = system.process(run.read_pid().unwrap()).unwrap();
-
-    // // find all the child processes of a given pid
-    // let children = system
-    //     .processes()
-    //     .into_iter()
-    //     .filter(|(_pid, process)| process.parent() == Some(proc.pid()))
-    //     .collect::<Vec<_>>();
-
-    // println!("children: {:?}", children.iter().map(|(pid, _)| pid).collect::<Vec<_>>());
-
     // Kill the run
     run.kill()?;
 
