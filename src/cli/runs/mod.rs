@@ -14,15 +14,15 @@ mod logs;
 pub enum Command {
     #[clap(alias = "ls")]
     List(list::Args),
-    Kill(kill::Args),
-    KillAll(kill_all::Args),
     Logs(logs::Args),
+    Kill(kill::Args),
     Clear(clear::Args),
+    KillAll(kill_all::Args),
     ClearAll(clear_all::Args),
 }
 
-/// Runs allows you to manage all the detached runs of the project.
-/// Note that only the detached runs are managed (the runs executed in the background with the `--detach` or `-d` flag).
+/// Manage all the detached runs of the project. Note that only the detached runs
+/// are managed (the runs executed in the background with the `--detach` or `-d` flag).
 #[derive(Debug, Parser)]
 pub struct Args {
     /// The path to 'pixi.toml'

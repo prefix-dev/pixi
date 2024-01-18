@@ -83,6 +83,8 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 
 ##### Options
 
+- `--detach` or `-d`: Detach the process from the terminal. You can manager the detached runs with [`pixi runs`](#runs).
+- `--name` or `-n`: Name the detached run. Only used in combination with `--detach`.
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
 - `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
@@ -93,16 +95,61 @@ pixi run cowpy "Hey pixi user"
 pixi run --manifest-path ~/myproject/pixi.toml python
 pixi run --frozen python
 pixi run --locked python
+
 # If you have specified a custom task in the pixi.toml you can run it with run as well
 pixi run build
+
 # Extra arguments will be passed to the tasks command.
 pixi run task argument1 argument2
+
+# Start a detached run
+pixi run --detach --name myrun python script.py
 ```
 
 !!! info
       In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the run command.
       Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
       This is done so that the run commands can be run across all platforms.
+
+## `runs`
+
+Manage all the detached runs of the project. Note that only the detached runs are managed (the runs executed in the background with the `--detach` or `-d` flag).
+
+### `runs list`
+
+List all the detached runs of the project.
+
+##### Options
+
+- `--json`: Whether to output in json format.
+- `--json-pretty`: Whether to output in pretty json format.
+- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+
+```shell
+pixi runs list
+pixi runs list --json
+pixi runs list --json-pretty
+```
+
+### `runs logs`
+
+Print the logs of a detached runs of the project. It prints the stdout logs by default. Use `--stderr` to print the stderr logs.
+
+##### Options
+
+- `--stderr`: Whether to output in json format.
+- `--lines` or `-l`: The number of lines to print starting from the end of the logs. If 0, print the whole logs [default: 0].
+- `--follow` or `-f`: Whether to follow the logs.
+- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+
+```shell
+
+```shell
+pixi runs logs my_task
+pixi runs logs -l 10 my_task
+pixi runs logs -l 5 -f my_task
+pixi runs logs --stderr -f my_task
+```
 
 ## `remove`
 
@@ -571,7 +618,6 @@ pixi project version patch
 ```
 
 [^1]:
-    An **up-to-date** lockfile means that the dependencies in the lockfile are allowed by the dependencies in the manifest file.
     For example
 
     - a `pixi.toml` with `python = ">= 3.11"` is up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
