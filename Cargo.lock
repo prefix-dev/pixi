@@ -2734,6 +2734,7 @@ dependencies = [
  "rattler_virtual_packages",
  "regex",
  "reqwest",
+ "rev_buf_reader",
  "rstest",
  "self-replace",
  "serde",
@@ -3451,6 +3452,15 @@ dependencies = [
  "anyhow",
  "chrono",
  "rand",
+]
+
+[[package]]
+name = "rev_buf_reader"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c0f2e47e00e29920959826e2e1784728a3780d1a784247be5257258cc75f910"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]

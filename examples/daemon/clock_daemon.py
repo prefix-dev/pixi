@@ -1,6 +1,9 @@
 import time
 import argparse
 import sys
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--name", type=str, required=True)
@@ -14,7 +17,7 @@ n = args.n
 sleep_seconds = args.sleep
 
 for i in range(n):
-    print(f"{i} - {time.ctime()}")
+    logging.info(f"{i} - {time.ctime()}")
     time.sleep(sleep_seconds)
 
 print("Done")
