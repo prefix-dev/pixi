@@ -5,7 +5,7 @@ use crate::{
     Project,
 };
 
-/// Kill all the detached run that are not terminated. It will send a SIGTERM signals to the processes.
+/// Kill all the detached runs that are not terminated. It will send a SIGTERM and/or a SIGKILL signals to the processes.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Whether to also clear the run from the history

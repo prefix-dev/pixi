@@ -21,8 +21,8 @@ pub enum Command {
     ClearAll(clear_all::Args),
 }
 
-/// Runs allows you to manage all the running instances of the project.
-/// Note that only the daemon are managed (the tasks executed in the background with the `--detach` or `-d` flag).
+/// Runs allows you to manage all the detached runs of the project.
+/// Note that only the detached runs are managed (the runs executed in the background with the `--detach` or `-d` flag).
 #[derive(Debug, Parser)]
 pub struct Args {
     /// The path to 'pixi.toml'

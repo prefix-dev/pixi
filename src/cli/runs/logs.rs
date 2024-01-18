@@ -9,7 +9,8 @@ use rev_buf_reader::RevBufReader;
 
 use crate::{runs::DaemonRunsManager, Project};
 
-/// Print the logs of a daemon task of the project. Print the stdout logs by default. Use `--stderr` to print the stderr logs.
+/// Print the logs of a detached runs of the project. It prints the stdout logs
+/// by default. Use `--stderr` to print the stderr logs.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The name of the run to clear

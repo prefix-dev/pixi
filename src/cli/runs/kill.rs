@@ -2,7 +2,7 @@ use clap::Parser;
 
 use crate::{runs::DaemonRunsManager, Project};
 
-/// Kill a detached run. It will send a SIGTERM signal to the process.
+/// Kill a detached run. It will send a SIGTERM and/or a SIGKILL signal to the process.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The name of the run to kill

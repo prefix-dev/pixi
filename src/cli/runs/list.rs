@@ -6,7 +6,7 @@ use crate::{
     Project,
 };
 
-/// List all the daemon tasks of the project.
+/// List all the detached runs of the project.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Whether to output in json format
