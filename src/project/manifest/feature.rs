@@ -11,7 +11,7 @@ use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
 use std::fmt;
 
@@ -28,7 +28,7 @@ impl<'de> Deserialize<'de> for FeatureName {
         D: serde::Deserializer<'de>,
     {
         match String::deserialize(deserializer)?.as_str() {
-            "default" => Err(D::Error::custom(
+            consts::DEFAULT_ENVIRONMENT_NAME => Err(D::Error::custom(
                 "The name 'default' is reserved for the default feature",
             )),
             name => Ok(FeatureName::Named(name.to_string())),
@@ -36,6 +36,14 @@ impl<'de> Deserialize<'de> for FeatureName {
     }
 }
 
+impl<'s> From<&'s str> for FeatureName {
+    fn from(value: &'s str) -> Self {
+        match value {
+            consts::DEFAULT_ENVIRONMENT_NAME => FeatureName::Default,
+            name => FeatureName::Named(name.to_string()),
+        }
+    }
+}
 impl FeatureName {
     /// Returns the name of the feature or `None` if this is the default feature.
     pub fn name(&self) -> Option<&str> {
@@ -43,6 +51,16 @@ impl FeatureName {
             FeatureName::Default => None,
             FeatureName::Named(name) => Some(name),
         }
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.name().unwrap_or(consts::DEFAULT_ENVIRONMENT_NAME)
+    }
+}
+
+impl Borrow<str> for FeatureName {
+    fn borrow(&self) -> &str {
+        self.as_str()
     }
 }
 
