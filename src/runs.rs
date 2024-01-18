@@ -154,13 +154,12 @@ impl DaemonRun {
             return None;
         }
 
-        let pid = std::fs::read_to_string(self.pid_file_path())
-            .expect("Failed to read pid file")
-            .trim()
-            .parse::<Pid>()
-            .expect("Failed to parse pid file content as u32");
+        let pid = match std::fs::read_to_string(self.pid_file_path()) {
+            Ok(content) => content.trim().parse::<Pid>().ok(),
+            Err(_) => None,
+        };
 
-        Some(pid)
+        pid
     }
 
     pub fn read_infos(&self) -> Option<DaemonRunInfos> {
@@ -263,7 +262,7 @@ impl DaemonRun {
     pub fn state(&self) -> miette::Result<DaemonRunState> {
         let pid = match self.read_pid() {
             Some(pid) => pid,
-            None => miette::bail!("No pid file with name '{}' found.", self.name),
+            None => miette::bail!("Cannot read the pid file for the run '{}'.", self.name),
         };
         let stdout_length = self.read_stdout()?.len();
         let stderr_length = self.read_stderr()?.len();
@@ -286,7 +285,7 @@ impl DaemonRun {
     pub fn kill(&self) -> miette::Result<()> {
         let pid = match self.read_pid() {
             Some(pid) => pid,
-            None => miette::bail!("No pid file with name '{}' found.", self.name),
+            None => miette::bail!("Cannot read the pid file for the run '{}'.", self.name),
         };
 
         // TODO: not very efficient to call this every time
