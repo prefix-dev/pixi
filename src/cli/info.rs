@@ -11,9 +11,11 @@ use serde_with::DisplayFromStr;
 use tokio::task::spawn_blocking;
 
 use crate::progress::await_in_progress;
-use crate::Project;
+use crate::{config, Project};
 
-/// Information about the system and project
+static WIDTH: usize = 18;
+
+/// Information about the system, project and environments for the current machine.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Show cache and environment size
@@ -31,12 +33,127 @@ pub struct Args {
 
 #[derive(Serialize)]
 pub struct ProjectInfo {
-    tasks: Vec<String>,
     manifest_path: PathBuf,
-    package_count: u64,
-    environment_size: Option<String>,
     last_updated: Option<String>,
+    pixi_folder_size: Option<String>,
+    version: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct EnvironmentInfo {
+    name: String,
+    features: Vec<String>,
+    solve_group: Option<String>,
+    environment_size: Option<String>,
+    dependencies: Vec<String>,
+    pypi_dependencies: Vec<String>,
     platforms: Vec<Platform>,
+    tasks: Vec<String>,
+    channels: Vec<String>,
+    // prefix: Option<PathBuf>, add when PR 674 is merged
+}
+
+impl Display for EnvironmentInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let bold = console::Style::new().bold();
+        writeln!(
+            f,
+            "{}",
+            console::style(self.name.clone()).bold().blue().underlined()
+        )?;
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Features"),
+            self.features.join(", ")
+        )?;
+        if let Some(solve_group) = &self.solve_group {
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Solve group"),
+                solve_group
+            )?;
+        }
+        // TODO: add environment size when PR 674 is merged
+        if let Some(size) = &self.environment_size {
+            writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Environment size"), size)?;
+        }
+        if !self.channels.is_empty() {
+            let channels_list = self
+                .channels
+                .iter()
+                .map(|c| c.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Channels"),
+                channels_list
+            )?;
+        }
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Dependency count"),
+            self.dependencies.len()
+        )?;
+        if !self.dependencies.is_empty() {
+            let dependencies_list = self
+                .dependencies
+                .iter()
+                .map(|d| d.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Dependencies"),
+                dependencies_list
+            )?;
+        }
+
+        if !self.pypi_dependencies.is_empty() {
+            let dependencies_list = self
+                .pypi_dependencies
+                .iter()
+                .map(|d| d.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("PyPI Dependencies"),
+                dependencies_list
+            )?;
+        }
+
+        if !self.platforms.is_empty() {
+            let platform_list = self
+                .platforms
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Target platforms"),
+                platform_list
+            )?;
+        }
+        if !self.tasks.is_empty() {
+            let tasks_list = self
+                .tasks
+                .iter()
+                .map(|t| t.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Tasks"), tasks_list)?;
+        }
+        Ok(())
+    }
 }
 
 #[serde_as]
@@ -50,77 +167,77 @@ pub struct Info {
     cache_size: Option<String>,
     auth_dir: PathBuf,
     project_info: Option<ProjectInfo>,
+    environments_info: Vec<EnvironmentInfo>,
 }
-
 impl Display for Info {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let blue = console::Style::new().blue();
+        let bold = console::Style::new().bold();
         let cache_dir = match &self.cache_dir {
             Some(path) => path.to_string_lossy().to_string(),
             None => "None".to_string(),
         };
 
-        writeln!(f, "pixi {}\n", self.version)?;
-        writeln!(f, "{:20}: {}", "Platform", self.platform)?;
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Pixi version"),
+            blue.apply_to(&self.version)
+        )?;
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Platform"),
+            self.platform
+        )?;
 
         for (i, p) in self.virtual_packages.iter().enumerate() {
             if i == 0 {
-                writeln!(f, "{:20}: {}", "Virtual packages", p)?;
+                writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Virtual packages"), p)?;
             } else {
-                writeln!(f, "{:20}: {}", "", p)?;
+                writeln!(f, "{:>WIDTH$}: {}", "", p)?;
             }
         }
 
-        writeln!(f, "{:20}: {}", "Cache dir", cache_dir)?;
+        writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Cache dir"), cache_dir)?;
 
         if let Some(cache_size) = &self.cache_size {
-            writeln!(f, "{:20}: {}", "Cache size", cache_size)?;
+            writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Cache size"), cache_size)?;
         }
 
         writeln!(
             f,
-            "{:20}: {}",
-            "Auth storage",
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Auth storage"),
             self.auth_dir.to_string_lossy()
         )?;
 
         if let Some(pi) = self.project_info.as_ref() {
-            writeln!(f, "\nProject\n------------\n")?;
-
+            writeln!(f, "\n{}", bold.apply_to("Project\n------------"))?;
+            if let Some(version) = pi.version.clone() {
+                writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Version"), version)?;
+            }
             writeln!(
                 f,
-                "{:20}: {}",
-                "Manifest file",
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Manifest file"),
                 pi.manifest_path.to_string_lossy()
             )?;
 
-            writeln!(f, "{:20}: {}", "Dependency count", pi.package_count)?;
-
-            if let Some(size) = &pi.environment_size {
-                writeln!(f, "{:20}: {}", "Environment size", size)?;
-            }
-
             if let Some(update_time) = &pi.last_updated {
-                writeln!(f, "{:20}: {}", "Last updated", update_time)?;
+                writeln!(
+                    f,
+                    "{:>WIDTH$}: {}",
+                    bold.apply_to("Last updated"),
+                    update_time
+                )?;
             }
+        }
 
-            if !pi.platforms.is_empty() {
-                for (i, p) in pi.platforms.iter().enumerate() {
-                    if i == 0 {
-                        writeln!(f, "{:20}: {}", "Target platforms", p)?;
-                    } else {
-                        writeln!(f, "{:20}: {}", "", p)?;
-                    }
-                }
-            }
-
-            if !pi.tasks.is_empty() {
-                for (i, t) in pi.tasks.iter().enumerate() {
-                    if i == 0 {
-                        writeln!(f, "{:20}: {}", "Tasks", t)?;
-                    } else {
-                        writeln!(f, "{:20}: {}", "", t)?;
-                    }
-                }
+        if !self.environments_info.is_empty() {
+            writeln!(f, "\n{}", bold.apply_to("Environments\n------------"))?;
+            for e in &self.environments_info {
+                writeln!(f, "{}", e)?;
             }
         }
 
@@ -158,22 +275,12 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
     Ok(formated_time)
 }
 
-/// Returns number of dependencies on current platform
-fn dependency_count(project: &Project) -> u64 {
-    project
-        .dependencies(None, Some(Platform::current()))
-        .names()
-        .count() as _
-}
-
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
 
-    let cache_dir = rattler::default_cache_dir()
-        .map_err(|_| miette::miette!("Could not determine default cache directory"))?;
-    let (environment_size, cache_size) = if args.extended {
-        let cache_dir = cache_dir.clone();
+    let (pixi_folder_size, cache_size) = if args.extended {
         let env_dir = project.as_ref().map(|p| p.root().join(".pixi"));
+        let cache_dir = config::get_cache_dir()?;
         await_in_progress(
             "fetching cache",
             spawn_blocking(move || {
@@ -188,19 +295,50 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         (None, None)
     };
 
-    let project_info = project.map(|p| ProjectInfo {
+    let project_info = project.clone().map(|p| ProjectInfo {
         manifest_path: p.root().to_path_buf().join("pixi.toml"),
-        tasks: p
-            .manifest
-            .tasks(Some(Platform::current()))
-            .into_keys()
-            .map(|k| k.to_string())
-            .collect(),
-        package_count: dependency_count(&p),
-        environment_size,
         last_updated: last_updated(p.lock_file_path()).ok(),
-        platforms: p.platforms().into_iter().collect(),
+        pixi_folder_size,
+        version: p.version().clone().map(|v| v.to_string()),
     });
+
+    let environments_info: Vec<EnvironmentInfo> = project
+        .as_ref()
+        .map(|p| {
+            p.environments()
+                .iter()
+                .map(|env| EnvironmentInfo {
+                    name: env.name().as_str().to_string(),
+                    features: env.features().map(|f| f.name.to_string()).collect(),
+                    solve_group: env.manifest().solve_group.clone(),
+                    environment_size: None,
+                    dependencies: env
+                        .dependencies(None, Some(Platform::current()))
+                        .names()
+                        .map(|p| p.as_source().to_string())
+                        .collect(),
+                    pypi_dependencies: env
+                        .pypi_dependencies(Some(Platform::current()))
+                        .into_iter()
+                        .map(|(name, _p)| name.as_str().to_string())
+                        .collect(),
+                    platforms: env.platforms().into_iter().collect(),
+                    channels: env
+                        .channels()
+                        .into_iter()
+                        .filter_map(|c| c.name.clone())
+                        .collect(),
+                    // prefix: env.dir(),
+                    tasks: env
+                        .tasks(Some(Platform::current()))
+                        .expect("Current environment should be supported on current platform")
+                        .into_keys()
+                        .map(|k| k.to_string())
+                        .collect(),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
     let virtual_packages = VirtualPackage::current()
         .into_diagnostic()?
@@ -213,12 +351,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         platform: Platform::current().to_string(),
         virtual_packages,
         version: env!("CARGO_PKG_VERSION").to_string(),
-        cache_dir: Some(cache_dir),
+        cache_dir: Some(config::get_cache_dir()?),
         cache_size,
         auth_dir: rattler_networking::authentication_storage::backends::file::FileStorage::default(
         )
         .path,
         project_info,
+        environments_info,
     };
 
     if args.json {
