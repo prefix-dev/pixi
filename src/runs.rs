@@ -9,12 +9,15 @@ use sysinfo::{Pid, ProcessStatus, System};
 
 use crate::{consts, Project};
 
+/// Manage the daemon (detached) runs of a project.
 #[derive(Debug)]
 pub struct DaemonRunsManager<'a> {
     pub project: &'a Project,
 }
 
 impl<'a> DaemonRunsManager<'a> {
+    /// Create a new `DaemonRunsManager` for a project.
+    /// This will create the runs directory if it doesn't exist.
     pub fn new(project: &'a Project) -> Self {
         let daemon_runs = Self { project };
 
@@ -24,13 +27,13 @@ impl<'a> DaemonRunsManager<'a> {
         daemon_runs
     }
 
+    /// Get the runs directory of the project.
     pub fn runs_dir(&self) -> PathBuf {
         self.project.pixi_dir().join(consts::RUNS_DIR)
     }
 
+    /// Get the runs of the project. The source of truth for managed runs are the pid files (any files ending with `.pid`) in the runs directory.
     pub fn runs(&self) -> Vec<DaemonRun> {
-        // NOTE(hadim): the source of truth for managed runs are the pid files (any files ending with `.pid`) in the runs directory.
-
         let runs: Vec<DaemonRun> = std::fs::read_dir(self.runs_dir())
             .expect("Failed to read runs directory")
             .filter_map(|entry| {
@@ -57,6 +60,8 @@ impl<'a> DaemonRunsManager<'a> {
         runs
     }
 
+    /// Create a new run for the project. Runs with the same name are not allowed. If no name
+    /// is provided, a random name will be generated.
     pub fn create_new_run(&self, name: Option<String>) -> miette::Result<DaemonRun> {
         // Check if a run with the same name already exists
         let name = match name {
@@ -80,6 +85,7 @@ impl<'a> DaemonRunsManager<'a> {
         ))
     }
 
+    /// Get a run by its name.
     pub fn get_run(&self, name: String) -> miette::Result<DaemonRun> {
         let run = DaemonRun::new(name, self.runs_dir(), self.project.root().to_path_buf());
 
@@ -92,6 +98,7 @@ impl<'a> DaemonRunsManager<'a> {
     }
 }
 
+/// A detached run of a project.
 #[derive(Debug)]
 pub struct DaemonRun {
     pub name: String,
@@ -108,22 +115,25 @@ impl DaemonRun {
         }
     }
 
-    pub fn is_running(&self) -> bool {
+    /// Check if the run is alive. A run is considered alive if its PID can be found in the
+    /// system using the `sysinfo` crate.
+    pub fn is_alive(&self) -> bool {
         !matches!(
             self.process_status(),
             DaemonRunStatus::Terminated | DaemonRunStatus::UnknownPid
         )
     }
 
+    /// Get the status of the run. If the run is not alive, the status is either `Terminated` or
+    /// `UnknownPid`.
     pub fn process_status(&self) -> DaemonRunStatus {
         let pid = match self.read_pid() {
             Some(pid) => pid,
             None => return DaemonRunStatus::UnknownPid,
         };
 
-        // TODO: not very efficient to call this every time
-        let mut system = System::new_all();
-        system.refresh_all();
+        // `SystemInfo::refresh_system()` must have been call before.
+        let system = SystemInfo::get();
 
         match system.process(pid) {
             Some(process) => DaemonRunStatus::from_process_status(process.status()),
@@ -221,11 +231,15 @@ impl DaemonRun {
     }
 
     pub fn clear(&self) -> miette::Result<()> {
-        // check if the run is running
-        if self.is_running() {
-            miette::bail!("The run is still running. You can call `pixi runs kill` to kill it.");
+        // check if the run is alive
+        if self.is_alive() {
+            miette::bail!("The run is still alive. You can call `pixi runs kill` to kill it.");
         }
 
+        self.clear_force()
+    }
+
+    pub fn clear_force(&self) -> miette::Result<()> {
         // delete pid, infos, stdout and stderr files
         let _ = std::fs::remove_file(self.pid_file_path()).map_err(|_| {
             eprintln!(
@@ -287,9 +301,8 @@ impl DaemonRun {
             None => miette::bail!("Cannot read the pid file for the run '{}'.", self.name),
         };
 
-        // TODO: not very efficient to call this every time
-        let mut system = System::new_all();
-        system.refresh_all();
+        // `SystemInfo::refresh_system()` must have been call before.
+        let system = SystemInfo::get();
 
         match system.process(pid) {
             Some(process) => match process.kill() {
@@ -363,5 +376,34 @@ impl DaemonRunStatus {
 impl fmt::Display for DaemonRunStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+lazy_static::lazy_static! {
+    /// Get the system info. This is cached.
+    static ref SYSTEM: std::sync::Mutex<System> = std::sync::Mutex::new(System::new_all());
+}
+
+/// System info to help managing `sysinfo::System` as a singleton and also limiting the
+/// number of `system.refresh_all()` calls.
+pub struct SystemInfo {}
+
+impl SystemInfo {
+    /// Refresh the system info and return the system.
+    pub fn refresh_and_get() -> std::sync::MutexGuard<'static, System> {
+        let mut system = SYSTEM.lock().expect("Failed to lock system");
+        system.refresh_all();
+        system
+    }
+
+    /// Return the system.
+    pub fn get() -> std::sync::MutexGuard<'static, System> {
+        SYSTEM.lock().expect("Failed to lock system")
+    }
+
+    /// Refresh the system info.
+    pub fn refresh() {
+        let mut system = SYSTEM.lock().expect("Failed to lock system");
+        system.refresh_all();
     }
 }
