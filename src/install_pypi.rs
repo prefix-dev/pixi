@@ -8,18 +8,25 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 
+use crate::consts::PROJECT_MANIFEST;
+use crate::project::manifest::SystemRequirements;
+use crate::pypi_marker_env::determine_marker_environment;
+use crate::pypi_tags::{is_python_record, project_platform_tags};
 use rattler_conda_types::Platform;
 use rattler_lock::{CondaLock, LockedDependency};
 use rip::artifacts::wheel::{InstallPaths, UnpackWheelOptions};
 use rip::artifacts::Wheel;
 use rip::index::PackageDb;
-use rip::python_env::{find_distributions_in_venv, uninstall_distribution, Distribution, WheelTag};
+use rip::python_env::{
+    find_distributions_in_venv, uninstall_distribution, Distribution, PythonLocation, WheelTag,
+};
+use rip::resolve::{ResolveOptions, SDistResolution};
 use rip::types::{
     Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Extra, NormalizedPackageName,
-    WheelFilename,
 };
-use std::collections::HashSet;
-use std::path::Path;
+use rip::wheel_builder::WheelBuilder;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::task::JoinError;
@@ -28,12 +35,17 @@ use tokio::task::JoinError;
 pub(crate) const PIXI_PYPI_INSTALLER: &str = env!("CARGO_PKG_NAME");
 
 /// Installs and/or remove python distributions.
+// TODO: refactor arguments in struct
+#[allow(clippy::too_many_arguments)]
 pub async fn update_python_distributions(
     package_db: &PackageDb,
     prefix: &Prefix,
     lock_file: &CondaLock,
     platform: Platform,
     status: &PythonStatus,
+    python_location: &Option<PathBuf>,
+    system_requirements: &SystemRequirements,
+    sdist_resolution: SDistResolution,
 ) -> miette::Result<()> {
     let python_info = match status {
         PythonStatus::Changed { new, .. }
@@ -76,9 +88,43 @@ pub async fn update_python_distributions(
             python_packages,
         );
 
+    let conda_packages = lock_file
+        .get_conda_packages_by_platform(platform)
+        .into_diagnostic()?;
+
+    // Determine the python interpreter that is installed as part of the conda packages.
+    let python_record = conda_packages
+        .iter()
+        .find(|r| is_python_record(r))
+        .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
+
+    // Determine the environment markers
+    let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
+
+    // Determine the compatible tags
+    let compatible_tags =
+        project_platform_tags(platform, system_requirements, python_record.as_ref());
+
+    let wheel_builder = python_location.as_ref().map(|path| {
+        WheelBuilder::new(
+            package_db,
+            &marker_environment,
+            Some(&compatible_tags),
+            &ResolveOptions {
+                sdist_resolution,
+                python_location: PythonLocation::Custom(path.clone()),
+                clean_env: false,
+            },
+            HashMap::default(),
+        )
+    });
+
     // Start downloading the python packages that we want in the background.
-    let (package_stream, package_stream_pb) =
-        stream_python_artifacts(package_db, python_distributions_to_install.clone());
+    let (package_stream, package_stream_pb) = stream_python_artifacts(
+        package_db,
+        python_distributions_to_install.clone(),
+        wheel_builder.as_ref(),
+    );
 
     // Remove python packages that need to be removed
     if !python_distributions_to_remove.is_empty() {
@@ -194,6 +240,7 @@ async fn install_python_distributions(
 fn stream_python_artifacts<'a>(
     package_db: &'a PackageDb,
     packages_to_download: Vec<&'a LockedDependency>,
+    wheel_builder: Option<&'a WheelBuilder<'a, 'a>>,
 ) -> (
     impl Stream<Item = miette::Result<(Option<String>, HashSet<Extra>, Wheel)>> + 'a,
     Option<ProgressBar>,
@@ -217,6 +264,7 @@ fn stream_python_artifacts<'a>(
 
     let stream_pb = pb.clone();
     let total_packages = packages_to_download.len();
+
     let download_stream = stream::iter(packages_to_download)
         .map(move |package| {
             let pb = stream_pb.clone();
@@ -237,8 +285,9 @@ fn stream_python_artifacts<'a>(
                     .with_context(|| {
                         format!("'{}' is not a valid python package name", &package.name)
                     })?;
-                let wheel_name = WheelFilename::from_filename(filename, &name)
-                    .expect("failed to convert filename to wheel filename");
+
+                let artifact_name = ArtifactName::from_filename(filename, &name)
+                    .expect("failed to convert filename to artifact name");
 
                 // Log out intent to install this python package.
                 tracing::info!("downloading python package {filename}");
@@ -246,7 +295,7 @@ fn stream_python_artifacts<'a>(
 
                 // Reconstruct the ArtifactInfo from the data in the lockfile.
                 let artifact_info = ArtifactInfo {
-                    filename: ArtifactName::Wheel(wheel_name),
+                    filename: artifact_name,
                     url: pip_package.url.clone(),
                     hashes: pip_package.hash.as_ref().map(|hash| ArtifactHashes {
                         sha256: hash.sha256().cloned(),
@@ -263,7 +312,7 @@ fn stream_python_artifacts<'a>(
 
                 // TODO: Maybe we should have a cache of wheels separate from the package_db. Since a
                 //   wheel can just be identified by its hash or url.
-                let wheel: Wheel = package_db.get_wheel(&artifact_info, None).await?;
+                let wheel: Wheel = package_db.get_wheel(&artifact_info, wheel_builder).await?;
 
                 // Update the progress bar
                 pb_task.finish().await;

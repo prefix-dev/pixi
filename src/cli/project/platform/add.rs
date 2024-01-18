@@ -44,7 +44,14 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     project.manifest.add_platforms(missing_platforms.iter())?;
 
     // Try to update the lock-file with the new channels
-    get_up_to_date_prefix(&project, LockFileUsage::Update, args.no_install, None).await?;
+    get_up_to_date_prefix(
+        &project,
+        LockFileUsage::Update,
+        args.no_install,
+        None,
+        Default::default(),
+    )
+    .await?;
     project.save()?;
 
     // Report back to the user
