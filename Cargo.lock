@@ -1212,6 +1212,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-err"
+version = "2.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88a41f105fe1d5b6b34b2055e3dc59bb79b46b48b2040b9e6c7b4b5de097aa41"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "fs4"
 version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1484,15 +1493,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
  "digest",
-]
-
-[[package]]
-name = "home"
-version = "0.5.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3d1354bf6b7235cb4a0576c2619fd4ed18183f689b12b006a0ee7329eeff9a5"
-dependencies = [
- "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3034,9 +3034,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_installs_packages"
-version = "0.1.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae67cf7e1c4a7f35bf82b38fed677ba56e4540a70a94bea91d29443ba0d136c6"
+checksum = "a9e5d881f60db77caedd8e7ef001b553c61e6cc97ad420ffa4a23861afcaa3aa"
 dependencies = [
  "async-once-cell",
  "async-recursion",
@@ -3052,6 +3052,7 @@ dependencies = [
  "dunce",
  "elsa",
  "flate2",
+ "fs-err",
  "fs4",
  "futures 0.3.30",
  "html-escape",
@@ -3086,7 +3087,6 @@ dependencies = [
  "tokio-util",
  "tracing",
  "url",
- "which",
  "zip",
 ]
 
@@ -4729,18 +4729,6 @@ name = "webpki-roots"
 version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1778a42e8b3b90bff8d0f5032bf22250792889a5cdc752aa0020c84abe3aaf10"
-
-[[package]]
-name = "which"
-version = "4.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87ba24419a2078cd2b0f2ede2691b6c66d8e47836da3b6db8265ebad47afbfc7"
-dependencies = [
- "either",
- "home",
- "once_cell",
- "rustix 0.38.30",
-]
 
 [[package]]
 name = "winapi"
