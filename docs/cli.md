@@ -104,6 +104,32 @@ pixi run task argument1 argument2
       Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
       This is done so that the run commands can be run across all platforms.
 
+## `remove`
+
+Removes dependencies from the `pixi.toml`.
+
+##### Options
+
+- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--host`: Specifies a host dependency, important for building a package.
+- `--build`: Specifies a build dependency, important for building a package.
+- `--pypi`: Specifies a PyPI dependency, not a conda package.
+- `--platform (-p)`: The platform from which the dependency should be removed.
+- `--feature (-f)`: The feature from which the dependency should be removed.
+
+```shell
+pixi remove numpy
+pixi remove numpy pandas pytorch
+pixi remove --manifest-path ~/myproject/pixi.toml numpy
+pixi remove --host python
+pixi remove --build cmake
+pixi remove --pypi requests
+pixi remove --platform osx-64 --build clang
+pixi remove --feature featurex clang
+pixi remove --feature featurex --platform osx-64 clang
+pixi remove --feature featurex --platform osx-64 --build clang
+```
+
 ## `task`
 
 If you want to make a shorthand for a specific command you can add a task for it.

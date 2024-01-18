@@ -56,6 +56,7 @@ fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
 /// Runs the following checks to make sure the project is in a sane state:
 ///     1. It verifies that the prefix location is unchanged.
 ///     2. It verifies that the system requirements are met.
+///     3. It verifies the absence of the `env` folder.
 pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
     verify_prefix_location_unchanged(
