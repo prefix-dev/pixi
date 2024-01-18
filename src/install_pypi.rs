@@ -26,7 +26,7 @@ use rip::types::{
 };
 use rip::wheel_builder::WheelBuilder;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::task::JoinError;
@@ -43,7 +43,7 @@ pub async fn update_python_distributions(
     lock_file: &CondaLock,
     platform: Platform,
     status: &PythonStatus,
-    python_location: &PythonLocation,
+    python_location: &Option<PathBuf>,
     system_requirements: &SystemRequirements,
     sdist_resolution: SDistResolution,
 ) -> miette::Result<()> {
@@ -105,28 +105,25 @@ pub async fn update_python_distributions(
     let compatible_tags =
         project_platform_tags(platform, system_requirements, python_record.as_ref());
 
-    let wheel_builder = if let PythonLocation::Custom(_) = python_location {
-        Some(WheelBuilder::new(
+    let wheel_builder = python_location.as_ref().map(|path| {
+        WheelBuilder::new(
             package_db,
             &marker_environment,
             Some(&compatible_tags),
             &ResolveOptions {
                 sdist_resolution,
-                python_location: python_location.clone(),
+                python_location: PythonLocation::Custom(path.clone()),
                 clean_env: false,
             },
             HashMap::default(),
-        ))
-    } else {
-        None
-    };
-    let wheel_builder = wheel_builder.as_ref();
+        )
+    });
 
     // Start downloading the python packages that we want in the background.
     let (package_stream, package_stream_pb) = stream_python_artifacts(
         package_db,
         python_distributions_to_install.clone(),
-        wheel_builder,
+        wheel_builder.as_ref(),
     );
 
     // Remove python packages that need to be removed

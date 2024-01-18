@@ -21,8 +21,8 @@ use rattler_lock::{
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
-use rip::python_env::PythonLocation;
 use rip::resolve::SDistResolution;
+use std::path::PathBuf;
 use std::{sync::Arc, time::Duration};
 
 pub use satisfiability::lock_file_satisfies_project;
@@ -159,7 +159,7 @@ pub async fn update_lock_file_conda(
 pub async fn update_lock_file_for_pypi(
     project: &Project,
     lock_for_conda: CondaLock,
-    python_location: &PythonLocation,
+    python_location: &Option<PathBuf>,
     sdist_resolution: SDistResolution,
 ) -> miette::Result<CondaLock> {
     let platforms = project.platforms();
@@ -259,7 +259,7 @@ async fn resolve_pypi(
     mut locked_packages: LockedPackagesBuilder,
     platform: Platform,
     pb: &ProgressBar,
-    python_location: &PythonLocation,
+    python_location: &Option<PathBuf>,
     sdist_resolution: SDistResolution,
 ) -> miette::Result<LockedPackagesBuilder> {
     // Solve python packages

@@ -10,6 +10,7 @@ use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rip::python_env::PythonLocation;
 use rip::resolve::{resolve, PinnedPackage, ResolveOptions, SDistResolution};
+use std::path::PathBuf;
 use std::{collections::HashMap, vec};
 
 /// Resolve python packages for the specified project.
@@ -17,7 +18,7 @@ pub async fn resolve_dependencies<'p>(
     project: &'p Project,
     platform: Platform,
     conda_packages: &[RepoDataRecord],
-    python_location: &PythonLocation,
+    python_location: &Option<PathBuf>,
     sdist_resolution: SDistResolution,
 ) -> miette::Result<Vec<PinnedPackage<'p>>> {
     let dependencies = project.pypi_dependencies(Some(platform));
@@ -75,10 +76,10 @@ pub async fn resolve_dependencies<'p>(
     // If we only have a system python
     // we cannot resolve correctly, because we might not be able to
     // build source dists correctly. Let's skip them for now
-    let resolution = match &python_location {
-        PythonLocation::System => SDistResolution::OnlyWheels,
+    let (sdist_resolution, python_location) = match python_location {
+        Some(path) => (sdist_resolution, PythonLocation::Custom(path.clone())),
         // Use the resolution we have been passed in
-        PythonLocation::Custom(_) => sdist_resolution,
+        None => (sdist_resolution, PythonLocation::System),
     };
 
     // Resolve the PyPi dependencies
@@ -93,8 +94,8 @@ pub async fn resolve_dependencies<'p>(
             .collect(),
         HashMap::default(),
         &ResolveOptions {
-            sdist_resolution: resolution,
-            python_location: python_location.clone(),
+            sdist_resolution,
+            python_location,
             clean_env: false,
         },
         HashMap::default(),

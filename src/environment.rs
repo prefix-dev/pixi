@@ -12,8 +12,8 @@ use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::CondaLock;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rip::index::PackageDb;
-use rip::python_env::PythonLocation;
 use rip::resolve::SDistResolution;
+use std::path::PathBuf;
 use std::{io::ErrorKind, path::Path};
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
@@ -192,12 +192,8 @@ pub async fn get_up_to_date_prefix(
         let python_location = match &python_status {
             PythonStatus::Changed { new, .. }
             | PythonStatus::Unchanged(new)
-            | PythonStatus::Added { new } => {
-                PythonLocation::Custom(prefix.root().join(new.path.clone()))
-            }
-            PythonStatus::DoesNotExist | PythonStatus::Removed { .. } => {
-                miette::bail!("no python interpreter available in the environment, need this to resolve pypi dependencies")
-            }
+            | PythonStatus::Added { new } => Some(prefix.root().join(new.path.clone())),
+            PythonStatus::DoesNotExist | PythonStatus::Removed { .. } => None,
         };
 
         if update_lock_file {
@@ -237,7 +233,7 @@ pub async fn update_prefix_pypi(
     package_db: &PackageDb,
     lock_file: &CondaLock,
     status: &PythonStatus,
-    python_location: &PythonLocation,
+    python_location: &Option<PathBuf>,
     system_requirements: &SystemRequirements,
     sdist_resolution: SDistResolution,
 ) -> miette::Result<()> {
