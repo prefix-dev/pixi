@@ -228,7 +228,7 @@ pub fn quote(in_str: &str) -> Cow<str> {
         "\"\"".into()
     } else if in_str
         .bytes()
-        .any(|c| matches!(c as char, '\t' | '\r' | '\n' | ' '))
+        .any(|c| matches!(c as char, '\t' | '\r' | '\n' | ' ' | '[' | ']'))
     {
         let mut out: Vec<u8> = Vec::new();
         out.push(b'"');
@@ -252,7 +252,7 @@ pub fn quote_arguments<'a>(args: impl IntoIterator<Item = &'a str>) -> String {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::quote;
 
     #[test]
@@ -267,5 +267,6 @@ mod test {
             quote("PATH=\"$PATH;build/Debug\""),
             "PATH=\"$PATH;build/Debug\""
         );
+        assert_eq!(quote("name=[64,64]"), "\"name=[64,64]\"");
     }
 }

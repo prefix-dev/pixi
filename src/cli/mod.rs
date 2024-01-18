@@ -14,11 +14,14 @@ pub mod global;
 pub mod info;
 pub mod init;
 pub mod install;
+pub mod list;
 pub mod project;
 pub mod remove;
 pub mod run;
 pub mod search;
+pub mod self_update;
 pub mod shell;
+pub mod shell_hook;
 pub mod task;
 pub mod upload;
 
@@ -57,6 +60,8 @@ pub enum Command {
     Run(run::Args),
     #[clap(alias = "s")]
     Shell(shell::Args),
+    #[clap(hide = true)]
+    ShellHook(shell_hook::Args),
     #[clap(alias = "g")]
     Global(global::Args),
     Auth(auth::Args),
@@ -69,6 +74,8 @@ pub enum Command {
     Project(project::Args),
     #[clap(alias = "rm")]
     Remove(remove::Args),
+    SelfUpdate(self_update::Args),
+    List(list::Args),
 }
 
 #[derive(Parser, Debug, Default)]
@@ -159,12 +166,15 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Auth(cmd) => auth::execute(cmd).await,
         Command::Install(cmd) => install::execute(cmd).await,
         Command::Shell(cmd) => shell::execute(cmd).await,
+        Command::ShellHook(cmd) => shell_hook::execute(cmd),
         Command::Task(cmd) => task::execute(cmd),
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
         Command::Project(cmd) => project::execute(cmd).await,
         Command::Remove(cmd) => remove::execute(cmd).await,
+        Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
+        Command::List(cmd) => list::execute(cmd).await,
     }
 }
 

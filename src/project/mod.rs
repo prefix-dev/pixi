@@ -24,6 +24,7 @@ use std::{
 };
 
 use crate::{
+    config,
     consts::{self, PROJECT_MANIFEST},
     default_client,
     task::Task,
@@ -198,8 +199,8 @@ impl Project {
     }
 
     /// Returns the environment directory
-    pub fn environment_dir(&self) -> PathBuf {
-        self.pixi_dir().join(consts::ENVIRONMENT_DIR)
+    pub fn environments_dir(&self) -> PathBuf {
+        self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
     }
 
     /// Returns the path to the manifest file.
@@ -234,6 +235,19 @@ impl Project {
             project: self,
             environment: self.manifest.environment(name)?,
         })
+    }
+
+    /// Returns the environments in this project.
+    pub fn environments(&self) -> Vec<Environment> {
+        self.manifest
+            .parsed
+            .environments
+            .iter()
+            .map(|(_name, env)| Environment {
+                project: self,
+                environment: env,
+            })
+            .collect()
     }
 
     /// Returns the channels used by this project.
@@ -326,11 +340,7 @@ impl Project {
                 PackageDb::new(
                     default_client(),
                     &self.pypi_index_urls(),
-                    &rattler::default_cache_dir()
-                        .map_err(|_| {
-                            miette::miette!("could not determine default cache directory")
-                        })?
-                        .join("pypi/"),
+                    &config::get_cache_dir()?.join("pypi/"),
                 )
                 .into_diagnostic()
                 .map(Arc::new)

@@ -1,4 +1,4 @@
-use crate::{default_authenticated_client, progress, project::Project};
+use crate::{config, default_authenticated_client, progress, project::Project};
 use futures::{stream, StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
 use itertools::Itertools;
@@ -50,9 +50,7 @@ pub async fn fetch_sparse_repodata(
     top_level_progress.set_message("fetching latest repodata");
     top_level_progress.enable_steady_tick(Duration::from_millis(50));
 
-    let repodata_cache_path = rattler::default_cache_dir()
-        .map_err(|_| miette::miette!("could not determine default cache directory"))?
-        .join("repodata");
+    let repodata_cache_path = config::get_cache_dir()?.join("repodata");
     let repodata_download_client = default_authenticated_client();
     let multi_progress = progress::global_multi_progress();
     let mut progress_bars = Vec::new();

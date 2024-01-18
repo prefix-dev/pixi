@@ -1,0 +1,32 @@
+---
+source: src/pypi_tags.rs
+expression: tags
+---
+[
+    "py311-none-win_amd64",
+    "py3-none-win_amd64",
+    "py310-none-win_amd64",
+    "py39-none-win_amd64",
+    "py38-none-win_amd64",
+    "py37-none-win_amd64",
+    "py36-none-win_amd64",
+    "py35-none-win_amd64",
+    "py34-none-win_amd64",
+    "py33-none-win_amd64",
+    "py32-none-win_amd64",
+    "py31-none-win_amd64",
+    "py30-none-win_amd64",
+    "py311-none-any",
+    "py3-none-any",
+    "py310-none-any",
+    "py39-none-any",
+    "py38-none-any",
+    "py37-none-any",
+    "py36-none-any",
+    "py35-none-any",
+    "py34-none-any",
+    "py33-none-any",
+    "py32-none-any",
+    "py31-none-any",
+    "py30-none-any",
+]

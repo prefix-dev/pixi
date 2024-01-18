@@ -39,8 +39,8 @@ It will only add if the package with its version constraint is able to work with
 - `--host`: Specifies a host dependency, important for building a package.
 - `--build`: Specifies a build dependency, important for building a package.
 - `--pypi`: Specifies a PyPI dependency, not a conda package.
-      Parses dependencies as [PEP508](https://peps.python.org/pep-0508/) requirements, supporting extras and versions.
-      See [configuration](configuration.md) for details.
+    Parses dependencies as [PEP508](https://peps.python.org/pep-0508/) requirements, supporting extras and versions.
+    See [configuration](configuration.md) for details.
 - `--no-install`: Don't install the package to the environment, only add the package to the lock-file.
 - `--platform (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 
@@ -104,7 +104,6 @@ pixi run task argument1 argument2
       Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
       This is done so that the run commands can be run across all platforms.
 
-
 ## `task`
 
 If you want to make a shorthand for a specific command you can add a task for it.
@@ -118,6 +117,7 @@ If you want to make a shorthand for a specific command you can add a task for it
 Add a task to the `pixi.toml`, use `--depends-on` to add tasks you want to run before this task, e.g. build before an execute task.
 
 ##### Options
+
 - `--platform`: the platform for which this task should be added.
 - `--depends-on`: the task it depends on to be run before the one your adding.
 - `--cwd`: the working directory for the task relative to the root of the project.
@@ -157,6 +157,25 @@ Remove the task from the `pixi.toml`
 pixi task remove cow
 ```
 
+## `list`
+
+List project's packages. Highlighted packages are explicit dependencies.
+
+##### Options
+
+- `--platform <PLATFORM>`: The platform to list packages for. Defaults to the current platform
+- `--json`: Whether to output in json format.
+- `--json-pretty`: Whether to output in pretty json format
+- `--sort-by <SORT_BY>`: Sorting strategy [default: name] [possible values: size, name, type]
+- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+
+```shell
+pixi list
+pixi list --json-pretty
+pixi list --sort-by size
+pixi list --platform win-64
+```
+
 ### `task alias`
 
 Give a task a new name or concatenate multiple tasks into one name.
@@ -177,7 +196,6 @@ moo = { depends_on = ["cow"] }
       In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the tasks.
       Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
       This is done so that the tasks defined can be run across all platforms.
-
 
 ## `shell`
 
@@ -200,10 +218,13 @@ exit
 pixi shell --locked
 exit
 ```
+
 ## `search`
+
 Search a package, output will list the latest version of the package.
 
 ###### Options
+
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--limit (-l)`: Limit the number of search results (default: 15)
@@ -212,6 +233,23 @@ Search a package, output will list the latest version of the package.
 pixi search pixi
 pixi search -l 30 py
 pixi search -c robostack plotjuggler
+```
+
+## `self-update`
+
+Update pixi to the latest version or a specific version. If the pixi binary is not found in the default location (e.g.
+`~/.pixi/bin/pixi`), pixi won't updated to prevent breaking the current installation (Homebrew, etc). The behaviour can be
+overridden with the `--force` flag
+
+##### Options
+
+- `--version <VERSION>`: The desired version (to downgrade or upgrade to). Update to the latest version if not specified.
+- `--force`: Force the update even if the pixi binary is not found in the default location.
+
+```shell
+pixi self-update
+pixi self-update --version 0.12.0
+pixi self-update --force
 ```
 
 ## `info`
@@ -247,8 +285,7 @@ This command is used to authenticate the user's access to remote hosts such as `
 Store authentication information for given host.
 
 !!! tip
-      The host is real hostname not a channel.
-
+The host is real hostname not a channel.
 
 ##### Options
 
@@ -281,9 +318,9 @@ Global is the main entry point for the part of pixi that executes on the
 global(system) level.
 
 !!! tip
-      Binaries and environments installed globally are stored in `~/.pixi`
-      by default, this can be changed by setting the `PIXI_HOME` environment
-      variable.
+Binaries and environments installed globally are stored in `~/.pixi`
+by default, this can be changed by setting the `PIXI_HOME` environment
+variable.
 
 ### `global install`
 
@@ -314,6 +351,7 @@ After using global install, you can use the package you installed anywhere on yo
 This command shows the current installed global environments including what binaries come with it.
 A global installed package/environment can possibly contain multiple binaries.
 Here is an example of a few installed packages:
+
 ```
 > pixi global list
 Globally installed binary packages:
@@ -506,10 +544,11 @@ pixi project version minor
 pixi project version patch
 ```
 
-[^1]: An __up-to-date__ lockfile means that the dependencies in the lockfile are allowed by the dependencies in the manifest file.
-      For example
+[^1]:
+    An **up-to-date** lockfile means that the dependencies in the lockfile are allowed by the dependencies in the manifest file.
+    For example
 
-      - a `pixi.toml` with `python = ">= 3.11"` is up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
-      - a `pixi.toml` with `python = ">= 3.12"` is **not** up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
+    - a `pixi.toml` with `python = ">= 3.11"` is up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
+    - a `pixi.toml` with `python = ">= 3.12"` is **not** up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
 
-      Being up-to-date does **not** mean that the lockfile holds the latest version available on the channel for the given dependency.
+    Being up-to-date does **not** mean that the lockfile holds the latest version available on the channel for the given dependency.
