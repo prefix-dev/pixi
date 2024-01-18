@@ -38,7 +38,7 @@ pub struct Args {
 
     /// The feature for which the dependency should be removed
     #[arg(long)]
-    pub feature: Option<FeatureName>,
+    pub feature: Option<String>,
 }
 
 fn convert_pkg_name<T>(deps: &[String]) -> miette::Result<Vec<T>>
@@ -74,6 +74,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else {
         section_name
     };
+    let feature_name = args
+        .feature
+        .map_or(FeatureName::Default, FeatureName::Named);
 
     fn format_ok_message(pkg_name: &str, pkg_extras: &str, table_name: &str) -> String {
         format!(
@@ -86,11 +89,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.pypi {
         let all_pkg_name = convert_pkg_name::<rip::types::PackageName>(&deps)?;
         for dep in all_pkg_name.iter() {
-            let (name, req) = project.manifest.remove_pypi_dependency(
-                dep,
-                args.platform,
-                args.feature.as_ref(),
-            )?;
+            let (name, req) =
+                project
+                    .manifest
+                    .remove_pypi_dependency(dep, args.platform, Some(&feature_name))?;
             sucessful_output.push(format_ok_message(
                 name.as_str(),
                 &req.to_string(),
@@ -104,7 +106,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 dep,
                 spec_type,
                 args.platform,
-                args.feature.as_ref(),
+                Some(&feature_name),
             )?;
             sucessful_output.push(format_ok_message(
                 name.as_source(),
