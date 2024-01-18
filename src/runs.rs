@@ -191,8 +191,8 @@ impl DaemonRun {
         #[cfg(unix)]
         {
             // Create stdout and stderr files
-            let stdout = std::fs::File::create(self.stdout_path()).unwrap();
-            let stderr = std::fs::File::create(self.stderr_path()).unwrap();
+            let stdout = std::fs::File::create(self.stdout_path()).into_diagnostic()?;
+            let stderr = std::fs::File::create(self.stderr_path()).into_diagnostic()?;
 
             // Create and save the infos file
             let infos = DaemonRunInfos {
@@ -200,8 +200,8 @@ impl DaemonRun {
                 task,
                 start_date: Local::now(),
             };
-            let infos_json = serde_json::to_string_pretty(&infos).unwrap();
-            std::fs::write(self.infos_file_path(), infos_json).unwrap();
+            let infos_json = serde_json::to_string_pretty(&infos).into_diagnostic()?;
+            std::fs::write(self.infos_file_path(), infos_json).into_diagnostic()?;
 
             // Create the daemon
             let daemonize = Daemonize::new()
@@ -229,10 +229,33 @@ impl DaemonRun {
         }
 
         // delete pid, infos, stdout and stderr files
-        std::fs::remove_file(self.pid_file_path()).expect("Failed to remove pid file");
-        std::fs::remove_file(self.infos_file_path()).expect("Failed to remove infos file");
-        std::fs::remove_file(self.stdout_path()).expect("Failed to remove stdout file");
-        std::fs::remove_file(self.stderr_path()).expect("Failed to remove stderr file");
+        let _ = std::fs::remove_file(self.pid_file_path()).map_err(|_| {
+            eprintln!(
+                "{}Failed to remove pid file.",
+                console::style(console::Emoji("⚠️ ", "")).yellow()
+            );
+        });
+
+        let _ = std::fs::remove_file(self.infos_file_path()).map_err(|_| {
+            eprintln!(
+                "{}Failed to remove infos file.",
+                console::style(console::Emoji("⚠️ ", "")).yellow()
+            );
+        });
+
+        let _ = std::fs::remove_file(self.stdout_path()).map_err(|_| {
+            eprintln!(
+                "{}Failed to remove stdout file.",
+                console::style(console::Emoji("⚠️ ", "")).yellow()
+            );
+        });
+
+        let _ = std::fs::remove_file(self.stderr_path()).map_err(|_| {
+            eprintln!(
+                "{}Failed to remove stderr file.",
+                console::style(console::Emoji("⚠️ ", "")).yellow()
+            );
+        });
 
         Ok(())
     }
@@ -242,8 +265,8 @@ impl DaemonRun {
             Some(pid) => pid,
             None => miette::bail!("No pid file with name '{}' found.", self.name),
         };
-        let stdout_length = std::fs::read_to_string(self.stdout_path()).unwrap().len();
-        let stderr_length = std::fs::read_to_string(self.stderr_path()).unwrap().len();
+        let stdout_length = self.read_stdout()?.len();
+        let stderr_length = self.read_stderr()?.len();
         let infos = match self.read_infos() {
             Some(infos) => infos,
             None => miette::bail!("No infos file with name '{}' found.", self.name),
