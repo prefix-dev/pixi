@@ -347,6 +347,7 @@ impl DaemonRun {
     }
 }
 
+/// The infos of a run that is stored in the `RUN_NAME.infos.json` file.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DaemonRunInfos {
     pub name: String,
@@ -354,6 +355,7 @@ pub struct DaemonRunInfos {
     pub start_date: DateTime<Local>,
 }
 
+/// The state of a run that is used when calling `pixi runs list`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DaemonRunState {
     pub name: String,
@@ -365,6 +367,8 @@ pub struct DaemonRunState {
     pub stderr_length: usize,
 }
 
+/// The status of a run. The same as `sysinfo::ProcessStatus` but extended with `Terminated` and
+/// `UnknownPid` to introduce situations when a PID has not been found in the system.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DaemonRunStatus {
     Terminated,
@@ -386,6 +390,7 @@ pub enum DaemonRunStatus {
 }
 
 impl DaemonRunStatus {
+    /// Convert a `sysinfo::ProcessStatus` to a `DaemonRunStatus`.
     pub fn from_process_status(process_status: ProcessStatus) -> Self {
         match process_status {
             ProcessStatus::Idle => DaemonRunStatus::Idle,
@@ -405,6 +410,7 @@ impl DaemonRunStatus {
     }
 }
 
+/// Implement `Display` for `DaemonRunStatus`.
 impl fmt::Display for DaemonRunStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
