@@ -143,12 +143,62 @@ Print the logs of a detached runs of the project. It prints the stdout logs by d
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 
 ```shell
-
-```shell
 pixi runs logs my_task
 pixi runs logs -l 10 my_task
 pixi runs logs -l 5 -f my_task
 pixi runs logs --stderr -f my_task
+```
+
+### `runs kill`
+
+Kill a detached run. It will send a SIGTERM and/or a SIGKILL signal to the process.
+
+##### Options
+
+- `--clear` or `-c`: Whether to also clear the run from the history.
+- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+
+```shell
+pixi runs kill my_task
+pixi runs kill --clear my_task
+```
+
+### `runs clear`
+
+Clear a detached run. It only works on terminated runs. It will remove the pid, the logs and the infos files from the runs directory.
+
+##### Options
+
+- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+
+```shell
+pixi runs clear my_task
+```
+
+### `runs kill-all`
+
+Kill all the detached runs that are not terminated. It will send a SIGTERM and/or a SIGKILL signals to the processes.
+
+##### Options
+
+- `--clear` or `-c`: Whether to also clear the runs from the history.
+- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+
+```shell
+pixi runs kill-all
+pixi runs kill-all --clear
+```
+
+### `runs clear-all`
+
+Clear all the terminated detached runs. It will remove the pid, the logs and the infos files from the runs directory.
+
+##### Options
+
+- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+
+```shell
+pixi runs clear-all
 ```
 
 ## `remove`
