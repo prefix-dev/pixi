@@ -308,7 +308,7 @@ impl Manifest {
         dep: &PackageName,
         spec_type: SpecType,
         platform: Option<Platform>,
-        feature_name: Option<&FeatureName>,
+        feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
         get_toml_target_table(&mut self.document, platform, feature_name, spec_type.name())?
             .remove(dep.as_normalized())
@@ -325,7 +325,7 @@ impl Manifest {
         Ok(self
             .parsed
             .features
-            .get_mut(feature_name.unwrap_or(&FeatureName::Default))
+            .get_mut(feature_name)
             .expect("feature should exist")
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
@@ -339,7 +339,7 @@ impl Manifest {
         &mut self,
         dep: &rip::types::PackageName,
         platform: Option<Platform>,
-        feature_name: Option<&FeatureName>,
+        feature_name: &FeatureName,
     ) -> miette::Result<(rip::types::PackageName, PyPiRequirement)> {
         get_toml_target_table(
             &mut self.document,
@@ -362,7 +362,7 @@ impl Manifest {
         Ok(self
             .parsed
             .features
-            .get_mut(feature_name.unwrap_or(&FeatureName::Default))
+            .get_mut(feature_name)
             .expect("feature should exist")
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
@@ -565,24 +565,24 @@ pub fn ensure_toml_target_table<'a>(
 /// If `platform` and `feature_name` are `None`, the table name is returned as-is.
 /// Otherwise, the table name is prefixed with the feature, platform, or both.
 fn get_nested_toml_table_name(
-    feature_name: Option<&FeatureName>,
+    feature_name: &FeatureName,
     platform: Option<Platform>,
     table: &str,
 ) -> String {
     match (platform, feature_name) {
-        (Some(platform), Some(feature_name)) => format!(
+        (Some(platform), FeatureName::Named(_)) => format!(
             "feature.{}.target.{}.{}",
             feature_name.as_str(),
             platform.as_str(),
             table
         ),
-        (Some(platform), None) => {
+        (Some(platform), FeatureName::Default) => {
             format!("target.{}.{}", platform.as_str(), table)
         }
-        (None, Some(feature_name)) => {
+        (None, FeatureName::Named(_)) => {
             format!("feature.{}.{}", feature_name.as_str(), table)
         }
-        (None, None) => table.to_string(),
+        (None, FeatureName::Default) => table.to_string(),
     }
 }
 
@@ -591,22 +591,22 @@ fn get_nested_toml_table_name(
 fn get_toml_target_table<'a>(
     doc: &'a mut Document,
     platform: Option<Platform>,
-    feature: Option<&FeatureName>,
+    feature: &FeatureName,
     table_name: &str,
 ) -> miette::Result<&'a mut Table> {
     let table_name = get_nested_toml_table_name(feature, platform, table_name);
     let parts: Vec<&str> = table_name.split('.').collect();
     let mut current_table = doc.as_table_mut();
 
-    for (i, part) in parts.iter().enumerate() {
+    for part in parts {
         current_table = current_table
             .get_mut(part)
             .and_then(|item| item.as_table_mut())
             .ok_or_else(|| {
                 miette!(
-                    "Could not find or access the part '{}' in the path '{}'",
+                    "Could not find or access the part '{}' in the path '[{}]'",
                     part,
-                    parts[..i + 1].join(".")
+                    table_name
                 )
             })?;
     }
@@ -1130,11 +1130,9 @@ mod tests {
         name: &str,
         kind: SpecType,
         platform: Option<Platform>,
-        feature_name_opt: Option<&FeatureName>,
+        feature_name: &FeatureName,
     ) {
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
-
-        let feature_name = feature_name_opt.unwrap_or(&FeatureName::Default);
 
         // Initially the dependency should exist
         assert!(manifest
@@ -1158,7 +1156,7 @@ mod tests {
                 &PackageName::new_unchecked(name),
                 kind,
                 platform,
-                feature_name_opt,
+                feature_name,
             )
             .unwrap();
 
@@ -1189,13 +1187,11 @@ mod tests {
         file_contents: &str,
         name: &str,
         platform: Option<Platform>,
-        feature_name_opt: Option<&FeatureName>,
+        feature_name: &FeatureName,
     ) {
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
 
         let package_name = rip::types::PackageName::from_str(name).unwrap();
-
-        let feature_name = feature_name_opt.unwrap_or(&FeatureName::Default);
 
         // Initially the dependency should exist
         assert!(manifest
@@ -1215,7 +1211,7 @@ mod tests {
 
         // Remove the dependency from the manifest
         manifest
-            .remove_pypi_dependency(&package_name, platform, feature_name_opt)
+            .remove_pypi_dependency(&package_name, platform, feature_name)
             .unwrap();
 
         // The dependency should no longer exist
@@ -1242,15 +1238,15 @@ mod tests {
     }
 
     #[rstest]
-    #[case::xpackage("xpackage", Some(Platform::Linux64), None)]
-    #[case::jax("jax", Some(Platform::Win64), None)]
-    #[case::requests("requests", None, None)]
-    #[case::feature_dep("feature_dep", None, Some(FeatureName::Named("test".to_string())))]
-    #[case::feature_target_dep("feature_target_dep", Some(Platform::Linux64), Some(FeatureName::Named("test".to_string())))]
+    #[case::xpackage("xpackage", Some(Platform::Linux64), FeatureName::Default)]
+    #[case::jax("jax", Some(Platform::Win64), FeatureName::Default)]
+    #[case::requests("requests", None, FeatureName::Default)]
+    #[case::feature_dep("feature_dep", None, FeatureName::Named("test".to_string()))]
+    #[case::feature_target_dep("feature_target_dep", Some(Platform::Linux64), FeatureName::Named("test".to_string()))]
     fn test_remove_pypi_dependencies(
         #[case] package_name: &str,
         #[case] platform: Option<Platform>,
-        #[case] feature_name: Option<FeatureName>,
+        #[case] feature_name: FeatureName,
     ) {
         let pixi_cfg = r#"[project]
 name = "pixi_fun"
@@ -1278,7 +1274,7 @@ feature_dep = "*"
 [feature.test.target.linux-64.pypi-dependencies]
 feature_target_dep = "*"
 "#;
-        test_remove_pypi(pixi_cfg, package_name, platform, feature_name.as_ref());
+        test_remove_pypi(pixi_cfg, package_name, platform, &feature_name);
     }
 
     #[test]
@@ -1306,16 +1302,22 @@ feature_target_dep = "*"
             "baz",
             SpecType::Build,
             Some(Platform::Linux64),
-            None,
+            &FeatureName::Default,
         );
         test_remove(
             file_contents,
             "bar",
             SpecType::Run,
             Some(Platform::Win64),
-            None,
+            &FeatureName::Default,
         );
-        test_remove(file_contents, "fooz", SpecType::Run, None, None);
+        test_remove(
+            file_contents,
+            "fooz",
+            SpecType::Run,
+            None,
+            &FeatureName::Default,
+        );
     }
 
     #[test]
@@ -1345,7 +1347,7 @@ feature_target_dep = "*"
                 &PackageName::new_unchecked("fooz"),
                 SpecType::Run,
                 None,
-                None,
+                &FeatureName::Default,
             )
             .unwrap();
 

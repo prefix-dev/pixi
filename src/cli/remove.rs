@@ -92,7 +92,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let (name, req) =
                 project
                     .manifest
-                    .remove_pypi_dependency(dep, args.platform, Some(&feature_name))?;
+                    .remove_pypi_dependency(dep, args.platform, &feature_name)?;
             sucessful_output.push(format_ok_message(
                 name.as_str(),
                 &req.to_string(),
@@ -102,12 +102,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else {
         let all_pkg_name = convert_pkg_name::<rattler_conda_types::PackageName>(&deps)?;
         for dep in all_pkg_name.iter() {
-            let (name, req) = project.manifest.remove_dependency(
-                dep,
-                spec_type,
-                args.platform,
-                Some(&feature_name),
-            )?;
+            let (name, req) =
+                project
+                    .manifest
+                    .remove_dependency(dep, spec_type, args.platform, &feature_name)?;
             sucessful_output.push(format_ok_message(
                 name.as_source(),
                 &req.to_string(),
