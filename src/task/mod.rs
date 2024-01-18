@@ -252,7 +252,7 @@ pub fn quote_arguments<'a>(args: impl IntoIterator<Item = &'a str>) -> String {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::quote;
 
     #[test]

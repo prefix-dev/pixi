@@ -11,7 +11,8 @@ use serde_with::DisplayFromStr;
 use tokio::task::spawn_blocking;
 
 use crate::progress::await_in_progress;
-use crate::Project;
+use crate::{config, Project};
+
 static WIDTH: usize = 18;
 
 /// Information about the system, project and environments for the current machine.
@@ -277,11 +278,9 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
 
-    let cache_dir = rattler::default_cache_dir()
-        .map_err(|_| miette::miette!("Could not determine default cache directory"))?;
     let (pixi_folder_size, cache_size) = if args.extended {
-        let cache_dir = cache_dir.clone();
         let env_dir = project.as_ref().map(|p| p.root().join(".pixi"));
+        let cache_dir = config::get_cache_dir()?;
         await_in_progress(
             "fetching cache",
             spawn_blocking(move || {
@@ -352,7 +351,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         platform: Platform::current().to_string(),
         virtual_packages,
         version: env!("CARGO_PKG_VERSION").to_string(),
-        cache_dir: Some(cache_dir),
+        cache_dir: Some(config::get_cache_dir()?),
         cache_size,
         auth_dir: rattler_networking::authentication_storage::backends::file::FileStorage::default(
         )

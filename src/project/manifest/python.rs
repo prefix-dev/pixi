@@ -184,7 +184,7 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use indexmap::IndexMap;
 
