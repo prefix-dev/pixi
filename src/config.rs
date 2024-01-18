@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 /// Determines the default author based on the default git author. Both the name and the email
@@ -27,4 +28,18 @@ pub fn get_default_author() -> Option<(String, String)> {
     }
 
     Some((name?, email.unwrap_or_else(|| "".into())))
+}
+
+/// Returns the default cache directory.
+/// Most important is the `PIXI_CACHE_DIR` environment variable.
+/// If that is not set, the `RATTLER_CACHE_DIR` environment variable is used.
+/// If that is not set, the default cache directory of [`rattler::default_cache_dir`] is used.
+pub fn get_cache_dir() -> miette::Result<PathBuf> {
+    std::env::var("PIXI_CACHE_DIR")
+        .map(PathBuf::from)
+        .or_else(|_| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from))
+        .or_else(|_| {
+            rattler::default_cache_dir()
+                .map_err(|_| miette::miette!("could not determine default cache directory"))
+        })
 }

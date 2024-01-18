@@ -246,7 +246,7 @@ impl<'de> Deserialize<'de> for Feature {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::project::manifest::Manifest;
     use assert_matches::assert_matches;

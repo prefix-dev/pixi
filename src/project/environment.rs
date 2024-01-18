@@ -265,7 +265,7 @@ impl<'p> Environment<'p> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use insta::assert_display_snapshot;
     use itertools::Itertools;

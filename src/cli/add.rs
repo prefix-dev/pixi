@@ -416,7 +416,7 @@ fn determine_version_constraint<'a>(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]

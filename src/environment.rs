@@ -1,5 +1,5 @@
 use crate::{
-    consts, default_authenticated_client, install, install_pypi, lock_file, prefix::Prefix,
+    config, consts, default_authenticated_client, install, install_pypi, lock_file, prefix::Prefix,
     progress, Project,
 };
 use miette::IntoDiagnostic;
@@ -286,8 +286,7 @@ pub async fn update_prefix_conda(
             install::execute_transaction(
                 &transaction,
                 prefix.root().to_path_buf(),
-                rattler::default_cache_dir()
-                    .map_err(|_| miette::miette!("could not determine default cache directory"))?,
+                config::get_cache_dir()?,
                 default_authenticated_client(),
             ),
         )

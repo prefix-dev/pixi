@@ -218,7 +218,7 @@ impl From<LibCFamilyAndVersion> for LibC {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use assert_matches::assert_matches;
     use insta::assert_snapshot;
