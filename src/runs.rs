@@ -142,22 +142,27 @@ impl DaemonRun {
         }
     }
 
+    /// Get the path to the pid file of the run.
     pub fn pid_file_path(&self) -> PathBuf {
         self.runs_dir.join(format!("{}.pid", self.name))
     }
 
+    /// Get the path to the stdout file of the run.
     pub fn stdout_path(&self) -> PathBuf {
         self.runs_dir.join(format!("{}.out", self.name))
     }
 
+    /// Get the path to the stderr file of the run.
     pub fn stderr_path(&self) -> PathBuf {
         self.runs_dir.join(format!("{}.err", self.name))
     }
 
+    /// Get the path to the infos file of the run.
     pub fn infos_file_path(&self) -> PathBuf {
         self.runs_dir.join(format!("{}.infos.json", self.name))
     }
 
+    /// Read the pid of the run from the pid file.
     pub fn read_pid(&self) -> Option<Pid> {
         if !self.pid_file_path().exists() {
             return None;
@@ -171,6 +176,7 @@ impl DaemonRun {
         pid
     }
 
+    /// Read the infos of the run from the infos file.
     pub fn read_infos(&self) -> Option<DaemonRunInfos> {
         if !self.infos_file_path().exists() {
             return None;
@@ -187,14 +193,17 @@ impl DaemonRun {
         }
     }
 
+    /// Read the stdout of the run from the stdout file.
     pub fn read_stdout(&self) -> miette::Result<String> {
         std::fs::read_to_string(self.stdout_path()).into_diagnostic()
     }
 
+    /// Read the stderr of the run from the stderr file.
     pub fn read_stderr(&self) -> miette::Result<String> {
         std::fs::read_to_string(self.stderr_path()).into_diagnostic()
     }
 
+    /// Start a daemon for the run. This will create the pid, stdout, stderr and infos files.
     pub fn start(&self, task: Vec<String>) -> miette::Result<()> {
         #[cfg(unix)]
         {
@@ -230,6 +239,7 @@ impl DaemonRun {
         }
     }
 
+    /// Clear the run. This will delete the pid, stdout, stderr and infos files.
     pub fn clear(&self) -> miette::Result<()> {
         // check if the run is alive
         if self.is_alive() {
@@ -239,6 +249,7 @@ impl DaemonRun {
         self.clear_force()
     }
 
+    /// Clear the run even if it is alive. This will delete the pid, stdout, stderr and infos files.
     pub fn clear_force(&self) -> miette::Result<()> {
         // delete pid, infos, stdout and stderr files
         let _ = std::fs::remove_file(self.pid_file_path()).map_err(|_| {
@@ -272,6 +283,7 @@ impl DaemonRun {
         Ok(())
     }
 
+    /// Get the state of the run. This will read the pid, stdout, stderr and infos files.
     pub fn state(&self) -> miette::Result<DaemonRunState> {
         let pid = match self.read_pid() {
             Some(pid) => pid,
@@ -295,6 +307,7 @@ impl DaemonRun {
         })
     }
 
+    /// Kill the run. This will send a SIGTERM signal to the process.
     pub fn kill(&self) -> miette::Result<()> {
         let pid = match self.read_pid() {
             Some(pid) => pid,
@@ -305,9 +318,28 @@ impl DaemonRun {
         let system = SystemInfo::get();
 
         match system.process(pid) {
-            Some(process) => match process.kill() {
-                true => Ok(()),
-                false => miette::bail!("Failed to kill process with pid '{}'.", pid.as_u32()),
+            // First try to terminate the process with a SIGTERM signal
+            Some(process) => match process.kill_with(sysinfo::Signal::Term) {
+                Some(result) => match result {
+                    // All good if it works
+                    true => Ok(()),
+                    // If it doesn't work, try to kill the process with a SIGKILL signal
+                    false => match process.kill_with(sysinfo::Signal::Kill) {
+                        Some(result) => match result {
+                            // All good if it works
+                            true => Ok(()),
+                            false => miette::bail!(
+                                "Failed to terminate the process with pid '{}'.",
+                                pid.as_u32()
+                            ),
+                        },
+                        None => miette::bail!(
+                            "Failed to terminate the process with pid '{}'.",
+                            pid.as_u32()
+                        ),
+                    },
+                },
+                None => miette::bail!("The term signal does not exist on that platform"),
             },
             // if no process is associated with the pid, it means the process is terminated
             None => miette::bail!("No process with pid '{}' found.", pid.as_u32()),
