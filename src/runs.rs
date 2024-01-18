@@ -168,18 +168,23 @@ impl DaemonRun {
             return None;
         }
 
-        let infos_json = std::fs::read_to_string(self.infos_file_path()).unwrap();
-        let infos: DaemonRunInfos = serde_json::from_str(&infos_json).unwrap();
+        let infos_json = match std::fs::read_to_string(self.infos_file_path()) {
+            Ok(json) => json,
+            Err(_) => return None,
+        };
 
-        Some(infos)
+        match serde_json::from_str(&infos_json) {
+            Ok(infos) => Some(infos),
+            Err(_) => None,
+        }
     }
 
-    pub fn read_stdout(&self) -> String {
-        std::fs::read_to_string(self.stdout_path()).unwrap()
+    pub fn read_stdout(&self) -> miette::Result<String> {
+        std::fs::read_to_string(self.stdout_path()).into_diagnostic()
     }
 
-    pub fn read_stderr(&self) -> String {
-        std::fs::read_to_string(self.stderr_path()).unwrap()
+    pub fn read_stderr(&self) -> miette::Result<String> {
+        std::fs::read_to_string(self.stderr_path()).into_diagnostic()
     }
 
     pub fn start(&self, task: Vec<String>) -> miette::Result<()> {

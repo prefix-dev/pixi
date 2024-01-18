@@ -21,23 +21,15 @@ pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
     // Get the run
     let run = runs_manager.get_run(args.name)?;
 
-    // Get the logs path
-    let logs_path = if args.err {
-        run.stderr_path()
-    } else {
-        run.stdout_path()
+    // Print the logs
+    let logs = match args.err {
+        true => run.read_stderr()?,
+        false => run.read_stdout()?,
     };
 
-    // Print the logs
-    if logs_path.exists() {
-        let logs = std::fs::read_to_string(logs_path).expect("Failed to read the logs file");
-
-        match logs.as_str() {
-            "" => miette::bail!("No logs found for the run '{}'", run.name),
-            _ => println!("{}", logs),
-        }
-    } else {
-        miette::bail!("No logs found for the run '{}'", run.name);
+    match logs.as_str() {
+        "" => miette::bail!("No logs found for the run '{}'", run.name),
+        _ => println!("{}", logs),
     }
 
     Ok(())

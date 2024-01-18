@@ -157,7 +157,9 @@ pub fn execute() -> miette::Result<()> {
     execute_command(args.command)
 }
 
-/// Execute the actual command
+/// Execute the actual command. Async and sync commands are handled differently.
+/// Some commands such as `pixi run` cannot be executed async because they use the crate
+/// [daemonize](https://crates.io/crates/daemonize).
 pub fn execute_command(command: Command) -> miette::Result<()> {
     match command {
         Command::Completion(cmd) => completion::execute(cmd),
@@ -167,6 +169,7 @@ pub fn execute_command(command: Command) -> miette::Result<()> {
     }
 }
 
+/// The commands forwarded to this function are executed asynchronously leveraging `tokio::runtime`.
 fn execute_command_async(command: Command) -> miette::Result<()> {
     let rt = tokio::runtime::Runtime::new().into_diagnostic()?;
     rt.block_on(async move {

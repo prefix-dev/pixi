@@ -42,7 +42,7 @@ pub struct Args {
     pub detach: bool,
 
     /// The name of the run. Only used in detached mode (`--detached`)
-    #[arg(short, long)]
+    #[arg(short, long, requires = "detach")]
     pub name: Option<String>,
 }
 
