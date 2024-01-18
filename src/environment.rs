@@ -195,7 +195,9 @@ pub async fn get_up_to_date_prefix(
             | PythonStatus::Added { new } => {
                 PythonLocation::Custom(prefix.root().join(new.path.clone()))
             }
-            PythonStatus::DoesNotExist | PythonStatus::Removed { .. } => PythonLocation::System,
+            PythonStatus::DoesNotExist | PythonStatus::Removed { .. } => {
+                miette::bail!("no python interpreter available in the environment, need this to resolve pypi dependencies")
+            }
         };
 
         if update_lock_file {
