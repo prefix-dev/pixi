@@ -326,7 +326,6 @@ impl DaemonRun {
 
         // Kill the run and all its children
         for child_pid in children_pids {
-            println!("killing child pid: {}", child_pid.as_u32());
             self.kill_one_process(child_pid)?;
         }
         self.kill_one_process(&pid)?;
