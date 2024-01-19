@@ -24,7 +24,14 @@ pub struct Args {
 async fn generate_activation_script(shell: Option<ShellEnum>) -> miette::Result<String> {
     let project = Project::discover()?;
 
-    get_up_to_date_prefix(&project, LockFileUsage::Frozen, false, None).await?;
+    get_up_to_date_prefix(
+        &project,
+        LockFileUsage::Frozen,
+        false,
+        None,
+        Default::default(),
+    )
+    .await?;
 
     let platform = Platform::current();
     let prefix = Prefix::new(project.default_environment().dir())?;
