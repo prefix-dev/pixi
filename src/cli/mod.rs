@@ -180,7 +180,7 @@ fn execute_command_async(command: Command) -> miette::Result<()> {
             Command::Auth(cmd) => auth::execute(cmd).await,
             Command::Install(cmd) => install::execute(cmd).await,
             Command::Shell(cmd) => shell::execute(cmd).await,
-            Command::ShellHook(cmd) => shell_hook::execute(cmd),
+            Command::ShellHook(cmd) => shell_hook::execute(cmd).await,
             Command::Info(cmd) => info::execute(cmd).await,
             Command::Upload(cmd) => upload::execute(cmd).await,
             Command::Search(cmd) => search::execute(cmd).await,
