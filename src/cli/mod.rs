@@ -166,7 +166,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Auth(cmd) => auth::execute(cmd).await,
         Command::Install(cmd) => install::execute(cmd).await,
         Command::Shell(cmd) => shell::execute(cmd).await,
-        Command::ShellHook(cmd) => shell_hook::execute(cmd),
+        Command::ShellHook(cmd) => shell_hook::execute(cmd).await,
         Command::Task(cmd) => task::execute(cmd),
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
