@@ -308,9 +308,12 @@ pub async fn update_prefix_conda(
     let desired_conda_packages = lock_file
         .get_conda_packages_by_platform(platform)
         .into_diagnostic()?;
-    let transaction =
-        Transaction::from_current_and_desired(installed_packages, desired_conda_packages, platform)
-            .into_diagnostic()?;
+    let transaction = Transaction::from_current_and_desired(
+        installed_packages.clone(),
+        desired_conda_packages,
+        platform,
+    )
+    .into_diagnostic()?;
 
     // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
@@ -319,6 +322,7 @@ pub async fn update_prefix_conda(
             "updating environment",
             install::execute_transaction(
                 &transaction,
+                &installed_packages,
                 prefix.root().to_path_buf(),
                 config::get_cache_dir()?,
                 default_authenticated_client(),

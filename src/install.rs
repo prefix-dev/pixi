@@ -6,21 +6,21 @@ use crate::progress::{
 use futures::future::ready;
 use futures::{stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use itertools::Itertools;
-use miette::{IntoDiagnostic, WrapErr};
+use miette::IntoDiagnostic;
 use rattler::install::{
-    link_package, InstallDriver, InstallOptions, Transaction, TransactionOperation,
+    link_package, unlink_package, InstallDriver, InstallOptions, Transaction, TransactionOperation,
 };
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
 use rattler_networking::AuthenticatedClient;
 use std::cmp::Ordering;
-use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// Executes the transaction on the given environment.
 pub async fn execute_transaction(
     transaction: &Transaction<PrefixRecord, RepoDataRecord>,
+    prefix_records: &[PrefixRecord],
     target_prefix: PathBuf,
     cache_dir: PathBuf,
     download_client: AuthenticatedClient,
@@ -29,7 +29,7 @@ pub async fn execute_transaction(
     let package_cache = PackageCache::new(cache_dir.join("pkgs"));
 
     // Create an install driver which helps limit the number of concurrent filesystem operations
-    let install_driver = InstallDriver::default();
+    let install_driver = InstallDriver::new(100, Some(prefix_records));
 
     // Define default installation options.
     let install_options = InstallOptions {
@@ -133,6 +133,12 @@ pub async fn execute_transaction(
             }
         })
         .await;
+
+    // Post-process the environment installation to unclobber all files deterministically
+    let new_prefix_records = PrefixRecord::collect_from_prefix(&target_prefix).into_diagnostic()?;
+    install_driver
+        .post_process(&new_prefix_records, &target_prefix)
+        .into_diagnostic()?;
 
     // Clear progress bars
     if let Some(download_pb) = download_pb {
@@ -257,8 +263,8 @@ async fn install_package_to_environment(
     install_driver: &InstallDriver,
     install_options: &InstallOptions,
 ) -> miette::Result<()> {
-    // Link the contents of the package into our environment. This returns all the paths that were
-    // linked.
+    // Link the contents of the package into our environment.
+    // This returns all the paths that were linked.
     let paths = link_package(
         &package_dir,
         target_prefix,
@@ -291,16 +297,7 @@ async fn install_package_to_environment(
         std::fs::create_dir_all(&conda_meta_path)?;
 
         // Write the conda-meta information
-        let pkg_meta_path = conda_meta_path.join(format!(
-            "{}-{}-{}.json",
-            prefix_record
-                .repodata_record
-                .package_record
-                .name
-                .as_source(),
-            prefix_record.repodata_record.package_record.version,
-            prefix_record.repodata_record.package_record.build
-        ));
+        let pkg_meta_path = conda_meta_path.join(prefix_record.file_name());
         prefix_record.write_to_path(pkg_meta_path, true)
     })
     .await
@@ -321,35 +318,7 @@ async fn remove_package_from_environment(
     target_prefix: &Path,
     package: &PrefixRecord,
 ) -> miette::Result<()> {
-    // TODO: Take into account any clobbered files, they need to be restored.
-    // TODO: Can we also delete empty directories?
-
-    // Remove all entries
-    for paths in package.paths_data.paths.iter() {
-        match tokio::fs::remove_file(target_prefix.join(&paths.relative_path)).await {
-            Ok(_) => {}
-            Err(e) if e.kind() == ErrorKind::NotFound => {
-                // Simply ignore if the file is already gone.
-            }
-            Err(e) => {
-                return Err(e).into_diagnostic().wrap_err(format!(
-                    "failed to delete {}",
-                    paths.relative_path.display()
-                ))
-            }
-        }
-    }
-
-    // Remove the conda-meta file
-    let conda_meta_path = target_prefix.join("conda-meta").join(format!(
-        "{}-{}-{}.json",
-        package.repodata_record.package_record.name.as_normalized(),
-        package.repodata_record.package_record.version,
-        package.repodata_record.package_record.build
-    ));
-    tokio::fs::remove_file(conda_meta_path)
+    unlink_package(target_prefix, package)
         .await
-        .into_diagnostic()?;
-
-    Ok(())
+        .into_diagnostic()
 }
