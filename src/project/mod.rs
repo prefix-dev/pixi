@@ -237,6 +237,19 @@ impl Project {
         })
     }
 
+    /// Returns the environments in this project.
+    pub fn environments(&self) -> Vec<Environment> {
+        self.manifest
+            .parsed
+            .environments
+            .iter()
+            .map(|(_name, env)| Environment {
+                project: self,
+                environment: env,
+            })
+            .collect()
+    }
+
     /// Returns the channels used by this project.
     ///
     /// TODO: Remove this function and use the channels from the default environment instead.

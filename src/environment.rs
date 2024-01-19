@@ -5,12 +5,15 @@ use crate::{
 use miette::IntoDiagnostic;
 
 use crate::lock_file::lock_file_satisfies_project;
+use crate::project::manifest::SystemRequirements;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use rattler::install::{PythonInfo, Transaction};
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::CondaLock;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rip::index::PackageDb;
+use rip::resolve::SDistResolution;
+use std::path::PathBuf;
 use std::{io::ErrorKind, path::Path};
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
@@ -126,6 +129,7 @@ pub async fn get_up_to_date_prefix(
     usage: LockFileUsage,
     mut no_install: bool,
     sparse_repo_data: Option<Vec<SparseRepoData>>,
+    sdist_resolution: SDistResolution,
 ) -> miette::Result<Prefix> {
     // Do not install if the platform is not supported
     if !no_install {
@@ -186,8 +190,21 @@ pub async fn get_up_to_date_prefix(
     };
 
     if project.has_pypi_dependencies() {
+        let python_location = match &python_status {
+            PythonStatus::Changed { new, .. }
+            | PythonStatus::Unchanged(new)
+            | PythonStatus::Added { new } => Some(prefix.root().join(new.path.clone())),
+            PythonStatus::DoesNotExist | PythonStatus::Removed { .. } => None,
+        };
+
         if update_lock_file {
-            lock_file = lock_file::update_lock_file_for_pypi(project, lock_file).await?;
+            lock_file = lock_file::update_lock_file_for_pypi(
+                project,
+                lock_file,
+                &python_location,
+                sdist_resolution,
+            )
+            .await?;
         }
 
         if !no_install {
@@ -198,6 +215,9 @@ pub async fn get_up_to_date_prefix(
                 project.pypi_package_db()?,
                 &lock_file,
                 &python_status,
+                &python_location,
+                &project.system_requirements(),
+                sdist_resolution,
             )
             .await?;
         }
@@ -206,12 +226,17 @@ pub async fn get_up_to_date_prefix(
     Ok(prefix)
 }
 
+#[allow(clippy::too_many_arguments)]
+// TODO: refactor args into struct
 pub async fn update_prefix_pypi(
     prefix: &Prefix,
     platform: Platform,
     package_db: &PackageDb,
     lock_file: &CondaLock,
     status: &PythonStatus,
+    python_location: &Option<PathBuf>,
+    system_requirements: &SystemRequirements,
+    sdist_resolution: SDistResolution,
 ) -> miette::Result<()> {
     // Remove python packages from a previous python distribution if the python version changed.
     install_pypi::remove_old_python_distributions(prefix, platform, status)?;
@@ -219,7 +244,16 @@ pub async fn update_prefix_pypi(
     // Install and/or remove python packages
     progress::await_in_progress(
         "updating python packages",
-        install_pypi::update_python_distributions(package_db, prefix, lock_file, platform, status),
+        install_pypi::update_python_distributions(
+            package_db,
+            prefix,
+            lock_file,
+            platform,
+            status,
+            python_location,
+            system_requirements,
+            sdist_resolution,
+        ),
     )
     .await
 }
@@ -274,9 +308,12 @@ pub async fn update_prefix_conda(
     let desired_conda_packages = lock_file
         .get_conda_packages_by_platform(platform)
         .into_diagnostic()?;
-    let transaction =
-        Transaction::from_current_and_desired(installed_packages, desired_conda_packages, platform)
-            .into_diagnostic()?;
+    let transaction = Transaction::from_current_and_desired(
+        installed_packages.clone(),
+        desired_conda_packages,
+        platform,
+    )
+    .into_diagnostic()?;
 
     // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
@@ -285,6 +322,7 @@ pub async fn update_prefix_conda(
             "updating environment",
             install::execute_transaction(
                 &transaction,
+                &installed_packages,
                 prefix.root().to_path_buf(),
                 config::get_cache_dir()?,
                 default_authenticated_client(),

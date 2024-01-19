@@ -16,6 +16,9 @@ pub mod unix;
 pub mod util;
 pub mod utils;
 
+mod pypi_marker_env;
+mod pypi_tags;
+
 use once_cell::sync::Lazy;
 pub use project::Project;
 use rattler_networking::retry_policies::ExponentialBackoff;

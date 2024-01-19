@@ -51,7 +51,14 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .manifest
         .add_channels(missing_channels.iter().map(|(name, _channel)| name))?;
 
-    get_up_to_date_prefix(&project, LockFileUsage::Update, args.no_install, None).await?;
+    get_up_to_date_prefix(
+        &project,
+        LockFileUsage::Update,
+        args.no_install,
+        None,
+        Default::default(),
+    )
+    .await?;
     project.save()?;
     // Report back to the user
     for (name, channel) in missing_channels {

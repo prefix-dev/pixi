@@ -431,7 +431,7 @@ pub(super) async fn globally_install_package(
 
     // Create the transaction that we need
     let transaction = Transaction::from_current_and_desired(
-        prefix_records,
+        prefix_records.clone(),
         records.iter().cloned(),
         Platform::current(),
     )
@@ -446,6 +446,7 @@ pub(super) async fn globally_install_package(
             "creating virtual environment",
             execute_transaction(
                 &transaction,
+                &prefix_records,
                 prefix.root().to_path_buf(),
                 config::get_cache_dir()?,
                 default_authenticated_client(),

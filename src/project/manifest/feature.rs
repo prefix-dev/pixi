@@ -13,6 +13,7 @@ use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
+use std::fmt;
 
 /// The name of a feature. This is either a string or default for the default feature.
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -60,6 +61,31 @@ impl FeatureName {
 impl Borrow<str> for FeatureName {
     fn borrow(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl From<FeatureName> for String {
+    fn from(name: FeatureName) -> Self {
+        match name {
+            FeatureName::Default => consts::DEFAULT_ENVIRONMENT_NAME.to_string(),
+            FeatureName::Named(name) => name,
+        }
+    }
+}
+impl<'a> From<&'a FeatureName> for String {
+    fn from(name: &'a FeatureName) -> Self {
+        match name {
+            FeatureName::Default => consts::DEFAULT_ENVIRONMENT_NAME.to_string(),
+            FeatureName::Named(name) => name.clone(),
+        }
+    }
+}
+impl fmt::Display for FeatureName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FeatureName::Default => write!(f, "{}", consts::DEFAULT_ENVIRONMENT_NAME),
+            FeatureName::Named(name) => write!(f, "{}", name),
+        }
     }
 }
 
