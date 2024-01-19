@@ -1,5 +1,6 @@
 use crate::common::PixiControl;
 use pixi::cli::run::Args;
+use pixi::project::manifest::FeatureName;
 use pixi::task::{CmdArgs, Task};
 use rattler_conda_types::Platform;
 use std::fs;
@@ -14,7 +15,7 @@ pub async fn add_remove_task() {
 
     // Simple task
     pixi.tasks()
-        .add("test", None)
+        .add("test", None, FeatureName::Default)
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
@@ -36,12 +37,12 @@ pub async fn add_command_types() {
 
     // Add a command with dependencies
     pixi.tasks()
-        .add("test", None)
+        .add("test", None, FeatureName::Default)
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
     pixi.tasks()
-        .add("test2", None)
+        .add("test2", None, FeatureName::Default)
         .with_commands(["echo hello", "echo bonjour"])
         .with_depends_on(["test"])
         .execute()
@@ -78,19 +79,19 @@ async fn test_alias() {
     pixi.init().without_channels().await.unwrap();
 
     pixi.tasks()
-        .add("hello", None)
+        .add("hello", None, FeatureName::Default)
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
 
     pixi.tasks()
-        .add("world", None)
+        .add("world", None, FeatureName::Default)
         .with_commands(["echo world"])
         .execute()
         .unwrap();
 
     pixi.tasks()
-        .add("helloworld", None)
+        .add("helloworld", None, FeatureName::Default)
         .with_depends_on(["hello", "world"])
         .execute()
         .unwrap();
@@ -117,7 +118,7 @@ pub async fn add_remove_target_specific_task() {
 
     // Simple task
     pixi.tasks()
-        .add("test", Some(Platform::Win64))
+        .add("test", Some(Platform::Win64), FeatureName::Default)
         .with_commands(["echo only_on_windows"])
         .execute()
         .unwrap();
@@ -128,7 +129,7 @@ pub async fn add_remove_target_specific_task() {
 
     // Simple task
     pixi.tasks()
-        .add("test", None)
+        .add("test", None, FeatureName::Default)
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
@@ -154,7 +155,7 @@ async fn test_cwd() {
     fs::create_dir(pixi.project_path().join("test")).unwrap();
 
     pixi.tasks()
-        .add("pwd-test", None)
+        .add("pwd-test", None, FeatureName::Default)
         .with_commands(["pwd"])
         .with_cwd(PathBuf::from("test"))
         .execute()
@@ -174,7 +175,7 @@ async fn test_cwd() {
 
     // Test that an unknown cwd gives an error
     pixi.tasks()
-        .add("unknown-cwd", None)
+        .add("unknown-cwd", None, FeatureName::Default)
         .with_commands(["pwd"])
         .with_cwd(PathBuf::from("tests"))
         .execute()
