@@ -196,9 +196,10 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     .contains_key(name.as_str())
                 {
                     eprintln!(
-                        "{}Task `{}` does not exist",
+                        "{}Task `{}` does not exist for the `{}` feature",
                         console::style(console::Emoji("❌ ", "X")).red(),
                         console::style(&name).bold(),
+                        console::style(&feature).bold(),
                     );
                     continue;
                 }
