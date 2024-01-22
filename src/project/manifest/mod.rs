@@ -19,7 +19,7 @@ pub use feature::{Feature, FeatureName};
 use indexmap::{Equivalent, IndexMap};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
-use miette::{miette, IntoDiagnostic, LabeledSpan, NamedSource};
+use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource};
 pub use python::PyPiRequirement;
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
@@ -33,7 +33,15 @@ use std::{
 };
 pub use system_requirements::{LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector, Targets};
+use thiserror::Error;
 use toml_edit::{value, Array, Document, Item, Table, TomlError, Value};
+
+/// Errors that can occur when getting a feature.
+#[derive(Debug, Clone, Error, Diagnostic)]
+pub enum GetFeatureError {
+    #[error("feature `{0}` does not exist")]
+    FeatureDoesNotExist(FeatureName),
+}
 
 /// Handles the project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the manifest.
@@ -125,8 +133,15 @@ impl Manifest {
 
     /// Returns a hashmap of the tasks that should run only the given platform. If the platform is
     /// `None`, only the default targets tasks are returned.
-    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&str, &Task> {
-        self.default_feature()
+    pub fn tasks(
+        &self,
+        platform: Option<Platform>,
+        feature_name: &FeatureName,
+    ) -> miette::Result<HashMap<&str, &Task>> {
+        Ok(self
+            .feature(feature_name)
+            // Return error if feature does not exist
+            .ok_or(GetFeatureError::FeatureDoesNotExist(feature_name.clone()))?
             .targets
             .resolve(platform)
             .collect_vec()
@@ -134,7 +149,7 @@ impl Manifest {
             .rev()
             .flat_map(|target| target.tasks.iter())
             .map(|(name, task)| (name.as_str(), task))
-            .collect()
+            .collect())
     }
 
     /// Add a task to the project
@@ -146,8 +161,10 @@ impl Manifest {
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Check if the task already exists
-        if self.tasks(platform).contains_key(name.as_ref()) {
-            miette::bail!("task {} already exists", name.as_ref());
+        if let Ok(tasks) = self.tasks(platform, feature_name) {
+            if tasks.contains_key(name.as_ref()) {
+                miette::bail!("task {} already exists", name.as_ref());
+            }
         }
 
         // Get the table that contains the tasks.
@@ -171,20 +188,22 @@ impl Manifest {
         &mut self,
         name: impl AsRef<str>,
         platform: Option<Platform>,
+        feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        self.tasks(platform)
+        self.tasks(platform, feature_name)?
             .get(name.as_ref())
             .ok_or_else(|| miette::miette!("task {} does not exist", name.as_ref()))?;
 
         // Get the task table either from the target platform or the default tasks.
         let tasks_table =
-            get_or_insert_toml_table(&mut self.document, platform, &FeatureName::Default, "tasks")?;
+            get_or_insert_toml_table(&mut self.document, platform, feature_name, "tasks")?;
 
         // If it does not exist in toml, consider this ok as we want to remove it anyways
         tasks_table.remove(name.as_ref());
 
         // Remove the task from the internal manifest
-        self.default_feature_mut()
+        self.feature_mut(feature_name)
+            .expect("feature should exist")
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::from).as_ref())
             .map(|target| target.tasks.remove(name.as_ref()));
@@ -499,12 +518,20 @@ impl Manifest {
         self.parsed.default_feature_mut()
     }
 
-    /// Returns the feature with the given name or `None` if it does not exist.
+    /// Returns the mutable feature with the given name or `None` if it does not exist.
     pub fn feature_mut<Q: ?Sized>(&mut self, name: &Q) -> Option<&mut Feature>
     where
         Q: Hash + Equivalent<FeatureName>,
     {
         self.parsed.features.get_mut(name)
+    }
+
+    /// Returns the feature with the given name or `None` if it does not exist.
+    pub fn feature<Q: ?Sized>(&self, name: &Q) -> Option<&Feature>
+    where
+        Q: Hash + Equivalent<FeatureName>,
+    {
+        self.parsed.features.get(name)
     }
 
     /// Returns the default environment

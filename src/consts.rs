@@ -6,3 +6,5 @@ pub const ENVIRONMENTS_DIR: &str = "envs";
 pub const PYPI_DEPENDENCIES: &str = "pypi-dependencies";
 
 pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
+
+pub const DEFAULT_FEATURE_NAME: &str = DEFAULT_ENVIRONMENT_NAME;

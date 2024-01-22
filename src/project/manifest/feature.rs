@@ -28,7 +28,7 @@ impl<'de> Deserialize<'de> for FeatureName {
         D: serde::Deserializer<'de>,
     {
         match String::deserialize(deserializer)?.as_str() {
-            consts::DEFAULT_ENVIRONMENT_NAME => Err(D::Error::custom(
+            consts::DEFAULT_FEATURE_NAME => Err(D::Error::custom(
                 "The name 'default' is reserved for the default feature",
             )),
             name => Ok(FeatureName::Named(name.to_string())),
@@ -39,7 +39,7 @@ impl<'de> Deserialize<'de> for FeatureName {
 impl<'s> From<&'s str> for FeatureName {
     fn from(value: &'s str) -> Self {
         match value {
-            consts::DEFAULT_ENVIRONMENT_NAME => FeatureName::Default,
+            consts::DEFAULT_FEATURE_NAME => FeatureName::Default,
             name => FeatureName::Named(name.to_string()),
         }
     }
@@ -54,7 +54,7 @@ impl FeatureName {
     }
 
     pub fn as_str(&self) -> &str {
-        self.name().unwrap_or(consts::DEFAULT_ENVIRONMENT_NAME)
+        self.name().unwrap_or(consts::DEFAULT_FEATURE_NAME)
     }
 }
 
@@ -67,7 +67,7 @@ impl Borrow<str> for FeatureName {
 impl From<FeatureName> for String {
     fn from(name: FeatureName) -> Self {
         match name {
-            FeatureName::Default => consts::DEFAULT_ENVIRONMENT_NAME.to_string(),
+            FeatureName::Default => consts::DEFAULT_FEATURE_NAME.to_string(),
             FeatureName::Named(name) => name,
         }
     }
@@ -75,7 +75,7 @@ impl From<FeatureName> for String {
 impl<'a> From<&'a FeatureName> for String {
     fn from(name: &'a FeatureName) -> Self {
         match name {
-            FeatureName::Default => consts::DEFAULT_ENVIRONMENT_NAME.to_string(),
+            FeatureName::Default => consts::DEFAULT_FEATURE_NAME.to_string(),
             FeatureName::Named(name) => name.clone(),
         }
     }
@@ -83,7 +83,7 @@ impl<'a> From<&'a FeatureName> for String {
 impl fmt::Display for FeatureName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FeatureName::Default => write!(f, "{}", consts::DEFAULT_ENVIRONMENT_NAME),
+            FeatureName::Default => write!(f, "{}", consts::DEFAULT_FEATURE_NAME),
             FeatureName::Named(name) => write!(f, "{}", name),
         }
     }

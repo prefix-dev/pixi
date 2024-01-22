@@ -253,7 +253,7 @@ impl<'p> Environment<'p> {
         if let Some(platform) = platform {
             if !self.platforms().contains(&platform) {
                 return Err(UnsupportedPlatformError {
-                    project: self.project,
+                    environments_platforms: self.platforms().into_iter().collect(),
                     environment: self.name().clone(),
                     platform,
                 });
