@@ -7,7 +7,7 @@ use miette::IntoDiagnostic;
 
 use rattler_digest::{compute_file_digest, Sha256};
 use rattler_networking::AuthenticatedClient;
-use reqwest::Client;
+
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
@@ -41,7 +41,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         HumanBytes(filesize)
     );
 
-    let client = AuthenticatedClient::from_client(Client::new(), Default::default());
+    let client = AuthenticatedClient::default();
 
     let sha256sum = format!(
         "{:x}",

@@ -8,7 +8,7 @@ use rattler_conda_types::{Channel, ChannelConfig, PackageName, Platform, RepoDat
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
-use reqwest::Client;
+
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
@@ -101,7 +101,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let package_name_filter = args.package;
-    let authenticated_client = AuthenticatedClient::from_client(Client::new(), Default::default());
+    let authenticated_client = AuthenticatedClient::default();
     let repo_data = fetch_sparse_repodata(
         channels.iter().map(AsRef::as_ref),
         [Platform::current()],

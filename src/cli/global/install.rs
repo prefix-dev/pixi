@@ -15,7 +15,6 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use rattler_solve::{resolvo, SolverImpl};
-use reqwest::Client;
 use std::ffi::OsStr;
 use std::{
     path::{Path, PathBuf},
@@ -329,7 +328,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|c| Channel::from_str(c, &channel_config))
         .collect::<Result<Vec<Channel>, _>>()
         .into_diagnostic()?;
-    let authenticated_client = AuthenticatedClient::from_client(Client::new(), Default::default());
+    let authenticated_client = AuthenticatedClient::default();
 
     // Find the MatchSpec we want to install
     let package_matchspec = MatchSpec::from_str(&args.package).into_diagnostic()?;
