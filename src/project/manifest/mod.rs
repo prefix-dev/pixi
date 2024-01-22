@@ -143,6 +143,7 @@ impl Manifest {
         name: impl AsRef<str>,
         task: Task,
         platform: Option<Platform>,
+        feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Check if the task already exists
         if self.tasks(platform).contains_key(name.as_ref()) {
@@ -150,7 +151,7 @@ impl Manifest {
         }
 
         // Get the table that contains the tasks.
-        let table = ensure_toml_target_table(&mut self.document, platform, "tasks")?;
+        let table = get_or_insert_toml_table(&mut self.document, platform, feature_name, "tasks")?;
 
         // Add the task to the table
         table.insert(name.as_ref(), task.clone().into());
@@ -176,7 +177,8 @@ impl Manifest {
             .ok_or_else(|| miette::miette!("task {} does not exist", name.as_ref()))?;
 
         // Get the task table either from the target platform or the default tasks.
-        let tasks_table = ensure_toml_target_table(&mut self.document, platform, "tasks")?;
+        let tasks_table =
+            get_or_insert_toml_table(&mut self.document, platform, &FeatureName::Default, "tasks")?;
 
         // If it does not exist in toml, consider this ok as we want to remove it anyways
         tasks_table.remove(name.as_ref());
@@ -255,8 +257,12 @@ impl Manifest {
         platform: Option<Platform>,
     ) -> miette::Result<()> {
         // Find the table toml table to add the dependency to.
-        let dependency_table =
-            ensure_toml_target_table(&mut self.document, platform, spec_type.name())?;
+        let dependency_table = get_or_insert_toml_table(
+            &mut self.document,
+            platform,
+            &FeatureName::Default,
+            spec_type.name(),
+        )?;
 
         // Determine the name of the package to add
         let (Some(name), spec) = spec.clone().into_nameless() else {
@@ -285,8 +291,12 @@ impl Manifest {
         platform: Option<Platform>,
     ) -> miette::Result<()> {
         // Find the table toml table to add the dependency to.
-        let dependency_table =
-            ensure_toml_target_table(&mut self.document, platform, consts::PYPI_DEPENDENCIES)?;
+        let dependency_table = get_or_insert_toml_table(
+            &mut self.document,
+            platform,
+            &FeatureName::Default,
+            consts::PYPI_DEPENDENCIES,
+        )?;
 
         // Add the pypi dependency to the table
         dependency_table.insert(name.as_str(), (*requirement).clone().into());
@@ -310,7 +320,7 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
-        get_toml_target_table(&mut self.document, platform, feature_name, spec_type.name())?
+        get_or_insert_toml_table(&mut self.document, platform, feature_name, spec_type.name())?
             .remove(dep.as_normalized())
             .ok_or_else(|| {
                 let table_name =
@@ -341,7 +351,7 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(rip::types::PackageName, PyPiRequirement)> {
-        get_toml_target_table(
+        get_or_insert_toml_table(
             &mut self.document,
             platform,
             feature_name,
@@ -514,53 +524,6 @@ impl Manifest {
     }
 }
 
-/// Ensures that the specified TOML target table exists within a given document,
-/// and inserts it if not.
-/// Returns the final target table (`table_name`) inside the platform-specific table if everything
-/// goes as expected.
-pub fn ensure_toml_target_table<'a>(
-    doc: &'a mut Document,
-    platform: Option<Platform>,
-    table_name: &str,
-) -> miette::Result<&'a mut Table> {
-    let root_table = if let Some(platform) = platform {
-        // Get or create the target table (e.g. [target])
-        let target = doc["target"]
-            .or_insert(Item::Table(Table::new()))
-            .as_table_mut()
-            .ok_or_else(|| {
-                miette::miette!("target table in {} is malformed", consts::PROJECT_MANIFEST)
-            })?;
-        target.set_dotted(true);
-
-        // Add a specific platform table (e.g. [target.linux-64])
-        let platform_table = doc["target"][platform.as_str()]
-            .or_insert(Item::Table(Table::new()))
-            .as_table_mut()
-            .ok_or_else(|| {
-                miette::miette!(
-                    "platform table in {} is malformed",
-                    consts::PROJECT_MANIFEST
-                )
-            })?;
-        platform_table.set_dotted(true);
-        platform_table
-    } else {
-        doc.as_table_mut()
-    };
-
-    // Return final table on target platform table.
-    root_table[table_name]
-        .or_insert(Item::Table(Table::new()))
-        .as_table_mut()
-        .ok_or_else(|| {
-            miette::miette!(
-                "{table_name} table in {} is malformed",
-                consts::PROJECT_MANIFEST,
-            )
-        })
-}
-
 /// Returns the name of a nested TOML table.
 /// If `platform` and `feature_name` are `None`, the table name is returned as-is.
 /// Otherwise, the table name is prefixed with the feature, platform, or both.
@@ -588,7 +551,8 @@ fn get_nested_toml_table_name(
 
 /// Retrieve a mutable reference to a target table `table_name`
 /// for a specific platform.
-fn get_toml_target_table<'a>(
+/// If table not found, its inserted into the document.
+fn get_or_insert_toml_table<'a>(
     doc: &'a mut Document,
     platform: Option<Platform>,
     feature: &FeatureName,
@@ -596,12 +560,13 @@ fn get_toml_target_table<'a>(
 ) -> miette::Result<&'a mut Table> {
     let table_name = get_nested_toml_table_name(feature, platform, table_name);
     let parts: Vec<&str> = table_name.split('.').collect();
-    let mut current_table = doc.as_table_mut();
 
-    for part in parts {
+    let mut current_table = doc.as_table_mut();
+    for (i, part) in parts.iter().enumerate() {
         current_table = current_table
-            .get_mut(part)
-            .and_then(|item| item.as_table_mut())
+            .entry(part)
+            .or_insert(Item::Table(Table::new()))
+            .as_table_mut()
             .ok_or_else(|| {
                 miette!(
                     "Could not find or access the part '{}' in the path '[{}]'",
@@ -609,8 +574,10 @@ fn get_toml_target_table<'a>(
                     table_name
                 )
             })?;
+        if i < parts.len() - 1 {
+            current_table.set_dotted(true);
+        }
     }
-
     Ok(current_table)
 }
 
@@ -1773,5 +1740,116 @@ feature_target_dep = "*"
             manifest.has_pypi_dependencies(),
             should_have_pypi_dependencies,
         );
+    }
+
+    #[test]
+    fn test_add_task() {
+        let file_contents = r#"
+[project]
+name = "foo"
+version = "0.1.0"
+description = "foo description"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[tasks]
+test = "test initial"
+
+        "#;
+
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+
+        manifest
+            .add_task(
+                "default",
+                Task::Plain("echo default".to_string()),
+                None,
+                &FeatureName::Default,
+            )
+            .unwrap();
+        manifest
+            .add_task(
+                "target_linux",
+                Task::Plain("echo target_linux".to_string()),
+                Some(Platform::Linux64),
+                &FeatureName::Default,
+            )
+            .unwrap();
+        manifest
+            .add_task(
+                "feature_test",
+                Task::Plain("echo feature_test".to_string()),
+                None,
+                &FeatureName::Named("test".to_string()),
+            )
+            .unwrap();
+        manifest
+            .add_task(
+                "feature_test_target_linux",
+                Task::Plain("echo feature_test_target_linux".to_string()),
+                Some(Platform::Linux64),
+                &FeatureName::Named("test".to_string()),
+            )
+            .unwrap();
+        assert_display_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_get_nested_toml_table_name() {
+        // Test all different options for the feature name and platform
+        assert_eq!(
+            "dependencies".to_string(),
+            get_nested_toml_table_name(&FeatureName::Default, None, "dependencies")
+        );
+        assert_eq!(
+            "target.linux-64.dependencies".to_string(),
+            get_nested_toml_table_name(
+                &FeatureName::Default,
+                Some(Platform::Linux64),
+                "dependencies"
+            )
+        );
+        assert_eq!(
+            "feature.test.dependencies".to_string(),
+            get_nested_toml_table_name(
+                &FeatureName::Named("test".to_string()),
+                None,
+                "dependencies"
+            )
+        );
+        assert_eq!(
+            "feature.test.target.linux-64.dependencies".to_string(),
+            get_nested_toml_table_name(
+                &FeatureName::Named("test".to_string()),
+                Some(Platform::Linux64),
+                "dependencies"
+            )
+        );
+    }
+
+    #[test]
+    fn test_get_or_insert_toml_table() {
+        let mut manifest = Manifest::from_str(Path::new(""), PROJECT_BOILERPLATE).unwrap();
+        let _ =
+            get_or_insert_toml_table(&mut manifest.document, None, &FeatureName::Default, "tasks");
+        let _ = get_or_insert_toml_table(
+            &mut manifest.document,
+            Some(Platform::Linux64),
+            &FeatureName::Default,
+            "tasks",
+        );
+        let _ = get_or_insert_toml_table(
+            &mut manifest.document,
+            None,
+            &FeatureName::Named("test".to_string()),
+            "tasks",
+        );
+        let _ = get_or_insert_toml_table(
+            &mut manifest.document,
+            Some(Platform::Linux64),
+            &FeatureName::Named("test".to_string()),
+            "tasks",
+        );
+        assert_display_snapshot!(manifest.document.to_string());
     }
 }

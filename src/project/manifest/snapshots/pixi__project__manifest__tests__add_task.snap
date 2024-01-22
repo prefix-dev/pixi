@@ -1,0 +1,26 @@
+---
+source: src/project/manifest/mod.rs
+expression: manifest.document.to_string()
+---
+
+[project]
+name = "foo"
+version = "0.1.0"
+description = "foo description"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[tasks]
+test = "test initial"
+default = "echo default"
+
+[target.linux-64.tasks]
+target_linux = "echo target_linux"
+
+[feature.test.tasks]
+feature_test = "echo feature_test"
+
+[feature.test.target.linux-64.tasks]
+feature_test_target_linux = "echo feature_test_target_linux"
+
+        

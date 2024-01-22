@@ -25,6 +25,7 @@ use rattler_lock::{CondaLock, LockedDependencyKind};
 use miette::{Diagnostic, IntoDiagnostic};
 use pep508_rs::VersionOrUrl;
 use pixi::cli::LockFileUsageArgs;
+use pixi::project::manifest::FeatureName;
 use pixi::task::TaskExecutionError;
 use std::{
     collections::HashSet,
@@ -306,7 +307,13 @@ pub struct TasksControl<'a> {
 
 impl TasksControl<'_> {
     /// Add a task
-    pub fn add(&self, name: impl ToString, platform: Option<Platform>) -> TaskAddBuilder {
+    pub fn add(
+        &self,
+        name: impl ToString,
+        platform: Option<Platform>,
+        feature_name: FeatureName,
+    ) -> TaskAddBuilder {
+        let feature = feature_name.name().map(|s| s.to_string());
         TaskAddBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AddArgs {
@@ -314,6 +321,7 @@ impl TasksControl<'_> {
                 commands: vec![],
                 depends_on: None,
                 platform,
+                feature,
                 cwd: None,
             },
         }

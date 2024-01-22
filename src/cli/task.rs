@@ -1,3 +1,4 @@
+use crate::project::manifest::FeatureName;
 use crate::task::{quote, Alias, CmdArgs, Execute, Task};
 use crate::Project;
 use clap::Parser;
@@ -54,6 +55,10 @@ pub struct AddArgs {
     /// The platform for which the task should be added
     #[arg(long, short)]
     pub platform: Option<Platform>,
+
+    /// The feature for which the task should be added
+    #[arg(long, short)]
+    pub feature: Option<String>,
 
     /// The working directory relative to the root of the project
     #[arg(long)]
@@ -140,9 +145,12 @@ pub fn execute(args: Args) -> miette::Result<()> {
         Operation::Add(args) => {
             let name = &args.name;
             let task: Task = args.clone().into();
+            let feature = args
+                .feature
+                .map_or(FeatureName::Default, FeatureName::Named);
             project
                 .manifest
-                .add_task(name, task.clone(), args.platform)?;
+                .add_task(name, task.clone(), args.platform, &feature)?;
             project.save()?;
             eprintln!(
                 "{}Added task {}: {}",
@@ -213,7 +221,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
             let task: Task = args.clone().into();
             project
                 .manifest
-                .add_task(name, task.clone(), args.platform)?;
+                .add_task(name, task.clone(), args.platform, &FeatureName::Default)?;
             project.save()?;
             eprintln!(
                 "{} Added alias {}: {}",
