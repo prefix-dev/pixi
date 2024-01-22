@@ -195,6 +195,13 @@ impl Feature {
             .filter_map(|a| a.scripts.as_ref())
             .next()
     }
+
+    /// Returns true if the feature contains any reference to a pypi dependencies.
+    pub fn has_pypi_dependencies(&self) -> bool {
+        self.targets
+            .targets()
+            .any(|t| t.pypi_dependencies.iter().flatten().next().is_some())
+    }
 }
 
 impl<'de> Deserialize<'de> for Feature {

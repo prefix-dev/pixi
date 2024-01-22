@@ -1,7 +1,7 @@
 use super::pypi_name_mapping;
 use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
-use rattler_lock::{LockedDependency, LockedDependencyKind};
+use rattler_lock::CondaPackage;
 use rip::resolve::PinnedPackage;
 use rip::types::{Extra, NormalizedPackageName, ParsePackageNameError};
 use std::{collections::HashSet, str::FromStr};
@@ -26,32 +26,24 @@ impl PypiPackageIdentifier {
     }
 
     /// Constructs a new instance from a [`LockedDependency`].
-    pub fn from_locked_dependency(
-        locked_dependency: &LockedDependency,
+    pub fn from_locked_package(
+        package: &rattler_lock::Package,
     ) -> Result<Vec<Self>, ConversionError> {
-        match &locked_dependency.kind {
-            LockedDependencyKind::Conda(_) => Self::from_locked_conda_dependency(locked_dependency),
-            LockedDependencyKind::Pypi(_) => {
-                Ok(vec![Self::from_locked_pypi_dependency(locked_dependency)?])
-            }
+        match package {
+            rattler_lock::Package::Conda(pkg) => Self::from_locked_conda_dependency(pkg),
+            rattler_lock::Package::Pypi(pkg) => Ok(vec![Self::from_locked_pypi_dependency(pkg)?]),
         }
     }
 
-    /// Constructs a new instance from a locked Pypi dependency. This function assumes that the
-    /// locked dependency is a Pypi dependency.
-    fn from_locked_pypi_dependency(
-        locked_dependency: &LockedDependency,
+    /// Constructs a new instance from a locked Pypi dependency.
+    pub fn from_locked_pypi_dependency(
+        package: &rattler_lock::PypiPackage,
     ) -> Result<Self, ConversionError> {
-        let Some(pypi) = locked_dependency.as_pypi() else {
-            panic!("expected conda dependency");
-        };
-
-        let name = NormalizedPackageName::from_str(&locked_dependency.name)
-            .map_err(|e| ConversionError::PackageName(locked_dependency.name.clone(), e))?;
-        let version = pep440_rs::Version::from_str(&locked_dependency.version)
-            .map_err(|_| ConversionError::Version(locked_dependency.version.clone()))?;
-        let extras = pypi
-            .extras
+        let name = NormalizedPackageName::from_str(&package.data().package.name)
+            .map_err(|e| ConversionError::PackageName(package.data().package.name.clone(), e))?;
+        let version = package.data().package.version.clone();
+        let extras = package
+            .extras()
             .iter()
             .map(|e| Extra::from_str(e).map_err(|_| ConversionError::Extra(e.clone())))
             .collect::<Result<_, _>>()?;
@@ -65,19 +57,16 @@ impl PypiPackageIdentifier {
 
     /// Determine the python packages that will be installed when the specified locked dependency is
     /// installed.
-    fn from_locked_conda_dependency(
-        locked_dependency: &LockedDependency,
+    pub fn from_locked_conda_dependency(
+        package: &CondaPackage,
     ) -> Result<Vec<Self>, ConversionError> {
-        let Some(conda) = locked_dependency.as_conda() else {
-            panic!("expected conda dependency");
-        };
-
+        let record = package.package_record();
         let mut result = Vec::new();
 
         // Get the PyPI urls from the package
         let mut has_pypi_purl = false;
-        for purl in conda.purls.iter() {
-            if let Some(entry) = Self::try_from_purl(purl, &locked_dependency.version)? {
+        for purl in record.purls.iter() {
+            if let Some(entry) = Self::try_from_purl(purl, &record.version.as_str())? {
                 result.push(entry);
                 has_pypi_purl = true;
             }
@@ -85,11 +74,11 @@ impl PypiPackageIdentifier {
 
         // If there is no pypi purl, but the package is a conda-forge package, we just assume that
         // the name of the package is equivalent to the name of the python package.
-        if !has_pypi_purl && pypi_name_mapping::is_conda_forge_url(&conda.url) {
+        if !has_pypi_purl && pypi_name_mapping::is_conda_forge_url(package.url()) {
             // Convert the conda package names to pypi package names. If the conversion fails we
             // just assume that its not a valid python package.
-            let name = NormalizedPackageName::from_str(&locked_dependency.name).ok();
-            let version = pep440_rs::Version::from_str(&locked_dependency.version).ok();
+            let name = NormalizedPackageName::from_str(record.name.as_normalized()).ok();
+            let version = pep440_rs::Version::from_str(&record.version.as_str()).ok();
             if let (Some(name), Some(version)) = (name, version) {
                 result.push(PypiPackageIdentifier {
                     name,

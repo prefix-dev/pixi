@@ -1,321 +1,426 @@
 use super::package_identifier;
-use crate::project::{DependencyKind, DependencyName};
-use crate::pypi_marker_env::determine_marker_environment;
-use crate::pypi_tags::is_python_record;
-use crate::Project;
+use crate::{
+    project::Environment, pypi_marker_env::determine_marker_environment,
+    pypi_tags::is_python_record, Project,
+};
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::Diagnostic;
+use pep440_rs::VersionSpecifiers;
 use pep508_rs::Requirement;
-use rattler_conda_types::{MatchSpec, Platform, Version};
-use rattler_lock::{CondaLock, LockedDependency, LockedDependencyKind};
-use rip::types::NormalizedPackageName;
+use rattler_conda_types::{MatchSpec, ParseMatchSpecError, Platform};
+use rattler_lock::{CondaPackage, LockFile, Package, PypiPackage};
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     str::FromStr,
 };
+use thiserror::Error;
 
-/// Returns true if the locked packages match the dependencies in the project.
+#[derive(Debug, Error)]
+pub enum EnvironmentUnsat {
+    #[error("the environment is not present in the lock-file")]
+    Missing,
+
+    #[error("channels mismatch")]
+    ChannelsMismatch,
+
+    #[error("{0} is unsatisfiable")]
+    PlatformUnsatisfiable(Platform, #[source] PlatformUnsat),
+}
+
+#[derive(Debug, Error)]
+pub enum PlatformUnsat {
+    #[error("could not satisfy '{0}' (required by '{1}')")]
+    UnsatisfiableMatchSpec(MatchSpec, String),
+
+    #[error("could not satisfy '{0}' (required by '{1}')")]
+    UnsatisfiableRequirement(Requirement, String),
+
+    #[error("found a duplicate entry for '{0}'")]
+    DuplicateEntry(String),
+
+    #[error("failed to parse requirement '{0}'")]
+    FailedToParseMatchSpec(String, #[source] ParseMatchSpecError),
+
+    #[error("too many conda packages in the lock-file")]
+    TooManyCondaPackages,
+
+    #[error("too many pypi packages in the lock-file")]
+    TooManyPypiPackages,
+
+    #[error("there are PyPi dependencies but a python interpreter is missing from the lock-file")]
+    MissingPythonInterpreter,
+
+    #[error("failed to determine marker environment from the python interpreter in the lock-file")]
+    FailedToDetermineMarkerEnvironment(#[source] Box<dyn Diagnostic + Send + Sync>),
+
+    #[error("{0} requires python version {1} but the python interpreter in the lock-file has version {2}")]
+    PythonVersionMismatch(String, VersionSpecifiers, Box<pep440_rs::Version>),
+}
+
+/// A helper method to check if the lock file satisfies the project.
+///
+/// This function checks all environments and all platforms of each environment. The function early
+/// outs if verification of any environment fails.
 pub fn lock_file_satisfies_project(
     project: &Project,
-    lock_file: &CondaLock,
-) -> miette::Result<bool> {
-    let platforms = project.platforms();
-
-    // If a platform is missing from the lock file the lock file is completely out-of-date.
-    if HashSet::<Platform>::from_iter(lock_file.metadata.platforms.iter().copied())
-        != HashSet::from_iter(platforms.iter().copied())
-    {
-        return Ok(false);
+    lock_file: &LockFile,
+) -> Result<(), EnvironmentUnsat> {
+    for env in project.environments() {
+        verify_environment_satisfiability(&env, lock_file.environment(env.name().as_str()))?
     }
+
+    Ok(())
+}
+
+/// Verifies that all the requirements of the specified `environment` can be satisfied with the
+/// packages present in the lock-file.
+///
+/// This function returns a [`EnvironmentUnsat`] error if a verification issue occurred. The
+/// [`EnvironmentUnsat`] error should contain enough information for the user and developer to
+/// figure out what went wrong.
+pub fn verify_environment_satisfiability(
+    environment: &Environment<'_>,
+    locked_environment: Option<rattler_lock::Environment>,
+) -> Result<(), EnvironmentUnsat> {
+    let Some(locked_environment) = locked_environment else {
+        return Err(EnvironmentUnsat::Missing);
+    };
 
     // Check if the channels in the lock file match our current configuration. Note that the order
     // matters here. If channels are added in a different order, the solver might return a different
     // result.
-    let channels = project
+    let channels = environment
         .channels()
         .into_iter()
         .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()))
         .collect_vec();
-    if lock_file.metadata.channels.iter().ne(channels.iter()) {
-        return Ok(false);
+    if locked_environment.channels().eq(&channels) {
+        return Err(EnvironmentUnsat::ChannelsMismatch);
     }
 
-    // For each platform,
-    for platform in platforms.iter().cloned() {
-        // Check if all dependencies exist in the lock-file.
-        let conda_dependencies = project
-            .dependencies(None, Some(platform))
-            .iter_specs()
-            .map(|(name, spec)| {
-                DependencyKind::Conda(MatchSpec::from_nameless(spec.clone(), Some(name.clone())))
-            })
-            .collect::<Vec<_>>();
+    // Check each individual platform
+    for platform in environment.platforms() {
+        if let Err(unsat) =
+            verify_platform_satisfiability(environment, &locked_environment, platform)
+        {
+            return Err(EnvironmentUnsat::PlatformUnsatisfiable(platform, unsat));
+        }
+    }
 
-        let mut pypi_dependencies = project
-            .pypi_dependencies(Some(platform))
-            .into_iter()
-            .flat_map(|(name, requirement)| {
-                requirement.into_iter().map(move |req| req.as_pep508(&name))
-            })
-            .map(DependencyKind::PyPi)
-            .peekable();
+    Ok(())
+}
 
-        // Determine the python marker environment from the lock-file.
-        let python_marker_env = if pypi_dependencies.peek().is_some() {
-            // Determine the python executable
-            let Ok(conda_packages) = lock_file.get_conda_packages_by_platform(platform) else {
-                tracing::info!("failed to convert conda package to RepoDataRecord, assuming the lockfile is corrupt.");
-                return Ok(false);
-            };
+/// Verifies that the package requirements of the specified `environment` can be satisfied with the
+/// packages present in the lock-file.
+///
+/// Both Conda and pypi packages are verified by this function. First all the conda package are
+/// verified and then all the pypi packages are verified. This is done so that if we can check if
+/// we only need to update the pypi dependencies or also the conda dependencies.
+///
+/// This function returns a [`PlatformUnsat`] error if a verification issue occurred. The
+/// [`PlatformUnsat`] error should contain enough information for the user and developer to figure
+/// out what went wrong.
+pub fn verify_platform_satisfiability(
+    environment: &Environment<'_>,
+    locked_environment: &rattler_lock::Environment,
+    platform: Platform,
+) -> Result<(), PlatformUnsat> {
+    // Get all the conda packages from the locked environment
+    let conda_packages = locked_environment
+        .packages(platform)
+        .into_iter()
+        .flatten()
+        .filter_map(Package::into_conda)
+        .collect_vec();
 
-            // Find the python package
-            let Some(python_record) = conda_packages.into_iter().find(is_python_record) else {
-                tracing::info!(
-                    "there are pypi-dependencies but there is no python version in the lock-file"
-                );
-                return Ok(false);
-            };
+    // Check the satisfiability of the conda packages.
+    verify_conda_platform_satisfiability(environment, &conda_packages, platform)?;
 
-            // Construct the marker environment
-            let marker_environment =
-                match determine_marker_environment(platform, &python_record.package_record) {
-                    Ok(marker_environment) => marker_environment,
-                    Err(e) => {
-                        tracing::info!(
-                            "failed to determine marker environment from the lock-file: {e}"
-                        );
-                        return Ok(false);
-                    }
-                };
+    // Get all the pypi packages from the locked environment
+    let pypi_packages = locked_environment
+        .packages(platform)
+        .into_iter()
+        .flatten()
+        .filter_map(Package::into_pypi)
+        .collect_vec();
 
-            Some(marker_environment)
-        } else {
-            None
-        };
+    // Check the satisfiability of the pypi packages.
+    verify_pypi_platform_satisfiability(environment, &conda_packages, &pypi_packages, platform)?;
 
-        let dependencies = conda_dependencies
-            .into_iter()
-            .chain(pypi_dependencies)
-            .collect::<VecDeque<_>>();
+    Ok(())
+}
 
-        // Construct a queue of dependencies that we wanna find in the lock file
-        let mut queue = dependencies.clone();
+pub fn verify_conda_platform_satisfiability(
+    environment: &Environment<'_>,
+    locked_environment: &Vec<CondaPackage>,
+    platform: Platform,
+) -> Result<(), PlatformUnsat> {
+    // Get all the requirements from the environment
+    let mut specs = environment
+        .dependencies(None, Some(platform))
+        .into_match_specs()
+        .map(|spec| (spec, "<environment>"))
+        .collect_vec();
 
-        // Get the virtual packages for the system
-        let virtual_packages = project
-            .virtual_packages(platform)
-            .into_iter()
-            .map(|vpkg| (vpkg.name.clone(), vpkg))
-            .collect::<HashMap<_, _>>();
+    // Create a lookup table from package name to package record. Returns an error if we find a
+    // duplicate entry for a record.
+    let mut name_to_record = HashMap::new();
+    for (record_idx, record) in locked_environment.iter().enumerate() {
+        if name_to_record
+            .insert(
+                record.package_record().name.as_normalized().to_string(),
+                record_idx,
+            )
+            .is_some()
+        {
+            return Err(PlatformUnsat::DuplicateEntry(
+                record.package_record().name.as_normalized().to_string(),
+            ));
+        }
+    }
 
-        // Keep track of which dependencies we already found. Since there can always only be one
-        // version per named package we can just keep track of the package names.
-        let mut seen = dependencies
-            .iter()
-            .filter_map(|req| match req {
-                DependencyKind::Conda(spec) => spec.name.clone().map(DependencyName::Conda),
-                DependencyKind::PyPi(req) => Some(DependencyName::PyPi(
-                    NormalizedPackageName::from_str(&req.name).ok()?,
-                )),
-            })
-            .collect::<HashSet<_>>();
+    // Create a list of virtual packages by name
+    let virtual_packages = environment
+        .virtual_packages(platform)
+        .into_iter()
+        .map(|vpkg| (vpkg.name.clone(), vpkg))
+        .collect::<HashMap<_, _>>();
 
-        while let Some(dependency) = queue.pop_back() {
-            let locked_package = match &dependency {
-                DependencyKind::Conda(match_spec) => {
-                    // Is this a virtual package? And does it match?
-                    if let Some(vpkg) = match_spec
-                        .name
+    // Keep a list of all records we have seen.
+    let mut records_visited = HashSet::new();
+
+    // Iterate over all the requirements and find all packages that match the requirements. If
+    while let Some((spec, source)) = specs.pop() {
+        let matching_record_idx = match &spec.name {
+            None => {
+                // If the spec does not define a name this means we have to find any record that
+                // matches the spec.
+                locked_environment.iter().position(|r| r.satisfies(&spec))
+            }
+            Some(name) => {
+                // If the spec does define a name we can do a quick lookup based on the name.
+                //
+                // We start by looking at virtual packages. This is also what the solver does. It
+                // first tries to find a virtual package that matches the spec followed by regular
+                // packages.
+                if let Some(vpkg) = virtual_packages.get(name) {
+                    if spec
+                        .version
                         .as_ref()
-                        .and_then(|name| virtual_packages.get(name))
+                        .map(|spec| spec.matches(&vpkg.version))
+                        .unwrap_or(true)
+                        && spec
+                            .build
+                            .as_ref()
+                            .map(|spec| spec.matches(&vpkg.build_string))
+                            .unwrap_or(true)
                     {
-                        if let Some(version_spec) = &match_spec.version {
-                            if !version_spec.matches(&vpkg.version) {
-                                tracing::info!("found a dependency on virtual package '{}' but the version spec '{}' does not match the expected version of the virtual package '{}'.", vpkg.name.as_source(), &version_spec, &vpkg.version);
-                                return Ok(false);
-                            }
-                        }
-                        if let Some(build_spec) = &match_spec.build {
-                            if !build_spec.matches(&vpkg.build_string) {
-                                tracing::info!("found a dependency on virtual package '{}' but the build spec '{}' does not match the expected build of the virtual package '{}'.", vpkg.name.as_source(), &build_spec, &vpkg.build_string);
-                                return Ok(false);
-                            }
-                        }
-
                         // Virtual package matches
                         continue;
                     }
-
-                    // Find the package in the lock-file that matches our dependency.
-                    lock_file
-                        .get_packages_by_platform(platform)
-                        .find(|locked_package| {
-                            locked_dependency_satisfies_match_spec(locked_package, match_spec)
-                        })
                 }
-                DependencyKind::PyPi(requirement) => {
-                    // Find the package in the lock-file that matches our requirement.
-                    lock_file
-                        .get_packages_by_platform(platform)
-                        .find_map(|locked_package| {
-                            match locked_dependency_satisfies_requirement(locked_package, requirement) {
-                                Ok(true) => Some(Ok(locked_package)),
-                                Ok(false) => None,
-                                Err(e) => {
-                                    tracing::info!("failed to check if locked package '{}' satisfies requirement '{}': {e}", locked_package.name, requirement);
-                                    Some(Err(e))
-                                }
-                            }
-                        }).transpose()?
-                }
-            };
 
-            match locked_package {
-                None => {
-                    // No package found that matches the dependency, the lock file is not in a
-                    // consistent state.
-                    tracing::info!("failed to find a locked package for '{}', assuming the lock file is out of date.", &dependency);
-                    return Ok(false);
-                }
-                Some(package) => match &package.kind {
-                    LockedDependencyKind::Conda(conda_package) => {
-                        for spec in conda_package.dependencies.iter() {
-                            let Ok(spec) = MatchSpec::from_str(spec) else {
-                                tracing::warn!(
-                                    "failed to parse spec '{}', assuming the lock file is corrupt.",
-                                    spec
-                                );
-                                return Ok(false);
-                            };
-
-                            if let Some(name) = spec.name.clone() {
-                                let dependency_name = DependencyName::Conda(name);
-                                if !seen.contains(&dependency_name) {
-                                    queue.push_back(DependencyKind::Conda(spec));
-                                    seen.insert(dependency_name);
-                                }
-                            }
-                        }
-                    }
-                    LockedDependencyKind::Pypi(pypi_package) => {
-                        // TODO: We have to verify that the python version is compatible
-
-                        for req in pypi_package.requires_dist.iter() {
-                            let Ok(req) = pep508_rs::Requirement::from_str(req) else {
-                                tracing::warn!(
-                                    "failed to parse requirement '{}', assuming the lock file is corrupt.",
-                                    req
-                                );
-                                return Ok(false);
-                            };
-                            // Filter the requirement based on the environment markers
-                            if !python_marker_env
-                                .as_ref()
-                                .map(|env| {
-                                    req.evaluate_markers(
-                                        env,
-                                        pypi_package.extras.iter().cloned().collect_vec(),
-                                    )
-                                })
-                                .unwrap_or(true)
-                            {
-                                continue;
-                            }
-                            let Ok(name) = rip::types::NormalizedPackageName::from_str(&req.name)
-                            else {
-                                tracing::warn!(
-                                    "failed to parse package name '{}', assuming the lock file is corrupt.",
-                                    req.name
-                                );
-                                return Ok(false);
-                            };
-                            let dependency_name = DependencyName::PyPi(name);
-                            if !seen.contains(&dependency_name) {
-                                queue.push_back(DependencyKind::PyPi(req));
-                                seen.insert(dependency_name);
-                            }
-                        }
-                    }
-                },
+                // Otherwise, find the record that matches the spec.
+                name_to_record.get(name.as_normalized()).copied()
             }
-        }
-
-        // If the number of "seen" dependencies is less than the number of packages for this
-        // platform in the first place, there are more packages in the lock file than are used. This
-        // means the lock file is also out of date.
-        if seen.len() < lock_file.packages_for_platform(platform).count() {
-            tracing::info!("there are more packages in the lock-file than required to fulfill all dependency requirements. Assuming the lock file is out of date.");
-            return Ok(false);
-        }
-    }
-
-    Ok(true)
-}
-
-/// Check whether the specified requirement is satisfied by the given locked package.
-fn locked_dependency_satisfies_requirement(
-    locked_package: &LockedDependency,
-    requirement: &Requirement,
-) -> miette::Result<bool> {
-    let pypi_packages =
-        package_identifier::PypiPackageIdentifier::from_locked_dependency(locked_package)
-            .into_diagnostic()?;
-    Ok(pypi_packages
-        .into_iter()
-        .any(|pypi_package| pypi_package.satisfies(requirement)))
-}
-
-/// Returns true if the specified [`conda_lock::LockedDependency`] satisfies the given MatchSpec.
-/// TODO: Move this back to rattler.
-/// TODO: Make this more elaborate to include all properties of MatchSpec
-fn locked_dependency_satisfies_match_spec(
-    locked_package: &LockedDependency,
-    match_spec: &MatchSpec,
-) -> bool {
-    // Only conda packages can match matchspecs.
-    let Some(conda) = locked_package.as_conda() else {
-        return false;
-    };
-
-    // Check if the name of the package matches
-    if match_spec
-        .name
-        .as_ref()
-        .map(|name| locked_package.name != name.as_normalized())
-        .unwrap_or(false)
-    {
-        return false;
-    }
-
-    // Check if the version matches
-    if let Some(version_spec) = &match_spec.version {
-        let v = match Version::from_str(&locked_package.version) {
-            Err(_) => return false,
-            Ok(v) => v,
         };
 
-        if !version_spec.matches(&v) {
-            return false;
+        // Bail if no record could be found
+        let Some(matching_record_idx) = matching_record_idx else {
+            return Err(PlatformUnsat::UnsatisfiableMatchSpec(
+                spec,
+                source.to_string(),
+            ));
+        };
+
+        // Check if we've already seen this package
+        if !records_visited.insert(matching_record_idx) {
+            continue;
+        }
+
+        // Otherwise, add all the requirements of the record to the queue.
+        let record = &locked_environment[matching_record_idx];
+        let source = record
+            .file_name()
+            .unwrap_or_else(|| record.package_record().name.as_normalized());
+        for depends in &record.package_record().depends {
+            let spec = MatchSpec::from_str(depends.as_str())
+                .map_err(|e| PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e))?;
+            specs.push((spec, source))
         }
     }
 
-    // Check if the build string matches
-    match (match_spec.build.as_ref(), &conda.build) {
-        (Some(build_spec), Some(build)) => {
-            if !build_spec.matches(build) {
-                return false;
+    // If we didn't visit all conda-records it means we have too many packages in the lock-file. We
+    // don't want to install more packages than we need.
+    if records_visited.len() != locked_environment.len() {
+        return Err(PlatformUnsat::TooManyCondaPackages);
+    }
+
+    Ok(())
+}
+
+pub fn verify_pypi_platform_satisfiability(
+    environment: &Environment<'_>,
+    locked_conda_packages: &[CondaPackage],
+    locked_pypi_environment: &[PypiPackage],
+    platform: Platform,
+) -> Result<(), PlatformUnsat> {
+    let mut requirements = environment
+        .pypi_dependencies(Some(platform))
+        .iter()
+        .flat_map(|(name, reqs)| {
+            reqs.iter()
+                .map(move |req| (req.as_pep508(name), "<environment>"))
+        })
+        .collect_vec();
+
+    // If there are no pypi packages specified in the requirement, we can skip verifying them.
+    if requirements.is_empty() {
+        return if !locked_pypi_environment.is_empty() {
+            Err(PlatformUnsat::TooManyPypiPackages)
+        } else {
+            Ok(())
+        };
+    }
+
+    // Construct package identifiers for the locked packages
+    let package_identifiers =
+        package_identifiers_from_locked_packages(locked_conda_packages, locked_pypi_environment);
+
+    // Create a lookup by name for the package identifiers.
+    let mut name_to_package_identifiers = HashMap::new();
+    for (idx, (identifier, _)) in package_identifiers.iter().enumerate() {
+        name_to_package_identifiers
+            .entry(identifier.name.clone())
+            .or_insert_with(Vec::new)
+            .push(idx);
+    }
+
+    // Find the python package from the list of conda packages.
+    let Some(python_record) = locked_conda_packages.iter().find(|r| is_python_record(*r)) else {
+        return Err(PlatformUnsat::MissingPythonInterpreter);
+    };
+
+    // Determine the marker environment from the python interpreter package
+    let marker_environment =
+        match determine_marker_environment(platform, python_record.package_record()) {
+            Ok(marker_environment) => marker_environment,
+            Err(e) => return Err(PlatformUnsat::FailedToDetermineMarkerEnvironment(e.into())),
+        };
+
+    // Keep a list of all requirements we have seen so we don't check them again.
+    let mut requirements_visited = requirements
+        .iter()
+        .map(|(req, _source)| req.clone())
+        .collect::<HashSet<_>>();
+
+    // Keep a list of all packages visited
+    let mut packages_visited = HashSet::new();
+
+    // Iterate over all the requirements and find a packages that match the requirements.
+    while let Some((requirement, source)) = requirements.pop() {
+        // Look-up the identifier that matches the requirement
+        let matched_package = name_to_package_identifiers
+            .get(requirement.name.as_str())
+            .into_iter()
+            .flat_map(|idxs| idxs.iter().map(|idx| &package_identifiers[*idx]))
+            .find(|(identifier, _pypi_package_idx)| identifier.satisfies(&requirement));
+
+        // Error if no package could be found that matches the requirement
+        let Some((_identifier, pypi_package_idx)) = matched_package else {
+            return Err(PlatformUnsat::UnsatisfiableRequirement(
+                requirement,
+                source.to_string(),
+            ));
+        };
+
+        // Get the package data from the found package. Or if there is no package data, continue,
+        // because that indicates that the package is a conda package.
+        let Some(pypi_package_idx) = *pypi_package_idx else {
+            continue;
+        };
+        let pkg_data = locked_pypi_environment[pypi_package_idx].data().package;
+
+        // Record that we visited this package.
+        packages_visited.insert(pypi_package_idx);
+
+        // Check that the package is compatible with the python version
+        if let Some(required_python_version) = &pkg_data.requires_python {
+            if !required_python_version.contains(&marker_environment.python_full_version.version) {
+                return Err(PlatformUnsat::PythonVersionMismatch(
+                    pkg_data.name.clone(),
+                    required_python_version.clone(),
+                    marker_environment
+                        .python_full_version
+                        .version
+                        .clone()
+                        .into(),
+                ));
             }
         }
-        (Some(_), None) => return false,
-        _ => {}
-    }
 
-    // If there is a channel specified, check if the channel matches
-    if let Some(channel) = &match_spec.channel {
-        if !conda.url.as_str().starts_with(channel.base_url.as_str()) {
-            return false;
+        // Loop over all requirements of the package and add them to the queue.
+        for dependency in pkg_data.requires_dist.iter() {
+            // Skip this requirement if it does not apply.
+            if !dependency.evaluate_markers(
+                &marker_environment,
+                requirement.extras.clone().unwrap_or_default(),
+            ) {
+                continue;
+            }
+
+            // Make sure we don't visit the same requirement twice.
+            if requirements_visited.get(dependency).is_some() {
+                continue;
+            }
+
+            // Add the requirement to the queue.
+            requirements_visited.insert(dependency.clone());
+            requirements.push((dependency.clone(), &pkg_data.name));
         }
     }
 
-    true
+    // Make sure we don't have more packages than we need.
+    if packages_visited.len() != locked_pypi_environment.len() {
+        return Err(PlatformUnsat::TooManyPypiPackages);
+    }
+
+    Ok(())
+}
+
+/// Returns the [`PypiPackageIdentifier`] that are present in the given set of locked packages. The
+/// resulting identifiers are also associated with the package data that they came from. This is
+/// only the case for Pypi packages.
+///
+/// Both Conda and Pypi package have [`PypiPackageIdentifier`]s associated with them.
+fn package_identifiers_from_locked_packages(
+    locked_conda_environment: &[CondaPackage],
+    locked_pypi_environment: &[PypiPackage],
+) -> Vec<(package_identifier::PypiPackageIdentifier, Option<usize>)> {
+    // Construct package identifiers for the conda locked packages
+    let conda_package_identifiers = locked_conda_environment
+        .iter()
+        .map(package_identifier::PypiPackageIdentifier::from_locked_conda_dependency)
+        .filter_map(Result::ok)
+        .flatten()
+        .map(|pkg| (pkg, None));
+
+    // Construct package identifiers from the locked pypi packages. Also associate the resulting
+    // identifiers with the package data that it came from.
+    let pypi_package_identifiers =
+        locked_pypi_environment
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, pypi_package)| {
+                Some((
+                    package_identifier::PypiPackageIdentifier::from_locked_pypi_dependency(
+                        pypi_package,
+                    )
+                    .ok()?,
+                    Some(idx),
+                ))
+            });
+
+    // Combine the two sets of identifiers.
+    itertools::chain(conda_package_identifiers, pypi_package_identifiers).collect()
 }
