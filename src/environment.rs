@@ -1,7 +1,4 @@
-use crate::{
-    config, consts, default_authenticated_client, install, install_pypi, lock_file, prefix::Prefix,
-    progress, Project,
-};
+use crate::{config, consts, install, install_pypi, lock_file, prefix::Prefix, progress, Project};
 use miette::IntoDiagnostic;
 
 use crate::lock_file::lock_file_satisfies_project;
@@ -10,6 +7,7 @@ use crate::project::virtual_packages::verify_current_platform_has_required_virtu
 use rattler::install::{PythonInfo, Transaction};
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::CondaLock;
+use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rip::index::PackageDb;
 use rip::resolve::SDistResolution;
@@ -179,6 +177,7 @@ pub async fn get_up_to_date_prefix(
     let python_status = if !no_install {
         update_prefix_conda(
             &prefix,
+            project.authenticated_client().clone(),
             installed_packages_future.await.into_diagnostic()??,
             &lock_file,
             Platform::current(),
@@ -300,6 +299,7 @@ impl PythonStatus {
 /// Updates the environment to contain the packages from the specified lock-file
 pub async fn update_prefix_conda(
     prefix: &Prefix,
+    authenticated_client: AuthenticatedClient,
     installed_packages: Vec<PrefixRecord>,
     lock_file: &CondaLock,
     platform: Platform,
@@ -325,7 +325,7 @@ pub async fn update_prefix_conda(
                 &installed_packages,
                 prefix.root().to_path_buf(),
                 config::get_cache_dir()?,
-                default_authenticated_client(),
+                authenticated_client,
             ),
         )
         .await?;

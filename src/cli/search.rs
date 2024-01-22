@@ -5,8 +5,10 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig, PackageName, Platform, RepoDataRecord};
+use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
+
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
@@ -99,8 +101,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let package_name_filter = args.package;
-    let repo_data =
-        fetch_sparse_repodata(channels.iter().map(AsRef::as_ref), [Platform::current()]).await?;
+    let authenticated_client = AuthenticatedClient::default();
+    let repo_data = fetch_sparse_repodata(
+        channels.iter().map(AsRef::as_ref),
+        [Platform::current()],
+        &authenticated_client,
+    )
+    .await?;
 
     // When package name filter contains * (wildcard), it will search and display a list of packages matching this filter
     if package_name_filter.contains('*') {
