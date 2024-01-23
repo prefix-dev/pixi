@@ -88,15 +88,15 @@ tokio = { version = "1.35.1", features = ["rt"] }
 toml = "0.8.8"
 
 [patch.crates-io]
-rattler = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/rattler_lock_v4" }
-rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/rattler_lock_v4" }
-rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/rattler_lock_v4" }
-rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/rattler_lock_v4" }
-rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/rattler_lock_v4" }
-rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/rattler_lock_v4" }
-rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/rattler_lock_v4" }
-rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/rattler_lock_v4" }
-rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/rattler_lock_v4" }
+rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_lock = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 #rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages", branch = "main" }
 #deno_task_shell = { path = "../deno_task_shell" }
 

@@ -2941,7 +2941,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.16.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/rattler_lock_v4#a8e022d031da57933b22ae3a7e0a0c7f50548d6a"
+source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
 dependencies = [
  "anyhow",
  "async-compression 0.4.6",
@@ -2984,7 +2984,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.16.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/rattler_lock_v4#a8e022d031da57933b22ae3a7e0a0c7f50548d6a"
+source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3028,7 +3028,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.16.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/rattler_lock_v4#a8e022d031da57933b22ae3a7e0a0c7f50548d6a"
+source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
 dependencies = [
  "blake2",
  "digest",
@@ -3101,7 +3101,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.16.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/rattler_lock_v4#a8e022d031da57933b22ae3a7e0a0c7f50548d6a"
+source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3124,7 +3124,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.16.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/rattler_lock_v4#a8e022d031da57933b22ae3a7e0a0c7f50548d6a"
+source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
 dependencies = [
  "quote",
  "syn 2.0.48",
@@ -3133,7 +3133,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.16.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/rattler_lock_v4#a8e022d031da57933b22ae3a7e0a0c7f50548d6a"
+source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
 dependencies = [
  "anyhow",
  "dirs",
@@ -3157,7 +3157,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.16.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/rattler_lock_v4#a8e022d031da57933b22ae3a7e0a0c7f50548d6a"
+source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3182,7 +3182,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.16.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/rattler_lock_v4#a8e022d031da57933b22ae3a7e0a0c7f50548d6a"
+source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
 dependencies = [
  "anyhow",
  "async-compression 0.4.6",
@@ -3220,7 +3220,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.16.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/rattler_lock_v4#a8e022d031da57933b22ae3a7e0a0c7f50548d6a"
+source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.1.0",
@@ -3237,7 +3237,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.16.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/rattler_lock_v4#a8e022d031da57933b22ae3a7e0a0c7f50548d6a"
+source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3256,7 +3256,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.16.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=refactor/rattler_lock_v4#a8e022d031da57933b22ae3a7e0a0c7f50548d6a"
+source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
 dependencies = [
  "cfg-if",
  "libloading",
