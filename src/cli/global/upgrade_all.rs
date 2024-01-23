@@ -2,6 +2,7 @@ use clap::Parser;
 use futures::{stream, StreamExt, TryStreamExt};
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig, Platform};
+use rattler_networking::AuthenticatedClient;
 
 use crate::repodata::fetch_sparse_repodata;
 
@@ -36,8 +37,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let packages = list_global_packages().await?;
 
+    let authenticated_client = AuthenticatedClient::default();
     // Fetch sparse repodata
-    let platform_sparse_repodata = fetch_sparse_repodata(&channels, [Platform::current()]).await?;
+    let platform_sparse_repodata =
+        fetch_sparse_repodata(&channels, [Platform::current()], &authenticated_client).await?;
 
     let tasks = packages
         .iter()
@@ -47,7 +50,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let task_stream = stream::iter(tasks)
         .map(|matchspec| {
-            globally_install_package(matchspec, &platform_sparse_repodata, &channel_config)
+            globally_install_package(
+                matchspec,
+                &platform_sparse_repodata,
+                &channel_config,
+                authenticated_client.clone(),
+            )
         })
         .buffered(UPGRADE_ALL_CONCURRENCY);
 

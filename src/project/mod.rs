@@ -11,6 +11,7 @@ use once_cell::sync::OnceCell;
 use rattler_conda_types::{
     Channel, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
 };
+use rattler_networking::AuthenticatedClient;
 use rip::{index::PackageDb, normalize_index_url};
 use std::hash::Hash;
 use std::{
@@ -26,7 +27,6 @@ use std::{
 use crate::{
     config,
     consts::{self, PROJECT_MANIFEST},
-    default_client,
     task::Task,
 };
 use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
@@ -87,6 +87,10 @@ pub struct Project {
     root: PathBuf,
     /// The PyPI package db for this project
     package_db: OnceCell<Arc<PackageDb>>,
+    /// Reqwest client shared for this project
+    client: reqwest::Client,
+    /// Authenticated reqwest client shared for this project
+    authenticated_client: AuthenticatedClient,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
 }
@@ -103,9 +107,14 @@ impl Debug for Project {
 impl Project {
     /// Constructs a new instance from an internal manifest representation
     pub fn from_manifest(manifest: Manifest) -> Self {
+        let client = reqwest::Client::new();
+        let authenticated_client =
+            AuthenticatedClient::from_client(client.clone(), Default::default());
         Self {
             root: Default::default(),
             package_db: Default::default(),
+            client,
+            authenticated_client,
             manifest,
         }
     }
@@ -160,6 +169,8 @@ impl Project {
         Ok(Self {
             root: root.to_owned(),
             package_db: Default::default(),
+            client: Default::default(),
+            authenticated_client: Default::default(),
             manifest: manifest?,
         })
     }
@@ -338,7 +349,7 @@ impl Project {
             .package_db
             .get_or_try_init(|| {
                 PackageDb::new(
-                    default_client(),
+                    self.client().clone(),
                     &self.pypi_index_urls(),
                     &config::get_cache_dir()?.join("pypi/"),
                 )
@@ -346,6 +357,17 @@ impl Project {
                 .map(Arc::new)
             })?
             .as_ref())
+    }
+
+    /// Returns the reqwest client used for http networking
+    pub fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
+
+    /// Create an authenticated reqwest client for this project
+    /// use authentication from `rattler_networking`
+    pub fn authenticated_client(&self) -> &AuthenticatedClient {
+        &self.authenticated_client
     }
 }
 

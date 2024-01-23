@@ -1,15 +1,14 @@
-use crate::{
-    config, consts, default_authenticated_client, install, install_pypi, lock_file, prefix::Prefix,
-    progress, Project,
-};
+use crate::{config, consts, install, install_pypi, lock_file, prefix::Prefix, progress, Project};
 use miette::{Context, IntoDiagnostic};
 
 use crate::lock_file::lock_file_satisfies_project;
 use crate::project::manifest::SystemRequirements;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
+use itertools::Itertools;
 use rattler::install::{PythonInfo, Transaction};
 use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
-use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rip::index::PackageDb;
 use rip::resolve::SDistResolution;
@@ -203,7 +202,7 @@ pub async fn get_up_to_date_prefix(
         updated_repodata_records.insert(
             lock_file::update_lock_file_conda(
                 &environment,
-                locked_repodata_records,
+                &locked_repodata_records,
                 sparse_repo_data,
             )
             .await?,
@@ -218,6 +217,7 @@ pub async fn get_up_to_date_prefix(
         let empty_vec = Vec::new();
         update_prefix_conda(
             &prefix,
+            project.authenticated_client().clone(),
             installed_prefix_records,
             repodata_records
                 .get(&current_platform)
@@ -247,7 +247,7 @@ pub async fn get_up_to_date_prefix(
             lock_file::update_lock_file_for_pypi(
                 &environment,
                 repodata_records,
-                locked_pypi_records,
+                &locked_pypi_records,
                 python_status.location(),
                 sdist_resolution,
             )
@@ -276,6 +276,44 @@ pub async fn get_up_to_date_prefix(
             sdist_resolution,
         )
         .await?;
+    }
+
+    // If any of the records have changed we need to update the contents of the lock-file.
+    if updated_repodata_records.is_some() || updated_pypi_records.is_some() {
+        let mut builder = LockFile::builder();
+
+        let channels = environment
+            .channels()
+            .into_iter()
+            .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()))
+            .collect_vec();
+        builder.set_channels(environment.name().as_str(), channels);
+
+        // Add the conda records
+        for (platform, records) in updated_repodata_records.unwrap_or(locked_repodata_records) {
+            for record in records {
+                builder.add_conda_package(environment.name().as_str(), platform, record.into());
+            }
+        }
+
+        // Add the PyPi records
+        for (platform, packages) in updated_pypi_records.unwrap_or(locked_pypi_records) {
+            for (pkg_data, pkg_env_data) in packages {
+                builder.add_pypi_package(
+                    environment.name().as_str(),
+                    platform,
+                    pkg_data,
+                    pkg_env_data,
+                );
+            }
+        }
+
+        // Write to disk
+        let lock_file = builder.finish();
+        lock_file
+            .to_path(&project.lock_file_path())
+            .into_diagnostic()
+            .context("failed to write updated lock-file to disk")?;
     }
 
     Ok(prefix)
@@ -370,6 +408,7 @@ impl PythonStatus {
 /// Updates the environment to contain the packages from the specified lock-file
 pub async fn update_prefix_conda(
     prefix: &Prefix,
+    authenticated_client: AuthenticatedClient,
     installed_packages: Vec<PrefixRecord>,
     repodata_records: &[RepoDataRecord],
     platform: Platform,
@@ -393,7 +432,7 @@ pub async fn update_prefix_conda(
                 &installed_packages,
                 prefix.root().to_path_buf(),
                 config::get_cache_dir()?,
-                default_authenticated_client(),
+                authenticated_client,
             ),
         )
         .await?;

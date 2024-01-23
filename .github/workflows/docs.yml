@@ -35,7 +35,7 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: prefix-dev/setup-pixi@v0.4.1
+      - uses: prefix-dev/setup-pixi@v0.4.3
         with:
           pixi-version: v0.6.0
           cache: true

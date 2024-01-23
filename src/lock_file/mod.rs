@@ -89,7 +89,7 @@ fn platform_solve_bars(platforms: impl IntoIterator<Item = Platform>) -> Vec<Pro
 /// Updates the lock file for conda dependencies for the specified project.
 pub async fn update_lock_file_conda(
     environment: &Environment<'_>,
-    existing_lock_file: LockedCondaEnvironment,
+    existing_lock_file: &LockedCondaEnvironment,
     repodata: Option<Vec<SparseRepoData>>,
 ) -> miette::Result<LockedCondaEnvironment> {
     let platforms = environment.platforms();
@@ -159,7 +159,7 @@ pub async fn update_lock_file_conda(
 pub async fn update_lock_file_for_pypi(
     environment: &Environment<'_>,
     locked_conda_packages: &LockedCondaEnvironment,
-    locked_pypi_packages: LockedPypiEnvironment,
+    locked_pypi_packages: &LockedPypiEnvironment,
     python_location: Option<&Path>,
     sdist_resolution: SDistResolution,
 ) -> miette::Result<LockedPypiEnvironment> {

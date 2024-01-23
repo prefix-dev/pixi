@@ -1,5 +1,5 @@
 use crate::project::Environment;
-use crate::{config, default_authenticated_client, progress, project::Project};
+use crate::{config, progress, project::Project};
 use futures::{stream, StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
 use itertools::Itertools;
@@ -20,13 +20,14 @@ impl Environment<'_> {
     pub async fn fetch_sparse_repodata(&self) -> miette::Result<Vec<SparseRepoData>> {
         let channels = self.channels();
         let platforms = self.platforms();
-        fetch_sparse_repodata(channels, platforms).await
+        fetch_sparse_repodata(channels, platforms, self.project().authenticated_client()).await
     }
 }
 
 pub async fn fetch_sparse_repodata(
     channels: impl IntoIterator<Item = &'_ Channel>,
     target_platforms: impl IntoIterator<Item = Platform>,
+    authenticated_client: &AuthenticatedClient,
 ) -> miette::Result<Vec<SparseRepoData>> {
     let channels = channels.into_iter();
     let target_platforms = target_platforms.into_iter().collect_vec();
@@ -59,7 +60,6 @@ pub async fn fetch_sparse_repodata(
     top_level_progress.enable_steady_tick(Duration::from_millis(50));
 
     let repodata_cache_path = config::get_cache_dir()?.join("repodata");
-    let repodata_download_client = default_authenticated_client();
     let multi_progress = progress::global_multi_progress();
     let mut progress_bars = Vec::new();
 
@@ -76,7 +76,7 @@ pub async fn fetch_sparse_repodata(
 
             // Spawn a future that downloads the repodata in the background
             let repodata_cache = repodata_cache_path.clone();
-            let download_client = repodata_download_client.clone();
+            let download_client = authenticated_client.clone();
             let top_level_progress = top_level_progress.clone();
 
             async move {

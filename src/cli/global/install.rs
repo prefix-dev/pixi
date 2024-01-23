@@ -1,15 +1,13 @@
 use crate::install::execute_transaction;
 use crate::repodata::friendly_channel_name;
-use crate::{
-    config, default_authenticated_client, prefix::Prefix, progress::await_in_progress,
-    repodata::fetch_sparse_repodata,
-};
+use crate::{config, prefix::Prefix, progress::await_in_progress, repodata::fetch_sparse_repodata};
 use clap::Parser;
 use dirs::home_dir;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord};
+use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -330,18 +328,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|c| Channel::from_str(c, &channel_config))
         .collect::<Result<Vec<Channel>, _>>()
         .into_diagnostic()?;
+    let authenticated_client = AuthenticatedClient::default();
 
     // Find the MatchSpec we want to install
     let package_matchspec = MatchSpec::from_str(&args.package).into_diagnostic()?;
 
     // Fetch sparse repodata
-    let platform_sparse_repodata = fetch_sparse_repodata(&channels, [Platform::current()]).await?;
+    let platform_sparse_repodata =
+        fetch_sparse_repodata(&channels, [Platform::current()], &authenticated_client).await?;
 
     // Install the package
     let (prefix_package, scripts, _) = globally_install_package(
         package_matchspec,
         &platform_sparse_repodata,
         &channel_config,
+        authenticated_client,
     )
     .await?;
 
@@ -394,6 +395,7 @@ pub(super) async fn globally_install_package(
     package_matchspec: MatchSpec,
     platform_sparse_repodata: &[SparseRepoData],
     channel_config: &ChannelConfig,
+    authenticated_client: AuthenticatedClient,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
     let package_name = package_name(&package_matchspec)?;
 
@@ -449,7 +451,7 @@ pub(super) async fn globally_install_package(
                 &prefix_records,
                 prefix.root().to_path_buf(),
                 config::get_cache_dir()?,
-                default_authenticated_client(),
+                authenticated_client,
             ),
         )
         .await?;

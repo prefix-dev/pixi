@@ -121,7 +121,7 @@ async fn install_locked() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
-    pixi.add("python==3.8.0").await.unwrap();
+    pixi.add("python==3.10.0").await.unwrap();
 
     // Add new version of python only to the manifest
     pixi.add("python==3.9.0")
@@ -136,7 +136,7 @@ async fn install_locked() {
     assert!(lock.contains_match_spec(
         DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
-        "python==3.8.0"
+        "python==3.10.0"
     ));
 
     // After an install with lockfile update the locked install should succeed.

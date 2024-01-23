@@ -1084,11 +1084,7 @@ mod tests {
             .clone()
             .into_iter()
             .flat_map(|d| d.into_iter())
-            .map(|(name, spec)| format!(
-                "{} = {}",
-                name.as_source_str(),
-                Item::from(spec).to_string()
-            ))
+            .map(|(name, spec)| format!("{} = {}", name.as_source_str(), Item::from(spec)))
             .join("\n"));
     }
 
@@ -1104,10 +1100,7 @@ mod tests {
         // Initially the dependency should exist
         assert!(manifest
             .feature_mut(feature_name)
-            .expect(&*format!(
-                "feature `{}` should exist",
-                feature_name.as_str()
-            ))
+            .expect(&format!("feature `{}` should exist", feature_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1130,10 +1123,7 @@ mod tests {
         // The dependency should no longer exist
         assert!(manifest
             .feature_mut(feature_name)
-            .expect(&*format!(
-                "feature `{}` should exist",
-                feature_name.as_str()
-            ))
+            .expect(&format!("feature `{}` should exist", feature_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1163,10 +1153,7 @@ mod tests {
         // Initially the dependency should exist
         assert!(manifest
             .feature_mut(feature_name)
-            .expect(&*format!(
-                "feature `{}` should exist",
-                feature_name.as_str()
-            ))
+            .expect(&format!("feature `{}` should exist", feature_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1184,10 +1171,7 @@ mod tests {
         // The dependency should no longer exist
         assert!(manifest
             .feature_mut(feature_name)
-            .expect(&*format!(
-                "feature `{}` should exist",
-                feature_name.as_str()
-            ))
+            .expect(&format!("feature `{}` should exist", feature_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
