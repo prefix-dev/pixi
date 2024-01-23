@@ -1,13 +1,13 @@
 use crate::project::manifest::{LibCSystemRequirement, SystemRequirements};
 use crate::project::virtual_packages::{default_glibc_version, default_mac_os_version};
 use itertools::Itertools;
-use rattler_conda_types::{PackageRecord, Platform, RepoDataRecord, Version};
+use rattler_conda_types::{PackageRecord, Platform, Version};
 use rip::python_env::{WheelTag, WheelTags};
 use std::str::FromStr;
 
 /// Returns true if the specified record refers to a version/variant of python.
-pub fn is_python_record(record: &RepoDataRecord) -> bool {
-    package_name_is_python(&record.package_record.name)
+pub fn is_python_record(record: impl AsRef<PackageRecord>) -> bool {
+    package_name_is_python(&record.as_ref().name)
 }
 
 /// Returns true if the specified name refers to a version/variant of python.

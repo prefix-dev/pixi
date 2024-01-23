@@ -404,6 +404,7 @@ impl Display for DependencyKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::project::manifest::FeatureName;
     use insta::{assert_debug_snapshot, assert_display_snapshot};
     use itertools::Itertools;
     use rattler_virtual_packages::{LibC, VirtualPackage};
@@ -572,8 +573,17 @@ mod tests {
 
         let project = Project::from_manifest(manifest);
 
-        assert_debug_snapshot!(project.manifest.tasks(Some(Platform::Osx64)));
-        assert_debug_snapshot!(project.manifest.tasks(Some(Platform::Win64)));
-        assert_debug_snapshot!(project.manifest.tasks(Some(Platform::Linux64)));
+        assert_debug_snapshot!(project
+            .manifest
+            .tasks(Some(Platform::Osx64), &FeatureName::Default)
+            .unwrap());
+        assert_debug_snapshot!(project
+            .manifest
+            .tasks(Some(Platform::Win64), &FeatureName::Default)
+            .unwrap());
+        assert_debug_snapshot!(project
+            .manifest
+            .tasks(Some(Platform::Linux64), &FeatureName::Default)
+            .unwrap());
     }
 }

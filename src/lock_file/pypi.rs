@@ -1,27 +1,25 @@
 use crate::consts::PROJECT_MANIFEST;
+use crate::lock_file::{package_identifier, pypi_name_mapping};
+use crate::project::Environment;
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{is_python_record, project_platform_tags};
-use crate::{
-    lock_file::{package_identifier, pypi_name_mapping},
-    Project,
-};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rip::python_env::PythonLocation;
 use rip::resolve::{resolve, PinnedPackage, ResolveOptions, SDistResolution};
-use std::path::PathBuf;
+use std::path::Path;
 use std::{collections::HashMap, vec};
 
 /// Resolve python packages for the specified project.
 pub async fn resolve_dependencies<'p>(
-    project: &'p Project,
+    environment: &Environment<'p>,
     platform: Platform,
     conda_packages: &[RepoDataRecord],
-    python_location: &Option<PathBuf>,
+    python_location: Option<&Path>,
     sdist_resolution: SDistResolution,
 ) -> miette::Result<Vec<PinnedPackage<'p>>> {
-    let dependencies = project.pypi_dependencies(Some(platform));
+    let dependencies = environment.pypi_dependencies(Some(platform));
     if dependencies.is_empty() {
         return Ok(vec![]);
     }
@@ -63,7 +61,7 @@ pub async fn resolve_dependencies<'p>(
     // Determine the compatible tags
     let compatible_tags = project_platform_tags(
         platform,
-        &project.system_requirements(),
+        &environment.system_requirements(),
         python_record.as_ref(),
     );
 
@@ -77,14 +75,14 @@ pub async fn resolve_dependencies<'p>(
     // we cannot resolve correctly, because we might not be able to
     // build source dists correctly. Let's skip them for now
     let (sdist_resolution, python_location) = match python_location {
-        Some(path) => (sdist_resolution, PythonLocation::Custom(path.clone())),
+        Some(path) => (sdist_resolution, PythonLocation::Custom(path.to_path_buf())),
         // Use the resolution we have been passed in
         None => (sdist_resolution, PythonLocation::System),
     };
 
     // Resolve the PyPi dependencies
     let mut result = resolve(
-        project.pypi_package_db()?,
+        environment.project().pypi_package_db()?,
         &requirements,
         &marker_environment,
         Some(&compatible_tags),

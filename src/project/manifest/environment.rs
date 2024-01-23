@@ -5,6 +5,7 @@ use miette::Diagnostic;
 use regex::Regex;
 use serde::{self, Deserialize, Deserializer};
 use std::borrow::Borrow;
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use thiserror::Error;
@@ -38,6 +39,16 @@ impl Borrow<str> for EnvironmentName {
         self.as_str()
     }
 }
+
+impl fmt::Display for EnvironmentName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EnvironmentName::Default => write!(f, "{}", consts::DEFAULT_ENVIRONMENT_NAME),
+            EnvironmentName::Named(name) => write!(f, "{}", name),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
 #[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes")]
 pub struct ParseEnvironmentNameError {

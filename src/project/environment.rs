@@ -45,6 +45,11 @@ impl Debug for Environment<'_> {
 }
 
 impl<'p> Environment<'p> {
+    /// Returns the project this environment belongs to.
+    pub fn project(&self) -> &'p Project {
+        self.project
+    }
+
     /// Returns the name of this environment.
     pub fn name(&self) -> &EnvironmentName {
         &self.environment.name
@@ -253,7 +258,7 @@ impl<'p> Environment<'p> {
         if let Some(platform) = platform {
             if !self.platforms().contains(&platform) {
                 return Err(UnsupportedPlatformError {
-                    project: self.project,
+                    environments_platforms: self.platforms().into_iter().collect(),
                     environment: self.name().clone(),
                     platform,
                 });
@@ -261,6 +266,11 @@ impl<'p> Environment<'p> {
         }
 
         Ok(())
+    }
+
+    /// Returns true if the environments contains any reference to a pypi dependency.
+    pub fn has_pypi_dependencies(&self) -> bool {
+        self.features().any(|f| f.has_pypi_dependencies())
     }
 }
 

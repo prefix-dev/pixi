@@ -19,16 +19,14 @@ use pixi::{
     task::{ExecutableTask, RunOutput, TraversalError},
     Project,
 };
-use rattler_conda_types::{MatchSpec, PackageName, Platform, Version};
-use rattler_lock::{CondaLock, LockedDependencyKind};
+use rattler_conda_types::{MatchSpec, Platform};
 
 use miette::{Diagnostic, IntoDiagnostic};
-use pep508_rs::VersionOrUrl;
 use pixi::cli::LockFileUsageArgs;
 use pixi::project::manifest::FeatureName;
 use pixi::task::TaskExecutionError;
+use rattler_lock::{LockFile, Package};
 use std::{
-    collections::HashSet,
     path::{Path, PathBuf},
     process::Output,
     str::FromStr,
@@ -65,101 +63,86 @@ pub fn string_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<
 
 pub trait LockFileExt {
     /// Check if this package is contained in the lockfile
-    fn contains_package(&self, name: &PackageName) -> bool;
+    fn contains_conda_package(&self, environment: &str, platform: Platform, name: &str) -> bool;
+    fn contains_pypi_package(&self, environment: &str, platform: Platform, name: &str) -> bool;
     /// Check if this matchspec is contained in the lockfile
-    fn contains_matchspec(&self, matchspec: impl IntoMatchSpec) -> bool;
-    /// Check if this matchspec is contained in the lockfile for this platform
-    fn contains_matchspec_for_platform(
+    fn contains_match_spec(
         &self,
-        matchspec: impl IntoMatchSpec,
-        platform: impl Into<Platform>,
+        environment: &str,
+        platform: Platform,
+        match_spec: impl IntoMatchSpec,
     ) -> bool;
+
     /// Check if the pep508 requirement is contained in the lockfile for this platform
-    fn contains_pep508_requirement_for_platform(
+    fn contains_pep508_requirement(
         &self,
+        environment: &str,
+        platform: Platform,
         requirement: pep508_rs::Requirement,
-        platform: impl Into<Platform>,
     ) -> bool;
 }
 
-impl LockFileExt for CondaLock {
-    fn contains_package(&self, name: &PackageName) -> bool {
-        self.package
-            .iter()
-            .any(|locked_dep| locked_dep.name == *name.as_normalized())
+impl LockFileExt for LockFile {
+    fn contains_conda_package(&self, environment: &str, platform: Platform, name: &str) -> bool {
+        let Some(env) = self.environment(environment) else {
+            return false;
+        };
+        let package_found = env
+            .packages(platform)
+            .into_iter()
+            .flatten()
+            .filter_map(Package::into_conda)
+            .any(|package| package.package_record().name.as_normalized() == name);
+        package_found
+    }
+    fn contains_pypi_package(&self, environment: &str, platform: Platform, name: &str) -> bool {
+        let Some(env) = self.environment(environment) else {
+            return false;
+        };
+        let package_found = env
+            .packages(platform)
+            .into_iter()
+            .flatten()
+            .filter_map(Package::into_pypi)
+            .any(|pkg| pkg.data().package.name == name);
+        package_found
     }
 
-    fn contains_matchspec(&self, matchspec: impl IntoMatchSpec) -> bool {
-        let matchspec = matchspec.into();
-        let name = matchspec.name.expect("expected matchspec to have a name");
-        let version = matchspec
-            .version
-            .expect("expected versionspec to have a name");
-        self.package.iter().any(|locked_dep| {
-            let package_version =
-                Version::from_str(&locked_dep.version).expect("could not parse version");
-            locked_dep.name == name.as_normalized() && version.matches(&package_version)
-        })
-    }
-
-    fn contains_matchspec_for_platform(
+    fn contains_match_spec(
         &self,
-        matchspec: impl IntoMatchSpec,
-        platform: impl Into<Platform>,
+        environment: &str,
+        platform: Platform,
+        match_spec: impl IntoMatchSpec,
     ) -> bool {
-        let matchspec = matchspec.into();
-        let name = matchspec.name.expect("expected matchspec to have a name");
-        let version = matchspec
-            .version
-            .expect("expected versionspec to have a name");
-        let platform = platform.into();
-        self.package.iter().any(|locked_dep| {
-            let package_version =
-                Version::from_str(&locked_dep.version).expect("could not parse version");
-            locked_dep.name == name.as_normalized()
-                && version.matches(&package_version)
-                && locked_dep.platform == platform
-        })
+        let match_spec = match_spec.into();
+        let Some(env) = self.environment(environment) else {
+            return false;
+        };
+        let package_found = env
+            .packages(platform)
+            .into_iter()
+            .flatten()
+            .filter_map(Package::into_conda)
+            .any(move |p| p.satisfies(&match_spec));
+        package_found
     }
 
-    fn contains_pep508_requirement_for_platform(
+    fn contains_pep508_requirement(
         &self,
+        environment: &str,
+        platform: Platform,
         requirement: pep508_rs::Requirement,
-        platform: impl Into<Platform>,
     ) -> bool {
-        let name = requirement.name;
-        let version: Option<pep440_rs::VersionSpecifiers> =
-            requirement
-                .version_or_url
-                .and_then(|version_or_url| match version_or_url {
-                    VersionOrUrl::VersionSpecifier(version) => Some(version),
-                    VersionOrUrl::Url(_) => unimplemented!(),
-                });
-
-        let platform = platform.into();
-        self.package.iter().any(|locked_dep| {
-            let package_version =
-                pep440_rs::Version::from_str(&locked_dep.version).expect("could not parse version");
-
-            let req_extras = requirement
-                .extras
-                .as_ref()
-                .map(|extras| extras.iter().cloned().collect::<HashSet<_>>())
-                .unwrap_or_default();
-
-            locked_dep.name == *name
-                && version
-                    .as_ref()
-                    .map_or(true, |v| v.contains(&package_version))
-                && locked_dep.platform == platform
-                // Check if the extras are the same.
-                && match &locked_dep.kind {
-                    LockedDependencyKind::Conda(_) => false,
-                    LockedDependencyKind::Pypi(locked) => {
-                        req_extras == locked.extras.iter().cloned().collect()
-                    }
-                }
-        })
+        let Some(env) = self.environment(environment) else {
+            return false;
+        };
+        let package_found = env
+            .packages(platform)
+            .into_iter()
+            .flatten()
+            .filter_map(Package::into_pypi)
+            .any(move |p| p.satisfies(&requirement));
+        package_found
     }
 }
 
@@ -290,7 +273,7 @@ impl PixiControl {
     }
 
     /// Get the associated lock file
-    pub async fn lock_file(&self) -> miette::Result<CondaLock> {
+    pub async fn lock_file(&self) -> miette::Result<LockFile> {
         let project = Project::load_or_else_discover(Some(&self.manifest_path()))?;
         pixi::lock_file::load_lock_file(&project).await
     }
@@ -332,12 +315,14 @@ impl TasksControl<'_> {
         &self,
         name: impl ToString,
         platform: Option<Platform>,
+        feature_name: Option<String>,
     ) -> miette::Result<()> {
         task::execute(task::Args {
             manifest_path: Some(self.pixi.manifest_path()),
             operation: task::Operation::Remove(task::RemoveArgs {
                 names: vec![name.to_string()],
                 platform,
+                feature: feature_name,
             }),
         })
     }

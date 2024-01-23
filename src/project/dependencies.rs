@@ -1,5 +1,5 @@
 use indexmap::{Equivalent, IndexMap};
-use rattler_conda_types::{NamelessMatchSpec, PackageName};
+use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName};
 use std::hash::Hash;
 
 /// Holds a list of dependencies where for each package name there can be multiple requirements.
@@ -109,6 +109,15 @@ impl Dependencies {
         self.map
             .into_iter()
             .flat_map(|(name, specs)| specs.into_iter().map(move |spec| (name.clone(), spec)))
+    }
+
+    /// Converts this instance into an iterator of [`MatchSpec`]s.
+    pub fn into_match_specs(self) -> impl Iterator<Item = MatchSpec> + DoubleEndedIterator {
+        self.map.into_iter().flat_map(|(name, specs)| {
+            specs
+                .into_iter()
+                .map(move |spec| MatchSpec::from_nameless(spec, Some(name.clone())))
+        })
     }
 }
 

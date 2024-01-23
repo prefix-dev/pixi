@@ -12,8 +12,8 @@ use crate::consts::PROJECT_MANIFEST;
 use crate::project::manifest::SystemRequirements;
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{is_python_record, project_platform_tags};
-use rattler_conda_types::Platform;
-use rattler_lock::{CondaLock, LockedDependency};
+use rattler_conda_types::{Platform, RepoDataRecord};
+use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 use rip::artifacts::wheel::{InstallPaths, UnpackWheelOptions};
 use rip::artifacts::Wheel;
 use rip::index::PackageDb;
@@ -26,7 +26,7 @@ use rip::types::{
 };
 use rip::wheel_builder::WheelBuilder;
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::task::JoinError;
@@ -34,28 +34,27 @@ use tokio::task::JoinError;
 /// The installer name for pypi packages installed by pixi.
 pub(crate) const PIXI_PYPI_INSTALLER: &str = env!("CARGO_PKG_NAME");
 
+type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
+
 /// Installs and/or remove python distributions.
 // TODO: refactor arguments in struct
 #[allow(clippy::too_many_arguments)]
 pub async fn update_python_distributions(
     package_db: &PackageDb,
     prefix: &Prefix,
-    lock_file: &CondaLock,
+    conda_package: &[RepoDataRecord],
+    python_packages: &[CombinedPypiPackageData],
     platform: Platform,
     status: &PythonStatus,
-    python_location: &Option<PathBuf>,
     system_requirements: &SystemRequirements,
     sdist_resolution: SDistResolution,
 ) -> miette::Result<()> {
-    let python_info = match status {
-        PythonStatus::Changed { new, .. }
-        | PythonStatus::Unchanged(new)
-        | PythonStatus::Added { new } => new,
-        PythonStatus::Removed { .. } | PythonStatus::DoesNotExist => {
-            // No python interpreter in the environment, so there is nothing to do here.
-            return Ok(());
-        }
+    let Some(python_info) = status.current_info() else {
+        // No python interpreter in the environment, so there is nothing to do here.
+        return Ok(());
     };
+
+    let python_location = prefix.root().join(&python_info.path);
 
     // Determine where packages would have been installed
     let python_version = (
@@ -73,10 +72,7 @@ pub async fn update_python_distributions(
         )?;
 
     // Determine the python packages that are part of the lock-file
-    let python_packages = lock_file
-        .get_packages_by_platform(platform)
-        .filter(|p| p.is_pypi())
-        .collect_vec();
+    let python_packages = python_packages.iter().collect_vec();
 
     // Determine the python packages to remove before we start installing anything new. If the
     // python version changed between installations we will have to remove any previous distribution
@@ -88,12 +84,8 @@ pub async fn update_python_distributions(
             python_packages,
         );
 
-    let conda_packages = lock_file
-        .get_conda_packages_by_platform(platform)
-        .into_diagnostic()?;
-
     // Determine the python interpreter that is installed as part of the conda packages.
-    let python_record = conda_packages
+    let python_record = conda_package
         .iter()
         .find(|r| is_python_record(r))
         .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
@@ -105,25 +97,23 @@ pub async fn update_python_distributions(
     let compatible_tags =
         project_platform_tags(platform, system_requirements, python_record.as_ref());
 
-    let wheel_builder = python_location.as_ref().map(|path| {
-        WheelBuilder::new(
-            package_db,
-            &marker_environment,
-            Some(&compatible_tags),
-            &ResolveOptions {
-                sdist_resolution,
-                python_location: PythonLocation::Custom(path.clone()),
-                clean_env: false,
-            },
-            HashMap::default(),
-        )
-    });
+    let wheel_builder = WheelBuilder::new(
+        package_db,
+        &marker_environment,
+        Some(&compatible_tags),
+        &ResolveOptions {
+            sdist_resolution,
+            python_location: PythonLocation::Custom(python_location),
+            clean_env: false,
+        },
+        HashMap::default(),
+    );
 
     // Start downloading the python packages that we want in the background.
     let (package_stream, package_stream_pb) = stream_python_artifacts(
         package_db,
         python_distributions_to_install.clone(),
-        wheel_builder.as_ref(),
+        Some(&wheel_builder),
     );
 
     // Remove python packages that need to be removed
@@ -239,7 +229,7 @@ async fn install_python_distributions(
 /// packages in parallel and yield them as soon as they become available.
 fn stream_python_artifacts<'a>(
     package_db: &'a PackageDb,
-    packages_to_download: Vec<&'a LockedDependency>,
+    packages_to_download: Vec<&'a CombinedPypiPackageData>,
     wheel_builder: Option<&'a WheelBuilder<'a, 'a>>,
 ) -> (
     impl Stream<Item = miette::Result<(Option<String>, HashSet<Extra>, Wheel)>> + 'a,
@@ -266,24 +256,20 @@ fn stream_python_artifacts<'a>(
     let total_packages = packages_to_download.len();
 
     let download_stream = stream::iter(packages_to_download)
-        .map(move |package| {
+        .map(move |(pkg_data, pkg_env_data)| {
             let pb = stream_pb.clone();
             let message_formatter = message_formatter.clone();
             async move {
-                let pip_package = package
-                    .as_pypi()
-                    .expect("must be a pip package at this point");
-
                 // Determine the filename from the
-                let filename = pip_package
+                let filename = pkg_data
                     .url
                     .path_segments()
                     .and_then(|s| s.last())
                     .expect("url is missing a path");
-                let name = NormalizedPackageName::from_str(&package.name)
+                let name = NormalizedPackageName::from_str(&pkg_data.name)
                     .into_diagnostic()
                     .with_context(|| {
-                        format!("'{}' is not a valid python package name", &package.name)
+                        format!("'{}' is not a valid python package name", &pkg_data.name)
                     })?;
 
                 let artifact_name = ArtifactName::from_filename(filename, &name)
@@ -296,16 +282,11 @@ fn stream_python_artifacts<'a>(
                 // Reconstruct the ArtifactInfo from the data in the lockfile.
                 let artifact_info = ArtifactInfo {
                     filename: artifact_name,
-                    url: pip_package.url.clone(),
-                    hashes: pip_package.hash.as_ref().map(|hash| ArtifactHashes {
+                    url: pkg_data.url.clone(),
+                    hashes: pkg_data.hash.as_ref().map(|hash| ArtifactHashes {
                         sha256: hash.sha256().cloned(),
                     }),
-                    requires_python: pip_package
-                        .requires_python
-                        .as_ref()
-                        .map(|p| p.parse())
-                        .transpose()
-                        .expect("the lock file contains an invalid 'requires_python` field"),
+                    requires_python: pkg_data.requires_python.clone(),
                     dist_info_metadata: Default::default(),
                     yanked: Default::default(),
                 };
@@ -322,7 +303,7 @@ fn stream_python_artifacts<'a>(
                     pb.finish();
                 }
 
-                let hash = pip_package
+                let hash = pkg_data
                     .hash
                     .as_ref()
                     .and_then(|h| h.sha256())
@@ -330,7 +311,7 @@ fn stream_python_artifacts<'a>(
 
                 Ok((
                     hash,
-                    pip_package
+                    pkg_env_data
                         .extras
                         .iter()
                         .filter_map(|e| Extra::from_str(e).ok())
@@ -428,8 +409,8 @@ fn uninstall_pixi_installed_distribution(
 fn determine_python_distributions_to_remove_and_install<'p>(
     prefix: &Path,
     mut current_python_packages: Vec<Distribution>,
-    desired_python_packages: Vec<&'p LockedDependency>,
-) -> (Vec<Distribution>, Vec<&'p LockedDependency>) {
+    desired_python_packages: Vec<&'p CombinedPypiPackageData>,
+) -> (Vec<Distribution>, Vec<&'p CombinedPypiPackageData>) {
     // Determine the artifact tags associated with the locked dependencies.
     let mut desired_python_packages = extract_locked_tags(desired_python_packages);
 
@@ -480,25 +461,22 @@ fn determine_python_distributions_to_remove_and_install<'p>(
 /// If the locked dependency is not a wheel distribution `None` is returned for the tags. If the
 /// the wheel name could not be parsed `None` is returned for the tags and a warning is emitted.
 fn extract_locked_tags(
-    desired_python_packages: Vec<&LockedDependency>,
-) -> Vec<(&LockedDependency, Option<IndexSet<WheelTag>>)> {
+    desired_python_packages: Vec<&CombinedPypiPackageData>,
+) -> Vec<(&CombinedPypiPackageData, Option<IndexSet<WheelTag>>)> {
     desired_python_packages
         .into_iter()
-        .map(|pkg| {
-            // Get the package as a pip package. If the package is not a pip package we can just ignore it.
-            let Some(pip) = pkg.as_pypi() else { return (pkg, None); };
-
+        .map(|pkg@(pkg_data, _pkg_env_data)| {
             // Extract the filename from the url and the name from the package name.
-            let Some(filename) = pip.url.path_segments().and_then(|s| s.last()) else {
+            let Some(filename) = pkg_data.url.path_segments().and_then(|s| s.last()) else {
                 tracing::warn!(
                         "failed to determine the artifact name of the python package {}-{} from url {}: the url has no filename.",
-                        &pkg.name, pkg.version, &pip.url);
+                        &pkg_data.name, pkg_data.version, &pkg_data.url);
                 return (pkg, None);
             };
-            let Ok(name) = NormalizedPackageName::from_str(&pkg.name) else {
+            let Ok(name) = NormalizedPackageName::from_str(&pkg_data.name) else {
                 tracing::warn!(
                         "failed to determine the artifact name of the python package {}-{} from url {}: {} is not a valid package name.",
-                        &pkg.name, pkg.version, &pip.url, &pkg.name);
+                        &pkg_data.name, pkg_data.version, &pkg_data.url, &pkg_data.name);
                 return (pkg, None);
             };
 
@@ -509,7 +487,7 @@ fn extract_locked_tags(
                 Err(err) => {
                     tracing::warn!(
                         "failed to determine the artifact name of the python package {}-{}. Could not determine the name from the url {}: {err}",
-                        &pkg.name, pkg.version, &pip.url);
+                        &pkg_data.name, pkg_data.version, &pkg_data.url);
                     (pkg, None)
                 }
             }
@@ -522,24 +500,23 @@ fn extract_locked_tags(
 fn does_installed_match_locked_package(
     prefix_root: &Path,
     installed_python_package: &Distribution,
-    locked_python_package: (&LockedDependency, Option<&IndexSet<WheelTag>>),
+    locked_python_package: (&CombinedPypiPackageData, Option<&IndexSet<WheelTag>>),
 ) -> bool {
-    let (pkg, artifact_tags) = locked_python_package;
+    let ((pkg_data, _), artifact_tags) = locked_python_package;
 
     // Match on name and version
-    if pkg.name != installed_python_package.name.as_str()
-        || pep440_rs::Version::from_str(&pkg.version).ok().as_ref()
-            != Some(&installed_python_package.version)
+    if pkg_data.name != installed_python_package.name.as_str()
+        || pkg_data.version != installed_python_package.version
     {
         return false;
     }
 
     // If this distribution is installed with pixi we can assume that there is a URL file that
     // contains the original URL.
-    if installed_python_package.installer.as_deref() == Some("pixi") {
-        let expected_hash = pkg
-            .as_pypi()
-            .and_then(|hash| hash.hash.as_ref())
+    if installed_python_package.installer.as_deref() == Some(PIXI_PYPI_INSTALLER) {
+        let expected_hash = pkg_data
+            .hash
+            .as_ref()
             .and_then(|hash| hash.sha256())
             .map(|sha256| format!("sha256-{:x}", sha256));
         if let Some(expected_hash) = expected_hash {

@@ -13,32 +13,50 @@ use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, PackageName, Platform, RepoDataRecord,
 };
 use rattler_lock::{
-    builder::{
-        CondaLockedDependencyBuilder, LockFileBuilder, LockedPackagesBuilder,
-        PypiLockedDependencyBuilder,
-    },
-    CondaLock, LockedDependencyKind, PackageHashes,
+    LockFile, PackageHashes, PypiPackageData, PypiPackageDataRef, PypiPackageEnvironmentData,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
 use rip::resolve::SDistResolution;
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::Path;
 use std::{sync::Arc, time::Duration};
 
+use crate::project::Environment;
 pub use satisfiability::lock_file_satisfies_project;
 
+/// A list of conda packages that are locked for a specific platform.
+pub type LockedCondaPackages = Vec<RepoDataRecord>;
+
+/// A list of Pypi packages that are locked for a specific platform.
+pub type LockedPypiPackages = Vec<(PypiPackageData, PypiPackageEnvironmentData)>;
+
+/// A list of references to conda packages that are locked for a specific platform.
+pub type LockedCondaPackagesRef<'p> = &'p LockedCondaPackages;
+
+/// A list of references to pypi packages that are locked for a specific platform.
+pub type LockedPypiPackagesRef<'p> = Vec<PypiPackageDataRef<'p>>;
+
+/// A list of conda packages that are locked for all supported platforms.
+pub type LockedCondaEnvironment = HashMap<Platform, LockedCondaPackages>;
+
+/// A list of Pypi packages that are locked for all supported platforms.
+pub type LockedPypiEnvironment = HashMap<Platform, LockedPypiPackages>;
+
+/// A list of Pypi packages that are locked for all supported platforms.
+pub type LockedPypiEnvironmentRef<'p> = HashMap<Platform, LockedPypiPackagesRef<'p>>;
+
 /// Loads the lockfile for the specified project or returns a dummy one if none could be found.
-pub async fn load_lock_file(project: &Project) -> miette::Result<CondaLock> {
+pub async fn load_lock_file(project: &Project) -> miette::Result<LockFile> {
     let lock_file_path = project.lock_file_path();
-    tokio::task::spawn_blocking(move || {
-        if lock_file_path.is_file() {
-            CondaLock::from_path(&lock_file_path).into_diagnostic()
-        } else {
-            LockFileBuilder::default().build().into_diagnostic()
-        }
-    })
-    .await
-    .unwrap_or_else(|e| Err(e).into_diagnostic())
+    if lock_file_path.is_file() {
+        // Spawn a background task because loading the file might be IO bound.
+        tokio::task::spawn_blocking(move || LockFile::from_path(&lock_file_path).into_diagnostic())
+            .await
+            .unwrap_or_else(|e| Err(e).into_diagnostic())
+    } else {
+        Ok(LockFile::default())
+    }
 }
 
 fn main_progress_bar(num_bars: u64, message: &'static str) -> ProgressBar {
@@ -70,204 +88,171 @@ fn platform_solve_bars(platforms: impl IntoIterator<Item = Platform>) -> Vec<Pro
 
 /// Updates the lock file for conda dependencies for the specified project.
 pub async fn update_lock_file_conda(
-    project: &Project,
-    existing_lock_file: CondaLock,
+    environment: &Environment<'_>,
+    existing_lock_file: &LockedCondaEnvironment,
     repodata: Option<Vec<SparseRepoData>>,
-) -> miette::Result<CondaLock> {
-    let platforms = project.platforms();
+) -> miette::Result<LockedCondaEnvironment> {
+    let platforms = environment.platforms();
 
     // Get the repodata for the project
     let sparse_repo_data: Arc<[_]> = if let Some(sparse_repo_data) = repodata {
         sparse_repo_data
     } else {
-        project.fetch_sparse_repodata().await?
+        environment.fetch_sparse_repodata().await?
     }
     .into();
 
-    // Construct a progress bar
+    // Construct a progress bar, a main one and one for each platform.
     let _top_level_progress =
         main_progress_bar(platforms.len() as u64, "resolving conda dependencies");
-    // Create progress bars for each platform
     let solve_bars = platform_solve_bars(platforms.iter().copied());
 
-    // Construct a conda lock file
-    let channels = project
-        .channels()
-        .into_iter()
-        .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()));
+    let result = stream::iter(platforms.iter().zip(solve_bars.iter().cloned()))
+        .map(|(platform, pb)| {
+            pb.reset_elapsed();
+            pb.set_style(
+                indicatif::ProgressStyle::with_template(&format!(
+                    "  {{spinner:.dim}} {:<9} [{{elapsed_precise}}] {{msg:.dim}}",
+                    platform.to_string(),
+                ))
+                .unwrap(),
+            );
 
-    let result: miette::Result<Vec<_>> =
-        stream::iter(platforms.iter().zip(solve_bars.iter().cloned()))
-            .map(|(platform, pb)| {
-                pb.reset_elapsed();
+            let existing_lock_file = &existing_lock_file;
+            let sparse_repo_data = sparse_repo_data.clone();
+            async move {
+                let empty_vec = vec![];
+                let result = resolve_platform(
+                    environment,
+                    existing_lock_file.get(platform).unwrap_or(&empty_vec),
+                    sparse_repo_data.clone(),
+                    *platform,
+                    pb.clone(),
+                )
+                .await?;
+
                 pb.set_style(
                     indicatif::ProgressStyle::with_template(&format!(
-                        "  {{spinner:.dim}} {:<9} [{{elapsed_precise}}] {{msg:.dim}}",
+                        "  {} {:<9} [{{elapsed_precise}}]",
+                        console::style(console::Emoji("✔", "↳")).green(),
                         platform.to_string(),
                     ))
                     .unwrap(),
                 );
+                pb.finish();
 
-                let existing_lock_file = &existing_lock_file;
-                let sparse_repo_data = sparse_repo_data.clone();
-                async move {
-                    let result = resolve_platform(
-                        project,
-                        existing_lock_file,
-                        sparse_repo_data.clone(),
-                        *platform,
-                        pb.clone(),
-                    )
-                    .await?;
-
-                    pb.set_style(
-                        indicatif::ProgressStyle::with_template(&format!(
-                            "  {} {:<9} [{{elapsed_precise}}]",
-                            console::style(console::Emoji("✔", "↳")).green(),
-                            platform.to_string(),
-                        ))
-                        .unwrap(),
-                    );
-                    pb.finish();
-
-                    Ok(result)
-                }
-            })
-            .buffer_unordered(2)
-            .try_collect()
-            .await;
-
-    for bar in solve_bars {
-        bar.finish_and_clear();
-    }
-
-    // Collect the result of each individual solve
-    let mut builder = LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
-    for locked_packages in result? {
-        builder = builder.add_locked_packages(locked_packages);
-    }
-    let conda_lock = builder.build().into_diagnostic()?;
-
-    // Write the conda lock to disk
-    conda_lock
-        .to_path(&project.lock_file_path())
-        .into_diagnostic()?;
-
-    Ok(conda_lock)
-}
-
-pub async fn update_lock_file_for_pypi(
-    project: &Project,
-    lock_for_conda: CondaLock,
-    python_location: &Option<PathBuf>,
-    sdist_resolution: SDistResolution,
-) -> miette::Result<CondaLock> {
-    let platforms = project.platforms();
-    let _top_level_progress =
-        main_progress_bar(platforms.len() as u64, "resolving pypi dependencies");
-    let solve_bars = platform_solve_bars(platforms.iter().copied());
-
-    let records = platforms
-        .iter()
-        .map(|plat| lock_for_conda.get_conda_packages_by_platform(*plat));
-
-    let result: miette::Result<Vec<_>> =
-        stream::iter(izip!(platforms.iter(), solve_bars.iter().cloned(), records))
-            .map(|(platform, pb, records)| {
-                pb.reset_elapsed();
-                pb.set_style(
-                    indicatif::ProgressStyle::with_template(&format!(
-                        "  {{spinner:.dim}} {:<9} [{{elapsed_precise}}] {{msg:.dim}}",
-                        platform.to_string(),
-                    ))
-                    .unwrap(),
-                );
-
-                async move {
-                    let locked_packages = LockedPackagesBuilder::new(*platform);
-                    let result = resolve_pypi(
-                        project,
-                        &records.into_diagnostic()?,
-                        locked_packages,
-                        *platform,
-                        &pb,
-                        python_location,
-                        sdist_resolution,
-                    )
-                    .await?;
-
-                    pb.set_style(
-                        indicatif::ProgressStyle::with_template(&format!(
-                            "  {} {:<9} [{{elapsed_precise}}]",
-                            console::style(console::Emoji("✔", "↳")).green(),
-                            platform.to_string(),
-                        ))
-                        .unwrap(),
-                    );
-                    pb.finish();
-
-                    Ok(result)
-                }
-            })
-            // TODO: Hack to ensure we do not encounter file-locking issues in windows, should look at a better solution
-            .buffer_unordered(1)
-            .try_collect()
-            .await;
+                Ok((*platform, result))
+            }
+        })
+        .buffer_unordered(2)
+        .try_collect()
+        .await;
 
     // Clear all progress bars
     for bar in solve_bars {
         bar.finish_and_clear();
     }
 
-    let channels = project
-        .channels()
-        .into_iter()
-        .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()));
-    let mut builder = LockFileBuilder::new(channels, platforms.iter().cloned(), vec![]);
-    for locked_packages in result? {
-        builder = builder.add_locked_packages(locked_packages);
+    result
+}
+
+pub async fn update_lock_file_for_pypi(
+    environment: &Environment<'_>,
+    locked_conda_packages: &LockedCondaEnvironment,
+    locked_pypi_packages: &LockedPypiEnvironment,
+    python_location: Option<&Path>,
+    sdist_resolution: SDistResolution,
+) -> miette::Result<LockedPypiEnvironment> {
+    let platforms = environment.platforms().into_iter().collect_vec();
+
+    // Construct the progress bars
+    let _top_level_progress =
+        main_progress_bar(platforms.len() as u64, "resolving pypi dependencies");
+    let solve_bars = platform_solve_bars(platforms.iter().copied());
+
+    // Extract conda packages per platform.
+    let empty_vec = vec![];
+    let lock_conda_packages_per_platform = platforms
+        .iter()
+        .map(|platform| locked_conda_packages.get(platform).unwrap_or(&empty_vec));
+
+    // Extract previous locked pypi packages per platform
+    let empty_vec = vec![];
+    let locked_pypi_packages_per_platform = platforms
+        .iter()
+        .map(|platform| locked_pypi_packages.get(platform).unwrap_or(&empty_vec));
+
+    let result = stream::iter(izip!(
+        platforms.iter(),
+        lock_conda_packages_per_platform,
+        locked_pypi_packages_per_platform,
+        solve_bars.iter().cloned(),
+    ))
+    .map(
+        |(platform, locked_conda_packages, locked_pypi_packages, pb)| {
+            pb.reset_elapsed();
+            pb.set_style(
+                indicatif::ProgressStyle::with_template(&format!(
+                    "  {{spinner:.dim}} {:<9} [{{elapsed_precise}}] {{msg:.dim}}",
+                    platform.to_string(),
+                ))
+                .unwrap(),
+            );
+
+            async move {
+                let result = resolve_pypi(
+                    environment,
+                    locked_conda_packages,
+                    locked_pypi_packages,
+                    *platform,
+                    &pb,
+                    python_location,
+                    sdist_resolution,
+                )
+                .await?;
+
+                pb.set_style(
+                    indicatif::ProgressStyle::with_template(&format!(
+                        "  {} {:<9} [{{elapsed_precise}}]",
+                        console::style(console::Emoji("✔", "↳")).green(),
+                        platform.to_string(),
+                    ))
+                    .unwrap(),
+                );
+                pb.finish();
+
+                Ok((*platform, result))
+            }
+        },
+    )
+    // TODO: Hack to ensure we do not encounter file-locking issues in windows, should look at a better solution
+    .buffer_unordered(1)
+    .try_collect()
+    .await;
+
+    // Clear all progress bars
+    for bar in solve_bars {
+        bar.finish_and_clear();
     }
-    let conda_lock_pypi_only = builder.build().into_diagnostic()?;
 
-    // TODO: think of a better way to do this
-    // Seeing as we are not using the content-hash anyways this seems to be fine
-    let latest_lock = CondaLock {
-        metadata: lock_for_conda.metadata,
-        package: conda_lock_pypi_only
-            .package
-            .into_iter()
-            .chain(
-                lock_for_conda
-                    .package
-                    .into_iter()
-                    .filter(|p| matches!(p.kind, LockedDependencyKind::Conda(_))),
-            )
-            .collect(),
-    };
-
-    // Write the conda lock to disk
-    latest_lock
-        .to_path(&project.lock_file_path())
-        .into_diagnostic()?;
-
-    Ok(latest_lock)
+    result
 }
 
 async fn resolve_pypi(
-    project: &Project,
-    records: &[RepoDataRecord],
-    mut locked_packages: LockedPackagesBuilder,
+    environment: &Environment<'_>,
+    locked_conda_records: &[RepoDataRecord],
+    _locked_pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
     platform: Platform,
     pb: &ProgressBar,
-    python_location: &Option<PathBuf>,
+    python_location: Option<&Path>,
     sdist_resolution: SDistResolution,
-) -> miette::Result<LockedPackagesBuilder> {
+) -> miette::Result<LockedPypiPackages> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
     let python_artifacts = pypi::resolve_dependencies(
-        project,
+        environment,
         platform,
-        records,
+        locked_conda_records,
         python_location,
         sdist_resolution,
     )
@@ -277,8 +262,9 @@ async fn resolve_pypi(
     pb.set_message("");
 
     // Add pip packages
+    let mut locked_packages = LockedPypiPackages::with_capacity(python_artifacts.len());
     for python_artifact in python_artifacts {
-        let (artifact, metadata) = project
+        let (artifact, metadata) = environment.project()
             .pypi_package_db()?
             // No need for a WheelBuilder here since any builds should have been done during the
             // [`python::resolve_dependencies`] call.
@@ -287,42 +273,40 @@ async fn resolve_pypi(
             .expect("failed to get metadata for a package for which we have already fetched metadata during solving.")
             .expect("no metadata for a package for which we have already fetched metadata during solving.");
 
-        let locked_package = PypiLockedDependencyBuilder {
+        let pkg_data = PypiPackageData {
             name: python_artifact.name.to_string(),
-            version: python_artifact.version.to_string(),
-            requires_dist: metadata
-                .requires_dist
-                .into_iter()
-                .map(|r| r.to_string())
-                .collect(),
-            requires_python: metadata.requires_python.map(|r| r.to_string()),
-            extras: python_artifact
-                .extras
-                .into_iter()
-                .map(|e| e.as_str().to_string())
-                .collect(),
+            version: python_artifact.version,
+            requires_dist: metadata.requires_dist,
+            requires_python: metadata.requires_python,
             url: artifact.url.clone(),
             hash: artifact
                 .hashes
                 .as_ref()
                 .and_then(|hash| PackageHashes::from_hashes(None, hash.sha256)),
-            source: None,
-            build: None,
         };
 
-        locked_packages.add_locked_package(locked_package)
+        let pkg_env = PypiPackageEnvironmentData {
+            extras: python_artifact
+                .extras
+                .into_iter()
+                .map(|e| e.as_str().to_string())
+                .collect(),
+        };
+
+        locked_packages.push((pkg_data, pkg_env));
     }
+
     Ok(locked_packages)
 }
 
 async fn resolve_platform(
-    project: &Project,
-    existing_lock_file: &CondaLock,
+    environment: &Environment<'_>,
+    existing_lock_file: &LockedCondaPackages,
     sparse_repo_data: Arc<[SparseRepoData]>,
     platform: Platform,
     pb: ProgressBar,
-) -> miette::Result<LockedPackagesBuilder> {
-    let dependencies = project.dependencies(None, Some(platform));
+) -> miette::Result<LockedCondaPackages> {
+    let dependencies = environment.dependencies(None, Some(platform));
     let match_specs = dependencies
         .iter_specs()
         .map(|(name, constraint)| MatchSpec::from_nameless(constraint.clone(), Some(name.clone())))
@@ -332,14 +316,7 @@ async fn resolve_platform(
     let package_names = dependencies.names().cloned().collect_vec();
 
     // Get the virtual packages for this platform
-    let virtual_packages = project.virtual_packages(platform);
-
-    // Get the packages that were contained in the last lock-file. We use these as favored packages
-    // for the solver (which is called `locked` for rattler_solve).
-    let locked_packages = existing_lock_file
-        .get_conda_packages_by_platform(platform)
-        .into_diagnostic()
-        .context("failed to retrieve the conda packages from the previous lock-file")?;
+    let virtual_packages = environment.virtual_packages(platform);
 
     // Get the repodata for the current platform and for NoArch
     pb.set_message("loading repodata");
@@ -351,26 +328,18 @@ async fn resolve_platform(
     let mut records = resolve_conda_dependencies(
         match_specs,
         virtual_packages,
-        locked_packages,
+        // TODO(baszalmstra): We should not need to clone here. We should be able to pass a reference to the data instead.
+        existing_lock_file.clone(),
         available_packages,
     )
     .await?;
 
     // Add purl's for the conda packages that are also available as pypi packages if we need them.
-    if project.manifest.has_pypi_dependencies() {
+    if environment.has_pypi_dependencies() {
         pypi::amend_pypi_purls(&mut records).await?;
     }
 
-    // Update lock file
-    let mut locked_packages = LockedPackagesBuilder::new(platform);
-
-    // Add conda packages
-    for record in records.iter() {
-        let locked_package = CondaLockedDependencyBuilder::try_from(record).into_diagnostic()?;
-        locked_packages.add_locked_package(locked_package);
-    }
-
-    Ok(locked_packages)
+    Ok(records)
 }
 
 /// Solves the conda package environment for the given input. This function is async because it
@@ -381,7 +350,7 @@ async fn resolve_conda_dependencies(
     virtual_packages: Vec<GenericVirtualPackage>,
     locked_packages: Vec<RepoDataRecord>,
     available_packages: Vec<Vec<RepoDataRecord>>,
-) -> miette::Result<Vec<RepoDataRecord>> {
+) -> miette::Result<LockedCondaPackages> {
     // Construct a solver task that we can start solving.
     let task = rattler_solve::SolverTask {
         specs,

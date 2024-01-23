@@ -21,13 +21,21 @@ pub async fn add_remove_task() {
         .unwrap();
 
     let project = pixi.project().unwrap();
-    let tasks = project.tasks(None);
+    let tasks = project.default_environment().tasks(None).unwrap();
     let task = tasks.get("test").unwrap();
     assert!(matches!(task, Task::Plain(s) if s == "echo hello"));
 
     // Remove the task
-    pixi.tasks().remove("test", None).await.unwrap();
-    assert_eq!(pixi.project().unwrap().tasks(None).len(), 0);
+    pixi.tasks().remove("test", None, None).await.unwrap();
+    assert_eq!(
+        pixi.project()
+            .unwrap()
+            .default_environment()
+            .tasks(None)
+            .unwrap()
+            .len(),
+        0
+    );
 }
 
 #[tokio::test]
@@ -49,7 +57,7 @@ pub async fn add_command_types() {
         .unwrap();
 
     let project = pixi.project().unwrap();
-    let tasks = project.tasks(None);
+    let tasks = project.default_environment().tasks(None).unwrap();
     let task2 = tasks.get("test2").unwrap();
     let task = tasks.get("test").unwrap();
     assert!(matches!(task2, Task::Execute(cmd) if matches!(cmd.cmd, CmdArgs::Single(_))));
@@ -64,11 +72,11 @@ pub async fn add_command_types() {
     // Create an alias
     pixi.tasks()
         .alias("testing", None)
-        .with_depends_on(["test"])
+        .with_depends_on(["test", "test3"])
         .execute()
         .unwrap();
     let project = pixi.project().unwrap();
-    let tasks = project.tasks(None);
+    let tasks = project.default_environment().tasks(None).unwrap();
     let task = tasks.get("testing").unwrap();
     assert!(matches!(task, Task::Alias(a) if a.depends_on.get(0).unwrap() == "test"));
 }
@@ -124,7 +132,12 @@ pub async fn add_remove_target_specific_task() {
         .unwrap();
 
     let project = pixi.project().unwrap();
-    let task = *project.tasks(Some(Platform::Win64)).get("test").unwrap();
+    let task = *project
+        .default_environment()
+        .tasks(Some(Platform::Win64))
+        .unwrap()
+        .get("test")
+        .unwrap();
     assert!(matches!(task, Task::Plain(s) if s == "echo only_on_windows"));
 
     // Simple task
@@ -136,11 +149,15 @@ pub async fn add_remove_target_specific_task() {
 
     // Remove the task
     pixi.tasks()
-        .remove("test", Some(Platform::Win64))
+        .remove("test", Some(Platform::Win64), None)
         .await
         .unwrap();
     assert_eq!(
-        project.tasks(Some(Platform::Win64)).len(),
+        project
+            .default_environment()
+            .tasks(Some(Platform::Win64))
+            .unwrap()
+            .len(),
         // The default task is still there
         1
     );

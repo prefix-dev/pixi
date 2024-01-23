@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::io::{self, Write};
 use std::{cmp::Ordering, path::PathBuf};
 
 use clap::Parser;
@@ -80,6 +81,7 @@ where
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    let stdout = io::stdout();
     let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
 
     let channel_config = ChannelConfig::default();
@@ -116,20 +118,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         let limit = args.limit;
 
-        search_package_by_wildcard(package_name, &package_name_filter, repo_data, limit).await?;
+        search_package_by_wildcard(package_name, &package_name_filter, repo_data, limit, stdout)
+            .await?;
     }
     // If package name filter doesn't contain * (wildcard), it will search and display specific package info (if any package is found)
     else {
         let package_name = PackageName::try_from(package_name_filter).into_diagnostic()?;
-        search_exact_package(package_name, repo_data).await?;
+        search_exact_package(package_name, repo_data, stdout).await?;
     }
 
     Ok(())
 }
 
-async fn search_exact_package(
+async fn search_exact_package<W: Write>(
     package_name: PackageName,
     repo_data: Vec<SparseRepoData>,
+    out: W,
 ) -> miette::Result<()> {
     let package_name_search = package_name.clone();
     let packages = await_in_progress(
@@ -150,101 +154,126 @@ async fn search_exact_package(
 
     let package = packages.last();
     if let Some(package) = package {
-        print_package_info(package);
+        if let Err(e) = print_package_info(package, out) {
+            if e.kind() != std::io::ErrorKind::BrokenPipe {
+                return Err(e).into_diagnostic();
+            }
+        }
     }
 
     Ok(())
 }
 
-fn print_package_info(package: &RepoDataRecord) {
-    println!();
+fn print_package_info<W: Write>(package: &RepoDataRecord, mut out: W) -> io::Result<()> {
+    writeln!(out)?;
 
     let package = package.clone();
     let package_name = package.package_record.name.as_source();
     let build = &package.package_record.build;
     let package_info = format!("{} {}", console::style(package_name), console::style(build));
-    println!("{}", package_info);
-    println!("{}\n", "-".repeat(package_info.chars().count()));
+    writeln!(out, "{}", package_info)?;
+    writeln!(out, "{}\n", "-".repeat(package_info.chars().count()))?;
 
-    println!(
+    writeln!(
+        out,
         "{:19} {:19}",
         console::style("Name"),
         console::style(package_name)
-    );
+    )?;
 
-    println!(
+    writeln!(
+        out,
         "{:19} {:19}",
         console::style("Version"),
         console::style(package.package_record.version)
-    );
+    )?;
 
-    println!(
+    writeln!(
+        out,
         "{:19} {:19}",
         console::style("Build"),
         console::style(build)
-    );
+    )?;
 
     let size = match package.package_record.size {
         Some(size) => size.to_string(),
         None => String::from("Not found."),
     };
-    println!("{:19} {:19}", console::style("Size"), console::style(size));
+    writeln!(
+        out,
+        "{:19} {:19}",
+        console::style("Size"),
+        console::style(size)
+    )?;
 
     let license = match package.package_record.license {
         Some(license) => license,
         None => String::from("Not found."),
     };
-    println!(
+    writeln!(
+        out,
         "{:19} {:19}",
         console::style("License"),
         console::style(license)
-    );
+    )?;
 
-    println!(
+    writeln!(
+        out,
         "{:19} {:19}",
         console::style("Subdir"),
         console::style(package.package_record.subdir)
-    );
+    )?;
 
-    println!(
+    writeln!(
+        out,
         "{:19} {:19}",
         console::style("File Name"),
         console::style(package.file_name)
-    );
+    )?;
 
-    println!(
+    writeln!(
+        out,
         "{:19} {:19}",
         console::style("URL"),
         console::style(package.url)
-    );
+    )?;
 
     let md5 = match package.package_record.md5 {
         Some(md5) => format!("{:x}", md5),
         None => "Not available".to_string(),
     };
-    println!("{:19} {:19}", console::style("MD5"), console::style(md5));
+    writeln!(
+        out,
+        "{:19} {:19}",
+        console::style("MD5"),
+        console::style(md5)
+    )?;
 
     let sha256 = match package.package_record.sha256 {
         Some(sha256) => format!("{:x}", sha256),
         None => "Not available".to_string(),
     };
-    println!(
+    writeln!(
+        out,
         "{:19} {:19}",
         console::style("SHA256"),
         console::style(sha256),
-    );
+    )?;
 
-    println!("\nDependencies:");
+    writeln!(out, "\nDependencies:")?;
     for dependency in package.package_record.depends {
-        println!(" - {}", dependency);
+        writeln!(out, " - {}", dependency)?;
     }
+
+    Ok(())
 }
 
-async fn search_package_by_wildcard(
+async fn search_package_by_wildcard<W: Write>(
     package_name: PackageName,
     package_name_filter: &str,
     repo_data: Vec<SparseRepoData>,
     limit: usize,
+    out: W,
 ) -> miette::Result<()> {
     let wildcard_pattern = Regex::new(&format!("^{}$", &package_name_filter.replace('*', ".*")))
         .expect("Expect only characters and/or * (wildcard).");
@@ -301,18 +330,23 @@ async fn search_package_by_wildcard(
         let _ = packages.split_off(limit);
     }
 
-    print_matching_packages(packages);
+    if let Err(e) = print_matching_packages(packages, out) {
+        if e.kind() != std::io::ErrorKind::BrokenPipe {
+            return Err(e).into_diagnostic();
+        }
+    }
 
     Ok(())
 }
 
-fn print_matching_packages(packages: Vec<RepoDataRecord>) {
-    println!(
+fn print_matching_packages<W: Write>(packages: Vec<RepoDataRecord>, mut out: W) -> io::Result<()> {
+    writeln!(
+        out,
         "{:40} {:19} {:19}",
         console::style("Package").bold(),
         console::style("Version").bold(),
         console::style("Channel").bold(),
-    );
+    )?;
 
     for package in packages {
         // TODO: change channel fetch logic to be more robust
@@ -324,11 +358,14 @@ fn print_matching_packages(packages: Vec<RepoDataRecord>) {
         let package_name = package.package_record.name;
         let version = package.package_record.version.as_str();
 
-        println!(
+        writeln!(
+            out,
             "{:40} {:19} {:19}",
             console::style(package_name.as_source()).cyan().bright(),
             console::style(version),
             console::style(channel_name),
-        );
+        )?;
     }
+
+    Ok(())
 }

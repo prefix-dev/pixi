@@ -3,6 +3,7 @@ mod common;
 use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
+use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
 use pixi::project::{DependencyType, SpecType};
 use rattler_conda_types::{PackageName, Platform};
 use rip::resolve::SDistResolution;
@@ -46,9 +47,9 @@ async fn add_functionality() {
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_matchspec("rattler==3"));
-    assert!(!lock.contains_matchspec("rattler==2"));
-    assert!(!lock.contains_matchspec("rattler==1"));
+    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==3"));
+    assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==2"));
+    assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==1"));
 }
 
 /// Test that we get the union of all packages in the lockfile for the run, build and host
@@ -106,9 +107,13 @@ async fn add_functionality_union() {
 
     // Lock file should contain all packages as well
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_matchspec("rattler==1"));
-    assert!(lock.contains_matchspec("libcomputer==1.2"));
-    assert!(lock.contains_matchspec("libidk==3.1"));
+    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==1"));
+    assert!(lock.contains_match_spec(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "libcomputer==1.2"
+    ));
+    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "libidk==3.1"));
 }
 
 /// Test adding a package for a specific OS
@@ -145,7 +150,7 @@ async fn add_functionality_os() {
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_matchspec_for_platform("rattler==1", Platform::LinuxS390X));
+    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::LinuxS390X, "rattler==1"));
 }
 
 /// Test the `pixi add --pypi` functionality
@@ -208,18 +213,21 @@ async fn add_pypi_functionality() {
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_package(&PackageName::from_str("pipx").unwrap()));
-    assert!(lock.contains_pep508_requirement_for_platform(
-        pep508_rs::Requirement::from_str("boto3>=1.33").unwrap(),
-        Platform::Osx64
+    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "pipx"));
+    assert!(lock.contains_pep508_requirement(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::Osx64,
+        pep508_rs::Requirement::from_str("boto3>=1.33").unwrap()
     ));
-    assert!(lock.contains_pep508_requirement_for_platform(
+    assert!(lock.contains_pep508_requirement(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
         pep508_rs::Requirement::from_str("pytest[all]").unwrap(),
-        Platform::Linux64
     ));
-    assert!(lock.contains_pep508_requirement_for_platform(
+    assert!(lock.contains_pep508_requirement(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
         pep508_rs::Requirement::from_str("requests [security,tests] >= 2.8.1, == 2.8.*").unwrap(),
-        Platform::Linux64
     ));
 }
 
