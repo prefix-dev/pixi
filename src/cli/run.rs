@@ -6,6 +6,7 @@ use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use rattler_conda_types::Platform;
 
 use crate::environment::LockFileUsage;
+use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{
     ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TraversalError,
 };
@@ -90,6 +91,9 @@ enum TaskExecutionError {
 
     #[error(transparent)]
     TraverseError(#[from] TraversalError),
+
+    #[error(transparent)]
+    UnsupportedPlatformError(#[from] UnsupportedPlatformError),
 }
 
 /// Called to execute a single command.
@@ -130,8 +134,8 @@ async fn execute_task<'p>(
     if status_code == 127 {
         let available_tasks = task
             .project()
-            .manifest
-            .tasks(Some(Platform::current()))
+            .default_environment()
+            .tasks(Some(Platform::current()))?
             .into_keys()
             .sorted()
             .collect_vec();

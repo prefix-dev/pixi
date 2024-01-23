@@ -332,12 +332,14 @@ impl TasksControl<'_> {
         &self,
         name: impl ToString,
         platform: Option<Platform>,
+        feature_name: Option<String>,
     ) -> miette::Result<()> {
         task::execute(task::Args {
             manifest_path: Some(self.pixi.manifest_path()),
             operation: task::Operation::Remove(task::RemoveArgs {
                 names: vec![name.to_string()],
                 platform,
+                feature: feature_name,
             }),
         })
     }
