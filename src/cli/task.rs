@@ -1,10 +1,12 @@
-use crate::project::manifest::FeatureName;
+use crate::project::manifest::{EnvironmentName, FeatureName};
 use crate::task::{quote, Alias, CmdArgs, Execute, Task};
 use crate::Project;
 use clap::Parser;
 use itertools::Itertools;
+use miette::miette;
 use rattler_conda_types::Platform;
 use std::path::PathBuf;
+use std::str::FromStr;
 use toml_edit::{Array, Item, Table, Value};
 
 #[derive(Parser, Debug)]
@@ -35,6 +37,10 @@ pub struct RemoveArgs {
     /// The platform for which the task should be removed
     #[arg(long, short)]
     pub platform: Option<Platform>,
+
+    /// The feature for which the task should be removed
+    #[arg(long, short)]
+    pub feature: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -84,6 +90,11 @@ pub struct AliasArgs {
 pub struct ListArgs {
     #[arg(long, short)]
     pub summary: bool,
+
+    /// The environment the list should be generated for
+    /// If not specified, the default environment is used.
+    #[arg(long, short)]
+    pub environment: Option<String>,
 }
 
 impl From<AddArgs> for Task {
@@ -153,7 +164,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 .add_task(name, task.clone(), args.platform, &feature)?;
             project.save()?;
             eprintln!(
-                "{}Added task {}: {}",
+                "{}Added task `{}`: {}",
                 console::style(console::Emoji("✔ ", "+")).green(),
                 console::style(&name).bold(),
                 task,
@@ -161,11 +172,14 @@ pub fn execute(args: Args) -> miette::Result<()> {
         }
         Operation::Remove(args) => {
             let mut to_remove = Vec::new();
+            let feature = args
+                .feature
+                .map_or(FeatureName::Default, FeatureName::Named);
             for name in args.names.iter() {
                 if let Some(platform) = args.platform {
                     if !project
                         .manifest
-                        .tasks(Some(platform))
+                        .tasks(Some(platform), &feature)?
                         .contains_key(name.as_str())
                     {
                         eprintln!(
@@ -176,11 +190,16 @@ pub fn execute(args: Args) -> miette::Result<()> {
                         );
                         continue;
                     }
-                } else if !project.manifest.tasks(None).contains_key(name.as_str()) {
+                } else if !project
+                    .manifest
+                    .tasks(None, &feature)?
+                    .contains_key(name.as_str())
+                {
                     eprintln!(
-                        "{}Task {} does not exist",
+                        "{}Task `{}` does not exist for the `{}` feature",
                         console::style(console::Emoji("❌ ", "X")).red(),
                         console::style(&name).bold(),
+                        console::style(&feature).bold(),
                     );
                     continue;
                 }
@@ -207,10 +226,10 @@ pub fn execute(args: Args) -> miette::Result<()> {
             }
 
             for (name, platform) in to_remove {
-                project.manifest.remove_task(name, platform)?;
+                project.manifest.remove_task(name, platform, &feature)?;
                 project.save()?;
                 eprintln!(
-                    "{}Removed task {} ",
+                    "{}Removed task `{}` ",
                     console::style(console::Emoji("✔ ", "+")).green(),
                     console::style(&name).bold(),
                 );
@@ -224,15 +243,18 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 .add_task(name, task.clone(), args.platform, &FeatureName::Default)?;
             project.save()?;
             eprintln!(
-                "{} Added alias {}: {}",
+                "{} Added alias `{}`: {}",
                 console::style("@").blue(),
                 console::style(&name).bold(),
                 task,
             );
         }
         Operation::List(args) => {
+            let env = EnvironmentName::from_str(args.environment.as_deref().unwrap_or("default"))?;
             let tasks = project
-                .tasks(Some(Platform::current()))
+                .environment(&env)
+                .ok_or(miette!("Environment `{}` not found in project", env))?
+                .tasks(Some(Platform::current()))?
                 .into_keys()
                 .collect_vec();
             if tasks.is_empty() {
