@@ -12,6 +12,8 @@ use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rip::index::PackageDb;
 use rip::resolve::SDistResolution;
+use std::error::Error;
+use std::fmt::Write;
 use std::{io::ErrorKind, path::Path};
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
@@ -162,18 +164,27 @@ pub async fn get_up_to_date_prefix(
     let update_lock_file = if usage.should_check_if_out_of_date() {
         match lock_file_satisfies_project(project, &lock_file) {
             Err(err) => {
-                tracing::info!(
-                    "the lock-file is not up to date with the project.\n{:?}",
-                    err
-                );
+                // Construct an error message
+                let mut report = String::new();
+                let mut err: &dyn Error = &err;
+                write!(&mut report, "{}", err).unwrap();
+                while let Some(source) = err.source() {
+                    write!(&mut report, "\nbecause {}", source).unwrap();
+                    err = source
+                }
+
+                tracing::info!("lock-file is not up to date with the project\nbecause {report}",);
 
                 if !usage.allows_lock_file_updates() {
-                    miette::bail!("lockfile not up-to-date with the project");
+                    miette::bail!("lock-file not up-to-date with the project");
                 }
 
                 true
             }
-            Ok(_) => false,
+            Ok(_) => {
+                tracing::debug!("the lock-file is up to date with the project.",);
+                false
+            }
         }
     } else {
         false

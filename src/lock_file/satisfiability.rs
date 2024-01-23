@@ -16,7 +16,13 @@ use std::{
 };
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
+pub enum Unsat {
+    #[error("the environment '{0}' is unsatisfiable")]
+    EnvironmentUnsatisfiable(String, #[source] EnvironmentUnsat),
+}
+
+#[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
     #[error("the environment is not present in the lock-file")]
     Missing,
@@ -28,7 +34,7 @@ pub enum EnvironmentUnsat {
     PlatformUnsatisfiable(Platform, #[source] PlatformUnsat),
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum PlatformUnsat {
     #[error("could not satisfy '{0}' (required by '{1}')")]
     UnsatisfiableMatchSpec(MatchSpec, String),
@@ -62,12 +68,12 @@ pub enum PlatformUnsat {
 ///
 /// This function checks all environments and all platforms of each environment. The function early
 /// outs if verification of any environment fails.
-pub fn lock_file_satisfies_project(
-    project: &Project,
-    lock_file: &LockFile,
-) -> Result<(), EnvironmentUnsat> {
+pub fn lock_file_satisfies_project(project: &Project, lock_file: &LockFile) -> Result<(), Unsat> {
     for env in project.environments() {
-        verify_environment_satisfiability(&env, lock_file.environment(env.name().as_str()))?
+        verify_environment_satisfiability(&env, lock_file.environment(env.name().as_str()))
+            .map_err(|unsat| {
+                Unsat::EnvironmentUnsatisfiable(env.name().as_str().to_string(), unsat)
+            })?
     }
 
     Ok(())
@@ -222,7 +228,17 @@ pub fn verify_conda_platform_satisfiability(
                 }
 
                 // Otherwise, find the record that matches the spec.
-                name_to_record.get(name.as_normalized()).copied()
+                name_to_record
+                    .get(name.as_normalized())
+                    .copied()
+                    .and_then(|idx| {
+                        let record = &locked_environment[idx];
+                        if record.satisfies(&spec) {
+                            Some(idx)
+                        } else {
+                            None
+                        }
+                    })
             }
         };
 
