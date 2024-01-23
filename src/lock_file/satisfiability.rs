@@ -9,6 +9,7 @@ use pep440_rs::VersionSpecifiers;
 use pep508_rs::Requirement;
 use rattler_conda_types::{MatchSpec, ParseMatchSpecError, Platform};
 use rattler_lock::{CondaPackage, LockFile, Package, PypiPackage};
+use rip::types::NormalizedPackageName;
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
@@ -94,7 +95,7 @@ pub fn verify_environment_satisfiability(
         .into_iter()
         .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()))
         .collect_vec();
-    if locked_environment.channels().eq(&channels) {
+    if !locked_environment.channels().eq(&channels) {
         return Err(EnvironmentUnsat::ChannelsMismatch);
     }
 
@@ -319,9 +320,18 @@ pub fn verify_pypi_platform_satisfiability(
 
     // Iterate over all the requirements and find a packages that match the requirements.
     while let Some((requirement, source)) = requirements.pop() {
+        // Convert the name to a normalized string. If the name is not valid, we also won't be able
+        // to satisfy the requirement.
+        let Ok(name) = NormalizedPackageName::from_str(requirement.name.as_str()) else {
+            return Err(PlatformUnsat::UnsatisfiableRequirement(
+                requirement,
+                source.to_string(),
+            ));
+        };
+
         // Look-up the identifier that matches the requirement
         let matched_package = name_to_package_identifiers
-            .get(requirement.name.as_str())
+            .get(&name)
             .into_iter()
             .flat_map(|idxs| idxs.iter().map(|idx| &package_identifiers[*idx]))
             .find(|(identifier, _pypi_package_idx)| identifier.satisfies(&requirement));

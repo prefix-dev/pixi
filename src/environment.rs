@@ -162,7 +162,7 @@ pub async fn get_up_to_date_prefix(
     let update_lock_file = if usage.should_check_if_out_of_date() {
         match lock_file_satisfies_project(project, &lock_file) {
             Err(err) => {
-                tracing::debug!(
+                tracing::info!(
                     "the lock-file is not up to date with the project.\n{:?}",
                     err
                 );
@@ -243,12 +243,13 @@ pub async fn get_up_to_date_prefix(
     // to the `locked_pypi_records` or to the `updated_pypi_records`.
     let mut updated_pypi_records = None;
     let pypi_records: &_ = if project.has_pypi_dependencies() && update_lock_file {
+        let python_path = python_status.location().map(|p| prefix.root().join(p));
         updated_pypi_records.insert(
             lock_file::update_lock_file_for_pypi(
                 &environment,
                 repodata_records,
                 &locked_pypi_records,
-                python_status.location(),
+                python_path.as_deref(),
                 sdist_resolution,
             )
             .await?,
