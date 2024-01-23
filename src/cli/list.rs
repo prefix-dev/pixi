@@ -4,8 +4,9 @@ use clap::Parser;
 use comfy_table::presets::NOTHING;
 use comfy_table::{Attribute, Cell, Color, ContentArrangement, Table};
 use human_bytes::human_bytes;
-use rattler_conda_types::{Channel, ChannelConfig, Platform};
-use rattler_lock::{LockedDependency, LockedDependencyKind};
+use itertools::Itertools;
+use rattler_conda_types::Platform;
+use rattler_lock::Package;
 use serde::Serialize;
 
 use crate::lock_file::load_lock_file;
@@ -69,26 +70,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let platform = args.platform.unwrap_or_else(Platform::current);
 
     // Load the environment
-    // TODO: NOTE(hadim): make it an argument once environments are implemented.
-    // let environment = project.default_environment();
+    let environment = project.default_environment();
 
     // Load the lockfile
-    let lockfile = load_lock_file(&project)
+    let lock_file = load_lock_file(&project)
         .await
         .map_err(|_| miette::miette!("Cannot load lockfile. Did you run `pixi install` first?"))?;
 
-    let locked_deps = lockfile.packages_for_platform(platform).collect::<Vec<_>>();
+    // Get all the packages in the environment.
+    let locked_deps = lock_file
+        .environment(environment.name().as_str())
+        .and_then(|env| env.packages(platform).map(Vec::from_iter))
+        .unwrap_or_default();
 
     // Get the explicit project dependencies
-    let project_dependency_names: Vec<String> = {
-        let dependencies = project
-            .default_environment()
-            .dependencies(None, Some(platform));
-        dependencies
-            .names()
-            .map(|p| p.as_source().to_string())
-            .collect()
-    };
+    let project_dependency_names = environment
+        .dependencies(None, Some(platform))
+        .names()
+        .map(|p| p.as_source().to_string())
+        .collect_vec();
 
     // Convert the the list of package record to specific output format
     let mut packages_to_output = locked_deps
@@ -207,58 +207,27 @@ fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
     println!("{}", json_string);
 }
 
-fn create_package_to_output(
-    p: &LockedDependency,
-    project_dependency_names: &[String],
-) -> PackageToOutput {
-    let name = p.name.clone();
-    let version = p.version.clone();
+fn create_package_to_output(p: &Package, project_dependency_names: &[String]) -> PackageToOutput {
+    let name = p.name().to_string();
+    let version = p.version().into_owned();
 
-    let kind = match p.kind {
-        LockedDependencyKind::Conda(_) => "conda".to_string(),
-        LockedDependencyKind::Pypi(_) => "pypi".to_string(),
+    let kind = match p {
+        Package::Conda(_) => "conda".to_string(),
+        Package::Pypi(_) => "pypi".to_string(),
     };
-    let build = match p.kind {
-        LockedDependencyKind::Conda(_) => p.as_conda().unwrap().build.clone(),
-        LockedDependencyKind::Pypi(_) => p.as_pypi().unwrap().build.clone(),
+    let build = match p {
+        Package::Conda(pkg) => Some(pkg.package_record().build.clone()),
+        Package::Pypi(_) => None,
     };
 
-    let size_bytes = match p.kind {
-        LockedDependencyKind::Conda(_) => p.as_conda().unwrap().size,
-        LockedDependencyKind::Pypi(_) => None,
+    let size_bytes = match p {
+        Package::Conda(pkg) => pkg.package_record().size,
+        Package::Pypi(_) => None,
     };
 
-    let source = match p.kind {
-        LockedDependencyKind::Conda(_) => {
-            let dirty_name = Channel::from_url(
-                p.as_conda().unwrap().url.clone(),
-                Some(vec![Platform::current()]),
-                &ChannelConfig::default(),
-            )
-            .name;
-
-            // NOTE(hadim): this a bit fragile and custom. Consider making it more robust
-            // with a dedicated upstream function in rattler maybe.
-            let name = match dirty_name {
-                Some(dirty_name) => dirty_name
-                    .split_once('/')
-                    .map(|(name, _)| name)
-                    .unwrap_or(&dirty_name)
-                    .to_string(),
-                None => "".to_string(),
-            };
-
-            Some(name)
-        }
-        LockedDependencyKind::Pypi(_) => {
-            let source = p.as_pypi().unwrap().source.clone();
-
-            // NOTE(hadim): currently not set at least for `examples/pypi/pixi.toml
-            match source {
-                Some(source) => Some(source.to_string()),
-                None => Some("".to_string()),
-            }
-        }
+    let source = match p {
+        Package::Conda(pkg) => pkg.file_name().map(ToOwned::to_owned),
+        Package::Pypi(_) => None,
     };
 
     let is_explicit = project_dependency_names.contains(&name);

@@ -119,13 +119,25 @@ pub async fn execute() -> miette::Result<()> {
     console::set_colors_enabled(use_colors);
     console::set_colors_enabled_stderr(use_colors);
 
-    let (level_filter, pixi_level) = match args.verbose.log_level_filter() {
-        clap_verbosity_flag::LevelFilter::Off => (LevelFilter::OFF, LevelFilter::OFF),
-        clap_verbosity_flag::LevelFilter::Error => (LevelFilter::ERROR, LevelFilter::WARN),
-        clap_verbosity_flag::LevelFilter::Warn => (LevelFilter::WARN, LevelFilter::INFO),
-        clap_verbosity_flag::LevelFilter::Info => (LevelFilter::INFO, LevelFilter::INFO),
-        clap_verbosity_flag::LevelFilter::Debug => (LevelFilter::DEBUG, LevelFilter::DEBUG),
-        clap_verbosity_flag::LevelFilter::Trace => (LevelFilter::TRACE, LevelFilter::TRACE),
+    let (low_level_filter, level_filter, pixi_level) = match args.verbose.log_level_filter() {
+        clap_verbosity_flag::LevelFilter::Off => {
+            (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::OFF)
+        }
+        clap_verbosity_flag::LevelFilter::Error => {
+            (LevelFilter::ERROR, LevelFilter::ERROR, LevelFilter::WARN)
+        }
+        clap_verbosity_flag::LevelFilter::Warn => {
+            (LevelFilter::WARN, LevelFilter::WARN, LevelFilter::INFO)
+        }
+        clap_verbosity_flag::LevelFilter::Info => {
+            (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::INFO)
+        }
+        clap_verbosity_flag::LevelFilter::Debug => {
+            (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::DEBUG)
+        }
+        clap_verbosity_flag::LevelFilter::Trace => {
+            (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE)
+        }
     };
 
     let env_filter = EnvFilter::builder()
@@ -135,6 +147,11 @@ pub async fn execute() -> miette::Result<()> {
         // filter logs from apple codesign because they are very noisy
         .add_directive("apple_codesign=off".parse().into_diagnostic()?)
         .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?)
+        .add_directive(
+            format!("resolvo={}", low_level_filter)
+                .parse()
+                .into_diagnostic()?,
+        )
         .add_directive(
             format!("rattler_installs_packages={}", pixi_level)
                 .parse()

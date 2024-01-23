@@ -4,6 +4,8 @@ use crate::common::builders::string_from_iter;
 use crate::common::package_database::{Package, PackageDatabase};
 use common::{LockFileExt, PixiControl};
 use pixi::cli::{run, LockFileUsageArgs};
+use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
+use rattler_conda_types::Platform;
 use serial_test::serial;
 use tempfile::TempDir;
 
@@ -19,7 +21,11 @@ async fn install_run_python() {
 
     // Check if lock has python version
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_matchspec("python==3.11.0"));
+    assert!(lock.contains_match_spec(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "python==3.11.0"
+    ));
 
     // Check if python is installed and can be run
     let result = pixi
@@ -77,8 +83,8 @@ async fn test_incremental_lock_file() {
 
     // Get the created lock-file
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_matchspec("foo ==1"));
-    assert!(lock.contains_matchspec("bar ==1"));
+    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "foo ==1"));
+    assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "bar ==1"));
 
     // Add version 2 of both `foo` and `bar`.
     package_database.add_package(Package::build("bar", "2").finish());
@@ -98,11 +104,11 @@ async fn test_incremental_lock_file() {
 
     let lock = pixi.lock_file().await.unwrap();
     assert!(
-        lock.contains_matchspec("foo ==2"),
+        lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "foo ==2"),
         "expected `foo` to be on version 2 because we changed the requirement"
     );
     assert!(
-        lock.contains_matchspec("bar ==1"),
+        lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "bar ==1"),
         "expected `bar` to remain locked to version 1."
     );
 }
@@ -127,7 +133,11 @@ async fn install_locked() {
 
     // Check if it didn't accidentally update the lockfile
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_matchspec("python==3.10.0"));
+    assert!(lock.contains_match_spec(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "python==3.10.0"
+    ));
 
     // After an install with lockfile update the locked install should succeed.
     pixi.install().await.unwrap();
@@ -135,7 +145,11 @@ async fn install_locked() {
 
     // Check if lock has python version updated
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_matchspec("python==3.9.0"));
+    assert!(lock.contains_match_spec(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "python==3.9.0"
+    ));
 }
 
 /// Test `pixi install/run --frozen` functionality
@@ -158,7 +172,11 @@ async fn install_frozen() {
 
     // Check if it didn't accidentally update the lockfile
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_matchspec("python==3.9.1"));
+    assert!(lock.contains_match_spec(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "python==3.9.1"
+    ));
 
     // Check if running with frozen doesn't suddenly install the latest update.
     let result = pixi

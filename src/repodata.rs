@@ -1,3 +1,4 @@
+use crate::project::Environment;
 use crate::{config, progress, project::Project};
 use futures::{stream, StreamExt, TryStreamExt};
 use indicatif::ProgressBar;
@@ -9,10 +10,17 @@ use rattler_repodata_gateway::{fetch, sparse::SparseRepoData};
 use std::{path::Path, time::Duration};
 
 impl Project {
+    // TODO: Remove this function once everything is migrated to the new environment system.
+    pub async fn fetch_sparse_repodata(&self) -> miette::Result<Vec<SparseRepoData>> {
+        self.default_environment().fetch_sparse_repodata().await
+    }
+}
+
+impl Environment<'_> {
     pub async fn fetch_sparse_repodata(&self) -> miette::Result<Vec<SparseRepoData>> {
         let channels = self.channels();
         let platforms = self.platforms();
-        fetch_sparse_repodata(channels, platforms, self.authenticated_client()).await
+        fetch_sparse_repodata(channels, platforms, self.project().authenticated_client()).await
     }
 }
 
