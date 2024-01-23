@@ -137,7 +137,7 @@ impl Manifest {
         &self,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-    ) -> miette::Result<HashMap<&str, &Task>> {
+    ) -> Result<HashMap<&str, &Task>, GetFeatureError> {
         Ok(self
             .feature(feature_name)
             // Return error if feature does not exist
