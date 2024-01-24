@@ -7,7 +7,7 @@ use rattler_shell::{
 };
 
 use crate::{
-    environment::{get_up_to_date_prefix_from_environment, LockFileUsage},
+    environment::{get_up_to_date_prefix, LockFileUsage},
     prefix::Prefix,
     Project,
 };
@@ -25,7 +25,7 @@ async fn generate_activation_script(shell: Option<ShellEnum>) -> miette::Result<
     let project = Project::discover()?;
     let environment = project.default_environment();
 
-    get_up_to_date_prefix_from_environment(
+    get_up_to_date_prefix(
         &environment,
         LockFileUsage::Frozen,
         false,

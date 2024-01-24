@@ -9,7 +9,7 @@ use rattler_shell::{
 };
 
 use crate::{
-    environment::{get_up_to_date_prefix_from_environment, LockFileUsage},
+    environment::{get_up_to_date_prefix, LockFileUsage},
     prefix::Prefix,
     progress::await_in_progress,
     project::{manifest::EnvironmentName, Environment},
@@ -97,7 +97,7 @@ pub async fn get_activation_env<'p>(
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
-    let prefix = get_up_to_date_prefix_from_environment(
+    let prefix = get_up_to_date_prefix(
         environment,
         lock_file_usage,
         false,
