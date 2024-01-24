@@ -6,7 +6,7 @@ use futures::{stream, Stream, StreamExt, TryFutureExt, TryStreamExt};
 use indexmap::IndexSet;
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, WrapErr};
+use miette::{Diagnostic, IntoDiagnostic, WrapErr};
 
 use crate::consts::PROJECT_MANIFEST;
 use crate::project::manifest::SystemRequirements;
@@ -105,9 +105,11 @@ pub async fn update_python_distributions(
             sdist_resolution,
             python_location: PythonLocation::Custom(python_location),
             clean_env: false,
+            on_wheel_build_failure: Default::default(),
         },
         HashMap::default(),
-    );
+    )
+    .into_diagnostic()?;
 
     // Start downloading the python packages that we want in the background.
     let (package_stream, package_stream_pb) = stream_python_artifacts(

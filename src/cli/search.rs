@@ -6,13 +6,13 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig, PackageName, Platform, RepoDataRecord};
-use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
 
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
+use crate::auth::make_client;
 use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata, Project};
 
 /// Search a package, output will list the latest version of package
@@ -103,7 +103,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let package_name_filter = args.package;
-    let authenticated_client = AuthenticatedClient::default();
+    let authenticated_client = make_client();
     let repo_data = fetch_sparse_repodata(
         channels.iter().map(AsRef::as_ref),
         [Platform::current()],

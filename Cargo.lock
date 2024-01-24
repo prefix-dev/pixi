@@ -338,16 +338,16 @@ dependencies = [
 
 [[package]]
 name = "async_http_range_reader"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f19c246be3876c6b6b6ae210174c137140de56e7588198ada05de9b9884e88a5"
+version = "0.4.0"
+source = "git+https://github.com/mamba-org/rattler?rev=b002f38fa9c9d855d450519ccccc1b7c491ee140#b002f38fa9c9d855d450519ccccc1b7c491ee140"
 dependencies = [
  "bisection",
- "futures 0.3.30",
+ "futures",
  "http-content-range",
  "itertools 0.11.0",
  "memmap2 0.9.3",
  "reqwest",
+ "reqwest-middleware",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -513,16 +513,6 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
-version = "0.4.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "206fdffcfa2df7cbe15601ef46c813fce0965eb3286db6b56c583b814b51c81c"
-dependencies = [
- "byteorder",
- "iovec",
-]
-
-[[package]]
-name = "bytes"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2bd12c1caf447e69cd4528f47f94d203fd2582878ecb9e9465484c4148a8223"
@@ -534,9 +524,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bdb116a6ef3f6c3698828873ad02c3014b3c85cadb88496095628e3ef1e347f8"
 dependencies = [
  "bzip2-sys",
- "futures 0.1.31",
  "libc",
- "tokio-io",
 ]
 
 [[package]]
@@ -558,7 +546,7 @@ checksum = "142316461ed3a3dfcba10417317472da5bfd0461e4d276bf7c07b330766d9490"
 dependencies = [
  "digest",
  "either",
- "futures 0.3.30",
+ "futures",
  "hex",
  "libc",
  "memmap2 0.5.10",
@@ -944,7 +932,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc8ddb4362a79ef3d264df363eef77c25c976964132bf672b682c5816ebdcfd1"
 dependencies = [
  "anyhow",
- "futures 0.3.30",
+ "futures",
  "glob",
  "monch",
  "os_pipe",
@@ -1254,12 +1242,6 @@ checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 
 [[package]]
 name = "futures"
-version = "0.1.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a471a38ef8ed83cd6e40aa59c1ffe17db6855c18e3604d9c4ed8c08ebc28678"
-
-[[package]]
-name = "futures"
 version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "645c6916888f6cb6350d2550b80fb63e734897a8498abe35cfb732b6487804b0"
@@ -1431,7 +1413,7 @@ version = "0.3.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb2c4422095b67ee78da96fbb51a4cc413b3b25883c7717ff7ca1ab31022c9c9"
 dependencies = [
- "bytes 1.5.0",
+ "bytes",
  "fnv",
  "futures-core",
  "futures-sink",
@@ -1516,7 +1498,7 @@ version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8947b1a6fad4393052c7ba1f4cd97bed3e953a95c79c92ad9b051a04611d9fbb"
 dependencies = [
- "bytes 1.5.0",
+ "bytes",
  "fnv",
  "itoa",
 ]
@@ -1527,7 +1509,7 @@ version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ceab25649e9960c0311ea418d17bee82c0dcec1bd053b5f9a66e265a693bed2"
 dependencies = [
- "bytes 1.5.0",
+ "bytes",
  "http",
  "pin-project-lite",
 ]
@@ -1600,7 +1582,7 @@ version = "0.14.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf96e135eb83a2a8ddf766e426a841d8ddd7449d5f00d34ea02b41d2f19eef80"
 dependencies = [
- "bytes 1.5.0",
+ "bytes",
  "futures-channel",
  "futures-core",
  "futures-util",
@@ -1638,7 +1620,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
 dependencies = [
- "bytes 1.5.0",
+ "bytes",
  "hyper",
  "native-tls",
  "tokio",
@@ -1779,15 +1761,6 @@ dependencies = [
  "hermit-abi",
  "libc",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "iovec"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2b3ea6ff95e175473f8ffe6a7eb7c00d054240321b84c57051175fe3c1e075e"
-dependencies = [
- "libc",
 ]
 
 [[package]]
@@ -2112,6 +2085,16 @@ name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
+
+[[package]]
+name = "mime_guess"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4192263c238a5f0d0c6bfd21f336a313a4ce1c450542449ca191bb657b4642ef"
+dependencies = [
+ "mime",
+ "unicase",
+]
 
 [[package]]
 name = "minijinja"
@@ -2680,6 +2663,7 @@ dependencies = [
 name = "pixi"
 version = "0.12.0"
 dependencies = [
+ "anyhow",
  "assert_matches",
  "async-once-cell",
  "async-recursion",
@@ -2693,7 +2677,7 @@ dependencies = [
  "dirs",
  "dunce",
  "flate2",
- "futures 0.3.30",
+ "futures",
  "human_bytes",
  "indexmap 2.1.0",
  "indicatif",
@@ -2720,6 +2704,7 @@ dependencies = [
  "rattler_virtual_packages",
  "regex",
  "reqwest",
+ "reqwest-middleware",
  "rstest",
  "self-replace",
  "serde",
@@ -2941,16 +2926,16 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
+source = "git+https://github.com/mamba-org/rattler?branch=main#b002f38fa9c9d855d450519ccccc1b7c491ee140"
 dependencies = [
  "anyhow",
  "async-compression 0.4.6",
- "bytes 1.5.0",
+ "bytes",
  "chrono",
  "digest",
  "dirs",
  "drop_bomb",
- "futures 0.3.30",
+ "futures",
  "fxhash",
  "hex",
  "indexmap 2.1.0",
@@ -2967,6 +2952,7 @@ dependencies = [
  "reflink-copy",
  "regex",
  "reqwest",
+ "reqwest-middleware",
  "serde",
  "serde_json",
  "serde_with",
@@ -2984,7 +2970,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
+source = "git+https://github.com/mamba-org/rattler?branch=main#b002f38fa9c9d855d450519ccccc1b7c491ee140"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3028,7 +3014,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
+source = "git+https://github.com/mamba-org/rattler?branch=main#b002f38fa9c9d855d450519ccccc1b7c491ee140"
 dependencies = [
  "blake2",
  "digest",
@@ -3043,15 +3029,14 @@ dependencies = [
 [[package]]
 name = "rattler_installs_packages"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9e5d881f60db77caedd8e7ef001b553c61e6cc97ad420ffa4a23861afcaa3aa"
+source = "git+https://github.com/vlad-ivanov-name/rip?branch=update-async-http-range-reader-client-middleware#e900aa35fe0f09783c19c137e4a155c1a9675fc2"
 dependencies = [
  "async-once-cell",
  "async-recursion",
  "async-trait",
  "async_http_range_reader",
  "async_zip",
- "bytes 1.5.0",
+ "bytes",
  "cacache",
  "ciborium",
  "configparser",
@@ -3062,7 +3047,7 @@ dependencies = [
  "flate2",
  "fs-err",
  "fs4",
- "futures 0.3.30",
+ "futures",
  "html-escape",
  "http",
  "http-cache-semantics",
@@ -3082,6 +3067,7 @@ dependencies = [
  "rattler_digest 0.9.0",
  "regex",
  "reqwest",
+ "reqwest-middleware",
  "resolvo",
  "serde",
  "serde_json",
@@ -3101,7 +3087,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
+source = "git+https://github.com/mamba-org/rattler?branch=main#b002f38fa9c9d855d450519ccccc1b7c491ee140"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3124,7 +3110,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
+source = "git+https://github.com/mamba-org/rattler?branch=main#b002f38fa9c9d855d450519ccccc1b7c491ee140"
 dependencies = [
  "quote",
  "syn 2.0.48",
@@ -3133,9 +3119,11 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
+source = "git+https://github.com/mamba-org/rattler?branch=main#b002f38fa9c9d855d450519ccccc1b7c491ee140"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "base64",
  "dirs",
  "fslock",
  "getrandom",
@@ -3146,9 +3134,11 @@ dependencies = [
  "netrc-rs",
  "once_cell",
  "reqwest",
+ "reqwest-middleware",
  "retry-policies",
  "serde",
  "serde_json",
+ "task-local-extensions",
  "thiserror",
  "tracing",
  "url",
@@ -3157,7 +3147,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
+source = "git+https://github.com/mamba-org/rattler?branch=main#b002f38fa9c9d855d450519ccccc1b7c491ee140"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3168,6 +3158,7 @@ dependencies = [
  "rattler_digest 0.16.2",
  "rattler_networking",
  "reqwest",
+ "reqwest-middleware",
  "serde_json",
  "tar",
  "tempfile",
@@ -3182,14 +3173,14 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
+source = "git+https://github.com/mamba-org/rattler?branch=main#b002f38fa9c9d855d450519ccccc1b7c491ee140"
 dependencies = [
  "anyhow",
  "async-compression 0.4.6",
  "blake2",
  "cache_control",
  "chrono",
- "futures 0.3.30",
+ "futures",
  "hex",
  "humansize",
  "humantime",
@@ -3204,6 +3195,7 @@ dependencies = [
  "rattler_digest 0.16.2",
  "rattler_networking",
  "reqwest",
+ "reqwest-middleware",
  "serde",
  "serde_json",
  "serde_with",
@@ -3220,7 +3212,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
+source = "git+https://github.com/mamba-org/rattler?branch=main#b002f38fa9c9d855d450519ccccc1b7c491ee140"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.1.0",
@@ -3237,7 +3229,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
+source = "git+https://github.com/mamba-org/rattler?branch=main#b002f38fa9c9d855d450519ccccc1b7c491ee140"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3256,7 +3248,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#0e036039e204c743f69b4f608c569e5f6ee55895"
+source = "git+https://github.com/mamba-org/rattler?branch=main#b002f38fa9c9d855d450519ccccc1b7c491ee140"
 dependencies = [
  "cfg-if",
  "libloading",
@@ -3379,7 +3371,7 @@ checksum = "37b1ae8d9ac08420c66222fb9096fc5de435c3c48542bc5336c51892cffafb41"
 dependencies = [
  "async-compression 0.4.6",
  "base64",
- "bytes 1.5.0",
+ "bytes",
  "encoding_rs",
  "futures-core",
  "futures-util",
@@ -3393,6 +3385,7 @@ dependencies = [
  "js-sys",
  "log",
  "mime",
+ "mime_guess",
  "native-tls",
  "once_cell",
  "percent-encoding",
@@ -3416,6 +3409,21 @@ dependencies = [
  "web-sys",
  "webpki-roots",
  "winreg",
+]
+
+[[package]]
+name = "reqwest-middleware"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88a3e86aa6053e59030e7ce2d2a3b258dd08fc2d337d52f73f6cb480f5858690"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "http",
+ "reqwest",
+ "serde",
+ "task-local-extensions",
+ "thiserror",
 ]
 
 [[package]]
@@ -3462,7 +3470,7 @@ version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97eeab2f3c0a199bc4be135c36c924b6590b88c377d416494288c14f2db30199"
 dependencies = [
- "futures 0.3.30",
+ "futures",
  "futures-timer",
  "rstest_macros",
  "rustc_version",
@@ -3813,7 +3821,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e56dd856803e253c8f298af3f4d7eb0ae5e23a737252cd90bb4f3b435033b2d"
 dependencies = [
  "dashmap",
- "futures 0.3.30",
+ "futures",
  "lazy_static",
  "log",
  "parking_lot",
@@ -4153,6 +4161,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "task-local-extensions"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba323866e5d033818e3240feeb9f7db2c4296674e4d9e16b97b7bf8f490434e8"
+dependencies = [
+ "pin-utils",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4283,7 +4300,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c89b4efa943be685f629b149f53829423f8f5531ea21249408e8e2f8671ec104"
 dependencies = [
  "backtrace",
- "bytes 1.5.0",
+ "bytes",
  "libc",
  "mio",
  "num_cpus",
@@ -4292,17 +4309,6 @@ dependencies = [
  "socket2 0.5.5",
  "tokio-macros",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "tokio-io"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57fc868aae093479e3131e3d165c93b1c7474109d13c90ec0dda2a1bbfff0674"
-dependencies = [
- "bytes 0.4.12",
- "futures 0.1.31",
- "log",
 ]
 
 [[package]]
@@ -4354,7 +4360,7 @@ version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5419f34732d9eb6ee4c3578b7989078579b7f039cbbb9ca2c4da015749371e15"
 dependencies = [
- "bytes 1.5.0",
+ "bytes",
  "futures-core",
  "futures-io",
  "futures-sink",

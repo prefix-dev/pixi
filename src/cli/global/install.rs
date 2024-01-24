@@ -1,3 +1,4 @@
+use crate::auth::make_client;
 use crate::install::execute_transaction;
 use crate::repodata::friendly_channel_name;
 use crate::{config, prefix::Prefix, progress::await_in_progress, repodata::fetch_sparse_repodata};
@@ -7,7 +8,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord};
-use rattler_networking::AuthenticatedClient;
+use rattler_networking::AuthenticationMiddleware;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -15,6 +16,7 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use rattler_solve::{resolvo, SolverImpl};
+use reqwest_middleware::ClientWithMiddleware;
 use std::ffi::OsStr;
 use std::{
     path::{Path, PathBuf},
@@ -328,21 +330,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|c| Channel::from_str(c, &channel_config))
         .collect::<Result<Vec<Channel>, _>>()
         .into_diagnostic()?;
-    let authenticated_client = AuthenticatedClient::default();
+    let client = make_client();
 
     // Find the MatchSpec we want to install
     let package_matchspec = MatchSpec::from_str(&args.package).into_diagnostic()?;
 
     // Fetch sparse repodata
     let platform_sparse_repodata =
-        fetch_sparse_repodata(&channels, [Platform::current()], &authenticated_client).await?;
+        fetch_sparse_repodata(&channels, [Platform::current()], &client).await?;
 
     // Install the package
     let (prefix_package, scripts, _) = globally_install_package(
         package_matchspec,
         &platform_sparse_repodata,
         &channel_config,
-        authenticated_client,
+        client,
     )
     .await?;
 
@@ -395,7 +397,7 @@ pub(super) async fn globally_install_package(
     package_matchspec: MatchSpec,
     platform_sparse_repodata: &[SparseRepoData],
     channel_config: &ChannelConfig,
-    authenticated_client: AuthenticatedClient,
+    authenticated_client: ClientWithMiddleware,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
     let package_name = package_name(&package_matchspec)?;
 

@@ -1,9 +1,9 @@
 use std::str::FromStr;
 
+use crate::auth::make_client;
 use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
-use rattler_networking::AuthenticatedClient;
 
 use crate::repodata::fetch_sparse_repodata;
 
@@ -54,7 +54,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    let authenticated_client = AuthenticatedClient::default();
+    let authenticated_client = make_client();
     // Fetch sparse repodata
     let platform_sparse_repodata =
         fetch_sparse_repodata(&channels, [Platform::current()], &authenticated_client).await?;

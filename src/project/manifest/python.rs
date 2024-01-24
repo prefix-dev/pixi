@@ -12,6 +12,7 @@ use toml_edit::Item;
 pub struct PyPiRequirement {
     pub(crate) version: Option<pep440_rs::VersionSpecifiers>,
     pub(crate) extras: Option<Vec<String>>,
+    pub(crate) index: Option<String>,
 }
 
 /// The type of parse error that occurred when parsing match spec.
@@ -84,6 +85,7 @@ impl FromStr for PyPiRequirement {
             Ok(Self {
                 version: None,
                 extras: None,
+                index: None,
             })
         } else if s.starts_with(|c: char| c.is_ascii_digit()) {
             Err(ParsePyPiRequirementError::MissingOperator(s.to_string()))
@@ -95,6 +97,7 @@ impl FromStr for PyPiRequirement {
                         .map_err(ParsePyPiRequirementError::Pep440Error)?,
                 ),
                 extras: None,
+                index: None,
             })
         }
     }
@@ -114,6 +117,7 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
         PyPiRequirement {
             version,
             extras: req.extras,
+            index: None,
         }
     }
 }
@@ -159,6 +163,7 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
                 struct RawPyPiRequirement {
                     version: Option<String>,
                     extras: Option<Vec<String>>,
+                    index: Option<String>,
                 }
                 let raw_requirement =
                     RawPyPiRequirement::deserialize(de::value::MapAccessDeserializer::new(map))?;
@@ -176,6 +181,7 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
                 Ok(PyPiRequirement {
                     version,
                     extras: raw_requirement.extras,
+                    index: raw_requirement.index,
                 })
             }
         }
@@ -211,7 +217,8 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap()),
-                extras: None
+                extras: None,
+                index: None,
             }
         );
         let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
@@ -220,7 +227,8 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str("==3.12.0").unwrap()),
-                extras: None
+                extras: None,
+                index: None,
             }
         );
 
@@ -230,7 +238,8 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str("~=2.1.3").unwrap()),
-                extras: None
+                extras: None,
+                index: None,
             }
         );
 
@@ -240,7 +249,8 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: None,
-                extras: None
+                extras: None,
+                index: None,
             }
         );
     }
@@ -248,7 +258,12 @@ mod tests {
     #[test]
     fn test_extended() {
         let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
-            toml_edit::de::from_str(r#"foo = { version=">=3.12", extras = ["bar"] }"#).unwrap();
+            toml_edit::de::from_str(
+                r#"
+                foo = { version=">=3.12", extras = ["bar"], index = "artifact-registry" }
+                "#,
+            )
+            .unwrap();
         assert_eq!(
             requirement.first().unwrap().0,
             &rip::types::PackageName::from_str("foo").unwrap()
@@ -257,7 +272,8 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap()),
-                extras: Some(vec!("bar".to_string()))
+                extras: Some(vec!("bar".to_string())),
+                index: Some("artifact-registry".to_string()),
             }
         );
 
@@ -274,7 +290,8 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12,<3.13.0").unwrap()),
-                extras: Some(vec!("bar".to_string(), "foo".to_string()))
+                extras: Some(vec!("bar".to_string(), "foo".to_string())),
+                index: None,
             }
         );
     }

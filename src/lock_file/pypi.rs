@@ -81,20 +81,23 @@ pub async fn resolve_dependencies<'p>(
     };
 
     // Resolve the PyPi dependencies
+    let packages = conda_python_packages
+        .into_iter()
+        .map(|p| (p.name.clone(), p))
+        .collect();
+
     let mut result = resolve(
         environment.project().pypi_package_db()?,
         &requirements,
         &marker_environment,
         Some(&compatible_tags),
-        conda_python_packages
-            .into_iter()
-            .map(|p| (p.name.clone(), p))
-            .collect(),
+        packages,
         HashMap::default(),
         &ResolveOptions {
             sdist_resolution,
             python_location,
             clean_env: false,
+            on_wheel_build_failure: Default::default(),
         },
         HashMap::default(),
     )
