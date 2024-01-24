@@ -1,3 +1,4 @@
+use crate::project::Environment;
 use crate::{config, consts, install, install_pypi, lock_file, prefix::Prefix, progress, Project};
 use miette::{Context, IntoDiagnostic};
 
@@ -132,6 +133,214 @@ pub async fn get_up_to_date_prefix(
     sdist_resolution: SDistResolution,
 ) -> miette::Result<Prefix> {
     let current_platform = Platform::current();
+
+    // Do not install if the platform is not supported
+    if !no_install && !project.platforms().contains(&current_platform) {
+        tracing::warn!("Not installing dependency on current platform: ({current_platform}) as it is not part of this project's supported platforms.");
+        no_install = true;
+    }
+
+    // Make sure the project is in a sane state
+    sanity_check_project(project)?;
+
+    // Determine which environment to install.
+    let environment = project.default_environment();
+
+    // Early out if If there is no lock-file and we are also not allowed to update it.
+    if !project.lock_file_path().is_file() && !usage.allows_lock_file_updates() {
+        miette::bail!("no lockfile available, can't do a frozen installation.");
+    }
+
+    // Start loading the installed packages in the background
+    let prefix = Prefix::new(environment.dir())?;
+    let installed_packages_future = {
+        let prefix = prefix.clone();
+        tokio::spawn(async move { prefix.find_installed_packages(None).await })
+    };
+
+    // Load the lock-file into memory.
+    let lock_file = lock_file::load_lock_file(project).await?;
+
+    // Check if the lock-file is up to date, but only if the current usage allows it.
+    let update_lock_file = if usage.should_check_if_out_of_date() {
+        match lock_file_satisfies_project(project, &lock_file) {
+            Err(err) => {
+                // Construct an error message
+                let mut report = String::new();
+                let mut err: &dyn Error = &err;
+                write!(&mut report, "{}", err).unwrap();
+                while let Some(source) = err.source() {
+                    write!(&mut report, "\nbecause {}", source).unwrap();
+                    err = source
+                }
+
+                tracing::info!("lock-file is not up to date with the project\nbecause {report}",);
+
+                if !usage.allows_lock_file_updates() {
+                    miette::bail!("lock-file not up-to-date with the project");
+                }
+
+                true
+            }
+            Ok(_) => {
+                tracing::debug!("the lock-file is up to date with the project.",);
+                false
+            }
+        }
+    } else {
+        false
+    };
+
+    // Get the environment from the lock-file.
+    let locked_environment = lock_file.environment(environment.name().as_str());
+
+    // Get all the repodata records from the lock-file
+    let locked_repodata_records = locked_environment
+        .as_ref()
+        .map(|env| env.conda_repodata_records())
+        .transpose()
+        .into_diagnostic()
+        .context("failed to parse the contents of the lock-file. Try removing the lock-file and running again")?
+        .unwrap_or_default();
+
+    // If the lock-file requires an updates, update the conda records.
+    //
+    // The `updated_repodata_records` fields holds the updated records if the records are updated.
+    //
+    // Depending on whether the lock-filed was updated the `repodata_records` field either points
+    // to the `locked_repodata_records` or to the `updated_repodata_records`.
+    let mut updated_repodata_records = None;
+    let repodata_records: &_ = if update_lock_file {
+        updated_repodata_records.insert(
+            lock_file::update_lock_file_conda(
+                &environment,
+                &locked_repodata_records,
+                sparse_repo_data,
+            )
+            .await?,
+        )
+    } else {
+        &locked_repodata_records
+    };
+
+    // Update the prefix with the conda packages. This will also return the python status.
+    let python_status = if !no_install {
+        let installed_prefix_records = installed_packages_future.await.into_diagnostic()??;
+        let empty_vec = Vec::new();
+        update_prefix_conda(
+            &prefix,
+            project.authenticated_client().clone(),
+            installed_prefix_records,
+            repodata_records
+                .get(&current_platform)
+                .unwrap_or(&empty_vec),
+            Platform::current(),
+        )
+        .await?
+    } else {
+        // We don't know and it won't matter because we won't install pypi either
+        PythonStatus::DoesNotExist
+    };
+
+    // Get the current pypi dependencies from the lock-file.
+    let locked_pypi_records = locked_environment
+        .map(|env| env.pypi_packages())
+        .unwrap_or_default();
+
+    // If the project has pypi dependencies and we need to update the lock-file lets do so here.
+    //
+    // The `updated_pypi_records` fields holds the updated records if the records are updated.
+    //
+    // Depending on whether the lock-file was updated the `pypi_records` field either points
+    // to the `locked_pypi_records` or to the `updated_pypi_records`.
+    let mut updated_pypi_records = None;
+    let pypi_records: &_ = if project.has_pypi_dependencies() && update_lock_file {
+        let python_path = python_status.location().map(|p| prefix.root().join(p));
+        updated_pypi_records.insert(
+            lock_file::update_lock_file_for_pypi(
+                &environment,
+                repodata_records,
+                &locked_pypi_records,
+                python_path.as_deref(),
+                sdist_resolution,
+            )
+            .await?,
+        )
+    } else {
+        &locked_pypi_records
+    };
+
+    if project.has_pypi_dependencies() && !no_install {
+        // Then update the pypi packages.
+        let empty_repodata_vec = Vec::new();
+        let empty_pypi_vec = Vec::new();
+        update_prefix_pypi(
+            &prefix,
+            current_platform,
+            project.pypi_package_db()?,
+            repodata_records
+                .get(&current_platform)
+                .unwrap_or(&empty_repodata_vec),
+            pypi_records
+                .get(&current_platform)
+                .unwrap_or(&empty_pypi_vec),
+            &python_status,
+            &project.system_requirements(),
+            sdist_resolution,
+        )
+        .await?;
+    }
+
+    // If any of the records have changed we need to update the contents of the lock-file.
+    if updated_repodata_records.is_some() || updated_pypi_records.is_some() {
+        let mut builder = LockFile::builder();
+
+        let channels = environment
+            .channels()
+            .into_iter()
+            .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()))
+            .collect_vec();
+        builder.set_channels(environment.name().as_str(), channels);
+
+        // Add the conda records
+        for (platform, records) in updated_repodata_records.unwrap_or(locked_repodata_records) {
+            for record in records {
+                builder.add_conda_package(environment.name().as_str(), platform, record.into());
+            }
+        }
+
+        // Add the PyPi records
+        for (platform, packages) in updated_pypi_records.unwrap_or(locked_pypi_records) {
+            for (pkg_data, pkg_env_data) in packages {
+                builder.add_pypi_package(
+                    environment.name().as_str(),
+                    platform,
+                    pkg_data,
+                    pkg_env_data,
+                );
+            }
+        }
+
+        // Write to disk
+        let lock_file = builder.finish();
+        lock_file
+            .to_path(&project.lock_file_path())
+            .into_diagnostic()
+            .context("failed to write updated lock-file to disk")?;
+    }
+
+    Ok(prefix)
+}
+
+pub async fn get_up_to_date_prefix_from_environment<'p>(
+    environment: &'p Environment<'p>,
+    usage: LockFileUsage,
+    mut no_install: bool,
+    sparse_repo_data: Option<Vec<SparseRepoData>>,
+    sdist_resolution: SDistResolution,
+) -> miette::Result<Prefix> {
+    let current_platform = Platform::current();
+    let project = environment.project();
 
     // Do not install if the platform is not supported
     if !no_install && !project.platforms().contains(&current_platform) {

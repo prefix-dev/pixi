@@ -1,3 +1,4 @@
+use crate::activation::get_activation_env;
 use crate::{prompt, Project};
 use clap::Parser;
 use miette::IntoDiagnostic;
@@ -12,12 +13,8 @@ use std::path::PathBuf;
 use crate::unix::PtySession;
 
 use crate::cli::LockFileUsageArgs;
-use crate::environment::get_up_to_date_prefix;
-use crate::environment::LockFileUsage;
 #[cfg(target_family = "windows")]
 use rattler_shell::shell::CmdExe;
-
-use super::run::run_activation_async;
 
 /// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]
@@ -193,41 +190,12 @@ async fn start_nu_shell(
     Ok(process.wait().into_diagnostic()?.code())
 }
 
-/// Determine the environment variables that need to be set in an interactive shell to make it
-/// function as if the environment has been activated. This method runs the activation scripts from
-/// the environment and stores the environment variables it added, finally it adds environment
-/// variables from the project.
-pub async fn get_shell_env(
-    project: &Project,
-    lock_file_usage: LockFileUsage,
-) -> miette::Result<HashMap<String, String>> {
-    // Get the prefix which we can then activate.
-    let prefix =
-        get_up_to_date_prefix(project, lock_file_usage, false, None, Default::default()).await?;
-
-    // Get environment variables from the activation
-    let activation_env = run_activation_async(project, prefix).await?;
-
-    // Get environment variables from the manifest
-    let manifest_env = project.get_metadata_env();
-
-    // Add the conda default env variable so that the existing tools know about the env.
-    let mut shell_env = HashMap::new();
-    shell_env.insert("CONDA_DEFAULT_ENV".to_string(), project.name().to_string());
-
-    // Construct command environment by concatenating the environments
-    Ok(activation_env
-        .into_iter()
-        .chain(manifest_env.into_iter())
-        .chain(shell_env.into_iter())
-        .collect())
-}
-
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let environment = project.default_environment();
 
     // Get the environment variables we need to set activate the project in the shell.
-    let env = get_shell_env(&project, args.lock_file_usage.into()).await?;
+    let env = get_activation_env(&environment, args.lock_file_usage.into()).await?;
     tracing::debug!("Pixi environment activation:\n{:?}", env);
 
     // Start the shell as the last part of the activation script based on the default shell.

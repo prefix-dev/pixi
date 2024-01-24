@@ -8,11 +8,11 @@ use crate::common::builders::{
     TaskAliasBuilder,
 };
 use pixi::{
+    activation::get_activation_env,
     cli::{
         add, init,
         install::Args,
         project, run,
-        run::get_task_env,
         task::{self, AddArgs, AliasArgs},
     },
     consts,
@@ -224,8 +224,9 @@ impl PixiControl {
     pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
         let project = self.project()?;
+        let environment = project.default_environment();
         let task = ExecutableTask::from_cmd_args(&project, args.task, Some(Platform::current()));
-        let task_env = get_task_env(&project, args.lock_file_usage.into()).await?;
+        let task_env = get_activation_env(&environment, args.lock_file_usage.into()).await?;
 
         #[derive(Error, Debug, Diagnostic)]
         enum RunError {

@@ -7,7 +7,7 @@ use rattler_shell::{
 };
 
 use crate::{
-    environment::{get_up_to_date_prefix, LockFileUsage},
+    environment::{get_up_to_date_prefix_from_environment, LockFileUsage},
     prefix::Prefix,
     Project,
 };
@@ -23,9 +23,10 @@ pub struct Args {
 /// Generates the activation script.
 async fn generate_activation_script(shell: Option<ShellEnum>) -> miette::Result<String> {
     let project = Project::discover()?;
+    let environment = project.default_environment();
 
-    get_up_to_date_prefix(
-        &project,
+    get_up_to_date_prefix_from_environment(
+        &environment,
         LockFileUsage::Frozen,
         false,
         None,
@@ -34,7 +35,7 @@ async fn generate_activation_script(shell: Option<ShellEnum>) -> miette::Result<
     .await?;
 
     let platform = Platform::current();
-    let prefix = Prefix::new(project.default_environment().dir())?;
+    let prefix = Prefix::new(environment.dir())?;
     let shell = shell.unwrap_or_default();
     let activator = Activator::from_path(prefix.root(), shell, platform).into_diagnostic()?;
 
