@@ -1,5 +1,5 @@
 mod activation;
-mod channel;
+pub(crate) mod channel;
 mod environment;
 mod error;
 mod feature;
@@ -16,7 +16,8 @@ use ::serde::{Deserialize, Deserializer};
 pub use activation::Activation;
 pub use environment::{Environment, EnvironmentName};
 pub use feature::{Feature, FeatureName};
-use indexmap::{Equivalent, IndexMap};
+use indexmap::map::Entry;
+use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource};
@@ -415,38 +416,113 @@ impl Manifest {
     }
 
     /// Returns a mutable reference to the channels array.
-    fn channels_array_mut(&mut self) -> miette::Result<&mut Array> {
-        let project = &mut self.document["project"];
-        if project.is_none() {
-            *project = Item::Table(Table::new());
-        }
+    fn channels_array_mut(&mut self, feature_name: &FeatureName) -> miette::Result<&mut Array> {
+        match feature_name {
+            FeatureName::Default => {
+                let project = &mut self.document["project"];
+                if project.is_none() {
+                    *project = Item::Table(Table::new());
+                }
 
-        let channels = &mut project["channels"];
-        if channels.is_none() {
-            *channels = Item::Value(Value::Array(Array::new()))
-        }
+                let channels = &mut project["channels"];
+                if channels.is_none() {
+                    *channels = Item::Value(Value::Array(Array::new()))
+                }
 
-        channels
-            .as_array_mut()
-            .ok_or_else(|| miette::miette!("malformed channels array"))
+                channels
+                    .as_array_mut()
+                    .ok_or_else(|| miette::miette!("malformed channels array"))
+            }
+            FeatureName::Named(_) => {
+                let feature = &mut self.document["feature"];
+                if feature.is_none() {
+                    *feature = Item::Table(Table::new());
+                }
+                let table = feature.as_table_mut().expect("feature should be a table");
+                table.set_dotted(true);
+
+                let feature = &mut table[feature_name.as_str()];
+                if feature.is_none() {
+                    *feature = Item::Table(Table::new());
+                }
+
+                let channels = &mut feature["channels"];
+                if channels.is_none() {
+                    *channels = Item::Value(Value::Array(Array::new()))
+                }
+
+                channels
+                    .as_array_mut()
+                    .ok_or_else(|| miette::miette!("malformed channels array"))
+            }
+        }
     }
 
     /// Adds the specified channels to the manifest.
     pub fn add_channels(
         &mut self,
-        channels: impl IntoIterator<Item = impl AsRef<str>>,
+        channels: impl IntoIterator<Item = PrioritizedChannel>,
+        feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        let mut stored_channels = Vec::new();
-        for channel in channels {
-            self.parsed.project.channels.push(PrioritizedChannel {
-                channel: Channel::from_str(channel.as_ref(), &ChannelConfig::default())
-                    .into_diagnostic()?,
-                priority: None,
-            });
-            stored_channels.push(channel.as_ref().to_owned());
+        fn get_channel_name(channel: &Channel) -> miette::Result<String> {
+            match channel.base_url().scheme() {
+                "https" | "http" => Ok(channel.name.clone().unwrap_or(channel.canonical_name())),
+                "file" => Ok(channel.canonical_name()),
+                _ => Err(miette!(
+                    "channel {} has an unsupported scheme: {}",
+                    channel.base_url(),
+                    channel.base_url().scheme(),
+                )),
+            }
         }
 
-        let channels_array = self.channels_array_mut()?;
+        // First add the channels to the manifest
+        let mut stored_channels = IndexSet::new();
+        match feature_name {
+            FeatureName::Default => {
+                for channel in channels {
+                    // TODO: Make channels a IndexSet to avoid duplicates.
+                    if self.parsed.project.channels.iter().any(|x| x == &channel) {
+                        continue;
+                    }
+                    self.parsed.project.channels.push(channel.clone());
+
+                    stored_channels.insert(get_channel_name(&channel.channel)?);
+                }
+            }
+            FeatureName::Named(_) => {
+                for channel in channels {
+                    match self.parsed.features.entry(feature_name.clone()) {
+                        Entry::Occupied(mut entry) => {
+                            if let Some(channels) = &mut entry.get_mut().channels {
+                                if channels.iter().any(|x| x == &channel) {
+                                    continue;
+                                }
+                            }
+                            // If the feature already exists, just push the new channel
+                            entry
+                                .get_mut()
+                                .channels
+                                .get_or_insert_with(Vec::new)
+                                .push(channel.clone());
+                        }
+                        Entry::Vacant(entry) => {
+                            // If the feature does not exist, insert a new feature with the new channel
+                            entry.insert(Feature {
+                                name: feature_name.clone(),
+                                platforms: None,
+                                channels: Some(vec![channel.clone()]),
+                                system_requirements: Default::default(),
+                                targets: Default::default(),
+                            });
+                        }
+                    }
+                    stored_channels.insert(get_channel_name(&channel.channel)?);
+                }
+            }
+        }
+        // Then add the channels to the toml document
+        let channels_array = self.channels_array_mut(feature_name)?;
         for channel in stored_channels {
             channels_array.push(channel);
         }
@@ -481,7 +557,7 @@ impl Manifest {
         }
 
         // remove the channels from the toml
-        let channels_array = self.channels_array_mut()?;
+        let channels_array = self.channels_array_mut(&FeatureName::Default)?;
         channels_array.retain(|x| !removed_channels.contains(&x.as_str().unwrap().to_string()));
 
         Ok(())
@@ -1483,21 +1559,50 @@ feature_target_dep = "*"
     fn test_add_channels() {
         // Using known files in the project so the test succeed including the file check.
         let file_contents = r#"
-            [project]
-            name = "foo"
-            version = "0.1.0"
-            description = "foo description"
-            channels = []
-            platforms = ["linux-64", "win-64"]
+[project]
+name = "foo"
+channels = []
+platforms = ["linux-64", "win-64"]
 
-            [dependencies]
+[dependencies]
+
+[feature.test.dependencies]
         "#;
 
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
 
         assert_eq!(manifest.parsed.project.channels, vec![]);
 
-        manifest.add_channels(["conda-forge"].iter()).unwrap();
+        let conda_forge = PrioritizedChannel::from_channel(
+            Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
+        );
+        manifest
+            .add_channels([conda_forge.clone()].into_iter(), &FeatureName::Default)
+            .unwrap();
+
+        let cuda_feature = FeatureName::Named("cuda".to_string());
+        let nvidia = PrioritizedChannel::from_channel(
+            Channel::from_str("nvidia", &ChannelConfig::default()).unwrap(),
+        );
+        manifest
+            .add_channels([nvidia.clone()].into_iter(), &cuda_feature)
+            .unwrap();
+
+        let test_feature = FeatureName::Named("test".to_string());
+        manifest
+            .add_channels(
+                [
+                    PrioritizedChannel::from_channel(
+                        Channel::from_str("test", &ChannelConfig::default()).unwrap(),
+                    ),
+                    PrioritizedChannel::from_channel(
+                        Channel::from_str("test2", &ChannelConfig::default()).unwrap(),
+                    ),
+                ]
+                .into_iter(),
+                &test_feature,
+            )
+            .unwrap();
 
         assert_eq!(
             manifest.parsed.project.channels,
@@ -1506,6 +1611,75 @@ feature_target_dep = "*"
                 priority: None
             }]
         );
+
+        // Try to add again, should not add more channels
+        manifest
+            .add_channels([conda_forge.clone()].into_iter(), &FeatureName::Default)
+            .unwrap();
+
+        assert_eq!(
+            manifest.parsed.project.channels,
+            vec![PrioritizedChannel {
+                channel: Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
+                priority: None
+            }]
+        );
+
+        assert_eq!(
+            manifest
+                .parsed
+                .features
+                .get(&cuda_feature)
+                .unwrap()
+                .channels
+                .clone()
+                .unwrap(),
+            vec![PrioritizedChannel {
+                channel: Channel::from_str("nvidia", &ChannelConfig::default()).unwrap(),
+                priority: None
+            }]
+        );
+        // Try to add again, should not add more channels
+        manifest
+            .add_channels([nvidia.clone()].into_iter(), &cuda_feature)
+            .unwrap();
+        assert_eq!(
+            manifest
+                .parsed
+                .features
+                .get(&cuda_feature)
+                .unwrap()
+                .channels
+                .clone()
+                .unwrap(),
+            vec![PrioritizedChannel {
+                channel: Channel::from_str("nvidia", &ChannelConfig::default()).unwrap(),
+                priority: None
+            }]
+        );
+
+        assert_eq!(
+            manifest
+                .parsed
+                .features
+                .get(&test_feature)
+                .unwrap()
+                .channels
+                .clone()
+                .unwrap(),
+            vec![
+                PrioritizedChannel {
+                    channel: Channel::from_str("test", &ChannelConfig::default()).unwrap(),
+                    priority: None
+                },
+                PrioritizedChannel {
+                    channel: Channel::from_str("test2", &ChannelConfig::default()).unwrap(),
+                    priority: None
+                }
+            ]
+        );
+
+        assert_display_snapshot!(manifest.document.to_string());
     }
 
     #[test]
