@@ -12,7 +12,58 @@ use crate::{
     environment::{get_up_to_date_prefix, LockFileUsage},
     progress::await_in_progress,
     project::{manifest::EnvironmentName, Environment},
+    Project,
 };
+
+// Setting a base prefix for the pixi package
+const PROJECT_PREFIX: &str = "PIXI_PROJECT_";
+
+impl Project {
+    /// Returns environment variables and their values that should be injected when running a command.
+    pub fn get_metadata_env(&self) -> HashMap<String, String> {
+        HashMap::from_iter([
+            (
+                format!("{PROJECT_PREFIX}ROOT"),
+                self.root().to_string_lossy().into_owned(),
+            ),
+            (format!("{PROJECT_PREFIX}NAME"), self.name().to_string()),
+            (
+                format!("{PROJECT_PREFIX}MANIFEST"),
+                self.manifest_path().to_string_lossy().into_owned(),
+            ),
+            (
+                format!("{PROJECT_PREFIX}VERSION"),
+                self.version()
+                    .as_ref()
+                    .map_or("NO_VERSION_SPECIFIED".to_string(), |version| {
+                        version.to_string()
+                    }),
+            ),
+        ])
+    }
+}
+
+const ENV_PREFIX: &str = "PIXI_ENVIRONMENT_";
+
+impl Environment<'_> {
+    /// Returns environment variables and their values that should be injected when running a command.
+    pub fn get_metadata_env(&self) -> HashMap<String, String> {
+        let prompt = match self.name() {
+            EnvironmentName::Named(name) => {
+                format!("{}:{}", self.project().name(), name)
+            }
+            EnvironmentName::Default => self.project().name().to_string(),
+        };
+        HashMap::from_iter([
+            (format!("{ENV_PREFIX}NAME"), self.name().to_string()),
+            (
+                format!("{ENV_PREFIX}PLATFORMS"),
+                self.platforms().iter().map(|plat| plat.as_str()).join(","),
+            ),
+            ("PIXI_PROMPT".to_string(), format!("({}) ", prompt)),
+        ])
+    }
+}
 
 /// Get the complete activator for the environment.
 /// This method will create an activator for the environment and add the activation scripts from the project.
@@ -149,4 +200,62 @@ pub async fn get_activation_env<'p>(
         .into_iter()
         .chain(environment_variables.into_iter())
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+
+    #[test]
+    fn test_metadata_env() {
+        let multi_env_project = r#"
+        [project]
+        name = "pixi"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "osx-64", "win-64"]
+
+        [feature.test.dependencies]
+        pytest = "*"
+        [environments]
+        test = ["test"]
+        "#;
+        let project = Project::from_str(Path::new(""), multi_env_project).unwrap();
+
+        let default_env = project.default_environment();
+        let env = default_env.get_metadata_env();
+        dbg!(&env);
+        assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "default");
+        assert!(env.get("PIXI_ENVIRONMENT_PLATFORMS").is_some());
+        assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));
+
+        let test_env = project.environment("test").unwrap();
+        let env = test_env.get_metadata_env();
+        dbg!(&env);
+
+        assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "test");
+        assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));
+        assert!(env.get("PIXI_PROMPT").unwrap().contains("test"));
+    }
+
+    #[test]
+    fn test_metadata_project_env() {
+        let project = Project::discover().unwrap();
+        let env = project.get_metadata_env();
+
+        assert_eq!(env.get("PIXI_PROJECT_NAME").unwrap(), project.name());
+        assert_eq!(
+            env.get("PIXI_PROJECT_ROOT").unwrap(),
+            project.root().to_str().unwrap()
+        );
+        assert_eq!(
+            env.get("PIXI_PROJECT_MANIFEST").unwrap(),
+            project.manifest_path().to_str().unwrap()
+        );
+        assert_eq!(
+            env.get("PIXI_PROJECT_VERSION").unwrap(),
+            &project.version().as_ref().unwrap().to_string()
+        );
+    }
 }
