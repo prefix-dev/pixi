@@ -1,25 +1,27 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::Platform;
 use rattler_shell::{
-    activation::{ActivationVariables, Activator, PathModificationBehavior},
+    activation::{ActivationError, ActivationVariables, Activator, PathModificationBehavior},
     shell::ShellEnum,
 };
 
 use crate::{
     environment::{get_up_to_date_prefix, LockFileUsage},
-    prefix::Prefix,
     progress::await_in_progress,
     project::{manifest::EnvironmentName, Environment},
 };
 
-/// Runs the activation script asynchronously. This function also adds a progress bar.
-pub async fn run_activation_async<'p>(
+/// Get the complete activator for the environment.
+/// This method will create an activator for the environment and add the activation scripts from the project.
+/// The activator will be created for the current platform and the default shell.
+/// The activation scripts from the environment will be checked for existence and the extension will be checked for correctness.
+pub fn get_activator<'p>(
     environment: &'p Environment<'p>,
-    prefix: Prefix,
-) -> miette::Result<HashMap<String, String>> {
+    shell: ShellEnum,
+) -> Result<Activator<ShellEnum>, ActivationError> {
     let platform = Platform::current();
     let additional_activation_scripts = environment.activation_scripts(Some(platform));
 
@@ -47,30 +49,34 @@ pub async fn run_activation_async<'p>(
         }
     }
 
-    await_in_progress(
-        "activating environment",
-        run_activation(prefix, additional_activation_scripts.into_iter().collect()),
-    )
-    .await
-    .wrap_err("failed to activate environment")
+    let mut activator =
+        Activator::from_path(environment.dir().as_path(), shell, Platform::current())?;
+
+    // Add the custom activation scripts from the environment
+    activator
+        .activation_scripts
+        .extend(additional_activation_scripts);
+
+    // Add the environment variables from the project.
+    activator
+        .env_vars
+        .extend(get_environment_variables(environment));
+
+    Ok(activator)
 }
 
 /// Runs and caches the activation script.
-async fn run_activation(
-    prefix: Prefix,
-    additional_activation_scripts: Vec<PathBuf>,
-) -> miette::Result<HashMap<String, String>> {
+async fn run_activation(environment: &Environment<'_>) -> miette::Result<HashMap<String, String>> {
+    let activator = get_activator(environment, ShellEnum::default()).map_err(|e| {
+        miette::miette!(format!(
+            "failed to create activator for {:?}\n{}",
+            environment.name(),
+            e
+        ))
+    })?;
+
     let activator_result = tokio::task::spawn_blocking(move || {
         // Run and cache the activation script
-        let shell: ShellEnum = ShellEnum::default();
-
-        // Construct an activator for the script
-        let mut activator = Activator::from_path(prefix.root(), shell, Platform::current())?;
-        activator
-            .activation_scripts
-            .extend(additional_activation_scripts);
-
-        // Run the activation
         activator.run_activation(ActivationVariables {
             // Get the current PATH variable
             path: Default::default(),
@@ -88,32 +94,14 @@ async fn run_activation(
 
     Ok(activator_result)
 }
-/// Determine the environment variables that need to be set in an interactive shell to make it
-/// function as if the environment has been activated. This method runs the activation scripts from
-/// the environment and stores the environment variables it added, finally it adds environment
-/// variables from the project.
-pub async fn get_activation_env<'p>(
-    environment: &'p Environment<'p>,
-    lock_file_usage: LockFileUsage,
-) -> miette::Result<HashMap<String, String>> {
-    // Get the prefix which we can then activate.
-    let prefix = get_up_to_date_prefix(
-        environment,
-        lock_file_usage,
-        false,
-        None,
-        Default::default(),
-    )
-    .await?;
 
-    // Get environment variables from the activation
-    let activation_env = run_activation_async(environment, prefix).await?;
-
+/// Get the environment variables that are statically generated from the project and the environment.
+pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMap<String, String> {
     // Get environment variables from the project
     let project_env = environment.project().get_metadata_env();
 
     // Get environment variables from the environment
-    let environmnet_env = environment.get_metadata_env();
+    let environment_env = environment.get_metadata_env();
 
     // Add the conda default env variable so that the existing tools know about the env.
     let env_name = match environment.name() {
@@ -123,11 +111,42 @@ pub async fn get_activation_env<'p>(
     let mut shell_env = HashMap::new();
     shell_env.insert("CONDA_DEFAULT_ENV".to_string(), env_name);
 
+    // Combine the environments
+    project_env
+        .into_iter()
+        .chain(environment_env)
+        .chain(shell_env)
+        .collect()
+}
+
+/// Determine the environment variables that need to be set in an interactive shell to make it
+/// function as if the environment has been activated. This method runs the activation scripts from
+/// the environment and stores the environment variables it added, finally it adds environment
+/// variables from the project.
+pub async fn get_activation_env<'p>(
+    environment: &'p Environment<'p>,
+    lock_file_usage: LockFileUsage,
+) -> miette::Result<HashMap<String, String>> {
+    // Get the prefix which we can then activate.
+    get_up_to_date_prefix(
+        environment,
+        lock_file_usage,
+        false,
+        None,
+        Default::default(),
+    )
+    .await?;
+
+    // Get environment variables from the activation
+    let activation_env = await_in_progress("activating environment", run_activation(environment))
+        .await
+        .wrap_err("failed to activate environment")?;
+
+    let environment_variables = get_environment_variables(environment);
+
     // Construct command environment by concatenating the environments
     Ok(activation_env
         .into_iter()
-        .chain(project_env.into_iter())
-        .chain(environmnet_env.into_iter())
-        .chain(shell_env.into_iter())
+        .chain(environment_variables.into_iter())
         .collect())
 }
