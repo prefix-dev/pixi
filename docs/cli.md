@@ -10,21 +10,28 @@ description: All pixi cli subcommands
 - `--help (-h)` Shows help information, use `-h` to get the short version of the help.
 - `--version (-V)`: shows the version of pixi that is used.
 - `--quiet (-q)`: Decreases the amount of output.
+- `--color <COLOR>`: Forces the output to be colored. [default: auto] [possible values: auto, always, never]
 
 ## `init`
 
 This command is used to create a new project.
 It initializes a `pixi.toml` file and also prepares a `.gitignore` to prevent the environment from being added to `git`.
 
+##### Arguments
+
+1. `[PATH]`: Where to place the project (defaults to current path) [default: .]
+
 ##### Options
 
-- `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--platform <PLATFORM> (-p)`: specify a platform that the project supports. (Allowed to be used more than once)
 
 ```shell
 pixi init myproject
 pixi init ~/myproject
 pixi init  # Initializes directly in the current directory.
 pixi init --channel conda-forge --channel bioconda myproject
+pixi init --platform osx-64 --platform linux-64 myproject
 ```
 
 ## `add`
@@ -33,16 +40,21 @@ Adds dependencies to the `pixi.toml`.
 It will only add if the package with its version constraint is able to work with rest of the dependencies in the project.
 [More info](advanced/multi_platform_configuration.md) on multi-platform configuration.
 
+##### Arguments
+
+1. `<SPECS>`: The package(s) to add, space separated. The version constraint is optional.
+
 ##### Options
 
-- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--host`: Specifies a host dependency, important for building a package.
 - `--build`: Specifies a build dependency, important for building a package.
 - `--pypi`: Specifies a PyPI dependency, not a conda package.
     Parses dependencies as [PEP508](https://peps.python.org/pep-0508/) requirements, supporting extras and versions.
     See [configuration](configuration.md) for details.
 - `--no-install`: Don't install the package to the environment, only add the package to the lock-file.
-- `--platform (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
+- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
+- `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 
 ```shell
 pixi add numpy
@@ -53,6 +65,8 @@ pixi add --host "python>=3.9.0"
 pixi add --build cmake
 pixi add --pypi requests[security]
 pixi add --platform osx-64 --build clang
+pixi add --no-install numpy
+pixi add --no-lockfile-update numpy
 ```
 
 ## `install`
@@ -62,7 +76,7 @@ Which gets generated on `pixi add` or when you manually change the `pixi.toml` f
 
 ##### Options
 
-- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
 - `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
 
@@ -81,9 +95,13 @@ The custom tasks defined in the `pixi.toml` are also available through the run c
 
 You cannot run `pixi run source setup.bash` as `source` is not available in the `deno_task_shell` commandos and not an executable.
 
+##### Arguments
+
+1. `[TASK]...`  The task you want to run in the projects environment, this can also be a normal command. And all arguments after the task will be passed to the task.
+
 ##### Options
 
-- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
 - `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
 
@@ -110,12 +128,12 @@ Removes dependencies from the `pixi.toml`.
 
 ##### Options
 
-- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--host`: Specifies a host dependency, important for building a package.
 - `--build`: Specifies a build dependency, important for building a package.
 - `--pypi`: Specifies a PyPI dependency, not a conda package.
-- `--platform (-p)`: The platform from which the dependency should be removed.
-- `--feature (-f)`: The feature from which the dependency should be removed.
+- `--platform <PLATFORM> (-p)`: The platform from which the dependency should be removed.
+- `--feature <FEATURE> (-f)`: The feature from which the dependency should be removed.
 
 ```shell
 pixi remove numpy
@@ -136,23 +154,33 @@ If you want to make a shorthand for a specific command you can add a task for it
 
 ##### Options
 
-- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 
 ### `task add`
 
 Add a task to the `pixi.toml`, use `--depends-on` to add tasks you want to run before this task, e.g. build before an execute task.
 
+##### Arguments
+
+1. `<NAME>`: The name of the task.
+2. `<COMMAND>`: The command to run. This can be more than one word.
+!!! info
+    If you are using `$` for env variables they will be resolved before adding them to the task.
+    If you want to use `$` in the task you need to escape it with a `\`, e.g. `echo \$HOME`.
+
 ##### Options
 
-- `--platform`: the platform for which this task should be added.
-- `--depends-on`: the task it depends on to be run before the one your adding.
-- `--cwd`: the working directory for the task relative to the root of the project.
+- `--platform <PLATFORM> (-p)`: the platform for which this task should be added.
+- `--feature <FEATURE> (-f)`: the feature for which the task is added, if non provided the default tasks will be added.
+- `--depends-on <DEPENDS_ON>`: the task it depends on to be run before the one your adding.
+- `--cwd <CWD>`: the working directory for the task relative to the root of the project.
 
 ```shell
 pixi task add cow cowpy "Hello User"
 pixi task add tls ls --cwd tests
 pixi task add test cargo t --depends-on build
 pixi task add build-osx "METAL=1 cargo build" --platform osx-64
+pixi task add train python train.py --feature cuda
 ```
 
 This adds the following to the `pixi.toml`:
@@ -165,6 +193,9 @@ test = { cmd = "cargo t", depends_on = ["build"] }
 
 [target.osx-64.tasks]
 build-osx = "METAL=1 cargo build"
+
+[feature.cuda.tasks]
+train = "python train.py"
 ```
 
 Which you can then run with the `run` command:
@@ -179,8 +210,51 @@ pixi run test --test test1
 
 Remove the task from the `pixi.toml`
 
+##### Arguments
+- `<NAMES>`: The names of the tasks, space separated.
+
+##### Options
+
+- `--platform <PLATFORM> (-p)`: the platform for which this task is removed.
+- `--feature <FEATURE> (-f)`: the feature for which the task is removed.
+
 ```shell
 pixi task remove cow
+pixi task remove --platform linux-64 test
+pixi task remove --feature cuda task
+```
+### `task alias`
+
+Create an alias for a task.
+
+##### Arguments
+
+1. `<ALIAS>`: The alias name
+2. `<DEPENDS_ON>`: The names of the tasks you want to execute on this alias, order counts, first one runs first.
+
+##### Options
+
+- `--platform <PLATFORM> (-p)`: the platform for which this alias is created.
+
+```shell
+pixi task alias test-all test-py test-cpp test-rust
+pixi task alias --platform linux-64 test test-linux
+```
+
+
+### `task list`
+
+List all tasks in the project.
+
+##### Options
+
+- `--environment`(`-e`): the environment's tasks list, if non is provided the default tasks will be listed.
+- `--summary`(`-s`): the output gets formatted to be machine parsable. (Used in the autocompletion of `pixi run`).
+
+```shell
+pixi task list
+pixi task list --environment cuda
+pixi task list --summary
 ```
 
 ## `list`
@@ -189,11 +263,11 @@ List project's packages. Highlighted packages are explicit dependencies.
 
 ##### Options
 
-- `--platform <PLATFORM>`: The platform to list packages for. Defaults to the current platform
+- `--platform <PLATFORM> (-p)`: The platform to list packages for. Defaults to the current platform
 - `--json`: Whether to output in json format.
 - `--json-pretty`: Whether to output in pretty json format
 - `--sort-by <SORT_BY>`: Sorting strategy [default: name] [possible values: size, name, type]
-- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 
 ```shell
 pixi list
@@ -230,7 +304,7 @@ To exit the pixi shell, simply run `exit`.
 
 #####Options
 
-- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
 - `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
 
@@ -251,8 +325,8 @@ Search a package, output will list the latest version of the package.
 
 ###### Options
 
-- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
-- `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--limit (-l)`: Limit the number of search results (default: 15)
 
 ```zsh
@@ -354,7 +428,7 @@ This command installs a package into its own environment and adds the binary to 
 
 ##### Options
 
-- `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 
 ```shell
 pixi global install ruff
@@ -401,7 +475,7 @@ This command upgrades a globally installed package to the latest version.
 
 ##### Options
 
-- `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 
 ```shell
 pixi global upgrade ruff
@@ -416,7 +490,7 @@ This command upgrades all globally installed packages to their latest version.
 
 ##### Options
 
-- `--channel (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 
 ```shell
 pixi global upgrade-all
@@ -442,7 +516,7 @@ This subcommand allows you to modify the project configuration through the comma
 
 ##### Options
 
-- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--no-install`: do not update the environment, only add changed packages to the lock-file.
 
 ### `project channel add`
