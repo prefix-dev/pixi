@@ -126,6 +126,10 @@ pixi run task argument1 argument2
 
 Removes dependencies from the `pixi.toml`.
 
+##### Arguments
+
+1. `<DEPS>...`: List of dependencies you wish to remove from the project.
+
 ##### Options
 
 - `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
@@ -239,8 +243,8 @@ Create an alias for a task.
 ```shell
 pixi task alias test-all test-py test-cpp test-rust
 pixi task alias --platform linux-64 test test-linux
+pixi task alias moo cow
 ```
-
 
 ### `task list`
 
@@ -276,27 +280,6 @@ pixi list --sort-by size
 pixi list --platform win-64
 ```
 
-### `task alias`
-
-Give a task a new name or concatenate multiple tasks into one name.
-
-```shell
-pixi task alias moo cow
-```
-
-Adds the last line to the `pixi.toml`:
-
-```toml
-[tasks]
-cow = "cowpy \"Hello User\""
-moo = { depends_on = ["cow"] }
-```
-
-!!! info
-      In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the tasks.
-      Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
-      This is done so that the tasks defined can be run across all platforms.
-
 ## `shell`
 
 This command starts a new shell in the project's environment.
@@ -323,22 +306,26 @@ exit
 
 Search a package, output will list the latest version of the package.
 
+##### Arguments
+1. `<PACKAGE>`:  Name of package to search, it's possible to use wildcards (`*`).
+
+
 ###### Options
 
 - `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
-- `--limit (-l)`: Limit the number of search results (default: 15)
+- `--limit <LIMIT> (-l)`: Limit the number of search results (default: 15)
 
 ```zsh
 pixi search pixi
-pixi search -l 30 py
-pixi search -c robostack plotjuggler
+pixi search -l 30 py*
+pixi search -c robostack plotjuggler*
 ```
 
 ## `self-update`
 
 Update pixi to the latest version or a specific version. If the pixi binary is not found in the default location (e.g.
-`~/.pixi/bin/pixi`), pixi won't updated to prevent breaking the current installation (Homebrew, etc). The behaviour can be
+`~/.pixi/bin/pixi`), pixi won't update to prevent breaking the current installation (Homebrew, etc.). The behaviour can be
 overridden with the `--force` flag
 
 ##### Options
@@ -357,8 +344,9 @@ pixi self-update --force
 Shows helpful information about the pixi installation, cache directories, disk usage, and more.
 More information [here](advanced/explain_info_command.md).
 
-#####Options
+##### Options
 
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--extended`: extend the information with more slow queries to the system, like directory sizes.
 - `--json`: Get a machine-readable version of the information as output.
 
@@ -371,8 +359,12 @@ pixi info --json --extended
 
 Upload a package to a prefix.dev channel
 
+##### Arguments
+
+1. `<HOST>`: The host + channel to upload to.
+2. `<PACKAGE_FILE>`: The package file to upload.
+
 ```shell
-pixi upload <HOST> <PACKAGE_FILE>
 pixi upload repo.prefix.dev/my_channel my_package.conda
 ```
 
@@ -385,18 +377,20 @@ This command is used to authenticate the user's access to remote hosts such as `
 Store authentication information for given host.
 
 !!! tip
-The host is real hostname not a channel.
+    The host is real hostname not a channel.
+
+##### Arguments
+
+1. `<HOST>`: The host to authenticate with.
 
 ##### Options
 
-- `--token`: The token to use for authentication with prefix.dev.
-- `--username`: The username to use for basic HTTP authentication
-- `--password`: The password to use for basic HTTP authentication.
-- `--conda-token`: The token to use on `anaconda.org` / `quetz` authentication.
+- `--token <TOKEN>`: The token to use for authentication with prefix.dev.
+- `--username <USERNAME>`: The username to use for basic HTTP authentication
+- `--password <PASSWORD>`: The password to use for basic HTTP authentication.
+- `--conda-token <CONDA_TOKEN>`: The token to use on `anaconda.org` / `quetz` authentication.
 
 ```shell
-pixi auth login <HOST> [OPTIONS]
-
 pixi auth login repo.prefix.dev --token pfx_JQEV-m_2bdz-D8NSyRSaNdHANx0qHjq7f2iD
 pixi auth login anaconda.org --conda-token ABCDEFGHIJKLMNOP
 pixi auth login https://myquetz.server --user john --password xxxxxx
@@ -405,6 +399,10 @@ pixi auth login https://myquetz.server --user john --password xxxxxx
 ### `auth logout`
 
 Remove authentication information for a given host.
+
+##### Arguments
+
+1. `<HOST>`: The host to authenticate with.
 
 ```shell
 pixi auth logout <HOST>
@@ -425,6 +423,10 @@ variable.
 ### `global install`
 
 This command installs a package into its own environment and adds the binary to `PATH`, allowing you to access it anywhere on your system without activating the environment.
+
+##### Arguments
+
+1.`<PACKAGE>`: The package to install, this can also be a version constraint.
 
 ##### Options
 
@@ -473,6 +475,10 @@ Globally installed binary packages:
 
 This command upgrades a globally installed package to the latest version.
 
+##### Arguments
+
+1. `<PACKAGE>`: The package to upgrade.
+
 ##### Options
 
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
@@ -506,7 +512,11 @@ Removes a package previously installed into a globally accessible location via
 
 Use `pixi global info` to find out what the package name is that belongs to the tool you want to remove.
 
-```
+##### Arguments
+
+1. `<PACKAGE>`: The package to remove.
+
+```shell
 pixi global remove pre-commit
 ```
 
@@ -517,16 +527,20 @@ This subcommand allows you to modify the project configuration through the comma
 ##### Options
 
 - `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
-- `--no-install`: do not update the environment, only add changed packages to the lock-file.
 
 ### `project channel add`
 
 Add channels to the channel list in the project configuration.
 When you add channels, the channels are tested for existence, added to the lockfile and the environment is reinstalled.
 
+##### Arguments
+
+1. `<CHANNEL>`: The channels to add, name or URL.
+
 ##### Options
 
 - `--no-install`: do not update the environment, only add changed packages to the lock-file.
+- `--feature <FEATURE> (-f)`: The feature for which the channel is added.
 
 ```
 pixi project channel add robostack
@@ -534,6 +548,7 @@ pixi project channel add bioconda conda-forge robostack
 pixi project channel add file:///home/user/local_channel
 pixi project channel add https://repo.prefix.dev/conda-forge
 pixi project channel add --no-install robostack
+pixi project channel add --feature cuda nividia
 ```
 
 ### `project channel list`
@@ -542,7 +557,7 @@ List the channels in the project file
 
 ##### Options
 
-- `--no-install`: do not update the environment, only add changed packages to the lock-file.
+- `urls`: show the urls of the channels instead of the names.
 
 ```sh
 $ pixi project channel list
@@ -554,6 +569,10 @@ https://conda.anaconda.org/conda-forge/
 ### `project channel remove`
 
 List the channels in the project file
+
+##### Arguments
+
+1. `<CHANNEL>...`: The channels to remove, name(s) or URL(s).
 
 ##### Options
 
@@ -577,6 +596,10 @@ Package management made easy!
 
 Set the project description.
 
+##### Arguments
+
+1. `<DESCRIPTION>`: The description to set.
+
 ```sh
 pixi project description set "my new description"
 ```
@@ -584,6 +607,10 @@ pixi project description set "my new description"
 ### `project platform add`
 
 Adds a platform(s) to the project file and updates the lockfile.
+
+##### Arguments
+
+1. `<PLATFORM>...`: The platforms to add.
 
 ##### Options
 
@@ -609,6 +636,10 @@ osx-arm64
 
 Remove platform(s) from the project file and updates the lockfile.
 
+##### Arguments
+
+1. `<PLATFORM>...`: The platforms to remove.
+
 ##### Options
 
 - `--no-install`: do not update the environment, only add changed packages to the lock-file.
@@ -629,6 +660,10 @@ $ pixi project version get
 ### `project version set`
 
 Set the project version.
+
+##### Arguments
+
+1. `<VERSION>`: The version to set.
 
 ```sh
 pixi project version set "0.12.0"
