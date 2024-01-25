@@ -216,6 +216,7 @@ impl PixiControl {
             args: project::channel::add::Args {
                 channel: vec![],
                 no_install: true,
+                feature: None,
             },
         }
     }
