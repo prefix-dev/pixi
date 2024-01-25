@@ -33,7 +33,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     match args.command {
         Command::Add(args) => add::execute(project, args).await,
-        Command::List(args) => list::execute(project, args).await,
+        Command::List(args) => list::execute(project, args),
         Command::Remove(args) => remove::execute(project, args).await,
     }
 }
