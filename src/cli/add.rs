@@ -6,10 +6,12 @@ use crate::{
 use clap::Parser;
 use itertools::{Either, Itertools};
 
+use indexmap::IndexMap;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{
     version_spec::{LogicalOperator, RangeOperator},
-    MatchSpec, NamelessMatchSpec, PackageName, Platform, Version, VersionBumpType, VersionSpec,
+    Channel, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version, VersionBumpType,
+    VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
@@ -290,7 +292,7 @@ pub async fn add_conda_specs_to_project(
         ) {
             Ok(versions) => versions,
             Err(err) => {
-                return Err(err).wrap_err_with(||miette::miette!(
+                return Err(err).wrap_err_with(|| miette::miette!(
                         "could not determine any available versions for {} on {platform}. Either the package could not be found or version constraints on other dependencies result in a conflict.",
                         new_specs.keys().map(|s| s.as_source()).join(", ")
                     ));
@@ -353,7 +355,7 @@ pub fn determine_best_version(
     project: &Project,
     new_specs: &HashMap<PackageName, NamelessMatchSpec>,
     new_specs_type: SpecType,
-    sparse_repo_data: &[SparseRepoData],
+    sparse_repo_data: &IndexMap<(Channel, Platform), SparseRepoData>,
     platform: Platform,
 ) -> miette::Result<HashMap<PackageName, Version>> {
     // Build the combined set of specs while updating the dependencies with the new specs.
@@ -375,9 +377,12 @@ pub fn determine_best_version(
     let package_names = dependencies.names().cloned().collect_vec();
 
     // Get the repodata for the current platform and for NoArch
-    let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
-        sparse.subdir() == platform.as_str() || sparse.subdir() == Platform::NoArch.as_str()
-    });
+    let platform_sparse_repo_data = project
+        .channels()
+        .into_iter()
+        .cloned()
+        .cartesian_product(vec![platform, Platform::NoArch])
+        .filter_map(|target| sparse_repo_data.get(&target));
 
     // Load only records we need for this platform
     let available_packages = SparseRepoData::load_records_recursive(

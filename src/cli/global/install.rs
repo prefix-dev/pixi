@@ -3,6 +3,7 @@ use crate::repodata::friendly_channel_name;
 use crate::{config, prefix::Prefix, progress::await_in_progress, repodata::fetch_sparse_repodata};
 use clap::Parser;
 use dirs::home_dir;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
@@ -382,10 +383,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
     } else {
         eprintln!("{whitespace}These apps have been added to {}\n{whitespace} -  {script_names}\n\n{} To use them, make sure to add {} to your PATH",
-                      console::style(&bin_dir.display()).bold(),
-                      console::style("!").yellow().bold(),
-                      console::style(&bin_dir.display()).bold()
-            )
+                  console::style(&bin_dir.display()).bold(),
+                  console::style("!").yellow().bold(),
+                  console::style(&bin_dir.display()).bold()
+        )
     }
 
     Ok(())
@@ -393,14 +394,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 pub(super) async fn globally_install_package(
     package_matchspec: MatchSpec,
-    platform_sparse_repodata: &[SparseRepoData],
+    sparse_repodata: &IndexMap<(Channel, Platform), SparseRepoData>,
     channel_config: &ChannelConfig,
     authenticated_client: AuthenticatedClient,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
     let package_name = package_name(&package_matchspec)?;
 
     let available_packages = SparseRepoData::load_records_recursive(
-        platform_sparse_repodata,
+        sparse_repodata.values(),
         vec![package_name.clone()],
         None,
     )
