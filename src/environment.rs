@@ -1,3 +1,4 @@
+use crate::project::Environment;
 use crate::{config, consts, install, install_pypi, lock_file, prefix::Prefix, progress, Project};
 use miette::{Context, IntoDiagnostic};
 
@@ -124,14 +125,15 @@ impl LockFileUsage {
 /// make sure the data is not loaded twice since the repodata takes up a lot of memory and takes a
 /// while to load. If `sparse_repo_data` is `None` it will be downloaded. If the lock-file is not
 /// updated, the `sparse_repo_data` is ignored.
-pub async fn get_up_to_date_prefix(
-    project: &Project,
+pub async fn get_up_to_date_prefix<'p>(
+    environment: &'p Environment<'p>,
     usage: LockFileUsage,
     mut no_install: bool,
     sparse_repo_data: Option<Vec<SparseRepoData>>,
     sdist_resolution: SDistResolution,
 ) -> miette::Result<Prefix> {
     let current_platform = Platform::current();
+    let project = environment.project();
 
     // Do not install if the platform is not supported
     if !no_install && !project.platforms().contains(&current_platform) {

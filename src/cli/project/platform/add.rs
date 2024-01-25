@@ -45,7 +45,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
 
     // Try to update the lock-file with the new channels
     get_up_to_date_prefix(
-        &project,
+        &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,
         None,

@@ -2,7 +2,6 @@ mod dependencies;
 mod environment;
 pub mod errors;
 pub mod manifest;
-pub mod metadata;
 pub mod virtual_packages;
 
 use indexmap::{Equivalent, IndexMap, IndexSet};

@@ -5,9 +5,9 @@ use clap::Parser;
 use miette::miette;
 use rattler_conda_types::Platform;
 
-use crate::environment::LockFileUsage;
+use crate::environment::{get_up_to_date_prefix, LockFileUsage};
 use crate::project::manifest::FeatureName;
-use crate::{consts, environment::get_up_to_date_prefix, project::SpecType, Project};
+use crate::{consts, project::SpecType, Project};
 
 /// Remove the dependency from the project
 #[derive(Debug, Default, Parser)]
@@ -117,9 +117,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     project.save()?;
     eprintln!("{}", sucessful_output.join("\n"));
 
+    // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
-    let _ = get_up_to_date_prefix(
-        &project,
+    get_up_to_date_prefix(
+        &project.default_environment(),
         LockFileUsage::Update,
         false,
         None,

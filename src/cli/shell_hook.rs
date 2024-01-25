@@ -1,14 +1,13 @@
 use clap::Parser;
 use miette::IntoDiagnostic;
-use rattler_conda_types::Platform;
 use rattler_shell::{
-    activation::{ActivationVariables, Activator, PathModificationBehavior},
+    activation::{ActivationVariables, PathModificationBehavior},
     shell::ShellEnum,
 };
 
 use crate::{
+    activation::get_activator,
     environment::{get_up_to_date_prefix, LockFileUsage},
-    prefix::Prefix,
     Project,
 };
 
@@ -23,9 +22,10 @@ pub struct Args {
 /// Generates the activation script.
 async fn generate_activation_script(shell: Option<ShellEnum>) -> miette::Result<String> {
     let project = Project::discover()?;
+    let environment = project.default_environment();
 
     get_up_to_date_prefix(
-        &project,
+        &environment,
         LockFileUsage::Frozen,
         false,
         None,
@@ -33,10 +33,8 @@ async fn generate_activation_script(shell: Option<ShellEnum>) -> miette::Result<
     )
     .await?;
 
-    let platform = Platform::current();
-    let prefix = Prefix::new(project.default_environment().dir())?;
     let shell = shell.unwrap_or_default();
-    let activator = Activator::from_path(prefix.root(), shell, platform).into_diagnostic()?;
+    let activator = get_activator(&environment, shell).into_diagnostic()?;
 
     let path = std::env::var("PATH")
         .ok()
