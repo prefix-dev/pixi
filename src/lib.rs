@@ -19,6 +19,7 @@ pub mod utils;
 
 mod pypi_marker_env;
 mod pypi_tags;
+mod solver;
 
 pub use project::Project;
 use rattler_networking::retry_policies::ExponentialBackoff;

@@ -1,6 +1,7 @@
 use crate::project::Environment;
 use crate::{config, progress, project::Project};
 use futures::{stream, StreamExt, TryStreamExt};
+use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
@@ -48,13 +49,27 @@ pub async fn fetch_sparse_repodata(
         }
     }
 
-    if fetch_targets.is_empty() {
-        return Ok(vec![]);
+    Ok(
+        fetch_sparse_repodata_targets(fetch_targets, authenticated_client)
+            .await?
+            .into_values()
+            .collect(),
+    )
+}
+
+pub async fn fetch_sparse_repodata_targets(
+    fetch_targets: impl IntoIterator<Item = (Channel, Platform)>,
+    authenticated_client: &AuthenticatedClient,
+) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
+    let mut fetch_targets = fetch_targets.into_iter().peekable();
+    if fetch_targets.peek().is_none() {
+        return Ok(IndexMap::new());
     }
 
     // Construct a top-level progress bar
     let multi_progress = progress::global_multi_progress();
-    let top_level_progress = multi_progress.add(ProgressBar::new(fetch_targets.len() as u64));
+    let top_level_progress =
+        multi_progress.add(ProgressBar::new(fetch_targets.size_hint().0 as u64));
     top_level_progress.set_style(progress::long_running_progress_style());
     top_level_progress.set_message("fetching latest repodata");
     top_level_progress.enable_steady_tick(Duration::from_millis(50));
@@ -81,7 +96,7 @@ pub async fn fetch_sparse_repodata(
 
             async move {
                 let result = fetch_repo_data_records_with_progress(
-                    channel,
+                    channel.clone(),
                     platform,
                     &repodata_cache,
                     download_client,
@@ -92,12 +107,12 @@ pub async fn fetch_sparse_repodata(
 
                 top_level_progress.tick();
 
-                result
+                result.map(|repo_data| repo_data.map(|repo_data| ((channel, platform), repo_data)))
             }
         })
         .buffered(20)
         .filter_map(|result| async move { result.transpose() })
-        .try_collect::<Vec<_>>()
+        .try_collect()
         .await;
 
     // Clear all the progressbars together

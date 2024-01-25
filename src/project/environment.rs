@@ -8,6 +8,7 @@ use crate::{task::Task, Project};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{Either, Itertools};
 use rattler_conda_types::{Channel, Platform};
+use std::hash::{Hash, Hasher};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -273,6 +274,20 @@ impl<'p> Environment<'p> {
         self.features().any(|f| f.has_pypi_dependencies())
     }
 }
+
+impl<'p> Hash for Environment<'p> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.environment.name.hash(state);
+    }
+}
+
+impl<'p> PartialEq<Self> for Environment<'p> {
+    fn eq(&self, other: &Self) -> bool {
+        self.environment.name == other.environment.name
+    }
+}
+
+impl<'p> Eq for Environment<'p> {}
 
 #[cfg(test)]
 mod tests {

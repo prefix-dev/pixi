@@ -1,5 +1,5 @@
 mod package_identifier;
-mod pypi;
+pub(crate) mod pypi;
 mod pypi_name_mapping;
 mod satisfiability;
 
@@ -23,7 +23,10 @@ use std::path::Path;
 use std::{sync::Arc, time::Duration};
 
 use crate::project::Environment;
-pub use satisfiability::lock_file_satisfies_project;
+pub use satisfiability::{
+    lock_file_satisfies_project, verify_environment_satisfiability, verify_platform_satisfiability,
+    PlatformUnsat,
+};
 
 /// A list of conda packages that are locked for a specific platform.
 pub type LockedCondaPackages = Vec<RepoDataRecord>;
@@ -331,8 +334,7 @@ async fn resolve_platform(
         // TODO(baszalmstra): We should not need to clone here. We should be able to pass a reference to the data instead.
         existing_lock_file.clone(),
         available_packages,
-    )
-    .await?;
+    )?;
 
     // Add purl's for the conda packages that are also available as pypi packages if we need them.
     if environment.has_pypi_dependencies() {
@@ -345,7 +347,7 @@ async fn resolve_platform(
 /// Solves the conda package environment for the given input. This function is async because it
 /// spawns a background task for the solver. Since solving is a CPU intensive task we do not want to
 /// block the main task.
-async fn resolve_conda_dependencies(
+pub fn resolve_conda_dependencies(
     specs: Vec<MatchSpec>,
     virtual_packages: Vec<GenericVirtualPackage>,
     locked_packages: Vec<RepoDataRecord>,
@@ -366,7 +368,7 @@ async fn resolve_conda_dependencies(
 
 /// Load the repodata records for the specified platform and package names in the background. This
 /// is a CPU and IO intensive task so we run it in a blocking task to not block the main task.
-async fn load_sparse_repo_data_async(
+pub async fn load_sparse_repo_data_async(
     platform: Platform,
     package_names: Vec<PackageName>,
     sparse_repo_data: Arc<[SparseRepoData]>,

@@ -29,9 +29,6 @@ pub enum EnvironmentUnsat {
 
     #[error("channels mismatch")]
     ChannelsMismatch,
-
-    #[error("{0} is unsatisfiable")]
-    PlatformUnsatisfiable(Platform, #[source] PlatformUnsat),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -70,10 +67,16 @@ pub enum PlatformUnsat {
 /// outs if verification of any environment fails.
 pub fn lock_file_satisfies_project(project: &Project, lock_file: &LockFile) -> Result<(), Unsat> {
     for env in project.environments() {
-        verify_environment_satisfiability(&env, lock_file.environment(env.name().as_str()))
-            .map_err(|unsat| {
-                Unsat::EnvironmentUnsatisfiable(env.name().as_str().to_string(), unsat)
-            })?
+        let Some(locked_env) = lock_file.environment(env.name().as_str()) else {
+            return Err(Unsat::EnvironmentUnsatisfiable(
+                env.name().as_str().to_string(),
+                EnvironmentUnsat::Missing,
+            ));
+        };
+
+        verify_environment_satisfiability(&env, &locked_env).map_err(|unsat| {
+            Unsat::EnvironmentUnsatisfiable(env.name().as_str().to_string(), unsat)
+        })?
     }
 
     Ok(())
@@ -87,12 +90,8 @@ pub fn lock_file_satisfies_project(project: &Project, lock_file: &LockFile) -> R
 /// figure out what went wrong.
 pub fn verify_environment_satisfiability(
     environment: &Environment<'_>,
-    locked_environment: Option<rattler_lock::Environment>,
+    locked_environment: &rattler_lock::Environment,
 ) -> Result<(), EnvironmentUnsat> {
-    let Some(locked_environment) = locked_environment else {
-        return Err(EnvironmentUnsat::Missing);
-    };
-
     // Check if the channels in the lock file match our current configuration. Note that the order
     // matters here. If channels are added in a different order, the solver might return a different
     // result.
@@ -103,15 +102,6 @@ pub fn verify_environment_satisfiability(
         .collect_vec();
     if !locked_environment.channels().eq(&channels) {
         return Err(EnvironmentUnsat::ChannelsMismatch);
-    }
-
-    // Check each individual platform
-    for platform in environment.platforms() {
-        if let Err(unsat) =
-            verify_platform_satisfiability(environment, &locked_environment, platform)
-        {
-            return Err(EnvironmentUnsat::PlatformUnsatisfiable(platform, unsat));
-        }
     }
 
     Ok(())
