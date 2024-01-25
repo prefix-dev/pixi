@@ -5,10 +5,9 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, Platform};
-use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::{fetch, sparse::SparseRepoData};
+use reqwest_middleware::ClientWithMiddleware;
 use std::{path::Path, time::Duration};
-
 impl Project {
     // TODO: Remove this function once everything is migrated to the new environment system.
     pub async fn fetch_sparse_repodata(&self) -> miette::Result<Vec<SparseRepoData>> {
@@ -27,7 +26,7 @@ impl Environment<'_> {
 pub async fn fetch_sparse_repodata(
     channels: impl IntoIterator<Item = &'_ Channel>,
     target_platforms: impl IntoIterator<Item = Platform>,
-    authenticated_client: &AuthenticatedClient,
+    authenticated_client: &ClientWithMiddleware,
 ) -> miette::Result<Vec<SparseRepoData>> {
     let channels = channels.into_iter();
     let target_platforms = target_platforms.into_iter().collect_vec();
@@ -115,7 +114,7 @@ async fn fetch_repo_data_records_with_progress(
     channel: Channel,
     platform: Platform,
     repodata_cache: &Path,
-    client: AuthenticatedClient,
+    client: ClientWithMiddleware,
     progress_bar: indicatif::ProgressBar,
     allow_not_found: bool,
 ) -> miette::Result<Option<SparseRepoData>> {
