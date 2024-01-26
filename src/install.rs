@@ -12,7 +12,7 @@ use rattler::install::{
 };
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
-use rattler_networking::AuthenticatedClient;
+use reqwest_middleware::ClientWithMiddleware;
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -23,7 +23,7 @@ pub async fn execute_transaction(
     prefix_records: &[PrefixRecord],
     target_prefix: PathBuf,
     cache_dir: PathBuf,
-    download_client: AuthenticatedClient,
+    download_client: ClientWithMiddleware,
 ) -> miette::Result<()> {
     // Open the package cache
     let package_cache = PackageCache::new(cache_dir.join("pkgs"));
@@ -154,7 +154,7 @@ pub async fn execute_transaction(
 #[allow(clippy::too_many_arguments)]
 async fn execute_operation(
     target_prefix: &Path,
-    download_client: AuthenticatedClient,
+    download_client: ClientWithMiddleware,
     package_cache: &PackageCache,
     install_driver: &InstallDriver,
     download_pb: Option<&ProgressBarMessageFormatter>,

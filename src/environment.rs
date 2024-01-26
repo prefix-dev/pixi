@@ -11,8 +11,8 @@ use itertools::Itertools;
 use rattler::install::{PythonInfo, Transaction};
 use rattler_conda_types::{Channel, Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
+use reqwest_middleware::ClientWithMiddleware;
 use rip::index::PackageDb;
 use rip::resolve::SDistResolution;
 use std::{collections::HashMap, error::Error, fmt::Write, io::ErrorKind, path::Path, sync::Arc};
@@ -518,7 +518,7 @@ impl PythonStatus {
 pub async fn update_prefix_conda(
     name: &str,
     prefix: &Prefix,
-    authenticated_client: AuthenticatedClient,
+    authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
     repodata_records: &[RepoDataRecord],
     platform: Platform,

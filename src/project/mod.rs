@@ -10,7 +10,8 @@ use once_cell::sync::OnceCell;
 use rattler_conda_types::{
     Channel, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
 };
-use rattler_networking::AuthenticatedClient;
+use rattler_networking::AuthenticationMiddleware;
+use reqwest_middleware::ClientWithMiddleware;
 use rip::{index::PackageDb, normalize_index_url};
 use std::hash::Hash;
 use std::{
@@ -89,7 +90,7 @@ pub struct Project {
     /// Reqwest client shared for this project
     client: reqwest::Client,
     /// Authenticated reqwest client shared for this project
-    authenticated_client: AuthenticatedClient,
+    authenticated_client: ClientWithMiddleware,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
 }
@@ -107,8 +108,9 @@ impl Project {
     /// Constructs a new instance from an internal manifest representation
     pub fn from_manifest(manifest: Manifest) -> Self {
         let client = reqwest::Client::new();
-        let authenticated_client =
-            AuthenticatedClient::from_client(client.clone(), Default::default());
+        let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
+            .with_arc(Arc::new(AuthenticationMiddleware::default()))
+            .build();
         Self {
             root: Default::default(),
             package_db: Default::default(),
@@ -169,7 +171,9 @@ impl Project {
             root: root.to_owned(),
             package_db: Default::default(),
             client: Default::default(),
-            authenticated_client: Default::default(),
+            authenticated_client: reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
+                .with_arc(Arc::new(AuthenticationMiddleware::default()))
+                .build(),
             manifest: manifest?,
         })
     }
@@ -365,7 +369,7 @@ impl Project {
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> &AuthenticatedClient {
+    pub fn authenticated_client(&self) -> &ClientWithMiddleware {
         &self.authenticated_client
     }
 }
