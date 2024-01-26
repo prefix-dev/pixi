@@ -8,20 +8,29 @@ pub struct Args {
     pub urls: bool,
 }
 
-pub async fn execute(project: Project, args: Args) -> miette::Result<()> {
-    project.channels().into_iter().for_each(|channel| {
-        if args.urls {
-            // Print the channel's url
-            println!("{}", channel.base_url());
-        } else {
-            // Print the channel's name and fallback to the url if it doesn't have one
-            let name = channel
-                .name
-                .as_deref()
-                .unwrap_or(channel.base_url().as_str());
-            println!("{}", name);
-        }
-    });
-
+pub fn execute(project: Project, args: Args) -> miette::Result<()> {
+    project
+        .environments()
+        .iter()
+        .map(|e| {
+            println!(
+                "{} {}",
+                console::style("Environment:").bold().blue(),
+                console::style(e.name()).bold()
+            );
+            e.channels()
+        })
+        .for_each(|c| {
+            c.into_iter().for_each(|channel| {
+                println!(
+                    "- {}",
+                    if args.urls {
+                        channel.base_url().as_str()
+                    } else {
+                        channel.name()
+                    }
+                );
+            })
+        });
     Ok(())
 }

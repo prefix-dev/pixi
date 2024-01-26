@@ -7,7 +7,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord};
-use rattler_networking::AuthenticatedClient;
+use rattler_networking::AuthenticationMiddleware;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -15,7 +15,9 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use rattler_solve::{resolvo, SolverImpl};
+use reqwest_middleware::ClientWithMiddleware;
 use std::ffi::OsStr;
+use std::sync::Arc;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -328,7 +330,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|c| Channel::from_str(c, &channel_config))
         .collect::<Result<Vec<Channel>, _>>()
         .into_diagnostic()?;
-    let authenticated_client = AuthenticatedClient::default();
+    let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
+        .with_arc(Arc::new(AuthenticationMiddleware::default()))
+        .build();
 
     // Find the MatchSpec we want to install
     let package_matchspec = MatchSpec::from_str(&args.package).into_diagnostic()?;
@@ -395,7 +399,7 @@ pub(super) async fn globally_install_package(
     package_matchspec: MatchSpec,
     platform_sparse_repodata: &[SparseRepoData],
     channel_config: &ChannelConfig,
-    authenticated_client: AuthenticatedClient,
+    authenticated_client: ClientWithMiddleware,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
     let package_name = package_name(&package_matchspec)?;
 
