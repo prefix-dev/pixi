@@ -25,7 +25,9 @@ use std::path::Path;
 use std::{sync::Arc, time::Duration};
 
 use crate::project::Environment;
-pub use satisfiability::{lock_file_satisfies_project, verify_environment_satisfiability};
+pub use satisfiability::{
+    lock_file_satisfies_project, verify_environment_satisfiability, EnvironmentUnsat,
+};
 
 /// A list of conda packages that are locked for a specific platform.
 pub type LockedCondaPackages = Vec<RepoDataRecord>;
