@@ -561,9 +561,13 @@ List the channels in the project file
 
 ```sh
 $ pixi project channel list
-conda-forge
+Environment: default
+- conda-forge
+
 $ pixi project channel list --urls
-https://conda.anaconda.org/conda-forge/
+Environment: default
+- https://conda.anaconda.org/conda-forge/
+
 ```
 
 ### `project channel remove`
@@ -577,10 +581,13 @@ List the channels in the project file
 ##### Options
 
 - `--no-install`: do not update the environment, only add changed packages to the lock-file.
+- `--feature <FEATURE> (-f)`: The feature for which the channel is removed.
 
 ```sh
 pixi project channel remove conda-forge
 pixi project channel remove https://conda.anaconda.org/conda-forge/
+pixi project channel remove --no-install conda-forge
+pixi project channel remove --feature cuda nividia
 ```
 
 ### `project description get`
