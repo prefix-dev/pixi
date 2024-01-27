@@ -12,9 +12,9 @@ use crate::project::virtual_packages::verify_current_platform_has_required_virtu
 use crate::repodata::fetch_sparse_repodata_targets;
 use crate::utils::BarrierCell;
 use async_scoped::{Scope, TokioScope};
-use futures::future::Either;
+use futures::future::{BoxFuture, Either};
 use futures::stream::FuturesUnordered;
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt, TryFutureExt};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::{ProgressBar, ProgressFinish};
 use itertools::Itertools;
@@ -602,10 +602,14 @@ impl<'p> OutdatedEnvironments<'p> {
 
         // For all targets where conda is out of date, the pypi packages are also out of date.
         for (environment, platforms) in outdated_conda.iter() {
-            outdated_pypi
-                .entry(environment.clone())
-                .or_default()
-                .extend(platforms.iter().copied());
+            for platform in platforms {
+                if !environment.pypi_dependencies(Some(*platform)).is_empty() {
+                    outdated_pypi
+                        .entry(environment.clone())
+                        .or_default()
+                        .extend(platforms.iter().copied());
+                }
+            }
         }
 
         Self {
@@ -624,9 +628,7 @@ impl<'p> OutdatedEnvironments<'p> {
 /// This function will return a [`LockFileDerivedData`] struct that contains the lock-file and any
 /// potential derived data that was computed as part of this function. The derived data might be
 /// usable by other functions to avoid recomputing the same data.
-async fn ensure_up_to_date_lock_file<'p>(
-    project: &'p Project,
-) -> miette::Result<LockFileDerivedData> {
+async fn ensure_up_to_date_lock_file(project: &Project) -> miette::Result<LockFileDerivedData> {
     let lock_file = load_lock_file(project).await?;
     let current_platform = Platform::current();
 
@@ -663,9 +665,6 @@ async fn ensure_up_to_date_lock_file<'p>(
             .await?,
     );
 
-    // TODO(baszalmstra): In the future we could start solving conda environments as soon as we
-    //  enough repodata is available.
-
     // Extract the current conda records from the lock-file
     // TODO: Should we parallelize this? Measure please.
     let mut locked_conda_repodata_records = project
@@ -676,49 +675,50 @@ async fn ensure_up_to_date_lock_file<'p>(
                 .environment(env.name().as_str())
                 .into_iter()
                 .map(move |locked_env| {
-                    locked_env
-                        .conda_repodata_records()
-                        .map(|records| (env.clone(), records))
+                    locked_env.conda_repodata_records().map(|records| {
+                        (
+                            env.clone(),
+                            records
+                                .into_iter()
+                                .map(|(platform, records)| (platform, Arc::new(records)))
+                                .collect(),
+                        )
+                    })
                 })
         })
-        .collect::<Result<HashMap<_, _>, _>>()
+        .collect::<Result<HashMap<_, HashMap<_, _>>, _>>()
         .into_diagnostic()?;
 
-    // Construct all progress bars before spawning anything because that causes the progress bar to
-    // skip a line or something.
-    let mut environment_progress_bars = HashMap::new();
-    let mut target_progress_bars = HashMap::new();
-    for (environment, platforms) in outdated.conda.iter() {
-        let mut environment_pb = EnvironmentProgressBar::new(environment.name());
-        for platform in platforms {
-            target_progress_bars.insert(
-                (environment.clone(), *platform),
-                environment_pb.add_platform(*platform),
-            );
-        }
-        environment_progress_bars.insert(environment.clone(), environment_pb);
-    }
-
+    // This will keep track of all outstanding tasks that we need to wait for. All tasks are added
+    // to this list after they are spawned. This function blocks until all pending tasks have either
+    // completed or errored.
     let mut pending_futures = FuturesUnordered::new();
+
+    /// Keeps track of all pending conda targets that are being solved. The mapping contains a
+    /// `BarrierCell` that will eventually contain the solved records computed by another task.
+    /// This allows tasks to wait for the records to be solved before proceeding.
     let mut updated_conda_records: HashMap<_, HashMap<_, _>> = HashMap::new();
 
-    // Start solving all the conda environments.
+    // Spawn tasks for all the conda targets that are out of date.
     for (environment, platforms) in outdated.conda {
-        let updated_conda_records = updated_conda_records
+        let solved_conda_repodata_records = updated_conda_records
             .entry(environment.clone())
             .or_default();
 
-        for platform in platforms {
-            // Get the progress bar for this target
-            let pb = target_progress_bars
-                .get(&(environment.clone(), platform))
-                .expect("progress bar must exist")
-                .clone();
+        // Turn the platforms into an IndexSet so we have a little control over the order in which
+        // we solve the platforms. We want to solve the current platform first so we can start
+        // instantiating prefixes if we have to.
+        let mut ordered_platforms = platforms.into_iter().collect::<IndexSet<_>>();
+        if let Some(current_platform_index) = ordered_platforms.get_index_of(&current_platform) {
+            ordered_platforms.move_index(current_platform_index, 0);
+        }
 
+        for platform in ordered_platforms {
             // Extract the records from the existing lock file
             let existing_records = locked_conda_repodata_records
                 .get_mut(&environment)
                 .and_then(|records| records.remove(&platform))
+                .map(|records| Arc::try_unwrap(records).unwrap_or_else(|arc| (*arc).clone()))
                 .unwrap_or_default();
 
             // Spawn a task to solve the environment.
@@ -727,44 +727,52 @@ async fn ensure_up_to_date_lock_file<'p>(
                 existing_records,
                 &repo_data,
                 platform,
-                pb,
+                global_multi_progress().add(ProgressBar::new(1)),
             );
 
             pending_futures.push(conda_solve_task);
-            updated_conda_records.insert(platform, BarrierCell::new());
+            solved_conda_repodata_records.insert(
+                platform,
+                Arc::new(BarrierCell::<Arc<Vec<RepoDataRecord>>>::new()),
+            );
         }
     }
 
-    // Start creating/updating pypi build environments
+    // Spawn tasks to instantiate prefixes that we need to be able to solve Pypi packages.
+    //
+    // Solving Pypi packages requires a python interpreter to be present in the prefix, therefor we
+    // first need to make sure we have conda packages available, then we can instantiate the
+    // prefix with at least the required conda packages (including a python interpreter) and then
+    // we can solve the Pypi packages using the installed interpreter.
+    //
+    // We only need to instantiate the prefix for the current platform.
     for environment in outdated.pypi.keys() {
         // Construct a future that will resolve when we have the repodata available for the current
         // platform for this environment.
         let records_future = updated_conda_records
             .get(environment)
             .and_then(|records| records.get(&current_platform))
-            .map(|records| Either::Left(records.wait()))
+            .map(|records| {
+                let record = records.clone();
+                Either::Left(async move { record.wait().await.clone() })
+            })
             .or_else(|| {
                 locked_conda_repodata_records
                     .get(environment)
                     .and_then(|records| records.get(&current_platform))
-                    .map(|records| Either::Right(ready(records)))
+                    .map(|records| Either::Right(ready(records.clone())))
             })
             .expect("conda records should be available now or in the future");
 
         // Spawn a task to instantiate the environment
         let pypi_env_task = spawn_create_prefix_task(environment, records_future);
+
+        pending_futures.push(pypi_env_task);
     }
 
     // Iterate over all pending futures and collect them one by one
     while let Some(result) = pending_futures.next().await {
-        let result = match result.map_err(JoinError::try_into_panic) {
-            Ok(Ok(result)) => result,
-            Ok(Err(err)) => return Err(err),
-            Err(Err(_)) => miette::bail!("cancelled"),
-            Err(Ok(panic)) => std::panic::resume_unwind(panic),
-        };
-
-        match result {
+        match result? {
             TaskResult::CondaSolved(environment, platform, records) => {
                 let environment = project
                     .environment(&environment)
@@ -775,8 +783,13 @@ async fn ensure_up_to_date_lock_file<'p>(
                     .or_default()
                     .entry(platform)
                     .or_default()
-                    .set(records)
+                    .set(Arc::new(records))
                     .expect("records should not be solved twice");
+
+                tracing::info!("solved {} {}", environment.name(), platform);
+            }
+            TaskResult::CondaPrefixUpdated(environment, _) => {
+                tracing::info!("instantiated {}", environment);
             }
         }
     }
@@ -798,7 +811,12 @@ async fn ensure_up_to_date_lock_file<'p>(
             let records = updated_conda_records
                 .get_mut(&environment)
                 .and_then(|records| records.remove(&platform))
-                .map(|records| records.into_inner().expect("records should be solved"))
+                .map(|records| {
+                    Arc::into_inner(records)
+                        .expect("records should no longer be shared")
+                        .into_inner()
+                        .expect("records should be solved")
+                })
                 .or_else(|| {
                     locked_conda_repodata_records
                         .get_mut(&environment)
@@ -806,14 +824,15 @@ async fn ensure_up_to_date_lock_file<'p>(
                 })
                 .expect("the records should either have been updated or they should already exist");
 
-            for record in records {
-                builder.add_conda_package(environment.name().as_str(), platform, record.into());
+            for record in records.iter() {
+                builder.add_conda_package(
+                    environment.name().as_str(),
+                    platform,
+                    record.clone().into(),
+                );
             }
         }
     }
-
-    // Drop progress bars to clear all of them
-    drop(environment_progress_bars);
 
     // Store the lock file
     let lock_file = builder.finish();
@@ -826,42 +845,6 @@ async fn ensure_up_to_date_lock_file<'p>(
         lock_file,
         repo_data,
     })
-}
-
-struct EnvironmentProgressBar {
-    top_level: ProgressBar,
-    children: Vec<ProgressBar>,
-}
-
-impl EnvironmentProgressBar {
-    pub fn new(name: &EnvironmentName) -> Self {
-        let top_level_progress = global_multi_progress().add(ProgressBar::new(10));
-        top_level_progress.set_style(progress::long_running_progress_style());
-        top_level_progress.set_message(format!("Solving environment '{}'", name.as_str()));
-        top_level_progress.enable_steady_tick(Duration::from_millis(100));
-
-        Self {
-            top_level: top_level_progress,
-            children: Vec::new(),
-        }
-    }
-
-    pub fn add_platform(&mut self, platform: Platform) -> SolveProgressBar {
-        let last_pb = self.children.last().unwrap_or(&self.top_level);
-        let pb = global_multi_progress().insert_after(last_pb, ProgressBar::new(10));
-        self.children.push(pb.clone());
-
-        SolveProgressBar::new(pb, platform)
-    }
-}
-
-impl Drop for EnvironmentProgressBar {
-    fn drop(&mut self) {
-        for pb in self.children.iter().rev() {
-            pb.finish_and_clear();
-        }
-        self.top_level.finish_and_clear();
-    }
 }
 
 #[derive(Clone)]
@@ -911,13 +894,18 @@ impl SolveProgressBar {
     }
 }
 
+pub enum TaskResult {
+    CondaSolved(EnvironmentName, Platform, Vec<RepoDataRecord>),
+    CondaPrefixUpdated(EnvironmentName, Prefix),
+}
+
 fn spawn_solve_conda_environment_task(
     environment: &Environment<'_>,
     existing_repodata_records: Vec<RepoDataRecord>,
     sparse_repo_data: &Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
     platform: Platform,
-    pb: SolveProgressBar,
-) -> JoinHandle<miette::Result<TaskResult>> {
+    pb: ProgressBar,
+) -> BoxFuture<'static, miette::Result<TaskResult>> {
     // Get the dependencies for this platform
     let dependencies = environment.dependencies(None, Some(platform));
 
@@ -937,7 +925,7 @@ fn spawn_solve_conda_environment_task(
     let has_pypi_dependencies = environment.has_pypi_dependencies();
 
     tokio::spawn((move || async move {
-        pb.start();
+        // pb.start();
 
         // Convert the dependencies into match specs
         let match_specs = dependencies
@@ -960,8 +948,6 @@ fn spawn_solve_conda_environment_task(
         )
         .await?;
 
-        tokio::time::sleep(Duration::new(platform.as_str().len() as u64, 0)).await;
-
         // Solve conda packages
         pb.set_message("resolving conda");
         let mut records = lock_file::resolve_conda_dependencies(
@@ -981,10 +967,55 @@ fn spawn_solve_conda_environment_task(
 
         Ok(TaskResult::CondaSolved(environment_name, platform, records))
     })())
+    .map_err(|e| match e.try_into_panic() {
+        Ok(panic) => std::panic::resume_unwind(panic),
+        Err(_err) => miette::miette!("the operation was cancelled"),
+    })
+    .map_ok_or_else(|e| Err(e), identity)
+    .boxed()
 }
 
-pub enum TaskResult {
-    CondaSolved(EnvironmentName, Platform, Vec<RepoDataRecord>),
+fn spawn_create_prefix_task(
+    environment: &Environment<'_>,
+    conda_records: impl Future<Output = Arc<Vec<RepoDataRecord>>> + Send + 'static,
+) -> BoxFuture<'static, miette::Result<TaskResult>> {
+    let environment_name = environment.name().clone();
+    let prefix = Prefix::new(environment.dir());
+    let client = environment.project().authenticated_client().clone();
+
+    // Spawn a task to determine the currently installed packages.
+    let installed_packages_future = {
+        let prefix = prefix.clone();
+        tokio::spawn(async move { prefix.find_installed_packages(None).await })
+            .map_err(|e| match e.try_into_panic() {
+                Ok(panic) => std::panic::resume_unwind(panic),
+                Err(_err) => miette::miette!("the operation was cancelled"),
+            })
+            .map_ok_or_else(|e| Err(e), identity)
+    };
+
+    // Spawn a task to update the prefix.
+    tokio::spawn((move || async move {
+        let (conda_records, installed_packages) =
+            tokio::try_join!(conda_records.map(Ok), installed_packages_future)?;
+
+        update_prefix_conda(
+            &prefix,
+            client,
+            installed_packages,
+            &conda_records,
+            Platform::current(),
+        )
+        .await?;
+
+        Ok(TaskResult::CondaPrefixUpdated(environment_name, prefix))
+    })())
+    .map_err(|e| match e.try_into_panic() {
+        Ok(panic) => std::panic::resume_unwind(panic),
+        Err(_err) => miette::miette!("the operation was cancelled"),
+    })
+    .map_ok_or_else(|e| Err(e), identity)
+    .boxed()
 }
 
 /// Load the repodata records for the specified platform and package names in the background. This
@@ -1016,11 +1047,4 @@ pub async fn load_sparse_repo_data_async(
             platform.as_str()
         )
     })
-}
-
-fn spawn_create_prefix_task(
-    environment: &Environment<'_>,
-    records_future: impl Future<Output = &Vec<RepoDataRecord>>,
-) -> JoinHandle<miette::Result<TaskResult>> {
-
 }

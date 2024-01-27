@@ -12,6 +12,9 @@ pub struct BarrierCell<T> {
     notify: Notify,
 }
 
+unsafe impl<T: Sync> Sync for BarrierCell<T> {}
+unsafe impl<T: Send> Send for BarrierCell<T> {}
+
 #[repr(u8)]
 enum BarrierCellState {
     Uninitialized,

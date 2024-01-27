@@ -428,7 +428,7 @@ pub(super) async fn globally_install_package(
 
     // Create the binary environment prefix where we install or update the package
     let BinEnvDir(bin_prefix) = BinEnvDir::create(&package_name).await?;
-    let prefix = Prefix::new(bin_prefix)?;
+    let prefix = Prefix::new(bin_prefix);
     let prefix_records = prefix.find_installed_packages(None).await?;
 
     // Create the transaction that we need
