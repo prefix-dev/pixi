@@ -64,9 +64,10 @@ where
         let mut records = Vec::new();
 
         for repo in repo_data {
-            records.extend(repo
-                .load_records(&PackageName::new_unchecked(*package))
-                .into_diagnostic()?);
+            records.extend(
+                repo.load_records(&PackageName::new_unchecked(*package))
+                    .into_diagnostic()?,
+            );
         }
 
         // sort records by version, get the latest one
