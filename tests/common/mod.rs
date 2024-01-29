@@ -16,7 +16,7 @@ use pixi::{
         task::{self, AddArgs, AliasArgs},
     },
     consts,
-    task::{ExecutableTask, RunOutput, TraversalError},
+    task::{ExecutableTask, RunOutput},
     Project,
 };
 use rattler_conda_types::{MatchSpec, Platform};
@@ -24,7 +24,7 @@ use rattler_conda_types::{MatchSpec, Platform};
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi::cli::LockFileUsageArgs;
 use pixi::project::manifest::FeatureName;
-use pixi::task::TaskExecutionError;
+use pixi::task::{TaskExecutionError, TaskGraph, TaskGraphError};
 use rattler_lock::{LockFile, Package};
 use std::{
     path::{Path, PathBuf},
@@ -224,41 +224,40 @@ impl PixiControl {
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
         args.manifest_path = args.manifest_path.or_else(|| Some(self.manifest_path()));
+
+        // Load the project
         let project = self.project()?;
         let environment = project.default_environment();
-        let task = ExecutableTask::from_cmd_args(&project, args.task, Some(Platform::current()));
-        let task_env = get_activation_env(&environment, args.lock_file_usage.into()).await?;
 
-        #[derive(Error, Debug, Diagnostic)]
-        enum RunError {
-            #[error(transparent)]
-            TraverseError(#[from] TraversalError),
-            #[error(transparent)]
-            ExecutionError(#[from] TaskExecutionError),
-            #[error("the task executed with a non-zero exit code {0}")]
-            NonZeroExitCode(i32),
+        // Create a task graph from the command line arguments.
+        let task_graph = TaskGraph::from_cmd_args(&project, args.task, Some(Platform::current()))
+            .map_err(RunError::TaskGraphError)?;
+
+        // Iterate over all tasks in the graph and execute them.
+        let mut task_env = None;
+        let mut result = RunOutput::default();
+        for task_id in task_graph.topological_order() {
+            let task = ExecutableTask::from_task_graph(&task_graph, task_id);
+
+            // Construct the task environment if not already created.
+            let task_env = match task_env.as_ref() {
+                None => {
+                    let env = get_activation_env(&environment, args.lock_file_usage.into()).await?;
+                    task_env.insert(env) as &_
+                }
+                Some(task_env) => task_env,
+            };
+
+            let output = task.execute_with_pipes(&task_env, None).await?;
+            result.stdout.push_str(&output.stdout);
+            result.stderr.push_str(&output.stderr);
+            result.exit_code = output.exit_code;
+            if output.exit_code != 0 {
+                return Err(RunError::NonZeroExitCode(output.exit_code).into());
+            }
         }
 
-        Ok(task
-            .traverse(
-                RunOutput::default(),
-                move |mut result, task| {
-                    let task_env = task_env.clone();
-                    async move {
-                        let output = task.execute_with_pipes(&task_env, None).await?;
-                        result.stdout.push_str(&output.stdout);
-                        result.stderr.push_str(&output.stderr);
-                        result.exit_code = output.exit_code;
-                        if output.exit_code != 0 {
-                            Err(RunError::NonZeroExitCode(output.exit_code))
-                        } else {
-                            Ok(result)
-                        }
-                    }
-                },
-                |_, _| async { true },
-            )
-            .await?)
+        return Ok(result);
     }
 
     /// Returns a [`InstallBuilder`]. To execute the command and await the result call `.await` on the return value.
@@ -364,4 +363,14 @@ impl IntoMatchSpec for MatchSpec {
     fn into(self) -> MatchSpec {
         self
     }
+}
+
+#[derive(Error, Debug, Diagnostic)]
+enum RunError {
+    #[error(transparent)]
+    TaskGraphError(#[from] TaskGraphError),
+    #[error(transparent)]
+    ExecutionError(#[from] TaskExecutionError),
+    #[error("the task executed with a non-zero exit code {0}")]
+    NonZeroExitCode(i32),
 }
