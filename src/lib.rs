@@ -5,7 +5,7 @@ pub mod consts;
 pub mod environment;
 pub mod install;
 pub mod install_pypi;
-pub mod lock_file;
+mod lock_file;
 pub mod prefix;
 pub mod progress;
 pub mod project;
@@ -21,7 +21,9 @@ mod pypi_marker_env;
 mod pypi_tags;
 mod solver;
 
+pub use lock_file::load_lock_file;
 pub use project::Project;
+
 use rattler_networking::retry_policies::ExponentialBackoff;
 
 /// The default retry policy employed by pixi.

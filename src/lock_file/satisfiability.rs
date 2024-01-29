@@ -1,14 +1,14 @@
 use super::package_identifier;
 use crate::{
     project::Environment, pypi_marker_env::determine_marker_environment,
-    pypi_tags::is_python_record, Project,
+    pypi_tags::is_python_record,
 };
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::Requirement;
 use rattler_conda_types::{MatchSpec, ParseMatchSpecError, Platform};
-use rattler_lock::{CondaPackage, LockFile, Package, PypiPackage};
+use rattler_lock::{CondaPackage, Package, PypiPackage};
 use rip::types::NormalizedPackageName;
 use std::{
     collections::{HashMap, HashSet},
@@ -17,16 +17,7 @@ use std::{
 use thiserror::Error;
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum Unsat {
-    #[error("the environment '{0}' is unsatisfiable")]
-    EnvironmentUnsatisfiable(String, #[source] EnvironmentUnsat),
-}
-
-#[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
-    #[error("there are no recorded packages for the environment in the lock-file")]
-    Missing,
-
     #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
 }
@@ -61,27 +52,6 @@ pub enum PlatformUnsat {
 
     #[error("{0} requires python version {1} but the python interpreter in the lock-file has version {2}")]
     PythonVersionMismatch(String, VersionSpecifiers, Box<pep440_rs::Version>),
-}
-
-/// A helper method to check if the lock file satisfies the project.
-///
-/// This function checks all environments and all platforms of each environment. The function early
-/// outs if verification of any environment fails.
-pub fn lock_file_satisfies_project(project: &Project, lock_file: &LockFile) -> Result<(), Unsat> {
-    for env in project.environments() {
-        let Some(locked_env) = lock_file.environment(env.name().as_str()) else {
-            return Err(Unsat::EnvironmentUnsatisfiable(
-                env.name().as_str().to_string(),
-                EnvironmentUnsat::Missing,
-            ));
-        };
-
-        verify_environment_satisfiability(&env, &locked_env).map_err(|unsat| {
-            Unsat::EnvironmentUnsatisfiable(env.name().as_str().to_string(), unsat)
-        })?
-    }
-
-    Ok(())
 }
 
 /// Verifies that all the requirements of the specified `environment` can be satisfied with the

@@ -52,7 +52,7 @@ pub async fn fetch_sparse_repodata(
         }
     }
 
-    Ok(fetch_sparse_repodata_targets(fetch_targets, authenticated_client).await?)
+    fetch_sparse_repodata_targets(fetch_targets, authenticated_client).await
 }
 
 pub async fn fetch_sparse_repodata_targets(

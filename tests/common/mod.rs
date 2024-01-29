@@ -276,7 +276,7 @@ impl PixiControl {
     /// Get the associated lock file
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
         let project = Project::load_or_else_discover(Some(&self.manifest_path()))?;
-        pixi::lock_file::load_lock_file(&project).await
+        pixi::load_lock_file(&project).await
     }
 
     pub fn tasks(&self) -> TasksControl {

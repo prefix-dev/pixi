@@ -1,6 +1,6 @@
 use miette::{Context, IntoDiagnostic};
 
-use crate::lock_file::resolve_pypi;
+use crate::lock_file::{resolve_pypi, LockedCondaPackages, LockedPypiPackages};
 use crate::{
     config, consts, install, install_pypi, lock_file,
     lock_file::{
@@ -146,7 +146,7 @@ impl LockFileUsage {
 }
 
 /// Returns the prefix associated with the given environment. If the prefix doesn't exist or is not
-/// up to date it is updated.
+/// up-to-date it is updated.
 ///
 /// The `sparse_repo_data` is used when the lock-file is update. We pass it into this function to
 /// make sure the data is not loaded twice since the repodata takes up a lot of memory and takes a
@@ -179,7 +179,7 @@ pub async fn get_up_to_date_prefix(
     if no_install {
         Ok(Prefix::new(environment.dir()))
     } else {
-        lock_file.prefix(&environment).await
+        lock_file.prefix(environment).await
     }
 }
 
@@ -536,6 +536,9 @@ impl<'p> OutdatedEnvironments<'p> {
     }
 }
 
+type PerEnvironment<'p, T> = HashMap<Environment<'p>, T>;
+type PerEnvironmentAndPlatform<'p, T> = HashMap<Environment<'p>, HashMap<Platform, T>>;
+
 #[derive(Default)]
 struct UpdateContext<'p> {
     /// Repodata that is available to the solve tasks.
@@ -544,36 +547,27 @@ struct UpdateContext<'p> {
     /// Repodata records from the lock-file. This contains the records that actually exist in the
     /// lock-file. If the lock-file is missing or partially missing then the data also won't exist
     /// in this field.
-    locked_repodata_records: HashMap<Environment<'p>, HashMap<Platform, Arc<Vec<RepoDataRecord>>>>,
+    locked_repodata_records: PerEnvironmentAndPlatform<'p, Arc<LockedCondaPackages>>,
 
     /// Repodata records from the lock-file. This contains the records that actually exist in the
     /// lock-file. If the lock-file is missing or partially missing then the data also won't exist
     /// in this field.
-    locked_pypi_records: HashMap<
-        Environment<'p>,
-        HashMap<Platform, Arc<Vec<(PypiPackageData, PypiPackageEnvironmentData)>>>,
-    >,
+    locked_pypi_records: PerEnvironmentAndPlatform<'p, Arc<LockedPypiPackages>>,
 
     /// Keeps track of all pending conda targets that are being solved. The mapping contains a
     /// [`BarrierCell`] that will eventually contain the solved records computed by another task.
     /// This allows tasks to wait for the records to be solved before proceeding.
     solved_repodata_records:
-        HashMap<Environment<'p>, HashMap<Platform, Arc<BarrierCell<Arc<Vec<RepoDataRecord>>>>>>,
+        PerEnvironmentAndPlatform<'p, Arc<BarrierCell<Arc<LockedCondaPackages>>>>,
 
     /// Keeps track of all pending prefix updates. This only tracks the conda updates to a prefix,
     /// not whether the pypi packages have also been updated.
-    instantiated_conda_prefixes: HashMap<Environment<'p>, Arc<BarrierCell<(Prefix, PythonStatus)>>>,
+    instantiated_conda_prefixes: PerEnvironment<'p, Arc<BarrierCell<(Prefix, PythonStatus)>>>,
 
     /// Keeps track of all pending conda targets that are being solved. The mapping contains a
     /// [`BarrierCell`] that will eventually contain the solved records computed by another task.
     /// This allows tasks to wait for the records to be solved before proceeding.
-    solved_pypi_records: HashMap<
-        Environment<'p>,
-        HashMap<
-            Platform,
-            Arc<BarrierCell<Arc<Vec<(PypiPackageData, PypiPackageEnvironmentData)>>>>,
-        >,
-    >,
+    solved_pypi_records: PerEnvironmentAndPlatform<'p, Arc<BarrierCell<Arc<LockedPypiPackages>>>>,
 }
 
 impl<'p> UpdateContext<'p> {
@@ -585,7 +579,7 @@ impl<'p> UpdateContext<'p> {
         platform: Platform,
     ) -> Option<impl Future<Output = Arc<Vec<RepoDataRecord>>>> {
         self.solved_repodata_records
-            .get(&environment)
+            .get(environment)
             .and_then(|records| records.get(&platform))
             .map(|records| {
                 let records = records.clone();
@@ -593,7 +587,7 @@ impl<'p> UpdateContext<'p> {
             })
             .or_else(|| {
                 self.locked_repodata_records
-                    .get(&environment)
+                    .get(environment)
                     .and_then(|records| records.get(&platform))
                     .cloned()
                     .map(ready)
@@ -685,6 +679,11 @@ impl<'p> UpdateContext<'p> {
 /// This function will return a [`LockFileDerivedData`] struct that contains the lock-file and any
 /// potential derived data that was computed as part of this function. The derived data might be
 /// usable by other functions to avoid recomputing the same data.
+///
+/// This function starts by checking if the lock-file is up-to-date. If it is not up-to-date it will
+/// construct a task graph of all the work that needs to be done to update the lock-file. The tasks
+/// are awaited in a specific order to make sure that we can start instantiating prefixes as soon as
+/// possible.
 async fn ensure_up_to_date_lock_file(
     project: &Project,
     existing_repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
@@ -859,7 +858,7 @@ async fn ensure_up_to_date_lock_file(
 
     // Spawn tasks to instantiate prefixes that we need to be able to solve Pypi packages.
     //
-    // Solving Pypi packages requires a python interpreter to be present in the prefix, therefor we
+    // Solving Pypi packages requires a python interpreter to be present in the prefix, therefore we
     // first need to make sure we have conda packages available, then we can instantiate the
     // prefix with at least the required conda packages (including a python interpreter) and then
     // we can solve the Pypi packages using the installed interpreter.
@@ -1007,7 +1006,7 @@ async fn ensure_up_to_date_lock_file(
                     .instantiated_conda_prefixes
                     .get_mut(&environment)
                     .expect("the entry for this environment should exists")
-                    .set((prefix, python_status))
+                    .set((prefix, *python_status))
                     .expect("prefix should not be instantiated twice");
 
                 tracing::info!(
@@ -1089,9 +1088,11 @@ async fn ensure_up_to_date_lock_file(
     })
 }
 
-pub enum TaskResult {
+/// Represents data that is sent back from a task. This is used to communicate the result of a task
+/// back to the main task which will forward the information to other tasks waiting for results.
+enum TaskResult {
     CondaSolved(EnvironmentName, Platform, Vec<RepoDataRecord>),
-    CondaPrefixUpdated(EnvironmentName, Prefix, PythonStatus),
+    CondaPrefixUpdated(EnvironmentName, Prefix, Box<PythonStatus>),
     PypiSolved(
         EnvironmentName,
         Platform,
@@ -1099,6 +1100,7 @@ pub enum TaskResult {
     ),
 }
 
+/// A task that solves the conda dependencies for a given environment.
 async fn spawn_solve_conda_environment_task(
     environment: Environment<'_>,
     existing_repodata_records: Vec<RepoDataRecord>,
@@ -1123,7 +1125,7 @@ async fn spawn_solve_conda_environment_task(
     // Whether there are pypi dependencies, and we should fetch purls.
     let has_pypi_dependencies = environment.has_pypi_dependencies();
 
-    tokio::spawn((move || async move {
+    tokio::spawn(async move {
         let pb =
             SolveProgressBar::new(global_multi_progress().add(ProgressBar::hidden()), platform);
         pb.start();
@@ -1167,7 +1169,7 @@ async fn spawn_solve_conda_environment_task(
         pb.finish();
 
         Ok(TaskResult::CondaSolved(environment_name, platform, records))
-    })())
+    })
     .await
     .unwrap_or_else(|e| match e.try_into_panic() {
         Ok(panic) => std::panic::resume_unwind(panic),
@@ -1175,52 +1177,7 @@ async fn spawn_solve_conda_environment_task(
     })
 }
 
-#[derive(Clone)]
-struct SolveProgressBar {
-    pb: ProgressBar,
-    platform: Platform,
-}
-
-impl SolveProgressBar {
-    pub fn new(pb: ProgressBar, platform: Platform) -> Self {
-        pb.set_style(
-            indicatif::ProgressStyle::with_template(
-                &format!("    {:<9} ..", platform.to_string(),),
-            )
-            .unwrap(),
-        );
-        pb.enable_steady_tick(Duration::from_millis(100));
-        Self { pb, platform }
-    }
-
-    pub fn start(&self) {
-        self.pb.reset_elapsed();
-        self.pb.set_style(
-            indicatif::ProgressStyle::with_template(&format!(
-                "  {{spinner:.dim}} {:<9} [{{elapsed_precise}}] {{msg:.dim}}",
-                self.platform.to_string(),
-            ))
-            .unwrap(),
-        );
-    }
-
-    pub fn set_message(&self, msg: impl Into<Cow<'static, str>>) {
-        self.pb.set_message(msg);
-    }
-
-    pub fn finish(&self) {
-        self.pb.set_style(
-            indicatif::ProgressStyle::with_template(&format!(
-                "  {} {:<9} [{{elapsed_precise}}]",
-                console::style(console::Emoji("✔", "↳")).green(),
-                self.platform.to_string(),
-            ))
-            .unwrap(),
-        );
-        self.pb.finish_and_clear();
-    }
-}
-
+/// A task that solves the pypi dependencies for a given environment.
 async fn spawn_solve_pypi_task(
     environment: Environment<'_>,
     platform: Platform,
@@ -1247,7 +1204,7 @@ async fn spawn_solve_pypi_task(
     // Wait until the conda records and prefix are available.
     let (repodata_records, (prefix, python_status)) = tokio::join!(repodata_records, prefix);
 
-    let pypi_packages = tokio::spawn((move || async move {
+    let pypi_packages = tokio::spawn(async move {
         let pb =
             SolveProgressBar::new(global_multi_progress().add(ProgressBar::hidden()), platform);
         pb.start();
@@ -1257,7 +1214,7 @@ async fn spawn_solve_pypi_task(
             dependencies,
             system_requirements,
             &repodata_records,
-            &vec![],
+            &[],
             platform,
             &pb.pb,
             python_status
@@ -1271,7 +1228,7 @@ async fn spawn_solve_pypi_task(
         pb.finish();
 
         result
-    })())
+    })
     .await
     .unwrap_or_else(|e| match e.try_into_panic() {
         Ok(panic) => std::panic::resume_unwind(panic),
@@ -1338,7 +1295,7 @@ async fn spawn_create_prefix_task(
     Ok(TaskResult::CondaPrefixUpdated(
         environment_name,
         prefix,
-        python_status,
+        Box::new(python_status),
     ))
 }
 
@@ -1364,11 +1321,58 @@ pub async fn load_sparse_repo_data_async(
         Ok(panic) => std::panic::resume_unwind(panic),
         Err(_err) => miette::miette!("the operation was cancelled"),
     })
-    .map_or_else(|e| Err(e), identity)
+    .map_or_else(Err, identity)
     .with_context(|| {
         format!(
             "failed to load repodata records for platform '{}'",
             platform.as_str()
         )
     })
+}
+
+/// A helper struct that manages a progress-bar for solving an environment.
+#[derive(Clone)]
+struct SolveProgressBar {
+    pb: ProgressBar,
+    platform: Platform,
+}
+
+impl SolveProgressBar {
+    pub fn new(pb: ProgressBar, platform: Platform) -> Self {
+        pb.set_style(
+            indicatif::ProgressStyle::with_template(
+                &format!("    {:<9} ..", platform.to_string(),),
+            )
+            .unwrap(),
+        );
+        pb.enable_steady_tick(Duration::from_millis(100));
+        Self { pb, platform }
+    }
+
+    pub fn start(&self) {
+        self.pb.reset_elapsed();
+        self.pb.set_style(
+            indicatif::ProgressStyle::with_template(&format!(
+                "  {{spinner:.dim}} {:<9} [{{elapsed_precise}}] {{msg:.dim}}",
+                self.platform.to_string(),
+            ))
+            .unwrap(),
+        );
+    }
+
+    pub fn set_message(&self, msg: impl Into<Cow<'static, str>>) {
+        self.pb.set_message(msg);
+    }
+
+    pub fn finish(&self) {
+        self.pb.set_style(
+            indicatif::ProgressStyle::with_template(&format!(
+                "  {} {:<9} [{{elapsed_precise}}]",
+                console::style(console::Emoji("✔", "↳")).green(),
+                self.platform.to_string(),
+            ))
+            .unwrap(),
+        );
+        self.pb.finish_and_clear();
+    }
 }
