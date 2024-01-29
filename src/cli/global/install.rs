@@ -69,7 +69,7 @@ impl BinDir {
 }
 
 /// Get pixi home directory, default to `$HOME/.pixi`
-fn home_path() -> miette::Result<PathBuf> {
+pub fn home_path() -> miette::Result<PathBuf> {
     if let Some(path) = std::env::var_os("PIXI_HOME") {
         Ok(PathBuf::from(path))
     } else {
