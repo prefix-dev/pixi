@@ -352,7 +352,7 @@ impl Project {
             .package_db
             .get_or_try_init(|| {
                 PackageDb::new(
-                    self.client().clone(),
+                    self.authenticated_client().clone(),
                     &self.pypi_index_urls(),
                     &config::get_cache_dir()?.join("pypi/"),
                 )
