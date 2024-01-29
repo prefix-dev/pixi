@@ -258,7 +258,7 @@ impl<'de> Deserialize<'de> for Feature {
             let package_name = PackageName::from_str(package).map_err(serde::de::Error::custom)?;
             if !dependency_map.insert(package_name) {
                 return Err(serde::de::Error::custom(&format!(
-                    "duplicate dependency: {package}"
+                    "duplicate dependency: {package}, please avoid using capitalized names for the dependencies as they are read as lowercase as well."
                 )));
             }
         }
