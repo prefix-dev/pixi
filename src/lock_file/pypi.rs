@@ -98,7 +98,8 @@ pub async fn resolve_dependencies<'p>(
         },
         HashMap::default(),
     )
-    .await?;
+    .await
+    .wrap_err("failed to resolve pypi dependencies, due to underlying error")?;
 
     // Remove any conda package from the result
     result.retain(|p| !p.artifacts.is_empty());
