@@ -1,6 +1,7 @@
 use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelector};
 use crate::consts;
 use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
+use crate::project::manifest::deserialize_dependencies;
 use crate::project::manifest::target::Targets;
 use crate::project::SpecType;
 use crate::task::Task;
@@ -12,9 +13,8 @@ use serde::de::Error;
 use serde::{Deserialize, Deserializer};
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use std::borrow::{Borrow, Cow};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt;
-use std::str::FromStr;
 
 /// The name of a feature. This is either a string or default for the default feature.
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -249,46 +249,12 @@ impl<'de> Deserialize<'de> for Feature {
 
         let inner = FeatureInner::deserialize(deserializer)?;
 
-        // check duplicate dependencies (run, host, build)
-        let mut dependencies = inner.dependencies.clone();
-        dependencies.extend(inner.host_dependencies.clone().unwrap_or_default());
-        dependencies.extend(inner.build_dependencies.clone().unwrap_or_default());
-        let mut dependency_map = HashSet::new();
-        for package in dependencies.keys() {
-            let package_name = PackageName::from_str(package).map_err(serde::de::Error::custom)?;
-            if !dependency_map.insert(package_name) {
-                return Err(serde::de::Error::custom(&format!(
-                    "duplicate dependency: {package}, please avoid using capitalized names for the dependencies as they are read as lowercase as well."
-                )));
-            }
-        }
-
-        let mut dependencies = HashMap::from_iter([(
-            SpecType::Run,
-            inner
-                .dependencies
-                .into_iter()
-                .flat_map(|(p, s)| PackageName::from_str(&p).ok().map(|p| (p, s)))
-                .collect(),
-        )]);
-        if let Some(host_deps) = inner.host_dependencies {
-            dependencies.insert(
-                SpecType::Host,
-                host_deps
-                    .into_iter()
-                    .flat_map(|(p, s)| PackageName::from_str(&p).ok().map(|p| (p, s)))
-                    .collect(),
-            );
-        }
-        if let Some(build_deps) = inner.build_dependencies {
-            dependencies.insert(
-                SpecType::Build,
-                build_deps
-                    .into_iter()
-                    .flat_map(|(p, s)| PackageName::from_str(&p).ok().map(|p| (p, s)))
-                    .collect(),
-            );
-        }
+        let dependencies = deserialize_dependencies(
+            inner.dependencies,
+            inner.host_dependencies,
+            inner.build_dependencies,
+        )
+        .map_err(serde::de::Error::custom)?;
 
         let default_target = Target {
             dependencies,
