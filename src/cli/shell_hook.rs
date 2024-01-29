@@ -1,9 +1,11 @@
 use clap::Parser;
+use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
     shell::ShellEnum,
 };
+use std::default::Default;
 
 use crate::{
     activation::get_activator,
@@ -28,8 +30,7 @@ async fn generate_activation_script(shell: Option<ShellEnum>) -> miette::Result<
         &environment,
         LockFileUsage::Frozen,
         false,
-        None,
-        Default::default(),
+        IndexMap::default(),
     )
     .await?;
 

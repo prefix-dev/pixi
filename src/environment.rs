@@ -30,8 +30,8 @@ use rattler_conda_types::{
     Channel, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
 };
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
+use reqwest_middleware::ClientWithMiddleware;
 use rip::{index::PackageDb, resolve::SDistResolution};
 use std::{
     borrow::Cow,
@@ -154,16 +154,15 @@ impl LockFileUsage {
 /// updated, the `sparse_repo_data` is ignored.
 pub async fn get_up_to_date_prefix(
     environment: &Environment<'_>,
-    usage: LockFileUsage,
+    lock_file_usage: LockFileUsage,
     mut no_install: bool,
-    sparse_repo_data: Option<Vec<SparseRepoData>>,
-    sdist_resolution: SDistResolution,
+    existing_repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
 ) -> miette::Result<Prefix> {
     let current_platform = Platform::current();
     let project = environment.project();
 
     // Do not install if the platform is not supported
-    if !no_install && !project.platforms().contains(&current_platform) {
+    if !no_install && !environment.platforms().contains(&current_platform) {
         tracing::warn!("Not installing dependency on current platform: ({current_platform}) as it is not part of this project's supported platforms.");
         no_install = true;
     }
@@ -171,24 +170,23 @@ pub async fn get_up_to_date_prefix(
     // Make sure the project is in a sane state
     sanity_check_project(project)?;
 
-    // Determine which environment to install.
-    let environment = project.default_environment();
-
-    // Early out if there is no lock-file and we are also not allowed to update it.
-    if !project.lock_file_path().is_file() && !usage.allows_lock_file_updates() {
-        miette::bail!("no lockfile available, can't do a frozen installation.");
-    }
-
     // Ensure that the lock-file is up-to-date
-    let mut lock_file = ensure_up_to_date_lock_file(project).await?;
+    let mut lock_file =
+        ensure_up_to_date_lock_file(project, existing_repo_data, lock_file_usage, no_install)
+            .await?;
 
     // Get the locked environment from the lock-file.
-    lock_file.prefix(&environment).await
+    if no_install {
+        Ok(Prefix::new(environment.dir()))
+    } else {
+        lock_file.prefix(&environment).await
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
 // TODO: refactor args into struct
 pub async fn update_prefix_pypi(
+    name: &str,
     prefix: &Prefix,
     platform: Platform,
     package_db: &PackageDb,
@@ -202,8 +200,7 @@ pub async fn update_prefix_pypi(
     install_pypi::remove_old_python_distributions(prefix, platform, status)?;
 
     // Install and/or remove python packages
-    progress::await_in_progress(
-        "updating python packages",
+    progress::await_in_progress(format!("updating pypi package in '{}'", name), |_| {
         install_pypi::update_python_distributions(
             package_db,
             prefix,
@@ -213,8 +210,8 @@ pub async fn update_prefix_pypi(
             status,
             system_requirements,
             sdist_resolution,
-        ),
-    )
+        )
+    })
     .await
 }
 
@@ -274,9 +271,10 @@ impl PythonStatus {
 
 /// Updates the environment to contain the packages from the specified lock-file
 pub async fn update_prefix_conda(
+    name: &str,
     prefix: &Prefix,
     package_cache: Arc<PackageCache>,
-    authenticated_client: AuthenticatedClient,
+    authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
     repodata_records: &[RepoDataRecord],
     platform: Platform,
@@ -293,16 +291,17 @@ pub async fn update_prefix_conda(
     // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
         // Execute the operations that are returned by the solver.
-        progress::await_in_progress(
-            "updating environment",
+        progress::await_in_progress(format!("updating packages in '{}'", name), |pb| async {
             install::execute_transaction(
                 package_cache,
                 &transaction,
                 &installed_packages,
                 prefix.root().to_path_buf(),
                 authenticated_client,
-            ),
-        )
+                pb,
+            )
+            .await
+        })
         .await?;
     }
 
@@ -323,7 +322,7 @@ pub struct LockFileDerivedData<'p> {
     pub package_cache: Arc<PackageCache>,
 
     /// Repodata that was fetched
-    pub repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
+    pub repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
 
     /// A list of prefixes that are up-to-date with the latest conda packages.
     pub updated_conda_prefixes: HashMap<Environment<'p>, (Prefix, PythonStatus)>,
@@ -350,6 +349,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Update the prefix with Pypi records
         update_prefix_pypi(
+            environment.name().as_str(),
             &prefix,
             platform,
             &package_db,
@@ -422,6 +422,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Update the prefix with conda packages.
         let python_status = update_prefix_conda(
+            environment.name().as_str(),
             &prefix,
             self.package_cache.clone(),
             environment.project().authenticated_client().clone(),
@@ -517,12 +518,10 @@ impl<'p> OutdatedEnvironments<'p> {
 
         // For all targets where conda is out of date, the pypi packages are also out of date.
         for (environment, platforms) in outdated_conda.iter() {
-            for platform in platforms {
-                outdated_pypi
-                    .entry(environment.clone())
-                    .or_default()
-                    .extend(platforms.iter().copied());
-            }
+            outdated_pypi
+                .entry(environment.clone())
+                .or_default()
+                .extend(platforms.iter().copied());
         }
 
         Self {
@@ -531,6 +530,7 @@ impl<'p> OutdatedEnvironments<'p> {
         }
     }
 
+    /// Returns true if the lock-file is up-to-date with the project.
     pub fn is_empty(&self) -> bool {
         self.conda.is_empty() && self.pypi.is_empty()
     }
@@ -685,10 +685,28 @@ impl<'p> UpdateContext<'p> {
 /// This function will return a [`LockFileDerivedData`] struct that contains the lock-file and any
 /// potential derived data that was computed as part of this function. The derived data might be
 /// usable by other functions to avoid recomputing the same data.
-async fn ensure_up_to_date_lock_file(project: &Project) -> miette::Result<LockFileDerivedData> {
+async fn ensure_up_to_date_lock_file(
+    project: &Project,
+    existing_repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
+    lock_file_usage: LockFileUsage,
+    no_install: bool,
+) -> miette::Result<LockFileDerivedData> {
     let lock_file = load_lock_file(project).await?;
     let current_platform = Platform::current();
     let package_cache = Arc::new(PackageCache::new(config::get_cache_dir()?.join("pkgs")));
+
+    // should we check the lock-file in the first place?
+    if !lock_file_usage.should_check_if_out_of_date() {
+        tracing::info!("skipping check if lock-file is up-to-date");
+
+        return Ok(LockFileDerivedData {
+            lock_file,
+            package_cache,
+            repo_data: existing_repo_data,
+            updated_conda_prefixes: Default::default(),
+            updated_pypi_prefixes: Default::default(),
+        });
+    }
 
     // Check which environments are out of date.
     let outdated = OutdatedEnvironments::from_project_and_lock_file(project, &lock_file);
@@ -699,10 +717,15 @@ async fn ensure_up_to_date_lock_file(project: &Project) -> miette::Result<LockFi
         return Ok(LockFileDerivedData {
             lock_file,
             package_cache,
-            repo_data: Arc::new(Default::default()),
+            repo_data: existing_repo_data,
             updated_conda_prefixes: Default::default(),
             updated_pypi_prefixes: Default::default(),
         });
+    }
+
+    // If the lock-file is out of date, but we're not allowed to update it, we should exit.
+    if !lock_file_usage.allows_lock_file_updates() {
+        miette::bail!("lock-file not up-to-date with the project");
     }
 
     // Determine the repodata that we're going to need to solve the environments. For all outdated
@@ -721,10 +744,16 @@ async fn ensure_up_to_date_lock_file(project: &Project) -> miette::Result<LockFi
     }
 
     // Fetch all the repodata that we need to solve the environments.
-    let repo_data = Arc::new(
-        fetch_sparse_repodata_targets(fetch_targets.into_iter(), project.authenticated_client())
-            .await?,
-    );
+    let mut repo_data = fetch_sparse_repodata_targets(
+        fetch_targets
+            .into_iter()
+            .filter(|target| !existing_repo_data.contains_key(target)),
+        project.authenticated_client(),
+    )
+    .await?;
+
+    // Add repo data that was already fetched
+    repo_data.extend(existing_repo_data);
 
     // Extract the current conda records from the lock-file
     // TODO: Should we parallelize this? Measure please.
@@ -771,7 +800,7 @@ async fn ensure_up_to_date_lock_file(project: &Project) -> miette::Result<LockFi
         .collect::<HashMap<_, HashMap<_, _>>>();
 
     let mut context = UpdateContext {
-        repo_data,
+        repo_data: Arc::new(repo_data),
         locked_repodata_records,
         locked_pypi_records,
         solved_repodata_records: HashMap::new(),
@@ -809,7 +838,6 @@ async fn ensure_up_to_date_lock_file(project: &Project) -> miette::Result<LockFi
                 existing_records,
                 context.repo_data.clone(),
                 platform,
-                global_multi_progress().add(ProgressBar::new(1)),
             )
             .boxed_local();
 
@@ -846,6 +874,11 @@ async fn ensure_up_to_date_lock_file(project: &Project) -> miette::Result<LockFi
             .any(|p| !environment.pypi_dependencies(Some(*p)).is_empty())
         {
             continue;
+        }
+
+        // If we are not allowed to install, we can't instantiate a prefix.
+        if no_install {
+            miette::bail!("Cannot update pypi dependencies without installing a conda prefix that includes python first.");
         }
 
         // Construct a future that will resolve when we have the repodata available for the current
@@ -904,7 +937,6 @@ async fn ensure_up_to_date_lock_file(project: &Project) -> miette::Result<LockFi
                 repodata_future,
                 prefix_future,
                 SDistResolution::default(),
-                global_multi_progress().add(ProgressBar::new(1)),
             );
 
             Either::Right(pypi_solve_future)
@@ -922,6 +954,14 @@ async fn ensure_up_to_date_lock_file(project: &Project) -> miette::Result<LockFi
         );
     }
 
+    let top_level_progress =
+        global_multi_progress().add(ProgressBar::new(pending_futures.len() as u64));
+    top_level_progress.set_style(indicatif::ProgressStyle::default_bar()
+        .template("{spinner:.cyan} {prefix:20!} [{elapsed_precise}] [{bar:40!.bright.yellow/dim.white}] {pos:>4}/{len:4} {wide_msg:.dim}").unwrap()
+        .progress_chars("━━╾─"));
+    top_level_progress.enable_steady_tick(Duration::from_millis(50));
+    top_level_progress.set_prefix("updating lock-file");
+
     // Iterate over all the futures we spawned and wait for them to complete.
     //
     // The spawned futures each result either in an error or in a `TaskResult`. The `TaskResult`
@@ -936,6 +976,7 @@ async fn ensure_up_to_date_lock_file(project: &Project) -> miette::Result<LockFi
     // 2. The futures stored in `pending_futures` do not necessarily have to be `'static`. Which
     //    makes them easier to work with.
     while let Some(result) = pending_futures.next().await {
+        top_level_progress.inc(1);
         match result? {
             TaskResult::CondaSolved(environment, platform, records) => {
                 let environment = project
@@ -1036,60 +1077,16 @@ async fn ensure_up_to_date_lock_file(project: &Project) -> miette::Result<LockFi
         .into_diagnostic()
         .context("failed to write lock-file to disk")?;
 
+    top_level_progress.finish_and_clear();
+
     Ok(LockFileDerivedData {
         lock_file,
         package_cache,
         updated_conda_prefixes: context.take_instantiated_conda_prefixes(),
         updated_pypi_prefixes: HashMap::default(),
-        repo_data: context.repo_data,
+        repo_data: Arc::into_inner(context.repo_data)
+            .expect("repo data should not be shared anymore"),
     })
-}
-
-#[derive(Clone)]
-struct SolveProgressBar {
-    pb: ProgressBar,
-    platform: Platform,
-}
-
-impl SolveProgressBar {
-    pub fn new(pb: ProgressBar, platform: Platform) -> Self {
-        pb.set_style(
-            indicatif::ProgressStyle::with_template(
-                &format!("    {:<9} ..", platform.to_string(),),
-            )
-            .unwrap(),
-        );
-        pb.enable_steady_tick(Duration::from_millis(100));
-
-        Self { pb, platform }
-    }
-
-    pub fn start(&self) {
-        self.pb.reset_elapsed();
-        self.pb.set_style(
-            indicatif::ProgressStyle::with_template(&format!(
-                "  {{spinner:.dim}} {:<9} [{{elapsed_precise}}] {{msg:.dim}}",
-                self.platform.to_string(),
-            ))
-            .unwrap(),
-        );
-    }
-
-    pub fn set_message(&self, message: impl Into<Cow<'static, str>>) {
-        self.pb.set_message(message);
-    }
-
-    pub fn finish(&self) {
-        self.pb.set_style(
-            indicatif::ProgressStyle::with_template(&format!(
-                "  {} {:<9} [{{elapsed_precise}}]",
-                console::style(console::Emoji("✔", "↳")).green(),
-                self.platform.to_string(),
-            ))
-            .unwrap(),
-        );
-        self.pb.finish();
-    }
 }
 
 pub enum TaskResult {
@@ -1107,7 +1104,6 @@ async fn spawn_solve_conda_environment_task(
     existing_repodata_records: Vec<RepoDataRecord>,
     sparse_repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
     platform: Platform,
-    pb: ProgressBar,
 ) -> miette::Result<TaskResult> {
     // Get the dependencies for this platform
     let dependencies = environment.dependencies(None, Some(platform));
@@ -1128,7 +1124,9 @@ async fn spawn_solve_conda_environment_task(
     let has_pypi_dependencies = environment.has_pypi_dependencies();
 
     tokio::spawn((move || async move {
-        // pb.start();
+        let pb =
+            SolveProgressBar::new(global_multi_progress().add(ProgressBar::hidden()), platform);
+        pb.start();
 
         // Convert the dependencies into match specs
         let match_specs = dependencies
@@ -1177,13 +1175,58 @@ async fn spawn_solve_conda_environment_task(
     })
 }
 
+#[derive(Clone)]
+struct SolveProgressBar {
+    pb: ProgressBar,
+    platform: Platform,
+}
+
+impl SolveProgressBar {
+    pub fn new(pb: ProgressBar, platform: Platform) -> Self {
+        pb.set_style(
+            indicatif::ProgressStyle::with_template(
+                &format!("    {:<9} ..", platform.to_string(),),
+            )
+            .unwrap(),
+        );
+        pb.enable_steady_tick(Duration::from_millis(100));
+        Self { pb, platform }
+    }
+
+    pub fn start(&self) {
+        self.pb.reset_elapsed();
+        self.pb.set_style(
+            indicatif::ProgressStyle::with_template(&format!(
+                "  {{spinner:.dim}} {:<9} [{{elapsed_precise}}] {{msg:.dim}}",
+                self.platform.to_string(),
+            ))
+            .unwrap(),
+        );
+    }
+
+    pub fn set_message(&self, msg: impl Into<Cow<'static, str>>) {
+        self.pb.set_message(msg);
+    }
+
+    pub fn finish(&self) {
+        self.pb.set_style(
+            indicatif::ProgressStyle::with_template(&format!(
+                "  {} {:<9} [{{elapsed_precise}}]",
+                console::style(console::Emoji("✔", "↳")).green(),
+                self.platform.to_string(),
+            ))
+            .unwrap(),
+        );
+        self.pb.finish_and_clear();
+    }
+}
+
 async fn spawn_solve_pypi_task(
     environment: Environment<'_>,
     platform: Platform,
     repodata_records: impl Future<Output = Arc<Vec<RepoDataRecord>>>,
     prefix: impl Future<Output = (Prefix, PythonStatus)>,
     sdist_resolution: SDistResolution,
-    pb: ProgressBar,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1205,21 +1248,29 @@ async fn spawn_solve_pypi_task(
     let (repodata_records, (prefix, python_status)) = tokio::join!(repodata_records, prefix);
 
     let pypi_packages = tokio::spawn((move || async move {
-        resolve_pypi(
+        let pb =
+            SolveProgressBar::new(global_multi_progress().add(ProgressBar::hidden()), platform);
+        pb.start();
+
+        let result = resolve_pypi(
             &package_db,
             dependencies,
             system_requirements,
             &repodata_records,
             &vec![],
             platform,
-            &pb,
+            &pb.pb,
             python_status
                 .location()
                 .map(|path| prefix.root().join(path))
                 .as_deref(),
             sdist_resolution,
         )
-        .await
+        .await;
+
+        pb.finish();
+
+        result
     })())
     .await
     .unwrap_or_else(|e| match e.try_into_panic() {
@@ -1264,8 +1315,10 @@ async fn spawn_create_prefix_task(
     // Spawn a background task to update the prefix
     let python_status = tokio::spawn({
         let prefix = prefix.clone();
+        let environment_name = environment_name.clone();
         async move {
             update_prefix_conda(
+                environment_name.as_str(),
                 &prefix,
                 package_cache,
                 client,

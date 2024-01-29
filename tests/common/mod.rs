@@ -204,7 +204,6 @@ impl PixiControl {
                 no_lockfile_update: false,
                 platform: Default::default(),
                 pypi: false,
-                sdist_resolution: Default::default(),
             },
         }
     }

@@ -6,7 +6,6 @@ use crate::common::PixiControl;
 use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
 use pixi::project::{DependencyType, SpecType};
 use rattler_conda_types::{PackageName, Platform};
-use rip::resolve::SDistResolution;
 use std::str::FromStr;
 use tempfile::TempDir;
 
@@ -246,11 +245,10 @@ async fn add_sdist_functionality() {
         .await
         .unwrap();
 
-    // // Add the sdist pypi package
-    pixi.add("flask==3.0.0")
+    // Add the sdist pypi package
+    pixi.add("sdist")
         .set_type(DependencyType::PypiDependency)
         .with_install(true)
-        .with_sdist_resolution(SDistResolution::OnlySDists)
         .await
         .unwrap();
 }

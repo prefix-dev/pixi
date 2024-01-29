@@ -11,7 +11,7 @@ use indicatif::ProgressBar;
 use itertools::{izip, Itertools};
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, PackageName, Platform, RepoDataRecord,
+    Channel, GenericVirtualPackage, MatchSpec, PackageName, Platform, RepoDataRecord,
 };
 use rattler_lock::{
     LockFile, PackageHashes, PypiPackageData, PypiPackageDataRef, PypiPackageEnvironmentData,
@@ -20,6 +20,7 @@ use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
 use rip::index::PackageDb;
 use rip::resolve::SDistResolution;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::Path;
 use std::{sync::Arc, time::Duration};
@@ -65,7 +66,7 @@ pub async fn load_lock_file(project: &Project) -> miette::Result<LockFile> {
     }
 }
 
-fn main_progress_bar(num_bars: u64, message: &'static str) -> ProgressBar {
+fn main_progress_bar(num_bars: u64, message: impl Into<Cow<'static, str>>) -> ProgressBar {
     let multi_progress = progress::global_multi_progress();
     let top_level_progress = multi_progress.add(ProgressBar::new(num_bars));
     top_level_progress.set_style(progress::long_running_progress_style());
@@ -96,21 +97,15 @@ fn platform_solve_bars(platforms: impl IntoIterator<Item = Platform>) -> Vec<Pro
 pub async fn update_lock_file_conda(
     environment: &Environment<'_>,
     existing_lock_file: &LockedCondaEnvironment,
-    repodata: Option<Vec<SparseRepoData>>,
+    repodata: &Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
 ) -> miette::Result<LockedCondaEnvironment> {
     let platforms = environment.platforms();
 
-    // Get the repodata for the project
-    let sparse_repo_data: Arc<[_]> = if let Some(sparse_repo_data) = repodata {
-        sparse_repo_data
-    } else {
-        environment.fetch_sparse_repodata().await?
-    }
-    .into();
-
     // Construct a progress bar, a main one and one for each platform.
-    let _top_level_progress =
-        main_progress_bar(platforms.len() as u64, "resolving conda dependencies");
+    let _top_level_progress = main_progress_bar(
+        platforms.len() as u64,
+        format!("resolving conda dependencies for '{0}'", environment.name()),
+    );
     let solve_bars = platform_solve_bars(platforms.iter().copied());
 
     let result = stream::iter(platforms.iter().zip(solve_bars.iter().cloned()))
@@ -125,13 +120,13 @@ pub async fn update_lock_file_conda(
             );
 
             let existing_lock_file = &existing_lock_file;
-            let sparse_repo_data = sparse_repo_data.clone();
+            let sparse_repo_data = repodata.clone();
             async move {
                 let empty_vec = vec![];
                 let result = resolve_platform(
                     environment,
                     existing_lock_file.get(platform).unwrap_or(&empty_vec),
-                    sparse_repo_data.clone(),
+                    &sparse_repo_data,
                     *platform,
                     pb.clone(),
                 )
@@ -172,8 +167,10 @@ pub async fn update_lock_file_for_pypi(
     let platforms = environment.platforms().into_iter().collect_vec();
 
     // Construct the progress bars
-    let _top_level_progress =
-        main_progress_bar(platforms.len() as u64, "resolving pypi dependencies");
+    let _top_level_progress = main_progress_bar(
+        platforms.len() as u64,
+        format!("resolving pypi dependencies for '{0}'", environment.name()),
+    );
     let solve_bars = platform_solve_bars(platforms.iter().copied());
 
     // Extract conda packages per platform.
@@ -314,7 +311,7 @@ pub async fn resolve_pypi(
 async fn resolve_platform(
     environment: &Environment<'_>,
     existing_lock_file: &LockedCondaPackages,
-    sparse_repo_data: Arc<[SparseRepoData]>,
+    sparse_repo_data: &Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
     platform: Platform,
     pb: ProgressBar,
 ) -> miette::Result<LockedCondaPackages> {
@@ -332,8 +329,13 @@ async fn resolve_platform(
 
     // Get the repodata for the current platform and for NoArch
     pb.set_message("loading repodata");
-    let available_packages =
-        load_sparse_repo_data_async(platform, package_names.clone(), sparse_repo_data).await?;
+    let available_packages = load_sparse_repo_data_async(
+        platform,
+        environment.channels().into_iter().cloned().collect(),
+        package_names.clone(),
+        sparse_repo_data.clone(),
+    )
+    .await?;
 
     // Solve conda packages
     pb.set_message("resolving conda");
@@ -379,16 +381,19 @@ pub fn resolve_conda_dependencies(
 /// is a CPU and IO intensive task so we run it in a blocking task to not block the main task.
 pub async fn load_sparse_repo_data_async(
     platform: Platform,
+    channels: Vec<Channel>,
     package_names: Vec<PackageName>,
-    sparse_repo_data: Arc<[SparseRepoData]>,
+    sparse_repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
 ) -> miette::Result<Vec<Vec<RepoDataRecord>>> {
     tokio::task::spawn_blocking(move || {
-        let platform_sparse_repo_data = sparse_repo_data.iter().filter(|sparse| {
-            sparse.subdir() == platform.as_str() || sparse.subdir() == Platform::NoArch.as_str()
-        });
+        let sparse_repo_data = channels
+            .iter()
+            .cloned()
+            .cartesian_product([platform, Platform::NoArch])
+            .filter_map(|target| sparse_repo_data.get(&target));
 
         // Load only records we need for this platform
-        SparseRepoData::load_records_recursive(platform_sparse_repo_data, package_names, None)
+        SparseRepoData::load_records_recursive(sparse_repo_data, package_names, None)
             .into_diagnostic()
     })
     .await

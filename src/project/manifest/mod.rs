@@ -22,9 +22,7 @@ use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource};
 pub use python::PyPiRequirement;
-use rattler_conda_types::{
-    Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
-};
+use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
 use serde_with::{serde_as, DisplayFromStr, Map, PickFirst};
 use std::hash::Hash;
 use std::{
@@ -464,18 +462,6 @@ impl Manifest {
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        fn get_channel_name(channel: &Channel) -> miette::Result<String> {
-            match channel.base_url().scheme() {
-                "https" | "http" => Ok(channel.name.clone().unwrap_or(channel.canonical_name())),
-                "file" => Ok(channel.canonical_name()),
-                _ => Err(miette!(
-                    "channel {} has an unsupported scheme: {}",
-                    channel.base_url(),
-                    channel.base_url().scheme(),
-                )),
-            }
-        }
-
         // First add the channels to the manifest
         let mut stored_channels = IndexSet::new();
         match feature_name {
@@ -487,7 +473,7 @@ impl Manifest {
                     }
                     self.parsed.project.channels.push(channel.clone());
 
-                    stored_channels.insert(get_channel_name(&channel.channel)?);
+                    stored_channels.insert(channel.channel.name().to_string());
                 }
             }
             FeatureName::Named(_) => {
@@ -517,7 +503,7 @@ impl Manifest {
                             });
                         }
                     }
-                    stored_channels.insert(get_channel_name(&channel.channel)?);
+                    stored_channels.insert(channel.channel.name().to_string());
                 }
             }
         }
@@ -533,31 +519,53 @@ impl Manifest {
     /// Remove the specified channels to the manifest.
     pub fn remove_channels(
         &mut self,
-        channels: impl IntoIterator<Item = impl AsRef<str>>,
+        channels: impl IntoIterator<Item = PrioritizedChannel>,
+        feature_name: &FeatureName,
     ) -> miette::Result<()> {
         let mut removed_channels = Vec::new();
 
-        for channel in channels {
-            // Parse the channel to be removed
-            let channel_to_remove =
-                Channel::from_str(channel.as_ref(), &ChannelConfig::default()).into_diagnostic()?;
-
-            // Remove the channel if it exists
-            if let Some(pos) = self
-                .parsed
-                .project
-                .channels
-                .iter()
-                .position(|x| x.channel == channel_to_remove)
-            {
-                self.parsed.project.channels.remove(pos);
+        match feature_name {
+            FeatureName::Default => {
+                for channel in channels {
+                    // TODO: Make channels a IndexSet to simplify this.
+                    if self.parsed.project.channels.iter().any(|x| x == &channel) {
+                        if let Some(index) = self
+                            .parsed
+                            .project
+                            .channels
+                            .iter()
+                            .position(|x| *x == channel)
+                        {
+                            self.parsed.project.channels.remove(index);
+                        }
+                        removed_channels.push(channel.channel.name().to_string());
+                    }
+                }
             }
-
-            removed_channels.push(channel.as_ref().to_owned());
+            FeatureName::Named(_) => {
+                for channel in channels {
+                    match self.parsed.features.entry(feature_name.clone()) {
+                        Entry::Occupied(mut entry) => {
+                            if let Some(channels) = &mut entry.get_mut().channels {
+                                if let Some(index) = channels.iter().position(|x| *x == channel) {
+                                    channels.remove(index);
+                                }
+                            }
+                        }
+                        Entry::Vacant(_entry) => {
+                            return Err(miette!(
+                                "Feature {} does not exist",
+                                feature_name.as_str()
+                            ));
+                        }
+                    }
+                    removed_channels.push(channel.channel.name().to_string());
+                }
+            }
         }
 
         // remove the channels from the toml
-        let channels_array = self.channels_array_mut(&FeatureName::Default)?;
+        let channels_array = self.channels_array_mut(feature_name)?;
         channels_array.retain(|x| !removed_channels.contains(&x.as_str().unwrap().to_string()));
 
         Ok(())
@@ -869,6 +877,7 @@ mod tests {
     use super::*;
     use crate::project::manifest::channel::PrioritizedChannel;
     use insta::assert_display_snapshot;
+    use rattler_conda_types::{Channel, ChannelConfig};
     use rstest::*;
     use std::str::FromStr;
     use tempfile::tempdir;
@@ -1692,6 +1701,9 @@ platforms = ["linux-64", "win-64"]
             description = "foo description"
             channels = ["conda-forge"]
             platforms = ["linux-64", "win-64"]
+
+            [feature.test]
+            channels = ["test_channel"]
         "#;
 
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
@@ -1703,9 +1715,37 @@ platforms = ["linux-64", "win-64"]
             )]
         );
 
-        manifest.remove_channels(["conda-forge"].iter()).unwrap();
+        manifest
+            .remove_channels(
+                [PrioritizedChannel {
+                    channel: Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
+                    priority: None,
+                }]
+                .into_iter(),
+                &FeatureName::Default,
+            )
+            .unwrap();
 
         assert_eq!(manifest.parsed.project.channels, vec![]);
+
+        manifest
+            .remove_channels(
+                [PrioritizedChannel {
+                    channel: Channel::from_str("test_channel", &ChannelConfig::default()).unwrap(),
+                    priority: None,
+                }]
+                .into_iter(),
+                &FeatureName::Named("test".to_string()),
+            )
+            .unwrap();
+
+        let feature_channels = manifest
+            .feature(&FeatureName::Named("test".to_string()))
+            .unwrap()
+            .channels
+            .clone()
+            .unwrap();
+        assert_eq!(feature_channels, vec![]);
     }
 
     #[test]

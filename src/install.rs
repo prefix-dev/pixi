@@ -5,6 +5,7 @@ use crate::progress::{
 };
 use futures::future::ready;
 use futures::{stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
+use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::{
@@ -12,7 +13,7 @@ use rattler::install::{
 };
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
-use rattler_networking::AuthenticatedClient;
+use reqwest_middleware::ClientWithMiddleware;
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -24,7 +25,8 @@ pub async fn execute_transaction(
     transaction: &Transaction<PrefixRecord, RepoDataRecord>,
     prefix_records: &[PrefixRecord],
     target_prefix: PathBuf,
-    download_client: AuthenticatedClient,
+    download_client: ClientWithMiddleware,
+    top_level_progress: ProgressBar,
 ) -> miette::Result<()> {
     // Create an install driver which helps limit the number of concurrent filesystem operations
     let install_driver = InstallDriver::new(100, Some(prefix_records));
@@ -45,12 +47,14 @@ pub async fn execute_transaction(
         .filter(|op| op.record_to_install().is_some())
         .count();
     let download_pb = if total_packages_to_download > 0 {
-        let pb = multi_progress.add(
-            indicatif::ProgressBar::new(total_packages_to_download as u64)
-                .with_style(default_progress_style())
-                .with_finish(indicatif::ProgressFinish::WithMessage("Done!".into()))
-                .with_prefix("downloading"),
-        );
+        let pb = multi_progress
+            .insert_after(
+                &top_level_progress,
+                indicatif::ProgressBar::new(total_packages_to_download as u64),
+            )
+            .with_style(default_progress_style())
+            .with_finish(indicatif::ProgressFinish::WithMessage("Done!".into()))
+            .with_prefix("downloading");
         pb.enable_steady_tick(Duration::from_millis(100));
         Some(ProgressBarMessageFormatter::new(pb))
     } else {
@@ -60,12 +64,18 @@ pub async fn execute_transaction(
     // Create a progress bar to track all operations.
     let total_operations = transaction.operations.len();
     let link_pb = {
-        let pb = multi_progress.add(
-            indicatif::ProgressBar::new(total_operations as u64)
-                .with_style(default_progress_style())
-                .with_finish(indicatif::ProgressFinish::WithMessage("Done!".into()))
-                .with_prefix("linking"),
-        );
+        let first_pb = download_pb
+            .as_ref()
+            .map(ProgressBarMessageFormatter::progress_bar)
+            .unwrap_or(&top_level_progress);
+        let pb = multi_progress
+            .insert_after(
+                first_pb,
+                indicatif::ProgressBar::new(total_operations as u64),
+            )
+            .with_style(default_progress_style())
+            .with_finish(indicatif::ProgressFinish::WithMessage("Done!".into()))
+            .with_prefix("linking");
         pb.enable_steady_tick(Duration::from_millis(100));
         ProgressBarMessageFormatter::new(pb)
     };
@@ -152,7 +162,7 @@ pub async fn execute_transaction(
 #[allow(clippy::too_many_arguments)]
 async fn execute_operation(
     target_prefix: &Path,
-    download_client: AuthenticatedClient,
+    download_client: ClientWithMiddleware,
     package_cache: &PackageCache,
     install_driver: &InstallDriver,
     download_pb: Option<&ProgressBarMessageFormatter>,

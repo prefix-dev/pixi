@@ -24,37 +24,39 @@ pub enum Unsat {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
-    #[error("the environment is not present in the lock-file")]
+    #[error("there are no recorded packages for the environment in the lock-file")]
     Missing,
 
-    #[error("channels mismatch")]
+    #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
 }
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum PlatformUnsat {
-    #[error("could not satisfy '{0}' (required by '{1}')")]
+    #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
     UnsatisfiableMatchSpec(MatchSpec, String),
 
-    #[error("could not satisfy '{0}' (required by '{1}')")]
+    #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
     UnsatisfiableRequirement(Requirement, String),
 
-    #[error("found a duplicate entry for '{0}'")]
+    #[error("there was a duplicate entry for '{0}'")]
     DuplicateEntry(String),
 
-    #[error("failed to parse requirement '{0}'")]
+    #[error("the requirement '{0}' failed to parse")]
     FailedToParseMatchSpec(String, #[source] ParseMatchSpecError),
 
-    #[error("too many conda packages in the lock-file")]
+    #[error("there are more conda packages in the lock-file than are used by the environment")]
     TooManyCondaPackages,
 
-    #[error("too many pypi packages in the lock-file")]
+    #[error("there are more pypi packages in the lock-file than are used by the environment")]
     TooManyPypiPackages,
 
     #[error("there are PyPi dependencies but a python interpreter is missing from the lock-file")]
     MissingPythonInterpreter,
 
-    #[error("failed to determine marker environment from the python interpreter in the lock-file")]
+    #[error(
+        "a marker environment could not be derived from the python interpreter in the lock-file"
+    )]
     FailedToDetermineMarkerEnvironment(#[source] Box<dyn Diagnostic + Send + Sync>),
 
     #[error("{0} requires python version {1} but the python interpreter in the lock-file has version {2}")]

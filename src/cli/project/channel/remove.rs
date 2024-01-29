@@ -1,8 +1,10 @@
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
 
+use crate::project::manifest::channel::PrioritizedChannel;
+use crate::project::manifest::FeatureName;
 use crate::Project;
 use clap::Parser;
-use itertools::Itertools;
+use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig};
 
@@ -15,9 +17,17 @@ pub struct Args {
     /// Don't update the environment, only remove the channel(s) from the lock-file.
     #[clap(long)]
     pub no_install: bool,
+
+    /// The name of the feature to remove the channel from.
+    #[clap(long, short)]
+    pub feature: Option<String>,
 }
 
 pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+    let feature_name = args
+        .feature
+        .map_or(FeatureName::Default, FeatureName::Named);
+
     // Determine which channels to remove
     let channel_config = ChannelConfig::default();
     let channels = args
@@ -29,37 +39,28 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
-    let channels_to_remove = channels
-        .into_iter()
-        .filter(|(_name, channel)| project.channels().contains(channel))
-        .collect_vec();
-
-    if channels_to_remove.is_empty() {
-        eprintln!(
-            "{}The channel(s) are not present.",
-            console::style(console::Emoji("✔ ", "")).green(),
-        );
-        return Ok(());
-    }
-
     // Remove the channels from the manifest
-    project
-        .manifest
-        .remove_channels(channels_to_remove.iter().map(|(name, _channel)| name))?;
+    project.manifest.remove_channels(
+        channels
+            .clone()
+            .into_iter()
+            .map(|(_name, channel)| channel)
+            .map(PrioritizedChannel::from_channel),
+        &feature_name,
+    )?;
 
     // Try to update the lock-file without the removed channels
     get_up_to_date_prefix(
         &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,
-        None,
-        Default::default(),
+        IndexMap::default(),
     )
     .await?;
     project.save()?;
 
     // Report back to the user
-    for (name, channel) in channels_to_remove {
+    for (name, channel) in channels {
         eprintln!(
             "{}Removed {} ({})",
             console::style(console::Emoji("✔ ", "")).green(),
