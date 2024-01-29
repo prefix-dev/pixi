@@ -8,6 +8,7 @@ use crate::{task::Task, Project};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{Either, Itertools};
 use rattler_conda_types::{Channel, Platform};
+use std::hash::{Hash, Hasher};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -43,6 +44,20 @@ impl Debug for Environment<'_> {
             .finish()
     }
 }
+
+impl Hash for Environment<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.environment.name.hash(state)
+    }
+}
+
+impl<'p> PartialEq<Self> for Environment<'p> {
+    fn eq(&self, other: &Self) -> bool {
+        self.environment.name == other.environment.name
+    }
+}
+
+impl Eq for Environment<'_> {}
 
 impl<'p> Environment<'p> {
     /// Returns the project this environment belongs to.

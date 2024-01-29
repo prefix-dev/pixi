@@ -12,6 +12,7 @@ use crate::task::{
 };
 use crate::Project;
 
+use crate::project::manifest::EnvironmentName;
 use thiserror::Error;
 use tracing::Level;
 
@@ -28,13 +29,21 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_usage: super::LockFileUsageArgs,
+
+    #[arg(long, short)]
+    pub environment: Option<String>,
 }
 
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment = project.default_environment();
+    let environment_name = args
+        .environment
+        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
+    let environment = project
+        .environment(&environment_name)
+        .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
 
     // Split 'task' into arguments if it's a single string, supporting commands like:
     // `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or `"echo 'Hello World'"`

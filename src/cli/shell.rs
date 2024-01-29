@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use crate::unix::PtySession;
 
 use crate::cli::LockFileUsageArgs;
+use crate::project::manifest::EnvironmentName;
 #[cfg(target_family = "windows")]
 use rattler_shell::shell::CmdExe;
 
@@ -25,6 +26,9 @@ pub struct Args {
 
     #[clap(flatten)]
     lock_file_usage: LockFileUsageArgs,
+
+    #[arg(long, short)]
+    environment: Option<String>,
 }
 
 fn start_powershell(
@@ -192,7 +196,12 @@ async fn start_nu_shell(
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment = project.default_environment();
+    let environment_name = args
+        .environment
+        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
+    let environment = project
+        .environment(&environment_name)
+        .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
 
     // Get the environment variables we need to set activate the project in the shell.
     let env = get_activation_env(&environment, args.lock_file_usage.into()).await?;
