@@ -15,7 +15,7 @@ pub struct Args {
     pub lock_file_usage: super::LockFileUsageArgs,
 
     #[arg(long, short)]
-    environment: Option<String>,
+    pub environment: Option<String>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
