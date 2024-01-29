@@ -877,7 +877,7 @@ async fn ensure_up_to_date_lock_file(
 
         // If we are not allowed to install, we can't instantiate a prefix.
         if no_install {
-            miette::bail!("Cannot update pypi dependencies without installing a conda prefix that includes python first.");
+            miette::bail!("Cannot update pypi dependencies without first installing a conda prefix that includes python.");
         }
 
         // Construct a future that will resolve when we have the repodata available for the current

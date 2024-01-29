@@ -7,7 +7,7 @@ use futures::future::ready;
 use futures::{stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::{IntoDiagnostic, WrapErr};
 use rattler::install::{
     link_package, unlink_package, InstallDriver, InstallOptions, Transaction, TransactionOperation,
 };
@@ -216,7 +216,8 @@ async fn execute_operation(
                 )
                 .map_ok(|cache_dir| Some((install_record.clone(), cache_dir)))
                 .await
-                .into_diagnostic();
+                .into_diagnostic()
+                .with_context(|| format!("failed to download package {}", install_record.url));
 
             // Increment the download progress bar.
             if let Some(task) = task {

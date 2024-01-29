@@ -76,7 +76,8 @@ impl SpecType {
     }
 }
 
-/// The pixi project, this main struct to interact with the project. This struct holds the [`Manifest`] and has functions to modify or request information from it.
+/// The pixi project, this main struct to interact with the project. This struct holds the
+/// `Manifest` and has functions to modify or request information from it.
 /// This allows in the future to have multiple environments or manifests linked to a project.
 #[derive(Clone)]
 pub struct Project {
