@@ -94,7 +94,7 @@ pub async fn resolve_dependencies<'p>(
         &ResolveOptions {
             sdist_resolution,
             python_location,
-            clean_env: false,
+            ..Default::default()
         },
         HashMap::default(),
     )

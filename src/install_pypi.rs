@@ -104,10 +104,12 @@ pub async fn update_python_distributions(
         &ResolveOptions {
             sdist_resolution,
             python_location: PythonLocation::Custom(python_location),
-            clean_env: false,
+            ..Default::default()
         },
         HashMap::default(),
-    );
+    )
+    .into_diagnostic()
+    .context("error in construction of WheelBuilder for pypi installation")?;
 
     // Start downloading the python packages that we want in the background.
     let (package_stream, package_stream_pb) = stream_python_artifacts(
