@@ -44,7 +44,7 @@ impl Task {
         }
     }
 
-    // If this command is an execute command, returns the [`Execute`] task.
+    /// If this command is an execute command, returns the `Execute` task.
     pub fn as_execute(&self) -> Option<&Execute> {
         match self {
             Task::Execute(execute) => Some(execute),
@@ -52,7 +52,7 @@ impl Task {
         }
     }
 
-    /// If this command is an alias, returns the [`Alias`] task.
+    /// If this command is an alias, returns the `Alias` task.
     pub fn as_alias(&self) -> Option<&Alias> {
         match self {
             Task::Alias(alias) => Some(alias),
