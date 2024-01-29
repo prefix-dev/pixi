@@ -6,6 +6,7 @@ mod satisfiability;
 use crate::{progress, Project};
 use futures::TryStreamExt;
 use futures::{stream, StreamExt};
+use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::{izip, Itertools};
 use miette::{Context, IntoDiagnostic};
@@ -17,11 +18,13 @@ use rattler_lock::{
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
+use rip::index::PackageDb;
 use rip::resolve::SDistResolution;
 use std::collections::HashMap;
 use std::path::Path;
 use std::{sync::Arc, time::Duration};
 
+use crate::project::manifest::{PyPiRequirement, SystemRequirements};
 use crate::project::Environment;
 pub use satisfiability::{
     lock_file_satisfies_project, verify_environment_satisfiability, verify_platform_satisfiability,
@@ -203,8 +206,11 @@ pub async fn update_lock_file_for_pypi(
             );
 
             async move {
+                let package_db = environment.project().pypi_package_db()?;
                 let result = resolve_pypi(
-                    environment,
+                    &package_db,
+                    environment.pypi_dependencies(Some(*platform)),
+                    environment.system_requirements(),
                     locked_conda_packages,
                     locked_pypi_packages,
                     *platform,
@@ -241,8 +247,10 @@ pub async fn update_lock_file_for_pypi(
     result
 }
 
-async fn resolve_pypi(
-    environment: &Environment<'_>,
+pub async fn resolve_pypi(
+    package_db: &PackageDb,
+    dependencies: IndexMap<rip::types::PackageName, Vec<PyPiRequirement>>,
+    system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
     _locked_pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
     platform: Platform,
@@ -253,7 +261,9 @@ async fn resolve_pypi(
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
     let python_artifacts = pypi::resolve_dependencies(
-        environment,
+        package_db,
+        dependencies,
+        system_requirements,
         platform,
         locked_conda_records,
         python_location,
@@ -267,8 +277,7 @@ async fn resolve_pypi(
     // Add pip packages
     let mut locked_packages = LockedPypiPackages::with_capacity(python_artifacts.len());
     for python_artifact in python_artifacts {
-        let (artifact, metadata) = environment.project()
-            .pypi_package_db()?
+        let (artifact, metadata) = package_db
             // No need for a WheelBuilder here since any builds should have been done during the
             // [`python::resolve_dependencies`] call.
             .get_metadata(&python_artifact.artifacts, None)

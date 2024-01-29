@@ -343,7 +343,7 @@ impl Project {
 
     /// Returns the package database used for caching python metadata, wheels and more. See the
     /// documentation of [`rip::index::PackageDb`] for more information.
-    pub fn pypi_package_db(&self) -> miette::Result<&PackageDb> {
+    pub fn pypi_package_db(&self) -> miette::Result<Arc<PackageDb>> {
         Ok(self
             .package_db
             .get_or_try_init(|| {
@@ -355,7 +355,7 @@ impl Project {
                 .into_diagnostic()
                 .map(Arc::new)
             })?
-            .as_ref())
+            .clone())
     }
 
     /// Returns the reqwest client used for http networking

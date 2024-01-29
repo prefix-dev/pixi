@@ -6,6 +6,7 @@ use dirs::home_dir;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
+use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord};
 use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::sparse::SparseRepoData;
@@ -16,6 +17,7 @@ use rattler_shell::{
 };
 use rattler_solve::{resolvo, SolverImpl};
 use std::ffi::OsStr;
+use std::sync::Arc;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -443,14 +445,16 @@ pub(super) async fn globally_install_package(
 
     // Execute the transaction if there is work to do
     if has_transactions {
+        let package_cache = Arc::new(PackageCache::new(config::get_cache_dir()?.join("pkgs")));
+
         // Execute the operations that are returned by the solver.
         await_in_progress(
             "creating virtual environment",
             execute_transaction(
+                package_cache,
                 &transaction,
                 &prefix_records,
                 prefix.root().to_path_buf(),
-                config::get_cache_dir()?,
                 authenticated_client,
             ),
         )

@@ -15,19 +15,17 @@ use rattler_conda_types::{PrefixRecord, RepoDataRecord};
 use rattler_networking::AuthenticatedClient;
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Executes the transaction on the given environment.
 pub async fn execute_transaction(
+    package_cache: Arc<PackageCache>,
     transaction: &Transaction<PrefixRecord, RepoDataRecord>,
     prefix_records: &[PrefixRecord],
     target_prefix: PathBuf,
-    cache_dir: PathBuf,
     download_client: AuthenticatedClient,
 ) -> miette::Result<()> {
-    // Open the package cache
-    let package_cache = PackageCache::new(cache_dir.join("pkgs"));
-
     // Create an install driver which helps limit the number of concurrent filesystem operations
     let install_driver = InstallDriver::new(100, Some(prefix_records));
 
