@@ -24,6 +24,7 @@ use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource};
 pub use python::PyPiRequirement;
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
 use serde_with::{serde_as, DisplayFromStr, Map, PickFirst};
+use std::collections::HashSet;
 use std::hash::Hash;
 use std::{
     collections::HashMap,
@@ -767,15 +768,15 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             // default_target: Target,
             #[serde(default)]
             #[serde_as(as = "IndexMap<_, PickFirst<(DisplayFromStr, _)>>")]
-            dependencies: IndexMap<PackageName, NamelessMatchSpec>,
+            dependencies: IndexMap<String, NamelessMatchSpec>,
 
             #[serde(default)]
             #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
-            host_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+            host_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
 
             #[serde(default)]
             #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
-            build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
+            build_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
 
             #[serde(default)]
             pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
@@ -800,12 +801,45 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 
         let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
 
-        let mut dependencies = HashMap::from_iter([(SpecType::Run, toml_manifest.dependencies)]);
+        // check duplicate dependencies (run, host, build)
+        let mut dependencies = toml_manifest.dependencies.clone();
+        dependencies.extend(toml_manifest.host_dependencies.clone().unwrap_or_default());
+        dependencies.extend(toml_manifest.build_dependencies.clone().unwrap_or_default());
+        let mut dependency_map = HashSet::new();
+        for package in dependencies.keys() {
+            let package_name = PackageName::from_str(package).map_err(serde::de::Error::custom)?;
+            if !dependency_map.insert(package_name) {
+                return Err(serde::de::Error::custom(&format!(
+                    "duplicate dependency: {package}"
+                )));
+            }
+        }
+
+        let mut dependencies = HashMap::from_iter([(
+            SpecType::Run,
+            toml_manifest
+                .dependencies
+                .into_iter()
+                .flat_map(|(p, s)| PackageName::from_str(&p).ok().map(|p| (p, s)))
+                .collect(),
+        )]);
         if let Some(host_deps) = toml_manifest.host_dependencies {
-            dependencies.insert(SpecType::Host, host_deps);
+            dependencies.insert(
+                SpecType::Host,
+                host_deps
+                    .into_iter()
+                    .flat_map(|(p, s)| PackageName::from_str(&p).ok().map(|p| (p, s)))
+                    .collect(),
+            );
         }
         if let Some(build_deps) = toml_manifest.build_dependencies {
-            dependencies.insert(SpecType::Build, build_deps);
+            dependencies.insert(
+                SpecType::Build,
+                build_deps
+                    .into_iter()
+                    .flat_map(|(p, s)| PackageName::from_str(&p).ok().map(|p| (p, s)))
+                    .collect(),
+            );
         }
 
         let default_target = Target {
