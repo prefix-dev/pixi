@@ -4,7 +4,7 @@ use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
 use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
-use pixi::project::{DependencyType, SpecType};
+use pixi::{DependencyType, SpecType};
 use rattler_conda_types::{PackageName, Platform};
 use std::str::FromStr;
 use tempfile::TempDir;

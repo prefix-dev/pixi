@@ -138,11 +138,6 @@ impl ScopedTask {
         }
         self.pb.clone()
     }
-
-    /// Returns the progress bar associated with the task
-    pub fn progress_bar(&self) -> &ProgressBar {
-        &self.pb
-    }
 }
 
 impl ProgressBarMessageFormatter {

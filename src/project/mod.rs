@@ -7,9 +7,7 @@ pub mod virtual_packages;
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
-use rattler_conda_types::{
-    Channel, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
-};
+use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
 use rattler_networking::AuthenticationMiddleware;
 use reqwest_middleware::ClientWithMiddleware;
 use rip::{index::PackageDb, normalize_index_url};
@@ -18,7 +16,7 @@ use std::{
     collections::{HashMap, HashSet},
     env,
     ffi::OsStr,
-    fmt::{Debug, Display, Formatter},
+    fmt::{Debug, Formatter},
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -30,7 +28,6 @@ use crate::{
     task::Task,
 };
 use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
-use rip::types::NormalizedPackageName;
 use url::Url;
 
 pub use dependencies::Dependencies;
@@ -381,27 +378,6 @@ pub fn find_project_root() -> Option<PathBuf> {
     std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent())
         .find(|dir| dir.join(consts::PROJECT_MANIFEST).is_file())
         .map(Path::to_path_buf)
-}
-
-#[derive(Eq, PartialEq, Hash)]
-pub enum DependencyName {
-    Conda(PackageName),
-    PyPi(NormalizedPackageName),
-}
-
-#[derive(Clone)]
-pub enum DependencyKind {
-    Conda(MatchSpec),
-    PyPi(pep508_rs::Requirement),
-}
-
-impl Display for DependencyKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DependencyKind::Conda(spec) => write!(f, "{}", spec),
-            DependencyKind::PyPi(req) => write!(f, "{}", req),
-        }
-    }
 }
 
 #[cfg(test)]

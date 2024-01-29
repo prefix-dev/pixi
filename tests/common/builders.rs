@@ -26,7 +26,7 @@
 use futures::FutureExt;
 use pixi::{
     cli::{add, init, install, project, task},
-    project::{DependencyType, SpecType},
+    DependencyType, SpecType,
 };
 use rattler_conda_types::Platform;
 use std::{

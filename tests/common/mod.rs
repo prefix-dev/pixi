@@ -8,23 +8,20 @@ use crate::common::builders::{
     TaskAliasBuilder,
 };
 use pixi::{
-    activation::get_activation_env,
     cli::{
         add, init,
         install::Args,
         project, run,
         task::{self, AddArgs, AliasArgs},
     },
-    consts,
-    task::{ExecutableTask, RunOutput, TraversalError},
-    Project,
+    consts, get_activation_env, ExecutableTask, Project, RunOutput, TraversalError,
 };
 use rattler_conda_types::{MatchSpec, Platform};
 
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi::cli::LockFileUsageArgs;
-use pixi::project::manifest::FeatureName;
-use pixi::task::TaskExecutionError;
+use pixi::FeatureName;
+use pixi::TaskExecutionError;
 use rattler_lock::{LockFile, Package};
 use std::{
     path::{Path, PathBuf},

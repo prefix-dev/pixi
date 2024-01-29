@@ -1,17 +1,17 @@
-pub mod activation;
+mod activation;
 pub mod cli;
-pub mod config;
+mod config;
 pub mod consts;
-pub mod environment;
-pub mod install;
-pub mod install_pypi;
+mod environment;
+mod install;
+mod install_pypi;
 mod lock_file;
-pub mod prefix;
-pub mod progress;
-pub mod project;
+mod prefix;
+mod progress;
+mod project;
 mod prompt;
-pub mod repodata;
-pub mod task;
+mod repodata;
+mod task;
 #[cfg(unix)]
 pub mod unix;
 pub mod util;
@@ -19,10 +19,12 @@ pub mod utils;
 
 mod pypi_marker_env;
 mod pypi_tags;
-mod solver;
 
+pub use activation::get_activation_env;
 pub use lock_file::load_lock_file;
-pub use project::Project;
+pub use project::manifest::FeatureName;
+pub use project::{DependencyType, Project, SpecType};
+pub use task::{CmdArgs, ExecutableTask, RunOutput, Task, TaskExecutionError, TraversalError};
 
 use rattler_networking::retry_policies::ExponentialBackoff;
 
