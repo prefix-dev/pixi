@@ -1603,7 +1603,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.5",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -3038,7 +3038,7 @@ dependencies = [
 [[package]]
 name = "rattler_installs_packages"
 version = "0.4.0"
-source = "git+https://github.com/prefix-dev/rattler_installs_packages?branch=main#5cde37efbc897f11ff498bfe7860918579516d4a"
+source = "git+https://github.com/prefix-dev/rattler_installs_packages?branch=main#f32fe0aadab6b179ea93c01b24682f04199aaa0d"
 dependencies = [
  "async-once-cell",
  "async-recursion",
