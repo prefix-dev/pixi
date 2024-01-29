@@ -38,7 +38,7 @@ struct Args {
     verbose: Verbosity,
 
     /// Whether the log needs to be colored.
-    #[clap(long, default_value = "auto", global = true)]
+    #[clap(long, default_value = "auto", global = true, env = "PIXI_COLOR")]
     color: ColorOutput,
 }
 
@@ -83,10 +83,10 @@ pub enum Command {
 /// Lock file usage from the CLI
 pub struct LockFileUsageArgs {
     /// Don't check or update the lockfile, continue with previously installed environment.
-    #[clap(long, conflicts_with = "locked")]
+    #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
     pub frozen: bool,
     /// Check if lockfile is up to date, aborts when lockfile isn't up to date with the manifest file.
-    #[clap(long, conflicts_with = "frozen")]
+    #[clap(long, conflicts_with = "frozen", env = "PIXI_LOCKED")]
     pub locked: bool,
 }
 

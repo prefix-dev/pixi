@@ -20,7 +20,7 @@ assert_matches = "1.5.0"
 async-once-cell = "0.5.3"
 async-recursion = "1.0.5"
 chrono = "0.4.32"
-clap = { version = "4.4.18", default-features = false, features = ["derive", "usage", "wrap_help", "std", "color", "error-context"] }
+clap = { version = "4.4.18", default-features = false, features = ["derive", "usage", "wrap_help", "std", "color", "error-context", "env"] }
 clap-verbosity-flag = "2.1.2"
 clap_complete = "4.4.9"
 comfy-table = "7.1.0"
