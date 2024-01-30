@@ -10,7 +10,7 @@ description: All pixi cli subcommands
 - `--help (-h)` Shows help information, use `-h` to get the short version of the help.
 - `--version (-V)`: shows the version of pixi that is used.
 - `--quiet (-q)`: Decreases the amount of output.
-- `--color <COLOR>`: Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values: always, never, auto].
+- `--color <COLOR>`: Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values: always, never, auto]. Pixi also honor the `FORCE_COLOR` and `NO_COLOR` environment variables. They both take precedence over `--color` and `PIXI_COLOR`.
 
 ## `init`
 
