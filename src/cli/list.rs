@@ -10,6 +10,7 @@ use rattler_lock::Package;
 use serde::Serialize;
 
 use crate::lock_file::load_lock_file;
+use crate::project::manifest::EnvironmentName;
 use crate::Project;
 
 // an enum to sort by size or name
@@ -47,6 +48,10 @@ pub struct Args {
     /// The path to 'pixi.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
+
+    /// The environment to list packages for. Defaults to the default environment.
+    #[arg(short, long)]
+    pub environment: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -61,16 +66,16 @@ struct PackageToOutput {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    // Load the project
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())
-        .ok()
-        .ok_or_else(|| miette::miette!("No project found"))?;
+    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let environment_name = args
+        .environment
+        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
+    let environment = project
+        .environment(&environment_name)
+        .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
 
     // Load the platform
     let platform = args.platform.unwrap_or_else(Platform::current);
-
-    // Load the environment
-    let environment = project.default_environment();
 
     // Load the lockfile
     let lock_file = load_lock_file(&project)
@@ -90,7 +95,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|p| p.as_source().to_string())
         .collect_vec();
 
-    // Convert the the list of package record to specific output format
+    // Convert the list of package record to specific output format
     let mut packages_to_output = locked_deps
         .iter()
         .map(|p| create_package_to_output(p, &project_dependency_names))
