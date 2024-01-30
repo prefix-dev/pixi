@@ -6,6 +6,7 @@ use crate::common::PixiControl;
 use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
 use pixi::{DependencyType, SpecType};
 use rattler_conda_types::{PackageName, Platform};
+use serial_test::serial;
 use std::str::FromStr;
 use tempfile::TempDir;
 
@@ -155,6 +156,7 @@ async fn add_functionality_os() {
 /// Test the `pixi add --pypi` functionality
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[serial]
 async fn add_pypi_functionality() {
     let pixi = PixiControl::new().unwrap();
 
@@ -226,6 +228,7 @@ async fn add_pypi_functionality() {
 /// Test the sdist support for pypi packages
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[serial]
 async fn add_sdist_functionality() {
     let pixi = PixiControl::new().unwrap();
 
