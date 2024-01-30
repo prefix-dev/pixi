@@ -82,8 +82,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         task_args,
         Some(Platform::current()),
         explicit_environment.clone(),
-    )
-    .context("failed to construct task graph from command line arguments")?;
+    )?;
 
     // Traverse the task graph in topological order and execute each individual task.
     let mut task_idx = 0;
@@ -150,7 +149,7 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
     let available_tasks: HashSet<String> = if let Some(explicit_environment) = explicit_environment
     {
         explicit_environment
-            .tasks(Some(Platform::current()))
+            .tasks(Some(Platform::current()), true)
             .into_iter()
             .flat_map(|tasks| tasks.into_keys())
             .map(ToOwned::to_owned)
@@ -160,7 +159,7 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
             .environments()
             .into_iter()
             .flat_map(|env| {
-                env.tasks(Some(Platform::current()))
+                env.tasks(Some(Platform::current()), true)
                     .into_iter()
                     .flat_map(|tasks| tasks.into_keys())
                     .map(ToOwned::to_owned)

@@ -308,14 +308,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .iter()
                 .map(|env| {
                     let tasks = env
-                        .tasks(None)
+                        .tasks(None, true)
                         .ok()
                         .map(|t| t.into_keys().map(|k| k.to_string()).collect())
                         .unwrap_or_default();
 
                     EnvironmentInfo {
                         name: env.name().as_str().to_string(),
-                        features: env.features().map(|f| f.name.to_string()).collect(),
+                        features: env.features(true).map(|f| f.name.to_string()).collect(),
                         solve_group: env.manifest().solve_group.clone(),
                         environment_size: None,
                         dependencies: env

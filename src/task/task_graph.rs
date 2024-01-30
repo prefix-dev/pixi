@@ -4,6 +4,7 @@ use crate::{
     task::{error::MissingTaskError, CmdArgs, Custom, Task},
     Project,
 };
+use itertools::Itertools;
 use miette::Diagnostic;
 use rattler_conda_types::Platform;
 use std::{
@@ -123,10 +124,8 @@ impl<'p> SearchEnvironments<'p> {
         name: &str,
         source: FindTaskSource,
     ) -> Result<(Environment<'p>, &'p Task), FindTaskError> {
-        let mut tasks = Vec::new();
-
         // If the task was specified on the command line and there is no explicit environment and
-        // there is a task with that name in the default feature, use the default environment.
+        // the task is only defined in the default feature, use the default environment.
         if source == FindTaskSource::CmdArgs && self.explicit_environment.is_none() {
             if let Some(task) = self
                 .project
@@ -136,7 +135,18 @@ impl<'p> SearchEnvironments<'p> {
                 .resolve(self.platform)
                 .find_map(|target| target.tasks.get(name))
             {
-                return Ok((self.project.default_environment(), task));
+                // None of the other environments can have this task. Otherwise, its still
+                // ambiguous.
+                if !self
+                    .project
+                    .environments()
+                    .into_iter()
+                    .flat_map(|env| env.features(false).collect_vec())
+                    .flat_map(|feature| feature.targets.resolve(self.platform))
+                    .any(|target| target.tasks.contains_key(name))
+                {
+                    return Ok((self.project.default_environment(), task));
+                }
             }
         }
 
@@ -149,9 +159,11 @@ impl<'p> SearchEnvironments<'p> {
         };
 
         // Find all the task and environment combinations
+        let include_default_feature = true;
+        let mut tasks = Vec::new();
         for env in environments {
             if let Some(task) = env
-                .tasks(self.platform)
+                .tasks(self.platform, include_default_feature)
                 .ok()
                 .and_then(|tasks| tasks.get(name).copied())
             {
@@ -347,6 +359,7 @@ pub enum TaskGraphError {
     MissingTask(#[from] MissingTaskError),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     AmbiguousTask(AmbiguousTaskError),
 }
 
