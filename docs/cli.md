@@ -228,7 +228,7 @@ moo = { depends_on = ["cow"] }
 This command starts a new shell in the project's environment.
 To exit the pixi shell, simply run `exit`.
 
-#####Options
+##### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
@@ -243,6 +243,31 @@ pixi shell --frozen
 exit
 pixi shell --locked
 exit
+```
+
+## `shell-hook`
+
+This command prints the activation script of an environment.
+
+##### Options
+- `--shell`: The shell for which the activation script should be printed. Defaults to the current shell.
+    Currently supported variants: [`Bash`,  `Zsh`,  `Xonsh`,  `CmdExe`,  `PowerShell`,  `Fish`,  `NuShell`]
+- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
+- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
+
+```shell
+pixi shell-hook
+pixi shell-hook --shell bash
+pixi shell-hook --shell zsh
+pixi shell-hook --manifest-path ~/myproject/pixi.toml
+pixi shell-hook --frozen
+pixi shell-hook --locked
+```
+Example use-case, when you want to get rid of the `pixi` executable in a Docker container.
+```shell
+pixi shell-hook --shell bash > /etc/profile.d/pixi.sh
+rm ~/.pixi/bin/pixi # Now the environment will be activated without the need for the pixi executable.
 ```
 
 ## `search`
