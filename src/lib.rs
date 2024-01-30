@@ -21,9 +21,12 @@ mod pypi_marker_env;
 mod pypi_tags;
 
 pub use activation::get_activation_env;
+pub use environment::UpdateLockFileOptions;
 pub use lock_file::load_lock_file;
-pub use project::manifest::FeatureName;
-pub use project::{DependencyType, Project, SpecType};
+pub use project::{
+    manifest::{EnvironmentName, FeatureName},
+    DependencyType, Project, SpecType,
+};
 pub use task::{
     CmdArgs, ExecutableTask, RunOutput, Task, TaskExecutionError, TaskGraph, TaskGraphError,
 };
