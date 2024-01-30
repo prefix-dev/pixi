@@ -4,7 +4,6 @@ use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
 use clap::Parser;
-use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{miette, Context, Diagnostic};
 use rattler_conda_types::Platform;
@@ -12,9 +11,9 @@ use rattler_conda_types::Platform;
 use crate::activation::get_environment_variables;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TaskGraph};
-use crate::Project;
+use crate::{Project, UpdateLockFileOptions};
 
-use crate::environment::{ensure_up_to_date_lock_file, LockFileDerivedData};
+use crate::environment::LockFileDerivedData;
 use crate::progress::await_in_progress;
 use crate::project::manifest::EnvironmentName;
 use crate::project::Environment;
@@ -58,13 +57,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .transpose()?;
 
     // Ensure that the lock-file is up-to-date.
-    let mut lock_file = ensure_up_to_date_lock_file(
-        &project,
-        IndexMap::new(),
-        args.lock_file_usage.into(),
-        false,
-    )
-    .await?;
+    let mut lock_file = project
+        .up_to_date_lock_file(UpdateLockFileOptions {
+            lock_file_usage: args.lock_file_usage.into(),
+            ..UpdateLockFileOptions::default()
+        })
+        .await?;
 
     // Split 'task' into arguments if it's a single string, supporting commands like:
     // `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or `"echo 'Hello World'"`

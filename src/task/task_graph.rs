@@ -368,6 +368,7 @@ mod test {
             &project,
             run_args.into_iter().map(|arg| arg.to_string()).collect(),
             platform,
+            None,
         )
         .unwrap();
 
@@ -483,7 +484,33 @@ mod test {
                 &["build"],
                 None,
             ),
-            vec![r#""echo build""#]
+            vec![r#"echo build"#]
+        );
+    }
+
+    #[test]
+    fn test_multi_env_default() {
+        assert_eq!(
+            commands_in_order(
+                r#"
+        [project]
+        name = "pixi"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [tasks]
+        start = "hello world"
+
+        [feature.build.tasks]
+        build = "echo build"
+
+        [environments]
+        build = ["build"]
+    "#,
+                &["start"],
+                None,
+            ),
+            vec![r#"hello world"#]
         );
     }
 }

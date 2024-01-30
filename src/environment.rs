@@ -171,15 +171,51 @@ pub async fn get_up_to_date_prefix(
     sanity_check_project(project)?;
 
     // Ensure that the lock-file is up-to-date
-    let mut lock_file =
-        ensure_up_to_date_lock_file(project, existing_repo_data, lock_file_usage, no_install)
-            .await?;
+    let mut lock_file = project
+        .up_to_date_lock_file(UpdateLockFileOptions {
+            existing_repo_data,
+            lock_file_usage,
+            no_install,
+        })
+        .await?;
 
     // Get the locked environment from the lock-file.
     if no_install {
         Ok(Prefix::new(environment.dir()))
     } else {
         lock_file.prefix(environment).await
+    }
+}
+
+/// Options to pass to [`Project::up_to_date_lock_file`].
+#[derive(Default)]
+pub struct UpdateLockFileOptions {
+    /// Defines what to do if the lock-file is out of date
+    pub lock_file_usage: LockFileUsage,
+
+    /// Don't install anything to disk.
+    pub no_install: bool,
+
+    /// Existing repodata that can be used to avoid downloading it again.
+    pub existing_repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
+}
+
+impl Project {
+    /// Ensures that the lock-file is up-to-date with the project information.
+    ///
+    /// Returns the lock-file and any potential derived data that was computed as part of this
+    /// operation.
+    pub async fn up_to_date_lock_file(
+        &self,
+        options: UpdateLockFileOptions,
+    ) -> miette::Result<LockFileDerivedData<'_>> {
+        ensure_up_to_date_lock_file(
+            self,
+            options.existing_repo_data,
+            options.lock_file_usage,
+            options.no_install,
+        )
+        .await
     }
 }
 
@@ -684,12 +720,12 @@ impl<'p> UpdateContext<'p> {
 /// construct a task graph of all the work that needs to be done to update the lock-file. The tasks
 /// are awaited in a specific order to make sure that we can start instantiating prefixes as soon as
 /// possible.
-pub async fn ensure_up_to_date_lock_file(
+async fn ensure_up_to_date_lock_file(
     project: &Project,
     existing_repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
     lock_file_usage: LockFileUsage,
     no_install: bool,
-) -> miette::Result<LockFileDerivedData> {
+) -> miette::Result<LockFileDerivedData<'_>> {
     let lock_file = load_lock_file(project).await?;
     let current_platform = Platform::current();
     let package_cache = Arc::new(PackageCache::new(config::get_cache_dir()?.join("pkgs")));
