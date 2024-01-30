@@ -118,7 +118,9 @@ pub fn get_activator<'p>(
 }
 
 /// Runs and caches the activation script.
-async fn run_activation(environment: &Environment<'_>) -> miette::Result<HashMap<String, String>> {
+pub async fn run_activation(
+    environment: &Environment<'_>,
+) -> miette::Result<HashMap<String, String>> {
     let activator = get_activator(environment, ShellEnum::default()).map_err(|e| {
         miette::miette!(format!(
             "failed to create activator for {:?}\n{}",

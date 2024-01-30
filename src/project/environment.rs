@@ -46,6 +46,11 @@ impl Debug for Environment<'_> {
 }
 
 impl<'p> Environment<'p> {
+    /// Returns true if this environment is the default environment.
+    pub fn is_default(&self) -> bool {
+        self.environment.name == EnvironmentName::Default
+    }
+
     /// Returns the project this environment belongs to.
     pub fn project(&self) -> &'p Project {
         self.project

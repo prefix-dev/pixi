@@ -1,3 +1,4 @@
+use crate::project::Environment;
 use crate::{
     task::task_graph::{TaskGraph, TaskId},
     task::{quote_arguments, Task},
@@ -52,6 +53,7 @@ pub struct ExecutableTask<'p> {
     pub project: &'p Project,
     pub name: Option<String>,
     pub task: Cow<'p, Task>,
+    pub run_environment: Environment<'p>,
     pub additional_args: Vec<String>,
 }
 
@@ -63,6 +65,7 @@ impl<'p> ExecutableTask<'p> {
             project: task_graph.project(),
             name: node.name.clone(),
             task: node.task.clone(),
+            run_environment: node.run_environment.clone(),
             additional_args: node.additional_args.clone(),
         }
     }

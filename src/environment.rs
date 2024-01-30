@@ -684,7 +684,7 @@ impl<'p> UpdateContext<'p> {
 /// construct a task graph of all the work that needs to be done to update the lock-file. The tasks
 /// are awaited in a specific order to make sure that we can start instantiating prefixes as soon as
 /// possible.
-async fn ensure_up_to_date_lock_file(
+pub async fn ensure_up_to_date_lock_file(
     project: &Project,
     existing_repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
     lock_file_usage: LockFileUsage,

@@ -1,3 +1,5 @@
+use crate::project::Environment;
+use crate::task::error::AmbiguousTaskError;
 use crate::{
     task::{error::MissingTaskError, CmdArgs, Custom, Task},
     Project,
@@ -22,6 +24,9 @@ pub struct TaskId(usize);
 pub struct TaskNode<'p> {
     /// The name of the task or `None` if the task is a custom task.
     pub name: Option<String>,
+
+    /// The environment to run the task in
+    pub run_environment: Environment<'p>,
 
     /// A reference to a project task, or a owned custom task.
     pub task: Cow<'p, Task>,
@@ -69,6 +74,110 @@ impl<'p> Index<TaskId> for TaskGraph<'p> {
     }
 }
 
+/// Defines where the task was defined when looking for a task.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum FindTaskSource {
+    CmdArgs,
+    DependsOn,
+}
+
+/// An object to help with searching for tasks.
+struct SearchEnvironments<'p> {
+    pub project: &'p Project,
+    pub explicit_environment: Option<Environment<'p>>,
+    pub platform: Option<Platform>,
+}
+
+#[derive(Debug, Diagnostic, Error)]
+pub enum FindTaskError {
+    #[error(transparent)]
+    MissingTask(MissingTaskError),
+
+    #[error(transparent)]
+    AmbiguousTask(AmbiguousTaskError),
+}
+
+impl<'p> SearchEnvironments<'p> {
+    // Determine which environments we are allowed to check for tasks.
+    //
+    // If the user specified an environment, look for tasks in the main environment and the
+    // user specified environment.
+    //
+    // If the user did not specify an environment, look for tasks in any environment.
+    pub fn from_opt_env(
+        project: &'p Project,
+        explicit_environment: Option<Environment<'p>>,
+        platform: Option<Platform>,
+    ) -> Self {
+        Self {
+            project,
+            explicit_environment,
+            platform,
+        }
+    }
+
+    /// Finds the task with the given name or returns an error that explains why the task could not
+    /// be found.
+    pub fn find_task(
+        &self,
+        name: &str,
+        source: FindTaskSource,
+    ) -> Result<(Environment<'p>, &'p Task), FindTaskError> {
+        let mut tasks = Vec::new();
+
+        // If the task was specified on the command line and there is no explicit environment and
+        // there is a task with that name in the default feature, use the default environment.
+        if source == FindTaskSource::CmdArgs && self.explicit_environment.is_none() {
+            if let Some(task) = self
+                .project
+                .manifest
+                .default_feature()
+                .targets
+                .resolve(self.platform)
+                .find_map(|target| target.tasks.get(name))
+            {
+                return Ok((self.project.default_environment(), task));
+            }
+        }
+
+        // If an explicit environment was specified, only look for tasks in that environment and
+        // the default environment.
+        let environments = if let Some(explicit_environment) = &self.explicit_environment {
+            vec![explicit_environment.clone()]
+        } else {
+            self.project.environments()
+        };
+
+        // Find all the task and environment combinations
+        for env in environments {
+            if let Some(task) = env
+                .tasks(self.platform)
+                .ok()
+                .and_then(|tasks| tasks.get(name).copied())
+            {
+                tasks.push((env, task));
+            }
+        }
+
+        match tasks.len() {
+            0 => Err(FindTaskError::MissingTask(MissingTaskError {
+                task_name: name.to_string(),
+            })),
+            1 => {
+                let (env, task) = tasks.remove(0);
+                Ok((env.clone(), task))
+            }
+            _ => Err(FindTaskError::AmbiguousTask(AmbiguousTaskError {
+                task_name: name.to_string(),
+                environments: tasks
+                    .into_iter()
+                    .map(|(env, _)| env.name().clone())
+                    .collect(),
+            })),
+        }
+    }
+}
+
 impl<'p> TaskGraph<'p> {
     pub fn project(&self) -> &'p Project {
         self.project
@@ -79,30 +188,49 @@ impl<'p> TaskGraph<'p> {
         project: &'p Project,
         args: Vec<String>,
         platform: Option<Platform>,
+        environment: Option<Environment<'p>>,
     ) -> Result<Self, TaskGraphError> {
         let mut args = args;
 
+        let search_envs = SearchEnvironments::from_opt_env(project, environment, platform);
+
         if let Some(name) = args.first() {
-            // Find the task in the project. First searches for platform specific tasks and falls
-            // back to looking for the task in the default tasks.
-            if let Some(task) = project.task_opt(name, platform) {
-                return Self::from_root(
-                    project,
-                    platform,
-                    TaskNode {
-                        name: Some(args.remove(0)),
-                        task: Cow::Borrowed(task),
-                        additional_args: args,
-                        dependencies: vec![],
-                    },
-                );
+            match search_envs.find_task(name, FindTaskSource::CmdArgs) {
+                Err(FindTaskError::MissingTask(_)) => {}
+                Err(FindTaskError::AmbiguousTask(err)) => {
+                    return Err(TaskGraphError::AmbiguousTask(err))
+                }
+                Ok((task_env, task)) => {
+                    // If an explicit environment was specified and the task is from the default
+                    // environment use the specified environment instead.
+                    let run_env = match search_envs.explicit_environment.clone() {
+                        Some(explicit_env) if task_env.is_default() => explicit_env,
+                        _ => task_env,
+                    };
+
+                    return Self::from_root(
+                        project,
+                        search_envs,
+                        TaskNode {
+                            name: Some(args.remove(0)),
+                            task: Cow::Borrowed(task),
+                            run_environment: run_env,
+                            additional_args: args,
+                            dependencies: vec![],
+                        },
+                    );
+                }
             }
         }
 
         // When no task is found, just execute the command verbatim.
+        let run_environment = search_envs
+            .explicit_environment
+            .clone()
+            .unwrap_or_else(|| project.default_environment());
         Self::from_root(
             project,
-            platform,
+            search_envs,
             TaskNode {
                 name: None,
                 task: Cow::Owned(
@@ -112,6 +240,7 @@ impl<'p> TaskGraph<'p> {
                     }
                     .into(),
                 ),
+                run_environment,
                 additional_args: vec![],
                 dependencies: vec![],
             },
@@ -121,7 +250,7 @@ impl<'p> TaskGraph<'p> {
     /// Constructs a new instance of a [`TaskGraph`] from a root task.
     fn from_root(
         project: &'p Project,
-        platform: Option<Platform>,
+        search_environments: SearchEnvironments<'p>,
         root: TaskNode<'p>,
     ) -> Result<Self, TaskGraphError> {
         let mut task_name_to_node: HashMap<String, TaskId> =
@@ -137,24 +266,30 @@ impl<'p> TaskGraph<'p> {
             // Iterate over all the dependencies of the node and add them to the graph.
             let mut node_dependencies = Vec::with_capacity(dependency_names.len());
             for dependency in dependency_names {
-                // Check if we visisted this node before already.
+                // Check if we visited this node before already.
                 if let Some(&task_id) = task_name_to_node.get(&dependency) {
                     node_dependencies.push(task_id);
                     continue;
                 }
 
                 // Find the task in the project
-                let Some(task_dependency) = project.task_opt(&dependency, platform) else {
-                    return Err(TaskGraphError::MissingTask(MissingTaskError {
-                        task_name: dependency,
-                    }));
-                };
+                let (task_env, task_dependency) =
+                    match search_environments.find_task(&dependency, FindTaskSource::DependsOn) {
+                        Err(FindTaskError::MissingTask(err)) => {
+                            return Err(TaskGraphError::MissingTask(err))
+                        }
+                        Err(FindTaskError::AmbiguousTask(err)) => {
+                            return Err(TaskGraphError::AmbiguousTask(err))
+                        }
+                        Ok(result) => result,
+                    };
 
                 // Add the node to the graph
                 let task_id = TaskId(nodes.len());
                 nodes.push(TaskNode {
                     name: Some(dependency.clone()),
                     task: Cow::Borrowed(task_dependency),
+                    run_environment: task_env,
                     additional_args: Vec::new(),
                     dependencies: Vec::new(),
                 });
@@ -210,6 +345,9 @@ impl<'p> TaskGraph<'p> {
 pub enum TaskGraphError {
     #[error(transparent)]
     MissingTask(#[from] MissingTaskError),
+
+    #[error(transparent)]
+    AmbiguousTask(AmbiguousTaskError),
 }
 
 #[cfg(test)]
@@ -323,6 +461,29 @@ mod test {
                 None,
             ),
             vec![r#""echo bla""#]
+        );
+    }
+
+    #[test]
+    fn test_multi_env() {
+        assert_eq!(
+            commands_in_order(
+                r#"
+        [project]
+        name = "pixi"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [feature.build.tasks]
+        build = "echo build"
+
+        [environments]
+        build = ["build"]
+    "#,
+                &["build"],
+                None,
+            ),
+            vec![r#""echo build""#]
         );
     }
 }
