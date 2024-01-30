@@ -45,20 +45,6 @@ impl Debug for Environment<'_> {
     }
 }
 
-impl Hash for Environment<'_> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.environment.name.hash(state)
-    }
-}
-
-impl<'p> PartialEq<Self> for Environment<'p> {
-    fn eq(&self, other: &Self) -> bool {
-        self.environment.name == other.environment.name
-    }
-}
-
-impl Eq for Environment<'_> {}
-
 impl<'p> Environment<'p> {
     /// Returns the project this environment belongs to.
     pub fn project(&self) -> &'p Project {
@@ -288,6 +274,20 @@ impl<'p> Environment<'p> {
         self.features().any(|f| f.has_pypi_dependencies())
     }
 }
+
+impl<'p> Hash for Environment<'p> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.environment.name.hash(state);
+    }
+}
+
+impl<'p> PartialEq<Self> for Environment<'p> {
+    fn eq(&self, other: &Self) -> bool {
+        self.environment.name == other.environment.name
+    }
+}
+
+impl<'p> Eq for Environment<'p> {}
 
 #[cfg(test)]
 mod tests {

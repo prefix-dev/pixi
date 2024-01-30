@@ -5,14 +5,15 @@ use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 
+mod error;
 mod executable_task;
-mod traverse;
+mod task_graph;
 
 pub use executable_task::{
     ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, RunOutput,
     TaskExecutionError,
 };
-pub use traverse::TraversalError;
+pub use task_graph::{TaskGraph, TaskGraphError, TaskId, TaskNode};
 
 /// Represents different types of scripts
 #[derive(Debug, Clone, Deserialize)]
@@ -44,7 +45,7 @@ impl Task {
         }
     }
 
-    // If this command is an execute command, returns the [`Execute`] task.
+    /// If this command is an execute command, returns the `Execute` task.
     pub fn as_execute(&self) -> Option<&Execute> {
         match self {
             Task::Execute(execute) => Some(execute),
@@ -52,7 +53,7 @@ impl Task {
         }
     }
 
-    /// If this command is an alias, returns the [`Alias`] task.
+    /// If this command is an alias, returns the `Alias` task.
     pub fn as_alias(&self) -> Option<&Alias> {
         match self {
             Task::Alias(alias) => Some(alias),

@@ -54,30 +54,30 @@ where
             repo.package_names()
                 .filter(|&name| filter_func(name, package))
         })
+        .unique()
         .collect::<Vec<&str>>();
 
     let mut latest_packages = Vec::new();
 
     // search for `similar_packages` in all platform's repodata
     // add the latest version of the fetched package to latest_packages vector
-    for repo in repo_data.values() {
-        for package in &similar_packages {
-            let mut records = repo
-                .load_records(&PackageName::new_unchecked(*package))
-                .into_diagnostic()?;
-            // sort records by version, get the latest one
-            records.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
-            let latest_package = records.last().cloned();
-            if let Some(latest_package) = latest_package {
-                latest_packages.push(latest_package);
-            }
+    for package in similar_packages {
+        let mut records = Vec::new();
+
+        for repo in repo_data.values() {
+            records.extend(
+                repo.load_records(&PackageName::new_unchecked(package))
+                    .into_diagnostic()?,
+            );
+        }
+
+        // sort records by version, get the latest one
+        records.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
+        let latest_package = records.last().cloned();
+        if let Some(latest_package) = latest_package {
+            latest_packages.push(latest_package);
         }
     }
-
-    latest_packages = latest_packages
-        .into_iter()
-        .unique_by(|record| record.package_record.name.clone())
-        .collect::<Vec<_>>();
 
     Ok(latest_packages)
 }
@@ -143,14 +143,13 @@ async fn search_exact_package<W: Write>(
     out: W,
 ) -> miette::Result<()> {
     let package_name_search = package_name.clone();
-    let packages = await_in_progress(
-        "searching packages",
+    let packages = await_in_progress("searching packages", |_| {
         spawn_blocking(move || {
             search_package_by_filter(&package_name_search, repo_data, |pn, n| {
                 pn == n.as_normalized()
             })
-        }),
-    )
+        })
+    })
     .await
     .into_diagnostic()??;
 
@@ -286,8 +285,7 @@ async fn search_package_by_wildcard<W: Write>(
         .expect("Expect only characters and/or * (wildcard).");
 
     let package_name_search = package_name.clone();
-    let mut packages = await_in_progress(
-        "searching packages",
+    let mut packages = await_in_progress("searching packages", |_| {
         spawn_blocking(move || {
             let packages =
                 search_package_by_filter(&package_name_search, repo_data.clone(), |pn, _| {
@@ -307,8 +305,8 @@ async fn search_package_by_wildcard<W: Write>(
                 }
                 Err(e) => Err(e),
             }
-        }),
-    )
+        })
+    })
     .await
     .into_diagnostic()??;
 
