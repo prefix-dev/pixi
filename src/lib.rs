@@ -24,7 +24,9 @@ pub use activation::get_activation_env;
 pub use lock_file::load_lock_file;
 pub use project::manifest::FeatureName;
 pub use project::{DependencyType, Project, SpecType};
-pub use task::{CmdArgs, ExecutableTask, RunOutput, Task, TaskExecutionError, TraversalError};
+pub use task::{
+    CmdArgs, ExecutableTask, RunOutput, Task, TaskExecutionError, TaskGraph, TaskGraphError,
+};
 
 use rattler_networking::retry_policies::ExponentialBackoff;
 

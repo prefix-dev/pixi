@@ -306,34 +306,37 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|p| {
             p.environments()
                 .iter()
-                .map(|env| EnvironmentInfo {
-                    name: env.name().as_str().to_string(),
-                    features: env.features().map(|f| f.name.to_string()).collect(),
-                    solve_group: env.manifest().solve_group.clone(),
-                    environment_size: None,
-                    dependencies: env
-                        .dependencies(None, Some(Platform::current()))
-                        .names()
-                        .map(|p| p.as_source().to_string())
-                        .collect(),
-                    pypi_dependencies: env
-                        .pypi_dependencies(Some(Platform::current()))
-                        .into_iter()
-                        .map(|(name, _p)| name.as_str().to_string())
-                        .collect(),
-                    platforms: env.platforms().into_iter().collect(),
-                    channels: env
-                        .channels()
-                        .into_iter()
-                        .filter_map(|c| c.name.clone())
-                        .collect(),
-                    // prefix: env.dir(),
-                    tasks: env
-                        .tasks(Some(Platform::current()))
-                        .expect("Current environment should be supported on current platform")
-                        .into_keys()
-                        .map(|k| k.to_string())
-                        .collect(),
+                .map(|env| {
+                    let tasks = env
+                        .tasks(None)
+                        .ok()
+                        .map(|t| t.into_keys().map(|k| k.to_string()).collect())
+                        .unwrap_or_default();
+
+                    EnvironmentInfo {
+                        name: env.name().as_str().to_string(),
+                        features: env.features().map(|f| f.name.to_string()).collect(),
+                        solve_group: env.manifest().solve_group.clone(),
+                        environment_size: None,
+                        dependencies: env
+                            .dependencies(None, Some(Platform::current()))
+                            .names()
+                            .map(|p| p.as_source().to_string())
+                            .collect(),
+                        pypi_dependencies: env
+                            .pypi_dependencies(Some(Platform::current()))
+                            .into_iter()
+                            .map(|(name, _p)| name.as_str().to_string())
+                            .collect(),
+                        platforms: env.platforms().into_iter().collect(),
+                        channels: env
+                            .channels()
+                            .into_iter()
+                            .filter_map(|c| c.name.clone())
+                            .collect(),
+                        // prefix: env.dir(),
+                        tasks,
+                    }
                 })
                 .collect()
         })
