@@ -88,6 +88,8 @@ pub async fn resolve_dependencies<'p>(
         Some(&compatible_tags),
         conda_python_packages
             .into_iter()
+            // skip using the locked package in the case where conda and pypi package has the same name
+            .filter(|p| requirements.iter().any(|r| r.name != p.name.as_str()))
             .map(|p| (p.name.clone(), p))
             .collect(),
         HashMap::default(),
