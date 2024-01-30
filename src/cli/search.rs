@@ -143,14 +143,13 @@ async fn search_exact_package<W: Write>(
     out: W,
 ) -> miette::Result<()> {
     let package_name_search = package_name.clone();
-    let packages = await_in_progress(
-        "searching packages",
+    let packages = await_in_progress("searching packages", |_| {
         spawn_blocking(move || {
             search_package_by_filter(&package_name_search, repo_data, |pn, n| {
                 pn == n.as_normalized()
             })
-        }),
-    )
+        })
+    })
     .await
     .into_diagnostic()??;
 
@@ -286,8 +285,7 @@ async fn search_package_by_wildcard<W: Write>(
         .expect("Expect only characters and/or * (wildcard).");
 
     let package_name_search = package_name.clone();
-    let mut packages = await_in_progress(
-        "searching packages",
+    let mut packages = await_in_progress("searching packages", |_| {
         spawn_blocking(move || {
             let packages =
                 search_package_by_filter(&package_name_search, repo_data.clone(), |pn, _| {
@@ -307,8 +305,8 @@ async fn search_package_by_wildcard<W: Write>(
                 }
                 Err(e) => Err(e),
             }
-        }),
-    )
+        })
+    })
     .await
     .into_diagnostic()??;
 

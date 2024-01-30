@@ -281,14 +281,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let (pixi_folder_size, cache_size) = if args.extended {
         let env_dir = project.as_ref().map(|p| p.root().join(".pixi"));
         let cache_dir = config::get_cache_dir()?;
-        await_in_progress(
-            "fetching cache",
+        await_in_progress("fetching cache", |_| {
             spawn_blocking(move || {
                 let env_size = env_dir.and_then(|env| dir_size(env).ok());
                 let cache_size = dir_size(cache_dir).ok();
                 (env_size, cache_size)
-            }),
-        )
+            })
+        })
         .await
         .into_diagnostic()?
     } else {

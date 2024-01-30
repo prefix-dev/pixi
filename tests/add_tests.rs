@@ -4,9 +4,8 @@ use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
 use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
-use pixi::project::{DependencyType, SpecType};
+use pixi::{DependencyType, SpecType};
 use rattler_conda_types::{PackageName, Platform};
-use rip::resolve::SDistResolution;
 use std::str::FromStr;
 use tempfile::TempDir;
 
@@ -155,25 +154,11 @@ async fn add_functionality_os() {
 
 /// Test the `pixi add --pypi` functionality
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_pypi_functionality() {
-    let mut package_database = PackageDatabase::default();
-
-    // Add a package `foo` that depends on `bar` both set to version 1.
-    package_database.add_package(Package::build("python", "3.9").finish());
-
-    // Write the repodata to disk
-    let channel_dir = TempDir::new().unwrap();
-    package_database
-        .write_repodata(channel_dir.path())
-        .await
-        .unwrap();
-
     let pixi = PixiControl::new().unwrap();
 
-    pixi.init()
-        .with_local_channel(channel_dir.path())
-        .await
-        .unwrap();
+    pixi.init().await.unwrap();
 
     // Add python
     pixi.add("python")
@@ -182,17 +167,24 @@ async fn add_pypi_functionality() {
         .await
         .unwrap();
 
-    // Add a pypi package
+    // Add a pypi package but without installing should fail
     pixi.add("pipx")
         .set_type(DependencyType::PypiDependency)
         .with_install(false)
+        .await
+        .unwrap_err();
+
+    // Add a pypi package
+    pixi.add("pipx")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
         .await
         .unwrap();
 
     // Add a pypi package to a target
     pixi.add("boto3>=1.33")
         .set_type(DependencyType::PypiDependency)
-        .with_install(false)
+        .with_install(true)
         .set_platforms(&[Platform::Osx64])
         .await
         .unwrap();
@@ -201,14 +193,14 @@ async fn add_pypi_functionality() {
     pixi.add("pytest[all]")
         .set_type(DependencyType::PypiDependency)
         .set_platforms(&[Platform::Linux64])
-        .with_install(false)
+        .with_install(true)
         .await
         .unwrap();
 
     pixi.add("requests [security,tests] >= 2.8.1, == 2.8.*")
         .set_type(DependencyType::PypiDependency)
         .set_platforms(&[Platform::Linux64])
-        .with_install(false)
+        .with_install(true)
         .await
         .unwrap();
 
@@ -246,11 +238,10 @@ async fn add_sdist_functionality() {
         .await
         .unwrap();
 
-    // // Add the sdist pypi package
-    pixi.add("flask==3.0.0")
+    // Add the sdist pypi package
+    pixi.add("sdist")
         .set_type(DependencyType::PypiDependency)
         .with_install(true)
-        .with_sdist_resolution(SDistResolution::OnlySDists)
         .await
         .unwrap();
 }

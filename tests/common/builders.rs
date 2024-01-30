@@ -24,13 +24,16 @@
 //! ```
 
 use futures::FutureExt;
-use pixi::cli::{add, init, install, project, task};
-use pixi::project::{DependencyType, SpecType};
+use pixi::{
+    cli::{add, init, install, project, task},
+    DependencyType, SpecType,
+};
 use rattler_conda_types::Platform;
-use rip::resolve::SDistResolution;
-use std::future::{Future, IntoFuture};
-use std::path::{Path, PathBuf};
-use std::pin::Pin;
+use std::{
+    future::{Future, IntoFuture},
+    path::{Path, PathBuf},
+    pin::Pin,
+};
 use url::Url;
 
 /// Strings from an iterator
@@ -126,11 +129,6 @@ impl AddBuilder {
 
     pub fn set_platforms(mut self, platforms: &[Platform]) -> Self {
         self.args.platform.extend(platforms.iter());
-        self
-    }
-
-    pub fn with_sdist_resolution(mut self, sdist_resolution: SDistResolution) -> Self {
-        self.args.sdist_resolution = sdist_resolution;
         self
     }
 }

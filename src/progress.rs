@@ -91,7 +91,7 @@ pub fn long_running_progress_style() -> indicatif::ProgressStyle {
 // }
 
 /// Displays a spinner with the given message while running the specified function to completion.
-pub async fn await_in_progress<T, F: Future<Output = T>>(
+pub async fn await_in_progress<T, F: FnOnce(ProgressBar) -> Fut, Fut: Future<Output = T>>(
     msg: impl Into<Cow<'static, str>>,
     future: F,
 ) -> T {
@@ -99,7 +99,7 @@ pub async fn await_in_progress<T, F: Future<Output = T>>(
     pb.enable_steady_tick(Duration::from_millis(100));
     pb.set_style(long_running_progress_style());
     pb.set_message(msg);
-    let result = future.await;
+    let result = future(pb.clone()).await;
     pb.finish_and_clear();
     result
 }
@@ -137,11 +137,6 @@ impl ScopedTask {
                 .await;
         }
         self.pb.clone()
-    }
-
-    /// Returns the progress bar associated with the task
-    pub fn progress_bar(&self) -> &ProgressBar {
-        &self.pb
     }
 }
 

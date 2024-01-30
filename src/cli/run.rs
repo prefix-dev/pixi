@@ -63,9 +63,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .context("failed to construct task graph from command line arguments")?;
 
     // Traverse the task graph in topological order and execute each individual task.
+    let mut task_idx = 0;
     let mut task_envs = HashMap::new();
     for task_id in task_graph.topological_order() {
         let executable_task = ExecutableTask::from_task_graph(&task_graph, task_id);
+
+        // If the task is not executable (e.g. an alias), we skip it. This ensures we don't
+        // instantiate a prefix for an alias.
+        if !executable_task.task().is_executable() {
+            continue;
+        }
+
+        // Showing which command is being run if the level and type allows it.
+        if tracing::enabled!(Level::WARN) && !executable_task.task().is_custom() {
+            if task_idx > 0 {
+                // Add a newline between task outputs
+                eprintln!();
+            }
+            eprintln!(
+                "{}{}",
+                console::style("✨ Pixi task: ").bold(),
+                executable_task.display_command(),
+            );
+        }
 
         // If we don't have a command environment yet, we need to compute it. We lazily compute the
         // task environment because we only need the environment if a task is actually executed.
@@ -80,7 +100,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Execute the task itself within the command environment. If one of the tasks failed with
         // a non-zero exit code, we exit this parent process with the same code.
         match execute_task(&executable_task, task_env).await {
-            Ok(_) => {}
+            Ok(_) => {
+                task_idx += 1;
+            }
             Err(TaskExecutionError::NonZeroExitCode(code)) => {
                 if code == 127 {
                     command_not_found(&project);
@@ -158,15 +180,6 @@ async fn execute_task<'p>(
     // which is fine when using run in isolation, however if we start to use run in conjunction with
     // some other command we might want to revaluate this.
     let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
-
-    // Showing which command is being run if the level and type allows it.
-    if tracing::enabled!(Level::WARN) && !task.task().is_custom() {
-        eprintln!(
-            "{}{}",
-            console::style("✨ Pixi task: ").bold(),
-            task.display_command(),
-        );
-    }
 
     let execute_future =
         deno_task_shell::execute(script, command_env.clone(), &cwd, Default::default());

@@ -32,7 +32,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
     })?;
     let BinEnvDir(bin_prefix) = BinEnvDir::from_existing(&package_name).await?;
-    let prefix = Prefix::new(bin_prefix.clone())?;
+    let prefix = Prefix::new(bin_prefix.clone());
 
     // Find the installed package in the environment
     let prefix_package = find_designated_package(&prefix, &package_name).await?;

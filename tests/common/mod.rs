@@ -14,17 +14,15 @@ use pixi::{
         project, run,
         task::{self, AddArgs, AliasArgs},
     },
-    consts,
-    task::{ExecutableTask, RunOutput},
-    Project,
+    consts, ExecutableTask, Project, RunOutput, TaskGraph, TaskGraphError,
 };
 use rattler_conda_types::{MatchSpec, Platform};
 
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi::cli::run::get_task_env;
 use pixi::cli::LockFileUsageArgs;
-use pixi::project::manifest::FeatureName;
-use pixi::task::{TaskExecutionError, TaskGraph, TaskGraphError};
+use pixi::FeatureName;
+use pixi::TaskExecutionError;
 use rattler_lock::{LockFile, Package};
 use std::{
     path::{Path, PathBuf},
@@ -204,7 +202,6 @@ impl PixiControl {
                 no_lockfile_update: false,
                 platform: Default::default(),
                 pypi: false,
-                sdist_resolution: Default::default(),
             },
         }
     }
@@ -277,7 +274,7 @@ impl PixiControl {
     /// Get the associated lock file
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
         let project = Project::load_or_else_discover(Some(&self.manifest_path()))?;
-        pixi::lock_file::load_lock_file(&project).await
+        pixi::load_lock_file(&project).await
     }
 
     pub fn tasks(&self) -> TasksControl {

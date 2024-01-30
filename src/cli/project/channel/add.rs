@@ -3,6 +3,7 @@ use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::FeatureName;
 use crate::Project;
 use clap::Parser;
+use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig};
 #[derive(Parser, Debug, Default)]
@@ -51,8 +52,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,
-        None,
-        Default::default(),
+        IndexMap::default(),
     )
     .await?;
     project.save()?;

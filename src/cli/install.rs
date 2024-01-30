@@ -2,6 +2,7 @@ use crate::environment::get_up_to_date_prefix;
 use crate::project::manifest::EnvironmentName;
 use crate::Project;
 use clap::Parser;
+use indexmap::IndexMap;
 use std::path::PathBuf;
 
 /// Install all dependencies
@@ -31,8 +32,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         args.lock_file_usage.into(),
         false,
-        None,
-        Default::default(),
+        IndexMap::default(),
     )
     .await?;
 

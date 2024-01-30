@@ -1,15 +1,19 @@
 use clap::Parser;
+use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
     shell::ShellEnum,
 };
-use std::path::PathBuf;
+use std::{default::Default, path::PathBuf};
 
-use crate::cli::LockFileUsageArgs;
-use crate::project::manifest::EnvironmentName;
-use crate::project::Environment;
-use crate::{activation::get_activator, environment::get_up_to_date_prefix, Project};
+use crate::{
+    activation::get_activator,
+    cli::LockFileUsageArgs,
+    environment::get_up_to_date_prefix,
+    project::{manifest::EnvironmentName, Environment},
+    Project,
+};
 
 /// Print the activation script so users can source it in their shell, without needing the pixi executable.
 #[derive(Parser, Debug)]
@@ -69,8 +73,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         args.lock_file_usage.into(),
         false,
-        None,
-        Default::default(),
+        IndexMap::default(),
     )
     .await?;
 

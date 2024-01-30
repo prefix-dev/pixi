@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use std::collections::HashMap;
 
 use itertools::Itertools;
@@ -179,19 +180,13 @@ pub async fn get_activation_env<'p>(
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
-    get_up_to_date_prefix(
-        environment,
-        lock_file_usage,
-        false,
-        None,
-        Default::default(),
-    )
-    .await?;
+    get_up_to_date_prefix(environment, lock_file_usage, false, IndexMap::default()).await?;
 
     // Get environment variables from the activation
-    let activation_env = await_in_progress("activating environment", run_activation(environment))
-        .await
-        .wrap_err("failed to activate environment")?;
+    let activation_env =
+        await_in_progress("activating environment", |_| run_activation(environment))
+            .await
+            .wrap_err("failed to activate environment")?;
 
     let environment_variables = get_environment_variables(environment);
 
