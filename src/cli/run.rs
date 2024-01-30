@@ -1,18 +1,19 @@
+use std::collections::hash_map::Entry;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
 use clap::Parser;
 use itertools::Itertools;
-use miette::{miette, Diagnostic};
+use miette::{miette, Context, Diagnostic};
 use rattler_conda_types::Platform;
 
 use crate::activation::get_activation_env;
 use crate::project::errors::UnsupportedPlatformError;
-use crate::task::{
-    ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TraversalError,
-};
+use crate::task::{ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TaskGraph};
 use crate::Project;
 
+use crate::environment::LockFileUsage;
 use crate::project::manifest::EnvironmentName;
+use crate::project::Environment;
 use thiserror::Error;
 use tracing::Level;
 
@@ -57,31 +58,71 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
     tracing::debug!("Task parsed from run command: {:?}", task_args);
 
-    // Get the task to execute
-    // TODO: Make this environment specific
-    let executable_task =
-        ExecutableTask::from_cmd_args(&project, task_args, Some(Platform::current()));
+    // Construct a task graph from the input arguments
+    let task_graph = TaskGraph::from_cmd_args(&project, task_args, Some(Platform::current()))
+        .context("failed to construct task graph from command line arguments")?;
 
-    // Get the environment to run the commands in.
-    let command_env = get_activation_env(&environment, args.lock_file_usage.into()).await?;
+    // Traverse the task graph in topological order and execute each individual task.
+    let mut task_envs = HashMap::new();
+    for task_id in task_graph.topological_order() {
+        let executable_task = ExecutableTask::from_task_graph(&task_graph, task_id);
 
-    // Traverse the task and its dependencies. Execute each task in order.
-    match executable_task
-        .traverse(
-            (),
-            |_, task| execute_task(task, &command_env),
-            |_, _task| async { true },
-        )
-        .await
-    {
-        Ok(_) => Ok(()),
-        Err(TaskExecutionError::NonZeroExitCode(code)) => {
-            // If one of the tasks failed with a non-zero exit code, we exit this parent process
-            // with the same code.
-            std::process::exit(code);
+        // If we don't have a command environment yet, we need to compute it. We lazily compute the
+        // task environment because we only need the environment if a task is actually executed.
+        let task_env: &_ = match task_envs.entry(environment.clone()) {
+            Entry::Occupied(env) => env.into_mut(),
+            Entry::Vacant(entry) => {
+                let command_env = get_task_env(&environment, args.lock_file_usage.into()).await?;
+                entry.insert(command_env)
+            }
+        };
+
+        // Execute the task itself within the command environment. If one of the tasks failed with
+        // a non-zero exit code, we exit this parent process with the same code.
+        match execute_task(&executable_task, task_env).await {
+            Ok(_) => {}
+            Err(TaskExecutionError::NonZeroExitCode(code)) => {
+                if code == 127 {
+                    command_not_found(&project);
+                }
+                std::process::exit(code);
+            }
+            Err(err) => return Err(err.into()),
         }
-        Err(err) => Err(err.into()),
     }
+
+    Ok(())
+}
+
+/// Called when a command was not found.
+fn command_not_found(project: &Project) {
+    let available_tasks = project
+        .tasks(Some(Platform::current()))
+        .into_keys()
+        .sorted()
+        .collect_vec();
+
+    if !available_tasks.is_empty() {
+        eprintln!(
+            "\nAvailable tasks:\n{}",
+            available_tasks.into_iter().format_with("\n", |name, f| {
+                f(&format_args!("\t{}", console::style(name).bold()))
+            })
+        );
+    }
+}
+
+/// Determine the environment variables to use when executing a command. The method combines the
+/// activation environment with the system environment variables.
+pub async fn get_task_env(
+    environment: &Environment<'_>,
+    lock_file_usage: LockFileUsage,
+) -> miette::Result<HashMap<String, String>> {
+    // Activate the environment.
+    let activation_env = get_activation_env(environment, lock_file_usage).await?;
+
+    // Concatenate with the system environment variables
+    Ok(std::env::vars().chain(activation_env).collect())
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -96,9 +137,6 @@ enum TaskExecutionError {
     InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
 
     #[error(transparent)]
-    TraverseError(#[from] TraversalError),
-
-    #[error(transparent)]
     UnsupportedPlatformError(#[from] UnsupportedPlatformError),
 }
 
@@ -106,7 +144,7 @@ enum TaskExecutionError {
 ///
 /// This function is called from [`execute`].
 async fn execute_task<'p>(
-    task: ExecutableTask<'p>,
+    task: &ExecutableTask<'p>,
     command_env: &HashMap<String, String>,
 ) -> Result<(), TaskExecutionError> {
     let Some(script) = task.as_deno_script()? else {
@@ -137,24 +175,6 @@ async fn execute_task<'p>(
         // This should never exit
         _ = ctrl_c => { unreachable!("Ctrl+C should not be triggered") }
     };
-    if status_code == 127 {
-        let available_tasks = task
-            .project()
-            .default_environment()
-            .tasks(Some(Platform::current()))?
-            .into_keys()
-            .sorted()
-            .collect_vec();
-
-        if !available_tasks.is_empty() {
-            eprintln!(
-                "\nAvailable tasks:\n{}",
-                available_tasks.into_iter().format_with("\n", |name, f| {
-                    f(&format_args!("\t{}", console::style(name).bold()))
-                })
-            );
-        }
-    }
 
     if status_code != 0 {
         return Err(TaskExecutionError::NonZeroExitCode(status_code));
