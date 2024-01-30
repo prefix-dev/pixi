@@ -1,4 +1,6 @@
 use std::collections::hash_map::Entry;
+use std::collections::HashSet;
+use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
 use clap::Parser;
@@ -6,12 +8,13 @@ use itertools::Itertools;
 use miette::{miette, Context, Diagnostic};
 use rattler_conda_types::Platform;
 
-use crate::activation::get_activation_env;
+use crate::activation::get_environment_variables;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TaskGraph};
-use crate::Project;
+use crate::{Project, UpdateLockFileOptions};
 
-use crate::environment::LockFileUsage;
+use crate::environment::LockFileDerivedData;
+use crate::progress::await_in_progress;
 use crate::project::manifest::EnvironmentName;
 use crate::project::Environment;
 use thiserror::Error;
@@ -38,13 +41,28 @@ pub struct Args {
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
+    // Load the project
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment_name = args
+
+    // Extract the passed in environment name.
+    let explicit_environment = args
         .environment
-        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
-    let environment = project
-        .environment(&environment_name)
-        .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
+        .map(|n| EnvironmentName::from_str(n.as_str()))
+        .transpose()?
+        .map(|n| {
+            project
+                .environment(&n)
+                .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
+        })
+        .transpose()?;
+
+    // Ensure that the lock-file is up-to-date.
+    let mut lock_file = project
+        .up_to_date_lock_file(UpdateLockFileOptions {
+            lock_file_usage: args.lock_file_usage.into(),
+            ..UpdateLockFileOptions::default()
+        })
+        .await?;
 
     // Split 'task' into arguments if it's a single string, supporting commands like:
     // `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or `"echo 'Hello World'"`
@@ -59,8 +77,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     tracing::debug!("Task parsed from run command: {:?}", task_args);
 
     // Construct a task graph from the input arguments
-    let task_graph = TaskGraph::from_cmd_args(&project, task_args, Some(Platform::current()))
-        .context("failed to construct task graph from command line arguments")?;
+    let task_graph = TaskGraph::from_cmd_args(
+        &project,
+        task_args,
+        Some(Platform::current()),
+        explicit_environment.clone(),
+    )?;
 
     // Traverse the task graph in topological order and execute each individual task.
     let mut task_idx = 0;
@@ -81,18 +103,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 eprintln!();
             }
             eprintln!(
-                "{}{}",
-                console::style("✨ Pixi task: ").bold(),
+                "{}{}{}{}{}",
+                console::Emoji("✨ ", ""),
+                console::style("Pixi task (").bold(),
+                console::style(executable_task.run_environment.name())
+                    .bold()
+                    .cyan(),
+                console::style("): ").bold(),
                 executable_task.display_command(),
             );
         }
 
         // If we don't have a command environment yet, we need to compute it. We lazily compute the
         // task environment because we only need the environment if a task is actually executed.
-        let task_env: &_ = match task_envs.entry(environment.clone()) {
+        let task_env: &_ = match task_envs.entry(executable_task.run_environment.clone()) {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
-                let command_env = get_task_env(&environment, args.lock_file_usage.into()).await?;
+                let command_env =
+                    get_task_env(&mut lock_file, &executable_task.run_environment).await?;
                 entry.insert(command_env)
             }
         };
@@ -105,7 +133,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(TaskExecutionError::NonZeroExitCode(code)) => {
                 if code == 127 {
-                    command_not_found(&project);
+                    command_not_found(&project, explicit_environment);
                 }
                 std::process::exit(code);
             }
@@ -117,34 +145,65 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 /// Called when a command was not found.
-fn command_not_found(project: &Project) {
-    let available_tasks = project
-        .tasks(Some(Platform::current()))
-        .into_keys()
-        .sorted()
-        .collect_vec();
+fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Environment<'p>>) {
+    let available_tasks: HashSet<String> = if let Some(explicit_environment) = explicit_environment
+    {
+        explicit_environment
+            .tasks(Some(Platform::current()), true)
+            .into_iter()
+            .flat_map(|tasks| tasks.into_keys())
+            .map(ToOwned::to_owned)
+            .collect()
+    } else {
+        project
+            .environments()
+            .into_iter()
+            .flat_map(|env| {
+                env.tasks(Some(Platform::current()), true)
+                    .into_iter()
+                    .flat_map(|tasks| tasks.into_keys())
+                    .map(ToOwned::to_owned)
+            })
+            .collect()
+    };
 
     if !available_tasks.is_empty() {
         eprintln!(
             "\nAvailable tasks:\n{}",
-            available_tasks.into_iter().format_with("\n", |name, f| {
-                f(&format_args!("\t{}", console::style(name).bold()))
-            })
+            available_tasks
+                .into_iter()
+                .sorted()
+                .format_with("\n", |name, f| {
+                    f(&format_args!("\t{}", console::style(name).bold()))
+                })
         );
     }
 }
 
 /// Determine the environment variables to use when executing a command. The method combines the
 /// activation environment with the system environment variables.
-pub async fn get_task_env(
-    environment: &Environment<'_>,
-    lock_file_usage: LockFileUsage,
+pub async fn get_task_env<'p>(
+    lock_file_derived_data: &mut LockFileDerivedData<'p>,
+    environment: &Environment<'p>,
 ) -> miette::Result<HashMap<String, String>> {
-    // Activate the environment.
-    let activation_env = get_activation_env(environment, lock_file_usage).await?;
+    // Ensure there is a valid prefix
+    lock_file_derived_data.prefix(environment).await?;
+
+    // Get environment variables from the activation
+    let activation_env = await_in_progress("activating environment", |_| {
+        crate::activation::run_activation(environment)
+    })
+    .await
+    .wrap_err("failed to activate environment")?;
+
+    // Get environments from pixi
+    let environment_variables = get_environment_variables(environment);
 
     // Concatenate with the system environment variables
-    Ok(std::env::vars().chain(activation_env).collect())
+    Ok(std::env::vars()
+        .chain(activation_env)
+        .chain(environment_variables)
+        .collect())
 }
 
 #[derive(Debug, Error, Diagnostic)]

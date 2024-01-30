@@ -7,6 +7,18 @@ channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [tasks]
+# Start the built executable
+start = { cmd = ".build/bin/sdl_example", depends_on = ["build"] }
+
+[dependencies]
+sdl2 = "2.26.5.*"
+
+[feature.build.dependencies]
+cmake = "3.26.4.*"
+cxx-compiler = "1.5.2.*"
+ninja = "1.11.1.*"
+
+[feature.build.tasks]
 # Configures CMake
 configure = { cmd = [
     "cmake",
@@ -24,11 +36,5 @@ configure = { cmd = [
 # Build the executable but make sure CMake is configured first.
 build = { cmd = ["ninja", "-C", ".build"], depends_on = ["configure"] }
 
-# Start the built executable
-start = { cmd = ".build/bin/sdl_example", depends_on = ["build"] }
-
-[dependencies]
-cmake = "3.26.4.*"
-cxx-compiler = "1.5.2.*"
-sdl2 = "2.26.5.*"
-ninja = "1.11.1.*"
+[environments]
+build = ["build"]
