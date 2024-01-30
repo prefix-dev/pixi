@@ -35,7 +35,6 @@ pub async fn execute_transaction(
     let install_options = InstallOptions {
         python_info: transaction.python_info.clone(),
         platform: Some(transaction.platform),
-        allow_ref_links: Some(false),
         ..Default::default()
     };
 
