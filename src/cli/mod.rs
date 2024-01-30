@@ -60,7 +60,6 @@ pub enum Command {
     Run(run::Args),
     #[clap(alias = "s")]
     Shell(shell::Args),
-    #[clap(hide = true)]
     ShellHook(shell_hook::Args),
     #[clap(alias = "g")]
     Global(global::Args),
