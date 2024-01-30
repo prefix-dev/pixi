@@ -302,6 +302,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-scoped"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bb5d44cd33a5095cf47aa2a90455ea3f9141f45e24d092425fef2bf4fd9c98e"
+dependencies = [
+ "futures",
+ "pin-project",
+ "tokio",
+]
+
+[[package]]
 name = "async-signal"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2676,6 +2687,7 @@ dependencies = [
  "assert_matches",
  "async-once-cell",
  "async-recursion",
+ "async-scoped",
  "chrono",
  "clap",
  "clap-verbosity-flag",
