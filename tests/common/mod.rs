@@ -22,6 +22,7 @@ use pixi::{
 use rattler_conda_types::{MatchSpec, Platform};
 
 use miette::{Diagnostic, IntoDiagnostic};
+use pixi::cli::run::get_task_env;
 use pixi::cli::LockFileUsageArgs;
 use pixi::project::manifest::FeatureName;
 use pixi::task::{TaskExecutionError, TaskGraph, TaskGraphError};
@@ -242,7 +243,7 @@ impl PixiControl {
             // Construct the task environment if not already created.
             let task_env = match task_env.as_ref() {
                 None => {
-                    let env = get_activation_env(&environment, args.lock_file_usage.into()).await?;
+                    let env = get_task_env(&environment, args.lock_file_usage.into()).await?;
                     task_env.insert(env) as &_
                 }
                 Some(task_env) => task_env,

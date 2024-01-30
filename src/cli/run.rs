@@ -11,7 +11,9 @@ use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TaskGraph};
 use crate::Project;
 
+use crate::environment::LockFileUsage;
 use crate::project::manifest::EnvironmentName;
+use crate::project::Environment;
 use thiserror::Error;
 use tracing::Level;
 
@@ -66,13 +68,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let executable_task = ExecutableTask::from_task_graph(&task_graph, task_id);
 
         // If we don't have a command environment yet, we need to compute it. We lazily compute the
-        // task environment because we only need the environment if a task is actually executed. If
-        // the task is cached, we don't need to compute the environment either.
+        // task environment because we only need the environment if a task is actually executed.
         let task_env: &_ = match task_envs.entry(environment.clone()) {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
-                let command_env =
-                    get_activation_env(&environment, args.lock_file_usage.into()).await?;
+                let command_env = get_task_env(&environment, args.lock_file_usage.into()).await?;
                 entry.insert(command_env)
             }
         };
@@ -110,6 +110,19 @@ fn command_not_found(project: &Project) {
             })
         );
     }
+}
+
+/// Determine the environment variables to use when executing a command. The method combines the
+/// activation environment with the system environment variables.
+pub async fn get_task_env(
+    environment: &Environment<'_>,
+    lock_file_usage: LockFileUsage,
+) -> miette::Result<HashMap<String, String>> {
+    // Activate the environment.
+    let activation_env = get_activation_env(environment, lock_file_usage).await?;
+
+    // Concatenate with the system environment variables
+    Ok(std::env::vars().chain(activation_env).collect())
 }
 
 #[derive(Debug, Error, Diagnostic)]
