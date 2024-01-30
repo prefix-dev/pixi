@@ -10,6 +10,7 @@ description: All pixi cli subcommands
 - `--help (-h)` Shows help information, use `-h` to get the short version of the help.
 - `--version (-V)`: shows the version of pixi that is used.
 - `--quiet (-q)`: Decreases the amount of output.
+- `--color <COLOR>`: Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values: always, never, auto].
 
 ## `init`
 
@@ -63,8 +64,8 @@ Which gets generated on `pixi add` or when you manually change the `pixi.toml` f
 ##### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
-- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
+- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 
 ```shell
 pixi install
@@ -84,8 +85,8 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 ##### Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
-- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
+- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 
 ```shell
 pixi run python
@@ -231,8 +232,8 @@ To exit the pixi shell, simply run `exit`.
 #####Options
 
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
-- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
+- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 
 ```shell
 pixi shell
