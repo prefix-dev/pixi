@@ -4,7 +4,7 @@ use clap::Parser;
 use clap_complete;
 use clap_verbosity_flag::Verbosity;
 use miette::IntoDiagnostic;
-use std::io::IsTerminal;
+use std::{env, io::IsTerminal};
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
 pub mod add;
@@ -114,6 +114,16 @@ pub async fn execute() -> miette::Result<()> {
                 .build(),
         )
     }))?;
+
+    // Honor FORCE_COLOR and NO_COLOR environment variables.
+    // Those take precedence over the CLI flag and PIXI_COLOR
+    let use_colors = match env::var("FORCE_COLOR") {
+        Ok(_) => true,
+        Err(_) => match env::var("NO_COLOR") {
+            Ok(_) => false,
+            Err(_) => use_colors,
+        },
+    };
 
     // Enable disable colors for the colors crate
     console::set_colors_enabled(use_colors);
