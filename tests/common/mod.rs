@@ -8,7 +8,6 @@ use crate::common::builders::{
     TaskAliasBuilder,
 };
 use pixi::{
-    activation::get_activation_env,
     cli::{
         add, init,
         install::Args,
