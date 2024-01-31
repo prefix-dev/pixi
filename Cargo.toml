@@ -99,7 +99,8 @@ rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branc
 rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages", branch = "main" }
+rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages", branch = "main" }
+resolvo = { git = "https://github.com/mamba-org/resolvo.git", branch = "main" }
 #deno_task_shell = { path = "../deno_task_shell" }
 
 #rattler = { path = "../rattler/crates/rattler" }
