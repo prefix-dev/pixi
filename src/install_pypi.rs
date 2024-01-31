@@ -322,7 +322,8 @@ fn stream_python_artifacts<'a>(
                 ))
             }
         })
-        .buffer_unordered(20)
+        // TODO: put this back on 20 when there is not deadlock anymore.
+        .buffer_unordered(1)
         .right_stream();
 
     (download_stream, Some(pb))
