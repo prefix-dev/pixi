@@ -254,7 +254,7 @@ These are not available on [prefix.dev](https://prefix.dev/channels) but on [pyp
     - **Version specification**: These dependencies don't follow the conda matchspec specification.
     The `version` is a [`VersionSpecifier`](https://docs.rs/pep440_rs/0.3.12/pep440_rs/struct.VersionSpecifiers.html) and the `extras` are a list of `Strings`.
     So see the example below to see what type of definition is allowed.
-
+    - **Dependency Resolution**: When resolving dependencies, if a conda package is already installed in the environment, it takes precedence over a PyPI package. This helps maintain consistency. However, selecting a conda version that conflicts with PyPI dependencies might lead to potential incompatibilities.
 
 ```toml
 [dependencies]
