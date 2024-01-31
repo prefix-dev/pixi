@@ -109,7 +109,7 @@ pub async fn update_python_distributions(
         HashMap::default(),
     )
     .into_diagnostic()
-    .context("error in construction of WheelBuilder for pypi installation")?;
+    .context("error in construction of WheelBuilder for `pypi-dependencies` installation")?;
 
     // Start downloading the python packages that we want in the background.
     let (package_stream, package_stream_pb) = stream_python_artifacts(
