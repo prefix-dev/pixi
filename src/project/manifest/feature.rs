@@ -120,6 +120,11 @@ pub struct Feature {
 }
 
 impl Feature {
+    /// Returns true if this feature is the default feature.
+    pub fn is_default(&self) -> bool {
+        self.name == FeatureName::Default
+    }
+
     /// Returns the dependencies of the feature for a given `spec_type` and `platform`.
     ///
     /// This function returns a [`Cow`]. If the dependencies are not combined or overwritten by

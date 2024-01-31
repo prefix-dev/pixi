@@ -1,14 +1,14 @@
 use super::package_identifier;
 use crate::{
     project::Environment, pypi_marker_env::determine_marker_environment,
-    pypi_tags::is_python_record, Project,
+    pypi_tags::is_python_record,
 };
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::Requirement;
 use rattler_conda_types::{MatchSpec, ParseMatchSpecError, Platform};
-use rattler_lock::{CondaPackage, LockFile, Package, PypiPackage};
+use rattler_lock::{CondaPackage, Package, PypiPackage};
 use rip::types::NormalizedPackageName;
 use std::{
     collections::{HashMap, HashSet},
@@ -17,21 +17,9 @@ use std::{
 use thiserror::Error;
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum Unsat {
-    #[error("the environment '{0}' is unsatisfiable")]
-    EnvironmentUnsatisfiable(String, #[source] EnvironmentUnsat),
-}
-
-#[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
-    #[error("there are no recorded packages for the environment in the lock-file")]
-    Missing,
-
     #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
-
-    #[error("the packages for '{0}' do not satisfy the requirements of the environment")]
-    PlatformUnsatisfiable(Platform, #[source] PlatformUnsat),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -66,21 +54,6 @@ pub enum PlatformUnsat {
     PythonVersionMismatch(String, VersionSpecifiers, Box<pep440_rs::Version>),
 }
 
-/// A helper method to check if the lock file satisfies the project.
-///
-/// This function checks all environments and all platforms of each environment. The function early
-/// outs if verification of any environment fails.
-pub fn lock_file_satisfies_project(project: &Project, lock_file: &LockFile) -> Result<(), Unsat> {
-    for env in project.environments() {
-        verify_environment_satisfiability(&env, lock_file.environment(env.name().as_str()))
-            .map_err(|unsat| {
-                Unsat::EnvironmentUnsatisfiable(env.name().as_str().to_string(), unsat)
-            })?
-    }
-
-    Ok(())
-}
-
 /// Verifies that all the requirements of the specified `environment` can be satisfied with the
 /// packages present in the lock-file.
 ///
@@ -89,12 +62,8 @@ pub fn lock_file_satisfies_project(project: &Project, lock_file: &LockFile) -> R
 /// figure out what went wrong.
 pub fn verify_environment_satisfiability(
     environment: &Environment<'_>,
-    locked_environment: Option<rattler_lock::Environment>,
+    locked_environment: &rattler_lock::Environment,
 ) -> Result<(), EnvironmentUnsat> {
-    let Some(locked_environment) = locked_environment else {
-        return Err(EnvironmentUnsat::Missing);
-    };
-
     // Check if the channels in the lock file match our current configuration. Note that the order
     // matters here. If channels are added in a different order, the solver might return a different
     // result.
@@ -105,15 +74,6 @@ pub fn verify_environment_satisfiability(
         .collect_vec();
     if !locked_environment.channels().eq(&channels) {
         return Err(EnvironmentUnsat::ChannelsMismatch);
-    }
-
-    // Check each individual platform
-    for platform in environment.platforms() {
-        if let Err(unsat) =
-            verify_platform_satisfiability(environment, &locked_environment, platform)
-        {
-            return Err(EnvironmentUnsat::PlatformUnsatisfiable(platform, unsat));
-        }
     }
 
     Ok(())

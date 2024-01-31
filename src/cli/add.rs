@@ -15,7 +15,6 @@ use rattler_conda_types::{
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
-use rip::resolve::SDistResolution;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -86,10 +85,6 @@ pub struct Args {
     /// The platform(s) for which the dependency should be added
     #[arg(long, short)]
     pub platform: Vec<Platform>,
-
-    /// Resolution scheme to use
-    #[arg(skip)]
-    pub sdist_resolution: SDistResolution,
 }
 
 impl DependencyType {
@@ -144,7 +139,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 args.no_install,
                 args.no_lockfile_update,
                 spec_platforms,
-                args.sdist_resolution,
             )
             .await
         }
@@ -174,7 +168,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 spec_platforms,
                 args.no_lockfile_update,
                 args.no_install,
-                args.sdist_resolution,
             )
             .await
         }
@@ -216,7 +209,6 @@ pub async fn add_pypi_specs_to_project(
     specs_platforms: &Vec<Platform>,
     no_update_lockfile: bool,
     no_install: bool,
-    sdist_resolution: SDistResolution,
 ) -> miette::Result<()> {
     for (name, spec) in &specs {
         // TODO: Get best version
@@ -241,8 +233,7 @@ pub async fn add_pypi_specs_to_project(
         &project.default_environment(),
         lock_file_usage,
         no_install,
-        None,
-        sdist_resolution,
+        IndexMap::default(),
     )
     .await?;
 
@@ -258,7 +249,6 @@ pub async fn add_conda_specs_to_project(
     no_install: bool,
     no_update_lockfile: bool,
     specs_platforms: &Vec<Platform>,
-    sdist_resolution: SDistResolution,
 ) -> miette::Result<()> {
     // Split the specs into package name and version specifier
     let new_specs = specs
@@ -341,8 +331,7 @@ pub async fn add_conda_specs_to_project(
         &project.default_environment(),
         lock_file_usage,
         no_install,
-        Some(sparse_repo_data),
-        sdist_resolution,
+        sparse_repo_data,
     )
     .await?;
     project.save()?;

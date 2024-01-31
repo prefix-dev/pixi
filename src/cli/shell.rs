@@ -203,7 +203,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .environment(&environment_name)
         .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
 
-    // Get the environment variables we need to set activate the project in the shell.
+    let prompt_name = match environment_name {
+        EnvironmentName::Default => project.name().to_string(),
+        EnvironmentName::Named(name) => format!("{}:{}", project.name(), name),
+    };
+
+    // Get the environment variables we need to set activate the environment in the shell.
     let env = get_activation_env(&environment, args.lock_file_usage.into()).await?;
     tracing::debug!("Pixi environment activation:\n{:?}", env);
 
@@ -215,13 +220,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     #[cfg(target_family = "windows")]
     let res = match interactive_shell {
         ShellEnum::NuShell(nushell) => {
-            start_nu_shell(nushell, &env, prompt::get_nu_prompt(project.name())).await
+            start_nu_shell(nushell, &env, prompt::get_nu_prompt(prompt_name.as_str())).await
         }
-        ShellEnum::PowerShell(pwsh) => {
-            start_powershell(pwsh, &env, prompt::get_powershell_prompt(project.name()))
-        }
+        ShellEnum::PowerShell(pwsh) => start_powershell(
+            pwsh,
+            &env,
+            prompt::get_powershell_prompt(prompt_name.as_str()),
+        ),
         ShellEnum::CmdExe(cmdexe) => {
-            start_cmdexe(cmdexe, &env, prompt::get_cmd_prompt(project.name()))
+            start_cmdexe(cmdexe, &env, prompt::get_cmd_prompt(prompt_name.as_str()))
         }
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell);
@@ -231,17 +238,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     #[cfg(target_family = "unix")]
     let res = match interactive_shell {
         ShellEnum::NuShell(nushell) => {
-            start_nu_shell(nushell, &env, prompt::get_nu_prompt(project.name())).await
+            start_nu_shell(nushell, &env, prompt::get_nu_prompt(prompt_name.as_str())).await
         }
-        ShellEnum::PowerShell(pwsh) => {
-            start_powershell(pwsh, &env, prompt::get_powershell_prompt(project.name()))
-        }
+        ShellEnum::PowerShell(pwsh) => start_powershell(
+            pwsh,
+            &env,
+            prompt::get_powershell_prompt(prompt_name.as_str()),
+        ),
         ShellEnum::Bash(bash) => {
             start_unix_shell(
                 bash,
                 vec!["-l", "-i"],
                 &env,
-                prompt::get_bash_prompt(project.name()),
+                prompt::get_bash_prompt(prompt_name.as_str()),
             )
             .await
         }
@@ -250,12 +259,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 zsh,
                 vec!["-l", "-i"],
                 &env,
-                prompt::get_zsh_prompt(project.name()),
+                prompt::get_zsh_prompt(prompt_name.as_str()),
             )
             .await
         }
         ShellEnum::Fish(fish) => {
-            start_unix_shell(fish, vec![], &env, prompt::get_fish_prompt(project.name())).await
+            start_unix_shell(
+                fish,
+                vec![],
+                &env,
+                prompt::get_fish_prompt(prompt_name.as_str()),
+            )
+            .await
         }
         ShellEnum::Xonsh(xonsh) => {
             start_unix_shell(xonsh, vec![], &env, prompt::get_xonsh_prompt()).await
