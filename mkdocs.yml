@@ -74,6 +74,7 @@ nav:
   - Basic Usage: basic_usage.md
   - Reference (CLI): cli.md
   - Configuration: configuration.md
+  - Environment: environment.md
   - Vision: vision.md
   - In-depth:
     - Authentication: advanced/authentication.md
