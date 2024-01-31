@@ -396,7 +396,7 @@ The `feature` table allows you to define the following fields per feature.
 - `pypi-dependencies`: Same as the [pypi-dependencies](#pypi-dependencies-beta-feature).
 - `system-requirements`: Same as the [system-requirements](#the-system-requirements-table).
 - `activation`: Same as the [activation](#the-activation-table).
-- `platforms`: Same as the [platforms](#platforms).
+- `platforms`: Same as the [platforms](#platforms). When adding features together the intersection of the platforms is taken. Be aware that the `default` feature is always implied thus this must contain all platforms the project can support.
 - `channels`: Same as the [channels](#channels). Adding the `priority` field to the channels to allow concatenation of channels instead of overwriting.
 - `target`: Same as the [target](#the-target-table).
 - `tasks`: Same as the [tasks](#the-tasks-table).

@@ -10,11 +10,10 @@ description: All pixi cli subcommands
 - `--help (-h)` Shows help information, use `-h` to get the short version of the help.
 - `--version (-V)`: shows the version of pixi that is used.
 - `--quiet (-q)`: Decreases the amount of output.
-<<<<<<< HEAD
-- `--color <COLOR>`: Forces the output to be colored. [default: auto] [possible values: auto, always, never]
-=======
-- `--color <COLOR>`: Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values: always, never, auto]. Pixi also honor the `FORCE_COLOR` and `NO_COLOR` environment variables. They both take precedence over `--color` and `PIXI_COLOR`.
->>>>>>> main
+- `--color <COLOR>`: Whether the log needs to be colored [env: `PIXI_COLOR=`] [default: `auto`] [possible values: always, never, auto].
+Pixi also honor the `FORCE_COLOR` and `NO_COLOR` environment variables.
+They both take precedence over `--color` and `PIXI_COLOR`.
+
 
 ## `init`
 
@@ -79,16 +78,9 @@ Installs all dependencies specified in the lockfile `pixi.lock`.
 Which gets generated on `pixi add` or when you manually change the `pixi.toml` file and run `pixi install`.
 
 ##### Options
-
-<<<<<<< HEAD
 - `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile.
-- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. Conflicts with `--frozen`.
-=======
-- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
->>>>>>> main
 
 ```shell
 pixi install
