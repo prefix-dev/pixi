@@ -1,9 +1,5 @@
 use pep440_rs::VersionSpecifiers;
-use serde::{
-    de,
-    de::{Error, MapAccess, Visitor},
-    Deserialize, Deserializer,
-};
+use serde::{de, de::Error, Deserialize, Deserializer};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
@@ -137,23 +133,9 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
     where
         D: Deserializer<'de>,
     {
-        struct RequirementVisitor;
-        impl<'de> Visitor<'de> for RequirementVisitor {
-            type Value = PyPiRequirement;
-
-            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-                formatter.write_str("a mapping from package names to a pypi requirement")
-            }
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: Error,
-            {
-                PyPiRequirement::from_str(v).map_err(Error::custom)
-            }
-            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
-            where
-                A: MapAccess<'de>,
-            {
+        serde_untagged::UntaggedEnumVisitor::new()
+            .string(|str| PyPiRequirement::from_str(str).map_err(Error::custom))
+            .map(|map| {
                 // Use a temp struct to deserialize into when it is a map.
                 #[derive(Deserialize)]
                 struct RawPyPiRequirement {
@@ -162,24 +144,23 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
                 }
                 let raw_requirement =
                     RawPyPiRequirement::deserialize(de::value::MapAccessDeserializer::new(map))?;
-
                 // Parse the * in version or allow for no version with extras.
                 let mut version = None;
                 if let Some(raw_version) = raw_requirement.version {
                     if raw_version != "*" {
                         version = Some(
                             VersionSpecifiers::from_str(raw_version.as_str())
-                                .map_err(A::Error::custom)?,
+                                .map_err(Error::custom)?,
                         );
                     }
-                }
+                };
                 Ok(PyPiRequirement {
                     version,
                     extras: raw_requirement.extras,
                 })
-            }
-        }
-        deserializer.deserialize_any(RequirementVisitor {})
+            })
+            .expecting("either a map or a string")
+            .deserialize(deserializer)
     }
 }
 
@@ -275,6 +256,56 @@ mod tests {
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12,<3.13.0").unwrap()),
                 extras: Some(vec!("bar".to_string(), "foo".to_string()))
+            }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_pypi_requirement_from_map() {
+        let json_string = r#"
+            {
+                "version": "==1.2.3",
+                "extras": ["feature1", "feature2"]
+            }
+        "#;
+        let result: Result<PyPiRequirement, _> = serde_json::from_str(json_string);
+        assert!(result.is_ok());
+        let pypi_requirement: PyPiRequirement = result.unwrap();
+        assert_eq!(
+            pypi_requirement,
+            PyPiRequirement {
+                version: VersionSpecifiers::from_str("==1.2.3").ok(),
+                extras: Some(vec!["feature1".to_owned(), "feature2".to_owned()])
+            }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_pypi_requirement_from_str() {
+        let json_string = r#""==1.2.3""#;
+        let result: Result<PyPiRequirement, _> = serde_json::from_str(json_string);
+        assert!(result.is_ok());
+        let pypi_requirement: PyPiRequirement = result.unwrap();
+        assert_eq!(
+            pypi_requirement,
+            PyPiRequirement {
+                version: VersionSpecifiers::from_str("==1.2.3").ok(),
+                extras: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_pypi_requirement_from_str_with_star() {
+        let json_string = r#""*""#;
+        let result: Result<PyPiRequirement, _> = serde_json::from_str(json_string);
+        assert!(result.is_ok());
+        let pypi_requirement: PyPiRequirement = result.unwrap();
+        assert_eq!(
+            pypi_requirement,
+            PyPiRequirement {
+                version: None,
+                extras: None,
             }
         );
     }
