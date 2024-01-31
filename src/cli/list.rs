@@ -139,7 +139,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         json_packages(&packages_to_output, args.json_pretty);
     } else {
         // print packages as table
-        print_packages_as_table(&packages_to_output).expect("an io error occured");
+        print_packages_as_table(&packages_to_output).expect("an io error occurred");
     }
 
     Ok(())
