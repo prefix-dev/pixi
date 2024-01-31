@@ -7,6 +7,11 @@
   font-weight: normal;
 }
 
+.md-typeset *:not(pre) > code {
+  /* Dimmed 30% of the main yellow color (ffec3d)*/
+  color: #b3a52b;
+}
+
 .md-typeset h1 {
   color: #ffec3d;
 }
