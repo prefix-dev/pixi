@@ -1,4 +1,5 @@
 use crate::consts::PROJECT_MANIFEST;
+use crate::lock_file::pypi_name_mapping::conda_pypi_name_mapping;
 use crate::lock_file::{package_identifier, pypi_name_mapping};
 use crate::project::manifest::{PyPiRequirement, SystemRequirements};
 use crate::pypi_marker_env::determine_marker_environment;
@@ -82,6 +83,7 @@ pub async fn resolve_dependencies<'db>(
     };
 
     // Resolve the PyPi dependencies
+    let mapping = conda_pypi_name_mapping().await?;
     let mut result = resolve(
         package_db,
         &requirements,
@@ -90,7 +92,11 @@ pub async fn resolve_dependencies<'db>(
         conda_python_packages
             .into_iter()
             // skip using the locked package in the case where conda and pypi package has the same name
-            .filter(|p| requirements.iter().any(|r| r.name != p.name.as_str()))
+            .filter(|p| {
+                requirements
+                    .iter()
+                    .any(|r| r.name != p.name.as_str() || mapping.get(p.name.as_str()).is_some())
+            })
             .map(|p| (p.name.clone(), p))
             .collect(),
         HashMap::default(),
