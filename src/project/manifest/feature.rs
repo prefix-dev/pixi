@@ -1,8 +1,8 @@
 use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelector};
 use crate::consts;
 use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
-use crate::project::manifest::deserialize_dependencies;
 use crate::project::manifest::target::Targets;
+use crate::project::manifest::UniquePackageName;
 use crate::project::SpecType;
 use crate::task::Task;
 use crate::utils::spanned::PixiSpanned;
@@ -230,15 +230,15 @@ impl<'de> Deserialize<'de> for Feature {
 
             #[serde(default)]
             #[serde_as(as = "IndexMap<_, PickFirst<(DisplayFromStr, _)>>")]
-            dependencies: IndexMap<String, NamelessMatchSpec>,
+            dependencies: IndexMap<UniquePackageName, NamelessMatchSpec>,
 
             #[serde(default)]
             #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
-            host_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
+            host_dependencies: Option<IndexMap<UniquePackageName, NamelessMatchSpec>>,
 
             #[serde(default)]
             #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
-            build_dependencies: Option<IndexMap<String, NamelessMatchSpec>>,
+            build_dependencies: Option<IndexMap<UniquePackageName, NamelessMatchSpec>>,
 
             #[serde(default)]
             pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
@@ -253,13 +253,32 @@ impl<'de> Deserialize<'de> for Feature {
         }
 
         let inner = FeatureInner::deserialize(deserializer)?;
-
-        let dependencies = deserialize_dependencies(
-            inner.dependencies,
-            inner.host_dependencies,
-            inner.build_dependencies,
-        )
-        .map_err(serde::de::Error::custom)?;
+        let mut dependencies = HashMap::from_iter([(
+            SpecType::Run,
+            inner
+                .dependencies
+                .into_iter()
+                .map(|(p, s)| (p.as_inner(), s))
+                .collect(),
+        )]);
+        if let Some(host_deps) = inner.host_dependencies {
+            dependencies.insert(
+                SpecType::Host,
+                host_deps
+                    .into_iter()
+                    .map(|(p, s)| (p.as_inner(), s))
+                    .collect(),
+            );
+        }
+        if let Some(build_deps) = inner.build_dependencies {
+            dependencies.insert(
+                SpecType::Build,
+                build_deps
+                    .into_iter()
+                    .map(|(p, s)| (p.as_inner(), s))
+                    .collect(),
+            );
+        }
 
         let default_target = Target {
             dependencies,
