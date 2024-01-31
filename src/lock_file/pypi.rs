@@ -1,25 +1,29 @@
 use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::{package_identifier, pypi_name_mapping};
-use crate::project::Environment;
+use crate::project::manifest::{PyPiRequirement, SystemRequirements};
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{is_python_record, project_platform_tags};
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Platform, RepoDataRecord};
+use rip::index::PackageDb;
 use rip::python_env::PythonLocation;
 use rip::resolve::{resolve, PinnedPackage, ResolveOptions, SDistResolution};
+use rip::types::PackageName;
 use std::path::Path;
 use std::{collections::HashMap, vec};
 
 /// Resolve python packages for the specified project.
-pub async fn resolve_dependencies<'p>(
-    environment: &Environment<'p>,
+pub async fn resolve_dependencies<'db>(
+    package_db: &'db PackageDb,
+    dependencies: IndexMap<PackageName, Vec<PyPiRequirement>>,
+    system_requirements: SystemRequirements,
     platform: Platform,
     conda_packages: &[RepoDataRecord],
     python_location: Option<&Path>,
     sdist_resolution: SDistResolution,
-) -> miette::Result<Vec<PinnedPackage<'p>>> {
-    let dependencies = environment.pypi_dependencies(Some(platform));
+) -> miette::Result<Vec<PinnedPackage<'db>>> {
     if dependencies.is_empty() {
         return Ok(vec![]);
     }
@@ -59,11 +63,8 @@ pub async fn resolve_dependencies<'p>(
     let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
 
     // Determine the compatible tags
-    let compatible_tags = project_platform_tags(
-        platform,
-        &environment.system_requirements(),
-        python_record.as_ref(),
-    );
+    let compatible_tags =
+        project_platform_tags(platform, &system_requirements, python_record.as_ref());
 
     let requirements = dependencies
         .iter()
@@ -82,7 +83,7 @@ pub async fn resolve_dependencies<'p>(
 
     // Resolve the PyPi dependencies
     let mut result = resolve(
-        environment.project().pypi_package_db()?,
+        package_db,
         &requirements,
         &marker_environment,
         Some(&compatible_tags),
@@ -94,11 +95,12 @@ pub async fn resolve_dependencies<'p>(
         &ResolveOptions {
             sdist_resolution,
             python_location,
-            clean_env: false,
+            ..Default::default()
         },
         HashMap::default(),
     )
-    .await?;
+    .await
+    .wrap_err("failed to resolve `pypi-dependencies`, due to underlying error")?;
 
     // Remove any conda package from the result
     result.retain(|p| !p.artifacts.is_empty());

@@ -1,23 +1,27 @@
 use crate::project::Environment;
 use crate::{config, progress, project::Project};
 use futures::{stream, StreamExt, TryStreamExt};
+use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, Platform};
-use rattler_networking::AuthenticatedClient;
 use rattler_repodata_gateway::{fetch, sparse::SparseRepoData};
+use reqwest_middleware::ClientWithMiddleware;
 use std::{path::Path, time::Duration};
-
 impl Project {
     // TODO: Remove this function once everything is migrated to the new environment system.
-    pub async fn fetch_sparse_repodata(&self) -> miette::Result<Vec<SparseRepoData>> {
+    pub async fn fetch_sparse_repodata(
+        &self,
+    ) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
         self.default_environment().fetch_sparse_repodata().await
     }
 }
 
 impl Environment<'_> {
-    pub async fn fetch_sparse_repodata(&self) -> miette::Result<Vec<SparseRepoData>> {
+    pub async fn fetch_sparse_repodata(
+        &self,
+    ) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
         let channels = self.channels();
         let platforms = self.platforms();
         fetch_sparse_repodata(channels, platforms, self.project().authenticated_client()).await
@@ -27,8 +31,8 @@ impl Environment<'_> {
 pub async fn fetch_sparse_repodata(
     channels: impl IntoIterator<Item = &'_ Channel>,
     target_platforms: impl IntoIterator<Item = Platform>,
-    authenticated_client: &AuthenticatedClient,
-) -> miette::Result<Vec<SparseRepoData>> {
+    authenticated_client: &ClientWithMiddleware,
+) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
     let channels = channels.into_iter();
     let target_platforms = target_platforms.into_iter().collect_vec();
 
@@ -48,22 +52,31 @@ pub async fn fetch_sparse_repodata(
         }
     }
 
-    if fetch_targets.is_empty() {
-        return Ok(vec![]);
+    fetch_sparse_repodata_targets(fetch_targets, authenticated_client).await
+}
+
+pub async fn fetch_sparse_repodata_targets(
+    fetch_targets: impl IntoIterator<Item = (Channel, Platform)>,
+    authenticated_client: &ClientWithMiddleware,
+) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
+    let mut fetch_targets = fetch_targets.into_iter().peekable();
+    if fetch_targets.peek().is_none() {
+        return Ok(IndexMap::new());
     }
 
     // Construct a top-level progress bar
     let multi_progress = progress::global_multi_progress();
-    let top_level_progress = multi_progress.add(ProgressBar::new(fetch_targets.len() as u64));
+    let top_level_progress =
+        multi_progress.add(ProgressBar::new(fetch_targets.size_hint().0 as u64));
     top_level_progress.set_style(progress::long_running_progress_style());
-    top_level_progress.set_message("fetching latest repodata");
+    top_level_progress.set_message("fetching package metadata");
     top_level_progress.enable_steady_tick(Duration::from_millis(50));
 
     let repodata_cache_path = config::get_cache_dir()?.join("repodata");
     let multi_progress = progress::global_multi_progress();
     let mut progress_bars = Vec::new();
 
-    let repo_data = stream::iter(fetch_targets.into_iter())
+    let repo_data = stream::iter(fetch_targets)
         .map(|(channel, platform)| {
             // Construct a progress bar for the fetch
             let progress_bar = multi_progress.add(
@@ -81,7 +94,7 @@ pub async fn fetch_sparse_repodata(
 
             async move {
                 let result = fetch_repo_data_records_with_progress(
-                    channel,
+                    channel.clone(),
                     platform,
                     &repodata_cache,
                     download_client,
@@ -92,12 +105,12 @@ pub async fn fetch_sparse_repodata(
 
                 top_level_progress.tick();
 
-                result
+                result.map(|repo_data| repo_data.map(|repo_data| ((channel, platform), repo_data)))
             }
         })
         .buffered(20)
         .filter_map(|result| async move { result.transpose() })
-        .try_collect::<Vec<_>>()
+        .try_collect()
         .await;
 
     // Clear all the progressbars together
@@ -115,7 +128,7 @@ async fn fetch_repo_data_records_with_progress(
     channel: Channel,
     platform: Platform,
     repodata_cache: &Path,
-    client: AuthenticatedClient,
+    client: ClientWithMiddleware,
     progress_bar: indicatif::ProgressBar,
     allow_not_found: bool,
 ) -> miette::Result<Option<SparseRepoData>> {

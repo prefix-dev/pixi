@@ -12,10 +12,10 @@ pub struct Prefix {
 }
 
 impl Prefix {
-    /// Constructs a new instance. Returns an error if the directory doesn't exist.
-    pub fn new(path: impl Into<PathBuf>) -> miette::Result<Self> {
+    /// Constructs a new instance.
+    pub fn new(path: impl Into<PathBuf>) -> Self {
         let root = path.into();
-        Ok(Self { root })
+        Self { root }
     }
 
     /// Returns the root directory of the prefix

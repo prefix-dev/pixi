@@ -3,11 +3,13 @@ use crate::repodata::friendly_channel_name;
 use crate::{config, prefix::Prefix, progress::await_in_progress, repodata::fetch_sparse_repodata};
 use clap::Parser;
 use dirs::home_dir;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
+use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord};
-use rattler_networking::AuthenticatedClient;
+use rattler_networking::AuthenticationMiddleware;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -15,7 +17,9 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use rattler_solve::{resolvo, SolverImpl};
+use reqwest_middleware::ClientWithMiddleware;
 use std::ffi::OsStr;
+use std::sync::Arc;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -328,7 +332,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|c| Channel::from_str(c, &channel_config))
         .collect::<Result<Vec<Channel>, _>>()
         .into_diagnostic()?;
-    let authenticated_client = AuthenticatedClient::default();
+    let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
+        .with_arc(Arc::new(AuthenticationMiddleware::default()))
+        .build();
 
     // Find the MatchSpec we want to install
     let package_matchspec = MatchSpec::from_str(&args.package).into_diagnostic()?;
@@ -382,10 +388,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
     } else {
         eprintln!("{whitespace}These apps have been added to {}\n{whitespace} -  {script_names}\n\n{} To use them, make sure to add {} to your PATH",
-                      console::style(&bin_dir.display()).bold(),
-                      console::style("!").yellow().bold(),
-                      console::style(&bin_dir.display()).bold()
-            )
+                  console::style(&bin_dir.display()).bold(),
+                  console::style("!").yellow().bold(),
+                  console::style(&bin_dir.display()).bold()
+        )
     }
 
     Ok(())
@@ -393,14 +399,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 pub(super) async fn globally_install_package(
     package_matchspec: MatchSpec,
-    platform_sparse_repodata: &[SparseRepoData],
+    sparse_repodata: &IndexMap<(Channel, Platform), SparseRepoData>,
     channel_config: &ChannelConfig,
-    authenticated_client: AuthenticatedClient,
+    authenticated_client: ClientWithMiddleware,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
     let package_name = package_name(&package_matchspec)?;
 
     let available_packages = SparseRepoData::load_records_recursive(
-        platform_sparse_repodata,
+        sparse_repodata.values(),
         vec![package_name.clone()],
         None,
     )
@@ -428,7 +434,7 @@ pub(super) async fn globally_install_package(
 
     // Create the binary environment prefix where we install or update the package
     let BinEnvDir(bin_prefix) = BinEnvDir::create(&package_name).await?;
-    let prefix = Prefix::new(bin_prefix)?;
+    let prefix = Prefix::new(bin_prefix);
     let prefix_records = prefix.find_installed_packages(None).await?;
 
     // Create the transaction that we need
@@ -443,17 +449,19 @@ pub(super) async fn globally_install_package(
 
     // Execute the transaction if there is work to do
     if has_transactions {
+        let package_cache = Arc::new(PackageCache::new(config::get_cache_dir()?.join("pkgs")));
+
         // Execute the operations that are returned by the solver.
-        await_in_progress(
-            "creating virtual environment",
+        await_in_progress("creating virtual environment", |pb| {
             execute_transaction(
+                package_cache,
                 &transaction,
                 &prefix_records,
                 prefix.root().to_path_buf(),
-                config::get_cache_dir()?,
                 authenticated_client,
-            ),
-        )
+                pb,
+            )
+        })
         .await?;
     }
 

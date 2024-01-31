@@ -7,17 +7,16 @@ pub mod virtual_packages;
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
-use rattler_conda_types::{
-    Channel, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
-};
-use rattler_networking::AuthenticatedClient;
+use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
+use rattler_networking::AuthenticationMiddleware;
+use reqwest_middleware::ClientWithMiddleware;
 use rip::{index::PackageDb, normalize_index_url};
 use std::hash::Hash;
 use std::{
     collections::{HashMap, HashSet},
     env,
     ffi::OsStr,
-    fmt::{Debug, Display, Formatter},
+    fmt::{Debug, Formatter},
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -29,7 +28,6 @@ use crate::{
     task::Task,
 };
 use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
-use rip::types::NormalizedPackageName;
 use url::Url;
 
 pub use dependencies::Dependencies;
@@ -78,7 +76,8 @@ impl SpecType {
     }
 }
 
-/// The pixi project, this main struct to interact with the project. This struct holds the [`Manifest`] and has functions to modify or request information from it.
+/// The pixi project, this main struct to interact with the project. This struct holds the
+/// `Manifest` and has functions to modify or request information from it.
 /// This allows in the future to have multiple environments or manifests linked to a project.
 #[derive(Clone)]
 pub struct Project {
@@ -89,7 +88,7 @@ pub struct Project {
     /// Reqwest client shared for this project
     client: reqwest::Client,
     /// Authenticated reqwest client shared for this project
-    authenticated_client: AuthenticatedClient,
+    authenticated_client: ClientWithMiddleware,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
 }
@@ -107,8 +106,9 @@ impl Project {
     /// Constructs a new instance from an internal manifest representation
     pub fn from_manifest(manifest: Manifest) -> Self {
         let client = reqwest::Client::new();
-        let authenticated_client =
-            AuthenticatedClient::from_client(client.clone(), Default::default());
+        let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
+            .with_arc(Arc::new(AuthenticationMiddleware::default()))
+            .build();
         Self {
             root: Default::default(),
             package_db: Default::default(),
@@ -169,7 +169,9 @@ impl Project {
             root: root.to_owned(),
             package_db: Default::default(),
             client: Default::default(),
-            authenticated_client: Default::default(),
+            authenticated_client: reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
+                .with_arc(Arc::new(AuthenticationMiddleware::default()))
+                .build(),
             manifest: manifest?,
         })
     }
@@ -279,7 +281,7 @@ impl Project {
     /// TODO: Remove this function and use the tasks from the default environment instead.
     pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&str, &Task> {
         self.default_environment()
-            .tasks(platform)
+            .tasks(platform, true)
             .unwrap_or_default()
     }
 
@@ -343,19 +345,19 @@ impl Project {
 
     /// Returns the package database used for caching python metadata, wheels and more. See the
     /// documentation of [`rip::index::PackageDb`] for more information.
-    pub fn pypi_package_db(&self) -> miette::Result<&PackageDb> {
+    pub fn pypi_package_db(&self) -> miette::Result<Arc<PackageDb>> {
         Ok(self
             .package_db
             .get_or_try_init(|| {
                 PackageDb::new(
-                    self.client().clone(),
+                    self.authenticated_client().clone(),
                     &self.pypi_index_urls(),
                     &config::get_cache_dir()?.join("pypi/"),
                 )
                 .into_diagnostic()
                 .map(Arc::new)
             })?
-            .as_ref())
+            .clone())
     }
 
     /// Returns the reqwest client used for http networking
@@ -365,7 +367,7 @@ impl Project {
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> &AuthenticatedClient {
+    pub fn authenticated_client(&self) -> &ClientWithMiddleware {
         &self.authenticated_client
     }
 }
@@ -377,27 +379,6 @@ pub fn find_project_root() -> Option<PathBuf> {
     std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent())
         .find(|dir| dir.join(consts::PROJECT_MANIFEST).is_file())
         .map(Path::to_path_buf)
-}
-
-#[derive(Eq, PartialEq, Hash)]
-pub enum DependencyName {
-    Conda(PackageName),
-    PyPi(NormalizedPackageName),
-}
-
-#[derive(Clone)]
-pub enum DependencyKind {
-    Conda(MatchSpec),
-    PyPi(pep508_rs::Requirement),
-}
-
-impl Display for DependencyKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DependencyKind::Conda(spec) => write!(f, "{}", spec),
-            DependencyKind::PyPi(req) => write!(f, "{}", req),
-        }
-    }
 }
 
 #[cfg(test)]

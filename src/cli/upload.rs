@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use clap::Parser;
 use futures::TryStreamExt;
@@ -6,7 +7,7 @@ use indicatif::HumanBytes;
 use miette::IntoDiagnostic;
 
 use rattler_digest::{compute_file_digest, Sha256};
-use rattler_networking::AuthenticatedClient;
+use rattler_networking::AuthenticationMiddleware;
 
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
@@ -41,7 +42,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         HumanBytes(filesize)
     );
 
-    let client = AuthenticatedClient::default();
+    let client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
+        .with_arc(Arc::new(AuthenticationMiddleware::default()))
+        .build();
 
     let sha256sum = format!(
         "{:x}",

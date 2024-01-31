@@ -3,6 +3,7 @@ use std::str::FromStr;
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
 use crate::Project;
 use clap::Parser;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
@@ -48,8 +49,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,
-        None,
-        Default::default(),
+        IndexMap::default(),
     )
     .await?;
     project.save()?;

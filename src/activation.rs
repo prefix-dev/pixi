@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use std::collections::HashMap;
 
 use itertools::Itertools;
@@ -117,7 +118,9 @@ pub fn get_activator<'p>(
 }
 
 /// Runs and caches the activation script.
-async fn run_activation(environment: &Environment<'_>) -> miette::Result<HashMap<String, String>> {
+pub async fn run_activation(
+    environment: &Environment<'_>,
+) -> miette::Result<HashMap<String, String>> {
     let activator = get_activator(environment, ShellEnum::default()).map_err(|e| {
         miette::miette!(format!(
             "failed to create activator for {:?}\n{}",
@@ -179,19 +182,13 @@ pub async fn get_activation_env<'p>(
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<HashMap<String, String>> {
     // Get the prefix which we can then activate.
-    get_up_to_date_prefix(
-        environment,
-        lock_file_usage,
-        false,
-        None,
-        Default::default(),
-    )
-    .await?;
+    get_up_to_date_prefix(environment, lock_file_usage, false, IndexMap::default()).await?;
 
     // Get environment variables from the activation
-    let activation_env = await_in_progress("activating environment", run_activation(environment))
-        .await
-        .wrap_err("failed to activate environment")?;
+    let activation_env =
+        await_in_progress("activating environment", |_| run_activation(environment))
+            .await
+            .wrap_err("failed to activate environment")?;
 
     let environment_variables = get_environment_variables(environment);
 

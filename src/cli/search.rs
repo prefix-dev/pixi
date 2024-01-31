@@ -1,12 +1,14 @@
 use std::borrow::Cow;
 use std::io::{self, Write};
+use std::sync::Arc;
 use std::{cmp::Ordering, path::PathBuf};
 
 use clap::Parser;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig, PackageName, Platform, RepoDataRecord};
-use rattler_networking::AuthenticatedClient;
+use rattler_networking::AuthenticationMiddleware;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
 
@@ -40,7 +42,7 @@ pub struct Args {
 /// fetch packages from `repo_data` based on `filter_func`
 fn search_package_by_filter<F>(
     package: &PackageName,
-    repo_data: &[SparseRepoData],
+    repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
     filter_func: F,
 ) -> miette::Result<Vec<RepoDataRecord>>
 where
@@ -48,34 +50,34 @@ where
 {
     let similar_packages = repo_data
         .iter()
-        .flat_map(|repo| {
+        .flat_map(|(_, repo)| {
             repo.package_names()
                 .filter(|&name| filter_func(name, package))
         })
+        .unique()
         .collect::<Vec<&str>>();
 
     let mut latest_packages = Vec::new();
 
     // search for `similar_packages` in all platform's repodata
     // add the latest version of the fetched package to latest_packages vector
-    for repo in repo_data {
-        for package in &similar_packages {
-            let mut records = repo
-                .load_records(&PackageName::new_unchecked(*package))
-                .into_diagnostic()?;
-            // sort records by version, get the latest one
-            records.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
-            let latest_package = records.last().cloned();
-            if let Some(latest_package) = latest_package {
-                latest_packages.push(latest_package);
-            }
+    for package in similar_packages {
+        let mut records = Vec::new();
+
+        for repo in repo_data.values() {
+            records.extend(
+                repo.load_records(&PackageName::new_unchecked(package))
+                    .into_diagnostic()?,
+            );
+        }
+
+        // sort records by version, get the latest one
+        records.sort_by(|a, b| a.package_record.version.cmp(&b.package_record.version));
+        let latest_package = records.last().cloned();
+        if let Some(latest_package) = latest_package {
+            latest_packages.push(latest_package);
         }
     }
-
-    latest_packages = latest_packages
-        .into_iter()
-        .unique_by(|record| record.package_record.name.clone())
-        .collect::<Vec<_>>();
 
     Ok(latest_packages)
 }
@@ -103,13 +105,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let package_name_filter = args.package;
-    let authenticated_client = AuthenticatedClient::default();
-    let repo_data = fetch_sparse_repodata(
-        channels.iter().map(AsRef::as_ref),
-        [Platform::current()],
-        &authenticated_client,
-    )
-    .await?;
+
+    let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
+        .with_arc(Arc::new(AuthenticationMiddleware::default()))
+        .build();
+    let repo_data = Arc::new(
+        fetch_sparse_repodata(
+            channels.iter().map(AsRef::as_ref),
+            [Platform::current()],
+            &authenticated_client,
+        )
+        .await?,
+    );
 
     // When package name filter contains * (wildcard), it will search and display a list of packages matching this filter
     if package_name_filter.contains('*') {
@@ -132,18 +139,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 async fn search_exact_package<W: Write>(
     package_name: PackageName,
-    repo_data: Vec<SparseRepoData>,
+    repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
     out: W,
 ) -> miette::Result<()> {
     let package_name_search = package_name.clone();
-    let packages = await_in_progress(
-        "searching packages",
+    let packages = await_in_progress("searching packages", |_| {
         spawn_blocking(move || {
-            search_package_by_filter(&package_name_search, &repo_data, |pn, n| {
+            search_package_by_filter(&package_name_search, repo_data, |pn, n| {
                 pn == n.as_normalized()
             })
-        }),
-    )
+        })
+    })
     .await
     .into_diagnostic()??;
 
@@ -271,7 +277,7 @@ fn print_package_info<W: Write>(package: &RepoDataRecord, mut out: W) -> io::Res
 async fn search_package_by_wildcard<W: Write>(
     package_name: PackageName,
     package_name_filter: &str,
-    repo_data: Vec<SparseRepoData>,
+    repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
     limit: usize,
     out: W,
 ) -> miette::Result<()> {
@@ -279,19 +285,19 @@ async fn search_package_by_wildcard<W: Write>(
         .expect("Expect only characters and/or * (wildcard).");
 
     let package_name_search = package_name.clone();
-    let mut packages = await_in_progress(
-        "searching packages",
+    let mut packages = await_in_progress("searching packages", |_| {
         spawn_blocking(move || {
-            let packages = search_package_by_filter(&package_name_search, &repo_data, |pn, _| {
-                wildcard_pattern.is_match(pn)
-            });
+            let packages =
+                search_package_by_filter(&package_name_search, repo_data.clone(), |pn, _| {
+                    wildcard_pattern.is_match(pn)
+                });
             match packages {
                 Ok(packages) => {
                     if packages.is_empty() {
                         let similarity = 0.6;
                         return search_package_by_filter(
                             &package_name_search,
-                            &repo_data,
+                            repo_data,
                             |pn, n| jaro(pn, n.as_normalized()) > similarity,
                         );
                     }
@@ -299,8 +305,8 @@ async fn search_package_by_wildcard<W: Write>(
                 }
                 Err(e) => Err(e),
             }
-        }),
-    )
+        })
+    })
     .await
     .into_diagnostic()??;
 

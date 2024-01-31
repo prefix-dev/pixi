@@ -281,14 +281,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let (pixi_folder_size, cache_size) = if args.extended {
         let env_dir = project.as_ref().map(|p| p.root().join(".pixi"));
         let cache_dir = config::get_cache_dir()?;
-        await_in_progress(
-            "fetching directory sizes",
+        await_in_progress("fetching directory sizes", |_| {
             spawn_blocking(move || {
                 let env_size = env_dir.and_then(|env| dir_size(env).ok());
                 let cache_size = dir_size(cache_dir).ok();
                 (env_size, cache_size)
-            }),
-        )
+            })
+        })
         .await
         .into_diagnostic()?
     } else {
@@ -307,34 +306,37 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|p| {
             p.environments()
                 .iter()
-                .map(|env| EnvironmentInfo {
-                    name: env.name().as_str().to_string(),
-                    features: env.features().map(|f| f.name.to_string()).collect(),
-                    solve_group: env.manifest().solve_group.clone(),
-                    environment_size: None,
-                    dependencies: env
-                        .dependencies(None, Some(Platform::current()))
-                        .names()
-                        .map(|p| p.as_source().to_string())
-                        .collect(),
-                    pypi_dependencies: env
-                        .pypi_dependencies(Some(Platform::current()))
-                        .into_iter()
-                        .map(|(name, _p)| name.as_str().to_string())
-                        .collect(),
-                    platforms: env.platforms().into_iter().collect(),
-                    channels: env
-                        .channels()
-                        .into_iter()
-                        .filter_map(|c| c.name.clone())
-                        .collect(),
-                    // prefix: env.dir(),
-                    tasks: env
-                        .tasks(Some(Platform::current()))
-                        .expect("Current environment should be supported on current platform")
-                        .into_keys()
-                        .map(|k| k.to_string())
-                        .collect(),
+                .map(|env| {
+                    let tasks = env
+                        .tasks(None, true)
+                        .ok()
+                        .map(|t| t.into_keys().map(|k| k.to_string()).collect())
+                        .unwrap_or_default();
+
+                    EnvironmentInfo {
+                        name: env.name().as_str().to_string(),
+                        features: env.features(true).map(|f| f.name.to_string()).collect(),
+                        solve_group: env.manifest().solve_group.clone(),
+                        environment_size: None,
+                        dependencies: env
+                            .dependencies(None, Some(Platform::current()))
+                            .names()
+                            .map(|p| p.as_source().to_string())
+                            .collect(),
+                        pypi_dependencies: env
+                            .pypi_dependencies(Some(Platform::current()))
+                            .into_iter()
+                            .map(|(name, _p)| name.as_str().to_string())
+                            .collect(),
+                        platforms: env.platforms().into_iter().collect(),
+                        channels: env
+                            .channels()
+                            .into_iter()
+                            .filter_map(|c| c.name.clone())
+                            .collect(),
+                        // prefix: env.dir(),
+                        tasks,
+                    }
                 })
                 .collect()
         })
