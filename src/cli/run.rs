@@ -11,11 +11,12 @@ use rattler_conda_types::Platform;
 use crate::activation::get_environment_variables;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TaskGraph};
-use crate::{Project, UpdateLockFileOptions};
+use crate::{consts, Project, UpdateLockFileOptions};
 
-use crate::environment::LockFileDerivedData;
+use crate::environment::{verify_prefix_location_unchanged, LockFileDerivedData};
 use crate::progress::await_in_progress;
 use crate::project::manifest::EnvironmentName;
+use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
 use thiserror::Error;
 use tracing::Level;
@@ -43,6 +44,15 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Load the project
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+
+    // Sanity check of prefix location
+    verify_prefix_location_unchanged(
+        project
+            .default_environment()
+            .dir()
+            .join(consts::PREFIX_FILE_NAME)
+            .as_path(),
+    )?;
 
     // Extract the passed in environment name.
     let explicit_environment = args
@@ -186,6 +196,9 @@ pub async fn get_task_env<'p>(
     lock_file_derived_data: &mut LockFileDerivedData<'p>,
     environment: &Environment<'p>,
 ) -> miette::Result<HashMap<String, String>> {
+    // Make sure the system requirements are met
+    verify_current_platform_has_required_virtual_packages(environment)?;
+
     // Ensure there is a valid prefix
     lock_file_derived_data.prefix(environment).await?;
 
