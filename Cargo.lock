@@ -2913,7 +2913,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#cb4ded6fb53527c1e72bc57d7382f4c0ae716e1e"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f29e1baa86abec6ad5db01b3f81d6726ed317729"
 dependencies = [
  "anyhow",
  "async-compression 0.4.6",
@@ -2957,7 +2957,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#cb4ded6fb53527c1e72bc57d7382f4c0ae716e1e"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f29e1baa86abec6ad5db01b3f81d6726ed317729"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3001,7 +3001,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#cb4ded6fb53527c1e72bc57d7382f4c0ae716e1e"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f29e1baa86abec6ad5db01b3f81d6726ed317729"
 dependencies = [
  "blake2",
  "digest",
@@ -3055,7 +3055,7 @@ dependencies = [
  "regex",
  "reqwest",
  "reqwest-middleware",
- "resolvo",
+ "resolvo 0.2.0",
  "serde",
  "serde_json",
  "serde_with",
@@ -3074,7 +3074,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#cb4ded6fb53527c1e72bc57d7382f4c0ae716e1e"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f29e1baa86abec6ad5db01b3f81d6726ed317729"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3097,7 +3097,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#cb4ded6fb53527c1e72bc57d7382f4c0ae716e1e"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f29e1baa86abec6ad5db01b3f81d6726ed317729"
 dependencies = [
  "quote",
  "syn 2.0.48",
@@ -3106,7 +3106,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#cb4ded6fb53527c1e72bc57d7382f4c0ae716e1e"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f29e1baa86abec6ad5db01b3f81d6726ed317729"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3134,7 +3134,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#cb4ded6fb53527c1e72bc57d7382f4c0ae716e1e"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f29e1baa86abec6ad5db01b3f81d6726ed317729"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3160,7 +3160,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#cb4ded6fb53527c1e72bc57d7382f4c0ae716e1e"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f29e1baa86abec6ad5db01b3f81d6726ed317729"
 dependencies = [
  "anyhow",
  "async-compression 0.4.6",
@@ -3199,7 +3199,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#cb4ded6fb53527c1e72bc57d7382f4c0ae716e1e"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f29e1baa86abec6ad5db01b3f81d6726ed317729"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.1",
@@ -3216,7 +3216,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#cb4ded6fb53527c1e72bc57d7382f4c0ae716e1e"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f29e1baa86abec6ad5db01b3f81d6726ed317729"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3224,7 +3224,7 @@ dependencies = [
  "itertools 0.11.0",
  "rattler_conda_types",
  "rattler_digest 0.16.2",
- "resolvo",
+ "resolvo 0.3.0",
  "serde",
  "tempfile",
  "thiserror",
@@ -3235,7 +3235,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.16.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#cb4ded6fb53527c1e72bc57d7382f4c0ae716e1e"
+source = "git+https://github.com/mamba-org/rattler?branch=main#f29e1baa86abec6ad5db01b3f81d6726ed317729"
 dependencies = [
  "cfg-if",
  "libloading",
@@ -3417,6 +3417,19 @@ dependencies = [
 name = "resolvo"
 version = "0.2.0"
 source = "git+https://github.com/mamba-org/resolvo.git?branch=main#d39c732d8221eae6400669425aead8afbaa9e774"
+dependencies = [
+ "bitvec",
+ "elsa",
+ "itertools 0.11.0",
+ "petgraph",
+ "tracing",
+]
+
+[[package]]
+name = "resolvo"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acd163bc7df01195423c83a7a391fecf319ff41d3de899694a9ccb698e790b29"
 dependencies = [
  "bitvec",
  "elsa",
