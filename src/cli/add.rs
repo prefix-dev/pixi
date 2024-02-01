@@ -396,6 +396,8 @@ pub fn determine_best_version(
         locked_packages: vec![],
 
         pinned_packages: vec![],
+
+        timeout: None,
     };
 
     let records = resolvo::Solver.solve(task).into_diagnostic()?;

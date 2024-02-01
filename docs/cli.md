@@ -414,7 +414,7 @@ overridden with the `--force` flag
 
 ```shell
 pixi self-update
-pixi self-update --version 0.12.0
+pixi self-update --version 0.13.0
 pixi self-update --force
 ```
 
@@ -752,7 +752,7 @@ Set the project version.
 1. `<VERSION>`: The version to set.
 
 ```sh
-pixi project version set "0.12.0"
+pixi project version set "0.13.0"
 ```
 
 ### `project version {major|minor|patch}`
