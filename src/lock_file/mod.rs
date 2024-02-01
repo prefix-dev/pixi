@@ -120,6 +120,7 @@ pub fn resolve_conda_dependencies(
         locked_packages,
         pinned_packages: vec![],
         virtual_packages,
+        timeout: None,
     };
 
     // Solve the task
