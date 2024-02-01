@@ -14,7 +14,8 @@ use pixi::{
         project, run,
         task::{self, AddArgs, AliasArgs},
     },
-    consts, ExecutableTask, Project, RunOutput, TaskGraph, TaskGraphError,
+    consts, EnvironmentName, ExecutableTask, Project, RunOutput, TaskGraph, TaskGraphError,
+    UpdateLockFileOptions,
 };
 use rattler_conda_types::{MatchSpec, Platform};
 
@@ -224,11 +225,35 @@ impl PixiControl {
 
         // Load the project
         let project = self.project()?;
-        let environment = project.default_environment();
+
+        // Extract the passed in environment name.
+        let explicit_environment = args
+            .environment
+            .map(|n| EnvironmentName::from_str(n.as_str()))
+            .transpose()?
+            .map(|n| {
+                project
+                    .environment(&n)
+                    .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
+            })
+            .transpose()?;
+
+        // Ensure the lock-file is up-to-date
+        let mut lock_file = project
+            .up_to_date_lock_file(UpdateLockFileOptions {
+                lock_file_usage: args.lock_file_usage.into(),
+                ..UpdateLockFileOptions::default()
+            })
+            .await?;
 
         // Create a task graph from the command line arguments.
-        let task_graph = TaskGraph::from_cmd_args(&project, args.task, Some(Platform::current()))
-            .map_err(RunError::TaskGraphError)?;
+        let task_graph = TaskGraph::from_cmd_args(
+            &project,
+            args.task,
+            Some(Platform::current()),
+            explicit_environment,
+        )
+        .map_err(RunError::TaskGraphError)?;
 
         // Iterate over all tasks in the graph and execute them.
         let mut task_env = None;
@@ -239,7 +264,7 @@ impl PixiControl {
             // Construct the task environment if not already created.
             let task_env = match task_env.as_ref() {
                 None => {
-                    let env = get_task_env(&environment, args.lock_file_usage.into()).await?;
+                    let env = get_task_env(&mut lock_file, &task.run_environment).await?;
                     task_env.insert(env) as &_
                 }
                 Some(task_env) => task_env,

@@ -281,7 +281,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let (pixi_folder_size, cache_size) = if args.extended {
         let env_dir = project.as_ref().map(|p| p.root().join(".pixi"));
         let cache_dir = config::get_cache_dir()?;
-        await_in_progress("fetching cache", |_| {
+        await_in_progress("fetching directory sizes", |_| {
             spawn_blocking(move || {
                 let env_size = env_dir.and_then(|env| dir_size(env).ok());
                 let cache_size = dir_size(cache_dir).ok();
@@ -308,14 +308,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .iter()
                 .map(|env| {
                     let tasks = env
-                        .tasks(None)
+                        .tasks(None, true)
                         .ok()
                         .map(|t| t.into_keys().map(|k| k.to_string()).collect())
                         .unwrap_or_default();
 
                     EnvironmentInfo {
                         name: env.name().as_str().to_string(),
-                        features: env.features().map(|f| f.name.to_string()).collect(),
+                        features: env.features(true).map(|f| f.name.to_string()).collect(),
                         solve_group: env.manifest().solve_group.clone(),
                         environment_size: None,
                         dependencies: env

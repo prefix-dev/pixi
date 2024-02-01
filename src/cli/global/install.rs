@@ -427,6 +427,8 @@ pub(super) async fn globally_install_package(
 
         locked_packages: vec![],
         pinned_packages: vec![],
+
+        timeout: None,
     };
 
     // Solve it

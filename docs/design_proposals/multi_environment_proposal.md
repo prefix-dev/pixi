@@ -355,7 +355,8 @@ pixi run test
     description = "A project that does ML stuff"
     authors = ["Your Name <your.name@gmail.com>"]
     channels = ["conda-forge", "pytorch"]
-    platforms = [] # there is no platform that supports all features
+    # All platforms that are supported by the project as the features will take the intersection of the platforms defined there.
+    platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
     [tasks]
     train-model = "python train.py"
