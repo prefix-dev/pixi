@@ -1,7 +1,6 @@
 use crate::project::Environment;
 use crate::task::error::{AmbiguousTaskError, MissingTaskError};
 use crate::{Project, Task};
-use itertools::Itertools;
 use miette::Diagnostic;
 use rattler_conda_types::Platform;
 use thiserror::Error;
@@ -117,28 +116,10 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
         source: FindTaskSource<'p>,
     ) -> Result<TaskAndEnvironment<'p>, FindTaskError> {
         // If the task was specified on the command line and there is no explicit environment and
-        // the task is only defined in the default feature, use the default environment.
+        // the task is the default environment, use the default environment.
         if matches!(source, FindTaskSource::CmdArgs) && self.explicit_environment.is_none() {
-            if let Some(task) = self
-                .project
-                .manifest
-                .default_feature()
-                .targets
-                .resolve(self.platform)
-                .find_map(|target| target.tasks.get(name))
-            {
-                // None of the other environments can have this task. Otherwise, its still
-                // ambiguous.
-                if !self
-                    .project
-                    .environments()
-                    .into_iter()
-                    .flat_map(|env| env.features(false).collect_vec())
-                    .flat_map(|feature| feature.targets.resolve(self.platform))
-                    .any(|target| target.tasks.contains_key(name))
-                {
-                    return Ok((self.project.default_environment(), task));
-                }
+            if let Ok(task) = self.project.default_environment().task(name, self.platform) {
+                return Ok((self.project.default_environment(), task));
             }
         }
 
