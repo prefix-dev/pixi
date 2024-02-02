@@ -7,12 +7,14 @@ use std::path::{Path, PathBuf};
 
 mod error;
 mod executable_task;
+mod task_environment;
 mod task_graph;
 
 pub use executable_task::{
     ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, RunOutput,
     TaskExecutionError,
 };
+pub use task_environment::{FindTaskError, FindTaskSource, SearchEnvironments, TaskDisambiguation};
 pub use task_graph::{TaskGraph, TaskGraphError, TaskId, TaskNode};
 
 /// Represents different types of scripts
@@ -22,7 +24,8 @@ pub enum Task {
     Plain(String),
     Execute(Execute),
     Alias(Alias),
-    // We don't what a way for the deserializer to except a custom task, as they are meant for tasks given in the command line.
+    // We want a way for the deserializer to except a custom task, as they are meant for tasks
+    // given in the command line.
     #[serde(skip)]
     Custom(Custom),
 }

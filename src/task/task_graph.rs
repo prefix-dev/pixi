@@ -1,12 +1,12 @@
 use crate::project::Environment;
 use crate::task::error::AmbiguousTaskError;
+use crate::task::task_environment::{FindTaskError, FindTaskSource, SearchEnvironments};
+use crate::task::TaskDisambiguation;
 use crate::{
     task::{error::MissingTaskError, CmdArgs, Custom, Task},
     Project,
 };
-use itertools::Itertools;
 use miette::Diagnostic;
-use rattler_conda_types::Platform;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -75,136 +75,18 @@ impl<'p> Index<TaskId> for TaskGraph<'p> {
     }
 }
 
-/// Defines where the task was defined when looking for a task.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum FindTaskSource {
-    CmdArgs,
-    DependsOn,
-}
-
-/// An object to help with searching for tasks.
-struct SearchEnvironments<'p> {
-    pub project: &'p Project,
-    pub explicit_environment: Option<Environment<'p>>,
-    pub platform: Option<Platform>,
-}
-
-#[derive(Debug, Diagnostic, Error)]
-pub enum FindTaskError {
-    #[error(transparent)]
-    MissingTask(MissingTaskError),
-
-    #[error(transparent)]
-    AmbiguousTask(AmbiguousTaskError),
-}
-
-impl<'p> SearchEnvironments<'p> {
-    // Determine which environments we are allowed to check for tasks.
-    //
-    // If the user specified an environment, look for tasks in the main environment and the
-    // user specified environment.
-    //
-    // If the user did not specify an environment, look for tasks in any environment.
-    pub fn from_opt_env(
-        project: &'p Project,
-        explicit_environment: Option<Environment<'p>>,
-        platform: Option<Platform>,
-    ) -> Self {
-        Self {
-            project,
-            explicit_environment,
-            platform,
-        }
-    }
-
-    /// Finds the task with the given name or returns an error that explains why the task could not
-    /// be found.
-    pub fn find_task(
-        &self,
-        name: &str,
-        source: FindTaskSource,
-    ) -> Result<(Environment<'p>, &'p Task), FindTaskError> {
-        // If the task was specified on the command line and there is no explicit environment and
-        // the task is only defined in the default feature, use the default environment.
-        if source == FindTaskSource::CmdArgs && self.explicit_environment.is_none() {
-            if let Some(task) = self
-                .project
-                .manifest
-                .default_feature()
-                .targets
-                .resolve(self.platform)
-                .find_map(|target| target.tasks.get(name))
-            {
-                // None of the other environments can have this task. Otherwise, its still
-                // ambiguous.
-                if !self
-                    .project
-                    .environments()
-                    .into_iter()
-                    .flat_map(|env| env.features(false).collect_vec())
-                    .flat_map(|feature| feature.targets.resolve(self.platform))
-                    .any(|target| target.tasks.contains_key(name))
-                {
-                    return Ok((self.project.default_environment(), task));
-                }
-            }
-        }
-
-        // If an explicit environment was specified, only look for tasks in that environment and
-        // the default environment.
-        let environments = if let Some(explicit_environment) = &self.explicit_environment {
-            vec![explicit_environment.clone()]
-        } else {
-            self.project.environments()
-        };
-
-        // Find all the task and environment combinations
-        let include_default_feature = true;
-        let mut tasks = Vec::new();
-        for env in environments {
-            if let Some(task) = env
-                .tasks(self.platform, include_default_feature)
-                .ok()
-                .and_then(|tasks| tasks.get(name).copied())
-            {
-                tasks.push((env, task));
-            }
-        }
-
-        match tasks.len() {
-            0 => Err(FindTaskError::MissingTask(MissingTaskError {
-                task_name: name.to_string(),
-            })),
-            1 => {
-                let (env, task) = tasks.remove(0);
-                Ok((env.clone(), task))
-            }
-            _ => Err(FindTaskError::AmbiguousTask(AmbiguousTaskError {
-                task_name: name.to_string(),
-                environments: tasks
-                    .into_iter()
-                    .map(|(env, _)| env.name().clone())
-                    .collect(),
-            })),
-        }
-    }
-}
-
 impl<'p> TaskGraph<'p> {
     pub fn project(&self) -> &'p Project {
         self.project
     }
 
     /// Constructs a new [`TaskGraph`] from a list of command line arguments.
-    pub fn from_cmd_args(
+    pub fn from_cmd_args<D: TaskDisambiguation<'p>>(
         project: &'p Project,
+        search_envs: &SearchEnvironments<'p, D>,
         args: Vec<String>,
-        platform: Option<Platform>,
-        environment: Option<Environment<'p>>,
     ) -> Result<Self, TaskGraphError> {
         let mut args = args;
-
-        let search_envs = SearchEnvironments::from_opt_env(project, environment, platform);
 
         if let Some(name) = args.first() {
             match search_envs.find_task(name, FindTaskSource::CmdArgs) {
@@ -260,9 +142,9 @@ impl<'p> TaskGraph<'p> {
     }
 
     /// Constructs a new instance of a [`TaskGraph`] from a root task.
-    fn from_root(
+    fn from_root<D: TaskDisambiguation<'p>>(
         project: &'p Project,
-        search_environments: SearchEnvironments<'p>,
+        search_environments: &SearchEnvironments<'p, D>,
         root: TaskNode<'p>,
     ) -> Result<Self, TaskGraphError> {
         let mut task_name_to_node: HashMap<String, TaskId> =
@@ -285,16 +167,29 @@ impl<'p> TaskGraph<'p> {
                 }
 
                 // Find the task in the project
-                let (task_env, task_dependency) =
-                    match search_environments.find_task(&dependency, FindTaskSource::DependsOn) {
-                        Err(FindTaskError::MissingTask(err)) => {
-                            return Err(TaskGraphError::MissingTask(err))
-                        }
-                        Err(FindTaskError::AmbiguousTask(err)) => {
-                            return Err(TaskGraphError::AmbiguousTask(err))
-                        }
-                        Ok(result) => result,
-                    };
+                let node = &nodes[next_node_to_visit];
+                let (task_env, task_dependency) = match search_environments.find_task(
+                    &dependency,
+                    FindTaskSource::DependsOn(
+                        node.name
+                            .clone()
+                            .expect("only named tasks can have dependencies"),
+                        match &node.task {
+                            Cow::Borrowed(task) => task,
+                            Cow::Owned(_) => {
+                                unreachable!("only named tasks can have dependencies")
+                            }
+                        },
+                    ),
+                ) {
+                    Err(FindTaskError::MissingTask(err)) => {
+                        return Err(TaskGraphError::MissingTask(err))
+                    }
+                    Err(FindTaskError::AmbiguousTask(err)) => {
+                        return Err(TaskGraphError::AmbiguousTask(err))
+                    }
+                    Ok(result) => result,
+                };
 
                 // Add the node to the graph
                 let task_id = TaskId(nodes.len());
@@ -365,6 +260,7 @@ pub enum TaskGraphError {
 
 #[cfg(test)]
 mod test {
+    use crate::task::task_environment::SearchEnvironments;
     use crate::task::task_graph::TaskGraph;
     use crate::Project;
     use rattler_conda_types::Platform;
@@ -377,11 +273,12 @@ mod test {
     ) -> Vec<String> {
         let project = Project::from_str(Path::new(""), project_str).unwrap();
 
+        let search_envs = SearchEnvironments::from_opt_env(&project, None, platform);
+
         let graph = TaskGraph::from_cmd_args(
             &project,
+            &search_envs,
             run_args.into_iter().map(|arg| arg.to_string()).collect(),
-            platform,
-            None,
         )
         .unwrap();
 

@@ -10,7 +10,10 @@ use rattler_conda_types::Platform;
 
 use crate::activation::get_environment_variables;
 use crate::project::errors::UnsupportedPlatformError;
-use crate::task::{ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TaskGraph};
+use crate::task::{
+    ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, SearchEnvironments,
+    TaskGraph,
+};
 use crate::{Project, UpdateLockFileOptions};
 
 use crate::environment::LockFileDerivedData;
@@ -77,12 +80,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     tracing::debug!("Task parsed from run command: {:?}", task_args);
 
     // Construct a task graph from the input arguments
-    let task_graph = TaskGraph::from_cmd_args(
+    let search_environment = SearchEnvironments::from_opt_env(
         &project,
-        task_args,
-        Some(Platform::current()),
         explicit_environment.clone(),
-    )?;
+        Some(Platform::current()),
+    );
+    let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, task_args)?;
 
     // Traverse the task graph in topological order and execute each individual task.
     let mut task_idx = 0;
