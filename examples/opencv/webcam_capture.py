@@ -21,16 +21,25 @@ def capture_and_grayscale():
     # Load the cascade for face detection
     face_cascade = cv2.CascadeClassifier(filename)
 
-    # Connect to the webcam
-    cap = cv2.VideoCapture(0)
+    # Search for available webcams
+    working_cam = None
+    for index in range(3):
+        cap = cv2.VideoCapture(index)
+        if not cap.read()[0]:
+            cap.release()
+            continue
+        else:
+            working_cam = cap
+            break
+
 
     # Check if the webcam is opened correctly
-    if not cap.isOpened():
+    if not working_cam.isOpened():
         raise IOError("Cannot open webcam")
 
     while True:
         # Read the current frame from the webcam
-        ret, frame = cap.read()
+        ret, frame = working_cam.read()
 
         if not ret:
             break
@@ -57,7 +66,7 @@ def capture_and_grayscale():
             break
 
     # Release the VideoCapture object
-    cap.release()
+    working_cam.release()
 
     # Destroy all windows
     cv2.destroyAllWindows()
