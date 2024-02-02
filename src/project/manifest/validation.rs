@@ -65,7 +65,7 @@ impl ProjectManifest {
         check_file_existence(&self.project.readme)?;
 
         // Validate the environments defined in the project
-        for (_name, env) in self.environments.iter() {
+        for env in self.environments.environments.iter() {
             if let Err(report) = self.validate_environment(env) {
                 return Err(report.with_source_code(source));
             }

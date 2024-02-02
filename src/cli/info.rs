@@ -316,7 +316,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     EnvironmentInfo {
                         name: env.name().as_str().to_string(),
                         features: env.features(true).map(|f| f.name.to_string()).collect(),
-                        solve_group: env.manifest().solve_group.clone(),
+                        solve_group: env
+                            .solve_group()
+                            .map(|solve_group| solve_group.name().to_string()),
                         environment_size: None,
                         dependencies: env
                             .dependencies(None, Some(Platform::current()))

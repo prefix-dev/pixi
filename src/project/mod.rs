@@ -2,6 +2,7 @@ mod dependencies;
 mod environment;
 pub mod errors;
 pub mod manifest;
+mod solve_group;
 pub mod virtual_packages;
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
@@ -32,6 +33,7 @@ use url::Url;
 
 pub use dependencies::Dependencies;
 pub use environment::Environment;
+pub use solve_group::SolveGroup;
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -255,9 +257,22 @@ impl Project {
             .parsed
             .environments
             .iter()
-            .map(|(_name, env)| Environment {
+            .map(|env| Environment {
                 project: self,
                 environment: env,
+            })
+            .collect()
+    }
+
+    /// Returns all the solve groups in the project.
+    pub fn solve_groups(&self) -> Vec<SolveGroup> {
+        self.manifest
+            .parsed
+            .solve_groups
+            .iter()
+            .map(|group| SolveGroup {
+                project: self,
+                solve_group: group,
             })
             .collect()
     }

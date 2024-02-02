@@ -2,7 +2,7 @@ use super::{
     dependencies::Dependencies,
     errors::{UnknownTask, UnsupportedPlatformError},
     manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
-    PyPiRequirement, SpecType,
+    PyPiRequirement, SolveGroup, SpecType,
 };
 use crate::{task::Task, Project};
 use indexmap::{IndexMap, IndexSet};
@@ -59,6 +59,18 @@ impl<'p> Environment<'p> {
     /// Returns the name of this environment.
     pub fn name(&self) -> &EnvironmentName {
         &self.environment.name
+    }
+
+    /// Returns the solve group to which this environment belongs, or `None` if no solve group was
+    /// specified.
+    pub fn solve_group(&self) -> Option<SolveGroup<'p>> {
+        self.environment
+            .solve_group
+            .map(|solve_group_idx| SolveGroup {
+                project: self.project,
+                solve_group: &self.project.manifest.parsed.solve_groups.solve_groups
+                    [solve_group_idx],
+            })
     }
 
     /// Returns the manifest definition of this environment. See the documentation of
