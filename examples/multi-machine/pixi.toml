@@ -41,10 +41,7 @@ test = "python test.py --mlx"
 [feature.mlx.dependencies]
 mlx = "*"
 
-[feature.cpu]
-platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [environments]
 cuda = ["cuda"]
 mlx = ["mlx"]
-default = ["cpu"]
