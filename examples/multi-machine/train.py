@@ -2,8 +2,9 @@ import os
 import sys
 
 if os.environ["PIXI_ENVIRONMENT_NAME"] == "mlx":
-    import mlx
-    mlx.init()
+    import mlx.core as mx
+    a = mx.array([1, 2, 3, 4])
+    print(a.shape)
     print("MLX is available, in mlx environment as expected")
 
 if os.environ["PIXI_ENVIRONMENT_NAME"] == "cuda":
