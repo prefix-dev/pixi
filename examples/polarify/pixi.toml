@@ -43,6 +43,7 @@ pre-commit = "*"
 lint = "pre-commit run --all"
 
 [environments]
+default = ["test"]
 pl017 = ["pl017", "py310", "test"]
 pl018 = ["pl018", "py39", "test"]
 pl019 = ["pl019", "py39", "test"]
@@ -51,12 +52,15 @@ py39 = ["py39", "test"]
 py310 = ["py310", "test"]
 py311 = ["py311", "test"]
 py312 = ["py312", "test"]
+lint = ["lint"]
 
 ## test this with:
+#pixi run test
 #pixi run -e pl017 test
 #pixi run -e pl018 test
 #pixi run -e pl019 test
 #pixi run -e pl020 test
+#pixi run start
 #pixi run -e py39 start
 #pixi run -e py310 start
 #pixi run -e py311 start
