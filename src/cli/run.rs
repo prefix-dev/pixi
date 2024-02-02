@@ -1,9 +1,11 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
+use std::convert::identity;
 use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
 use clap::Parser;
+use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
 use miette::{miette, Context, Diagnostic};
 use rattler_conda_types::Platform;
@@ -11,8 +13,8 @@ use rattler_conda_types::Platform;
 use crate::activation::get_environment_variables;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{
-    ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, SearchEnvironments,
-    TaskGraph,
+    AmbiguousTask, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
+    SearchEnvironments, TaskAndEnvironment, TaskGraph,
 };
 use crate::{Project, UpdateLockFileOptions};
 
@@ -84,7 +86,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &project,
         explicit_environment.clone(),
         Some(Platform::current()),
-    );
+    )
+    .with_disambiguate_fn(disambiguate_task_interactive);
+
     let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, task_args)?;
 
     // Traverse the task graph in topological order and execute each individual task.
@@ -256,4 +260,31 @@ async fn execute_task<'p>(
     }
 
     Ok(())
+}
+
+/// Called to disambiguate between environments to run a task in.
+fn disambiguate_task_interactive<'p>(
+    problem: &AmbiguousTask<'p>,
+) -> Option<TaskAndEnvironment<'p>> {
+    let environment_names = problem
+        .environments
+        .iter()
+        .map(|(env, _)| env.name())
+        .collect_vec();
+    dialoguer::Select::with_theme(&ColorfulTheme::default())
+        .with_prompt(format!(
+            "The task '{}' {}can be run in multiple environments.\n\nPlease select an environment to run the task in:",
+            problem.task_name,
+            if let Some(dependency) = &problem.depended_on_by {
+                format!("(depended on by '{}') ", dependency.0)
+            } else {
+                String::new()
+            }
+        ))
+        .report(false)
+        .items(&environment_names)
+        .default(0)
+        .interact_opt()
+        .map_or(None, identity)
+        .map(|idx| problem.environments[idx].clone())
 }

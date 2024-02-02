@@ -14,7 +14,10 @@ pub use executable_task::{
     ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, RunOutput,
     TaskExecutionError,
 };
-pub use task_environment::{FindTaskError, FindTaskSource, SearchEnvironments, TaskDisambiguation};
+pub use task_environment::{
+    AmbiguousTask, FindTaskError, FindTaskSource, SearchEnvironments, TaskAndEnvironment,
+    TaskDisambiguation,
+};
 pub use task_graph::{TaskGraph, TaskGraphError, TaskId, TaskNode};
 
 /// Represents different types of scripts
