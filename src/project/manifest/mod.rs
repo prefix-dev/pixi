@@ -339,7 +339,7 @@ impl Manifest {
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
         get_or_insert_toml_table(&mut self.document, platform, feature_name, spec_type.name())?
-            .remove(dep.as_normalized())
+            .remove(dep.as_source())
             .ok_or_else(|| {
                 let table_name =
                     get_nested_toml_table_name(feature_name, platform, spec_type.name());
