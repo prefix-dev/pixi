@@ -2,6 +2,7 @@ use std::{fmt::Display, fs, path::PathBuf};
 
 use chrono::{DateTime, Local};
 use clap::Parser;
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_virtual_packages::VirtualPackage;
@@ -58,14 +59,18 @@ impl Display for EnvironmentInfo {
         let bold = console::Style::new().bold();
         writeln!(
             f,
-            "{}",
-            console::style(self.name.clone()).bold().blue().underlined()
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Environment"),
+            console::style(self.name.clone()).bold().magenta()
         )?;
         writeln!(
             f,
             "{:>WIDTH$}: {}",
             bold.apply_to("Features"),
-            self.features.join(", ")
+            self.features
+                .iter()
+                .map(|feature| console::style(feature).cyan())
+                .join(", ")
         )?;
         if let Some(solve_group) = &self.solve_group {
             writeln!(
@@ -147,8 +152,7 @@ impl Display for EnvironmentInfo {
             let tasks_list = self
                 .tasks
                 .iter()
-                .map(|t| t.to_string())
-                .collect::<Vec<_>>()
+                .map(|t| console::style(t.to_string()).blue())
                 .join(", ");
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Tasks"), tasks_list)?;
         }

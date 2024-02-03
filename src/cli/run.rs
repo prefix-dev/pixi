@@ -5,6 +5,7 @@ use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
 use clap::Parser;
+use console::Style;
 use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
 use miette::{miette, Context, Diagnostic};
@@ -115,7 +116,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 console::style("Pixi task (").bold(),
                 console::style(executable_task.run_environment.name())
                     .bold()
-                    .cyan(),
+                    .magenta(),
                 console::style("): ").bold(),
                 executable_task.display_command(),
             );
@@ -181,7 +182,7 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
                 .into_iter()
                 .sorted()
                 .format_with("\n", |name, f| {
-                    f(&format_args!("\t{}", console::style(name).bold()))
+                    f(&format_args!("\t{}", console::style(name).bold().blue()))
                 })
         );
     }
@@ -271,12 +272,17 @@ fn disambiguate_task_interactive<'p>(
         .iter()
         .map(|(env, _)| env.name())
         .collect_vec();
-    dialoguer::Select::with_theme(&ColorfulTheme::default())
+    let theme = ColorfulTheme {
+        active_item_style: Style::new().for_stderr().magenta(),
+        ..ColorfulTheme::default()
+    };
+
+    dialoguer::Select::with_theme(&theme)
         .with_prompt(format!(
             "The task '{}' {}can be run in multiple environments.\n\nPlease select an environment to run the task in:",
             problem.task_name,
             if let Some(dependency) = &problem.depended_on_by {
-                format!("(depended on by '{}') ", dependency.0)
+                format!("(depended on by '{}') ", console::style(dependency.0.clone()).blue())
             } else {
                 String::new()
             }
