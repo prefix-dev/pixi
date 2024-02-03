@@ -32,6 +32,11 @@ impl EnvironmentName {
             EnvironmentName::Named(name) => name.as_str(),
         }
     }
+
+    /// Returns true if the environment is the default environment.
+    pub fn is_default(&self) -> bool {
+        matches!(self, EnvironmentName::Default)
+    }
 }
 
 impl Borrow<str> for EnvironmentName {

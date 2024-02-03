@@ -116,10 +116,33 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
         source: FindTaskSource<'p>,
     ) -> Result<TaskAndEnvironment<'p>, FindTaskError> {
         // If the task was specified on the command line and there is no explicit environment and
-        // the task is the default environment, use the default environment.
+        // the task is defined only in the default feature, use the default environment.
         if matches!(source, FindTaskSource::CmdArgs) && self.explicit_environment.is_none() {
-            if let Ok(task) = self.project.default_environment().task(name, self.platform) {
-                return Ok((self.project.default_environment(), task));
+            if let Some(task) = self
+                .project
+                .manifest
+                .default_feature()
+                .targets
+                .resolve(self.platform)
+                .find_map(|target| target.tasks.get(name))
+            {
+                // No other feature then default has the task defined.
+                if !self
+                    .project
+                    .manifest
+                    .parsed
+                    .features
+                    .iter()
+                    .filter(|(name, _feature)| name.as_str() != "default")
+                    .any(|(_, feature)| {
+                        feature
+                            .targets
+                            .resolve(self.platform)
+                            .any(|target| target.tasks.contains_key(name))
+                    })
+                {
+                    return Ok((self.project.default_environment(), task));
+                }
             }
         }
 
@@ -168,5 +191,56 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_find_task_default_defined() {
+        let manifest_str = r#"
+            [project]
+            name = "foo"
+            channels = ["foo"]
+            platforms = ["linux-64"]
+
+            [tasks]
+            test = "cargo test"
+            [feature.test.dependencies]
+            pytest = "*"
+            [environments]
+            test = ["test"]
+        "#;
+        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let result = search.find_task("test", FindTaskSource::CmdArgs);
+        assert!(result.is_ok());
+        assert!(result.unwrap().0.name().is_default());
+    }
+
+    #[test]
+    fn test_find_task_dual_defined() {
+        let manifest_str = r#"
+            [project]
+            name = "foo"
+            channels = ["foo"]
+            platforms = ["linux-64"]
+
+            [tasks]
+            test = "cargo test"
+
+            [feature.test.tasks]
+            test = "cargo test --all-features"
+
+            [environments]
+            test = ["test"]
+        "#;
+        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let result = search.find_task("test", FindTaskSource::CmdArgs);
+        assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
     }
 }
