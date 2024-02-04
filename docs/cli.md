@@ -298,6 +298,11 @@ List project's packages. Highlighted packages are explicit dependencies.
 - `--sort-by <SORT_BY>`: Sorting strategy [default: name] [possible values: size, name, type]
 - `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--environment`(`-e`): the environment's packages to list, if non is provided the default environment's packages will be listed.
+- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--no-install`: do not update the environment, only add changed packages to the lock-file. (Implied by `--frozen` and `--locked`)
+
+```shell
 
 ```shell
 pixi list
@@ -305,6 +310,9 @@ pixi list --json-pretty
 pixi list --sort-by size
 pixi list --platform win-64
 pixi list --environment cuda
+pixi list --frozen
+pixi list --locked
+pixi list --no-install
 ```
 Output will look like this, where `python` will be green as it is the package that was explicitly added to the `pixi.toml`:
 

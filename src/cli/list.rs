@@ -2,9 +2,11 @@ use std::io;
 use std::io::{stdout, Write};
 use std::path::PathBuf;
 
+use crate::environment::get_up_to_date_prefix;
 use clap::Parser;
 use console::Color;
 use human_bytes::human_bytes;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use rattler_conda_types::Platform;
 use rattler_lock::Package;
@@ -53,6 +55,13 @@ pub struct Args {
     /// The environment to list packages for. Defaults to the default environment.
     #[arg(short, long)]
     pub environment: Option<String>,
+
+    #[clap(flatten)]
+    pub lock_file_usage: super::LockFileUsageArgs,
+
+    /// Don't install the environment, only update the lock-file.
+    #[arg(long)]
+    pub no_install: bool,
 }
 
 #[derive(Serialize)]
@@ -74,6 +83,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let environment = project
         .environment(&environment_name)
         .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
+
+    get_up_to_date_prefix(
+        &environment,
+        args.lock_file_usage.into(),
+        args.no_install,
+        IndexMap::default(),
+    )
+    .await?;
 
     // Load the platform
     let platform = args.platform.unwrap_or_else(Platform::current);
