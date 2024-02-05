@@ -49,6 +49,12 @@ impl fmt::Display for EnvironmentName {
     }
 }
 
+impl PartialEq<str> for EnvironmentName {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
 #[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes")]
 pub struct ParseEnvironmentNameError {

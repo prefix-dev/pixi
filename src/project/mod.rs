@@ -277,6 +277,18 @@ impl Project {
             .collect()
     }
 
+    /// Returns the solve group with the given name or `None` if no such group exists.
+    pub fn solve_group(&self, name: &str) -> Option<SolveGroup> {
+        self.manifest
+            .parsed
+            .solve_groups
+            .find(name)
+            .map(|group| SolveGroup {
+                project: self,
+                solve_group: group,
+            })
+    }
+
     /// Returns the channels used by this project.
     ///
     /// TODO: Remove this function and use the channels from the default environment instead.

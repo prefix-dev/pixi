@@ -45,6 +45,15 @@ impl Debug for Environment<'_> {
     }
 }
 
+impl<'p> PartialEq for Environment<'p> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.project, other.project)
+            && std::ptr::eq(self.environment, other.environment)
+    }
+}
+
+impl<'p> Eq for Environment<'p> {}
+
 impl<'p> Environment<'p> {
     /// Returns true if this environment is the default environment.
     pub fn is_default(&self) -> bool {
@@ -92,7 +101,7 @@ impl<'p> Environment<'p> {
     pub fn features(
         &self,
         include_default: bool,
-    ) -> impl Iterator<Item = &'p Feature> + DoubleEndedIterator + '_ {
+    ) -> impl Iterator<Item = &'p Feature> + DoubleEndedIterator + 'p {
         let environment_features = self.environment.features.iter().map(|feature_name| {
             self.project
                 .manifest
@@ -212,7 +221,31 @@ impl<'p> Environment<'p> {
     /// The system requirements of the environment are the union of the system requirements of all
     /// the features that make up the environment. If multiple features specify a requirement for
     /// the same system package, the highest is chosen.
+    ///
+    /// If an environment defines a solve group the system requirements of all environments in the
+    /// solve group are also combined. This means that if two environments in the same solve group
+    /// specify conflicting system requirements that the highest system requirements are chosen.
+    ///
+    /// This is done to ensure that the requirements of all environments in the same solve group are
+    /// compatible with each other.
+    ///
+    /// If you want to get the system requirements for this environment without taking the solve
+    /// group into account, use the [`Self::local_system_requirements`] method.
     pub fn system_requirements(&self) -> SystemRequirements {
+        if let Some(solve_group) = self.solve_group() {
+            solve_group.system_requirements()
+        } else {
+            self.local_system_requirements()
+        }
+    }
+
+    /// Returns the system requirements for this environment without taking the solve-group into
+    /// account.
+    ///
+    /// The system requirements of the environment are the union of the system requirements of all
+    /// the features that make up the environment. If multiple features specify a requirement for
+    /// the same system package, the highest is chosen.
+    pub fn local_system_requirements(&self) -> SystemRequirements {
         self.features(true)
             .map(|feature| &feature.system_requirements)
             .fold(SystemRequirements::default(), |acc, req| {
@@ -306,14 +339,6 @@ impl<'p> Hash for Environment<'p> {
         self.environment.name.hash(state);
     }
 }
-
-impl<'p> PartialEq<Self> for Environment<'p> {
-    fn eq(&self, other: &Self) -> bool {
-        self.environment.name == other.environment.name
-    }
-}
-
-impl<'p> Eq for Environment<'p> {}
 
 #[cfg(test)]
 mod tests {

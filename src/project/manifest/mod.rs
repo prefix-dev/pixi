@@ -868,7 +868,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 
             /// The environments the project can create.
             #[serde(default)]
-            environments: HashMap<EnvironmentName, TomlEnvironmentMapOrSeq>,
+            environments: IndexMap<EnvironmentName, TomlEnvironmentMapOrSeq>,
         }
 
         let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
