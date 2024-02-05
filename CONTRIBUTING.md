@@ -85,4 +85,5 @@ To sync the colors of the different parts of the ui, we use the following rules:
 - `style("environment").magenta()`: The environment name
 - `style("feature").cyan()`: The feature name
 - `style("task").blue()`: The task name
-- `style("project").yellow()`: The project name
+
+These styles are put in the `consts` module. If you want to add a new generic color, please add it there.

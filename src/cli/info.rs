@@ -11,6 +11,7 @@ use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use tokio::task::spawn_blocking;
 
+use crate::consts::{ENV_STYLE, FEAT_STYLE};
 use crate::progress::await_in_progress;
 use crate::{config, Project};
 
@@ -61,7 +62,7 @@ impl Display for EnvironmentInfo {
             f,
             "{:>WIDTH$}: {}",
             bold.apply_to("Environment"),
-            console::style(self.name.clone()).bold().magenta()
+            ENV_STYLE.apply_to(self.name.clone()).bold()
         )?;
         writeln!(
             f,
@@ -69,7 +70,7 @@ impl Display for EnvironmentInfo {
             bold.apply_to("Features"),
             self.features
                 .iter()
-                .map(|feature| console::style(feature).cyan())
+                .map(|feature| FEAT_STYLE.apply_to(feature))
                 .join(", ")
         )?;
         if let Some(solve_group) = &self.solve_group {
@@ -152,7 +153,7 @@ impl Display for EnvironmentInfo {
             let tasks_list = self
                 .tasks
                 .iter()
-                .map(|t| console::style(t.to_string()).blue())
+                .map(|t| FEAT_STYLE.apply_to(t.to_string()))
                 .join(", ");
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Tasks"), tasks_list)?;
         }
@@ -175,7 +176,6 @@ pub struct Info {
 }
 impl Display for Info {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let blue = console::Style::new().blue();
         let bold = console::Style::new().bold();
         let cache_dir = match &self.cache_dir {
             Some(path) => path.to_string_lossy().to_string(),
@@ -186,7 +186,7 @@ impl Display for Info {
             f,
             "{:>WIDTH$}: {}",
             bold.apply_to("Pixi version"),
-            blue.apply_to(&self.version)
+            console::style(&self.version).green()
         )?;
         writeln!(
             f,

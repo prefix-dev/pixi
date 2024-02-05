@@ -5,7 +5,6 @@ use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
 use clap::Parser;
-use console::Style;
 use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
 use miette::{miette, Context, Diagnostic};
@@ -19,6 +18,7 @@ use crate::task::{
 };
 use crate::{Project, UpdateLockFileOptions};
 
+use crate::consts::{ENV_STYLE, TASK_STYLE};
 use crate::environment::LockFileDerivedData;
 use crate::progress::await_in_progress;
 use crate::project::manifest::EnvironmentName;
@@ -114,9 +114,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 "{}{}{}{}{}",
                 console::Emoji("✨ ", ""),
                 console::style("Pixi task (").bold(),
-                console::style(executable_task.run_environment.name())
-                    .bold()
-                    .magenta(),
+                ENV_STYLE
+                    .apply_to(executable_task.run_environment.name())
+                    .bold(),
                 console::style("): ").bold(),
                 executable_task.display_command(),
             );
@@ -182,7 +182,7 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
                 .into_iter()
                 .sorted()
                 .format_with("\n", |name, f| {
-                    f(&format_args!("\t{}", console::style(name).bold().blue()))
+                    f(&format_args!("\t{}", TASK_STYLE.apply_to(name).bold()))
                 })
         );
     }
@@ -273,7 +273,7 @@ fn disambiguate_task_interactive<'p>(
         .map(|(env, _)| env.name())
         .collect_vec();
     let theme = ColorfulTheme {
-        active_item_style: Style::new().for_stderr().magenta(),
+        active_item_style: ENV_STYLE.clone().for_stderr(),
         ..ColorfulTheme::default()
     };
 
@@ -282,7 +282,7 @@ fn disambiguate_task_interactive<'p>(
             "The task '{}' {}can be run in multiple environments.\n\nPlease select an environment to run the task in:",
             problem.task_name,
             if let Some(dependency) = &problem.depended_on_by {
-                format!("(depended on by '{}') ", console::style(dependency.0.clone()).blue())
+                format!("(depended on by '{}') ", TASK_STYLE.apply_to(dependency.0.clone()))
             } else {
                 String::new()
             }

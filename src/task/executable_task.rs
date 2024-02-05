@@ -1,3 +1,4 @@
+use crate::consts::TASK_STYLE;
 use crate::project::Environment;
 use crate::{
     task::task_graph::{TaskGraph, TaskId},
@@ -192,15 +193,15 @@ impl<'p, 't> Display for ExecutableTaskConsoleDisplay<'p, 't> {
         write!(
             f,
             "{}",
-            console::style(command.as_deref().unwrap_or("<alias>"))
-                .blue()
+            TASK_STYLE
+                .apply_to(command.as_deref().unwrap_or("<alias>"))
                 .bold()
         )?;
         if !self.task.additional_args.is_empty() {
             write!(
                 f,
                 " {}",
-                console::style(self.task.additional_args.join(" ")).blue()
+                TASK_STYLE.apply_to(self.task.additional_args.join(" "))
             )?;
         }
         Ok(())

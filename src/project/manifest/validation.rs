@@ -1,3 +1,4 @@
+use crate::consts::FEAT_STYLE;
 use crate::project::manifest::{Environment, FeatureName, SystemRequirements};
 use crate::{
     consts,
@@ -47,7 +48,7 @@ impl ProjectManifest {
             if name != &FeatureName::Default && !features_used.contains(&name.to_string()) {
                 tracing::warn!(
                     "The feature '{}' is defined but not used in any environment",
-                    console::style(name).bold().blue()
+                    FEAT_STYLE.apply_to(name)
                 );
             }
         }
