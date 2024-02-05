@@ -263,4 +263,39 @@ mod tests {
         let result = search.find_task("test", FindTaskSource::CmdArgs);
         assert!(result.unwrap().0.name().is_default());
     }
+
+    #[test]
+    fn test_find_non_default_feature_task() {
+        let manifest_str = r#"
+            [project]
+            name = "foo"
+            channels = ["foo"]
+            platforms = ["linux-64"]
+
+            [tasks]
+
+            [feature.test.tasks]
+            test = "pytest -s"
+            [feature.prod.tasks]
+            run = "python start.py"
+
+            [environments]
+            default = ["test"]
+            test = ["test"]
+            prod = ["prod"]
+        "#;
+        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let result = search.find_task("test", FindTaskSource::CmdArgs);
+        assert!(result.unwrap().0.name().is_default());
+
+        // With explicit environment
+        let search = SearchEnvironments::from_opt_env(
+            &project,
+            Some(project.environment("prod").unwrap()),
+            None,
+        );
+        let result = search.find_task("test", FindTaskSource::CmdArgs);
+        assert!(matches!(result, Err(FindTaskError::MissingTask(_))));
+    }
 }
