@@ -1,4 +1,3 @@
-use crate::consts::ENV_STYLE;
 use crate::Project;
 use clap::Parser;
 
@@ -17,7 +16,7 @@ pub fn execute(project: Project, args: Args) -> miette::Result<()> {
             println!(
                 "{} {}",
                 console::style("Environment:").bold().bright(),
-                ENV_STYLE.apply_to(e.name())
+                e.name().fancy_display()
             );
             e.channels()
         })

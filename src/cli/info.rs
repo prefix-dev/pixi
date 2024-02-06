@@ -11,9 +11,9 @@ use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use tokio::task::spawn_blocking;
 
-use crate::consts::{ENV_STYLE, FEAT_STYLE};
 use crate::progress::await_in_progress;
-use crate::{config, Project};
+use crate::task::TaskName;
+use crate::{config, EnvironmentName, FeatureName, Project};
 
 static WIDTH: usize = 18;
 
@@ -43,14 +43,14 @@ pub struct ProjectInfo {
 
 #[derive(Serialize)]
 pub struct EnvironmentInfo {
-    name: String,
-    features: Vec<String>,
+    name: EnvironmentName,
+    features: Vec<FeatureName>,
     solve_group: Option<String>,
     environment_size: Option<String>,
     dependencies: Vec<String>,
     pypi_dependencies: Vec<String>,
     platforms: Vec<Platform>,
-    tasks: Vec<String>,
+    tasks: Vec<TaskName>,
     channels: Vec<String>,
     // prefix: Option<PathBuf>, add when PR 674 is merged
 }
@@ -62,7 +62,7 @@ impl Display for EnvironmentInfo {
             f,
             "{:>WIDTH$}: {}",
             bold.apply_to("Environment"),
-            ENV_STYLE.apply_to(self.name.clone()).bold()
+            self.name.fancy_display().bold()
         )?;
         writeln!(
             f,
@@ -70,7 +70,7 @@ impl Display for EnvironmentInfo {
             bold.apply_to("Features"),
             self.features
                 .iter()
-                .map(|feature| FEAT_STYLE.apply_to(feature))
+                .map(|feature| feature.fancy_display())
                 .join(", ")
         )?;
         if let Some(solve_group) = &self.solve_group {
@@ -150,11 +150,7 @@ impl Display for EnvironmentInfo {
             )?;
         }
         if !self.tasks.is_empty() {
-            let tasks_list = self
-                .tasks
-                .iter()
-                .map(|t| FEAT_STYLE.apply_to(t.to_string()))
-                .join(", ");
+            let tasks_list = self.tasks.iter().map(|t| t.fancy_display()).join(", ");
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Tasks"), tasks_list)?;
         }
         Ok(())
@@ -314,12 +310,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     let tasks = env
                         .tasks(None, true)
                         .ok()
-                        .map(|t| t.into_keys().map(|k| k.to_string()).collect())
+                        .map(|t| t.into_keys().cloned().collect())
                         .unwrap_or_default();
 
                     EnvironmentInfo {
-                        name: env.name().as_str().to_string(),
-                        features: env.features(true).map(|f| f.name.to_string()).collect(),
+                        name: env.name().clone(),
+                        features: env
+                            .features(true)
+                            .map(|feature| feature.name.clone())
+                            .collect(),
                         solve_group: env.manifest().solve_group.clone(),
                         environment_size: None,
                         dependencies: env

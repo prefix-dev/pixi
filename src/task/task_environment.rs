@@ -1,5 +1,6 @@
 use crate::project::Environment;
 use crate::task::error::{AmbiguousTaskError, MissingTaskError};
+use crate::task::TaskName;
 use crate::{Project, Task};
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -10,7 +11,7 @@ use thiserror::Error;
 #[derive(Debug, Clone)]
 pub enum FindTaskSource<'p> {
     CmdArgs,
-    DependsOn(String, &'p Task),
+    DependsOn(TaskName, &'p Task),
 }
 
 pub type TaskAndEnvironment<'p> = (Environment<'p>, &'p Task);
@@ -47,8 +48,8 @@ pub struct SearchEnvironments<'p, D: TaskDisambiguation<'p> = NoDisambiguation> 
 
 /// Information about an task that was found when searching for a task
 pub struct AmbiguousTask<'p> {
-    pub task_name: String,
-    pub depended_on_by: Option<(String, &'p Task)>,
+    pub task_name: TaskName,
+    pub depended_on_by: Option<(TaskName, &'p Task)>,
     pub environments: Vec<TaskAndEnvironment<'p>>,
 }
 
@@ -113,7 +114,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
     /// be found.
     pub fn find_task(
         &self,
-        name: &str,
+        name: TaskName,
         source: FindTaskSource<'p>,
     ) -> Result<TaskAndEnvironment<'p>, FindTaskError> {
         // If the task was specified on the command line and there is no explicit environment and
@@ -125,7 +126,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                 .default_feature()
                 .targets
                 .resolve(self.platform)
-                .find_map(|target| target.tasks.get(name))
+                .find_map(|target| target.tasks.get(&name))
             {
                 // None of the other environments can have this task. Otherwise, its still
                 // ambiguous.
@@ -135,7 +136,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                     .into_iter()
                     .flat_map(|env| env.features(false).collect_vec())
                     .flat_map(|feature| feature.targets.resolve(self.platform))
-                    .any(|target| target.tasks.contains_key(name))
+                    .any(|target| target.tasks.contains_key(&name))
                 {
                     return Ok((self.project.default_environment(), task));
                 }
@@ -157,7 +158,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             if let Some(task) = env
                 .tasks(self.platform, include_default_feature)
                 .ok()
-                .and_then(|tasks| tasks.get(name).copied())
+                .and_then(|tasks| tasks.get(&name).copied())
             {
                 tasks.push((env.clone(), task));
             }
@@ -165,7 +166,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
 
         match tasks.len() {
             0 => Err(FindTaskError::MissingTask(MissingTaskError {
-                task_name: name.to_string(),
+                task_name: name,
             })),
             1 => {
                 let (env, task) = tasks.remove(0);
@@ -173,7 +174,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             }
             _ => {
                 let ambiguous_task = AmbiguousTask {
-                    task_name: name.to_string(),
+                    task_name: name,
                     depended_on_by: match source {
                         FindTaskSource::DependsOn(dep, task) => Some((dep, task)),
                         _ => None,

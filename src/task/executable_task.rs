@@ -1,5 +1,6 @@
 use crate::consts::TASK_STYLE;
 use crate::project::Environment;
+use crate::task::TaskName;
 use crate::{
     task::task_graph::{TaskGraph, TaskId},
     task::{quote_arguments, Task},
@@ -52,7 +53,7 @@ pub enum TaskExecutionError {
 #[derive(Clone)]
 pub struct ExecutableTask<'p> {
     pub project: &'p Project,
-    pub name: Option<String>,
+    pub name: Option<TaskName>,
     pub task: Cow<'p, Task>,
     pub run_environment: Environment<'p>,
     pub additional_args: Vec<String>,
@@ -73,7 +74,7 @@ impl<'p> ExecutableTask<'p> {
 
     /// Returns the name of the task or `None` if this is an anonymous task.
     pub fn name(&self) -> Option<&str> {
-        self.name.as_deref()
+        self.name.as_ref().map(|name| name.as_str())
     }
 
     /// Returns the task description from the project.

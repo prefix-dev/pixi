@@ -14,11 +14,10 @@ use crate::activation::get_environment_variables;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{
     AmbiguousTask, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
-    SearchEnvironments, TaskAndEnvironment, TaskGraph,
+    SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskName,
 };
 use crate::{Project, UpdateLockFileOptions};
 
-use crate::consts::{ENV_STYLE, TASK_STYLE};
 use crate::environment::LockFileDerivedData;
 use crate::progress::await_in_progress;
 use crate::project::manifest::EnvironmentName;
@@ -114,8 +113,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 "{}{}{}{}{}",
                 console::Emoji("✨ ", ""),
                 console::style("Pixi task (").bold(),
-                ENV_STYLE
-                    .apply_to(executable_task.run_environment.name())
+                executable_task
+                    .run_environment
+                    .name()
+                    .fancy_display()
                     .bold(),
                 console::style("): ").bold(),
                 executable_task.display_command(),
@@ -154,26 +155,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 /// Called when a command was not found.
 fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Environment<'p>>) {
-    let available_tasks: HashSet<String> = if let Some(explicit_environment) = explicit_environment
-    {
-        explicit_environment
-            .tasks(Some(Platform::current()), true)
-            .into_iter()
-            .flat_map(|tasks| tasks.into_keys())
-            .map(ToOwned::to_owned)
-            .collect()
-    } else {
-        project
-            .environments()
-            .into_iter()
-            .flat_map(|env| {
-                env.tasks(Some(Platform::current()), true)
-                    .into_iter()
-                    .flat_map(|tasks| tasks.into_keys())
-                    .map(ToOwned::to_owned)
-            })
-            .collect()
-    };
+    let available_tasks: HashSet<TaskName> =
+        if let Some(explicit_environment) = explicit_environment {
+            explicit_environment
+                .tasks(Some(Platform::current()), true)
+                .into_iter()
+                .flat_map(|tasks| tasks.into_keys())
+                .map(ToOwned::to_owned)
+                .collect()
+        } else {
+            project
+                .environments()
+                .into_iter()
+                .flat_map(|env| {
+                    env.tasks(Some(Platform::current()), true)
+                        .into_iter()
+                        .flat_map(|tasks| tasks.into_keys())
+                        .map(ToOwned::to_owned)
+                })
+                .collect()
+        };
 
     if !available_tasks.is_empty() {
         eprintln!(
@@ -182,7 +183,7 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
                 .into_iter()
                 .sorted()
                 .format_with("\n", |name, f| {
-                    f(&format_args!("\t{}", TASK_STYLE.apply_to(name).bold()))
+                    f(&format_args!("\t{}", name.fancy_display().bold()))
                 })
         );
     }
@@ -273,16 +274,16 @@ fn disambiguate_task_interactive<'p>(
         .map(|(env, _)| env.name())
         .collect_vec();
     let theme = ColorfulTheme {
-        active_item_style: ENV_STYLE.clone().for_stderr(),
+        active_item_style: console::Style::new().for_stderr().magenta(),
         ..ColorfulTheme::default()
     };
 
     dialoguer::Select::with_theme(&theme)
         .with_prompt(format!(
             "The task '{}' {}can be run in multiple environments.\n\nPlease select an environment to run the task in:",
-            problem.task_name,
+            problem.task_name.fancy_display(),
             if let Some(dependency) = &problem.depended_on_by {
-                format!("(depended on by '{}') ", TASK_STYLE.apply_to(dependency.0.clone()))
+                format!("(depended on by '{}') ", dependency.0.fancy_display())
             } else {
                 String::new()
             }
