@@ -10,7 +10,6 @@ use rattler_conda_types::Platform;
 use rattler_lock::Package;
 use serde::Serialize;
 
-use crate::lock_file::load_lock_file;
 use crate::project::manifest::EnvironmentName;
 use crate::{Project, UpdateLockFileOptions};
 
@@ -82,7 +81,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .environment(&environment_name)
         .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
 
-    project
+    let lock_file = project
         .up_to_date_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.lock_file_usage.into(),
             no_install: args.no_install,
@@ -93,13 +92,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Load the platform
     let platform = args.platform.unwrap_or_else(Platform::current);
 
-    // Load the lockfile
-    let lock_file = load_lock_file(&project)
-        .await
-        .map_err(|_| miette::miette!("Cannot load lockfile. Did you run `pixi install` first?"))?;
-
     // Get all the packages in the environment.
     let locked_deps = lock_file
+        .lock_file
         .environment(environment.name().as_str())
         .and_then(|env| env.packages(platform).map(Vec::from_iter))
         .unwrap_or_default();
