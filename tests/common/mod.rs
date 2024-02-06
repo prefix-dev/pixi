@@ -14,8 +14,8 @@ use pixi::{
         project, run,
         task::{self, AddArgs, AliasArgs},
     },
-    consts, EnvironmentName, ExecutableTask, Project, RunOutput, TaskGraph, TaskGraphError,
-    UpdateLockFileOptions,
+    consts, EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
+    TaskGraphError, UpdateLockFileOptions,
 };
 use rattler_conda_types::{MatchSpec, Platform};
 
@@ -247,13 +247,13 @@ impl PixiControl {
             .await?;
 
         // Create a task graph from the command line arguments.
-        let task_graph = TaskGraph::from_cmd_args(
+        let search_env = SearchEnvironments::from_opt_env(
             &project,
-            args.task,
-            Some(Platform::current()),
             explicit_environment,
-        )
-        .map_err(RunError::TaskGraphError)?;
+            Some(Platform::current()),
+        );
+        let task_graph = TaskGraph::from_cmd_args(&project, &search_env, args.task)
+            .map_err(RunError::TaskGraphError)?;
 
         // Iterate over all tasks in the graph and execute them.
         let mut task_env = None;

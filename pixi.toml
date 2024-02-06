@@ -24,9 +24,6 @@ rust = "~=1.73.0"
 openssl = "3.*"
 pkg-config = "0.29.*"
 git = "2.42.0.*"
-
-# Documentation building
-mkdocs = "1.5.3.*"
 mkdocs-material = "9.4.4.*"
 pillow = ">=9.4.0.*"
 cairosvg = "2.7.1.*"

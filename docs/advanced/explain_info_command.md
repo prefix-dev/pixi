@@ -9,7 +9,7 @@ This information can also be retrieved in `json` format using the `--json` flag,
 
 ```title="Running pixi info in the pixi repo"
 ➜ pixi info
-      Pixi version: 0.12.0
+      Pixi version: 0.13.0
           Platform: linux-64
   Virtual packages: __unix=0=0
                   : __linux=6.5.12=0
@@ -21,7 +21,7 @@ This information can also be retrieved in `json` format using the `--json` flag,
 
 Project
 ------------
-           Version: 0.12.0
+           Version: 0.13.0
      Manifest file: /home/user/development/pixi/pixi.toml
       Last updated: 25-01-2024 10:29:08
 
