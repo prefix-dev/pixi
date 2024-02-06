@@ -120,6 +120,7 @@ pub struct Environment {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(super) struct TomlEnvironment {
+    #[serde(default)]
     pub features: PixiSpanned<Vec<String>>,
     pub solve_group: Option<String>,
 }
