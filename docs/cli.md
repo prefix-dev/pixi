@@ -296,11 +296,11 @@ List project's packages. Highlighted packages are explicit dependencies.
 - `--json`: Whether to output in json format.
 - `--json-pretty`: Whether to output in pretty json format
 - `--sort-by <SORT_BY>`: Sorting strategy [default: name] [possible values: size, name, type]
-- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
-- `--environment`(`-e`): the environment's packages to list, if non is provided the default environment's packages will be listed.
-- `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
-- `--no-install`: do not update the environment, only add changed packages to the lock-file. (Implied by `--frozen` and `--locked`)
+- `--manifest-path <MANIFEST_PATH>`: The path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--environment`(`-e`): The environment's packages to list, if non is provided the default environment's packages will be listed.
+- `--frozen`: Install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: Only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
 
 ```shell
 
