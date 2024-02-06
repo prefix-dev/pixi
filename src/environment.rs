@@ -1471,6 +1471,7 @@ async fn spawn_solve_conda_environment_task(
     })
 }
 
+/// Distill the repodata that is applicable for the given `environment` from the repodata of an entire solve group.
 async fn spawn_extract_conda_environment_task(
     environment: Environment<'_>,
     platform: Platform,
@@ -1799,6 +1800,12 @@ impl<'p> GroupedEnvironment<'p> {
     }
 }
 
+/// Given a list of dependencies, and list of conda repodata records by package name recursively extract all the
+/// repodata records that are needed to satisfy the requirements.
+///
+/// This function only looks at the names of the packages and does not actually match the requirements of the
+/// dependencies. This function assumes that the repodata records from `records` form a consistent environment. If
+/// this turns out not to be the case this function might panic.
 fn extract_referenced_conda_records(
     records: &LockedCondaPackagesByName,
     virtual_packages: &HashSet<PackageName>,
