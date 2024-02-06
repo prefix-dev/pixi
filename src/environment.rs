@@ -751,9 +751,6 @@ struct UpdateContext<'p> {
 
     grouped_solved_repodata_records:
         PerGroupAndPlatform<'p, Arc<BarrierCell<Arc<LockedCondaPackagesByName>>>>,
-
-    grouped_solved_pypi_records:
-        PerGroupAndPlatform<'p, Arc<BarrierCell<Arc<LockedCondaPackagesByName>>>>,
 }
 
 impl<'p> UpdateContext<'p> {
@@ -992,7 +989,6 @@ async fn ensure_up_to_date_lock_file(
         instantiated_conda_prefixes: HashMap::new(),
         solved_pypi_records: HashMap::new(),
         grouped_solved_repodata_records: HashMap::new(),
-        grouped_solved_pypi_records: HashMap::new(),
     };
 
     // This will keep track of all outstanding tasks that we need to wait for. All tasks are added
@@ -1035,8 +1031,7 @@ async fn ensure_up_to_date_lock_file(
                         .get(&env)
                         .and_then(|env| env.get(&platform))
                         .into_iter()
-                        .map(|records| records.iter())
-                        .flatten()
+                        .flat_map(|records| records.iter())
                     {
                         match existing_records.get(&record.package_record.name) {
                             None => {
