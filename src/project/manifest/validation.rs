@@ -38,7 +38,7 @@ impl ProjectManifest {
 
         // Check if all features are used in environments, warn if not.
         let mut features_used = HashSet::new();
-        for env in self.environments.values() {
+        for env in self.environments.iter() {
             for feature in env.features.iter() {
                 features_used.insert(feature);
             }
