@@ -13,7 +13,5 @@ pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
 pub const DEFAULT_FEATURE_NAME: &str = DEFAULT_ENVIRONMENT_NAME;
 
 lazy_static! {
-    pub static ref ENV_STYLE: Style = Style::new().magenta();
-    pub static ref FEAT_STYLE: Style = Style::new().cyan();
     pub static ref TASK_STYLE: Style = Style::new().blue();
 }

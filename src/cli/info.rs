@@ -71,7 +71,7 @@ impl Display for EnvironmentInfo {
             self.features
                 .iter()
                 .map(|feature| feature.fancy_display())
-                .join(", ")
+                .format(", ")
         )?;
         if let Some(solve_group) = &self.solve_group {
             writeln!(
@@ -86,12 +86,7 @@ impl Display for EnvironmentInfo {
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Environment size"), size)?;
         }
         if !self.channels.is_empty() {
-            let channels_list = self
-                .channels
-                .iter()
-                .map(|c| c.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
+            let channels_list = self.channels.iter().map(|c| c.to_string()).format(", ");
             writeln!(
                 f,
                 "{:>WIDTH$}: {}",
@@ -106,12 +101,7 @@ impl Display for EnvironmentInfo {
             self.dependencies.len()
         )?;
         if !self.dependencies.is_empty() {
-            let dependencies_list = self
-                .dependencies
-                .iter()
-                .map(|d| d.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
+            let dependencies_list = self.dependencies.iter().map(|d| d.to_string()).format(", ");
             writeln!(
                 f,
                 "{:>WIDTH$}: {}",
@@ -125,8 +115,7 @@ impl Display for EnvironmentInfo {
                 .pypi_dependencies
                 .iter()
                 .map(|d| d.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
+                .format(", ");
             writeln!(
                 f,
                 "{:>WIDTH$}: {}",
@@ -136,12 +125,7 @@ impl Display for EnvironmentInfo {
         }
 
         if !self.platforms.is_empty() {
-            let platform_list = self
-                .platforms
-                .iter()
-                .map(|p| p.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
+            let platform_list = self.platforms.iter().map(|p| p.to_string()).format(", ");
             writeln!(
                 f,
                 "{:>WIDTH$}: {}",
@@ -150,7 +134,7 @@ impl Display for EnvironmentInfo {
             )?;
         }
         if !self.tasks.is_empty() {
-            let tasks_list = self.tasks.iter().map(|t| t.fancy_display()).join(", ");
+            let tasks_list = self.tasks.iter().map(|t| t.fancy_display()).format(", ");
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Tasks"), tasks_list)?;
         }
         Ok(())

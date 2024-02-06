@@ -9,6 +9,7 @@ use crate::{
 use deno_task_shell::{
     execute_with_pipes, parser::SequentialList, pipe, ShellPipeWriter, ShellState,
 };
+use itertools::Itertools;
 use miette::Diagnostic;
 use std::{
     borrow::Cow,
@@ -202,7 +203,7 @@ impl<'p, 't> Display for ExecutableTaskConsoleDisplay<'p, 't> {
             write!(
                 f,
                 " {}",
-                TASK_STYLE.apply_to(self.task.additional_args.join(" "))
+                TASK_STYLE.apply_to(self.task.additional_args.iter().format(" "))
             )?;
         }
         Ok(())
