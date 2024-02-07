@@ -495,7 +495,7 @@ impl<'p> OutdatedEnvironments<'p> {
             else {
                 tracing::info!(
                     "environment '{0}' is out of date because it does not exist in the lock-file.",
-                    environment.name().as_str()
+                    environment.name().fancy_display()
                 );
 
                 outdated_conda
@@ -511,7 +511,7 @@ impl<'p> OutdatedEnvironments<'p> {
             {
                 tracing::info!(
                     "environment '{0}' is out of date because {unsat}",
-                    environment.name().as_str()
+                    environment.name().fancy_display()
                 );
 
                 outdated_conda
@@ -529,7 +529,7 @@ impl<'p> OutdatedEnvironments<'p> {
                     Err(unsat @ PlatformUnsat::UnsatisfiableRequirement(_, _)) => {
                         tracing::info!(
                         "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-                        environment.name().as_str()
+                        environment.name().fancy_display()
                     );
 
                         outdated_pypi
@@ -540,7 +540,7 @@ impl<'p> OutdatedEnvironments<'p> {
                     Err(unsat) => {
                         tracing::info!(
                         "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-                        environment.name().as_str()
+                        environment.name().fancy_display()
                     );
 
                         outdated_conda
@@ -1029,7 +1029,7 @@ async fn ensure_up_to_date_lock_file(
 
                 tracing::info!(
                     "solved conda packages for '{}' '{}'",
-                    environment.name(),
+                    environment.name().fancy_display(),
                     platform
                 );
             }
@@ -1047,7 +1047,7 @@ async fn ensure_up_to_date_lock_file(
 
                 tracing::info!(
                     "updated conda packages in the '{}' prefix",
-                    environment.name()
+                    environment.name().fancy_display()
                 );
             }
             TaskResult::PypiSolved(environment, platform, records) => {
@@ -1066,7 +1066,7 @@ async fn ensure_up_to_date_lock_file(
 
                 tracing::info!(
                     "solved pypi packages for '{}' '{}'",
-                    environment.name(),
+                    environment.name().fancy_display(),
                     platform
                 );
             }

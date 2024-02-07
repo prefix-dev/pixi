@@ -1,5 +1,5 @@
 use crate::project::manifest::{EnvironmentName, FeatureName};
-use crate::task::{quote, Alias, CmdArgs, Execute, Task};
+use crate::task::{quote, Alias, CmdArgs, Execute, Task, TaskName};
 use crate::Project;
 use clap::Parser;
 use itertools::Itertools;
@@ -32,7 +32,7 @@ pub enum Operation {
 #[clap(arg_required_else_help = true)]
 pub struct RemoveArgs {
     /// Task names to remove
-    pub names: Vec<String>,
+    pub names: Vec<TaskName>,
 
     /// The platform for which the task should be removed
     #[arg(long, short)]
@@ -47,7 +47,7 @@ pub struct RemoveArgs {
 #[clap(arg_required_else_help = true)]
 pub struct AddArgs {
     /// Task name
-    pub name: String,
+    pub name: TaskName,
 
     /// One or more commands to actually execute
     #[clap(required = true, num_args = 1..)]
@@ -56,7 +56,7 @@ pub struct AddArgs {
     /// Depends on these other commands
     #[clap(long)]
     #[clap(num_args = 1..)]
-    pub depends_on: Option<Vec<String>>,
+    pub depends_on: Option<Vec<TaskName>>,
 
     /// The platform for which the task should be added
     #[arg(long, short)]
@@ -75,11 +75,11 @@ pub struct AddArgs {
 #[clap(arg_required_else_help = true)]
 pub struct AliasArgs {
     /// Alias name
-    pub alias: String,
+    pub alias: TaskName,
 
     /// Depends on these tasks to execute
     #[clap(required = true, num_args = 1..)]
-    pub depends_on: Vec<String>,
+    pub depends_on: Vec<TaskName>,
 
     /// The platform for which the alias should be added
     #[arg(long, short)]
@@ -161,12 +161,12 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 .map_or(FeatureName::Default, FeatureName::Named);
             project
                 .manifest
-                .add_task(name, task.clone(), args.platform, &feature)?;
+                .add_task(name.clone(), task.clone(), args.platform, &feature)?;
             project.save()?;
             eprintln!(
                 "{}Added task `{}`: {}",
                 console::style(console::Emoji("✔ ", "+")).green(),
-                console::style(&name).bold(),
+                name.fancy_display().bold(),
                 task,
             );
         }
@@ -180,25 +180,21 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     if !project
                         .manifest
                         .tasks(Some(platform), &feature)?
-                        .contains_key(name.as_str())
+                        .contains_key(name)
                     {
                         eprintln!(
                             "{}Task '{}' does not exist on {}",
                             console::style(console::Emoji("❌ ", "X")).red(),
-                            console::style(&name).bold(),
+                            name.fancy_display().bold(),
                             console::style(platform.as_str()).bold(),
                         );
                         continue;
                     }
-                } else if !project
-                    .manifest
-                    .tasks(None, &feature)?
-                    .contains_key(name.as_str())
-                {
+                } else if !project.manifest.tasks(None, &feature)?.contains_key(name) {
                     eprintln!(
                         "{}Task `{}` does not exist for the `{}` feature",
                         console::style(console::Emoji("❌ ", "X")).red(),
-                        console::style(&name).bold(),
+                        name.fancy_display().bold(),
                         console::style(&feature).bold(),
                     );
                     continue;
@@ -226,26 +222,31 @@ pub fn execute(args: Args) -> miette::Result<()> {
             }
 
             for (name, platform) in to_remove {
-                project.manifest.remove_task(name, platform, &feature)?;
+                project
+                    .manifest
+                    .remove_task(name.clone(), platform, &feature)?;
                 project.save()?;
                 eprintln!(
                     "{}Removed task `{}` ",
                     console::style(console::Emoji("✔ ", "+")).green(),
-                    console::style(&name).bold(),
+                    name.fancy_display().bold(),
                 );
             }
         }
         Operation::Alias(args) => {
             let name = &args.alias;
             let task: Task = args.clone().into();
-            project
-                .manifest
-                .add_task(name, task.clone(), args.platform, &FeatureName::Default)?;
+            project.manifest.add_task(
+                name.clone(),
+                task.clone(),
+                args.platform,
+                &FeatureName::Default,
+            )?;
             project.save()?;
             eprintln!(
                 "{} Added alias `{}`: {}",
                 console::style("@").blue(),
-                console::style(&name).bold(),
+                name.fancy_display().bold(),
                 task,
             );
         }
@@ -265,9 +266,9 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     .sorted()
                     .map(|name| {
                         if args.summary {
-                            format!("{} ", console::style(name))
+                            format!("{} ", name.as_str(),)
                         } else {
-                            format!("* {}\n", console::style(name).bold())
+                            format!("* {}\n", name.fancy_display().bold(),)
                         }
                     })
                     .collect();
@@ -297,7 +298,13 @@ impl From<Task> for Item {
                 if !process.depends_on.is_empty() {
                     table.insert(
                         "depends_on",
-                        Value::Array(Array::from_iter(process.depends_on)),
+                        Value::Array(Array::from_iter(
+                            process
+                                .depends_on
+                                .into_iter()
+                                .map(String::from)
+                                .map(Value::from),
+                        )),
                     );
                 }
                 if let Some(cwd) = process.cwd {
@@ -309,7 +316,13 @@ impl From<Task> for Item {
                 let mut table = Table::new().into_inline_table();
                 table.insert(
                     "depends_on",
-                    Value::Array(Array::from_iter(alias.depends_on)),
+                    Value::Array(Array::from_iter(
+                        alias
+                            .depends_on
+                            .into_iter()
+                            .map(String::from)
+                            .map(Value::from),
+                    )),
                 );
                 Item::Value(Value::InlineTable(table))
             }

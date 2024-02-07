@@ -47,7 +47,7 @@ impl ProjectManifest {
             if name != &FeatureName::Default && !features_used.contains(&name.to_string()) {
                 tracing::warn!(
                     "The feature '{}' is defined but not used in any environment",
-                    console::style(name).bold().blue()
+                    name.fancy_display(),
                 );
             }
         }

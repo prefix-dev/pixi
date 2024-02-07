@@ -3,7 +3,7 @@ use crate::utils::spanned::PixiSpanned;
 use lazy_static::lazy_static;
 use miette::Diagnostic;
 use regex::Regex;
-use serde::{self, Deserialize, Deserializer};
+use serde::{self, Deserialize, Deserializer, Serialize};
 use std::borrow::Borrow;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -11,7 +11,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 /// The name of an environment. This is either a string or default for the default environment.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum EnvironmentName {
     Default,
     Named(String),
@@ -31,6 +31,11 @@ impl EnvironmentName {
             EnvironmentName::Default => consts::DEFAULT_ENVIRONMENT_NAME,
             EnvironmentName::Named(name) => name.as_str(),
         }
+    }
+
+    /// Returns a styled version of the environment name for display in the console.
+    pub fn fancy_display(&self) -> console::StyledObject<&str> {
+        console::style(self.as_str()).magenta()
     }
 }
 
