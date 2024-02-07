@@ -1886,7 +1886,7 @@ platforms = ["linux-64", "win-64"]
 
             [environments]
             default = ["py39"]
-            standard = { solve-group = "test" }s
+            standard = { solve-group = "test" }
             cuda = ["cuda", "py310"]
             test1 = {features = ["test", "py310"], solve-group = "test"}
             test2 = {features = ["py39"], solve-group = "test"}
