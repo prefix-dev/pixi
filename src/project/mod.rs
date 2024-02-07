@@ -30,6 +30,7 @@ use crate::{
 use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
 use url::Url;
 
+use crate::task::TaskName;
 pub use dependencies::Dependencies;
 pub use environment::Environment;
 
@@ -279,7 +280,7 @@ impl Project {
     /// Get the tasks of this project
     ///
     /// TODO: Remove this function and use the tasks from the default environment instead.
-    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&str, &Task> {
+    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&TaskName, &Task> {
         self.default_environment()
             .tasks(platform, true)
             .unwrap_or_default()
@@ -290,7 +291,7 @@ impl Project {
     /// platform.
     ///
     /// TODO: Remove this function and use the `task` function from the default environment instead.
-    pub fn task_opt(&self, name: &str, platform: Option<Platform>) -> Option<&Task> {
+    pub fn task_opt(&self, name: &TaskName, platform: Option<Platform>) -> Option<&Task> {
         self.default_environment().task(name, platform).ok()
     }
 

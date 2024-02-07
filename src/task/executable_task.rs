@@ -1,4 +1,6 @@
+use crate::consts::TASK_STYLE;
 use crate::project::Environment;
+use crate::task::TaskName;
 use crate::{
     task::task_graph::{TaskGraph, TaskId},
     task::{quote_arguments, Task},
@@ -7,6 +9,7 @@ use crate::{
 use deno_task_shell::{
     execute_with_pipes, parser::SequentialList, pipe, ShellPipeWriter, ShellState,
 };
+use itertools::Itertools;
 use miette::Diagnostic;
 use std::{
     borrow::Cow,
@@ -51,7 +54,7 @@ pub enum TaskExecutionError {
 #[derive(Clone)]
 pub struct ExecutableTask<'p> {
     pub project: &'p Project,
-    pub name: Option<String>,
+    pub name: Option<TaskName>,
     pub task: Cow<'p, Task>,
     pub run_environment: Environment<'p>,
     pub additional_args: Vec<String>,
@@ -72,7 +75,7 @@ impl<'p> ExecutableTask<'p> {
 
     /// Returns the name of the task or `None` if this is an anonymous task.
     pub fn name(&self) -> Option<&str> {
-        self.name.as_deref()
+        self.name.as_ref().map(|name| name.as_str())
     }
 
     /// Returns the task description from the project.
@@ -192,15 +195,15 @@ impl<'p, 't> Display for ExecutableTaskConsoleDisplay<'p, 't> {
         write!(
             f,
             "{}",
-            console::style(command.as_deref().unwrap_or("<alias>"))
-                .blue()
+            TASK_STYLE
+                .apply_to(command.as_deref().unwrap_or("<alias>"))
                 .bold()
         )?;
         if !self.task.additional_args.is_empty() {
             write!(
                 f,
                 " {}",
-                console::style(self.task.additional_args.join(" ")).blue()
+                TASK_STYLE.apply_to(self.task.additional_args.iter().format(" "))
             )?;
         }
         Ok(())

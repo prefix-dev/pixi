@@ -4,6 +4,7 @@ use super::{
     manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
     PyPiRequirement, SpecType,
 };
+use crate::task::TaskName;
 use crate::{task::Task, Project};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{Either, Itertools};
@@ -166,21 +167,25 @@ impl<'p> Environment<'p> {
         &self,
         platform: Option<Platform>,
         include_default: bool,
-    ) -> Result<HashMap<&'p str, &'p Task>, UnsupportedPlatformError> {
+    ) -> Result<HashMap<&'p TaskName, &'p Task>, UnsupportedPlatformError> {
         self.validate_platform_support(platform)?;
         let result = self
             .features(include_default)
             .flat_map(|feature| feature.targets.resolve(platform))
             .rev() // Reverse to get the most specific targets last.
             .flat_map(|target| target.tasks.iter())
-            .map(|(name, task)| (name.as_str(), task))
+            .map(|(name, task)| (name, task))
             .collect();
         Ok(result)
     }
 
     /// Returns the task with the given `name` and for the specified `platform` or an `UnknownTask`
     /// which explains why the task was not available.
-    pub fn task(&self, name: &str, platform: Option<Platform>) -> Result<&'p Task, UnknownTask> {
+    pub fn task(
+        &self,
+        name: &TaskName,
+        platform: Option<Platform>,
+    ) -> Result<&'p Task, UnknownTask> {
         match self
             .tasks(platform, true)
             .map(|tasks| tasks.get(name).copied())
@@ -189,7 +194,7 @@ impl<'p> Environment<'p> {
                 project: self.project,
                 environment: self.name().clone(),
                 platform,
-                task_name: name.to_string(),
+                task_name: name.clone(),
             }),
             Ok(Some(task)) => Ok(task),
         }
@@ -381,7 +386,7 @@ mod tests {
 
         let task = manifest
             .default_environment()
-            .task("foo", None)
+            .task(&"foo".into(), None)
             .unwrap()
             .as_single_command()
             .unwrap();
@@ -390,7 +395,7 @@ mod tests {
 
         let task_osx = manifest
             .default_environment()
-            .task("foo", Some(Platform::Linux64))
+            .task(&"foo".into(), Some(Platform::Linux64))
             .unwrap()
             .as_single_command()
             .unwrap();

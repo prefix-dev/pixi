@@ -1,9 +1,11 @@
 ---
 source: src/project/mod.rs
-expression: "project.manifest.tasks(Some(Platform::Win64))"
+expression: "project.manifest.tasks(Some(Platform::Win64), &FeatureName::Default).unwrap()"
 ---
 {
-    "test": Plain(
+    TaskName(
+        "test",
+    ): Plain(
         "test win",
     ),
 }

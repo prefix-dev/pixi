@@ -3,20 +3,20 @@ use crate::consts;
 use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
 use crate::project::manifest::target::Targets;
 use crate::project::SpecType;
-use crate::task::Task;
+use crate::task::{Task, TaskName};
 use crate::utils::spanned::PixiSpanned;
 use indexmap::IndexMap;
 use itertools::Either;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use serde::de::Error;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
 use std::fmt;
 
 /// The name of a feature. This is either a string or default for the default feature.
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize)]
 pub enum FeatureName {
     Default,
     Named(String),
@@ -55,6 +55,11 @@ impl FeatureName {
 
     pub fn as_str(&self) -> &str {
         self.name().unwrap_or(consts::DEFAULT_FEATURE_NAME)
+    }
+
+    /// Returns a styled version of the feature name for display in the console.
+    pub fn fancy_display(&self) -> console::StyledObject<&str> {
+        console::style(self.as_str()).cyan()
     }
 }
 
@@ -248,7 +253,7 @@ impl<'de> Deserialize<'de> for Feature {
 
             /// Target specific tasks to run in the environment
             #[serde(default)]
-            tasks: HashMap<String, Task>,
+            tasks: HashMap<TaskName, Task>,
         }
 
         let inner = FeatureInner::deserialize(deserializer)?;
