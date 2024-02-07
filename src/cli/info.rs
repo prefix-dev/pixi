@@ -2,6 +2,7 @@ use std::{fmt::Display, fs, path::PathBuf};
 
 use chrono::{DateTime, Local};
 use clap::Parser;
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_virtual_packages::VirtualPackage;
@@ -11,7 +12,8 @@ use serde_with::DisplayFromStr;
 use tokio::task::spawn_blocking;
 
 use crate::progress::await_in_progress;
-use crate::{config, Project};
+use crate::task::TaskName;
+use crate::{config, EnvironmentName, FeatureName, Project};
 
 static WIDTH: usize = 18;
 
@@ -41,14 +43,14 @@ pub struct ProjectInfo {
 
 #[derive(Serialize)]
 pub struct EnvironmentInfo {
-    name: String,
-    features: Vec<String>,
+    name: EnvironmentName,
+    features: Vec<FeatureName>,
     solve_group: Option<String>,
     environment_size: Option<String>,
     dependencies: Vec<String>,
     pypi_dependencies: Vec<String>,
     platforms: Vec<Platform>,
-    tasks: Vec<String>,
+    tasks: Vec<TaskName>,
     channels: Vec<String>,
     // prefix: Option<PathBuf>, add when PR 674 is merged
 }
@@ -58,14 +60,18 @@ impl Display for EnvironmentInfo {
         let bold = console::Style::new().bold();
         writeln!(
             f,
-            "{}",
-            console::style(self.name.clone()).bold().blue().underlined()
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Environment"),
+            self.name.fancy_display().bold()
         )?;
         writeln!(
             f,
             "{:>WIDTH$}: {}",
             bold.apply_to("Features"),
-            self.features.join(", ")
+            self.features
+                .iter()
+                .map(|feature| feature.fancy_display())
+                .format(", ")
         )?;
         if let Some(solve_group) = &self.solve_group {
             writeln!(
@@ -80,12 +86,7 @@ impl Display for EnvironmentInfo {
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Environment size"), size)?;
         }
         if !self.channels.is_empty() {
-            let channels_list = self
-                .channels
-                .iter()
-                .map(|c| c.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
+            let channels_list = self.channels.iter().map(|c| c.to_string()).format(", ");
             writeln!(
                 f,
                 "{:>WIDTH$}: {}",
@@ -100,12 +101,7 @@ impl Display for EnvironmentInfo {
             self.dependencies.len()
         )?;
         if !self.dependencies.is_empty() {
-            let dependencies_list = self
-                .dependencies
-                .iter()
-                .map(|d| d.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
+            let dependencies_list = self.dependencies.iter().map(|d| d.to_string()).format(", ");
             writeln!(
                 f,
                 "{:>WIDTH$}: {}",
@@ -119,8 +115,7 @@ impl Display for EnvironmentInfo {
                 .pypi_dependencies
                 .iter()
                 .map(|d| d.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
+                .format(", ");
             writeln!(
                 f,
                 "{:>WIDTH$}: {}",
@@ -130,12 +125,7 @@ impl Display for EnvironmentInfo {
         }
 
         if !self.platforms.is_empty() {
-            let platform_list = self
-                .platforms
-                .iter()
-                .map(|p| p.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
+            let platform_list = self.platforms.iter().map(|p| p.to_string()).format(", ");
             writeln!(
                 f,
                 "{:>WIDTH$}: {}",
@@ -144,12 +134,7 @@ impl Display for EnvironmentInfo {
             )?;
         }
         if !self.tasks.is_empty() {
-            let tasks_list = self
-                .tasks
-                .iter()
-                .map(|t| t.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
+            let tasks_list = self.tasks.iter().map(|t| t.fancy_display()).format(", ");
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Tasks"), tasks_list)?;
         }
         Ok(())
@@ -171,7 +156,6 @@ pub struct Info {
 }
 impl Display for Info {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let blue = console::Style::new().blue();
         let bold = console::Style::new().bold();
         let cache_dir = match &self.cache_dir {
             Some(path) => path.to_string_lossy().to_string(),
@@ -182,7 +166,7 @@ impl Display for Info {
             f,
             "{:>WIDTH$}: {}",
             bold.apply_to("Pixi version"),
-            blue.apply_to(&self.version)
+            console::style(&self.version).green()
         )?;
         writeln!(
             f,
@@ -310,12 +294,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     let tasks = env
                         .tasks(None, true)
                         .ok()
-                        .map(|t| t.into_keys().map(|k| k.to_string()).collect())
+                        .map(|t| t.into_keys().cloned().collect())
                         .unwrap_or_default();
 
                     EnvironmentInfo {
-                        name: env.name().as_str().to_string(),
-                        features: env.features(true).map(|f| f.name.to_string()).collect(),
+                        name: env.name().clone(),
+                        features: env
+                            .features(true)
+                            .map(|feature| feature.name.clone())
+                            .collect(),
                         solve_group: env
                             .solve_group()
                             .map(|solve_group| solve_group.name().to_string()),

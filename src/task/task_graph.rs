@@ -1,7 +1,7 @@
 use crate::project::Environment;
 use crate::task::error::AmbiguousTaskError;
 use crate::task::task_environment::{FindTaskError, FindTaskSource, SearchEnvironments};
-use crate::task::TaskDisambiguation;
+use crate::task::{TaskDisambiguation, TaskName};
 use crate::{
     task::{error::MissingTaskError, CmdArgs, Custom, Task},
     Project,
@@ -24,7 +24,7 @@ pub struct TaskId(usize);
 /// A node in the [`TaskGraph`].
 pub struct TaskNode<'p> {
     /// The name of the task or `None` if the task is a custom task.
-    pub name: Option<String>,
+    pub name: Option<TaskName>,
 
     /// The environment to run the task in
     pub run_environment: Environment<'p>,
@@ -89,7 +89,7 @@ impl<'p> TaskGraph<'p> {
         let mut args = args;
 
         if let Some(name) = args.first() {
-            match search_envs.find_task(name, FindTaskSource::CmdArgs) {
+            match search_envs.find_task(TaskName(name.clone()), FindTaskSource::CmdArgs) {
                 Err(FindTaskError::MissingTask(_)) => {}
                 Err(FindTaskError::AmbiguousTask(err)) => {
                     return Err(TaskGraphError::AmbiguousTask(err))
@@ -106,7 +106,7 @@ impl<'p> TaskGraph<'p> {
                         project,
                         search_envs,
                         TaskNode {
-                            name: Some(args.remove(0)),
+                            name: Some(args.remove(0).into()),
                             task: Cow::Borrowed(task),
                             run_environment: run_env,
                             additional_args: args,
@@ -147,7 +147,7 @@ impl<'p> TaskGraph<'p> {
         search_environments: &SearchEnvironments<'p, D>,
         root: TaskNode<'p>,
     ) -> Result<Self, TaskGraphError> {
-        let mut task_name_to_node: HashMap<String, TaskId> =
+        let mut task_name_to_node: HashMap<TaskName, TaskId> =
             HashMap::from_iter(root.name.clone().into_iter().map(|name| (name, TaskId(0))));
         let mut nodes = vec![root];
 
@@ -169,7 +169,7 @@ impl<'p> TaskGraph<'p> {
                 // Find the task in the project
                 let node = &nodes[next_node_to_visit];
                 let (task_env, task_dependency) = match search_environments.find_task(
-                    &dependency,
+                    dependency.clone(),
                     FindTaskSource::DependsOn(
                         node.name
                             .clone()
@@ -202,7 +202,7 @@ impl<'p> TaskGraph<'p> {
                 });
 
                 // Store the task id in the map to be able to look up the name later
-                task_name_to_node.insert(dependency, task_id);
+                task_name_to_node.insert(dependency.clone(), task_id);
 
                 // Add the dependency to the node
                 node_dependencies.push(task_id);
