@@ -120,16 +120,24 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             let default_env = self.project.default_environment();
             // If the default environment has the task
             if let Ok(default_env_task) = default_env.task(name, self.platform) {
-                // Unique if no other environment has the task name but a different task
-                let is_unique_task = self.project.environments().iter().all(|env| {
-                    match env.task(name, self.platform) {
-                        Ok(task) => task == default_env_task,
-                        Err(_) => true,
-                    }
-                });
-
-                if is_unique_task {
-                    return Ok((default_env, default_env_task));
+                // If no other environment has the task name but a different task, return the default environment
+                if !self
+                    .project
+                    .environments()
+                    .iter()
+                    // Filter out default environment
+                    .filter(|env| !env.name().is_default())
+                    .any(|env| {
+                        if let Ok(task) = env.task(name, self.platform) {
+                            // If the task exists in the environment but it is not the reference to the same task, return true to make it ambiguous
+                            !std::ptr::eq(task, default_env_task)
+                        } else {
+                            // If the task does not exist in the environment, return false
+                            false
+                        }
+                    })
+                {
+                    return Ok((self.project.default_environment(), default_env_task));
                 }
             }
         }
@@ -297,5 +305,29 @@ mod tests {
         );
         let result = search.find_task("test", FindTaskSource::CmdArgs);
         assert!(matches!(result, Err(FindTaskError::MissingTask(_))));
+    }
+
+    #[test]
+    fn test_find_ambiguous_task() {
+        let manifest_str = r#"
+            [project]
+            name = "foo"
+            channels = ["foo"]
+            platforms = ["linux-64"]
+
+            [tasks]
+            bla = "echo foo"
+
+            [feature.other.tasks]
+            bla = "echo foo"
+
+            [environments]
+            other = ["other"]
+        "#;
+        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let result = search.find_task("bla", FindTaskSource::CmdArgs);
+        // Ambiguous task because it is the same name and code but it is defined in different environments
+        assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
     }
 }

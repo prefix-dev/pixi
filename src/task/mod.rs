@@ -21,7 +21,7 @@ pub use task_environment::{
 pub use task_graph::{TaskGraph, TaskGraphError, TaskId, TaskNode};
 
 /// Represents different types of scripts
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum Task {
     Plain(String),
@@ -113,7 +113,7 @@ impl Task {
 
 /// A command script executes a single command from the environment
 #[serde_as]
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Execute {
     /// A list of arguments, the first argument denotes the command to run. When deserializing both
@@ -136,7 +136,7 @@ impl From<Execute> for Task {
 }
 
 /// A custom command script executes a single command in the environment
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Custom {
     /// A list of arguments, the first argument denotes the command to run. When deserializing both
     /// an array of strings and a single string are supported.
@@ -151,7 +151,7 @@ impl From<Custom> for Task {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum CmdArgs {
     Single(String),
@@ -188,7 +188,7 @@ impl CmdArgs {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde_as]
 pub struct Alias {
