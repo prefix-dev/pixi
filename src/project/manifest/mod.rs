@@ -11,6 +11,7 @@ mod validation;
 
 use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
+use crate::task::TaskName;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 use ::serde::{Deserialize, Deserializer};
 pub use activation::Activation;
@@ -136,7 +137,7 @@ impl Manifest {
         &self,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-    ) -> Result<HashMap<&str, &Task>, GetFeatureError> {
+    ) -> Result<HashMap<TaskName, &Task>, GetFeatureError> {
         Ok(self
             .feature(feature_name)
             // Return error if feature does not exist
@@ -147,22 +148,22 @@ impl Manifest {
             .into_iter()
             .rev()
             .flat_map(|target| target.tasks.iter())
-            .map(|(name, task)| (name.as_str(), task))
+            .map(|(name, task)| (name.clone(), task))
             .collect())
     }
 
     /// Add a task to the project
     pub fn add_task(
         &mut self,
-        name: impl AsRef<str>,
+        name: TaskName,
         task: Task,
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Check if the task already exists
         if let Ok(tasks) = self.tasks(platform, feature_name) {
-            if tasks.contains_key(name.as_ref()) {
-                miette::bail!("task {} already exists", name.as_ref());
+            if tasks.contains_key(&name) {
+                miette::bail!("task {} already exists", name.fancy_display());
             }
         }
 
@@ -170,14 +171,14 @@ impl Manifest {
         let table = get_or_insert_toml_table(&mut self.document, platform, feature_name, "tasks")?;
 
         // Add the task to the table
-        table.insert(name.as_ref(), task.clone().into());
+        table.insert(name.as_str(), task.clone().into());
 
         // Add the task to the manifest
         self.default_feature_mut()
             .targets
             .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
             .tasks
-            .insert(name.as_ref().to_string(), task);
+            .insert(name, task);
 
         Ok(())
     }
@@ -185,27 +186,27 @@ impl Manifest {
     /// Remove a task from the project, and the tasks that depend on it
     pub fn remove_task(
         &mut self,
-        name: impl AsRef<str>,
+        name: TaskName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         self.tasks(platform, feature_name)?
-            .get(name.as_ref())
-            .ok_or_else(|| miette::miette!("task {} does not exist", name.as_ref()))?;
+            .get(&name)
+            .ok_or_else(|| miette::miette!("task {} does not exist", name.fancy_display()))?;
 
         // Get the task table either from the target platform or the default tasks.
         let tasks_table =
             get_or_insert_toml_table(&mut self.document, platform, feature_name, "tasks")?;
 
         // If it does not exist in toml, consider this ok as we want to remove it anyways
-        tasks_table.remove(name.as_ref());
+        tasks_table.remove(name.as_str());
 
         // Remove the task from the internal manifest
         self.feature_mut(feature_name)
             .expect("feature should exist")
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::from).as_ref())
-            .map(|target| target.tasks.remove(name.as_ref()));
+            .map(|target| target.tasks.remove(&name));
 
         Ok(())
     }
@@ -339,7 +340,7 @@ impl Manifest {
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
         get_or_insert_toml_table(&mut self.document, platform, feature_name, spec_type.name())?
-            .remove(dep.as_normalized())
+            .remove(dep.as_source())
             .ok_or_else(|| {
                 let table_name =
                     get_nested_toml_table_name(feature_name, platform, spec_type.name());
@@ -786,7 +787,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 
             /// Target specific tasks to run in the environment
             #[serde(default)]
-            tasks: HashMap<String, Task>,
+            tasks: HashMap<TaskName, Task>,
 
             /// The features defined in the project.
             #[serde(default)]
@@ -1167,8 +1168,9 @@ mod tests {
                     selector.map_or_else(|| String::from("default"), ToString::to_string);
                 target.tasks.iter().filter_map(move |(name, task)| {
                     Some(format!(
-                        "{}/{name} = {}",
+                        "{}/{} = {}",
                         &selector_name,
+                        name.as_str(),
                         task.as_single_command()?
                     ))
                 })
@@ -1938,7 +1940,7 @@ platforms = ["linux-64", "win-64"]
                 .targets
                 .default()
                 .tasks
-                .get("warmup")
+                .get(&"warmup".into())
                 .unwrap()
                 .as_single_command()
                 .unwrap(),
@@ -1986,7 +1988,7 @@ test = "test initial"
 
         manifest
             .add_task(
-                "default",
+                "default".into(),
                 Task::Plain("echo default".to_string()),
                 None,
                 &FeatureName::Default,
@@ -1994,7 +1996,7 @@ test = "test initial"
             .unwrap();
         manifest
             .add_task(
-                "target_linux",
+                "target_linux".into(),
                 Task::Plain("echo target_linux".to_string()),
                 Some(Platform::Linux64),
                 &FeatureName::Default,
@@ -2002,7 +2004,7 @@ test = "test initial"
             .unwrap();
         manifest
             .add_task(
-                "feature_test",
+                "feature_test".into(),
                 Task::Plain("echo feature_test".to_string()),
                 None,
                 &FeatureName::Named("test".to_string()),
@@ -2010,7 +2012,7 @@ test = "test initial"
             .unwrap();
         manifest
             .add_task(
-                "feature_test_target_linux",
+                "feature_test_target_linux".into(),
                 Task::Plain("echo feature_test_target_linux".to_string()),
                 Some(Platform::Linux64),
                 &FeatureName::Named("test".to_string()),

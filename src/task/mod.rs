@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_with::{formats::PreferMany, serde_as, OneOrMany};
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
@@ -7,13 +7,47 @@ use std::path::{Path, PathBuf};
 
 mod error;
 mod executable_task;
+mod task_environment;
 mod task_graph;
 
 pub use executable_task::{
     ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, RunOutput,
     TaskExecutionError,
 };
+pub use task_environment::{
+    AmbiguousTask, FindTaskError, FindTaskSource, SearchEnvironments, TaskAndEnvironment,
+    TaskDisambiguation,
+};
 pub use task_graph::{TaskGraph, TaskGraphError, TaskId, TaskNode};
+
+/// Represents a task name
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq, Hash, Ord, PartialOrd)]
+pub struct TaskName(String);
+
+impl TaskName {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+    /// Returns a styled version of the task name for display in the console.
+    pub fn fancy_display(&self) -> console::StyledObject<&str> {
+        console::style(self.as_str()).blue()
+    }
+}
+impl From<&str> for TaskName {
+    fn from(name: &str) -> Self {
+        TaskName(name.to_string())
+    }
+}
+impl From<String> for TaskName {
+    fn from(name: String) -> Self {
+        TaskName(name)
+    }
+}
+impl From<TaskName> for String {
+    fn from(task_name: TaskName) -> Self {
+        task_name.0 // Assuming TaskName is a tuple struct with the first element as String
+    }
+}
 
 /// Represents different types of scripts
 #[derive(Debug, Clone, Deserialize)]
@@ -22,14 +56,15 @@ pub enum Task {
     Plain(String),
     Execute(Execute),
     Alias(Alias),
-    // We don't what a way for the deserializer to except a custom task, as they are meant for tasks given in the command line.
+    // We want a way for the deserializer to except a custom task, as they are meant for tasks
+    // given in the command line.
     #[serde(skip)]
     Custom(Custom),
 }
 
 impl Task {
     /// Returns the names of the task that this task depends on
-    pub fn depends_on(&self) -> &[String] {
+    pub fn depends_on(&self) -> &[TaskName] {
         match self {
             Task::Plain(_) | Task::Custom(_) => &[],
             Task::Execute(cmd) => &cmd.depends_on,
@@ -117,7 +152,7 @@ pub struct Execute {
     /// A list of commands that should be run before this one
     #[serde(default)]
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
-    pub depends_on: Vec<String>,
+    pub depends_on: Vec<TaskName>,
 
     /// The working directory for the command relative to the root of the project.
     pub cwd: Option<PathBuf>,
@@ -188,7 +223,7 @@ impl CmdArgs {
 pub struct Alias {
     /// A list of commands that should be run before this one
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
-    pub depends_on: Vec<String>,
+    pub depends_on: Vec<TaskName>,
 }
 
 impl Display for Task {
@@ -212,9 +247,17 @@ impl Display for Task {
         let depends_on = self.depends_on();
         if !depends_on.is_empty() {
             if depends_on.len() == 1 {
-                write!(f, "depends_on = '{}'", depends_on.iter().join(","))
+                write!(
+                    f,
+                    "depends_on = '{}'",
+                    depends_on.iter().map(|t| t.fancy_display()).join(",")
+                )
             } else {
-                write!(f, "depends_on = [{}]", depends_on.iter().join(","))
+                write!(
+                    f,
+                    "depends_on = [{}]",
+                    depends_on.iter().map(|t| t.fancy_display()).join(",")
+                )
             }
         } else {
             Ok(())

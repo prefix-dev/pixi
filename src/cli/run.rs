@@ -1,16 +1,21 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
+use std::convert::identity;
 use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
 use clap::Parser;
+use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
 use miette::{miette, Context, Diagnostic};
 use rattler_conda_types::Platform;
 
 use crate::activation::get_environment_variables;
 use crate::project::errors::UnsupportedPlatformError;
-use crate::task::{ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, TaskGraph};
+use crate::task::{
+    AmbiguousTask, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
+    SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskName,
+};
 use crate::{consts, Project, UpdateLockFileOptions};
 
 use crate::environment::{verify_prefix_location_unchanged, LockFileDerivedData};
@@ -87,12 +92,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     tracing::debug!("Task parsed from run command: {:?}", task_args);
 
     // Construct a task graph from the input arguments
-    let task_graph = TaskGraph::from_cmd_args(
+    let search_environment = SearchEnvironments::from_opt_env(
         &project,
-        task_args,
-        Some(Platform::current()),
         explicit_environment.clone(),
-    )?;
+        Some(Platform::current()),
+    )
+    .with_disambiguate_fn(disambiguate_task_interactive);
+
+    let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, task_args)?;
 
     // Traverse the task graph in topological order and execute each individual task.
     let mut task_idx = 0;
@@ -116,9 +123,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 "{}{}{}{}{}",
                 console::Emoji("✨ ", ""),
                 console::style("Pixi task (").bold(),
-                console::style(executable_task.run_environment.name())
-                    .bold()
-                    .cyan(),
+                executable_task
+                    .run_environment
+                    .name()
+                    .fancy_display()
+                    .bold(),
                 console::style("): ").bold(),
                 executable_task.display_command(),
             );
@@ -156,26 +165,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 /// Called when a command was not found.
 fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Environment<'p>>) {
-    let available_tasks: HashSet<String> = if let Some(explicit_environment) = explicit_environment
-    {
-        explicit_environment
-            .tasks(Some(Platform::current()), true)
-            .into_iter()
-            .flat_map(|tasks| tasks.into_keys())
-            .map(ToOwned::to_owned)
-            .collect()
-    } else {
-        project
-            .environments()
-            .into_iter()
-            .flat_map(|env| {
-                env.tasks(Some(Platform::current()), true)
-                    .into_iter()
-                    .flat_map(|tasks| tasks.into_keys())
-                    .map(ToOwned::to_owned)
-            })
-            .collect()
-    };
+    let available_tasks: HashSet<TaskName> =
+        if let Some(explicit_environment) = explicit_environment {
+            explicit_environment
+                .tasks(Some(Platform::current()), true)
+                .into_iter()
+                .flat_map(|tasks| tasks.into_keys())
+                .map(ToOwned::to_owned)
+                .collect()
+        } else {
+            project
+                .environments()
+                .into_iter()
+                .flat_map(|env| {
+                    env.tasks(Some(Platform::current()), true)
+                        .into_iter()
+                        .flat_map(|tasks| tasks.into_keys())
+                        .map(ToOwned::to_owned)
+                })
+                .collect()
+        };
 
     if !available_tasks.is_empty() {
         eprintln!(
@@ -184,7 +193,7 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
                 .into_iter()
                 .sorted()
                 .format_with("\n", |name, f| {
-                    f(&format_args!("\t{}", console::style(name).bold()))
+                    f(&format_args!("\t{}", name.fancy_display().bold()))
                 })
         );
     }
@@ -266,4 +275,36 @@ async fn execute_task<'p>(
     }
 
     Ok(())
+}
+
+/// Called to disambiguate between environments to run a task in.
+fn disambiguate_task_interactive<'p>(
+    problem: &AmbiguousTask<'p>,
+) -> Option<TaskAndEnvironment<'p>> {
+    let environment_names = problem
+        .environments
+        .iter()
+        .map(|(env, _)| env.name())
+        .collect_vec();
+    let theme = ColorfulTheme {
+        active_item_style: console::Style::new().for_stderr().magenta(),
+        ..ColorfulTheme::default()
+    };
+
+    dialoguer::Select::with_theme(&theme)
+        .with_prompt(format!(
+            "The task '{}' {}can be run in multiple environments.\n\nPlease select an environment to run the task in:",
+            problem.task_name.fancy_display(),
+            if let Some(dependency) = &problem.depended_on_by {
+                format!("(depended on by '{}') ", dependency.0.fancy_display())
+            } else {
+                String::new()
+            }
+        ))
+        .report(false)
+        .items(&environment_names)
+        .default(0)
+        .interact_opt()
+        .map_or(None, identity)
+        .map(|idx| problem.environments[idx].clone())
 }

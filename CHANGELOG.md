@@ -22,6 +22,11 @@ This release is pretty crazy in amount of features! The major ones are:
 > ```
 > Check documentation here: https://pixi.sh/environment/
 
+> [!IMPORTANT]
+>
+> The `.pixi/env/` folder has been moved to accommodate multiple environments.
+> If you only have one environment it is now named `.pixi/envs/default`.
+
 ### 📃 Details
 
 #### Added

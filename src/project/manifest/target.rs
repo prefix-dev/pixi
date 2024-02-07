@@ -1,4 +1,5 @@
 use crate::project::manifest::activation::Activation;
+use crate::task::TaskName;
 use crate::utils::spanned::PixiSpanned;
 use crate::{
     project::{manifest::error::SpecIsMissing, manifest::PyPiRequirement, SpecType},
@@ -28,7 +29,7 @@ pub struct Target {
     pub activation: Option<Activation>,
 
     /// Target specific tasks to run in the environment
-    pub tasks: HashMap<String, Task>,
+    pub tasks: HashMap<TaskName, Task>,
 }
 
 impl Target {
@@ -197,7 +198,7 @@ impl<'de> Deserialize<'de> for Target {
 
             /// Target specific tasks to run in the environment
             #[serde(default)]
-            tasks: HashMap<String, Task>,
+            tasks: HashMap<TaskName, Task>,
         }
 
         let target = TomlTarget::deserialize(deserializer)?;

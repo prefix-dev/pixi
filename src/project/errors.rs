@@ -1,4 +1,5 @@
 use crate::project::manifest::EnvironmentName;
+use crate::task::TaskName;
 use crate::Project;
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan};
@@ -61,7 +62,7 @@ impl Diagnostic for UnsupportedPlatformError {
 ///     - Include names that might have been meant instead
 ///     - If the tasks is only available for a certain platform, explain that.
 #[derive(Debug, Clone, Diagnostic, Error)]
-#[error("the task '{task_name}' could not be found")]
+#[error("the task '{0}' could not be found", task_name.fancy_display())]
 pub struct UnknownTask<'p> {
     /// The project that the platform is not supported for.
     pub project: &'p Project,
@@ -73,5 +74,5 @@ pub struct UnknownTask<'p> {
     pub platform: Option<Platform>,
 
     /// The name of the task
-    pub task_name: String,
+    pub task_name: TaskName,
 }

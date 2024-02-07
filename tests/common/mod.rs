@@ -14,14 +14,15 @@ use pixi::{
         project, run,
         task::{self, AddArgs, AliasArgs},
     },
-    consts, EnvironmentName, ExecutableTask, Project, RunOutput, TaskGraph, TaskGraphError,
-    UpdateLockFileOptions,
+    consts, EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
+    TaskGraphError, UpdateLockFileOptions,
 };
 use rattler_conda_types::{MatchSpec, Platform};
 
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi::cli::run::get_task_env;
 use pixi::cli::LockFileUsageArgs;
+use pixi::task::TaskName;
 use pixi::FeatureName;
 use pixi::TaskExecutionError;
 use rattler_lock::{LockFile, Package};
@@ -247,13 +248,13 @@ impl PixiControl {
             .await?;
 
         // Create a task graph from the command line arguments.
-        let task_graph = TaskGraph::from_cmd_args(
+        let search_env = SearchEnvironments::from_opt_env(
             &project,
-            args.task,
-            Some(Platform::current()),
             explicit_environment,
-        )
-        .map_err(RunError::TaskGraphError)?;
+            Some(Platform::current()),
+        );
+        let task_graph = TaskGraph::from_cmd_args(&project, &search_env, args.task)
+            .map_err(RunError::TaskGraphError)?;
 
         // Iterate over all tasks in the graph and execute them.
         let mut task_env = None;
@@ -316,7 +317,7 @@ impl TasksControl<'_> {
     /// Add a task
     pub fn add(
         &self,
-        name: impl ToString,
+        name: TaskName,
         platform: Option<Platform>,
         feature_name: FeatureName,
     ) -> TaskAddBuilder {
@@ -324,7 +325,7 @@ impl TasksControl<'_> {
         TaskAddBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AddArgs {
-                name: name.to_string(),
+                name,
                 commands: vec![],
                 depends_on: None,
                 platform,
@@ -337,14 +338,14 @@ impl TasksControl<'_> {
     /// Remove a task
     pub async fn remove(
         &self,
-        name: impl ToString,
+        name: TaskName,
         platform: Option<Platform>,
         feature_name: Option<String>,
     ) -> miette::Result<()> {
         task::execute(task::Args {
             manifest_path: Some(self.pixi.manifest_path()),
             operation: task::Operation::Remove(task::RemoveArgs {
-                names: vec![name.to_string()],
+                names: vec![name],
                 platform,
                 feature: feature_name,
             }),
@@ -352,12 +353,12 @@ impl TasksControl<'_> {
     }
 
     /// Alias one or multiple tasks
-    pub fn alias(&self, name: impl ToString, platform: Option<Platform>) -> TaskAliasBuilder {
+    pub fn alias(&self, name: TaskName, platform: Option<Platform>) -> TaskAliasBuilder {
         TaskAliasBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AliasArgs {
                 platform,
-                alias: name.to_string(),
+                alias: name,
                 depends_on: vec![],
             },
         }
