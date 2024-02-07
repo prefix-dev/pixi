@@ -233,36 +233,53 @@ impl Manifest {
     /// Remove the platform(s) from the project
     pub fn remove_platforms(
         &mut self,
-        platforms: impl IntoIterator<Item = impl AsRef<str>>,
+        platforms: &Vec<Platform>,
+        feature_name: &FeatureName,
     ) -> miette::Result<()> {
         let mut removed_platforms = Vec::new();
-
-        for platform in platforms {
-            // Parse the channel to be removed
-            let platform_to_remove = Platform::from_str(platform.as_ref()).into_diagnostic()?;
-
-            // Remove the channel if it exists
-            if let Some(pos) = self
-                .parsed
-                .project
-                .platforms
-                .value
-                .iter()
-                .position(|x| *x == platform_to_remove)
-            {
-                self.parsed.project.platforms.value.remove(pos);
+        match feature_name {
+            FeatureName::Default => {
+                for platform in platforms {
+                    if let Some(index) = self
+                        .parsed
+                        .project
+                        .platforms
+                        .value
+                        .iter()
+                        .position(|x| x == platform)
+                    {
+                        self.parsed.project.platforms.value.remove(index);
+                        removed_platforms.push(platform.to_string());
+                    }
+                }
             }
-
-            removed_platforms.push(platform.as_ref().to_owned());
+            FeatureName::Named(_) => {
+                for platform in platforms {
+                    match self.parsed.features.entry(feature_name.clone()) {
+                        Entry::Occupied(mut entry) => {
+                            if let Some(platforms) = &mut entry.get_mut().platforms {
+                                if let Some(index) =
+                                    platforms.value.iter().position(|x| x == platform)
+                                {
+                                    platforms.value.remove(index);
+                                }
+                            }
+                        }
+                        Entry::Vacant(_entry) => {
+                            return Err(miette!(
+                                "Feature {} does not exist",
+                                feature_name.as_str()
+                            ));
+                        }
+                    }
+                    removed_platforms.push(platform.to_string());
+                }
+            }
         }
 
-        // remove the platforms from the toml
-        let platform_array = &mut self.document["project"]["platforms"];
-        let platform_array = platform_array
-            .as_array_mut()
-            .expect("platforms should be an array");
-
-        platform_array.retain(|x| !removed_platforms.contains(&x.as_str().unwrap().to_string()));
+        // remove the channels from the toml
+        let platforms_array = self.specific_array_mut("platforms", feature_name)?;
+        platforms_array.retain(|x| !removed_platforms.contains(&x.as_str().unwrap().to_string()));
 
         Ok(())
     }
@@ -413,8 +430,12 @@ impl Manifest {
             .any(|f| f.pypi_dependencies.is_some())
     }
 
-    /// Returns a mutable reference to the channels array.
-    fn channels_array_mut(&mut self, feature_name: &FeatureName) -> miette::Result<&mut Array> {
+    /// Returns a mutable reference to the specified array either in project or feature.
+    fn specific_array_mut(
+        &mut self,
+        array_name: &str,
+        feature_name: &FeatureName,
+    ) -> miette::Result<&mut Array> {
         match feature_name {
             FeatureName::Default => {
                 let project = &mut self.document["project"];
@@ -422,14 +443,14 @@ impl Manifest {
                     *project = Item::Table(Table::new());
                 }
 
-                let channels = &mut project["channels"];
+                let channels = &mut project[array_name];
                 if channels.is_none() {
                     *channels = Item::Value(Value::Array(Array::new()))
                 }
 
                 channels
                     .as_array_mut()
-                    .ok_or_else(|| miette::miette!("malformed channels array"))
+                    .ok_or_else(|| miette::miette!("malformed {array_name} array"))
             }
             FeatureName::Named(_) => {
                 let feature = &mut self.document["feature"];
@@ -444,14 +465,14 @@ impl Manifest {
                     *feature = Item::Table(Table::new());
                 }
 
-                let channels = &mut feature["channels"];
+                let channels = &mut feature[array_name];
                 if channels.is_none() {
                     *channels = Item::Value(Value::Array(Array::new()))
                 }
 
                 channels
                     .as_array_mut()
-                    .ok_or_else(|| miette::miette!("malformed channels array"))
+                    .ok_or_else(|| miette::miette!("malformed {array_name} array"))
             }
         }
     }
@@ -508,7 +529,7 @@ impl Manifest {
             }
         }
         // Then add the channels to the toml document
-        let channels_array = self.channels_array_mut(feature_name)?;
+        let channels_array = self.specific_array_mut("channels", feature_name)?;
         for channel in stored_channels {
             channels_array.push(channel);
         }
@@ -565,7 +586,7 @@ impl Manifest {
         }
 
         // remove the channels from the toml
-        let channels_array = self.channels_array_mut(feature_name)?;
+        let channels_array = self.specific_array_mut("channels", feature_name)?;
         channels_array.retain(|x| !removed_channels.contains(&x.as_str().unwrap().to_string()));
 
         Ok(())
@@ -1546,7 +1567,11 @@ feature_target_dep = "*"
             channels = []
             platforms = ["linux-64", "win-64"]
 
-            [dependencies]
+            [feature.test]
+            platforms = ["linux-64", "win-64", "osx-64"]
+
+            [environments]
+            test = ["test"]
         "#;
 
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
@@ -1556,10 +1581,41 @@ feature_target_dep = "*"
             vec![Platform::Linux64, Platform::Win64]
         );
 
-        manifest.remove_platforms(&vec!["linux-64"]).unwrap();
+        manifest
+            .remove_platforms(&vec![Platform::Linux64], &FeatureName::Default)
+            .unwrap();
 
         assert_eq!(
             manifest.parsed.project.platforms.value,
+            vec![Platform::Win64]
+        );
+
+        assert_eq!(
+            manifest
+                .feature(&FeatureName::Named("test".to_string()))
+                .unwrap()
+                .platforms
+                .clone()
+                .unwrap()
+                .value,
+            vec![Platform::Linux64, Platform::Win64, Platform::Osx64]
+        );
+
+        manifest
+            .remove_platforms(
+                &vec![Platform::Linux64, Platform::Osx64],
+                &FeatureName::Named("test".to_string()),
+            )
+            .unwrap();
+
+        assert_eq!(
+            manifest
+                .feature(&FeatureName::Named("test".to_string()))
+                .unwrap()
+                .platforms
+                .clone()
+                .unwrap()
+                .value,
             vec![Platform::Win64]
         );
     }

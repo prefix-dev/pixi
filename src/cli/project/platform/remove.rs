@@ -1,9 +1,8 @@
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
 
-use crate::Project;
+use crate::{FeatureName, Project};
 use clap::Parser;
 use indexmap::IndexMap;
-use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
 use std::str::FromStr;
@@ -17,9 +16,17 @@ pub struct Args {
     /// Don't update the environment, only remove the platform(s) from the lock-file.
     #[clap(long)]
     pub no_install: bool,
+
+    /// The name of the feature to remove the platform from.
+    #[clap(long, short)]
+    pub feature: Option<String>,
 }
 
 pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+    let feature_name = args
+        .feature
+        .map_or(FeatureName::Default, FeatureName::Named);
+
     // Determine which platforms to remove
     let platforms = args
         .platform
@@ -28,23 +35,10 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
-    let platforms_to_remove = platforms
-        .into_iter()
-        .filter(|x| project.platforms().contains(x))
-        .collect_vec();
-
-    if platforms_to_remove.is_empty() {
-        eprintln!(
-            "{}The platforms(s) are not present.",
-            console::style(console::Emoji("✔ ", "")).green(),
-        );
-        return Ok(());
-    }
-
     // Remove the platform(s) from the manifest
     project
         .manifest
-        .remove_platforms(platforms_to_remove.iter().map(|p| p.to_string()))?;
+        .remove_platforms(&platforms, &feature_name)?;
 
     get_up_to_date_prefix(
         &project.default_environment(),
@@ -56,7 +50,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     project.save()?;
 
     // Report back to the user
-    for platform in platforms_to_remove {
+    for platform in platforms {
         eprintln!(
             "{}Removed {}",
             console::style(console::Emoji("✔ ", "")).green(),
