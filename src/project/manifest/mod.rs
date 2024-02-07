@@ -215,19 +215,66 @@ impl Manifest {
     pub fn add_platforms<'a>(
         &mut self,
         platforms: impl Iterator<Item = &'a Platform> + Clone,
+        feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        // Add to platform table
-        let platform_array = &mut self.document["project"]["platforms"];
-        let platform_array = platform_array
-            .as_array_mut()
-            .expect("platforms should be an array");
+        let mut stored_platforms = IndexSet::new();
+        match feature_name {
+            FeatureName::Default => {
+                for platform in platforms {
+                    // TODO: Make platforms a IndexSet to avoid duplicates.
+                    if self
+                        .parsed
+                        .project
+                        .platforms
+                        .value
+                        .iter()
+                        .any(|x| x == platform)
+                    {
+                        continue;
+                    }
+                    self.parsed.project.platforms.value.push(*platform);
 
-        for platform in platforms.clone() {
-            platform_array.push(platform.to_string());
+                    stored_platforms.insert(platform);
+                }
+            }
+            FeatureName::Named(_) => {
+                for platform in platforms {
+                    match self.parsed.features.entry(feature_name.clone()) {
+                        Entry::Occupied(mut entry) => {
+                            if let Some(platforms) = &mut entry.get_mut().platforms {
+                                if platforms.value.iter().any(|x| x == platform) {
+                                    continue;
+                                }
+                            }
+                            // If the feature already exists, just push the new platform
+                            entry
+                                .get_mut()
+                                .platforms
+                                .get_or_insert_with(Default::default)
+                                .value
+                                .push(*platform);
+                        }
+                        Entry::Vacant(entry) => {
+                            // If the feature does not exist, insert a new feature with the new platform
+                            entry.insert(Feature {
+                                name: feature_name.clone(),
+                                platforms: Some(PixiSpanned::from(vec![*platform])),
+                                system_requirements: Default::default(),
+                                targets: Default::default(),
+                                channels: None,
+                            });
+                        }
+                    }
+                    stored_platforms.insert(platform);
+                }
+            }
+        }
+        // Then add the platforms to the toml document
+        let platforms_array = self.specific_array_mut("platforms", feature_name)?;
+        for platform in stored_platforms {
+            platforms_array.push(platform.to_string());
         }
 
-        // Add to manifest
-        self.parsed.project.platforms.value.extend(platforms);
         Ok(())
     }
 
@@ -1550,11 +1597,49 @@ feature_target_dep = "*"
             vec![Platform::Linux64, Platform::Win64]
         );
 
-        manifest.add_platforms([Platform::OsxArm64].iter()).unwrap();
+        manifest
+            .add_platforms([Platform::OsxArm64].iter(), &FeatureName::Default)
+            .unwrap();
 
         assert_eq!(
             manifest.parsed.project.platforms.value,
             vec![Platform::Linux64, Platform::Win64, Platform::OsxArm64]
+        );
+
+        manifest
+            .add_platforms(
+                [Platform::LinuxAarch64, Platform::Osx64].iter(),
+                &FeatureName::Named("test".to_string()),
+            )
+            .unwrap();
+
+        assert_eq!(
+            manifest
+                .feature(&FeatureName::Named("test".to_string()))
+                .unwrap()
+                .platforms
+                .clone()
+                .unwrap()
+                .value,
+            vec![Platform::LinuxAarch64, Platform::Osx64]
+        );
+
+        manifest
+            .add_platforms(
+                [Platform::LinuxAarch64, Platform::Win64].iter(),
+                &FeatureName::Named("test".to_string()),
+            )
+            .unwrap();
+
+        assert_eq!(
+            manifest
+                .feature(&FeatureName::Named("test".to_string()))
+                .unwrap()
+                .platforms
+                .clone()
+                .unwrap()
+                .value,
+            vec![Platform::LinuxAarch64, Platform::Osx64, Platform::Win64]
         );
     }
 

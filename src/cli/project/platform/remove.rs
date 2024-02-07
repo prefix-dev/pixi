@@ -54,7 +54,10 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         eprintln!(
             "{}Removed {}",
             console::style(console::Emoji("✔ ", "")).green(),
-            platform,
+            match &feature_name {
+                FeatureName::Default => platform.to_string(),
+                FeatureName::Named(name) => format!("{} from the feature {}", platform, name),
+            },
         );
     }
 
