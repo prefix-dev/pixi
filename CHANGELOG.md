@@ -25,7 +25,7 @@ This release is pretty crazy in amount of features! The major ones are:
 > [!IMPORTANT]
 >
 > The `.pixi/env/` folder has been moved to accommodate multiple environments.
-> If you only have one environment it is now named `.pixi/envs/default`. 
+> If you only have one environment it is now named `.pixi/envs/default`.
 
 ### 📃 Details
 
