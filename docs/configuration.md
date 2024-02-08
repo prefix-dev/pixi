@@ -455,7 +455,8 @@ The environments table is defined using the following fields:
 - `solve-group: String`: The solve group is used to group environments together at the solve stage.
   This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
   For instance when testing a production environment with additional test dependencies.
-
+  These dependencies will then be the same version in all environments that have the same solve group.
+  But the different environments contain different subsets of the solve-groups dependencies set.
 
 ```toml title="Simplest example"
 [environments]
