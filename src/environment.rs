@@ -1408,7 +1408,7 @@ async fn spawn_solve_conda_environment_task(
         let pb = SolveProgressBar::new(
             global_multi_progress().add(ProgressBar::hidden()),
             platform,
-            environment_name.clone(),
+            group_name.clone(),
         );
         pb.start();
 
@@ -1546,7 +1546,7 @@ async fn spawn_solve_pypi_task(
         let pb = SolveProgressBar::new(
             global_multi_progress().add(ProgressBar::hidden()),
             platform,
-            environment_name,
+            GroupedEnvironmentName::Environment(environment_name),
         );
         pb.start();
 
@@ -1676,11 +1676,15 @@ pub async fn load_sparse_repo_data_async(
 pub(crate) struct SolveProgressBar {
     pb: ProgressBar,
     platform: Platform,
-    environment_name: EnvironmentName,
+    environment_name: GroupedEnvironmentName,
 }
 
 impl SolveProgressBar {
-    pub fn new(pb: ProgressBar, platform: Platform, environment_name: EnvironmentName) -> Self {
+    pub fn new(
+        pb: ProgressBar,
+        platform: Platform,
+        environment_name: GroupedEnvironmentName,
+    ) -> Self {
         pb.set_style(
             indicatif::ProgressStyle::with_template(&format!(
                 "   ({:>12}) {:<9} ..",
@@ -1734,11 +1738,20 @@ pub enum GroupedEnvironment<'p> {
     Environment(Environment<'p>),
 }
 
+#[derive(Clone)]
 pub enum GroupedEnvironmentName {
     Group(String),
     Environment(EnvironmentName),
 }
 
+impl GroupedEnvironmentName {
+    pub fn fancy_display(&self) -> console::StyledObject<&str> {
+        match self {
+            GroupedEnvironmentName::Group(name) => console::style(name.as_str()).magenta(),
+            GroupedEnvironmentName::Environment(name) => name.fancy_display(),
+        }
+    }
+}
 impl<'p> From<SolveGroup<'p>> for GroupedEnvironment<'p> {
     fn from(source: SolveGroup<'p>) -> Self {
         GroupedEnvironment::Group(source)
