@@ -30,6 +30,15 @@ pub struct PixiSpanned<T> {
     pub value: T,
 }
 
+impl<T: Default> Default for PixiSpanned<T> {
+    fn default() -> Self {
+        Self {
+            span: None,
+            value: T::default(),
+        }
+    }
+}
+
 impl<T> From<T> for PixiSpanned<T> {
     fn from(value: T) -> Self {
         Self { span: None, value }

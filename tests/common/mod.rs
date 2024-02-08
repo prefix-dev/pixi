@@ -19,7 +19,7 @@ use pixi::{
 };
 use rattler_conda_types::{MatchSpec, Platform};
 
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::cli::run::get_task_env;
 use pixi::cli::LockFileUsageArgs;
 use pixi::task::TaskName;
@@ -151,6 +151,15 @@ impl PixiControl {
     pub fn new() -> miette::Result<PixiControl> {
         let tempdir = tempfile::tempdir().into_diagnostic()?;
         Ok(PixiControl { tmpdir: tempdir })
+    }
+
+    /// Creates a new PixiControl instance from an existing manifest
+    pub fn from_manifest(manifest: &str) -> miette::Result<PixiControl> {
+        let pixi = Self::new()?;
+        std::fs::write(&pixi.manifest_path(), manifest)
+            .into_diagnostic()
+            .context("failed to write pixi.toml")?;
+        Ok(pixi)
     }
 
     /// Loads the project manifest and returns it.
@@ -297,10 +306,21 @@ impl PixiControl {
         }
     }
 
-    /// Get the associated lock file
+    /// Load the current lock-file.
+    ///
+    /// If you want to lock-file to be up-to-date with the project call [`Self::up_to_date_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
         let project = Project::load_or_else_discover(Some(&self.manifest_path()))?;
         pixi::load_lock_file(&project).await
+    }
+
+    /// Load the current lock-file and makes sure that its up to date with the project.
+    pub async fn up_to_date_lock_file(&self) -> miette::Result<LockFile> {
+        let project = self.project()?;
+        Ok(project
+            .up_to_date_lock_file(UpdateLockFileOptions::default())
+            .await?
+            .lock_file)
     }
 
     pub fn tasks(&self) -> TasksControl {
