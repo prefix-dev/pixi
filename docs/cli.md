@@ -709,7 +709,7 @@ Adds a platform(s) to the project file and updates the lockfile.
 ##### Options
 
 - `--no-install`: do not update the environment, only add changed packages to the lock-file.
-- `--feature <FEATURE> (-f)`: The feature for which the platform is added.
+- `--feature <FEATURE> (-f)`: The feature for which the platform will be added.
 
 ```sh
 pixi project platform add win-64
