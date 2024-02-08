@@ -41,11 +41,12 @@ If this is not the case then all the commands that use the environment will auto
 ### Cleaning up
 If you want to clean up the environments, you can simply delete the `.pixi/envs` directory, and pixi will recreate the environments when needed.
 ```shell
+# either:
 rm -rf .pixi/envs
-# or per environment
+
+# or per environment:
 rm -rf .pixi/envs/default
 rm -rf .pixi/envs/cuda
-```
 
 ## Activation
 As an environment is nothing more than a set of file correctly located in a directory.
