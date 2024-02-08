@@ -99,7 +99,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let name = env_info.name;
         let channels = env_info.channels;
 
-        let (mut conda_deps, mut pip_deps) = (vec![], vec![]);
+        let mut conda_deps = vec![];
+        let mut pip_deps = vec![];
 
         for dep in env_info.dependencies {
             match dep {
