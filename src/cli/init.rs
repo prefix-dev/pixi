@@ -28,6 +28,7 @@ pub struct Args {
     #[arg(short, long = "platform", id = "platform")]
     pub platforms: Vec<String>,
 
+    /// Environment.yml file to bootstrap the project.
     #[arg(short = 'i', long = "import")]
     pub env_file: Option<PathBuf>,
 }
