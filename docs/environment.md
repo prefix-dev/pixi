@@ -51,7 +51,7 @@ rm -rf .pixi/envs/cuda
 ## Activation
 An environment is nothing more than a set of files that are installed into a certain location, that somewhat mimics a global system install.
 You need to activate the environment to use it.
-In them most simple sense that mean adding the `bin` directory of the environment to the `PATH` variable.
+In the most simple sense that mean adding the `bin` directory of the environment to the `PATH` variable.
 But there is more to it in a conda environment, as it also sets some environment variables.
 
 To do the activation we have multiple options:
