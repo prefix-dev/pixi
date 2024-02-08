@@ -1,6 +1,8 @@
 use miette::{Context, IntoDiagnostic};
 
 use crate::lock_file::{resolve_pypi, LockedCondaPackages, LockedPypiPackages};
+use crate::project::virtual_packages::get_minimal_virtual_packages;
+use crate::project::{Dependencies, SolveGroup};
 use crate::{
     config, consts, install, install_pypi, lock_file,
     lock_file::{
@@ -16,7 +18,7 @@ use crate::{
     },
     repodata::fetch_sparse_repodata_targets,
     utils::BarrierCell,
-    Project,
+    Project, SpecType,
 };
 use futures::future::Either;
 use futures::stream::FuturesUnordered;
@@ -27,9 +29,9 @@ use itertools::Itertools;
 use rattler::install::{PythonInfo, Transaction};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{
-    Channel, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
+    Channel, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
 };
-use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{LockFile, Package, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use reqwest_middleware::ClientWithMiddleware;
 use rip::{index::PackageDb, resolve::SDistResolution};
@@ -552,6 +554,145 @@ impl<'p> OutdatedEnvironments<'p> {
             }
         }
 
+        // Determine which solve-groups are out of date.
+        let mut conda_solve_groups_out_of_date = HashMap::new();
+        let mut pypi_solve_groups_out_of_date = HashMap::new();
+        for (environment, platforms) in &outdated_conda {
+            let Some(solve_group) = environment.solve_group() else {
+                continue;
+            };
+            conda_solve_groups_out_of_date
+                .entry(solve_group)
+                .or_insert_with(HashSet::new)
+                .extend(platforms.iter().copied());
+        }
+        for (environment, platforms) in &outdated_pypi {
+            let Some(solve_group) = environment.solve_group() else {
+                continue;
+            };
+            pypi_solve_groups_out_of_date
+                .entry(solve_group)
+                .or_insert_with(HashSet::new)
+                .extend(platforms.iter().copied());
+        }
+
+        // Check solve-groups, all environments in the same solve group must share the same
+        // dependencies.
+        for solve_group in project.solve_groups() {
+            for platform in solve_group
+                .environments()
+                .flat_map(|env| env.platforms())
+                .unique()
+            {
+                // Keep track of if any of the package types are out of date
+                let mut conda_package_mismatch = false;
+                let mut pypi_package_mismatch = false;
+
+                // Keep track of the packages by name to check for mismatches between environments.
+                let mut conda_packages_by_name = HashMap::new();
+                let mut pypi_packages_by_name = HashMap::new();
+
+                // Iterate over all environments to compare the packages.
+                for env in solve_group.environments() {
+                    if outdated_conda
+                        .get(&env)
+                        .and_then(|p| p.get(&platform))
+                        .is_some()
+                    {
+                        // If the environment is already out-of-date there is no need to check it,
+                        // because the solve-group is already out-of-date.
+                        break;
+                    }
+
+                    let Some(locked_env) = lock_file.environment(env.name().as_str()) else {
+                        // If the environment is missing, we already marked it as out of date.
+                        continue;
+                    };
+
+                    for package in locked_env.packages(platform).into_iter().flatten() {
+                        match package {
+                            Package::Conda(pkg) => {
+                                match conda_packages_by_name.get(&pkg.package_record().name) {
+                                    None => {
+                                        conda_packages_by_name.insert(
+                                            pkg.package_record().name.clone(),
+                                            pkg.url().clone(),
+                                        );
+                                    }
+                                    Some(url) if pkg.url() != url => {
+                                        conda_package_mismatch = true;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            Package::Pypi(pkg) => {
+                                match pypi_packages_by_name.get(&pkg.data().package.name) {
+                                    None => {
+                                        pypi_packages_by_name.insert(
+                                            pkg.data().package.name.clone(),
+                                            pkg.url().clone(),
+                                        );
+                                    }
+                                    Some(url) if pkg.url() != url => {
+                                        pypi_package_mismatch = true;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+
+                        // If there is a conda package mismatch there is also a pypi mismatch and we
+                        // can break early.
+                        if conda_package_mismatch {
+                            pypi_package_mismatch = true;
+                            break;
+                        }
+                    }
+
+                    // If there is a conda package mismatch there is also a pypi mismatch and we can
+                    // break early.
+                    if conda_package_mismatch {
+                        pypi_package_mismatch = true;
+                        break;
+                    }
+                }
+
+                // If there is a mismatch there is a mismatch for the entire group
+                if conda_package_mismatch {
+                    conda_solve_groups_out_of_date
+                        .entry(solve_group.clone())
+                        .or_default()
+                        .insert(platform);
+                }
+
+                if pypi_package_mismatch {
+                    pypi_solve_groups_out_of_date
+                        .entry(solve_group.clone())
+                        .or_default()
+                        .insert(platform);
+                }
+            }
+        }
+
+        // Mark the rest of the environments out of date for all solve groups
+        for (solve_group, platforms) in conda_solve_groups_out_of_date {
+            for env in solve_group.environments() {
+                outdated_conda
+                    .entry(env.clone())
+                    .or_default()
+                    .extend(platforms.iter().copied());
+            }
+        }
+
+        for (solve_group, platforms) in pypi_solve_groups_out_of_date {
+            for env in solve_group.environments() {
+                outdated_pypi
+                    .entry(env.clone())
+                    .or_default()
+                    .extend(platforms.iter().copied());
+            }
+        }
+
         // For all targets where conda is out of date, the pypi packages are also out of date.
         for (environment, platforms) in outdated_conda.iter() {
             outdated_pypi
@@ -574,6 +715,9 @@ impl<'p> OutdatedEnvironments<'p> {
 
 type PerEnvironment<'p, T> = HashMap<Environment<'p>, T>;
 type PerEnvironmentAndPlatform<'p, T> = HashMap<Environment<'p>, HashMap<Platform, T>>;
+type PerGroupAndPlatform<'p, T> = HashMap<GroupedEnvironment<'p>, HashMap<Platform, T>>;
+
+type LockedCondaPackagesByName = HashMap<PackageName, RepoDataRecord>;
 
 #[derive(Default)]
 struct UpdateContext<'p> {
@@ -604,6 +748,9 @@ struct UpdateContext<'p> {
     /// [`BarrierCell`] that will eventually contain the solved records computed by another task.
     /// This allows tasks to wait for the records to be solved before proceeding.
     solved_pypi_records: PerEnvironmentAndPlatform<'p, Arc<BarrierCell<Arc<LockedPypiPackages>>>>,
+
+    grouped_solved_repodata_records:
+        PerGroupAndPlatform<'p, Arc<BarrierCell<Arc<LockedCondaPackagesByName>>>>,
 }
 
 impl<'p> UpdateContext<'p> {
@@ -841,6 +988,7 @@ async fn ensure_up_to_date_lock_file(
         solved_repodata_records: HashMap::new(),
         instantiated_conda_prefixes: HashMap::new(),
         solved_pypi_records: HashMap::new(),
+        grouped_solved_repodata_records: HashMap::new(),
     };
 
     // This will keep track of all outstanding tasks that we need to wait for. All tasks are added
@@ -858,33 +1006,91 @@ async fn ensure_up_to_date_lock_file(
             ordered_platforms.move_index(current_platform_index, 0);
         }
 
+        // Determine the source of the solve information
+        let source = GroupedEnvironment::from(environment.clone());
+
         for platform in ordered_platforms {
-            // Extract the records from the existing lock file
-            let existing_records = context
-                .locked_repodata_records
-                .get_mut(&environment)
-                .and_then(|records| records.remove(&platform))
-                .map(|records| Arc::try_unwrap(records).unwrap_or_else(|arc| (*arc).clone()))
-                .unwrap_or_default();
+            // Is there an existing pending task to solve the group?
+            let group_solve_records = if let Some(cell) = context
+                .grouped_solved_repodata_records
+                .get(&source)
+                .and_then(|platforms| platforms.get(&platform))
+            {
+                // Yes, we can reuse the existing cell.
+                cell.clone()
+            } else {
+                // No, we need to spawn a task to update for the entire solve group.
+                //
+                // Determine the existing records for the group and platform. If there are multiple
+                // environments that contain the same packages (because they were previously not in
+                // the same solve group), we only take the latest version of the package.
+                let mut existing_records = HashMap::new();
+                for env in source.environments() {
+                    for record in context
+                        .locked_repodata_records
+                        .get(&env)
+                        .and_then(|env| env.get(&platform))
+                        .into_iter()
+                        .flat_map(|records| records.iter())
+                    {
+                        match existing_records.get(&record.package_record.name) {
+                            None => {
+                                existing_records
+                                    .insert(record.package_record.name.clone(), record.clone());
+                            }
+                            Some(existing)
+                                if existing.package_record.version
+                                    < record.package_record.version =>
+                            {
+                                existing_records
+                                    .insert(record.package_record.name.clone(), record.clone());
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                let existing_records = existing_records.into_values().collect_vec();
 
-            // Spawn a task to solve the environment.
-            let conda_solve_task = spawn_solve_conda_environment_task(
-                environment.clone(),
-                existing_records,
-                context.repo_data.clone(),
-                platform,
-            )
-            .boxed_local();
+                // Spawn a task to solve the group.
+                let group_solve_task = spawn_solve_conda_environment_task(
+                    source.clone(),
+                    existing_records,
+                    context.repo_data.clone(),
+                    platform,
+                )
+                .boxed_local();
 
-            pending_futures.push(conda_solve_task);
+                // Store the task so we can poll it later.
+                pending_futures.push(group_solve_task);
+
+                // Create an entry that can be used by other tasks to wait for the result.
+                let cell = Arc::new(BarrierCell::new());
+                let previous_cell = context
+                    .grouped_solved_repodata_records
+                    .entry(source.clone())
+                    .or_default()
+                    .insert(platform, cell.clone());
+                assert!(
+                    previous_cell.is_none(),
+                    "a cell has already been added to update conda records"
+                );
+
+                cell
+            };
+
+            // Spawn a task to extract the records from the group solve task.
+            let records_future =
+                spawn_extract_conda_environment_task(environment.clone(), platform, async move {
+                    group_solve_records.wait().await.clone()
+                })
+                .boxed_local();
+
+            pending_futures.push(records_future);
             let previous_cell = context
                 .solved_repodata_records
                 .entry(environment.clone())
                 .or_default()
-                .insert(
-                    platform,
-                    Arc::new(BarrierCell::<Arc<Vec<RepoDataRecord>>>::new()),
-                );
+                .insert(platform, Arc::default());
             assert!(
                 previous_cell.is_none(),
                 "a cell has already been added to update conda records"
@@ -1013,6 +1219,42 @@ async fn ensure_up_to_date_lock_file(
     while let Some(result) = pending_futures.next().await {
         top_level_progress.inc(1);
         match result? {
+            TaskResult::CondaGroupSolved(group_name, platform, records) => {
+                let group = match &group_name {
+                    GroupedEnvironmentName::Group(name) => GroupedEnvironment::Group(
+                        project.solve_group(name).expect("solve group should exist"),
+                    ),
+                    GroupedEnvironmentName::Environment(name) => GroupedEnvironment::Environment(
+                        project.environment(name).expect("environment should exist"),
+                    ),
+                };
+
+                context
+                    .grouped_solved_repodata_records
+                    .get_mut(&group)
+                    .expect("the entry for this environment should exist")
+                    .get_mut(&platform)
+                    .expect("the entry for this platform should exist")
+                    .set(Arc::new(records))
+                    .expect("records should not be solved twice");
+
+                match group_name {
+                    GroupedEnvironmentName::Group(group_name) => {
+                        tracing::info!(
+                            "solved conda package for solve group '{}' '{}'",
+                            group_name,
+                            platform
+                        );
+                    }
+                    GroupedEnvironmentName::Environment(env_name) => {
+                        tracing::info!(
+                            "solved conda package for environment '{}' '{}'",
+                            env_name,
+                            platform
+                        );
+                    }
+                }
+            }
             TaskResult::CondaSolved(environment, platform, records) => {
                 let environment = project
                     .environment(&environment)
@@ -1028,7 +1270,7 @@ async fn ensure_up_to_date_lock_file(
                     .expect("records should not be solved twice");
 
                 tracing::info!(
-                    "solved conda packages for '{}' '{}'",
+                    "extracted conda packages for '{}' '{}'",
                     environment.name().fancy_display(),
                     platform
                 );
@@ -1127,7 +1369,8 @@ async fn ensure_up_to_date_lock_file(
 /// Represents data that is sent back from a task. This is used to communicate the result of a task
 /// back to the main task which will forward the information to other tasks waiting for results.
 enum TaskResult {
-    CondaSolved(EnvironmentName, Platform, Vec<RepoDataRecord>),
+    CondaGroupSolved(GroupedEnvironmentName, Platform, LockedCondaPackagesByName),
+    CondaSolved(EnvironmentName, Platform, LockedCondaPackages),
     CondaPrefixUpdated(EnvironmentName, Prefix, Box<PythonStatus>),
     PypiSolved(
         EnvironmentName,
@@ -1138,28 +1381,28 @@ enum TaskResult {
 
 /// A task that solves the conda dependencies for a given environment.
 async fn spawn_solve_conda_environment_task(
-    environment: Environment<'_>,
+    group: GroupedEnvironment<'_>,
     existing_repodata_records: Vec<RepoDataRecord>,
     sparse_repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
     platform: Platform,
 ) -> miette::Result<TaskResult> {
     // Get the dependencies for this platform
-    let dependencies = environment.dependencies(None, Some(platform));
+    let dependencies = group.dependencies(None, Some(platform));
 
     // Get the virtual packages for this platform
-    let virtual_packages = environment.virtual_packages(platform);
+    let virtual_packages = group.virtual_packages(platform);
 
     // Get the environment name
-    let environment_name = environment.name().clone();
+    let group_name = group.name();
 
     // The list of channels and platforms we need for this task
-    let channels = environment.channels().into_iter().cloned().collect_vec();
+    let channels = group.channels().into_iter().cloned().collect_vec();
 
     // Capture local variables
     let sparse_repo_data = sparse_repo_data.clone();
 
     // Whether there are pypi dependencies, and we should fetch purls.
-    let has_pypi_dependencies = environment.has_pypi_dependencies();
+    let has_pypi_dependencies = group.has_pypi_dependencies();
 
     tokio::spawn(async move {
         let pb = SolveProgressBar::new(
@@ -1204,16 +1447,71 @@ async fn spawn_solve_conda_environment_task(
             lock_file::pypi::amend_pypi_purls(&mut records).await?;
         }
 
+        // Turn the records into a map by name
+        let records_by_name = records
+            .into_iter()
+            .map(|record| (record.package_record.name.clone(), record))
+            .collect();
+
         // Finish the progress bar
         pb.finish();
 
-        Ok(TaskResult::CondaSolved(environment_name, platform, records))
+        Ok(TaskResult::CondaGroupSolved(
+            group_name,
+            platform,
+            records_by_name,
+        ))
     })
     .await
     .unwrap_or_else(|e| match e.try_into_panic() {
         Ok(panic) => std::panic::resume_unwind(panic),
         Err(_err) => Err(miette::miette!("the operation was cancelled")),
     })
+}
+
+/// Distill the repodata that is applicable for the given `environment` from the repodata of an entire solve group.
+async fn spawn_extract_conda_environment_task(
+    environment: Environment<'_>,
+    platform: Platform,
+    solve_group_records: impl Future<Output = Arc<LockedCondaPackagesByName>>,
+) -> miette::Result<TaskResult> {
+    let group = GroupedEnvironment::from(environment.clone());
+
+    // Await the records from the group
+    let group_records = solve_group_records.await;
+
+    // If the group is just the environment on its own we can immediately return the records.
+    if matches!(group, GroupedEnvironment::Environment(_)) {
+        return Ok(TaskResult::CondaSolved(
+            environment.name().clone(),
+            platform,
+            group_records
+                .iter()
+                .map(|(_, record)| record)
+                .cloned()
+                .collect(),
+        ));
+    }
+
+    let virtual_package_names = group
+        .virtual_packages(platform)
+        .into_iter()
+        .map(|vp| vp.name)
+        .collect::<HashSet<_>>();
+
+    let environment_dependencies = environment.dependencies(None, Some(platform));
+
+    let environment_records = extract_referenced_conda_records(
+        &group_records,
+        &virtual_package_names,
+        &environment_dependencies,
+    );
+
+    Ok(TaskResult::CondaSolved(
+        environment.name().clone(),
+        platform,
+        environment_records,
+    ))
 }
 
 /// A task that solves the pypi dependencies for a given environment.
@@ -1427,4 +1725,131 @@ impl SolveProgressBar {
         );
         self.pb.finish_and_clear();
     }
+}
+
+/// Either a solve group or an individual environment without a solve group.
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+pub enum GroupedEnvironment<'p> {
+    Group(SolveGroup<'p>),
+    Environment(Environment<'p>),
+}
+
+pub enum GroupedEnvironmentName {
+    Group(String),
+    Environment(EnvironmentName),
+}
+
+impl<'p> From<SolveGroup<'p>> for GroupedEnvironment<'p> {
+    fn from(source: SolveGroup<'p>) -> Self {
+        GroupedEnvironment::Group(source)
+    }
+}
+
+impl<'p> From<Environment<'p>> for GroupedEnvironment<'p> {
+    fn from(source: Environment<'p>) -> Self {
+        source.solve_group().map_or_else(
+            || GroupedEnvironment::Environment(source),
+            GroupedEnvironment::Group,
+        )
+    }
+}
+
+impl<'p> GroupedEnvironment<'p> {
+    pub fn name(&self) -> GroupedEnvironmentName {
+        match self {
+            GroupedEnvironment::Group(group) => {
+                GroupedEnvironmentName::Group(group.name().to_string())
+            }
+            GroupedEnvironment::Environment(env) => {
+                GroupedEnvironmentName::Environment(env.name().clone())
+            }
+        }
+    }
+
+    pub fn environments(&self) -> impl Iterator<Item = Environment<'p>> + '_ {
+        match self {
+            GroupedEnvironment::Group(group) => itertools::Either::Left(group.environments()),
+            GroupedEnvironment::Environment(env) => {
+                itertools::Either::Right(vec![env.clone()].into_iter())
+            }
+        }
+    }
+
+    pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
+        match self {
+            GroupedEnvironment::Group(group) => group.dependencies(kind, platform),
+            GroupedEnvironment::Environment(env) => env.dependencies(kind, platform),
+        }
+    }
+
+    pub fn system_requirements(&self) -> SystemRequirements {
+        match self {
+            GroupedEnvironment::Group(group) => group.system_requirements(),
+            GroupedEnvironment::Environment(env) => env.system_requirements(),
+        }
+    }
+
+    pub fn virtual_packages(&self, platform: Platform) -> Vec<GenericVirtualPackage> {
+        get_minimal_virtual_packages(platform, &self.system_requirements())
+            .into_iter()
+            .map(GenericVirtualPackage::from)
+            .collect()
+    }
+
+    pub fn channels(&self) -> IndexSet<&'p Channel> {
+        match self {
+            GroupedEnvironment::Group(group) => group.channels(),
+            GroupedEnvironment::Environment(env) => env.channels(),
+        }
+    }
+
+    pub fn has_pypi_dependencies(&self) -> bool {
+        match self {
+            GroupedEnvironment::Group(group) => group.has_pypi_dependencies(),
+            GroupedEnvironment::Environment(env) => env.has_pypi_dependencies(),
+        }
+    }
+}
+
+/// Given a list of dependencies, and list of conda repodata records by package name recursively extract all the
+/// repodata records that are needed to satisfy the requirements.
+///
+/// This function only looks at the names of the packages and does not actually match the requirements of the
+/// dependencies. This function assumes that the repodata records from `records` form a consistent environment. If
+/// this turns out not to be the case this function might panic.
+fn extract_referenced_conda_records(
+    records: &LockedCondaPackagesByName,
+    virtual_packages: &HashSet<PackageName>,
+    dependencies: &Dependencies,
+) -> LockedCondaPackages {
+    let mut queue = dependencies
+        .iter_specs()
+        .map(|(name, _)| name.clone())
+        .collect_vec();
+    let mut queued_names = queue.iter().cloned().collect::<HashSet<_>>();
+    let mut result = Vec::new();
+    while let Some(package) = queue.pop() {
+        // Find the record in the superset of records
+        let found_package = if virtual_packages.contains(&package) {
+            continue;
+        } else if let Some(record) = records.get(&package) {
+            record
+        } else {
+            unreachable!("missing package '{}' from superset", package.as_source());
+        };
+
+        // Find all the dependencies of the package and add them to the queue
+        for dependency in found_package.package_record.depends.iter() {
+            let dependency_name = PackageName::new_unchecked(
+                dependency.split_once(' ').unwrap_or((&dependency, "")).0,
+            );
+            if queued_names.insert(dependency_name.clone()) {
+                queue.push(dependency_name);
+            }
+        }
+
+        result.push(found_package.clone());
+    }
+
+    result
 }

@@ -303,7 +303,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             .features(true)
                             .map(|feature| feature.name.clone())
                             .collect(),
-                        solve_group: env.manifest().solve_group.clone(),
+                        solve_group: env
+                            .solve_group()
+                            .map(|solve_group| solve_group.name().to_string()),
                         environment_size: None,
                         dependencies: env
                             .dependencies(None, Some(Platform::current()))

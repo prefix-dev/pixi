@@ -2,6 +2,7 @@ mod dependencies;
 mod environment;
 pub mod errors;
 pub mod manifest;
+mod solve_group;
 pub mod virtual_packages;
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
@@ -33,6 +34,7 @@ use url::Url;
 use crate::task::TaskName;
 pub use dependencies::Dependencies;
 pub use environment::Environment;
+pub use solve_group::SolveGroup;
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -256,11 +258,36 @@ impl Project {
             .parsed
             .environments
             .iter()
-            .map(|(_name, env)| Environment {
+            .map(|env| Environment {
                 project: self,
                 environment: env,
             })
             .collect()
+    }
+
+    /// Returns all the solve groups in the project.
+    pub fn solve_groups(&self) -> Vec<SolveGroup> {
+        self.manifest
+            .parsed
+            .solve_groups
+            .iter()
+            .map(|group| SolveGroup {
+                project: self,
+                solve_group: group,
+            })
+            .collect()
+    }
+
+    /// Returns the solve group with the given name or `None` if no such group exists.
+    pub fn solve_group(&self, name: &str) -> Option<SolveGroup> {
+        self.manifest
+            .parsed
+            .solve_groups
+            .find(name)
+            .map(|group| SolveGroup {
+                project: self,
+                solve_group: group,
+            })
     }
 
     /// Returns the channels used by this project.
