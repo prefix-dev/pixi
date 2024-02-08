@@ -33,6 +33,11 @@ impl EnvironmentName {
         }
     }
 
+    /// Returns true if the environment is the default environment.
+    pub fn is_default(&self) -> bool {
+        matches!(self, EnvironmentName::Default)
+    }
+
     /// Returns a styled version of the environment name for display in the console.
     pub fn fancy_display(&self) -> console::StyledObject<&str> {
         console::style(self.as_str()).magenta()
