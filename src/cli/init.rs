@@ -232,9 +232,9 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
     }
 }
 
-fn parse_dependencies(
-    deps: Vec<CondaEnvDep>,
-) -> miette::Result<(Vec<MatchSpec>, Vec<(PackageName, PyPiRequirement)>)> {
+type PipReq = (PackageName, PyPiRequirement);
+
+fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<(Vec<MatchSpec>, Vec<PipReq>)> {
     let mut conda_deps = vec![];
     let mut pip_deps = vec![];
 
