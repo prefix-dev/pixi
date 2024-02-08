@@ -1,10 +1,9 @@
 use std::str::FromStr;
 
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
-use crate::Project;
+use crate::{FeatureName, Project};
 use clap::Parser;
 use indexmap::IndexMap;
-use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
 
@@ -17,9 +16,17 @@ pub struct Args {
     /// Don't update the environment, only add changed packages to the lock-file.
     #[clap(long)]
     pub no_install: bool,
+
+    /// The name of the feature to add the platform to.
+    #[clap(long, short)]
+    pub feature: Option<String>,
 }
 
 pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+    let feature_name = args
+        .feature
+        .map_or(FeatureName::Default, FeatureName::Named);
+
     // Determine which platforms are missing
     let platforms = args
         .platform
@@ -28,21 +35,10 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
-    let missing_platforms = platforms
-        .into_iter()
-        .filter(|x| !project.platforms().contains(x))
-        .collect_vec();
-
-    if missing_platforms.is_empty() {
-        eprintln!(
-            "{}All platform(s) have already been added.",
-            console::style(console::Emoji("✔ ", "")).green(),
-        );
-        return Ok(());
-    }
-
     // Add the platforms to the lock-file
-    project.manifest.add_platforms(missing_platforms.iter())?;
+    project
+        .manifest
+        .add_platforms(platforms.iter(), &feature_name)?;
 
     // Try to update the lock-file with the new channels
     get_up_to_date_prefix(
@@ -55,11 +51,14 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     project.save()?;
 
     // Report back to the user
-    for platform in missing_platforms {
+    for platform in platforms {
         eprintln!(
             "{}Added {}",
             console::style(console::Emoji("✔ ", "")).green(),
-            platform
+            match &feature_name {
+                FeatureName::Default => platform.to_string(),
+                FeatureName::Named(name) => format!("{} to the feature {}", platform, name),
+            }
         );
     }
 

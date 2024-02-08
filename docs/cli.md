@@ -709,9 +709,11 @@ Adds a platform(s) to the project file and updates the lockfile.
 ##### Options
 
 - `--no-install`: do not update the environment, only add changed packages to the lock-file.
+- `--feature <FEATURE> (-f)`: The feature for which the platform will be added.
 
 ```sh
 pixi project platform add win-64
+pixi project platform add --feature test win-64
 ```
 
 ### `project platform list`
@@ -737,9 +739,11 @@ Remove platform(s) from the project file and updates the lockfile.
 ##### Options
 
 - `--no-install`: do not update the environment, only add changed packages to the lock-file.
+- `--feature <FEATURE> (-f)`: The feature for which the platform will be removed.
 
 ```sh
 pixi project platform remove win-64
+pixi project platform remove --feature test win-64
 ```
 
 ### `project version get`
