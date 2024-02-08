@@ -54,6 +54,12 @@ impl fmt::Display for EnvironmentName {
     }
 }
 
+impl PartialEq<str> for EnvironmentName {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
 #[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes")]
 pub struct ParseEnvironmentNameError {
@@ -111,7 +117,7 @@ pub struct Environment {
 
     /// An optional solver-group. Multiple environments can share the same solve-group. All the
     /// dependencies of the environment that share the same solve-group will be solved together.
-    pub solve_group: Option<String>,
+    pub solve_group: Option<usize>,
 }
 
 /// Helper struct to deserialize the environment from TOML.
@@ -119,6 +125,7 @@ pub struct Environment {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(super) struct TomlEnvironment {
+    #[serde(default)]
     pub features: PixiSpanned<Vec<String>>,
     pub solve_group: Option<String>,
 }
@@ -127,27 +134,7 @@ pub(super) enum TomlEnvironmentMapOrSeq {
     Map(TomlEnvironment),
     Seq(Vec<String>),
 }
-impl TomlEnvironmentMapOrSeq {
-    pub fn into_environment(self, name: EnvironmentName) -> Environment {
-        match self {
-            TomlEnvironmentMapOrSeq::Map(TomlEnvironment {
-                features,
-                solve_group,
-            }) => Environment {
-                name,
-                features: features.value,
-                features_source_loc: features.span,
-                solve_group,
-            },
-            TomlEnvironmentMapOrSeq::Seq(features) => Environment {
-                name,
-                features,
-                features_source_loc: None,
-                solve_group: None,
-            },
-        }
-    }
-}
+
 impl<'de> Deserialize<'de> for TomlEnvironmentMapOrSeq {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
