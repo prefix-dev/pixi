@@ -13,7 +13,7 @@ A pixi environment is located in the `.pixi/envs` directory of the project.
 This location is **not** configurable as it is a specific design decision to keep the environments in the project directory.
 This keeps your machine and your project clean and isolated from each other, and makes it easy to clean up after a project is done.
 
-If you look at the `.pixi/envs` directory, you will see a directory for each environment, the `default` being the one that is used if you only have one environment.
+If you look at the `.pixi/envs` directory, you will see a directory for each environment, the `default` being the one that is normally used, if you specify a custom environment the name you specified will be used.
 
 ```shell
 .pixi
@@ -47,6 +47,7 @@ rm -rf .pixi/envs
 # or per environment:
 rm -rf .pixi/envs/default
 rm -rf .pixi/envs/cuda
+```
 
 ## Activation
 An environment is nothing more than a set of files that are installed into a certain location, that somewhat mimics a global system install.
@@ -82,6 +83,7 @@ export PIXI_PROMPT="(pixi) "
 . "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/rust.sh"
 ```
 It sets the `PATH` and some more environment variables. But more importantly it also runs activation scripts that are presented by the installed packages.
+An example of this would be the [`libglib_activate.sh`](https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh) script.
 Thus, just adding the `bin` directory to the `PATH` is not enough.
 
 ## Environment variables
@@ -112,7 +114,13 @@ If you want to learn more about the solving process, you can read these:
 - [Rip(PyPI) resolver blog](https://prefix.dev/blog/introducing_rip)
 
 Pixi solves both the `conda` and `PyPI` dependencies, where the `PyPI` dependencies use the conda packages as a base, so you can be sure that the packages are compatible with each other.
-These solvers are split between the `rattler` and `rip` library, these do the heavy lifting of the solving process.
+These solvers are split between the [`rattler`](https://github.com/mamba-org/rattler) and [`rip`](https://github.com/prefix-dev/rip) library, these control the heavy lifting of the solving process, which is executed by our custom SAT solver: [`resolvo`](https://github.com/mamba-org/resolvo).
+`resolve` is able to solve multiple ecosystem like `conda` and `PyPI`. It implements the lazy solving process for `PyPI` packages, which means that it only downloads the metadata of the packages that are needed to solve the environment.
+It also supports the `conda` way of solving, which means that it downloads the metadata of all the packages at once and then solves in one go.
+
+For the `[pypi-dependencies]`, `rip` implements `sdist` building to retrieve the metadata of the packages, and `wheel` building to install the packages.
+For this building step, `pixi` requires to first install `python` in the (conda)`[dependencies]` section of the `pixi.toml` file.
+This will always be slower than the pure conda solves. So for the best pixi experience you should stay within the `[dependencies]` section of the `pixi.toml` file.
 
 ## Caching
 Pixi caches the packages used in the environment.
