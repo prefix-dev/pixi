@@ -1405,8 +1405,11 @@ async fn spawn_solve_conda_environment_task(
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
     tokio::spawn(async move {
-        let pb =
-            SolveProgressBar::new(global_multi_progress().add(ProgressBar::hidden()), platform);
+        let pb = SolveProgressBar::new(
+            global_multi_progress().add(ProgressBar::hidden()),
+            platform,
+            group_name.clone(),
+        );
         pb.start();
 
         // Convert the dependencies into match specs
@@ -1538,9 +1541,13 @@ async fn spawn_solve_pypi_task(
     // Wait until the conda records and prefix are available.
     let (repodata_records, (prefix, python_status)) = tokio::join!(repodata_records, prefix);
 
+    let environment_name = environment.name().clone();
     let pypi_packages = tokio::spawn(async move {
-        let pb =
-            SolveProgressBar::new(global_multi_progress().add(ProgressBar::hidden()), platform);
+        let pb = SolveProgressBar::new(
+            global_multi_progress().add(ProgressBar::hidden()),
+            platform,
+            GroupedEnvironmentName::Environment(environment_name),
+        );
         pb.start();
 
         let result = resolve_pypi(
@@ -1666,28 +1673,40 @@ pub async fn load_sparse_repo_data_async(
 
 /// A helper struct that manages a progress-bar for solving an environment.
 #[derive(Clone)]
-struct SolveProgressBar {
+pub(crate) struct SolveProgressBar {
     pb: ProgressBar,
     platform: Platform,
+    environment_name: GroupedEnvironmentName,
 }
 
 impl SolveProgressBar {
-    pub fn new(pb: ProgressBar, platform: Platform) -> Self {
+    pub fn new(
+        pb: ProgressBar,
+        platform: Platform,
+        environment_name: GroupedEnvironmentName,
+    ) -> Self {
         pb.set_style(
-            indicatif::ProgressStyle::with_template(
-                &format!("    {:<9} ..", platform.to_string(),),
-            )
+            indicatif::ProgressStyle::with_template(&format!(
+                "   ({:>12}) {:<9} ..",
+                environment_name.fancy_display(),
+                platform.to_string(),
+            ))
             .unwrap(),
         );
         pb.enable_steady_tick(Duration::from_millis(100));
-        Self { pb, platform }
+        Self {
+            pb,
+            platform,
+            environment_name,
+        }
     }
 
     pub fn start(&self) {
         self.pb.reset_elapsed();
         self.pb.set_style(
             indicatif::ProgressStyle::with_template(&format!(
-                "  {{spinner:.dim}} {:<9} [{{elapsed_precise}}] {{msg:.dim}}",
+                "  {{spinner:.dim}} {:>12}: {:<9} [{{elapsed_precise}}] {{msg:.dim}}",
+                self.environment_name.fancy_display(),
                 self.platform.to_string(),
             ))
             .unwrap(),
@@ -1701,8 +1720,9 @@ impl SolveProgressBar {
     pub fn finish(&self) {
         self.pb.set_style(
             indicatif::ProgressStyle::with_template(&format!(
-                "  {} {:<9} [{{elapsed_precise}}]",
+                "  {} ({:>12}) {:<9} [{{elapsed_precise}}]",
                 console::style(console::Emoji("✔", "↳")).green(),
+                self.environment_name.fancy_display(),
                 self.platform.to_string(),
             ))
             .unwrap(),
@@ -1718,11 +1738,20 @@ pub enum GroupedEnvironment<'p> {
     Environment(Environment<'p>),
 }
 
+#[derive(Clone)]
 pub enum GroupedEnvironmentName {
     Group(String),
     Environment(EnvironmentName),
 }
 
+impl GroupedEnvironmentName {
+    pub fn fancy_display(&self) -> console::StyledObject<&str> {
+        match self {
+            GroupedEnvironmentName::Group(name) => console::style(name.as_str()).magenta(),
+            GroupedEnvironmentName::Environment(name) => name.fancy_display(),
+        }
+    }
+}
 impl<'p> From<SolveGroup<'p>> for GroupedEnvironment<'p> {
     fn from(source: SolveGroup<'p>) -> Self {
         GroupedEnvironment::Group(source)
