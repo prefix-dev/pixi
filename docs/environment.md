@@ -121,4 +121,4 @@ So if you have multiple projects that use the same packages, pixi will only down
 The cache is located in the `~/.cache/rattler/cache` directory by default.
 This location is configurable by setting the `PIXI_CACHE_DIR` or `RATTLER_CACHE_DIR` environment variable.
 
-When you want to clean the cache, you can simply delete the cache directory, and pixi will recreate the cache when needed.
+When you want to clean the cache, you can simply delete the cache directory, and pixi will re-create the cache when needed.
