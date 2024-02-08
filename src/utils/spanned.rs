@@ -22,7 +22,7 @@ pub fn is_spanned(name: &'static str, fields: &'static [&'static str]) -> bool {
 }
 
 /// A spanned value, indicating the range at which it is defined in the source.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct PixiSpanned<T> {
     /// Byte range
     pub span: Option<std::ops::Range<usize>>,
