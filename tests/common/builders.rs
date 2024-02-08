@@ -69,10 +69,10 @@ impl InitBuilder {
 
 impl IntoFuture for InitBuilder {
     type Output = miette::Result<()>;
-    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(init::execute(self.args))
+        init::execute(self.args).boxed_local()
     }
 }
 

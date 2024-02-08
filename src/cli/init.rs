@@ -232,33 +232,33 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
     }
 }
 
-fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<(Vec<MatchSpec>, Vec<(PackageName, PyPiRequirement)>)> {
-        let mut conda_deps = vec![];
-        let mut pip_deps = vec![];
+fn parse_dependencies(
+    deps: Vec<CondaEnvDep>,
+) -> miette::Result<(Vec<MatchSpec>, Vec<(PackageName, PyPiRequirement)>)> {
+    let mut conda_deps = vec![];
+    let mut pip_deps = vec![];
 
-        for dep in deps {
-            match dep {
-                CondaEnvDep::Conda(d) => {
-                    conda_deps.push(MatchSpec::from_str(&d).into_diagnostic()?)
-                }
-                CondaEnvDep::Pip { pip } => pip_deps.extend(
-                    pip.into_iter()
-                        .map(|d| {
-                            let req = pep508_rs::Requirement::from_str(&d).into_diagnostic()?;
-                            let name = rip::types::PackageName::from_str(req.name.as_str())?;
-                            let requirement = PyPiRequirement::from(req);
-                            Ok((name, requirement))
-                        })
-                        .collect::<miette::Result<Vec<_>>>()?,
-                ),
-            }
+    for dep in deps {
+        match dep {
+            CondaEnvDep::Conda(d) => conda_deps.push(MatchSpec::from_str(&d).into_diagnostic()?),
+            CondaEnvDep::Pip { pip } => pip_deps.extend(
+                pip.into_iter()
+                    .map(|d| {
+                        let req = pep508_rs::Requirement::from_str(&d).into_diagnostic()?;
+                        let name = rip::types::PackageName::from_str(req.name.as_str())?;
+                        let requirement = PyPiRequirement::from(req);
+                        Ok((name, requirement))
+                    })
+                    .collect::<miette::Result<Vec<_>>>()?,
+            ),
         }
+    }
 
-        if !pip_deps.is_empty() {
-            conda_deps.push(MatchSpec::from_str("pip").into_diagnostic()?);
-        }
+    if !pip_deps.is_empty() {
+        conda_deps.push(MatchSpec::from_str("pip").into_diagnostic()?);
+    }
 
-        Ok((conda_deps, pip_deps))
+    Ok((conda_deps, pip_deps))
 }
 
 fn read_env_yml(path: PathBuf) -> miette::Result<CondaEnvFile> {
@@ -272,6 +272,58 @@ mod tests {
     use std::io::Read;
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
+
+    #[test]
+    fn test_parse_conda_env_file() {
+        let example_conda_env_file = r#"
+        name: pixi_example_project
+        channels:
+          - conda-forge
+        dependencies:
+          - python
+          - pip:
+            - requests
+        "#;
+        let conda_env_file_data: CondaEnvFile =
+            serde_yaml::from_str(example_conda_env_file).unwrap();
+
+        assert_eq!(conda_env_file_data.name, "pixi_example_project");
+        assert_eq!(
+            conda_env_file_data.channels,
+            vec!["conda-forge".to_string()]
+        );
+
+        let (conda_deps, pip_deps) = parse_dependencies(conda_env_file_data.dependencies).unwrap();
+
+        println!("{conda_deps:?}");
+        assert_eq!(
+            conda_deps,
+            vec![
+                MatchSpec::from_str("python").unwrap(),
+                MatchSpec::from_str("pip").unwrap()
+            ]
+        );
+
+        assert_eq!(
+            conda_deps,
+            vec![
+                MatchSpec::from_str("python").unwrap(),
+                MatchSpec::from_str("pip").unwrap()
+            ]
+        );
+
+        assert_eq!(
+            pip_deps,
+            vec![(
+                PackageName::from_str("requests").unwrap(),
+                PyPiRequirement {
+                    version: None,
+                    extras: None,
+                    index: None,
+                },
+            )]
+        );
+    }
 
     #[test]
     fn test_get_name() {
