@@ -6,6 +6,7 @@ use clap::Parser;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use rattler_conda_types::{MatchSpec, Platform};
+use rip::types::PackageName;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
@@ -98,31 +99,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let env_info = read_env_yml(env_file)?;
         let name = env_info.name;
         let channels = env_info.channels;
-
-        let mut conda_deps = vec![];
-        let mut pip_deps = vec![];
-
-        for dep in env_info.dependencies {
-            match dep {
-                CondaEnvDep::Conda(d) => {
-                    conda_deps.push(MatchSpec::from_str(&d).into_diagnostic()?)
-                }
-                CondaEnvDep::Pip { pip } => pip_deps.extend(
-                    pip.into_iter()
-                        .map(|d| {
-                            let req = pep508_rs::Requirement::from_str(&d).into_diagnostic()?;
-                            let name = rip::types::PackageName::from_str(req.name.as_str())?;
-                            let requirement = PyPiRequirement::from(req);
-                            Ok((name, requirement))
-                        })
-                        .collect::<miette::Result<Vec<_>>>()?,
-                ),
-            }
-        }
-
-        if !pip_deps.is_empty() {
-            conda_deps.push(MatchSpec::from_str("pip").into_diagnostic()?);
-        }
+        let (conda_deps, pip_deps) = parse_dependencies(env_info.dependencies)?;
 
         (name, channels, conda_deps, pip_deps)
     } else {
@@ -253,6 +230,35 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
             ),
         })
     }
+}
+
+fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<(Vec<MatchSpec>, Vec<(PackageName, PyPiRequirement)>)> {
+        let mut conda_deps = vec![];
+        let mut pip_deps = vec![];
+
+        for dep in deps {
+            match dep {
+                CondaEnvDep::Conda(d) => {
+                    conda_deps.push(MatchSpec::from_str(&d).into_diagnostic()?)
+                }
+                CondaEnvDep::Pip { pip } => pip_deps.extend(
+                    pip.into_iter()
+                        .map(|d| {
+                            let req = pep508_rs::Requirement::from_str(&d).into_diagnostic()?;
+                            let name = rip::types::PackageName::from_str(req.name.as_str())?;
+                            let requirement = PyPiRequirement::from(req);
+                            Ok((name, requirement))
+                        })
+                        .collect::<miette::Result<Vec<_>>>()?,
+                ),
+            }
+        }
+
+        if !pip_deps.is_empty() {
+            conda_deps.push(MatchSpec::from_str("pip").into_diagnostic()?);
+        }
+
+        Ok((conda_deps, pip_deps))
 }
 
 fn read_env_yml(path: PathBuf) -> miette::Result<CondaEnvFile> {
