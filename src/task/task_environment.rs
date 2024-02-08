@@ -1,5 +1,6 @@
 use crate::project::Environment;
 use crate::task::error::{AmbiguousTaskError, MissingTaskError};
+use crate::task::TaskName;
 use crate::{Project, Task};
 use miette::Diagnostic;
 use rattler_conda_types::Platform;
@@ -9,7 +10,7 @@ use thiserror::Error;
 #[derive(Debug, Clone)]
 pub enum FindTaskSource<'p> {
     CmdArgs,
-    DependsOn(String, &'p Task),
+    DependsOn(TaskName, &'p Task),
 }
 
 pub type TaskAndEnvironment<'p> = (Environment<'p>, &'p Task);
@@ -46,8 +47,8 @@ pub struct SearchEnvironments<'p, D: TaskDisambiguation<'p> = NoDisambiguation> 
 
 /// Information about an task that was found when searching for a task
 pub struct AmbiguousTask<'p> {
-    pub task_name: String,
-    pub depended_on_by: Option<(String, &'p Task)>,
+    pub task_name: TaskName,
+    pub depended_on_by: Option<(TaskName, &'p Task)>,
     pub environments: Vec<TaskAndEnvironment<'p>>,
 }
 
@@ -112,14 +113,14 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
     /// be found.
     pub fn find_task(
         &self,
-        name: &str,
+        name: TaskName,
         source: FindTaskSource<'p>,
     ) -> Result<TaskAndEnvironment<'p>, FindTaskError> {
         // If no explicit environment was specified
         if matches!(source, FindTaskSource::CmdArgs) && self.explicit_environment.is_none() {
             let default_env = self.project.default_environment();
             // If the default environment has the task
-            if let Ok(default_env_task) = default_env.task(name, self.platform) {
+            if let Ok(default_env_task) = default_env.task(&name, self.platform) {
                 // If no other environment has the task name but a different task, return the default environment
                 if !self
                     .project
@@ -128,7 +129,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                     // Filter out default environment
                     .filter(|env| !env.name().is_default())
                     .any(|env| {
-                        if let Ok(task) = env.task(name, self.platform) {
+                        if let Ok(task) = env.task(&name, self.platform) {
                             // If the task exists in the environment but it is not the reference to the same task, return true to make it ambiguous
                             !std::ptr::eq(task, default_env_task)
                         } else {
@@ -157,7 +158,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             if let Some(task) = env
                 .tasks(self.platform, include_default_feature)
                 .ok()
-                .and_then(|tasks| tasks.get(name).copied())
+                .and_then(|tasks| tasks.get(&name).copied())
             {
                 tasks.push((env.clone(), task));
             }
@@ -165,7 +166,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
 
         match tasks.len() {
             0 => Err(FindTaskError::MissingTask(MissingTaskError {
-                task_name: name.to_string(),
+                task_name: name,
             })),
             1 => {
                 let (env, task) = tasks.remove(0);
@@ -173,7 +174,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             }
             _ => {
                 let ambiguous_task = AmbiguousTask {
-                    task_name: name.to_string(),
+                    task_name: name,
                     depended_on_by: match source {
                         FindTaskSource::DependsOn(dep, task) => Some((dep, task)),
                         _ => None,
@@ -212,7 +213,7 @@ mod tests {
         "#;
         let project = Project::from_str(Path::new(""), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
-        let result = search.find_task("test", FindTaskSource::CmdArgs);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(result.is_ok());
         assert!(result.unwrap().0.name().is_default());
     }
@@ -236,7 +237,7 @@ mod tests {
         "#;
         let project = Project::from_str(Path::new(""), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
-        let result = search.find_task("test", FindTaskSource::CmdArgs);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
     }
 
@@ -262,13 +263,13 @@ mod tests {
         "#;
         let project = Project::from_str(Path::new(""), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
-        let result = search.find_task("test", FindTaskSource::CmdArgs);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
 
         // With explicit environment
         let search =
             SearchEnvironments::from_opt_env(&project, Some(project.default_environment()), None);
-        let result = search.find_task("test", FindTaskSource::CmdArgs);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(result.unwrap().0.name().is_default());
     }
 
@@ -294,7 +295,7 @@ mod tests {
         "#;
         let project = Project::from_str(Path::new(""), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
-        let result = search.find_task("test", FindTaskSource::CmdArgs);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(result.unwrap().0.name().is_default());
 
         // With explicit environment
@@ -303,7 +304,7 @@ mod tests {
             Some(project.environment("prod").unwrap()),
             None,
         );
-        let result = search.find_task("test", FindTaskSource::CmdArgs);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(matches!(result, Err(FindTaskError::MissingTask(_))));
     }
 
@@ -326,7 +327,7 @@ mod tests {
         "#;
         let project = Project::from_str(Path::new(""), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
-        let result = search.find_task("bla", FindTaskSource::CmdArgs);
+        let result = search.find_task("bla".into(), FindTaskSource::CmdArgs);
         // Ambiguous task because it is the same name and code but it is defined in different environments
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
     }

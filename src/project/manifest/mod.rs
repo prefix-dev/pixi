@@ -11,6 +11,7 @@ mod validation;
 
 use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
+use crate::task::TaskName;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 use ::serde::{Deserialize, Deserializer};
 pub use activation::Activation;
@@ -23,7 +24,7 @@ pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource};
 pub use python::PyPiRequirement;
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
-use serde_with::{serde_as, DisplayFromStr, Map, PickFirst};
+use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use std::hash::Hash;
 use std::{
     collections::HashMap,
@@ -136,7 +137,7 @@ impl Manifest {
         &self,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-    ) -> Result<HashMap<&str, &Task>, GetFeatureError> {
+    ) -> Result<HashMap<TaskName, &Task>, GetFeatureError> {
         Ok(self
             .feature(feature_name)
             // Return error if feature does not exist
@@ -147,22 +148,22 @@ impl Manifest {
             .into_iter()
             .rev()
             .flat_map(|target| target.tasks.iter())
-            .map(|(name, task)| (name.as_str(), task))
+            .map(|(name, task)| (name.clone(), task))
             .collect())
     }
 
     /// Add a task to the project
     pub fn add_task(
         &mut self,
-        name: impl AsRef<str>,
+        name: TaskName,
         task: Task,
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Check if the task already exists
         if let Ok(tasks) = self.tasks(platform, feature_name) {
-            if tasks.contains_key(name.as_ref()) {
-                miette::bail!("task {} already exists", name.as_ref());
+            if tasks.contains_key(&name) {
+                miette::bail!("task {} already exists", name.fancy_display());
             }
         }
 
@@ -170,14 +171,14 @@ impl Manifest {
         let table = get_or_insert_toml_table(&mut self.document, platform, feature_name, "tasks")?;
 
         // Add the task to the table
-        table.insert(name.as_ref(), task.clone().into());
+        table.insert(name.as_str(), task.clone().into());
 
         // Add the task to the manifest
         self.default_feature_mut()
             .targets
             .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
             .tasks
-            .insert(name.as_ref().to_string(), task);
+            .insert(name, task);
 
         Ok(())
     }
@@ -185,27 +186,27 @@ impl Manifest {
     /// Remove a task from the project, and the tasks that depend on it
     pub fn remove_task(
         &mut self,
-        name: impl AsRef<str>,
+        name: TaskName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         self.tasks(platform, feature_name)?
-            .get(name.as_ref())
-            .ok_or_else(|| miette::miette!("task {} does not exist", name.as_ref()))?;
+            .get(&name)
+            .ok_or_else(|| miette::miette!("task {} does not exist", name.fancy_display()))?;
 
         // Get the task table either from the target platform or the default tasks.
         let tasks_table =
             get_or_insert_toml_table(&mut self.document, platform, feature_name, "tasks")?;
 
         // If it does not exist in toml, consider this ok as we want to remove it anyways
-        tasks_table.remove(name.as_ref());
+        tasks_table.remove(name.as_str());
 
         // Remove the task from the internal manifest
         self.feature_mut(feature_name)
             .expect("feature should exist")
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::from).as_ref())
-            .map(|target| target.tasks.remove(name.as_ref()));
+            .map(|target| target.tasks.remove(&name));
 
         Ok(())
     }
@@ -631,7 +632,15 @@ impl Manifest {
     where
         Q: Hash + Equivalent<EnvironmentName>,
     {
-        self.parsed.environments.get(name)
+        self.parsed.environments.find(name)
+    }
+
+    /// Returns the solve group with the given name or `None` if it does not exist.
+    pub fn solve_group<Q: ?Sized>(&self, name: &Q) -> Option<&SolveGroup>
+    where
+        Q: Hash + Equivalent<String>,
+    {
+        self.parsed.solve_groups.find(name)
     }
 }
 
@@ -692,6 +701,61 @@ fn get_or_insert_toml_table<'a>(
     Ok(current_table)
 }
 
+/// The environments in the project.
+#[derive(Debug, Clone, Default)]
+pub struct Environments {
+    /// A list of all environments, in the order they are defined in the manifest.
+    pub(super) environments: Vec<Environment>,
+
+    /// A map of all environments, indexed by their name.
+    pub(super) by_name: IndexMap<EnvironmentName, usize>,
+}
+
+impl Environments {
+    /// Returns the environment with the given name or `None` if it does not exist.
+    pub fn find<Q: ?Sized>(&self, name: &Q) -> Option<&Environment>
+    where
+        Q: Hash + Equivalent<EnvironmentName>,
+    {
+        let index = self.by_name.get(name)?;
+        Some(&self.environments[*index])
+    }
+
+    /// Returns an iterator over all the environments in the project.
+    pub fn iter(&self) -> impl Iterator<Item = &Environment> + '_ {
+        self.environments.iter()
+    }
+}
+
+/// A solve group is a group of environments that are solved together.
+#[derive(Debug, Clone)]
+pub struct SolveGroup {
+    pub name: String,
+    pub environments: Vec<usize>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SolveGroups {
+    pub(super) solve_groups: Vec<SolveGroup>,
+    pub(super) by_name: IndexMap<String, usize>,
+}
+
+impl SolveGroups {
+    /// Returns the solve group with the given name or `None` if it does not exist.
+    pub fn find<Q: ?Sized>(&self, name: &Q) -> Option<&SolveGroup>
+    where
+        Q: Hash + Equivalent<String>,
+    {
+        let index = self.by_name.get(name)?;
+        Some(&self.solve_groups[*index])
+    }
+
+    /// Returns an iterator over all the solve groups in the project.
+    pub fn iter(&self) -> impl Iterator<Item = &SolveGroup> + '_ {
+        self.solve_groups.iter()
+    }
+}
+
 /// Describes the contents of a project manifest.
 #[derive(Debug, Clone)]
 pub struct ProjectManifest {
@@ -702,7 +766,10 @@ pub struct ProjectManifest {
     pub features: IndexMap<FeatureName, Feature>,
 
     /// All the environments defined in the project.
-    pub environments: IndexMap<EnvironmentName, Environment>,
+    pub environments: Environments,
+
+    /// The solve groups that are part of the project.
+    pub solve_groups: SolveGroups,
 }
 
 impl ProjectManifest {
@@ -734,11 +801,19 @@ impl ProjectManifest {
     /// feature. The default environment can be overwritten by a environment named `default`.
     pub fn default_environment(&self) -> &Environment {
         let envs = &self.environments;
-        envs.get(&EnvironmentName::Named(String::from(
+        envs.find(&EnvironmentName::Named(String::from(
             consts::DEFAULT_ENVIRONMENT_NAME,
         )))
-        .or_else(|| envs.get(&EnvironmentName::Default))
+        .or_else(|| envs.find(&EnvironmentName::Default))
         .expect("default environment should always exist")
+    }
+
+    /// Returns the environment with the given name or `None` if it does not exist.
+    pub fn environment<Q: ?Sized>(&self, name: &Q) -> Option<&Environment>
+    where
+        Q: Hash + Equivalent<EnvironmentName>,
+    {
+        self.environments.find(name)
     }
 }
 
@@ -786,7 +861,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 
             /// Target specific tasks to run in the environment
             #[serde(default)]
-            tasks: HashMap<String, Task>,
+            tasks: HashMap<TaskName, Task>,
 
             /// The features defined in the project.
             #[serde(default)]
@@ -794,8 +869,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 
             /// The environments the project can create.
             #[serde(default)]
-            #[serde_as(as = "Map<_, _>")]
-            environments: Vec<(EnvironmentName, TomlEnvironmentMapOrSeq)>,
+            environments: IndexMap<EnvironmentName, TomlEnvironmentMapOrSeq>,
         }
 
         let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
@@ -830,14 +904,6 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             targets: Targets::from_default_and_user_defined(default_target, toml_manifest.target),
         };
 
-        // Construct a default environment
-        let default_environment = Environment {
-            name: EnvironmentName::Default,
-            features: Vec::new(),
-            features_source_loc: None,
-            solve_group: None,
-        };
-
         // Construct the features including the default feature
         let features: IndexMap<FeatureName, Feature> =
             IndexMap::from_iter([(FeatureName::Default, default_feature)]);
@@ -852,22 +918,72 @@ impl<'de> Deserialize<'de> for ProjectManifest {
         let features = features.into_iter().chain(named_features).collect();
 
         // Construct the environments including the default environment
-        let environments: IndexMap<EnvironmentName, Environment> =
-            IndexMap::from_iter([(EnvironmentName::Default, default_environment)]);
-        let named_environments = toml_manifest
+        let mut environments = Environments::default();
+        let mut solve_groups = SolveGroups::default();
+
+        // Add the default environment first if it was not redefined.
+        if !toml_manifest
             .environments
-            .into_iter()
-            .map(|(name, t_env)| {
-                let env = t_env.into_environment(name.clone());
-                (name, env)
-            })
-            .collect::<IndexMap<EnvironmentName, Environment>>();
-        let environments = environments.into_iter().chain(named_environments).collect();
+            .contains_key(&EnvironmentName::Default)
+        {
+            environments.environments.push(Environment {
+                name: EnvironmentName::Default,
+                features: Vec::new(),
+                features_source_loc: None,
+                solve_group: None,
+            });
+            environments.by_name.insert(EnvironmentName::Default, 0);
+        }
+
+        // Add all named environments
+        for (name, env) in toml_manifest.environments {
+            let environment_idx = environments.environments.len();
+            environments.by_name.insert(name.clone(), environment_idx);
+
+            // Decompose the TOML
+            let (features, features_source_loc, solve_group) = match env {
+                TomlEnvironmentMapOrSeq::Map(env) => {
+                    (env.features.value, env.features.span, env.solve_group)
+                }
+                TomlEnvironmentMapOrSeq::Seq(features) => (features, None, None),
+            };
+
+            // Add to the solve group if defined
+            let solve_group = if let Some(solve_group) = solve_group {
+                Some(match solve_groups.by_name.get(&solve_group) {
+                    Some(idx) => {
+                        solve_groups.solve_groups[*idx]
+                            .environments
+                            .push(environment_idx);
+                        *idx
+                    }
+                    None => {
+                        let idx = solve_groups.solve_groups.len();
+                        solve_groups.solve_groups.push(SolveGroup {
+                            name: solve_group.clone(),
+                            environments: vec![environment_idx],
+                        });
+                        solve_groups.by_name.insert(solve_group, idx);
+                        idx
+                    }
+                })
+            } else {
+                None
+            };
+
+            environments.environments.push(Environment {
+                name,
+                features,
+                features_source_loc,
+                solve_group,
+            });
+        }
 
         Ok(Self {
             project: toml_manifest.project,
             features,
             environments,
+            solve_groups,
         })
     }
 }
@@ -1167,8 +1283,9 @@ mod tests {
                     selector.map_or_else(|| String::from("default"), ToString::to_string);
                 target.tasks.iter().filter_map(move |(name, task)| {
                     Some(format!(
-                        "{}/{name} = {}",
+                        "{}/{} = {}",
                         &selector_name,
+                        name.as_str(),
                         task.as_single_command()?
                     ))
                 })
@@ -1771,6 +1888,7 @@ platforms = ["linux-64", "win-64"]
 
             [environments]
             default = ["py39"]
+            standard = { solve-group = "test" }
             cuda = ["cuda", "py310"]
             test1 = {features = ["test", "py310"], solve-group = "test"}
             test2 = {features = ["py39"], solve-group = "test"}
@@ -1790,13 +1908,28 @@ platforms = ["linux-64", "win-64"]
             .environment(&EnvironmentName::Named("test1".to_string()))
             .unwrap();
         assert_eq!(test1_env.features, vec!["test", "py310"]);
-        assert_eq!(test1_env.solve_group, Some(String::from("test")));
+        assert_eq!(
+            test1_env
+                .solve_group
+                .map(|idx| manifest.parsed.solve_groups.solve_groups[idx].name.as_str()),
+            Some("test")
+        );
 
         let test2_env = manifest
             .environment(&EnvironmentName::Named("test2".to_string()))
             .unwrap();
         assert_eq!(test2_env.features, vec!["py39"]);
-        assert_eq!(test2_env.solve_group, Some(String::from("test")));
+        assert_eq!(
+            test2_env
+                .solve_group
+                .map(|idx| manifest.parsed.solve_groups.solve_groups[idx].name.as_str()),
+            Some("test")
+        );
+
+        assert_eq!(
+            test1_env.solve_group, test2_env.solve_group,
+            "both environments should share the same solve group"
+        );
     }
 
     #[test]
@@ -1938,7 +2071,7 @@ platforms = ["linux-64", "win-64"]
                 .targets
                 .default()
                 .tasks
-                .get("warmup")
+                .get(&"warmup".into())
                 .unwrap()
                 .as_single_command()
                 .unwrap(),
@@ -1986,7 +2119,7 @@ test = "test initial"
 
         manifest
             .add_task(
-                "default",
+                "default".into(),
                 Task::Plain("echo default".to_string()),
                 None,
                 &FeatureName::Default,
@@ -1994,7 +2127,7 @@ test = "test initial"
             .unwrap();
         manifest
             .add_task(
-                "target_linux",
+                "target_linux".into(),
                 Task::Plain("echo target_linux".to_string()),
                 Some(Platform::Linux64),
                 &FeatureName::Default,
@@ -2002,7 +2135,7 @@ test = "test initial"
             .unwrap();
         manifest
             .add_task(
-                "feature_test",
+                "feature_test".into(),
                 Task::Plain("echo feature_test".to_string()),
                 None,
                 &FeatureName::Named("test".to_string()),
@@ -2010,7 +2143,7 @@ test = "test initial"
             .unwrap();
         manifest
             .add_task(
-                "feature_test_target_linux",
+                "feature_test_target_linux".into(),
                 Task::Plain("echo feature_test_target_linux".to_string()),
                 Some(Platform::Linux64),
                 &FeatureName::Named("test".to_string()),

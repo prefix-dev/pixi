@@ -19,9 +19,10 @@ use pixi::{
 };
 use rattler_conda_types::{MatchSpec, Platform};
 
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::cli::run::get_task_env;
 use pixi::cli::LockFileUsageArgs;
+use pixi::task::TaskName;
 use pixi::FeatureName;
 use pixi::TaskExecutionError;
 use rattler_lock::{LockFile, Package};
@@ -150,6 +151,15 @@ impl PixiControl {
     pub fn new() -> miette::Result<PixiControl> {
         let tempdir = tempfile::tempdir().into_diagnostic()?;
         Ok(PixiControl { tmpdir: tempdir })
+    }
+
+    /// Creates a new PixiControl instance from an existing manifest
+    pub fn from_manifest(manifest: &str) -> miette::Result<PixiControl> {
+        let pixi = Self::new()?;
+        std::fs::write(&pixi.manifest_path(), manifest)
+            .into_diagnostic()
+            .context("failed to write pixi.toml")?;
+        Ok(pixi)
     }
 
     /// Loads the project manifest and returns it.
@@ -296,10 +306,21 @@ impl PixiControl {
         }
     }
 
-    /// Get the associated lock file
+    /// Load the current lock-file.
+    ///
+    /// If you want to lock-file to be up-to-date with the project call [`Self::up_to_date_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
         let project = Project::load_or_else_discover(Some(&self.manifest_path()))?;
         pixi::load_lock_file(&project).await
+    }
+
+    /// Load the current lock-file and makes sure that its up to date with the project.
+    pub async fn up_to_date_lock_file(&self) -> miette::Result<LockFile> {
+        let project = self.project()?;
+        Ok(project
+            .up_to_date_lock_file(UpdateLockFileOptions::default())
+            .await?
+            .lock_file)
     }
 
     pub fn tasks(&self) -> TasksControl {
@@ -316,7 +337,7 @@ impl TasksControl<'_> {
     /// Add a task
     pub fn add(
         &self,
-        name: impl ToString,
+        name: TaskName,
         platform: Option<Platform>,
         feature_name: FeatureName,
     ) -> TaskAddBuilder {
@@ -324,7 +345,7 @@ impl TasksControl<'_> {
         TaskAddBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AddArgs {
-                name: name.to_string(),
+                name,
                 commands: vec![],
                 depends_on: None,
                 platform,
@@ -337,14 +358,14 @@ impl TasksControl<'_> {
     /// Remove a task
     pub async fn remove(
         &self,
-        name: impl ToString,
+        name: TaskName,
         platform: Option<Platform>,
         feature_name: Option<String>,
     ) -> miette::Result<()> {
         task::execute(task::Args {
             manifest_path: Some(self.pixi.manifest_path()),
             operation: task::Operation::Remove(task::RemoveArgs {
-                names: vec![name.to_string()],
+                names: vec![name],
                 platform,
                 feature: feature_name,
             }),
@@ -352,12 +373,12 @@ impl TasksControl<'_> {
     }
 
     /// Alias one or multiple tasks
-    pub fn alias(&self, name: impl ToString, platform: Option<Platform>) -> TaskAliasBuilder {
+    pub fn alias(&self, name: TaskName, platform: Option<Platform>) -> TaskAliasBuilder {
         TaskAliasBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AliasArgs {
                 platform,
-                alias: name.to_string(),
+                alias: name,
                 depends_on: vec![],
             },
         }

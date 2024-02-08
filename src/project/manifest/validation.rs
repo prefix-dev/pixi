@@ -38,7 +38,7 @@ impl ProjectManifest {
 
         // Check if all features are used in environments, warn if not.
         let mut features_used = HashSet::new();
-        for env in self.environments.values() {
+        for env in self.environments.iter() {
             for feature in env.features.iter() {
                 features_used.insert(feature);
             }
@@ -47,7 +47,7 @@ impl ProjectManifest {
             if name != &FeatureName::Default && !features_used.contains(&name.to_string()) {
                 tracing::warn!(
                     "The feature '{}' is defined but not used in any environment",
-                    console::style(name).bold().blue()
+                    name.fancy_display(),
                 );
             }
         }
@@ -81,7 +81,7 @@ impl ProjectManifest {
         check_file_existence(&self.project.readme)?;
 
         // Validate the environments defined in the project
-        for (_name, env) in self.environments.iter() {
+        for env in self.environments.environments.iter() {
             if let Err(report) = self.validate_environment(env) {
                 return Err(report.with_source_code(source));
             }
