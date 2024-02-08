@@ -1,10 +1,16 @@
+use crate::cli::add::{add_conda_specs_to_project, add_pypi_specs_to_project};
+use crate::project::manifest::PyPiRequirement;
+use crate::Project;
 use crate::{config::get_default_author, consts};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
-use rattler_conda_types::Platform;
+use rattler_conda_types::{MatchSpec, Platform};
+use serde::Deserialize;
+use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
+use std::str::FromStr;
 use std::{fs, path::PathBuf};
 
 /// Creates a new project
@@ -15,12 +21,29 @@ pub struct Args {
     pub path: PathBuf,
 
     /// Channels to use in the project.
-    #[arg(short, long = "channel", id = "channel")]
+    #[arg(short, long = "channel", id = "channel", conflicts_with = "env_file")]
     pub channels: Option<Vec<String>>,
 
     /// Platforms that the project supports.
     #[arg(short, long = "platform", id = "platform")]
     pub platforms: Vec<String>,
+
+    #[arg(short = 'i', long = "import")]
+    pub env_file: Option<PathBuf>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CondaEnvFile {
+    name: String,
+    channels: Vec<String>,
+    dependencies: Vec<CondaEnvDep>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+pub enum CondaEnvDep {
+    Conda(String),
+    Pip { pip: Vec<String> },
 }
 
 /// The default channels to use for a new project.
@@ -70,28 +93,63 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Fail silently if it already exists or cannot be created.
     fs::create_dir_all(&dir).ok();
 
-    // Write pixi.toml
-    let name = dir
-        .file_name()
-        .ok_or_else(|| {
-            miette::miette!(
-                "Cannot get file or directory name from the path: {}",
-                dir.to_string_lossy()
-            )
-        })?
-        .to_string_lossy();
-    let version = "0.1.0";
-    let author = get_default_author();
-    let channels = if let Some(channels) = args.channels {
-        channels
+    let (name, channels, conda_deps, pip_deps) = if let Some(env_file) = args.env_file {
+        let env_info = read_env_yml(env_file)?;
+        let name = env_info.name;
+        let channels = env_info.channels;
+
+        let (mut conda_deps, mut pip_deps) = (vec![], vec![]);
+
+        for dep in env_info.dependencies {
+            match dep {
+                CondaEnvDep::Conda(d) => {
+                    conda_deps.push(MatchSpec::from_str(&d).into_diagnostic()?)
+                }
+                CondaEnvDep::Pip { pip } => pip_deps.extend(
+                    pip.into_iter()
+                        .map(|d| {
+                            let req = pep508_rs::Requirement::from_str(&d).into_diagnostic()?;
+                            let name = rip::types::PackageName::from_str(req.name.as_str())?;
+                            let requirement = PyPiRequirement::from(req);
+                            Ok((name, requirement))
+                        })
+                        .collect::<miette::Result<Vec<_>>>()?,
+                ),
+            }
+        }
+
+        if !pip_deps.is_empty() {
+            conda_deps.push(MatchSpec::from_str("pip").into_diagnostic()?);
+        }
+
+        (name, channels, conda_deps, pip_deps)
     } else {
-        DEFAULT_CHANNELS
-            .iter()
-            .copied()
-            .map(ToOwned::to_owned)
-            .collect()
+        let name = dir
+            .file_name()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "Cannot get file or directory name from the path: {}",
+                    dir.to_string_lossy()
+                )
+            })?
+            .to_string_lossy()
+            .to_string();
+
+        let channels = if let Some(channels) = args.channels {
+            channels
+        } else {
+            DEFAULT_CHANNELS
+                .iter()
+                .copied()
+                .map(ToOwned::to_owned)
+                .collect()
+        };
+
+        (name, channels, vec![], vec![])
     };
 
+    let version = "0.1.0";
+    let author = get_default_author();
     let platforms = if args.platforms.is_empty() {
         vec![Platform::current().to_string()]
     } else {
@@ -111,7 +169,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             },
         )
         .unwrap();
-    fs::write(&manifest_path, rv).into_diagnostic()?;
+
+    if conda_deps.is_empty() && pip_deps.is_empty() {
+        fs::write(&manifest_path, rv).into_diagnostic()?;
+    } else {
+        let mut project = Project::from_str(&dir, &rv)?;
+
+        add_conda_specs_to_project(
+            &mut project,
+            conda_deps,
+            crate::SpecType::Run,
+            true,
+            true,
+            &vec![],
+        )
+        .await?;
+
+        add_pypi_specs_to_project(&mut project, pip_deps, &vec![], true, true).await?;
+
+        project.save()?;
+    }
 
     // create a .gitignore if one is missing
     if let Err(e) = create_or_append_file(&gitignore_path, GITIGNORE_TEMPLATE) {
@@ -174,6 +251,10 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
             ),
         })
     }
+}
+
+fn read_env_yml(path: PathBuf) -> miette::Result<CondaEnvFile> {
+    serde_yaml::from_reader(File::open(path).into_diagnostic()?).into_diagnostic()
 }
 
 #[cfg(test)]
