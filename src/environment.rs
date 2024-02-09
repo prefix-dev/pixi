@@ -1,4 +1,5 @@
 use miette::{Context, IntoDiagnostic};
+use rip::resolve::solve_options::SDistResolution;
 
 use crate::lock_file::{resolve_pypi, LockedCondaPackages, LockedPypiPackages};
 use crate::project::virtual_packages::get_minimal_virtual_packages;
@@ -34,7 +35,7 @@ use rattler_conda_types::{
 use rattler_lock::{LockFile, Package, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use reqwest_middleware::ClientWithMiddleware;
-use rip::{index::PackageDb, resolve::SDistResolution};
+use rip::index::PackageDb;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -1563,7 +1564,7 @@ async fn spawn_solve_pypi_task(
         pb.start();
 
         let result = resolve_pypi(
-            &package_db,
+            package_db,
             dependencies,
             system_requirements,
             &repodata_records,

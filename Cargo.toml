@@ -38,11 +38,11 @@ insta = { version = "1.34.0", features = ["yaml"] }
 is_executable = "1.0.1"
 itertools = "0.12.0"
 lazy_static = "1.4.0"
-miette = { version = "5.10.0", features = ["fancy", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
+miette = { version = "7.0.0", features = ["fancy", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
 minijinja = { version = "1.0.12", features = ["builtins"] }
 once_cell = "1.19.0"
-pep440_rs = "0.3.12"
-pep508_rs = { version = "0.2.3", features = ["modern"] }
+pep440_rs = "0.4.0"
+pep508_rs = { version = "0.3.0", features = ["modern"] }
 rattler = { version = "0.17.0", default-features = false }
 rattler_conda_types = { version = "0.17.0", default-features = false }
 rattler_digest = { version = "0.17.0", default-features = false }
@@ -55,7 +55,7 @@ rattler_virtual_packages = { version = "0.17.0", default-features = false }
 regex = "1.10.3"
 reqwest = { version = "0.11.23", default-features = false }
 reqwest-middleware = "0.2.4"
-rip = { package = "rattler_installs_packages", version = "0.5.0", default-features = false }
+rip = { package = "rattler_installs_packages", version = "0.7.0", default-features = false }
 self-replace = "1.3.7"
 serde = "1.0.195"
 serde-untagged = "0.1.5"
@@ -91,15 +91,15 @@ tokio = { version = "1.35.1", features = ["rt"] }
 toml = "0.8.8"
 
 [patch.crates-io]
-#rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_lock = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-#rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_lock = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 #rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages", branch = "main" }
 #resolvo = { git = "https://github.com/mamba-org/resolvo.git", branch = "main" }
 #deno_task_shell = { path = "../deno_task_shell" }
