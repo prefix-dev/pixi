@@ -1,3 +1,4 @@
+use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
 use crate::task::error::{AmbiguousTaskError, MissingTaskError};
 use crate::task::TaskName;
@@ -128,6 +129,10 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                     .iter()
                     // Filter out default environment
                     .filter(|env| !env.name().is_default())
+                    // Filter out environments that can not run on this machine.
+                    .filter(|env| {
+                        verify_current_platform_has_required_virtual_packages(env).is_ok()
+                    })
                     .any(|env| {
                         if let Ok(task) = env.task(&name, self.platform) {
                             // If the task exists in the environment but it is not the reference to the same task, return true to make it ambiguous

@@ -71,6 +71,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .transpose()?;
 
+    // Verify that the current platform has the required virtual packages for the environment.
+    if let Some(ref explicit_environment) = explicit_environment {
+        verify_current_platform_has_required_virtual_packages(explicit_environment)?;
+    }
+
     // Ensure that the lock-file is up-to-date.
     let mut lock_file = project
         .up_to_date_lock_file(UpdateLockFileOptions {
@@ -100,6 +105,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .with_disambiguate_fn(disambiguate_task_interactive);
 
     let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, task_args)?;
+
+    tracing::info!("Task graph: {}", task_graph);
 
     // Traverse the task graph in topological order and execute each individual task.
     let mut task_idx = 0;
@@ -177,6 +184,7 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
             project
                 .environments()
                 .into_iter()
+                .filter(|env| verify_current_platform_has_required_virtual_packages(env).is_ok())
                 .flat_map(|env| {
                     env.tasks(Some(Platform::current()), true)
                         .into_iter()
@@ -205,9 +213,6 @@ pub async fn get_task_env<'p>(
     lock_file_derived_data: &mut LockFileDerivedData<'p>,
     environment: &Environment<'p>,
 ) -> miette::Result<HashMap<String, String>> {
-    // Make sure the system requirements are met
-    verify_current_platform_has_required_virtual_packages(environment)?;
-
     // Ensure there is a valid prefix
     lock_file_derived_data.prefix(environment).await?;
 

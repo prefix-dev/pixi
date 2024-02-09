@@ -10,7 +10,7 @@ use miette::Diagnostic;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    env,
+    env, fmt,
     ops::Index,
 };
 use thiserror::Error;
@@ -22,6 +22,7 @@ use thiserror::Error;
 pub struct TaskId(usize);
 
 /// A node in the [`TaskGraph`].
+#[derive(Debug)]
 pub struct TaskNode<'p> {
     /// The name of the task or `None` if the task is a custom task.
     pub name: Option<TaskName>,
@@ -37,6 +38,23 @@ pub struct TaskNode<'p> {
 
     /// The id's of the task that this task depends on.
     pub dependencies: Vec<TaskId>,
+}
+impl fmt::Display for TaskNode<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "task: {}, environment: {}, command: `{}`, additional arguments: `{}`, depends_on: `{}`",
+            self.name.clone().unwrap_or("CUSTOM COMMAND".into()).0,
+            self.run_environment.name(),
+            self.task.as_single_command().unwrap_or(Cow::Owned("".to_string())),
+            self.additional_args.join(", "),
+            self.dependencies
+                .iter()
+                .map(|id| id.0.to_string())
+                .collect::<Vec<String>>()
+                .join(", ")
+        )
+    }
 }
 
 impl<'p> TaskNode<'p> {
@@ -59,12 +77,27 @@ impl<'p> TaskNode<'p> {
 
 /// A [`TaskGraph`] is a graph of tasks that defines the relationships between different executable
 /// tasks.
+#[derive(Debug)]
 pub struct TaskGraph<'p> {
     /// The project that this graph references
     project: &'p Project,
 
     /// The tasks in the graph
     nodes: Vec<TaskNode<'p>>,
+}
+impl fmt::Display for TaskGraph<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "TaskGraph: number of nodes: {}, nodes: {}",
+            self.nodes.len(),
+            self.nodes
+                .iter()
+                .map(|node| node.to_string())
+                .collect::<Vec<String>>()
+                .join("\n")
+        )
+    }
 }
 
 impl<'p> Index<TaskId> for TaskGraph<'p> {
