@@ -224,7 +224,7 @@ impl Project {
 #[allow(clippy::too_many_arguments)]
 // TODO: refactor args into struct
 pub async fn update_prefix_pypi(
-    name: &str,
+    environment_name: &EnvironmentName,
     prefix: &Prefix,
     platform: Platform,
     package_db: Arc<PackageDb>,
@@ -238,18 +238,24 @@ pub async fn update_prefix_pypi(
     install_pypi::remove_old_python_distributions(prefix, platform, status)?;
 
     // Install and/or remove python packages
-    progress::await_in_progress(format!("updating pypi package in '{}'", name), |_| {
-        install_pypi::update_python_distributions(
-            package_db,
-            prefix,
-            conda_records,
-            pypi_records,
-            platform,
-            status,
-            system_requirements,
-            sdist_resolution,
-        )
-    })
+    progress::await_in_progress(
+        format!(
+            "updating pypi package in '{}'",
+            environment_name.fancy_display()
+        ),
+        |_| {
+            install_pypi::update_python_distributions(
+                package_db,
+                prefix,
+                conda_records,
+                pypi_records,
+                platform,
+                status,
+                system_requirements,
+                sdist_resolution,
+            )
+        },
+    )
     .await
 }
 
@@ -309,7 +315,7 @@ impl PythonStatus {
 
 /// Updates the environment to contain the packages from the specified lock-file
 pub async fn update_prefix_conda(
-    name: &str,
+    environment_name: &EnvironmentName,
     prefix: &Prefix,
     package_cache: Arc<PackageCache>,
     authenticated_client: ClientWithMiddleware,
@@ -329,17 +335,23 @@ pub async fn update_prefix_conda(
     // Execute the transaction if there is work to do
     if !transaction.operations.is_empty() {
         // Execute the operations that are returned by the solver.
-        progress::await_in_progress(format!("updating packages in '{}'", name), |pb| async {
-            install::execute_transaction(
-                package_cache,
-                &transaction,
-                &installed_packages,
-                prefix.root().to_path_buf(),
-                authenticated_client,
-                pb,
-            )
-            .await
-        })
+        progress::await_in_progress(
+            format!(
+                "updating packages in '{}'",
+                environment_name.fancy_display()
+            ),
+            |pb| async {
+                install::execute_transaction(
+                    package_cache,
+                    &transaction,
+                    &installed_packages,
+                    prefix.root().to_path_buf(),
+                    authenticated_client,
+                    pb,
+                )
+                .await
+            },
+        )
         .await?;
     }
 
@@ -387,7 +399,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Update the prefix with Pypi records
         update_prefix_pypi(
-            environment.name().as_str(),
+            environment.name(),
             &prefix,
             platform,
             package_db,
@@ -460,7 +472,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Update the prefix with conda packages.
         let python_status = update_prefix_conda(
-            environment.name().as_str(),
+            environment.name(),
             &prefix,
             self.package_cache.clone(),
             environment.project().authenticated_client().clone(),
@@ -1616,7 +1628,7 @@ async fn spawn_create_prefix_task(
         let environment_name = environment_name.clone();
         async move {
             update_prefix_conda(
-                environment_name.as_str(),
+                &environment_name,
                 &prefix,
                 package_cache,
                 client,
