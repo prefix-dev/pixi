@@ -2,6 +2,7 @@ use crate::{
     consts,
     environment::{get_up_to_date_prefix, verify_prefix_location_unchanged, LockFileUsage},
     project::{manifest::PyPiRequirement, DependencyType, Project, SpecType},
+    FeatureName,
 };
 use clap::Parser;
 use itertools::{Either, Itertools};
@@ -121,7 +122,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .filter(|p| !project.platforms().contains(p))
         .cloned()
         .collect::<Vec<Platform>>();
-    project.manifest.add_platforms(platforms_to_add.iter())?;
+    project
+        .manifest
+        .add_platforms(platforms_to_add.iter(), &FeatureName::Default)?;
 
     match dependency_type {
         DependencyType::CondaDependency(spec_type) => {
