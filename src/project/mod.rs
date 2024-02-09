@@ -368,8 +368,7 @@ impl Project {
 
     /// Returns the Python index URLs to use for this project.
     pub fn pypi_index_url(&self) -> Url {
-        let index_url = normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap());
-        index_url
+        normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap())
     }
 
     /// Returns the package database used for caching python metadata, wheels and more. See the
