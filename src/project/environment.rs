@@ -195,7 +195,6 @@ impl<'p> Environment<'p> {
             .flat_map(|feature| feature.targets.resolve(platform))
             .rev() // Reverse to get the most specific targets last.
             .flat_map(|target| target.tasks.iter())
-            .map(|(name, task)| (name, task))
             .collect();
         Ok(result)
     }

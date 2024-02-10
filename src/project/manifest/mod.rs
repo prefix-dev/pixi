@@ -31,7 +31,7 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
-pub use system_requirements::{LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};
+pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector, Targets};
 use thiserror::Error;
 use toml_edit::{value, Array, Document, Item, Table, TomlError, Value};
