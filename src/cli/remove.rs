@@ -38,7 +38,7 @@ pub struct Args {
     pub platform: Option<Platform>,
 
     /// The feature for which the dependency should be removed
-    #[arg(long)]
+    #[arg(long, short)]
     pub feature: Option<String>,
 }
 

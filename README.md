@@ -29,8 +29,7 @@
 `pixi` is a cross-platform, multi-language package manager and workflow tool built on the foundation of the conda ecosystem. It provides developers with an exceptional experience similar to popular package managers like `cargo` or `yarn`, but for any language.
 
 Developed with ❤️ at [prefix.dev](https://prefix.dev).
-
-![Real-time pixi_demo](https://github.com/ruben-arts/pixi/assets/12893423/8b1a1273-a210-4be2-a664-32076c535428)
+[![Real-time pixi_demo](https://github.com/prefix-dev/pixi/assets/12893423/0fc8f8c8-ac13-4c14-891b-dc613f25475b)](https://asciinema.org/a/636482)
 
 ## Highlights
 

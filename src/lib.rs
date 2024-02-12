@@ -11,7 +11,7 @@ mod progress;
 mod project;
 mod prompt;
 mod repodata;
-mod task;
+pub mod task;
 #[cfg(unix)]
 pub mod unix;
 pub mod util;
@@ -28,7 +28,8 @@ pub use project::{
     DependencyType, Project, SpecType,
 };
 pub use task::{
-    CmdArgs, ExecutableTask, RunOutput, Task, TaskExecutionError, TaskGraph, TaskGraphError,
+    CmdArgs, ExecutableTask, FindTaskError, FindTaskSource, RunOutput, SearchEnvironments, Task,
+    TaskDisambiguation, TaskExecutionError, TaskGraph, TaskGraphError,
 };
 
 use rattler_networking::retry_policies::ExponentialBackoff;

@@ -2,6 +2,7 @@ mod dependencies;
 mod environment;
 pub mod errors;
 pub mod manifest;
+mod solve_group;
 pub mod virtual_packages;
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
@@ -30,8 +31,10 @@ use crate::{
 use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
 use url::Url;
 
+use crate::task::TaskName;
 pub use dependencies::Dependencies;
 pub use environment::Environment;
+pub use solve_group::SolveGroup;
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -255,11 +258,36 @@ impl Project {
             .parsed
             .environments
             .iter()
-            .map(|(_name, env)| Environment {
+            .map(|env| Environment {
                 project: self,
                 environment: env,
             })
             .collect()
+    }
+
+    /// Returns all the solve groups in the project.
+    pub fn solve_groups(&self) -> Vec<SolveGroup> {
+        self.manifest
+            .parsed
+            .solve_groups
+            .iter()
+            .map(|group| SolveGroup {
+                project: self,
+                solve_group: group,
+            })
+            .collect()
+    }
+
+    /// Returns the solve group with the given name or `None` if no such group exists.
+    pub fn solve_group(&self, name: &str) -> Option<SolveGroup> {
+        self.manifest
+            .parsed
+            .solve_groups
+            .find(name)
+            .map(|group| SolveGroup {
+                project: self,
+                solve_group: group,
+            })
     }
 
     /// Returns the channels used by this project.
@@ -279,7 +307,7 @@ impl Project {
     /// Get the tasks of this project
     ///
     /// TODO: Remove this function and use the tasks from the default environment instead.
-    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&str, &Task> {
+    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&TaskName, &Task> {
         self.default_environment()
             .tasks(platform, true)
             .unwrap_or_default()
@@ -290,7 +318,7 @@ impl Project {
     /// platform.
     ///
     /// TODO: Remove this function and use the `task` function from the default environment instead.
-    pub fn task_opt(&self, name: &str, platform: Option<Platform>) -> Option<&Task> {
+    pub fn task_opt(&self, name: &TaskName, platform: Option<Platform>) -> Option<&Task> {
         self.default_environment().task(name, platform).ok()
     }
 
@@ -350,7 +378,7 @@ impl Project {
             .package_db
             .get_or_try_init(|| {
                 PackageDb::new(
-                    self.client().clone(),
+                    self.authenticated_client().clone(),
                     &self.pypi_index_urls(),
                     &config::get_cache_dir()?.join("pypi/"),
                 )

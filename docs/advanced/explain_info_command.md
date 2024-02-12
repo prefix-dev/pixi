@@ -9,34 +9,33 @@ This information can also be retrieved in `json` format using the `--json` flag,
 
 ```title="Running pixi info in the pixi repo"
 ➜ pixi info
-pixi 0.0.7
-
-Platform            : linux-64
-Virtual packages    : __unix=0=0
-                    : __linux=6.4.4=0
-                    : __glibc=2.36=0
-                    : __cuda=12.2=0
-                    : __archspec=1=x86_64
-Cache dir           : /home/user/.cache/rattler/cache
-Auth storage        : /home/user/.rattler
+      Pixi version: 0.13.0
+          Platform: linux-64
+  Virtual packages: __unix=0=0
+                  : __linux=6.5.12=0
+                  : __glibc=2.36=0
+                  : __cuda=12.3=0
+                  : __archspec=1=x86_64
+         Cache dir: /home/user/.cache/rattler/cache
+      Auth storage: /home/user/.rattler/credentials.json
 
 Project
 ------------
+           Version: 0.13.0
+     Manifest file: /home/user/development/pixi/pixi.toml
+      Last updated: 25-01-2024 10:29:08
 
-Manifest file       : /home/user/development/pixi/pixi.toml
-Dependency count    : 6
-Last updated        : 22-07-2023 13:31:30
-Target platforms    : linux-64
-                    : win-64
-                    : osx-64
-                    : osx-arm64
+Environments
+------------
+default
+          Features: default
+          Channels: conda-forge
+  Dependency count: 10
+      Dependencies: pre-commit, rust, openssl, pkg-config, git, mkdocs, mkdocs-material, pillow, cairosvg, compilers
+  Target platforms: linux-64, osx-arm64, win-64, osx-64
+             Tasks: docs, test-all, test, build, lint, install, build-docs
 ```
 
-#### Options
-
-- `--extended`: Gives more information that would otherwise be too slow for command.
-  This shows the sizes of the directories.
-- `--json`: Get a machine-readable version of the information as output.
 
 ## Global info
 
@@ -91,20 +90,31 @@ This info is only available if your path has a manifest file (`pixi.toml`).
 The path to the manifest file that describes the project.
 For now, this can only be `pixi.toml`.
 
-### Dependency count
-
-The amount of dependencies defined in the manifest file.
-
 ### Last updated
 
 The last time the lockfile was updated, either manually or by pixi itself.
 
+## Environment info
+
+The environment info defined per environment. If you don't have any environments defined, this will only show the `default` environment.
+
+### Features
+
+This lists which features are enabled in the environment.
+For the default this is only `default`
+
+### Channels
+
+The list of channels used in this environment.
+
+### Dependency count
+
+The amount of dependencies defined that are defined for this environment (not the amount of installed dependencies).
+
+### Dependencies
+
+The list of dependencies defined for this environment.
+
 ### Target platforms
 
 The platforms the project has defined.
-
-### Environment size
-
-[requires `--extended`]
-
-The size of the `.pixi` folder in Mebibytes.

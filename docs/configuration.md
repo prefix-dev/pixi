@@ -26,22 +26,6 @@ The name of the project.
 name = "project-name"
 ```
 
-### `version` (optional)
-The version of the project.
-This should be a valid version based on the conda Version Spec.
-See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation of what is allowed in a Version Spec.
-```toml
-[project]
-version = "1.2.3"
-```
-
-### `authors` (optional)
-This is a list of authors of the project.
-```toml
-[project]
-authors = ["John Doe <j.doe@prefix.dev>", "Marie Curie <mss1867@gmail.com>"]
-```
-
 ### `channels`
 This is a list that defines the channels used to fetch the packages from.
 If you want to use channels hosted on `anaconda.org` you only need to use the name of the channel directly.
@@ -71,6 +55,22 @@ Pixi solves the dependencies for all these platforms and puts them in the lockfi
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 ```
 The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html)
+
+### `version` (optional)
+The version of the project.
+This should be a valid version based on the conda Version Spec.
+See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation of what is allowed in a Version Spec.
+```toml
+[project]
+version = "1.2.3"
+```
+
+### `authors` (optional)
+This is a list of authors of the project.
+```toml
+[project]
+authors = ["John Doe <j.doe@prefix.dev>", "Marie Curie <mss1867@gmail.com>"]
+```
 
 ### `description` (optional)
 This should contain a short description of the project.
@@ -374,4 +374,98 @@ tmp = "echo $TEMP"
 
 [target.osx-64.dependencies]
 clang = ">=16.0.6"
+```
+
+## The `feature` and `environments` tables
+The `feature` table allows you to define features that can be used to create different `[environments]`.
+The `[environments]` table allows you to define different environments. The design is explained in the [this design document](design_proposals/multi_environment_proposal.md).
+
+```toml title="Simplest example"
+[feature.test.dependencies]
+pytest = "*"
+
+[environments]
+test = ["test"]
+```
+This will create an environment called `test` that has `pytest` installed.
+
+### The `feature` table
+The `feature` table allows you to define the following fields per feature.
+
+- `dependencies`: Same as the [dependencies](#dependencies).
+- `pypi-dependencies`: Same as the [pypi-dependencies](#pypi-dependencies-beta-feature).
+- `system-requirements`: Same as the [system-requirements](#the-system-requirements-table).
+- `activation`: Same as the [activation](#the-activation-table).
+- `platforms`: Same as the [platforms](#platforms). When adding features together the intersection of the platforms is taken. Be aware that the `default` feature is always implied thus this must contain all platforms the project can support.
+- `channels`: Same as the [channels](#channels). Adding the `priority` field to the channels to allow concatenation of channels instead of overwriting.
+- `target`: Same as the [target](#the-target-table).
+- `tasks`: Same as the [tasks](#the-tasks-table).
+
+These tables are all also available without the `feature` prefix.
+When those are used we call them the `default` feature. This is a protected name you can not use for your own feature.
+
+```toml title="Full feature table specification"
+[feature.cuda]
+activation = {scripts = ["cuda_activation.sh"]}
+channels = ["nvidia"] # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
+dependencies = {cuda = "x.y.z", cudnn = "12.0"}
+pypi-dependencies = {torch = "==1.9.0"}
+platforms = ["linux-64", "osx-arm64"]
+system-requirements = {cuda = "12"}
+tasks = { warmup = "python warmup.py" }
+target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
+```
+
+```toml title="Full feature table but written as separate tables"
+[feature.cuda.activation]
+scripts = ["cuda_activation.sh"]
+
+[feature.cuda.dependencies]
+cuda = "x.y.z"
+cudnn = "12.0"
+
+[feature.cuda.pypi-dependencies]
+torch = "==1.9.0"
+
+[feature.cuda.system-requirements]
+cuda = "12"
+
+[feature.cuda.tasks]
+warmup = "python warmup.py"
+
+[feature.cuda.target.osx-arm64.dependencies]
+mlx = "x.y.z"
+
+# Channels and Platforms are not available as separate tables as they are implemented as lists
+[feature.cuda]
+channels = ["nvidia"]
+platforms = ["linux-64", "osx-arm64"]
+```
+
+### The `environments` table
+The `environments` table allows you to define environments that are created using the features defined in the `feature` tables.
+
+!!! important
+    `default` is always implied when creating environments.
+    If you don't want to use the `default` feature you can keep all the non feature tables empty.
+
+The environments table is defined using the following fields:
+
+- `features: Vec<Feature>`: The features that are included in the environment set, which is also the default field in the environments.
+- `solve-group: String`: The solve group is used to group environments together at the solve stage.
+  This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
+  For instance when testing a production environment with additional test dependencies.
+  These dependencies will then be the same version in all environments that have the same solve group.
+  But the different environments contain different subsets of the solve-groups dependencies set.
+
+```toml title="Simplest example"
+[environments]
+test = ["test"]
+```
+
+```toml title="Full environments table specification"
+[environments]
+test = {features = ["test"], solve-group = "test"}
+prod = {features = ["prod"], solve-group = "test"}
+lint = "lint"
 ```

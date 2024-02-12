@@ -4,6 +4,88 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.13.0] - 2024-02-01
+### ✨ Highlights
+This release is pretty crazy in amount of features! The major ones are:
+- We added support for multiple environments. :tada: Checkout the [documentation](https://pixi.sh/configuration/#the-feature-and-environments-tables)
+- We added support for `sdist` installation, which greatly improves the amount of packages that can be installed from PyPI. :rocket:
+
+> [!IMPORTANT]
+>
+> Renaming of `PIXI_PACKAGE_*` variables:
+> ```
+> PIXI_PACKAGE_ROOT -> PIXI_PROJECT_ROOT
+> PIXI_PACKAGE_NAME ->  PIXI_PROJECT_NAME
+> PIXI_PACKAGE_MANIFEST -> PIXI_PROJECT_MANIFEST
+> PIXI_PACKAGE_VERSION -> PIXI_PROJECT_VERSION
+> PIXI_PACKAGE_PLATFORMS -> PIXI_ENVIRONMENT_PLATFORMS
+> ```
+> Check documentation here: https://pixi.sh/environment/
+
+> [!IMPORTANT]
+>
+> The `.pixi/env/` folder has been moved to accommodate multiple environments.
+> If you only have one environment it is now named `.pixi/envs/default`.
+
+### 📃 Details
+
+#### Added
+- Add support for multiple environment:
+  - Update to rattler lock v4 by @baszalmstra in [#698](https://github.com/prefix-dev/pixi/pull/698)
+  - Multi-env installation and usage by @baszalmstra in [#721](https://github.com/prefix-dev/pixi/pull/721)
+  - Update all environments in the lock-file when requesting an environment by @baszalmstra in [#711](https://github.com/prefix-dev/pixi/pull/711)
+  - Run tasks in the env they are defined by @baszalmstra in [#731](https://github.com/prefix-dev/pixi/pull/731)
+  - `polarify` use-case as an example by @ruben-arts in [#735](https://github.com/prefix-dev/pixi/pull/735)
+  - Make environment name parsing strict by @ruben-arts in [#673](https://github.com/prefix-dev/pixi/pull/673)
+  - Use named environments (only "default" for now) by @ruben-arts in [#674](https://github.com/prefix-dev/pixi/pull/674)
+  - Use task graph instead of traversal by @baszalmstra in [#725](https://github.com/prefix-dev/pixi/pull/725)
+  - Multi env documentation by @ruben-arts in [#703](https://github.com/prefix-dev/pixi/pull/703)
+  - `pixi info -e/--environment` option by @ruben-arts in [#676](https://github.com/prefix-dev/pixi/pull/676)
+  - `pixi channel add -f/--feature` option by @ruben-arts in [#700](https://github.com/prefix-dev/pixi/pull/700)
+  - `pixi channel remove -f/--feature` option by @ruben-arts in [#706](https://github.com/prefix-dev/pixi/pull/706)
+  - `pixi remove -f/--feature` option by @ruben-arts in [#680](https://github.com/prefix-dev/pixi/pull/680)
+  - `pixi task list -e/--environment` option by @ruben-arts in [#694](https://github.com/prefix-dev/pixi/pull/694)
+  - `pixi task remove -f/--feature` option by @ruben-arts in [#694](https://github.com/prefix-dev/pixi/pull/694)
+  - `pixi install -e/--environment` option by @ruben-arts in [#722](https://github.com/prefix-dev/pixi/pull/722)
+
+
+- Support for sdists in `pypi-dependencies` by @tdejager in [#664](https://github.com/prefix-dev/pixi/pull/664)
+- Add pre-release support to `pypi-dependencies` by @tdejager in [#716](https://github.com/prefix-dev/pixi/pull/716)
+
+
+- Support adding dependencies for project's unsupported platforms by @orhun in [#668](https://github.com/prefix-dev/pixi/pull/668)
+- Add `pixi list` command by @hadim in [#665](https://github.com/prefix-dev/pixi/pull/665)
+- Add `pixi shell-hook` command by @orhun in [#672](https://github.com/prefix-dev/pixi/pull/672)[#679](https://github.com/prefix-dev/pixi/pull/679) [#684](https://github.com/prefix-dev/pixi/pull/684)
+- Use env variable to configure locked, frozen and color by @hadim in [#726](https://github.com/prefix-dev/pixi/pull/726)
+- `pixi self-update` by @hadim in [#675](https://github.com/prefix-dev/pixi/pull/675)
+- Add `PIXI_NO_PATH_UPDATE` for PATH update suppression by @chawyehsu in [#692](https://github.com/prefix-dev/pixi/pull/692)
+- Set the cache directory by @ruben-arts in [#683](https://github.com/prefix-dev/pixi/pull/683)
+
+
+#### Changed
+- Use consistent naming for tests module by @orhun in [#678](https://github.com/prefix-dev/pixi/pull/678)
+- Install pixi and add to the path in docker example by @ruben-arts in [#743](https://github.com/prefix-dev/pixi/pull/743)
+- Simplify the deserializer of `PyPiRequirement` by @orhun in [#744](https://github.com/prefix-dev/pixi/pull/744)
+- Use `tabwriter` instead of `comfy_table` by @baszalmstra in [#745](https://github.com/prefix-dev/pixi/pull/745)
+- Document environment variables by @ruben-arts in [#746](https://github.com/prefix-dev/pixi/pull/746)
+
+#### Fixed
+- Quote part of the task that has brackets (`[ or ]`) by @JafarAbdi in [#677](https://github.com/prefix-dev/pixi/pull/677)
+- Package clobber and `__pycache__` removal issues by @wolfv in [#573](https://github.com/prefix-dev/pixi/pull/573)
+- Non-global reqwest client by @tdejager in [#693](https://github.com/prefix-dev/pixi/pull/693)
+- Fix broken pipe error during search by @orhun in [#699](https://github.com/prefix-dev/pixi/pull/699)
+- Make `pixi search` result correct by @chawyehsu in [#713](https://github.com/prefix-dev/pixi/pull/713)
+- Allow the tasks for all platforms to be shown in `pixi info` by @ruben-arts in [#728](https://github.com/prefix-dev/pixi/pull/728)
+- Flaky tests while installing pypi dependencies by @baszalmstra in [#732](https://github.com/prefix-dev/pixi/pull/732)
+- Linux install script by @mariusvniekerk in [#737](https://github.com/prefix-dev/pixi/pull/737)
+- Download wheels in parallel to avoid deadlock by @baszalmstra in [#752](https://github.com/prefix-dev/pixi/pull/752)
+
+## New Contributors
+* @JafarAbdi made their first contribution in [#677](https://github.com/prefix-dev/pixi/pull/677)
+* @mariusvniekerk made their first contribution in [#737](https://github.com/prefix-dev/pixi/pull/737)
+[0.13.0]: https://github.com/prefix-dev/pixi/compare/v0.12.0..v0.13.0
+
+
 ## [0.12.0] - 2024-01-15
 ### ✨ Highlights
 
