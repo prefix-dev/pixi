@@ -16,6 +16,7 @@ use rip::{index::PackageDb, resolve::SDistResolution};
 use std::path::Path;
 
 use crate::project::manifest::{PyPiRequirement, SystemRequirements};
+pub use package_identifier::PypiPackageIdentifier;
 pub use satisfiability::{
     verify_environment_satisfiability, verify_platform_satisfiability, PlatformUnsat,
 };

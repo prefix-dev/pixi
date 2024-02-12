@@ -6,6 +6,7 @@ pub const PROJECT_LOCK_FILE: &str = "pixi.lock";
 pub const PIXI_DIR: &str = ".pixi";
 pub const PREFIX_FILE_NAME: &str = "prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
+pub const SOLVE_GROUP_ENVIRONMENTS_DIR: &str = "solve-group-envs";
 pub const PYPI_DEPENDENCIES: &str = "pypi-dependencies";
 
 pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
