@@ -58,6 +58,7 @@ It will only add if the package with its version constraint is able to work with
 - `--no-install`: Don't install the package to the environment, only add the package to the lock-file.
 - `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
+- `--feature <FEATURE> (-f)`: The feature for which the dependency should be added.
 
 ```shell
 pixi add numpy
@@ -70,6 +71,7 @@ pixi add --pypi requests[security]
 pixi add --platform osx-64 --build clang
 pixi add --no-install numpy
 pixi add --no-lockfile-update numpy
+pixi add --feature featurex numpy
 ```
 
 ## `install`

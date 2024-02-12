@@ -7,6 +7,7 @@ use crate::{
 use clap::Parser;
 use itertools::{Either, Itertools};
 
+use crate::environment::GroupedEnvironment;
 use indexmap::IndexMap;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{
@@ -86,6 +87,10 @@ pub struct Args {
     /// The platform(s) for which the dependency should be added
     #[arg(long, short)]
     pub platform: Vec<Platform>,
+
+    /// The feature for which the dependency should be added
+    #[arg(long, short)]
+    pub feature: Option<String>,
 }
 
 impl DependencyType {
@@ -126,6 +131,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .manifest
         .add_platforms(platforms_to_add.iter(), &FeatureName::Default)?;
 
+    let feature_name = args
+        .feature
+        .map_or(FeatureName::Default, FeatureName::Named);
+
     match dependency_type {
         DependencyType::CondaDependency(spec_type) => {
             let specs = args
@@ -137,6 +146,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .into_diagnostic()?;
             add_conda_specs_to_project(
                 &mut project,
+                &feature_name,
                 specs,
                 spec_type,
                 args.no_install,
@@ -247,6 +257,7 @@ pub async fn add_pypi_specs_to_project(
 
 pub async fn add_conda_specs_to_project(
     project: &mut Project,
+    feature_name: &FeatureName,
     specs: Vec<MatchSpec>,
     spec_type: SpecType,
     no_install: bool,
@@ -268,45 +279,62 @@ pub async fn add_conda_specs_to_project(
     // Determine the best version per platform
     let mut package_versions = HashMap::<PackageName, HashSet<Version>>::new();
 
-    let platforms = if specs_platforms.is_empty() {
-        Either::Left(project.platforms().into_iter())
-    } else {
-        Either::Right(specs_platforms.iter().copied())
-    };
+    // Get the grouped environments that contain the feature
+    let grouped_environments: Vec<GroupedEnvironment> = project
+        .grouped_environments()
+        .iter()
+        .filter(|env| {
+            env.features()
+                .map(|feat| &feat.name)
+                .contains(&feature_name)
+        })
+        .cloned()
+        .collect();
 
-    for platform in platforms {
-        // Solve the environment with the new specs added
-        let solved_versions = match determine_best_version(
-            project,
-            &new_specs,
-            spec_type,
-            &sparse_repo_data,
-            platform,
-        ) {
-            Ok(versions) => versions,
-            Err(err) => {
-                return Err(err).wrap_err_with(|| miette::miette!(
+    // TODO: show progress of this set of solves
+    // TODO: Make this parallel
+    // TODO: Make this more efficient by reusing the solves in the get_up_to_date_prefix
+    for grouped_environment in grouped_environments {
+        let platforms = if specs_platforms.is_empty() {
+            Either::Left(grouped_environment.platforms().into_iter())
+        } else {
+            Either::Right(specs_platforms.iter().copied())
+        };
+
+        for platform in platforms {
+            // Solve the environment with the new specs added
+            let solved_versions = match determine_best_version(
+                &grouped_environment,
+                &new_specs,
+                spec_type,
+                &sparse_repo_data,
+                platform,
+            ) {
+                Ok(versions) => versions,
+                Err(err) => {
+                    return Err(err).wrap_err_with(|| miette::miette!(
                         "could not determine any available versions for {} on {platform}. Either the package could not be found or version constraints on other dependencies result in a conflict.",
                         new_specs.keys().map(|s| s.as_source()).join(", ")
                     ));
-            }
-        };
+                }
+            };
 
-        // Collect all the versions seen.
-        for (name, version) in solved_versions {
-            package_versions.entry(name).or_default().insert(version);
+            // Collect all the versions seen.
+            for (name, version) in solved_versions {
+                package_versions.entry(name).or_default().insert(version);
+            }
         }
     }
 
     // Update the specs passed on the command line with the best available versions.
     for (name, spec) in new_specs {
-        let versions_seen = package_versions
-            .get(&name)
-            .cloned()
-            .expect("a version must have been previously selected");
         let updated_spec = if spec.version.is_none() {
             let mut updated_spec = spec.clone();
-            updated_spec.version = determine_version_constraint(&versions_seen);
+            if let Some(versions_seen) = package_versions.get(&name).cloned() {
+                updated_spec.version = determine_version_constraint(&versions_seen);
+            } else {
+                updated_spec.version = Some(VersionSpec::Any);
+            }
             updated_spec
         } else {
             spec
@@ -315,12 +343,14 @@ pub async fn add_conda_specs_to_project(
 
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.manifest.add_dependency(&spec, spec_type, None)?;
+            project
+                .manifest
+                .add_dependency(&spec, spec_type, None, feature_name)?;
         } else {
             for platform in specs_platforms.iter() {
                 project
                     .manifest
-                    .add_dependency(&spec, spec_type, Some(*platform))?;
+                    .add_dependency(&spec, spec_type, Some(*platform), feature_name)?;
             }
         }
     }
@@ -330,6 +360,7 @@ pub async fn add_conda_specs_to_project(
         LockFileUsage::Update
     };
 
+    // Update the prefix
     get_up_to_date_prefix(
         &project.default_environment(),
         lock_file_usage,
@@ -337,6 +368,7 @@ pub async fn add_conda_specs_to_project(
         sparse_repo_data,
     )
     .await?;
+
     project.save()?;
 
     Ok(())
@@ -344,7 +376,7 @@ pub async fn add_conda_specs_to_project(
 
 /// Given several specs determines the highest installable version for them.
 pub fn determine_best_version(
-    project: &Project,
+    environment: &GroupedEnvironment,
     new_specs: &HashMap<PackageName, NamelessMatchSpec>,
     new_specs_type: SpecType,
     sparse_repo_data: &IndexMap<(Channel, Platform), SparseRepoData>,
@@ -353,7 +385,7 @@ pub fn determine_best_version(
     // Build the combined set of specs while updating the dependencies with the new specs.
     let dependencies = SpecType::all()
         .map(|spec_type| {
-            let mut deps = project.dependencies(Some(spec_type), Some(platform));
+            let mut deps = environment.dependencies(Some(spec_type), Some(platform));
             if spec_type == new_specs_type {
                 for (new_name, new_spec) in new_specs.iter() {
                     deps.remove(new_name); // Remove any existing specs
@@ -369,7 +401,7 @@ pub fn determine_best_version(
     let package_names = dependencies.names().cloned().collect_vec();
 
     // Get the repodata for the current platform and for NoArch
-    let platform_sparse_repo_data = project
+    let platform_sparse_repo_data = environment
         .channels()
         .into_iter()
         .cloned()
@@ -393,9 +425,8 @@ pub fn determine_best_version(
 
         available_packages: &available_packages,
 
-        virtual_packages: project.virtual_packages(platform),
+        virtual_packages: environment.virtual_packages(platform),
 
-        // TODO: Add the information from the current lock file here.
         locked_packages: vec![],
 
         pinned_packages: vec![],

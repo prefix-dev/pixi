@@ -31,6 +31,7 @@ use crate::{
 use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
 use url::Url;
 
+use crate::environment::GroupedEnvironment;
 use crate::task::TaskName;
 pub use dependencies::Dependencies;
 pub use environment::Environment;
@@ -288,6 +289,23 @@ impl Project {
                 project: self,
                 solve_group: group,
             })
+    }
+
+    /// Return the grouped environments, which are all solve-groups and the environments that need to be solved.
+    pub fn grouped_environments(&self) -> Vec<GroupedEnvironment> {
+        let mut environments = self
+            .environments()
+            .into_iter()
+            .filter(|env| env.solve_group().is_none())
+            .map(GroupedEnvironment::from)
+            .collect::<Vec<GroupedEnvironment>>();
+        let groups: Vec<GroupedEnvironment> = self
+            .solve_groups()
+            .into_iter()
+            .map(GroupedEnvironment::from)
+            .collect();
+        environments.extend(groups);
+        environments
     }
 
     /// Returns the channels used by this project.

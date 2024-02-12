@@ -2,7 +2,7 @@ use miette::{Context, IntoDiagnostic};
 
 use crate::lock_file::{resolve_pypi, LockedCondaPackages, LockedPypiPackages};
 use crate::project::virtual_packages::get_minimal_virtual_packages;
-use crate::project::{Dependencies, SolveGroup};
+use crate::project::{manifest, Dependencies, SolveGroup};
 use crate::{
     config, consts, install, install_pypi, lock_file,
     lock_file::{
@@ -1828,10 +1828,27 @@ impl<'p> GroupedEnvironment<'p> {
         }
     }
 
+    pub fn platforms(&self) -> HashSet<Platform> {
+        match self {
+            GroupedEnvironment::Group(group) => group
+                .environments()
+                .flat_map(|env| env.platforms())
+                .collect(),
+            GroupedEnvironment::Environment(env) => env.platforms(),
+        }
+    }
+
     pub fn has_pypi_dependencies(&self) -> bool {
         match self {
             GroupedEnvironment::Group(group) => group.has_pypi_dependencies(),
             GroupedEnvironment::Environment(env) => env.has_pypi_dependencies(),
+        }
+    }
+
+    pub fn features(&self) -> Box<dyn Iterator<Item = &'p manifest::Feature> + 'p> {
+        match self {
+            GroupedEnvironment::Group(group) => Box::new(group.features(true)),
+            GroupedEnvironment::Environment(env) => Box::new(env.features(true)),
         }
     }
 }
