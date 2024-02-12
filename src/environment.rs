@@ -39,8 +39,10 @@ use rip::{index::PackageDb, resolve::SDistResolution};
 use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::hash::Hash;
+use std::iter::ExactSizeIterator;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Instant;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -51,6 +53,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use tracing::Instrument;
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
 /// Errors when there is a file system error or the path does not align with the defined prefix.
@@ -677,13 +680,19 @@ impl<'p> OutdatedEnvironments<'p> {
 
                 // If there is a mismatch there is a mismatch for the entire group
                 if conda_package_mismatch {
+                    tracing::info!("the locked conda packages in solve group {} are not consistent for all environments for platform {}",
+                        consts::SOLVE_GROUP_STYLE.apply_to(solve_group.name()),
+                        consts::PLATFORM_STYLE.apply_to(platform));
                     conda_solve_groups_out_of_date
                         .entry(solve_group.clone())
                         .or_default()
                         .insert(platform);
                 }
 
-                if pypi_package_mismatch {
+                if pypi_package_mismatch && !conda_package_mismatch {
+                    tracing::info!("the locked pypi packages in solve group {} are not consistent for all environments for platform {}",
+                        consts::SOLVE_GROUP_STYLE.apply_to(solve_group.name()),
+                        consts::PLATFORM_STYLE.apply_to(platform));
                     pypi_solve_groups_out_of_date
                         .entry(solve_group.clone())
                         .or_default()
@@ -1359,7 +1368,7 @@ async fn ensure_up_to_date_lock_file(
     while let Some(result) = pending_futures.next().await {
         top_level_progress.inc(1);
         match result? {
-            TaskResult::CondaGroupSolved(group_name, platform, records) => {
+            TaskResult::CondaGroupSolved(group_name, platform, records, duration) => {
                 let group = GroupedEnvironment::from_name(project, &group_name)
                     .expect("group should exist");
 
@@ -1375,16 +1384,18 @@ async fn ensure_up_to_date_lock_file(
                 match group_name {
                     GroupedEnvironmentName::Group(_) => {
                         tracing::info!(
-                            "solved conda package for solve group '{}' '{}'",
+                            "resolved conda environment for solve group '{}' '{}' in {}",
                             group_name.fancy_display(),
-                            platform
+                            consts::PLATFORM_STYLE.apply_to(platform),
+                            humantime::format_duration(duration)
                         );
                     }
                     GroupedEnvironmentName::Environment(env_name) => {
                         tracing::info!(
-                            "solved conda package for environment '{}' '{}'",
+                            "resolved conda environment for environment '{}' '{}' in {}",
                             env_name.fancy_display(),
-                            platform
+                            consts::PLATFORM_STYLE.apply_to(platform),
+                            humantime::format_duration(duration)
                         );
                     }
                 }
@@ -1403,13 +1414,17 @@ async fn ensure_up_to_date_lock_file(
                     .set(records)
                     .expect("records should not be solved twice");
 
-                tracing::info!(
-                    "extracted conda packages for '{}' '{}'",
-                    environment.name().fancy_display(),
-                    platform
-                );
+                let group = GroupedEnvironment::from(environment.clone());
+                if matches!(group, GroupedEnvironment::Group(_)) {
+                    tracing::info!(
+                        "extracted conda packages for '{}' '{}' from the '{}' group",
+                        environment.name().fancy_display(),
+                        consts::PLATFORM_STYLE.apply_to(platform),
+                        group.name().fancy_display(),
+                    );
+                }
             }
-            TaskResult::CondaPrefixUpdated(group_name, prefix, python_status) => {
+            TaskResult::CondaPrefixUpdated(group_name, prefix, python_status, duration) => {
                 let group = GroupedEnvironment::from_name(project, &group_name)
                     .expect("grouped environment should exist");
 
@@ -1421,11 +1436,12 @@ async fn ensure_up_to_date_lock_file(
                     .expect("prefix should not be instantiated twice");
 
                 tracing::info!(
-                    "updated conda packages in the '{}' prefix",
-                    group.name().fancy_display()
+                    "updated conda packages in the '{}' prefix in {}",
+                    group.name().fancy_display(),
+                    humantime::format_duration(duration)
                 );
             }
-            TaskResult::PypiGroupSolved(group_name, platform, records) => {
+            TaskResult::PypiGroupSolved(group_name, platform, records, duration) => {
                 let group = GroupedEnvironment::from_name(project, &group_name)
                     .expect("group should exist");
 
@@ -1441,16 +1457,18 @@ async fn ensure_up_to_date_lock_file(
                 match group_name {
                     GroupedEnvironmentName::Group(_) => {
                         tracing::info!(
-                            "solved pypi package for solve group '{}' '{}'",
+                            "resolved pypi packages for solve group '{}' '{}' in {}",
                             group_name.fancy_display(),
-                            platform
+                            consts::PLATFORM_STYLE.apply_to(platform),
+                            humantime::format_duration(duration),
                         );
                     }
                     GroupedEnvironmentName::Environment(env_name) => {
                         tracing::info!(
-                            "solved pypi package for environment '{}' '{}'",
+                            "resolved pypi packages for environment '{}' '{}' in {}",
                             env_name.fancy_display(),
-                            platform
+                            consts::PLATFORM_STYLE.apply_to(platform),
+                            humantime::format_duration(duration),
                         );
                     }
                 }
@@ -1469,11 +1487,15 @@ async fn ensure_up_to_date_lock_file(
                     .set(records)
                     .expect("records should not be solved twice");
 
-                tracing::info!(
-                    "solved pypi packages for '{}' '{}'",
-                    environment.name().fancy_display(),
-                    platform
-                );
+                let group = GroupedEnvironment::from(environment.clone());
+                if matches!(group, GroupedEnvironment::Group(_)) {
+                    tracing::info!(
+                        "extracted pypi packages for '{}' '{}' from the '{}' group",
+                        environment.name().fancy_display(),
+                        consts::PLATFORM_STYLE.apply_to(platform),
+                        group.name().fancy_display(),
+                    );
+                }
             }
         }
     }
@@ -1532,10 +1554,20 @@ async fn ensure_up_to_date_lock_file(
 /// Represents data that is sent back from a task. This is used to communicate the result of a task
 /// back to the main task which will forward the information to other tasks waiting for results.
 enum TaskResult {
-    CondaGroupSolved(GroupedEnvironmentName, Platform, RepoDataRecordsByName),
+    CondaGroupSolved(
+        GroupedEnvironmentName,
+        Platform,
+        RepoDataRecordsByName,
+        Duration,
+    ),
     CondaSolved(EnvironmentName, Platform, Arc<RepoDataRecordsByName>),
-    CondaPrefixUpdated(GroupedEnvironmentName, Prefix, Box<PythonStatus>),
-    PypiGroupSolved(GroupedEnvironmentName, Platform, PypiRecordsByName),
+    CondaPrefixUpdated(GroupedEnvironmentName, Prefix, Box<PythonStatus>, Duration),
+    PypiGroupSolved(
+        GroupedEnvironmentName,
+        Platform,
+        PypiRecordsByName,
+        Duration,
+    ),
     PypiSolved(EnvironmentName, Platform, Arc<PypiRecordsByName>),
 }
 
@@ -1564,61 +1596,73 @@ async fn spawn_solve_conda_environment_task(
     // Whether there are pypi dependencies, and we should fetch purls.
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
-    tokio::spawn(async move {
-        let pb = SolveProgressBar::new(
-            global_multi_progress().add(ProgressBar::hidden()),
-            platform,
-            group_name.clone(),
-        );
-        pb.start();
+    tokio::spawn(
+        async move {
+            let pb = SolveProgressBar::new(
+                global_multi_progress().add(ProgressBar::hidden()),
+                platform,
+                group_name.clone(),
+            );
+            pb.start();
 
-        // Convert the dependencies into match specs
-        let match_specs = dependencies
-            .iter_specs()
-            .map(|(name, constraint)| {
-                MatchSpec::from_nameless(constraint.clone(), Some(name.clone()))
-            })
-            .collect_vec();
+            let start = Instant::now();
 
-        // Extract the package names from the dependencies
-        let package_names = dependencies.names().cloned().collect_vec();
+            // Convert the dependencies into match specs
+            let match_specs = dependencies
+                .iter_specs()
+                .map(|(name, constraint)| {
+                    MatchSpec::from_nameless(constraint.clone(), Some(name.clone()))
+                })
+                .collect_vec();
 
-        // Extract the repo data records needed to solve the environment.
-        pb.set_message("loading repodata");
-        let available_packages = load_sparse_repo_data_async(
-            package_names.clone(),
-            sparse_repo_data,
-            channels,
-            platform,
-        )
-        .await?;
+            // Extract the package names from the dependencies
+            let package_names = dependencies.names().cloned().collect_vec();
 
-        // Solve conda packages
-        pb.set_message("resolving conda");
-        let mut records = lock_file::resolve_conda_dependencies(
-            match_specs,
-            virtual_packages,
-            existing_repodata_records.records.clone(),
-            available_packages,
-        )?;
+            // Extract the repo data records needed to solve the environment.
+            pb.set_message("loading repodata");
+            let available_packages = load_sparse_repo_data_async(
+                package_names.clone(),
+                sparse_repo_data,
+                channels,
+                platform,
+            )
+            .await?;
 
-        // Add purl's for the conda packages that are also available as pypi packages if we need them.
-        if has_pypi_dependencies {
-            lock_file::pypi::amend_pypi_purls(&mut records).await?;
+            // Solve conda packages
+            pb.set_message("resolving conda");
+            let mut records = lock_file::resolve_conda_dependencies(
+                match_specs,
+                virtual_packages,
+                existing_repodata_records.records.clone(),
+                available_packages,
+            )?;
+
+            // Add purl's for the conda packages that are also available as pypi packages if we need them.
+            if has_pypi_dependencies {
+                lock_file::pypi::amend_pypi_purls(&mut records).await?;
+            }
+
+            // Turn the records into a map by name
+            let records_by_name = RepoDataRecordsByName::from(records);
+
+            let end = Instant::now();
+
+            // Finish the progress bar
+            pb.finish();
+
+            Ok(TaskResult::CondaGroupSolved(
+                group_name,
+                platform,
+                records_by_name,
+                end - start,
+            ))
         }
-
-        // Turn the records into a map by name
-        let records_by_name = RepoDataRecordsByName::from(records);
-
-        // Finish the progress bar
-        pb.finish();
-
-        Ok(TaskResult::CondaGroupSolved(
-            group_name,
-            platform,
-            records_by_name,
-        ))
-    })
+        .instrument(tracing::info_span!(
+            "resolve_conda",
+            group = %group.name().as_str(),
+            platform = %platform
+        )),
+    )
     .await
     .unwrap_or_else(|e| match e.try_into_panic() {
         Ok(panic) => std::panic::resume_unwind(panic),
@@ -1720,6 +1764,7 @@ async fn spawn_solve_pypi_task(
             environment.name().clone(),
             platform,
             PypiRecordsByName::default(),
+            Duration::from_millis(0),
         ));
     }
 
@@ -1733,34 +1778,45 @@ async fn spawn_solve_pypi_task(
     let (repodata_records, (prefix, python_status)) = tokio::join!(repodata_records, prefix);
 
     let environment_name = environment.name().clone();
-    let pypi_packages = tokio::spawn(async move {
-        let pb = SolveProgressBar::new(
-            global_multi_progress().add(ProgressBar::hidden()),
-            platform,
-            environment_name,
-        );
-        pb.start();
+    let (pypi_packages, duration) = tokio::spawn(
+        async move {
+            let pb = SolveProgressBar::new(
+                global_multi_progress().add(ProgressBar::hidden()),
+                platform,
+                environment_name,
+            );
+            pb.start();
 
-        let result = resolve_pypi(
-            &package_db,
-            dependencies,
-            system_requirements,
-            &repodata_records.records,
-            &[],
-            platform,
-            &pb.pb,
-            python_status
-                .location()
-                .map(|path| prefix.root().join(path))
-                .as_deref(),
-            sdist_resolution,
-        )
-        .await;
+            let start = Instant::now();
 
-        pb.finish();
+            let records = resolve_pypi(
+                &package_db,
+                dependencies,
+                system_requirements,
+                &repodata_records.records,
+                &[],
+                platform,
+                &pb.pb,
+                python_status
+                    .location()
+                    .map(|path| prefix.root().join(path))
+                    .as_deref(),
+                sdist_resolution,
+            )
+            .await?;
 
-        result.map(PypiRecordsByName::from_iter)
-    })
+            let end = Instant::now();
+
+            pb.finish();
+
+            Ok((PypiRecordsByName::from_iter(records), end - start))
+        }
+        .instrument(tracing::info_span!(
+            "resolve_pypi",
+            group = %environment.name().as_str(),
+            platform = %platform
+        )),
+    )
     .await
     .unwrap_or_else(|e| match e.try_into_panic() {
         Ok(panic) => std::panic::resume_unwind(panic),
@@ -1771,6 +1827,7 @@ async fn spawn_solve_pypi_task(
         environment.name().clone(),
         platform,
         pypi_packages,
+        duration,
     ))
 }
 
@@ -1802,11 +1859,12 @@ async fn spawn_create_prefix_task(
         tokio::try_join!(conda_records.map(Ok), installed_packages_future)?;
 
     // Spawn a background task to update the prefix
-    let python_status = tokio::spawn({
+    let (python_status, duration) = tokio::spawn({
         let prefix = prefix.clone();
         let group_name = group_name.clone();
         async move {
-            update_prefix_conda(
+            let start = Instant::now();
+            let python_status = update_prefix_conda(
                 group_name,
                 &prefix,
                 package_cache,
@@ -1815,7 +1873,9 @@ async fn spawn_create_prefix_task(
                 &conda_records.records,
                 Platform::current(),
             )
-            .await
+            .await?;
+            let end = Instant::now();
+            Ok((python_status, end - start))
         }
     })
     .await
@@ -1828,6 +1888,7 @@ async fn spawn_create_prefix_task(
         group_name,
         prefix,
         Box::new(python_status),
+        duration,
     ))
 }
 
@@ -1938,24 +1999,40 @@ pub enum GroupedEnvironmentName {
 impl GroupedEnvironmentName {
     pub fn fancy_display(&self) -> console::StyledObject<&str> {
         match self {
-            GroupedEnvironmentName::Group(name) => console::style(name.as_str()).magenta(),
+            GroupedEnvironmentName::Group(name) => console::style(name.as_str()).cyan(),
             GroupedEnvironmentName::Environment(name) => name.fancy_display(),
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            GroupedEnvironmentName::Group(group) => group.as_str(),
+            GroupedEnvironmentName::Environment(env) => env.as_str(),
         }
     }
 }
 
 impl<'p> From<SolveGroup<'p>> for GroupedEnvironment<'p> {
     fn from(source: SolveGroup<'p>) -> Self {
-        GroupedEnvironment::Group(source)
+        let mut envs = source.environments().peekable();
+        let first = envs.next();
+        let second = envs.peek();
+        if second.is_some() {
+            GroupedEnvironment::Group(source)
+        } else if let Some(first) = first {
+            GroupedEnvironment::Environment(first)
+        } else {
+            unreachable!("empty solve group")
+        }
     }
 }
 
 impl<'p> From<Environment<'p>> for GroupedEnvironment<'p> {
     fn from(source: Environment<'p>) -> Self {
-        source.solve_group().map_or_else(
-            || GroupedEnvironment::Environment(source),
-            GroupedEnvironment::Group,
-        )
+        match source.solve_group() {
+            Some(group) if group.environments().len() > 1 => GroupedEnvironment::Group(group),
+            _ => GroupedEnvironment::Environment(source),
+        }
     }
 }
 

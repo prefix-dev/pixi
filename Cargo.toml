@@ -32,6 +32,7 @@ dunce = "1.0.4"
 flate2 = "1.0.28"
 futures = "0.3.30"
 human_bytes = "0.4.3"
+humantime = "2.1.0"
 indexmap = { version = "2.2.2", features = ["serde"] }
 indicatif = "0.17.7"
 insta = { version = "1.34.0", features = ["yaml"] }

@@ -2698,6 +2698,7 @@ dependencies = [
  "flate2",
  "futures",
  "human_bytes",
+ "humantime",
  "indexmap 2.2.2",
  "indicatif",
  "insta",

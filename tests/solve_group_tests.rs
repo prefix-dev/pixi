@@ -9,7 +9,7 @@ use url::Url;
 mod common;
 
 #[tokio::test]
-async fn solve_group_functionality() {
+async fn conda_solve_group_functionality() {
     let mut package_database = PackageDatabase::default();
 
     // Add a package `foo` with 3 different versions
