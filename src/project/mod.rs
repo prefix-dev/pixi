@@ -1,6 +1,7 @@
 mod dependencies;
 mod environment;
 pub mod errors;
+mod grouped_environment;
 pub mod manifest;
 mod solve_group;
 pub mod virtual_packages;
@@ -35,6 +36,7 @@ use url::Url;
 use crate::task::TaskName;
 pub use dependencies::Dependencies;
 pub use environment::Environment;
+pub use grouped_environment::{GroupedEnvironment, GroupedEnvironmentName};
 pub use solve_group::SolveGroup;
 
 /// The dependency types we support
@@ -53,6 +55,7 @@ impl DependencyType {
         }
     }
 }
+
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 /// What kind of dependency spec do we have
 pub enum SpecType {
@@ -217,6 +220,11 @@ impl Project {
     /// Returns the environment directory
     pub fn environments_dir(&self) -> PathBuf {
         self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
+    }
+
+    /// Returns the solve group directory
+    pub fn solve_group_environments_dir(&self) -> PathBuf {
+        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
 
     /// Returns the path to the manifest file.
