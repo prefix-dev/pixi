@@ -370,16 +370,11 @@ jobs:
           tree -L 3 ../
           chmod a+x pixi_bin/pixi-${{ matrix.target }}
           ./pixi_bin/pixi-${{ matrix.target }} --help
-      - name: Symlink binary to pixi in bin
-        run: |
-            ln -s pixi_bin/pixi-${{ matrix.target }} pixi_bin/pixi
-            export PATH=$PWD/pixi_bin:$PATH
-            pixi --help
       - name: checkout repo
         uses: actions/checkout@v4
       - name: Install pixi
         run: |
-          ./pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }} install
+          ./pixi_bin/pixi-${{ matrix.target }} install
       - name: Run pixi run lint
         run: |
-          ./pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }} run lint
+          ./pixi_bin/pixi-${{ matrix.target }} run lint
