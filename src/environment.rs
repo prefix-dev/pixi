@@ -156,6 +156,7 @@ pub async fn get_up_to_date_prefix(
             existing_repo_data,
             lock_file_usage,
             no_install,
+            ..UpdateLockFileOptions::default()
         })
         .await?;
 

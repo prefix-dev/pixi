@@ -33,6 +33,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use tokio::sync::Semaphore;
 use tracing::Instrument;
 
 impl Project {
@@ -44,13 +45,7 @@ impl Project {
         &self,
         options: UpdateLockFileOptions,
     ) -> miette::Result<LockFileDerivedData<'_>> {
-        update::ensure_up_to_date_lock_file(
-            self,
-            options.existing_repo_data,
-            options.lock_file_usage,
-            options.no_install,
-        )
-        .await
+        update::ensure_up_to_date_lock_file(self, options).await
     }
 }
 
@@ -65,6 +60,10 @@ pub struct UpdateLockFileOptions {
 
     /// Existing repodata that can be used to avoid downloading it again.
     pub existing_repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
+
+    /// The maximum number of concurrent solves that are allowed to run. If this value is None
+    /// a heuristic is used based on the number of cores available from the system.
+    pub max_concurrent_solves: Option<usize>,
 }
 
 /// A struct that holds the lock-file and any potential derived data that was computed when calling
@@ -371,6 +370,12 @@ impl<'p> UpdateContext<'p> {
     }
 }
 
+/// Returns the default number of concurrent solves.
+fn default_max_concurrent_solves() -> usize {
+    let available_parallelism = std::thread::available_parallelism().map_or(1, |n| n.get());
+    (available_parallelism.saturating_sub(2)).min(4).max(1)
+}
+
 /// Ensures that the lock-file is up-to-date with the project.
 ///
 /// This function will return a [`LockFileDerivedData`] struct that contains the lock-file and any
@@ -383,22 +388,24 @@ impl<'p> UpdateContext<'p> {
 /// possible.
 pub async fn ensure_up_to_date_lock_file(
     project: &Project,
-    existing_repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
-    lock_file_usage: LockFileUsage,
-    no_install: bool,
+    options: UpdateLockFileOptions,
 ) -> miette::Result<LockFileDerivedData<'_>> {
     let lock_file = load_lock_file(project).await?;
     let current_platform = Platform::current();
     let package_cache = Arc::new(PackageCache::new(config::get_cache_dir()?.join("pkgs")));
+    let max_concurrent_solves = options
+        .max_concurrent_solves
+        .unwrap_or_else(default_max_concurrent_solves);
+    let solve_semaphore = Arc::new(Semaphore::new(max_concurrent_solves));
 
     // should we check the lock-file in the first place?
-    if !lock_file_usage.should_check_if_out_of_date() {
+    if !options.lock_file_usage.should_check_if_out_of_date() {
         tracing::info!("skipping check if lock-file is up-to-date");
 
         return Ok(LockFileDerivedData {
             lock_file,
             package_cache,
-            repo_data: existing_repo_data,
+            repo_data: options.existing_repo_data,
             updated_conda_prefixes: Default::default(),
             updated_pypi_prefixes: Default::default(),
         });
@@ -413,14 +420,14 @@ pub async fn ensure_up_to_date_lock_file(
         return Ok(LockFileDerivedData {
             lock_file,
             package_cache,
-            repo_data: existing_repo_data,
+            repo_data: options.existing_repo_data,
             updated_conda_prefixes: Default::default(),
             updated_pypi_prefixes: Default::default(),
         });
     }
 
     // If the lock-file is out of date, but we're not allowed to update it, we should exit.
-    if !lock_file_usage.allows_lock_file_updates() {
+    if !options.lock_file_usage.allows_lock_file_updates() {
         miette::bail!("lock-file not up-to-date with the project");
     }
 
@@ -443,13 +450,13 @@ pub async fn ensure_up_to_date_lock_file(
     let mut repo_data = fetch_sparse_repodata_targets(
         fetch_targets
             .into_iter()
-            .filter(|target| !existing_repo_data.contains_key(target)),
+            .filter(|target| !options.existing_repo_data.contains_key(target)),
         project.authenticated_client(),
     )
     .await?;
 
     // Add repo data that was already fetched
-    repo_data.extend(existing_repo_data);
+    repo_data.extend(options.existing_repo_data);
 
     // Extract the current conda records from the lock-file
     // TODO: Should we parallelize this? Measure please.
@@ -605,6 +612,7 @@ pub async fn ensure_up_to_date_lock_file(
                     locked_group_records,
                     context.repo_data.clone(),
                     platform,
+                    solve_semaphore.clone(),
                 )
                 .boxed_local();
 
@@ -666,7 +674,7 @@ pub async fn ensure_up_to_date_lock_file(
         }
 
         // If we are not allowed to install, we can't instantiate a prefix.
-        if no_install {
+        if options.no_install {
             miette::bail!("Cannot update pypi dependencies without first installing a conda prefix that includes python.");
         }
 
@@ -1027,6 +1035,7 @@ async fn spawn_solve_conda_environment_task(
     existing_repodata_records: Arc<RepoDataRecordsByName>,
     sparse_repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
     platform: Platform,
+    concurrency_semaphore: Arc<Semaphore>,
 ) -> miette::Result<TaskResult> {
     // Get the dependencies for this platform
     let dependencies = group.dependencies(None, Some(platform));
@@ -1048,6 +1057,11 @@ async fn spawn_solve_conda_environment_task(
 
     tokio::spawn(
         async move {
+            let _permit = concurrency_semaphore
+                .acquire()
+                .await
+                .expect("the semaphore is never closed");
+
             let pb = SolveProgressBar::new(
                 global_multi_progress().add(ProgressBar::hidden()),
                 platform,
@@ -1086,7 +1100,14 @@ async fn spawn_solve_conda_environment_task(
                 existing_repodata_records.records.clone(),
                 available_packages,
             )
-            .await?;
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to solve the conda requirements of '{}' '{}'",
+                    group_name.fancy_display(),
+                    consts::PLATFORM_STYLE.apply_to(platform)
+                )
+            })?;
 
             // Add purl's for the conda packages that are also available as pypi packages if we need them.
             if has_pypi_dependencies {
