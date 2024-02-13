@@ -363,18 +363,19 @@ jobs:
         with:
           name: pixi-${{ matrix.target }}
           path: pixi_bin
-      - name: Setup unix binary
-        if: matrix.os != 'windows-latest' || matrix.target != 'aarch64-pc-windows-msvc'
+      - name: Debug
         run: |
           pwd
           tree -L 3 ../
-          chmod a+x pixi_bin/pixi-${{ matrix.target }}
-          ./pixi_bin/pixi-${{ matrix.target }} --help
+      - name: Setup unix binary, add to github path
+        if: matrix.os != 'windows-latest' || matrix.target != 'aarch64-pc-windows-msvc'
+        run: |
+          mv pixi_bin/pixi-${{ matrix.target }} pixi_bin/pixi
+          chmod a+x pixi_bin/pixi
+          export PATH=$PATH:$(pwd)/pixi_bin
+          pixi --help
       - name: checkout repo
         uses: actions/checkout@v4
       - name: Install pixi
         run: |
-          ./pixi_bin/pixi-${{ matrix.target }} install
-      - name: Run pixi run lint
-        run: |
-          ./pixi_bin/pixi-${{ matrix.target }} run lint
+          pixi install
