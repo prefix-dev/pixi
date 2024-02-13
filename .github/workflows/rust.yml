@@ -366,9 +366,10 @@ jobs:
       - name: Setup unix binary
         if: matrix.os != 'windows-latest' || matrix.target != 'aarch64-pc-windows-msvc'
         run: |
+          pwd
           tree -L 3 ../
-          chmod a+x pixi_bin/pixi*
-          ./pixi_bin/pixi --help
+          chmod a+x pixi_bin/pixi-${{ matrix.target }}
+          ./pixi_bin/pixi-${{ matrix.target }} --help
       - name: Run thrift-compiler
         run: |
           chmod a+x compiler/cpp/thrift
