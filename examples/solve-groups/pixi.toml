@@ -14,6 +14,9 @@ pydantic = "*"
 python = ">=3.8"
 py-rattler = "*"
 
+[feature.min_py38.pypi-dependencies]
+pytest = "*"
+
 [environments]
 # The solve-group mixes the dependencies of all features in the group and solves them together.
 # Both environments should have at most python 3.10, even though `min-py38` environment only
