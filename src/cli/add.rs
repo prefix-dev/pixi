@@ -333,7 +333,43 @@ pub async fn add_conda_specs_to_project(
             if let Some(versions_seen) = package_versions.get(&name).cloned() {
                 updated_spec.version = determine_version_constraint(&versions_seen);
             } else {
-                updated_spec.version = Some(VersionSpec::Any);
+                // If we didn't find any versions, we'll just use the latest version we can find in the repodata.
+                let mut found_records = Vec::new();
+
+                // Get platforms to search for including NoArch
+                let platforms = if specs_platforms.is_empty() {
+                    let mut temp = project.platforms().into_iter().collect_vec();
+                    temp.push(Platform::NoArch);
+                    temp
+                } else {
+                    let mut temp = specs_platforms.clone();
+                    temp.push(Platform::NoArch);
+                    temp
+                };
+
+                // Search for the package in the all the channels and platforms
+                for channel in project.channels() {
+                    for platform in &platforms {
+                        let sparse_repo_data = sparse_repo_data.get(&(channel.clone(), *platform));
+                        if let Some(sparse_repo_data) = sparse_repo_data {
+                            let records = sparse_repo_data.load_records(&name).into_diagnostic()?;
+                            // Add max of every channel and platform
+                            if let Some(max_record) = records.into_iter().max_by_key(|record| {
+                                record.package_record.version.version().clone()
+                            }) {
+                                found_records.push(max_record);
+                            }
+                        };
+                    }
+                }
+
+                // Determine the version constraint based on the max of every channel and platform.
+                updated_spec.version = determine_version_constraint(
+                    &found_records
+                        .iter()
+                        .map(|record| record.package_record.version.version().clone())
+                        .collect_vec(),
+                );
             }
             updated_spec
         } else {
