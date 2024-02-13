@@ -370,16 +370,11 @@ jobs:
           tree -L 3 ../
           chmod a+x pixi_bin/pixi-${{ matrix.target }}
           ./pixi_bin/pixi-${{ matrix.target }} --help
-      - name: Run thrift-compiler
+      - name: Symlink binary to pixi in bin
         run: |
-          chmod a+x compiler/cpp/thrift
-          compiler/cpp/thrift -version
-      - name: Run binary
-        run: |
-          ./pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }} --help
-      - name: Run binary with --version
-        run: |
-          ./pixi-${{ matrix.target }}${{ steps.bin.outputs.EXE_SUFFIX }} --version
+            ln -s pixi_bin/pixi-${{ matrix.target }} pixi_bin/pixi
+            export PATH=$PWD/pixi_bin:$PATH
+            pixi --help
       - name: checkout repo
         uses: actions/checkout@v4
       - name: Install pixi
