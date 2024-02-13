@@ -6,6 +6,7 @@ use crate::{
     task::{error::MissingTaskError, CmdArgs, Custom, Task},
     Project,
 };
+use itertools::Itertools;
 use miette::Diagnostic;
 use std::{
     borrow::Cow,
@@ -91,11 +92,7 @@ impl fmt::Display for TaskGraph<'_> {
             f,
             "TaskGraph: number of nodes: {}, nodes: {}",
             self.nodes.len(),
-            self.nodes
-                .iter()
-                .map(|node| node.to_string())
-                .collect::<Vec<String>>()
-                .join("\n")
+            self.nodes.iter().format("\n")
         )
     }
 }
