@@ -11,7 +11,6 @@ start = 'python -c "import sys; print(f\"Python version: {sys.version}\"); impor
 python = ">=3.9"
 pip = "*"
 polars = ">=0.14.24,<0.21"
-rubin-env = "*"
 
 [feature.py39.dependencies]
 python = "3.9.*"
