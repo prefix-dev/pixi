@@ -3036,9 +3036,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_installs_packages"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a79b4b50124f1f9c266583862c974019e66e953139f954e776a1e52268b2d262"
+checksum = "e17e7e35ce2368d1467350d7509abd74041df7f259bec73ff5bb22aaae4ff65f"
 dependencies = [
  "async-once-cell",
  "async-recursion",
