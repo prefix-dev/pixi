@@ -11,7 +11,7 @@ mod progress;
 mod project;
 mod prompt;
 mod repodata;
-mod task;
+pub mod task;
 #[cfg(unix)]
 pub mod unix;
 pub mod util;
@@ -21,14 +21,15 @@ mod pypi_marker_env;
 mod pypi_tags;
 
 pub use activation::get_activation_env;
-pub use environment::UpdateLockFileOptions;
 pub use lock_file::load_lock_file;
+pub use lock_file::UpdateLockFileOptions;
 pub use project::{
     manifest::{EnvironmentName, FeatureName},
     DependencyType, Project, SpecType,
 };
 pub use task::{
-    CmdArgs, ExecutableTask, RunOutput, Task, TaskExecutionError, TaskGraph, TaskGraphError,
+    CmdArgs, ExecutableTask, FindTaskError, FindTaskSource, RunOutput, SearchEnvironments, Task,
+    TaskDisambiguation, TaskExecutionError, TaskGraph, TaskGraphError,
 };
 
 use rattler_networking::retry_policies::ExponentialBackoff;

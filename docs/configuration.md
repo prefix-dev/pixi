@@ -452,10 +452,11 @@ The `environments` table allows you to define environments that are created usin
 The environments table is defined using the following fields:
 
 - `features: Vec<Feature>`: The features that are included in the environment set, which is also the default field in the environments.
-- `solve-group: String`: **[NOT IMPLEMENTED YET, ONLY DESERIALIZABLE]** The solve group is used to group environments together at the solve stage.
+- `solve-group: String`: The solve group is used to group environments together at the solve stage.
   This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
   For instance when testing a production environment with additional test dependencies.
-
+  These dependencies will then be the same version in all environments that have the same solve group.
+  But the different environments contain different subsets of the solve-groups dependencies set.
 
 ```toml title="Simplest example"
 [environments]

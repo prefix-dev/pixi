@@ -7,6 +7,7 @@ use indexmap::IndexSet;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
+use rip::resolve::solve_options::{ResolveOptions, SDistResolution};
 
 use crate::consts::PROJECT_MANIFEST;
 use crate::project::manifest::SystemRequirements;
@@ -22,12 +23,12 @@ use rip::python_env::{
     find_distributions_in_venv, uninstall_distribution, Distribution, PythonLocation, WheelTag,
     WheelTags,
 };
-use rip::resolve::{ResolveOptions, SDistResolution};
 use rip::types::{
-    Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Extra, NormalizedPackageName,
+    ArtifactHashes, ArtifactInfo, ArtifactName, Extra, HasArtifactName, NormalizedPackageName,
 };
 use rip::wheel_builder::WheelBuilder;
 use std::collections::{HashMap, HashSet};
+use std::ops::Deref;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -302,6 +303,7 @@ fn stream_python_artifacts(
                     requires_python: pkg_data.requires_python.clone(),
                     dist_info_metadata: Default::default(),
                     yanked: Default::default(),
+                    is_direct_url: false,
                 };
 
                 let wheel = tokio::spawn({
@@ -311,10 +313,10 @@ fn stream_python_artifacts(
                     let package_db = package_db.clone();
                     async move {
                         let wheel_builder = WheelBuilder::new(
-                            &package_db,
-                            &marker_environment,
-                            Some(&compatible_tags),
-                            &resolve_options,
+                            package_db.clone(),
+                            marker_environment,
+                            Some(compatible_tags),
+                            resolve_options.deref().clone(),
                             HashMap::default(),
                         )
                             .into_diagnostic()

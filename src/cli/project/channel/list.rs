@@ -15,8 +15,8 @@ pub fn execute(project: Project, args: Args) -> miette::Result<()> {
         .map(|e| {
             println!(
                 "{} {}",
-                console::style("Environment:").bold().blue(),
-                console::style(e.name()).bold()
+                console::style("Environment:").bold().bright(),
+                e.name().fancy_display()
             );
             e.channels()
         })

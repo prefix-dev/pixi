@@ -13,7 +13,7 @@ use std::{
 
 impl ProjectManifest {
     /// Validate the project manifest.
-    pub fn validate(&self, source: NamedSource, root_folder: &Path) -> miette::Result<()> {
+    pub fn validate(&self, source: NamedSource<String>, root_folder: &Path) -> miette::Result<()> {
         // Check if the targets are defined for existing platforms
         for feature in self.features.values() {
             let platforms = feature
@@ -33,6 +33,22 @@ impl ProjectManifest {
                         }
                     }
                 }
+            }
+        }
+
+        // Check if all features are used in environments, warn if not.
+        let mut features_used = HashSet::new();
+        for env in self.environments.iter() {
+            for feature in env.features.iter() {
+                features_used.insert(feature);
+            }
+        }
+        for (name, _feature) in self.features.iter() {
+            if name != &FeatureName::Default && !features_used.contains(&name.to_string()) {
+                tracing::warn!(
+                    "The feature '{}' is defined but not used in any environment",
+                    name.fancy_display(),
+                );
             }
         }
 
@@ -65,7 +81,7 @@ impl ProjectManifest {
         check_file_existence(&self.project.readme)?;
 
         // Validate the environments defined in the project
-        for (_name, env) in self.environments.iter() {
+        for env in self.environments.environments.iter() {
             if let Err(report) = self.validate_environment(env) {
                 return Err(report.with_source_code(source));
             }
@@ -132,7 +148,7 @@ impl ProjectManifest {
 
 // Create an error report for using a platform that is not supported by the project.
 fn create_unsupported_platform_report(
-    source: NamedSource,
+    source: NamedSource<String>,
     span: Range<usize>,
     platform: &Platform,
     feature: &Feature,

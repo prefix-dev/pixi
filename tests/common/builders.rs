@@ -24,6 +24,7 @@
 //! ```
 
 use futures::FutureExt;
+use pixi::task::TaskName;
 use pixi::{
     cli::{add, init, install, project, task},
     DependencyType, SpecType,
@@ -155,8 +156,8 @@ impl TaskAddBuilder {
     }
 
     /// Depends on these commands
-    pub fn with_depends_on(mut self, depends: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
-        self.args.depends_on = Some(string_from_iter(depends));
+    pub fn with_depends_on(mut self, depends: Vec<TaskName>) -> Self {
+        self.args.depends_on = Some(depends);
         self
     }
 
@@ -182,8 +183,8 @@ pub struct TaskAliasBuilder {
 
 impl TaskAliasBuilder {
     /// Depends on these commands
-    pub fn with_depends_on(mut self, depends: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
-        self.args.depends_on = string_from_iter(depends);
+    pub fn with_depends_on(mut self, depends: Vec<TaskName>) -> Self {
+        self.args.depends_on = depends;
         self
     }
 

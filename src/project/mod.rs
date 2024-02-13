@@ -1,7 +1,9 @@
 mod dependencies;
 mod environment;
 pub mod errors;
+mod grouped_environment;
 pub mod manifest;
+mod solve_group;
 pub mod virtual_packages;
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
@@ -10,6 +12,7 @@ use once_cell::sync::OnceCell;
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
 use rattler_networking::AuthenticationMiddleware;
 use reqwest_middleware::ClientWithMiddleware;
+use rip::index::PackageSources;
 use rip::{index::PackageDb, normalize_index_url};
 use std::hash::Hash;
 use std::{
@@ -30,8 +33,11 @@ use crate::{
 use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
 use url::Url;
 
+use crate::task::TaskName;
 pub use dependencies::Dependencies;
 pub use environment::Environment;
+pub use grouped_environment::{GroupedEnvironment, GroupedEnvironmentName};
+pub use solve_group::SolveGroup;
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -49,6 +55,7 @@ impl DependencyType {
         }
     }
 }
+
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 /// What kind of dependency spec do we have
 pub enum SpecType {
@@ -137,7 +144,7 @@ impl Project {
 
     /// Returns the source code of the project as [`NamedSource`].
     /// Used in error reporting.
-    pub fn manifest_named_source(&self) -> NamedSource {
+    pub fn manifest_named_source(&self) -> NamedSource<String> {
         NamedSource::new(PROJECT_MANIFEST, self.manifest.contents.clone())
     }
 
@@ -215,6 +222,11 @@ impl Project {
         self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
     }
 
+    /// Returns the solve group directory
+    pub fn solve_group_environments_dir(&self) -> PathBuf {
+        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+    }
+
     /// Returns the path to the manifest file.
     pub fn manifest_path(&self) -> PathBuf {
         self.manifest.path.clone()
@@ -255,11 +267,36 @@ impl Project {
             .parsed
             .environments
             .iter()
-            .map(|(_name, env)| Environment {
+            .map(|env| Environment {
                 project: self,
                 environment: env,
             })
             .collect()
+    }
+
+    /// Returns all the solve groups in the project.
+    pub fn solve_groups(&self) -> Vec<SolveGroup> {
+        self.manifest
+            .parsed
+            .solve_groups
+            .iter()
+            .map(|group| SolveGroup {
+                project: self,
+                solve_group: group,
+            })
+            .collect()
+    }
+
+    /// Returns the solve group with the given name or `None` if no such group exists.
+    pub fn solve_group(&self, name: &str) -> Option<SolveGroup> {
+        self.manifest
+            .parsed
+            .solve_groups
+            .find(name)
+            .map(|group| SolveGroup {
+                project: self,
+                solve_group: group,
+            })
     }
 
     /// Returns the channels used by this project.
@@ -279,7 +316,7 @@ impl Project {
     /// Get the tasks of this project
     ///
     /// TODO: Remove this function and use the tasks from the default environment instead.
-    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&str, &Task> {
+    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&TaskName, &Task> {
         self.default_environment()
             .tasks(platform, true)
             .unwrap_or_default()
@@ -290,7 +327,7 @@ impl Project {
     /// platform.
     ///
     /// TODO: Remove this function and use the `task` function from the default environment instead.
-    pub fn task_opt(&self, name: &str, platform: Option<Platform>) -> Option<&Task> {
+    pub fn task_opt(&self, name: &TaskName, platform: Option<Platform>) -> Option<&Task> {
         self.default_environment().task(name, platform).ok()
     }
 
@@ -338,9 +375,8 @@ impl Project {
     }
 
     /// Returns the Python index URLs to use for this project.
-    pub fn pypi_index_urls(&self) -> Vec<Url> {
-        let index_url = normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap());
-        vec![index_url]
+    pub fn pypi_index_url(&self) -> Url {
+        normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap())
     }
 
     /// Returns the package database used for caching python metadata, wheels and more. See the
@@ -350,11 +386,10 @@ impl Project {
             .package_db
             .get_or_try_init(|| {
                 PackageDb::new(
+                    PackageSources::from(self.pypi_index_url()),
                     self.authenticated_client().clone(),
-                    &self.pypi_index_urls(),
                     &config::get_cache_dir()?.join("pypi/"),
                 )
-                .into_diagnostic()
                 .map(Arc::new)
             })?
             .clone())

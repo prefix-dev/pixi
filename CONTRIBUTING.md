@@ -73,3 +73,17 @@ git commit -m "<type>[optional scope]: <description>"
 # An example:
 git commit -m "feat: add xxx to the pixi.toml"
 ```
+
+## Color decisions in the ui code
+We use the `console::style` function to colorize the output of the ui.
+```rust
+use console::style;
+println!("{} {}", style("Hello").green(), style("world").red());
+```
+
+To sync the colors of the different parts of the ui, we use the following rules:
+- `style("environment").magenta()`: The environment name
+- `style("feature").cyan()`: The feature name
+- `style("task").blue()`: The task name
+
+These styles are put in the `consts` module or are a `.fancy_display()` on the names. If you want to add a new generic color, please add it there.

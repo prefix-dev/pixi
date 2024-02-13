@@ -106,6 +106,7 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 - `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--environment <ENVIRONMENT> (-e)`: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.
 
 ```shell
 pixi run python
@@ -117,6 +118,9 @@ pixi run --locked python
 pixi run build
 # Extra arguments will be passed to the tasks command.
 pixi run task argument1 argument2
+
+# If you have multiple environments you can select the right one with the --environment flag.
+pixi run --environment cuda python
 ```
 
 !!! info
@@ -296,8 +300,13 @@ List project's packages. Highlighted packages are explicit dependencies.
 - `--json`: Whether to output in json format.
 - `--json-pretty`: Whether to output in pretty json format
 - `--sort-by <SORT_BY>`: Sorting strategy [default: name] [possible values: size, name, type]
-- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
-- `--environment`(`-e`): the environment's packages to list, if non is provided the default environment's packages will be listed.
+- `--manifest-path <MANIFEST_PATH>`: The path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--environment`(`-e`): The environment's packages to list, if non is provided the default environment's packages will be listed.
+- `--frozen`: Install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: Only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
+
+```shell
 
 ```shell
 pixi list
@@ -305,6 +314,9 @@ pixi list --json-pretty
 pixi list --sort-by size
 pixi list --platform win-64
 pixi list --environment cuda
+pixi list --frozen
+pixi list --locked
+pixi list --no-install
 ```
 Output will look like this, where `python` will be green as it is the package that was explicitly added to the `pixi.toml`:
 
@@ -344,6 +356,7 @@ To exit the pixi shell, simply run `exit`.
 - `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--environment <ENVIRONMENT> (-e)`: The environment to activate the shell in, if none are provided the default environment will be used or a selector will be given to select the right environment.
 
 ```shell
 pixi shell
@@ -353,6 +366,8 @@ exit
 pixi shell --frozen
 exit
 pixi shell --locked
+exit
+pixi shell --environment cuda
 exit
 ```
 
@@ -366,6 +381,7 @@ This command prints the activation script of an environment.
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--environment <ENVIRONMENT> (-e)`: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.
 
 ```shell
 pixi shell-hook
@@ -374,6 +390,7 @@ pixi shell-hook --shell zsh
 pixi shell-hook --manifest-path ~/myproject/pixi.toml
 pixi shell-hook --frozen
 pixi shell-hook --locked
+pixi shell-hook --environment cuda
 ```
 Example use-case, when you want to get rid of the `pixi` executable in a Docker container.
 ```shell
@@ -701,9 +718,11 @@ Adds a platform(s) to the project file and updates the lockfile.
 ##### Options
 
 - `--no-install`: do not update the environment, only add changed packages to the lock-file.
+- `--feature <FEATURE> (-f)`: The feature for which the platform will be added.
 
 ```sh
 pixi project platform add win-64
+pixi project platform add --feature test win-64
 ```
 
 ### `project platform list`
@@ -729,9 +748,11 @@ Remove platform(s) from the project file and updates the lockfile.
 ##### Options
 
 - `--no-install`: do not update the environment, only add changed packages to the lock-file.
+- `--feature <FEATURE> (-f)`: The feature for which the platform will be removed.
 
 ```sh
 pixi project platform remove win-64
+pixi project platform remove --feature test win-64
 ```
 
 ### `project version get`

@@ -10,21 +10,23 @@ use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rip::index::PackageDb;
 use rip::python_env::PythonLocation;
-use rip::resolve::{resolve, PinnedPackage, ResolveOptions, SDistResolution};
+use rip::resolve::solve_options::{ResolveOptions, SDistResolution};
+use rip::resolve::{resolve, PinnedPackage};
 use rip::types::PackageName;
 use std::path::Path;
+use std::sync::Arc;
 use std::{collections::HashMap, vec};
 
 /// Resolve python packages for the specified project.
 pub async fn resolve_dependencies<'db>(
-    package_db: &'db PackageDb,
+    package_db: Arc<PackageDb>,
     dependencies: IndexMap<PackageName, Vec<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     platform: Platform,
     conda_packages: &[RepoDataRecord],
     python_location: Option<&Path>,
     sdist_resolution: SDistResolution,
-) -> miette::Result<Vec<PinnedPackage<'db>>> {
+) -> miette::Result<Vec<PinnedPackage>> {
     if dependencies.is_empty() {
         return Ok(vec![]);
     }
@@ -87,8 +89,8 @@ pub async fn resolve_dependencies<'db>(
     let mut result = resolve(
         package_db,
         &requirements,
-        &marker_environment,
-        Some(&compatible_tags),
+        Arc::new(marker_environment),
+        Some(Arc::new(compatible_tags)),
         conda_python_packages
             .into_iter()
             // skip using the locked package in the case where conda and pypi package has the same name
@@ -103,7 +105,7 @@ pub async fn resolve_dependencies<'db>(
             .map(|p| (p.name.clone(), p))
             .collect(),
         HashMap::default(),
-        &ResolveOptions {
+        ResolveOptions {
             sdist_resolution,
             python_location,
             ..Default::default()

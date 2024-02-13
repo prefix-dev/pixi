@@ -35,7 +35,6 @@ pub async fn execute_transaction(
     let install_options = InstallOptions {
         python_info: transaction.python_info.clone(),
         platform: Some(transaction.platform),
-        allow_ref_links: Some(false),
         ..Default::default()
     };
 
@@ -143,9 +142,8 @@ pub async fn execute_transaction(
         .await;
 
     // Post-process the environment installation to unclobber all files deterministically
-    let new_prefix_records = PrefixRecord::collect_from_prefix(&target_prefix).into_diagnostic()?;
     install_driver
-        .post_process(&new_prefix_records, &target_prefix)
+        .post_process(transaction, &target_prefix)
         .into_diagnostic()?;
 
     // Clear progress bars
