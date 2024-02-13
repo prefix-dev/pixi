@@ -10,8 +10,9 @@ use rattler_conda_types::Platform;
 use rattler_lock::Package;
 use serde::Serialize;
 
+use crate::lock_file::UpdateLockFileOptions;
 use crate::project::manifest::EnvironmentName;
-use crate::{Project, UpdateLockFileOptions};
+use crate::Project;
 
 // an enum to sort by size or name
 #[derive(clap::ValueEnum, Clone, Debug, Serialize)]

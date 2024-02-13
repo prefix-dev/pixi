@@ -4,6 +4,7 @@ use std::convert::identity;
 use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
+use crate::consts;
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
@@ -11,14 +12,16 @@ use miette::{miette, Context, Diagnostic};
 use rattler_conda_types::Platform;
 
 use crate::activation::get_environment_variables;
+use crate::environment::verify_prefix_location_unchanged;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{
     AmbiguousTask, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
     SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskName,
 };
-use crate::{consts, Project, UpdateLockFileOptions};
+use crate::Project;
 
-use crate::environment::{verify_prefix_location_unchanged, LockFileDerivedData};
+use crate::lock_file::LockFileDerivedData;
+use crate::lock_file::UpdateLockFileOptions;
 use crate::progress::await_in_progress;
 use crate::project::manifest::EnvironmentName;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
