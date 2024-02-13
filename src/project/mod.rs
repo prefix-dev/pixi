@@ -1,6 +1,7 @@
 mod dependencies;
 mod environment;
 pub mod errors;
+mod grouped_environment;
 pub mod manifest;
 mod solve_group;
 pub mod virtual_packages;
@@ -34,6 +35,7 @@ use url::Url;
 use crate::task::TaskName;
 pub use dependencies::Dependencies;
 pub use environment::Environment;
+pub use grouped_environment::{GroupedEnvironment, GroupedEnvironmentName};
 pub use solve_group::SolveGroup;
 
 /// The dependency types we support

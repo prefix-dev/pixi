@@ -16,9 +16,10 @@ use crate::task::{
     AmbiguousTask, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
     SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskName,
 };
-use crate::{Project, UpdateLockFileOptions};
+use crate::Project;
 
-use crate::environment::LockFileDerivedData;
+use crate::lock_file::LockFileDerivedData;
+use crate::lock_file::UpdateLockFileOptions;
 use crate::progress::await_in_progress;
 use crate::project::manifest::EnvironmentName;
 use crate::project::Environment;

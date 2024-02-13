@@ -53,7 +53,9 @@ impl<'p> SolveGroup<'p> {
     }
 
     /// Returns an iterator over all the environments that are part of the group.
-    pub fn environments(&self) -> impl Iterator<Item = Environment<'p>> + DoubleEndedIterator + ExactSizeIterator + 'p {
+    pub fn environments(
+        &self,
+    ) -> impl Iterator<Item = Environment<'p>> + DoubleEndedIterator + ExactSizeIterator + 'p {
         self.solve_group
             .environments
             .iter()
