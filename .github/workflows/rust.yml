@@ -373,7 +373,8 @@ jobs:
           mv pixi_bin/pixi-${{ matrix.target }} pixi_bin/pixi
           chmod a+x pixi_bin/pixi
           echo "$(pwd)/pixi_bin/pixi" >> $GITHUB_PATH
-          pixi --help
+      - name: Help
+        run: pixi --help
       - name: checkout repo
         uses: actions/checkout@v4
       - name: Install pixi
