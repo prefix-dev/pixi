@@ -12,8 +12,8 @@ use miette::IntoDiagnostic;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PackageHashes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_solve::{resolvo, SolverImpl};
-use rip::{index::PackageDb, resolve::SDistResolution};
-use std::path::Path;
+use rip::{index::PackageDb, resolve::solve_options::SDistResolution};
+use std::{path::Path, sync::Arc};
 
 use crate::project::manifest::{PyPiRequirement, SystemRequirements};
 pub use satisfiability::{
@@ -41,7 +41,7 @@ pub async fn load_lock_file(project: &Project) -> miette::Result<LockFile> {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
-    package_db: &PackageDb,
+    package_db: Arc<PackageDb>,
     dependencies: IndexMap<rip::types::PackageName, Vec<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
@@ -54,7 +54,7 @@ pub async fn resolve_pypi(
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
     let python_artifacts = pypi::resolve_dependencies(
-        package_db,
+        package_db.clone(),
         dependencies,
         system_requirements,
         platform,
