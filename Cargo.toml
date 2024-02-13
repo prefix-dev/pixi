@@ -56,7 +56,7 @@ rattler_virtual_packages = { version = "0.17.0", default-features = false }
 regex = "1.10.3"
 reqwest = { version = "0.11.24", default-features = false }
 reqwest-middleware = "0.2.4"
-rip = { package = "rattler_installs_packages", version = "0.7.0", default-features = false }
+rip = { package = "rattler_installs_packages", version = "0.8.0", default-features = false }
 self-replace = "1.3.7"
 serde = "1.0.196"
 serde-untagged = "0.1.5"
