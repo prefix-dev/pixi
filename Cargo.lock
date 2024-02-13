@@ -2708,7 +2708,6 @@ dependencies = [
  "pep508_rs",
  "rattler",
  "rattler_conda_types",
- "rattler_digest 0.17.0",
  "rattler_digest 0.18.0",
  "rattler_installs_packages",
  "rattler_lock",
