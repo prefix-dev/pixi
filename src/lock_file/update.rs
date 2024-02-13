@@ -1,18 +1,21 @@
-use crate::environment::{
-    LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+use crate::{
+    config, consts, environment,
+    environment::{
+        LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+    },
+    load_lock_file, lock_file,
+    lock_file::{
+        update, OutdatedEnvironments, PypiPackageIdentifier, PypiRecordsByName,
+        RepoDataRecordsByName,
+    },
+    prefix::Prefix,
+    progress::global_multi_progress,
+    project::{Environment, GroupedEnvironment, GroupedEnvironmentName},
+    repodata::fetch_sparse_repodata_targets,
+    utils::BarrierCell,
+    EnvironmentName, Project,
 };
-use crate::lock_file::{
-    update, OutdatedEnvironments, PypiPackageIdentifier, PypiRecordsByName, RepoDataRecordsByName,
-};
-use crate::prefix::Prefix;
-use crate::progress::global_multi_progress;
-use crate::project::{Environment, GroupedEnvironment, GroupedEnvironmentName};
-use crate::repodata::fetch_sparse_repodata_targets;
-use crate::utils::BarrierCell;
-use crate::{config, consts, environment, load_lock_file, lock_file, EnvironmentName, Project};
-use futures::future::Either;
-use futures::stream::FuturesUnordered;
-use futures::{FutureExt, StreamExt, TryFutureExt};
+use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::Itertools;
@@ -21,13 +24,15 @@ use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rip::resolve::SDistResolution;
-use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
-use std::convert::identity;
-use std::future::{ready, Future};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use rip::resolve::solve_options::SDistResolution;
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    convert::identity,
+    future::{ready, Future},
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tracing::Instrument;
 
 impl Project {
@@ -1236,7 +1241,7 @@ async fn spawn_solve_pypi_task(
             let start = Instant::now();
 
             let records = lock_file::resolve_pypi(
-                &package_db,
+                package_db,
                 dependencies,
                 system_requirements,
                 &repodata_records.records,

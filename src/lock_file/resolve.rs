@@ -3,7 +3,7 @@
 //! See [`resolve_pypi`] and [`resolve_conda`] for more information.
 
 use crate::{
-    lock_file::{pypi, LockedCondaPackages, LockedPypiPackages},
+    lock_file::{pypi, LockedCondaPackages, LockedPypiPackages, PypiRecord},
     project::manifest::{PyPiRequirement, SystemRequirements},
 };
 use indexmap::IndexMap;
@@ -12,18 +12,18 @@ use miette::IntoDiagnostic;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord};
 use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_solve::{resolvo, SolverImpl};
-use rip::{index::PackageDb, resolve::SDistResolution};
-use std::path::Path;
+use rip::{index::PackageDb, resolve::solve_options::SDistResolution};
+use std::{path::Path, sync::Arc};
 
 /// This function takes as input a set of dependencies and system requirements and returns a set of
 /// locked packages.
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
-    package_db: &PackageDb,
+    package_db: Arc<PackageDb>,
     dependencies: IndexMap<rip::types::PackageName, Vec<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
-    _locked_pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
+    _locked_pypi_records: &[PypiRecord],
     platform: Platform,
     pb: &ProgressBar,
     python_location: Option<&Path>,
@@ -32,7 +32,7 @@ pub async fn resolve_pypi(
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
     let python_artifacts = pypi::resolve_dependencies(
-        package_db,
+        package_db.clone(),
         dependencies,
         system_requirements,
         platform,

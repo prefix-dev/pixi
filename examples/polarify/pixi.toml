@@ -1,7 +1,7 @@
 [project]
 name = "polarify-use-case"
 channels = ["conda-forge"]
-platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+platforms = ["linux-64", "osx-arm64", "osx-64"]
 
 [tasks]
 postinstall = "pip install --no-build-isolation --no-deps --disable-pip-version-check -e ."
@@ -11,6 +11,7 @@ start = 'python -c "import sys; print(f\"Python version: {sys.version}\"); impor
 python = ">=3.9"
 pip = "*"
 polars = ">=0.14.24,<0.21"
+rubin-env = "*"
 
 [feature.py39.dependencies]
 python = "3.9.*"

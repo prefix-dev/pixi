@@ -1,15 +1,14 @@
 use miette::IntoDiagnostic;
 
-use crate::lock_file::UpdateLockFileOptions;
-use crate::project::{GroupedEnvironment, GroupedEnvironmentName};
 use crate::{
     consts, install, install_pypi,
+    lock_file::UpdateLockFileOptions,
     prefix::Prefix,
     progress::{self},
     project::{
         manifest::{EnvironmentName, SystemRequirements},
         virtual_packages::verify_current_platform_has_required_virtual_packages,
-        Environment,
+        Environment, GroupedEnvironment, GroupedEnvironmentName,
     },
     Project,
 };
@@ -22,7 +21,7 @@ use rattler_conda_types::{Channel, Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use reqwest_middleware::ClientWithMiddleware;
-use rip::{index::PackageDb, resolve::SDistResolution};
+use rip::{index::PackageDb, resolve::solve_options::SDistResolution};
 use std::{collections::HashMap, io::ErrorKind, path::Path, sync::Arc};
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.

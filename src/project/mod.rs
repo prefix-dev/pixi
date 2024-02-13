@@ -12,6 +12,7 @@ use once_cell::sync::OnceCell;
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
 use rattler_networking::AuthenticationMiddleware;
 use reqwest_middleware::ClientWithMiddleware;
+use rip::index::PackageSources;
 use rip::{index::PackageDb, normalize_index_url};
 use std::hash::Hash;
 use std::{
@@ -143,7 +144,7 @@ impl Project {
 
     /// Returns the source code of the project as [`NamedSource`].
     /// Used in error reporting.
-    pub fn manifest_named_source(&self) -> NamedSource {
+    pub fn manifest_named_source(&self) -> NamedSource<String> {
         NamedSource::new(PROJECT_MANIFEST, self.manifest.contents.clone())
     }
 
@@ -374,9 +375,8 @@ impl Project {
     }
 
     /// Returns the Python index URLs to use for this project.
-    pub fn pypi_index_urls(&self) -> Vec<Url> {
-        let index_url = normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap());
-        vec![index_url]
+    pub fn pypi_index_url(&self) -> Url {
+        normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap())
     }
 
     /// Returns the package database used for caching python metadata, wheels and more. See the
@@ -386,11 +386,10 @@ impl Project {
             .package_db
             .get_or_try_init(|| {
                 PackageDb::new(
+                    PackageSources::from(self.pypi_index_url()),
                     self.authenticated_client().clone(),
-                    &self.pypi_index_urls(),
                     &config::get_cache_dir()?.join("pypi/"),
                 )
-                .into_diagnostic()
                 .map(Arc::new)
             })?
             .clone())
