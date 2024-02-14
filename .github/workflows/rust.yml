@@ -363,7 +363,7 @@ jobs:
       - name: Download binary from build
         uses: actions/download-artifact@v4
         with:
-          name: pixi-${{ matrix.target }}{{ matrix.extension }}
+          name: pixi-${{ matrix.target }}${{ matrix.extension }}
           path: pixi_bin
       - name: Debug
         run: |
@@ -378,7 +378,7 @@ jobs:
       - name: Setup windows binary, add to github path
         if: matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-msvc'
         run: |
-          mv pixi_bin/pixi-${{ matrix.target }}{{ matrix.extension }} pixi_bin/pixi{{ matrix.extension }}
+          mv pixi_bin/pixi-${{ matrix.target }}${{ matrix.extension }} pixi_bin/pixi${{ matrix.extension }}
           echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
       - name: Help
         run: pixi --help
