@@ -307,6 +307,18 @@ pub fn verify_pypi_platform_satisfiability(
             ));
         };
 
+        // Error if a conda package with same name is provided.
+        if environment
+            .dependencies(None, Some(platform))
+            .names()
+            .any(|v| v.as_normalized() == name.to_string())
+        {
+            return Err(PlatformUnsat::UnsatisfiableRequirement(
+                requirement,
+                source.to_string(),
+            ));
+        }
+
         // Look-up the identifier that matches the requirement
         let matched_package = name_to_package_identifiers
             .get(&name)

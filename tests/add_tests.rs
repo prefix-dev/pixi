@@ -248,3 +248,37 @@ async fn add_sdist_functionality() {
         .await
         .unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[serial]
+async fn add_pypi_package_with_same_name() {
+    let pixi = PixiControl::new().unwrap();
+
+    pixi.init().await.unwrap();
+
+    pixi.add("python")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .with_install(false)
+        .await
+        .unwrap();
+
+    pixi.add("pandoc>=3.1.11.1")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .await
+        .unwrap();
+
+    pixi.add("pandoc")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "pandoc>=3.1.11.1"
+    ));
+    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "pandoc"));
+}
