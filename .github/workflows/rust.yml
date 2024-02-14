@@ -379,11 +379,11 @@ jobs:
       - name: Create Directory and Move Executable
         if: matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-msvc'
         run: |
-          New-Item -ItemType Directory -Force -Path "C:\.pixi"
-          Move-Item -Path "pixi_bin/pixi-${{ matrix.target }}${{ matrix.extension }}" -Destination "C:\.pixi\pixi.exe"
+          New-Item -ItemType Directory -Force -Path "D:\.pixi"
+          Move-Item -Path "pixi_bin/pixi-${{ matrix.target }}${{ matrix.extension }}" -Destination "D:\.pixi\pixi.exe"
         shell: pwsh
       - name: Add to PATH
-        run: echo "C:\.pixi" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
+        run: echo "D:\.pixi" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
         shell: pwsh
       - name: Verify and Use Executable
         run: |
