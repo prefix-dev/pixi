@@ -370,7 +370,7 @@ jobs:
           pwd
           tree -L 3 ../
       - name: Setup unix binary, add to github path
-        if: matrix.os != 'windows-latest' || matrix.target != 'aarch64-pc-windows-msvc'
+        if: matrix.os != 'windows-latest'
         run: |
           mv pixi_bin/pixi-${{ matrix.target }} pixi_bin/pixi
           chmod a+x pixi_bin/pixi
