@@ -381,9 +381,11 @@ jobs:
           Move-Item -Path "pixi_bin/pixi-${{ matrix.target }}${{ matrix.extension }}" -Destination "D:\.pixi\pixi.exe"
         shell: pwsh
       - name: Add to PATH
+        if: matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-msvc'
         run: echo "D:\.pixi" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
         shell: pwsh
       - name: Verify and Use Executable
+        if: matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-msvc'
         run: |
           echo "Current PATH: $env:PATH"
           pixi --version
