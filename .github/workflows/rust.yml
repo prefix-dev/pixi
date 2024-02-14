@@ -375,11 +375,29 @@ jobs:
           mv pixi_bin/pixi-${{ matrix.target }} pixi_bin/pixi
           chmod a+x pixi_bin/pixi
           echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
-      - name: Setup windows binary, add to github path
+#      - name: Setup windows binary, add to github path
+#        run: |
+#          mv pixi_bin/pixi-${{ matrix.target }}${{ matrix.extension }} pixi_bin/pixi${{ matrix.extension }}
+#          echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
+
+      - name: Create Directory and Move Executable
         if: matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-msvc'
         run: |
-          mv pixi_bin/pixi-${{ matrix.target }}${{ matrix.extension }} pixi_bin/pixi${{ matrix.extension }}
-          echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
+          New-Item -ItemType Directory -Force -Path "C:\.pixi"
+          Move-Item -Path "pixi_bin/pixi-${{ matrix.target }}${{ matrix.extension }}" -Destination "C:\.pixi\pixi.exe"
+        shell: pwsh
+
+      - name: Add to PATH
+        run: echo "C:\.pixi" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
+        shell: pwsh
+
+      - name: Verify and Use Executable
+        run: |
+          echo "Current PATH: $env:PATH"
+          pixi.exe --version || echo ".exe didn't work"
+          pixi --version || echo "pixi without .exe didn't work"
+        shell: pwsh
+
       - name: Help
         run: pixi --help
       - name: Verify pixi executable on path
