@@ -380,7 +380,11 @@ jobs:
       - name: Verify pixi executable on path
         run: |
           pwd
-          tree -L 3 ../
+          tree -L 4 ../../
           echo $PATH
+      - name: Help
+        run: pixi --help
+      - name: Info
+        run: pixi info
       - name: Install pixi
         run: pixi install
