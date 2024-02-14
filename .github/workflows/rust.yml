@@ -83,13 +83,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: "Linux-x86_64",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
+#          - { name: "Linux-x86_64",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
 #          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest, skip-tests: true }
 #
 #          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
 #          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
-#
-#          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+
+          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
     env:
       #
       # These are some environment variables that configure the build so that the binary size is reduced.
@@ -350,20 +350,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: "Linux-x86_64",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
-    #          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest, skip-tests: true }
-    #
-    #          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
-    #          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
-    #
-    #          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+#          - { name: "Linux-x86_64",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
+#          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest, skip-tests: true }
+#
+#          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
+#          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
+
+          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest , extension: .exe}
     steps:
       - name: checkout repo
         uses: actions/checkout@v4
       - name: Download binary from build
         uses: actions/download-artifact@v4
         with:
-          name: pixi-${{ matrix.target }}
+          name: pixi-${{ matrix.target }}{{ matrix.extension }}
           path: pixi_bin
       - name: Debug
         run: |
@@ -374,6 +374,11 @@ jobs:
         run: |
           mv pixi_bin/pixi-${{ matrix.target }} pixi_bin/pixi
           chmod a+x pixi_bin/pixi
+          echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
+      - name: Setup windows binary, add to github path
+        if: matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-msvc'
+        run: |
+          mv pixi_bin/pixi-${{ matrix.target }}{{ matrix.extension }} pixi_bin/pixi{{ matrix.extension }}
           echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
       - name: Help
         run: pixi --help
