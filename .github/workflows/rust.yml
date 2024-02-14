@@ -388,3 +388,7 @@ jobs:
         run: pixi info
       - name: Install pixi
         run: pixi install
+      - name: Test examples/polarify
+        run: pixi run --manifest-path examples/polarify/pixi.toml test
+      - name: Test examples/pypi
+        run: pixi run --manifest-path examples/pypi/pixi.toml test
