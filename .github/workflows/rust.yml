@@ -372,7 +372,7 @@ jobs:
         run: |
           mv pixi_bin/pixi-${{ matrix.target }} pixi_bin/pixi
           chmod a+x pixi_bin/pixi
-          echo "$(pwd)/pixi_bin/pixi" >> $GITHUB_PATH
+          echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
       - name: Help
         run: pixi --help
       - name: checkout repo
