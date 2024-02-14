@@ -306,7 +306,7 @@ fn stream_python_artifacts(
                     is_direct_url: false,
                 };
 
-                let wheel = tokio::spawn({
+                let (wheel, _) = tokio::spawn({
                     let marker_environment = marker_environment.clone();
                     let compatible_tags = compatible_tags.clone();
                     let resolve_options = resolve_options.clone();
