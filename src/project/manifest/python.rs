@@ -3,6 +3,14 @@ use serde::{de, de::Error, Deserialize, Deserializer};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
+use url::Url;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PyPiIndex {
+    pub(crate) url: Url,
+    pub(crate) auth_helper: Option<String>,
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PyPiRequirement {

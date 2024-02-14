@@ -1,4 +1,6 @@
+use crate::project::manifest::python::PyPiIndex;
 use crate::utils::spanned::PixiSpanned;
+use indexmap::IndexMap;
 use rattler_conda_types::{Platform, Version};
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
@@ -23,6 +25,9 @@ pub struct ProjectMetadata {
     /// Optional authors
     #[serde(default)]
     pub authors: Vec<String>,
+
+    /// Python indices used by this project
+    pub pypi_indices: Option<IndexMap<String, PyPiIndex>>,
 
     /// The channels used by the project
     #[serde_as(as = "Vec<super::channel::TomlPrioritizedChannelStrOrMap>")]

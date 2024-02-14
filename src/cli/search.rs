@@ -8,13 +8,13 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig, PackageName, Platform, RepoDataRecord};
-use rattler_networking::AuthenticationMiddleware;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
 
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
+use crate::auth::make_auth_client;
 use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata, Project};
 
 /// Search a package, output will list the latest version of package
@@ -106,9 +106,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let package_name_filter = args.package;
 
-    let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-        .with_arc(Arc::new(AuthenticationMiddleware::default()))
-        .build();
+    let authenticated_client = make_auth_client();
     let repo_data = Arc::new(
         fetch_sparse_repodata(
             channels.iter().map(AsRef::as_ref),

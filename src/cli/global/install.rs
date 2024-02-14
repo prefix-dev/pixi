@@ -1,3 +1,4 @@
+use crate::auth::make_auth_client;
 use crate::install::execute_transaction;
 use crate::repodata::friendly_channel_name;
 use crate::{config, prefix::Prefix, progress::await_in_progress, repodata::fetch_sparse_repodata};
@@ -9,7 +10,6 @@ use miette::IntoDiagnostic;
 use rattler::install::Transaction;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord};
-use rattler_networking::AuthenticationMiddleware;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -333,9 +333,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|c| Channel::from_str(c, &channel_config))
         .collect::<Result<Vec<Channel>, _>>()
         .into_diagnostic()?;
-    let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-        .with_arc(Arc::new(AuthenticationMiddleware::default()))
-        .build();
+    let authenticated_client = make_auth_client();
 
     // Find the MatchSpec we want to install
     let specs = args

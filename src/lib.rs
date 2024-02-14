@@ -1,4 +1,5 @@
 mod activation;
+mod auth;
 pub mod cli;
 mod config;
 pub mod consts;

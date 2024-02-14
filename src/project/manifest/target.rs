@@ -123,6 +123,22 @@ impl Target {
                     .ok_or_else(|| SpecIsMissing::dep_is_missing(dep_str, spec_type))
             })
     }
+
+    pub(crate) fn pypi_index_overrides(&self) -> Vec<(rip::types::PackageName, String)> {
+        let pypi_dependencies = match &self.pypi_dependencies {
+            Some(pypi_dependencies) => pypi_dependencies,
+            None => return vec![],
+        };
+
+        pypi_dependencies
+            .iter()
+            .filter_map(|(name, req)| {
+                req.index
+                    .as_ref()
+                    .map(|index| (name.clone(), index.clone()))
+            })
+            .collect()
+    }
 }
 
 /// Represents a target selector. Currently we only support explicit platform selection.

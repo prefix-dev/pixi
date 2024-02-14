@@ -8,13 +8,13 @@ pub mod virtual_packages;
 
 use async_once_cell::OnceCell as AsyncCell;
 use indexmap::{Equivalent, IndexMap, IndexSet};
+use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
 
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
-use rattler_networking::AuthenticationMiddleware;
 use reqwest_middleware::ClientWithMiddleware;
-use rip::index::PackageSources;
+use rip::index::{PackageSources, PackageSourcesBuilder};
 use rip::{index::PackageDb, normalize_index_url};
 use std::hash::Hash;
 use std::{
@@ -34,7 +34,10 @@ use crate::{
     config,
     consts::{self, PROJECT_MANIFEST},
     task::Task,
+    FeatureName,
 };
+
+use crate::auth::make_auth_client;
 pub use dependencies::Dependencies;
 pub use environment::Environment;
 use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
@@ -119,10 +122,7 @@ impl Project {
     /// Constructs a new instance from an internal manifest representation
     pub fn from_manifest(manifest: Manifest) -> Self {
         let client = reqwest::Client::new();
-        let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-            .with_arc(Arc::new(AuthenticationMiddleware::default()))
-            .build();
-
+        let authenticated_client = make_auth_client();
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
         Self {
@@ -198,9 +198,7 @@ impl Project {
             root: root.to_owned(),
             package_db: Default::default(),
             client: Default::default(),
-            authenticated_client: reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-                .with_arc(Arc::new(AuthenticationMiddleware::default()))
-                .build(),
+            authenticated_client: make_auth_client(),
             manifest,
             env_vars,
         })
@@ -406,8 +404,94 @@ impl Project {
     }
 
     /// Returns the Python index URLs to use for this project.
-    pub fn pypi_index_url(&self) -> Url {
-        normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap())
+    pub fn pypi_package_sources(&self) -> miette::Result<PackageSources> {
+        let base_url =
+            normalize_index_url(Url::parse("https://pypi.org/simple/").into_diagnostic()?);
+
+        let compose_index_alias =
+            |feature_name: &FeatureName, alias: &str| format!("{}:{}", feature_name, alias);
+
+        let project_indices = self
+            .manifest
+            .parsed
+            .project
+            .pypi_indices
+            .as_ref()
+            .map(|indices| {
+                indices
+                    .iter()
+                    .map(|(name, index)| {
+                        let url = normalize_index_url(index.url.clone());
+                        let name = compose_index_alias(&FeatureName::Default, name);
+
+                        (name, url)
+                    })
+                    .collect::<Vec<_>>()
+            });
+
+        let extra_indices = self
+            .manifest
+            .parsed
+            .features
+            .iter()
+            .flat_map(|(feature_name, feature)| {
+                let indices = match (feature_name, &feature.pypi_indices) {
+                    (FeatureName::Default, None) => {
+                        return project_indices.clone().unwrap_or_default()
+                    }
+                    (FeatureName::Named(_), None) => return vec![],
+                    (_, Some(indices)) => indices,
+                };
+
+                indices
+                    .iter()
+                    .map(|(name, index)| {
+                        let url = normalize_index_url(index.url.clone());
+                        let name = compose_index_alias(feature_name, name);
+
+                        (name, url)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        let overrides = self
+            .manifest
+            .parsed
+            .features
+            .iter()
+            .map(|(feature_name, feature)| {
+                let overrides = feature
+                    .targets
+                    .iter()
+                    .flat_map(|(target, _)| target.pypi_index_overrides())
+                    .collect_vec();
+
+                (feature_name, overrides)
+            })
+            .flat_map(|(feature_name, overrides)| {
+                overrides.into_iter().map(|(name, alias)| {
+                    let alias = compose_index_alias(feature_name, &alias);
+                    (name, alias)
+                })
+            })
+            .collect_vec();
+
+        let sources_builder = PackageSourcesBuilder::new(base_url);
+        let sources_builder = extra_indices
+            .into_iter()
+            .fold(sources_builder, |builder, (name, url)| {
+                builder.with_index(&name, &url)
+            });
+
+        let sources_builder = overrides
+            .into_iter()
+            .fold(sources_builder, |builder, (name, alias)| {
+                builder.with_override(name.into(), &alias)
+            });
+
+        let sources = sources_builder.build().into_diagnostic()?;
+        Ok(sources)
     }
 
     /// Returns the package database used for caching python metadata, wheels and more. See the
@@ -416,8 +500,9 @@ impl Project {
         Ok(self
             .package_db
             .get_or_try_init(|| {
+                let package_sources = self.pypi_package_sources()?;
                 PackageDb::new(
-                    PackageSources::from(self.pypi_index_url()),
+                    package_sources,
                     self.authenticated_client().clone(),
                     &config::get_cache_dir()?.join("pypi/"),
                 )

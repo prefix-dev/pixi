@@ -1,6 +1,7 @@
 use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelector};
 use crate::consts;
 use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
+use crate::project::manifest::python::PyPiIndex;
 use crate::project::manifest::target::Targets;
 use crate::project::manifest::{deserialize_opt_package_map, deserialize_package_map};
 use crate::project::SpecType;
@@ -111,6 +112,8 @@ pub struct Feature {
     /// This value is `None` if this feature does not specify any platforms and the default
     /// platforms from the project should be used.
     pub platforms: Option<PixiSpanned<Vec<Platform>>>,
+
+    pub pypi_indices: Option<IndexMap<String, PyPiIndex>>,
 
     /// Channels specific to this feature.
     ///
@@ -244,6 +247,9 @@ impl<'de> Deserialize<'de> for Feature {
             build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
             #[serde(default)]
+            pypi_indices: Option<IndexMap<String, PyPiIndex>>,
+
+            #[serde(default)]
             pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
 
             /// Additional information to activate an environment.
@@ -274,6 +280,7 @@ impl<'de> Deserialize<'de> for Feature {
         Ok(Feature {
             name: FeatureName::Default,
             platforms: inner.platforms,
+            pypi_indices: inner.pypi_indices,
             channels: inner.channels.map(|channels| {
                 channels
                     .into_iter()

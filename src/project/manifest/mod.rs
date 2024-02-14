@@ -264,6 +264,7 @@ impl Manifest {
                                 platforms: Some(PixiSpanned::from(vec![*platform])),
                                 system_requirements: Default::default(),
                                 targets: Default::default(),
+                                pypi_indices: None,
                                 channels: None,
                             });
                         }
@@ -589,6 +590,7 @@ impl Manifest {
                             entry.insert(Feature {
                                 name: feature_name.clone(),
                                 platforms: None,
+                                pypi_indices: None,
                                 channels: Some(vec![channel.clone()]),
                                 system_requirements: Default::default(),
                                 targets: Default::default(),
@@ -1070,6 +1072,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             // The default feature does not overwrite the platforms or channels from the project
             // metadata.
             platforms: None,
+            pypi_indices: None,
             channels: None,
 
             system_requirements: toml_manifest.system_requirements,
@@ -1489,6 +1492,30 @@ mod tests {
             .flat_map(|d| d.into_iter())
             .map(|(name, spec)| format!("{} = {}", name.as_source_str(), Item::from(spec)))
             .join("\n"));
+    }
+
+    #[test]
+    fn test_python_indices() {
+        let contents = format!(
+            r#"
+            {PROJECT_BOILERPLATE}
+            [project.pypi-indices.artifact-registry]
+            url = "https://kiribati-south2-python.pkg.dev/project-name/repo-name/simple"
+            auth_helper = "gcloud"
+            "#
+        );
+
+        let manifest = ProjectManifest::from_toml_str(&contents).unwrap();
+        let indices = manifest.project.pypi_indices.as_ref().unwrap();
+        let index = indices.get("artifact-registry").unwrap();
+
+        assert_eq!(
+            index.url,
+            "https://kiribati-south2-python.pkg.dev/project-name/repo-name/simple"
+                .parse()
+                .unwrap()
+        );
+        assert_eq!(index.auth_helper, Some("gcloud".to_string()));
     }
 
     fn test_remove(
