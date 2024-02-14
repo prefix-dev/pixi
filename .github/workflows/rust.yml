@@ -386,25 +386,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path "C:\.pixi"
           Move-Item -Path "pixi_bin/pixi-${{ matrix.target }}${{ matrix.extension }}" -Destination "C:\.pixi\pixi.exe"
         shell: pwsh
-
       - name: Add to PATH
         run: echo "C:\.pixi" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
         shell: pwsh
-
       - name: Verify and Use Executable
         run: |
           echo "Current PATH: $env:PATH"
-          pixi.exe --version || echo ".exe didn't work"
-          pixi --version || echo "pixi without .exe didn't work"
+          pixi --version
         shell: pwsh
-
-      - name: Help
-        run: pixi --help
-      - name: Verify pixi executable on path
-        run: |
-          pwd
-          tree -L 4 ../../
-          echo $PATH
       - name: Help
         run: pixi --help
       - name: Info
