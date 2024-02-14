@@ -368,14 +368,12 @@ jobs:
       - name: Debug
         run: |
           pwd
-          tree -L 3 ../
       - name: Setup unix binary, add to github path
         if: matrix.os != 'windows-latest'
         run: |
           mv pixi_bin/pixi-${{ matrix.target }} pixi_bin/pixi
           chmod a+x pixi_bin/pixi
           echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
-
       - name: Create Directory and Move Executable
         if: matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-msvc'
         run: |
