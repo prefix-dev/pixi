@@ -377,6 +377,10 @@ jobs:
         run: pixi --help
       - name: checkout repo
         uses: actions/checkout@v4
-      - name: Install pixi
+      - name: Verify pixi executable on path
         run: |
-          pixi install
+          pwd
+          tree -L 3 ../
+          echo $PATH
+      - name: Install pixi
+        run: pixi install
