@@ -204,14 +204,14 @@ jobs:
           CARGO_TEST_OPTIONS="${CARGO_TEST_OPTIONS} --features ${{ env.TEST_FEATURES }}"
           echo "CARGO_TEST_OPTIONS=${CARGO_TEST_OPTIONS}" >> $GITHUB_OUTPUT
 
-#      - name: Run tests
-#        if: ${{ !matrix.skip-tests }}
-#        run: >
-#          cargo test
-#          --locked
-#          --release
-#          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
-#          ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
+      - name: Run tests
+        if: ${{ !matrix.skip-tests }}
+        run: >
+          cargo test
+          --locked
+          --release
+          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+          ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
 
       - name: Build Installer
         continue-on-error: true
