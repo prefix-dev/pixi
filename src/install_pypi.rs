@@ -286,8 +286,6 @@ fn stream_python_artifacts(
                         format!("'{}' is not a valid python package name", &pkg_data.name)
                     })?;
 
-                tracing::warn!("version of is  {filename}, {}", pkg_data.version);
-
                 let artifact_name = ArtifactName::from_filename(filename, Some(pkg_data.url.clone()), &name)
                     .expect("failed to convert filename to artifact name");
 
