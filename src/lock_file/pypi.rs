@@ -84,28 +84,30 @@ pub async fn resolve_dependencies<'db>(
         None => (sdist_resolution, PythonLocation::System),
     };
 
-    // Resolve the PyPi dependencies
     let mapping = conda_pypi_name_mapping().await?;
+    let packages_to_resolve = conda_python_packages
+        .into_iter()
+        .filter(|pkg| {
+            // skip using the locked package in the case where conda and pypi package has the same name
+            requirements.iter().all(|req| {
+                let has_different_name = req.name != pkg.name.as_str();
+                let found_in_mapping = mapping.get(pkg.name.as_str()).is_some();
+                if !has_different_name && !found_in_mapping {
+                    tracing::warn!("{} exists in both Conda and PyPI dependencies", pkg.name);
+                }
+                has_different_name || found_in_mapping
+            })
+        })
+        .map(|p| (p.name.clone(), p))
+        .collect();
+
+    // Resolve the PyPi dependencies
     let mut result = resolve(
         package_db,
         &requirements,
         Arc::new(marker_environment),
         Some(Arc::new(compatible_tags)),
-        conda_python_packages
-            .into_iter()
-            // skip using the locked package in the case where conda and pypi package has the same name
-            .filter(|pkg| {
-                requirements.iter().any(|req| {
-                    let has_different_name = req.name != pkg.name.as_str();
-                    let found_in_mapping = mapping.get(pkg.name.as_str()).is_some();
-                    if !has_different_name {
-                        tracing::warn!("{} exists in both Conda and PyPI dependencies", pkg.name);
-                    }
-                    has_different_name || found_in_mapping
-                })
-            })
-            .map(|p| (p.name.clone(), p))
-            .collect(),
+        packages_to_resolve,
         HashMap::default(),
         ResolveOptions {
             sdist_resolution,

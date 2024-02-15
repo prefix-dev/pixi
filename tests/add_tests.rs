@@ -282,3 +282,37 @@ async fn add_pypi_package_with_same_name() {
     ));
     assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "pandoc"));
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[serial]
+async fn add_pypi_package_with_same_name_but_in_mapping() {
+    let pixi = PixiControl::new().unwrap();
+
+    pixi.init().await.unwrap();
+
+    pixi.add("python")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .with_install(false)
+        .await
+        .unwrap();
+
+    pixi.add("numpy>=1.26.4")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .await
+        .unwrap();
+
+    pixi.add("numpy")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "numpy>=1.26.4"
+    ));
+    assert!(!lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "numpy"));
+}
