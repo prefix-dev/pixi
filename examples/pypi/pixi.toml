@@ -8,6 +8,7 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [tasks]
 start = "python pycosat_example.py"
+test = "python pycosat_example.py"
 
 [dependencies]
 python = "~=3.11.0"
