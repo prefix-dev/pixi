@@ -5,7 +5,6 @@ description = "Add a short description here"
 authors = ["Bas Zalmstra <bas@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
-#platforms = ["osx-arm64"]
 
 
 [tasks]
