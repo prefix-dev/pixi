@@ -108,7 +108,7 @@ pub async fn fetch_sparse_repodata_targets(
                 result.map(|repo_data| repo_data.map(|repo_data| ((channel, platform), repo_data)))
             }
         })
-        .buffered(1)
+        .buffered(20)
         .filter_map(|result| async move { result.transpose() })
         .try_collect()
         .await;
