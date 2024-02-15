@@ -1,5 +1,6 @@
 use super::manifest::{LibCSystemRequirement, SystemRequirements};
 use crate::project::Environment;
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
@@ -103,6 +104,16 @@ pub fn verify_current_platform_has_required_virtual_packages(
     environment: &Environment<'_>,
 ) -> miette::Result<()> {
     let current_platform = Platform::current();
+
+    // Is the current platform in the list of supported platforms?
+    if !environment.platforms().contains(&current_platform) {
+        return Err(miette::miette!(
+            "The current platform '{}' is not supported by the `{}` environment. Supported platforms: {}",
+            current_platform,
+            environment.name(),
+            environment.platforms().iter().map(|plat| plat.as_str()).join(", ")
+        ));
+    }
 
     let system_virtual_packages = VirtualPackage::current()
         .into_diagnostic()?
