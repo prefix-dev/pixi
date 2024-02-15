@@ -287,10 +287,10 @@ fn stream_python_artifacts(
                     })?;
 
                 tracing::warn!("version of is  {filename}, {}", pkg_data.version);
-                
+
                 let artifact_name = ArtifactName::from_filename(filename, Some(pkg_data.url.clone()), &name)
                     .expect("failed to convert filename to artifact name");
-                
+
                 let (artifact_name, is_direct_url) = if let ArtifactName::STree(mut stree) = artifact_name{
                     // populate resolved version of direct dependency
                     stree.version = pkg_data.version.clone();
