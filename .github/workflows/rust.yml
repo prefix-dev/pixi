@@ -400,3 +400,7 @@ jobs:
         run: pixi run -v --manifest-path examples/polarify/pixi.toml test
       - name: Test examples/pypi
         run: pixi run -v --manifest-path examples/pypi/pixi.toml test
+      - name: Test examples/solve-groups
+        run: |
+          pixi run -v --manifest-path examples/solve-groups/pixi.toml -e min-py38 test
+          pixi run -v --manifest-path examples/solve-groups/pixi.toml -e max-py310 test
