@@ -398,4 +398,4 @@ jobs:
         run: pixi install -v
       - name: Test examples
         shell: bash
-        run: bash test/test_examples.sh
+        run: bash tests/test_examples.sh
