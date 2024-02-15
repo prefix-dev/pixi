@@ -165,6 +165,11 @@ pub async fn execute() -> miette::Result<()> {
             format!("rattler_installs_packages={}", pixi_level)
                 .parse()
                 .into_diagnostic()?,
+        )
+        .add_directive(
+            format!("rattler_networking={}", low_level_filter)
+                .parse()
+                .into_diagnostic()?,
         );
 
     // Setup the tracing subscriber
