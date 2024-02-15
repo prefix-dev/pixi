@@ -6,7 +6,6 @@ authors = ["Bas Zalmstra <bas@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
-
 [tasks]
 start = "python pycosat_example.py"
 
