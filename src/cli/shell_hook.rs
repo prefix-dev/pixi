@@ -39,8 +39,11 @@ async fn generate_activation_script(
     shell: Option<ShellEnum>,
     environment: &Environment<'_>,
 ) -> miette::Result<String> {
-   // Get shell from the arguments or from the current process or use default if all fails
-    let shell = shell.unwrap_or_else(|| ShellEnum::from_parent_process().unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default()));
+    // Get shell from the arguments or from the current process or use default if all fails
+    let shell = shell.unwrap_or_else(|| {
+        ShellEnum::from_parent_process()
+            .unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default())
+    });
 
     let activator = get_activator(environment, shell).into_diagnostic()?;
 
