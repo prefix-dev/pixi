@@ -18,7 +18,7 @@ use crate::{
 /// Print the activation script so users can source it in their shell, without needing the pixi executable.
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// Sets the shell
+    /// Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`,  `powershell`,  `fish`,  `nushell`]
     #[arg(short, long)]
     shell: Option<ShellEnum>,
 
@@ -93,20 +93,55 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rattler_shell::shell::{Bash, CmdExe, Fish, NuShell, PowerShell, Xonsh, Zsh};
 
     #[tokio::test]
     async fn test_shell_hook() {
         let project = Project::discover().unwrap();
         let environment = project.default_environment();
-        let script = generate_activation_script(None, &environment)
+        let script = generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment)
             .await
             .unwrap();
-        if cfg!(unix) {
-            assert!(script.contains("export PATH="));
-            assert!(script.contains("export CONDA_PREFIX="));
-        } else {
-            assert!(script.contains("@SET \"PATH="));
-            assert!(script.contains("@SET \"CONDA_PREFIX="));
-        }
+        assert!(script.contains("export PATH="));
+        assert!(script.contains("export CONDA_PREFIX="));
+
+        let script = generate_activation_script(
+            Some(ShellEnum::PowerShell(PowerShell::default())),
+            &environment,
+        )
+        .await
+        .unwrap();
+        assert!(script.contains("${Env:PATH}"));
+        assert!(script.contains("${Env:CONDA_PREFIX}"));
+
+        let script = generate_activation_script(Some(ShellEnum::Zsh(Zsh)), &environment)
+            .await
+            .unwrap();
+        assert!(script.contains("export PATH="));
+        assert!(script.contains("export CONDA_PREFIX="));
+
+        let script = generate_activation_script(Some(ShellEnum::Fish(Fish)), &environment)
+            .await
+            .unwrap();
+        assert!(script.contains("set -gx PATH "));
+        assert!(script.contains("set -gx CONDA_PREFIX "));
+
+        let script = generate_activation_script(Some(ShellEnum::Xonsh(Xonsh)), &environment)
+            .await
+            .unwrap();
+        assert!(script.contains("$PATH = "));
+        assert!(script.contains("$CONDA_PREFIX = "));
+
+        let script = generate_activation_script(Some(ShellEnum::CmdExe(CmdExe)), &environment)
+            .await
+            .unwrap();
+        assert!(script.contains("@SET \"PATH="));
+        assert!(script.contains("@SET \"CONDA_PREFIX="));
+
+        let script = generate_activation_script(Some(ShellEnum::NuShell(NuShell)), &environment)
+            .await
+            .unwrap();
+        assert!(script.contains("$env.PATH = "));
+        assert!(script.contains("$env.CONDA_PREFIX = "));
     }
 }
