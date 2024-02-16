@@ -6,6 +6,12 @@ use std::{
 use thiserror::Error;
 use tokio::sync::Notify;
 
+/// A synchronization primitive that can be used to wait for a value to become available.
+///
+/// The [`BarrierCell`] is initially empty, requesters can wait for a value to become available
+/// using the `wait` method. Once a value is available, the `set` method can be used to set the
+/// value in the cell. The `set` method can only be called once. If the `set` method is called
+/// multiple times, it will return an error. When `set` is called all waiters will be notified.
 pub struct BarrierCell<T> {
     state: AtomicU8,
     value: UnsafeCell<MaybeUninit<T>>,
@@ -13,6 +19,7 @@ pub struct BarrierCell<T> {
 }
 
 unsafe impl<T: Sync> Sync for BarrierCell<T> {}
+
 unsafe impl<T: Send> Send for BarrierCell<T> {}
 
 #[repr(u8)]
@@ -50,7 +57,7 @@ impl<T> BarrierCell<T> {
         unsafe { (*self.value.get()).assume_init_ref() }
     }
 
-    /// Wait for a value to become available in the cell or return a writer which
+    /// Set the value in the cell, if the cell was already initialized this will return an error.
     pub fn set(&self, value: T) -> Result<(), SetError> {
         let state = self
             .state
@@ -70,6 +77,7 @@ impl<T> BarrierCell<T> {
         Ok(())
     }
 
+    /// Consumes this instance and converts it into the inner value if it has been initialized.
     pub fn into_inner(self) -> Option<T> {
         if self.state.load(Ordering::Acquire) == BarrierCellState::Initialized as u8 {
             Some(unsafe { self.value.into_inner().assume_init() })

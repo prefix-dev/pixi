@@ -6,6 +6,7 @@ use itertools::{Either, Itertools};
 use rattler_conda_types::{Channel, Platform};
 use std::borrow::Cow;
 use std::hash::Hash;
+use std::path::PathBuf;
 
 /// A grouping of environments that are solved together.
 #[derive(Debug, Clone)]
@@ -44,8 +45,17 @@ impl<'p> SolveGroup<'p> {
         &self.solve_group.name
     }
 
+    /// Returns the directory where this solve group stores its environment
+    pub fn dir(&self) -> PathBuf {
+        self.project
+            .solve_group_environments_dir()
+            .join(self.name())
+    }
+
     /// Returns an iterator over all the environments that are part of the group.
-    pub fn environments(&self) -> impl Iterator<Item = Environment<'p>> + DoubleEndedIterator + 'p {
+    pub fn environments(
+        &self,
+    ) -> impl Iterator<Item = Environment<'p>> + DoubleEndedIterator + ExactSizeIterator + 'p {
         self.solve_group
             .environments
             .iter()

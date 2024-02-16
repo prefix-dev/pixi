@@ -165,6 +165,22 @@ pub async fn execute() -> miette::Result<()> {
             format!("rattler_installs_packages={}", pixi_level)
                 .parse()
                 .into_diagnostic()?,
+        )
+        .add_directive(
+            format!(
+                "rattler_networking::authentication_storage::backends::file={}",
+                LevelFilter::OFF
+            )
+            .parse()
+            .into_diagnostic()?,
+        )
+        .add_directive(
+            format!(
+                "rattler_networking::authentication_storage::storage={}",
+                LevelFilter::OFF
+            )
+            .parse()
+            .into_diagnostic()?,
         );
 
     // Setup the tracing subscriber

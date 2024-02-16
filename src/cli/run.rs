@@ -4,6 +4,7 @@ use std::convert::identity;
 use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
+use crate::consts;
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
@@ -11,16 +12,19 @@ use miette::{miette, Context, Diagnostic};
 use rattler_conda_types::Platform;
 
 use crate::activation::get_environment_variables;
+use crate::environment::verify_prefix_location_unchanged;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{
     AmbiguousTask, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
     SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskName,
 };
-use crate::{Project, UpdateLockFileOptions};
+use crate::Project;
 
-use crate::environment::LockFileDerivedData;
+use crate::lock_file::LockFileDerivedData;
+use crate::lock_file::UpdateLockFileOptions;
 use crate::progress::await_in_progress;
 use crate::project::manifest::EnvironmentName;
+use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
 use thiserror::Error;
 use tracing::Level;
@@ -49,6 +53,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Load the project
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
+    // Sanity check of prefix location
+    verify_prefix_location_unchanged(
+        project
+            .default_environment()
+            .dir()
+            .join(consts::PREFIX_FILE_NAME)
+            .as_path(),
+    )?;
+
     // Extract the passed in environment name.
     let explicit_environment = args
         .environment
@@ -60,6 +73,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
         })
         .transpose()?;
+
+    // Verify that the current platform has the required virtual packages for the environment.
+    if let Some(ref explicit_environment) = explicit_environment {
+        verify_current_platform_has_required_virtual_packages(explicit_environment)?;
+    }
 
     // Ensure that the lock-file is up-to-date.
     let mut lock_file = project
@@ -90,6 +108,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .with_disambiguate_fn(disambiguate_task_interactive);
 
     let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, task_args)?;
+
+    tracing::info!("Task graph: {}", task_graph);
 
     // Traverse the task graph in topological order and execute each individual task.
     let mut task_idx = 0;
@@ -167,6 +187,7 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
             project
                 .environments()
                 .into_iter()
+                .filter(|env| verify_current_platform_has_required_virtual_packages(env).is_ok())
                 .flat_map(|env| {
                     env.tasks(Some(Platform::current()), true)
                         .into_iter()
