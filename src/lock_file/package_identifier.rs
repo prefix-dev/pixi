@@ -194,7 +194,7 @@ impl PypiPackageIdentifier {
         match &requirement.version_or_url {
             None => {}
             Some(VersionOrUrl::Url(_)) => {
-                unimplemented!("urls are not yet supported in the lockfile")
+                return true;
             }
             Some(VersionOrUrl::VersionSpecifier(spec)) => {
                 if !spec.contains(&self.version) {
