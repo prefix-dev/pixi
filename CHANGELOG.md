@@ -6,11 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.14.0] - 2024-02-15
+
 ### ✨ Highlights
 We now support `solve-groups` in the environments.
 This makes it easy to align dependencies between environments without needing to install them all at once.
 This is especially useful when you have a `test` and a `production` environment, and you want to make sure that the dependencies are the same.
-
+```toml
+[environments]
+test = { features = ["prod", "test"], solve-groups = ["group1"] }
+prod = { features = ["prod"], solve-groups = ["group1"] }
+```
 
 ### 📃 Details
 
@@ -36,6 +41,8 @@ This is especially useful when you have a `test` and a `production` environment,
 - Fmt by @ruben-arts
 - Check for correct platform in task env creation by @ruben-arts in [#759](https://github.com/prefix-dev/pixi/pull/759)
 - Remove using source name by @ruben-arts in [#765](https://github.com/prefix-dev/pixi/pull/765)
+- Auto-guessing of the shell in the `shell-hook` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/811
+- `sdist` with direct references by @nichmor in https://github.com/prefix-dev/pixi/pull/813
 
 #### Miscellaneous
 - Add slim-trees to community projects by @pavelzw in [#760](https://github.com/prefix-dev/pixi/pull/760)
@@ -46,11 +53,14 @@ This is especially useful when you have a `test` and a `production` environment,
 - Rattler 0.18.0 by @baszalmstra in [#805](https://github.com/prefix-dev/pixi/pull/805)
 - Rip 0.8.0 by @nichmor in [#806](https://github.com/prefix-dev/pixi/pull/806)
 - Fix authentication path by @pavelzw in [#796](https://github.com/prefix-dev/pixi/pull/796)
+- Initial addition of integration test by @ruben-arts in https://github.com/prefix-dev/pixi/pull/804
+
 
 ## New Contributors
 * @vlad-ivanov-name made their first contribution in [#784](https://github.com/prefix-dev/pixi/pull/784)
 * @nichmor made their first contribution in [#806](https://github.com/prefix-dev/pixi/pull/806)
-  [0.14.0]: https://github.com/prefix-dev/pixi/compare/v0.13.0..v0.14.0
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.13.0..v0.14.0)
 
 ## [0.13.0] - 2024-02-01
 ### ✨ Highlights
@@ -131,7 +141,8 @@ This release is pretty crazy in amount of features! The major ones are:
 ## New Contributors
 * @JafarAbdi made their first contribution in [#677](https://github.com/prefix-dev/pixi/pull/677)
 * @mariusvniekerk made their first contribution in [#737](https://github.com/prefix-dev/pixi/pull/737)
-[0.13.0]: https://github.com/prefix-dev/pixi/compare/v0.12.0..v0.13.0
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.12.0..v0.13.0)
 
 
 ## [0.12.0] - 2024-01-15
