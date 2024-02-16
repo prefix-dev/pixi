@@ -8,14 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.14.0] - 2024-02-15
 
 ### ✨ Highlights
-We now support `solve-groups` in the environments.
-This makes it easy to align dependencies between environments without needing to install them all at once.
-This is especially useful when you have a `test` and a `production` environment, and you want to make sure that the dependencies are the same.
+Now, `solve-groups` can be used in `[environments]` to ensure dependency alignment across different environments without simultaneous installation.
+This feature is particularly beneficial for managing identical dependencies in `test` and `production` environments.
+Example configuration:
+
 ```toml
 [environments]
 test = { features = ["prod", "test"], solve-groups = ["group1"] }
 prod = { features = ["prod"], solve-groups = ["group1"] }
 ```
+This setup simplifies managing dependencies that must be consistent across `test` and `production`.
 
 ### 📃 Details
 
