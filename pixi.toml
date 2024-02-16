@@ -1,6 +1,6 @@
 [project]
 name = "pixi"
-version = "0.12.0"
+version = "0.14.0"
 description = "Package management made easy!"
 authors = ["Wolf Vollprecht <wolf@prefix.dev>", "Bas Zalmstra <bas@prefix.dev>", "Tim de Jager <tim@prefix.dev>", "Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge"]
@@ -20,7 +20,7 @@ build-docs = { cmd = "mkdocs build --strict" }
 pre-commit = "~=3.3.0"
 
 # Needed for building rattler
-rust = "~=1.73.0"
+rust = "~=1.75.0"
 openssl = "3.*"
 pkg-config = "0.29.*"
 git = "2.42.0.*"

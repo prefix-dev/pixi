@@ -194,7 +194,7 @@ impl PypiPackageIdentifier {
         match &requirement.version_or_url {
             None => {}
             Some(VersionOrUrl::Url(_)) => {
-                unimplemented!("urls are not yet supported in the lockfile")
+                return true;
             }
             Some(VersionOrUrl::VersionSpecifier(spec)) => {
                 if !spec.contains(&self.version) {
@@ -226,7 +226,7 @@ pub enum ConversionError {
     Extra(String),
 }
 
-impl<'a> From<PypiPackageIdentifier> for PinnedPackage<'a> {
+impl From<PypiPackageIdentifier> for PinnedPackage {
     fn from(value: PypiPackageIdentifier) -> Self {
         PinnedPackage {
             name: value.name,
@@ -234,6 +234,7 @@ impl<'a> From<PypiPackageIdentifier> for PinnedPackage<'a> {
             extras: value.extras,
             // We are not aware of artifacts for conda python packages.
             artifacts: vec![],
+            url: None,
         }
     }
 }

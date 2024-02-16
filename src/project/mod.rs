@@ -1,6 +1,7 @@
 mod dependencies;
 mod environment;
 pub mod errors;
+mod grouped_environment;
 pub mod manifest;
 mod solve_group;
 pub mod virtual_packages;
@@ -11,6 +12,7 @@ use once_cell::sync::OnceCell;
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
 use rattler_networking::AuthenticationMiddleware;
 use reqwest_middleware::ClientWithMiddleware;
+use rip::index::PackageSources;
 use rip::{index::PackageDb, normalize_index_url};
 use std::hash::Hash;
 use std::{
@@ -34,6 +36,7 @@ use url::Url;
 use crate::task::TaskName;
 pub use dependencies::Dependencies;
 pub use environment::Environment;
+pub use grouped_environment::{GroupedEnvironment, GroupedEnvironmentName};
 pub use solve_group::SolveGroup;
 
 /// The dependency types we support
@@ -52,6 +55,7 @@ impl DependencyType {
         }
     }
 }
+
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 /// What kind of dependency spec do we have
 pub enum SpecType {
@@ -140,7 +144,7 @@ impl Project {
 
     /// Returns the source code of the project as [`NamedSource`].
     /// Used in error reporting.
-    pub fn manifest_named_source(&self) -> NamedSource {
+    pub fn manifest_named_source(&self) -> NamedSource<String> {
         NamedSource::new(PROJECT_MANIFEST, self.manifest.contents.clone())
     }
 
@@ -216,6 +220,11 @@ impl Project {
     /// Returns the environment directory
     pub fn environments_dir(&self) -> PathBuf {
         self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
+    }
+
+    /// Returns the solve group directory
+    pub fn solve_group_environments_dir(&self) -> PathBuf {
+        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
 
     /// Returns the path to the manifest file.
@@ -366,9 +375,8 @@ impl Project {
     }
 
     /// Returns the Python index URLs to use for this project.
-    pub fn pypi_index_urls(&self) -> Vec<Url> {
-        let index_url = normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap());
-        vec![index_url]
+    pub fn pypi_index_url(&self) -> Url {
+        normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap())
     }
 
     /// Returns the package database used for caching python metadata, wheels and more. See the
@@ -378,11 +386,10 @@ impl Project {
             .package_db
             .get_or_try_init(|| {
                 PackageDb::new(
+                    PackageSources::from(self.pypi_index_url()),
                     self.authenticated_client().clone(),
-                    &self.pypi_index_urls(),
                     &config::get_cache_dir()?.join("pypi/"),
                 )
-                .into_diagnostic()
                 .map(Arc::new)
             })?
             .clone())

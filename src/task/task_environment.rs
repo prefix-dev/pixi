@@ -1,8 +1,8 @@
+use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
 use crate::task::error::{AmbiguousTaskError, MissingTaskError};
 use crate::task::TaskName;
 use crate::{Project, Task};
-use itertools::Itertools;
 use miette::Diagnostic;
 use rattler_conda_types::Platform;
 use thiserror::Error;
@@ -117,28 +117,33 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
         name: TaskName,
         source: FindTaskSource<'p>,
     ) -> Result<TaskAndEnvironment<'p>, FindTaskError> {
-        // If the task was specified on the command line and there is no explicit environment and
-        // the task is only defined in the default feature, use the default environment.
+        // If no explicit environment was specified
         if matches!(source, FindTaskSource::CmdArgs) && self.explicit_environment.is_none() {
-            if let Some(task) = self
-                .project
-                .manifest
-                .default_feature()
-                .targets
-                .resolve(self.platform)
-                .find_map(|target| target.tasks.get(&name))
-            {
-                // None of the other environments can have this task. Otherwise, its still
-                // ambiguous.
+            let default_env = self.project.default_environment();
+            // If the default environment has the task
+            if let Ok(default_env_task) = default_env.task(&name, self.platform) {
+                // If no other environment has the task name but a different task, return the default environment
                 if !self
                     .project
                     .environments()
-                    .into_iter()
-                    .flat_map(|env| env.features(false).collect_vec())
-                    .flat_map(|feature| feature.targets.resolve(self.platform))
-                    .any(|target| target.tasks.contains_key(&name))
+                    .iter()
+                    // Filter out default environment
+                    .filter(|env| !env.name().is_default())
+                    // Filter out environments that can not run on this machine.
+                    .filter(|env| {
+                        verify_current_platform_has_required_virtual_packages(env).is_ok()
+                    })
+                    .any(|env| {
+                        if let Ok(task) = env.task(&name, self.platform) {
+                            // If the task exists in the environment but it is not the reference to the same task, return true to make it ambiguous
+                            !std::ptr::eq(task, default_env_task)
+                        } else {
+                            // If the task does not exist in the environment, return false
+                            false
+                        }
+                    })
                 {
-                    return Ok((self.project.default_environment(), task));
+                    return Ok((self.project.default_environment(), default_env_task));
                 }
             }
         }
@@ -188,5 +193,147 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_find_task_default_defined() {
+        let manifest_str = r#"
+            [project]
+            name = "foo"
+            channels = ["foo"]
+            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64"]
+
+            [tasks]
+            test = "cargo test"
+            [feature.test.dependencies]
+            pytest = "*"
+            [environments]
+            test = ["test"]
+        "#;
+        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
+        assert!(result.is_ok());
+        assert!(result.unwrap().0.name().is_default());
+    }
+
+    #[test]
+    fn test_find_task_dual_defined() {
+        let manifest_str = r#"
+            [project]
+            name = "foo"
+            channels = ["foo"]
+            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64"]
+
+            [tasks]
+            test = "cargo test"
+
+            [feature.test.tasks]
+            test = "cargo test --all-features"
+
+            [environments]
+            test = ["test"]
+        "#;
+        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
+        assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
+    }
+
+    #[test]
+    fn test_find_task_explicit_defined() {
+        let manifest_str = r#"
+            [project]
+            name = "foo"
+            channels = ["foo"]
+            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64"]
+
+            [tasks]
+            test = "pytest"
+            [feature.test.tasks]
+            test = "pytest -s"
+            [feature.prod.tasks]
+            run = "python start.py"
+
+            [environments]
+            default = ["test"]
+            test = ["test"]
+            prod = ["prod"]
+        "#;
+        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
+        assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
+
+        // With explicit environment
+        let search =
+            SearchEnvironments::from_opt_env(&project, Some(project.default_environment()), None);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
+        assert!(result.unwrap().0.name().is_default());
+    }
+
+    #[test]
+    fn test_find_non_default_feature_task() {
+        let manifest_str = r#"
+            [project]
+            name = "foo"
+            channels = ["foo"]
+            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64"]
+
+            [tasks]
+
+            [feature.test.tasks]
+            test = "pytest -s"
+            [feature.prod.tasks]
+            run = "python start.py"
+
+            [environments]
+            default = ["test"]
+            test = ["test"]
+            prod = ["prod"]
+        "#;
+        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
+        assert!(result.unwrap().0.name().is_default());
+
+        // With explicit environment
+        let search = SearchEnvironments::from_opt_env(
+            &project,
+            Some(project.environment("prod").unwrap()),
+            None,
+        );
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
+        assert!(matches!(result, Err(FindTaskError::MissingTask(_))));
+    }
+
+    #[test]
+    fn test_find_ambiguous_task() {
+        let manifest_str = r#"
+            [project]
+            name = "foo"
+            channels = ["foo"]
+            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64"]
+
+            [tasks]
+            bla = "echo foo"
+
+            [feature.other.tasks]
+            bla = "echo foo"
+
+            [environments]
+            other = ["other"]
+        "#;
+        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let result = search.find_task("bla".into(), FindTaskSource::CmdArgs);
+        // Ambiguous task because it is the same name and code but it is defined in different environments
+        assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
     }
 }
