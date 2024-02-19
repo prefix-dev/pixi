@@ -88,14 +88,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
     let mut sucessful_output: Vec<String> = Vec::with_capacity(deps.len());
     if args.pypi {
-        let all_pkg_name = convert_pkg_name::<rip::types::PackageName>(&deps)?;
+        let all_pkg_name = convert_pkg_name::<uv_normalize::PackageName>(&deps)?;
         for dep in all_pkg_name.iter() {
             let (name, req) =
                 project
                     .manifest
                     .remove_pypi_dependency(dep, args.platform, &feature_name)?;
             sucessful_output.push(format_ok_message(
-                name.as_str(),
+                name.as_ref(),
                 &req.to_string(),
                 &table_name,
             ));

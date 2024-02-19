@@ -158,11 +158,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let specs = pep508_requirements
                 .into_iter()
                 .map(|req| {
-                    let name = rip::types::PackageName::from_str(req.name.as_str())?;
+                    let name = req.name.clone();
                     let requirement = PyPiRequirement::from(req);
                     Ok((name, requirement))
                 })
-                .collect::<Result<Vec<_>, rip::types::ParsePackageNameError>>()
+                .collect::<Result<Vec<_>, uv_normalize::InvalidNameError>>()
                 .into_diagnostic()?;
 
             add_pypi_specs_to_project(
@@ -208,7 +208,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 pub async fn add_pypi_specs_to_project(
     project: &mut Project,
-    specs: Vec<(rip::types::PackageName, PyPiRequirement)>,
+    specs: Vec<(uv_normalize::PackageName, PyPiRequirement)>,
     specs_platforms: &Vec<Platform>,
     no_update_lockfile: bool,
     no_install: bool,

@@ -106,15 +106,15 @@ toml = "0.8.10"
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 
-rattler = { git = "https://github.com/baszalmstra/rattler", rev="d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev="d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_digest = { git = "https://github.com/baszalmstra/rattler", rev="d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev="d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_networking = { git = "https://github.com/baszalmstra/rattler", rev="d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev="d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev="d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev="d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev="d61c84e379e75fe7ed528f917085d14b0719d844" }
+rattler = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
+rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
+rattler_digest = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
+rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
+rattler_networking = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
+rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
+rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
+rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
+rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
 #rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages", branch = "main"}
 #resolvo = { git = "https://github.com/mamba-org/resolvo.git", branch = "main" }
 #deno_task_shell = { path = "../deno_task_shell" }

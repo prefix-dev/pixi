@@ -357,7 +357,7 @@ impl Project {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<rip::types::PackageName, Vec<PyPiRequirement>> {
+    ) -> IndexMap<uv_normalize::PackageName, Vec<PyPiRequirement>> {
         self.default_environment().pypi_dependencies(platform)
     }
 

@@ -11,7 +11,7 @@ use rip::index::PackageDb;
 use rip::python_env::PythonLocation;
 use rip::resolve::solve_options::{ResolveOptions, SDistResolution};
 use rip::resolve::{resolve, PinnedPackage};
-use rip::types::PackageName;
+use uv_normalize::PackageName;
 use rip::wheel_builder::WheelBuilder;
 use std::path::Path;
 use std::sync::Arc;

@@ -369,7 +369,7 @@ impl Manifest {
 
     pub fn add_pypi_dependency(
         &mut self,
-        name: &rip::types::PackageName,
+        name: &uv_normalize::PackageName,
         requirement: &PyPiRequirement,
         platform: Option<Platform>,
     ) -> miette::Result<()> {
@@ -430,10 +430,10 @@ impl Manifest {
     /// Removes a pypi dependency from `pixi.toml`.
     pub fn remove_pypi_dependency(
         &mut self,
-        dep: &rip::types::PackageName,
+        dep: &uv_normalize::PackageName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-    ) -> miette::Result<(rip::types::PackageName, PyPiRequirement)> {
+    ) -> miette::Result<(uv_normalize::PackageName, PyPiRequirement)> {
         get_or_insert_toml_table(
             &mut self.document,
             platform,
@@ -921,7 +921,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
             #[serde(default)]
-            pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
+            pypi_dependencies: Option<IndexMap<uv_normalize::PackageName, PyPiRequirement>>,
 
             /// Additional information to activate an environment.
             #[serde(default)]
@@ -1445,7 +1445,7 @@ mod tests {
     ) {
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
 
-        let package_name = rip::types::PackageName::from_str(name).unwrap();
+        let package_name = uv_normalize::PackageName::from_str(name).unwrap();
 
         // Initially the dependency should exist
         assert!(manifest
@@ -2133,7 +2133,7 @@ platforms = ["linux-64", "win-64"]
                 .as_ref()
                 .unwrap()
                 .get(
-                    &rip::types::PackageName::from_str("torch")
+                    &uv_normalize::PackageName::from_str("torch")
                         .expect("torch should be a valid name")
                 )
                 .expect("pypi requirement should be available")

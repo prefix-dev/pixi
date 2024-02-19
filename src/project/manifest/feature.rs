@@ -174,7 +174,7 @@ impl Feature {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> Option<Cow<'_, IndexMap<rip::types::PackageName, PyPiRequirement>>> {
+    ) -> Option<Cow<'_, IndexMap<uv_normalize::PackageName, PyPiRequirement>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
@@ -245,7 +245,7 @@ impl<'de> Deserialize<'de> for Feature {
             build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
             #[serde(default)]
-            pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
+            pypi_dependencies: Option<IndexMap<uv_normalize::PackageName, PyPiRequirement>>,
 
             /// Additional information to activate an environment.
             #[serde(default)]

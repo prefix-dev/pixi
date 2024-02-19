@@ -2,142 +2,33 @@
 //!
 //! See [`resolve_pypi`] and [`resolve_conda`] for more information.
 
-use crate::project::manifest::LibCSystemRequirement;
-use crate::project::virtual_packages::{default_glibc_version, default_mac_os_version};
+use crate::consts::PROJECT_MANIFEST;
 use crate::pypi_marker_env::determine_marker_environment;
-use crate::pypi_tags::is_python_record;
+use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::{
-    lock_file::{pypi, LockedCondaPackages, LockedPypiPackages, PypiRecord},
+    lock_file::{LockedCondaPackages, LockedPypiPackages, PypiRecord},
     project::manifest::{PyPiRequirement, SystemRequirements},
 };
-use distribution_types::{BuiltDist, Dist, FileLocation, IndexLocations, IndexUrls, Resolution};
+use distribution_types::{BuiltDist, Dist, FileLocation, IndexLocations, Resolution};
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
-use miette::IntoDiagnostic;
-use platform_host::{Os, Platform};
-use platform_tags::Tags;
+use miette::{Context, IntoDiagnostic};
+use platform_host::{ Platform};
 use rattler::install::PythonInfo;
-use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, RepoDataRecord, Version};
+use rattler_conda_types::{ GenericVirtualPackage, MatchSpec, RepoDataRecord};
+use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_solve::{resolvo, SolverImpl};
-use std::cmp::min;
-use std::path::PathBuf;
 use std::str::FromStr;
-use std::{path::Path, sync::Arc};
+use std::{path::Path};
 use url::Url;
 use uv_cache::Cache;
-use uv_client::{Connectivity, FlatIndex, FlatIndexClient, RegistryClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndex, FlatIndexClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{InMemoryIndex, Manifest, Options, Resolver};
 use uv_traits::{InFlight, NoBinary, NoBuild, SetupPyStrategy};
-
-fn convert_to_uv_platform(
-    platform: rattler_conda_types::Platform,
-    system_requirements: SystemRequirements,
-) -> miette::Result<Platform> {
-    let platform = if platform.is_linux() {
-        let arch = match platform.arch() {
-            None => unreachable!("every platform we support has an arch"),
-            Some(Arch::X86) => platform_host::Arch::X86,
-            Some(Arch::X86_64) => platform_host::Arch::X86_64,
-            Some(Arch::Aarch64) => platform_host::Arch::Aarch64,
-            Some(Arch::ArmV7l) => platform_host::Arch::Armv7L,
-            Some(Arch::Ppc64le) => platform_host::Arch::Powerpc64Le,
-            Some(Arch::Ppc64) => platform_host::Arch::Powerpc64,
-            Some(Arch::S390X) => platform_host::Arch::S390X,
-            Some(unsupported_arch) => {
-                miette::miette!("unsupported arch for pypi packages '{unsupported_arch}'")
-            }
-        };
-
-        // Find the glibc version
-        match system_requirements
-            .libc
-            .as_ref()
-            .map(LibCSystemRequirement::family_and_version)
-        {
-            None => {
-                let (major, minor) = default_glibc_version()
-                    .as_major_minor()
-                    .expect("expected default glibc version to be a major.minor version");
-                Platform::new(
-                    Os::Manylinux {
-                        major: major as _,
-                        minor: minor as _,
-                    },
-                    arch,
-                )
-            }
-            Some(("glibc", version)) => {
-                let Some((major, minor)) = version.as_major_minor() else {
-                    miette::miette!(
-                        "expected glibc version to be a major.minor version, but got '{version}'"
-                    )
-                };
-                Platform::new(
-                    Os::Manylinux {
-                        major: major as _,
-                        minor: minor as _,
-                    },
-                    arch,
-                )
-            }
-            Some((family, _)) => {
-                return Err(miette::miette!(
-                    "unsupported libc family for pypi packages '{family}'"
-                ));
-            }
-        }
-    } else if platform.is_windows() {
-        let arch = match platform.arch() {
-            None => unreachable!("every platform we support has an arch"),
-            Some(Arch::X86) => platform_host::Arch::X86,
-            Some(Arch::X86_64) => platform_host::Arch::X86_64,
-            Some(Arch::Aarch64) => platform_host::Arch::Aarch64,
-            Some(unsupported_arch) => {
-                miette::miette!("unsupported arch for pypi packages '{unsupported_arch}'")
-            }
-        };
-
-        Platform::new(Os::Windows, arch)
-    } else if platform.is_osx() {
-        let Some((major, minor)) = system_requirements
-            .macos
-            .unwrap_or_else(default_mac_os_version(platform))
-            .as_major_minor()
-        else {
-            miette::miette!(
-                "expected macos version to be a major.minor version, but got '{version}'"
-            )
-        };
-
-        let arch = match platform.arch() {
-            None => unreachable!("every platform we support has an arch"),
-            Some(Arch::X86) => platform_host::Arch::X86,
-            Some(Arch::X86_64) => platform_host::Arch::X86_64,
-            Some(Arch::Aarch64) => platform_host::Arch::Aarch64,
-            Some(unsupported_arch) => {
-                miette::miette!("unsupported arch for pypi packages '{unsupported_arch}'")
-            }
-        };
-
-        Platform::new(
-            Os::Macos {
-                major: major as _,
-                minor: minor as _,
-            },
-            arch,
-        )
-    } else {
-        return Err(miette::miette!(
-            "unsupported platform for pypi packages {platform}"
-        ));
-    };
-
-    Ok(platform)
-}
 
 /// This function takes as input a set of dependencies and system requirements and returns a set of
 /// locked packages.
@@ -182,52 +73,32 @@ pub async fn resolve_pypi(
         Path::new("invalid").to_path_buf(),
     );
 
-    // Build the wheel tags based on the interpreter, the target platform, and the python version.
-    let Some(python_version) = python_record.package_record.version.as_major_minor() else {
-        return Err(miette::miette!(
-            "expected python version to be a major.minor version, but got '{version}'"
-        ));
-    };
-    let implementation_name = match python_record.package_record.name.as_normalized() {
-        "python" => "cpython",
-        "pypy" => "pypy",
-        _ => {
-            return Err(miette::miette!(
-                "unsupported python implementation '{}'",
-                python_record.package_record.name.as_source()
-            ));
-        }
-    };
-    let target_platform = convert_to_uv_platform(platform, system_requirements)?;
-    let tags = Tags::from_env(
-        &target_platform,
-        (
-            python_info.short_version.0 as u8,
-            python_info.short_version.1 as u8,
-        ),
-        implementation_name,
-        (python_version.0 as u8, python_version.1 as u8),
-    )
-    .context("failed to determine the python wheel tags for the target platform")?;
+    // Determine the tags
+    let tags = get_pypi_tags(platform, system_requirements, python_record.as_ref())?;
 
     // Construct a cache
     // TODO: Figure out the right location
-    let cache = Cache::temp().with_context("failed to create cache")?;
+    let cache = Cache::temp()
+        .into_diagnostic()
+        .context("failed to create cache")?;
 
     // Define where to get packages from
-    let index_locations = IndexUrls::default();
+    let index_locations = IndexLocations::default();
 
     // Construct a registry client
     let registry_client = RegistryClientBuilder::new(cache.clone())
-        .index_urls(index_locations.clone())
+        .index_urls(index_locations.index_urls())
         .connectivity(Connectivity::Online)
         .build();
 
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
         let client = FlatIndexClient::new(&registry_client, &cache);
-        let entries = client.fetch(index_locations.flat_index()).await?;
-        FlatIndex::from_entries(entries, tags)
+        let entries = client
+            .fetch(index_locations.flat_index())
+            .await
+            .into_diagnostic()?;
+        FlatIndex::from_entries(entries, &tags)
     };
 
     // Create a shared in-memory index.
@@ -247,7 +118,7 @@ pub async fn resolve_pypi(
         &index,
         &in_flight,
         interpreter.sys_executable().to_path_buf(),
-        &SetupPyStrategy::Pep517,
+        SetupPyStrategy::Pep517,
         &NoBuild::None,
         &NoBinary::None,
     )
@@ -261,11 +132,12 @@ pub async fn resolve_pypi(
         &tags,
         &registry_client,
         &flat_index,
-        index,
+        &index,
         &build_dispatch,
     )
     .resolve()
     .await
+    .into_diagnostic()
     .context("failed to resolve pypi dependencies")?;
     let resolution = Resolution::from(resolution);
 
@@ -279,7 +151,6 @@ pub async fn resolve_pypi(
                 let (url, hash) = match &dist {
                     BuiltDist::Registry(dist) => {
                         let url = match &dist.file.url {
-                            /// Absolute URL.
                             FileLocation::AbsoluteUrl(url) => {
                                 Url::from_str(url).expect("invalid absolute url")
                             }
@@ -289,12 +160,17 @@ pub async fn resolve_pypi(
                             _ => todo!("unsupported URL"),
                         };
 
-                        let hash = match (dist.file.hashes.sha256, dist.file.hashes.md5) {
-                            (Some(sha256), None) => Some(PackageHashes::Sha256(sha256)),
-                            (None, Some(md5)) => Some(PackageHashes::Md5(md5)),
-                            (Some(sha256), Some(md5)) => {
-                                Some(PackageHashes::Md5Sha256(md5, sha256))
+                        let hash = match (&dist.file.hashes.sha256, &dist.file.hashes.md5) {
+                            (Some(sha256), None) => Some(PackageHashes::Sha256(
+                                parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),
+                            )),
+                            (None, Some(md5)) => {
+                                Some(PackageHashes::Md5(parse_digest_from_hex::<Md5>(md5).expect("invalid md5")))
                             }
+                            (Some(sha256), Some(md5)) => Some(PackageHashes::Md5Sha256(
+                                parse_digest_from_hex::<Md5>(md5).expect("invalid md5"),
+                                parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),
+                            )),
                             (None, None) => None,
                         };
 

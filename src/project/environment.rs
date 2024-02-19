@@ -279,7 +279,7 @@ impl<'p> Environment<'p> {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<rip::types::PackageName, Vec<PyPiRequirement>> {
+    ) -> IndexMap<uv_normalize::PackageName, Vec<PyPiRequirement>> {
         self.features(true)
             .filter_map(|f| f.pypi_dependencies(platform))
             .fold(IndexMap::default(), |mut acc, deps| {

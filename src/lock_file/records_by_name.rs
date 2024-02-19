@@ -109,14 +109,14 @@ impl RepoDataRecordsByName {
 #[derive(Clone, Debug, Default)]
 pub struct PypiRecordsByName {
     pub records: Vec<PypiRecord>,
-    by_name: HashMap<rip::types::PackageName, usize>,
+    by_name: HashMap<uv_normalize::PackageName, usize>,
 }
 
 impl PypiRecordsByName {
     /// Returns the record with the given name or `None` if no such record exists.
     pub fn by_name<Q: ?Sized>(&self, key: &Q) -> Option<&PypiRecord>
     where
-        rip::types::PackageName: Borrow<Q>,
+        uv_normalize::PackageName: Borrow<Q>,
         Q: Hash + Eq,
     {
         self.by_name.get(key).map(|idx| &self.records[*idx])
@@ -135,7 +135,7 @@ impl PypiRecordsByName {
         let mut by_name = HashMap::with_capacity(min_size);
         let mut records = Vec::with_capacity(min_size);
         for record in iter {
-            let Ok(package_name) = rip::types::PackageName::from_str(&record.0.name) else {
+            let Ok(package_name) = uv_normalize::PackageName::from_str(&record.0.name) else {
                 continue;
             };
             match by_name.entry(package_name) {
@@ -161,8 +161,8 @@ impl PypiRecordsByName {
     /// names and recursively their dependencies.
     pub fn subset(
         &self,
-        package_names: impl IntoIterator<Item = rip::types::PackageName>,
-        conda_package_identifiers: &HashMap<rip::types::PackageName, PypiPackageIdentifier>,
+        package_names: impl IntoIterator<Item = uv_normalize::PackageName>,
+        conda_package_identifiers: &HashMap<uv_normalize::PackageName, PypiPackageIdentifier>,
     ) -> Self {
         let mut queue = package_names.into_iter().collect::<Vec<_>>();
         let mut queued_names = queue.iter().cloned().collect::<HashSet<_>>();
@@ -180,7 +180,7 @@ impl PypiRecordsByName {
 
             // Find all the dependencies of the package and add them to the queue
             for dependency in found_package.0.requires_dist.iter() {
-                let Ok(dependency_name) = rip::types::PackageName::from_str(&dependency.name)
+                let Ok(dependency_name) = uv_normalize::PackageName::from_str(&dependency.name)
                 else {
                     continue;
                 };
