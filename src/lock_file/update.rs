@@ -1270,7 +1270,7 @@ async fn spawn_solve_pypi_task(
 
         pb.finish();
 
-        Ok((PypiRecordsByName::from_iter(records), end - start))
+        Ok::<(_, _), miette::Report>((PypiRecordsByName::from_iter(records), end - start))
     }
     .instrument(tracing::info_span!(
         "resolve_pypi",

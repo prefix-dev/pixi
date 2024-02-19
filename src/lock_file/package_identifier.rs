@@ -24,16 +24,16 @@ impl PypiPackageIdentifier {
         Ok(result)
     }
 
-    /// Constructs a new instance from a [`LockedDependency`].
-    pub fn from_locked_package(
-        package: &rattler_lock::Package,
-    ) -> Result<Vec<Self>, ConversionError> {
-        match package {
-            rattler_lock::Package::Conda(pkg) => Self::from_locked_conda_dependency(pkg),
-            rattler_lock::Package::Pypi(pkg) => Ok(vec![Self::from_locked_pypi_dependency(pkg)?]),
-        }
-    }
-
+    // /// Constructs a new instance from a [`LockedDependency`].
+    // pub fn from_locked_package(
+    //     package: &rattler_lock::Package,
+    // ) -> Result<Vec<Self>, ConversionError> {
+    //     match package {
+    //         rattler_lock::Package::Conda(pkg) => Self::from_locked_conda_dependency(pkg),
+    //         rattler_lock::Package::Pypi(pkg) => Ok(vec![Self::from_locked_pypi_dependency(pkg)?]),
+    //     }
+    // }
+    //
     /// Constructs a new instance from a locked Pypi dependency.
     pub fn from_locked_pypi_dependency(
         package: &rattler_lock::PypiPackage,
@@ -119,15 +119,15 @@ impl PypiPackageIdentifier {
         Ok(())
     }
 
-    /// Given a list of conda package records, extract the python packages that will be installed
-    /// when these conda packages are installed.
-    pub fn from_records(records: &[RepoDataRecord]) -> Result<Vec<Self>, ConversionError> {
-        let mut result = Vec::new();
-        for record in records {
-            Self::from_record_into(record, &mut result)?;
-        }
-        Ok(result)
-    }
+    // /// Given a list of conda package records, extract the python packages that will be installed
+    // /// when these conda packages are installed.
+    // pub fn from_records(records: &[RepoDataRecord]) -> Result<Vec<Self>, ConversionError> {
+    //     let mut result = Vec::new();
+    //     for record in records {
+    //         Self::from_record_into(record, &mut result)?;
+    //     }
+    //     Ok(result)
+    // }
 
     /// Tries to construct an instance from a generic PURL.
     ///
@@ -205,7 +205,6 @@ pub enum ConversionError {
 
     #[error("'{0}' is not a valid python version")]
     Version(String),
-
-    #[error("'{0}' is not a valid python extra")]
-    Extra(String),
+    // #[error("'{0}' is not a valid python extra")]
+    // Extra(String),
 }

@@ -30,12 +30,12 @@ use uv_normalize::PackageName;
 use uv_resolver::{InMemoryIndex, Manifest, Options, Resolver};
 use uv_traits::{InFlight, NoBinary, NoBuild, SetupPyStrategy};
 
-struct PypiSolveContext {
-    interpreter: Interpreter,
-    registry_client: Arc<RegistryClient>,
-    index_locations: Arc<IndexLocations>,
-
-}
+// struct PypiSolveContext {
+//     interpreter: Interpreter,
+//     registry_client: Arc<RegistryClient>,
+//     index_locations: Arc<IndexLocations>,
+//
+// }
 
 /// This function takes as input a set of dependencies and system requirements and returns a set of
 /// locked packages.
@@ -131,7 +131,7 @@ pub async fn resolve_pypi(
         &NoBuild::None,
         &NoBinary::None,
     )
-        .with_options(options.clone());
+    .with_options(options.clone());
 
     let resolution = Resolver::new(
         Manifest::simple(requirements),
@@ -144,10 +144,10 @@ pub async fn resolve_pypi(
         &index,
         &build_dispatch,
     )
-        .resolve()
-        .await
-        .into_diagnostic()
-        .context("failed to resolve pypi dependencies")?;
+    .resolve()
+    .await
+    .into_diagnostic()
+    .context("failed to resolve pypi dependencies")?;
     let resolution = Resolution::from(resolution);
 
     // Clear message
@@ -237,9 +237,9 @@ pub async fn resolve_conda(
         // Solve the task
         resolvo::Solver.solve(task).into_diagnostic()
     })
-        .await
-        .unwrap_or_else(|e| match e.try_into_panic() {
-            Ok(e) => std::panic::resume_unwind(e),
-            Err(_err) => Err(miette::miette!("cancelled")),
-        })
+    .await
+    .unwrap_or_else(|e| match e.try_into_panic() {
+        Ok(e) => std::panic::resume_unwind(e),
+        Err(_err) => Err(miette::miette!("cancelled")),
+    })
 }

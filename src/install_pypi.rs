@@ -101,7 +101,7 @@ pub async fn update_python_distributions(
     let tags = venv.interpreter().tags().into_diagnostic()?;
 
     // Prep the registry client.
-    let client = RegistryClientBuilder::new(uv_cache).build();
+    let client = RegistryClientBuilder::new(uv_cache.clone()).build();
 
     // Resolve the flat indexes from `--find-links`.
 
@@ -188,7 +188,10 @@ pub async fn update_python_distributions(
             "{}",
             format!(
                 "Audited {} in {}",
-                format!("{num_requirements} package{s}"),
+                format!(
+                    "{num_requirements} package{s}",
+                    num_requirements = requirements.len()
+                ),
                 elapsed(start.elapsed())
             )
         );
