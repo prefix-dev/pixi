@@ -3,15 +3,18 @@ use crate::project::manifest::PyPiRequirement;
 use crate::Project;
 use crate::{config::get_default_author, consts};
 use clap::Parser;
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
-use rattler_conda_types::{MatchSpec, Platform};
+use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
+use regex::Regex;
 use rip::types::PackageName;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::{fs, path::PathBuf};
 
 /// Creates a new project
@@ -36,7 +39,9 @@ pub struct Args {
 
 #[derive(Deserialize, Debug)]
 pub struct CondaEnvFile {
+    #[serde(default)]
     name: String,
+    #[serde(default)]
     channels: Vec<String>,
     dependencies: Vec<CondaEnvDep>,
 }
@@ -98,9 +103,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let (name, channels, conda_deps, pip_deps) = if let Some(env_file) = args.env_file {
         let env_info = read_env_yml(env_file)?;
         let name = env_info.name;
-        let channels = env_info.channels;
-        let (conda_deps, pip_deps) = parse_dependencies(env_info.dependencies)?;
-
+        let channels = parse_channels(env_info.channels);
+        let (conda_deps, pip_deps, mut extra_channels) = parse_dependencies(env_info.dependencies)?;
+        extra_channels.extend(
+            channels
+                .into_iter()
+                .map(|c| Arc::new(Channel::from_str(c, &ChannelConfig::default()).unwrap())),
+        );
+        let mut channels: Vec<_> = extra_channels
+            .into_iter()
+            .unique()
+            .map(|c| c.name().to_string())
+            .collect();
+        if channels.is_empty() {
+            channels = DEFAULT_CHANNELS
+                .iter()
+                .copied()
+                .map(ToOwned::to_owned)
+                .collect()
+        }
         (name, channels, conda_deps, pip_deps)
     } else {
         let name = dir
@@ -233,18 +254,28 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
 }
 
 type PipReq = (PackageName, PyPiRequirement);
-
-fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<(Vec<MatchSpec>, Vec<PipReq>)> {
+type ParsedDependencies = (Vec<MatchSpec>, Vec<PipReq>, Vec<Arc<Channel>>);
+fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependencies> {
     let mut conda_deps = vec![];
     let mut pip_deps = vec![];
-
+    let mut picked_up_channels = vec![];
     for dep in deps {
         match dep {
-            CondaEnvDep::Conda(d) => conda_deps.push(MatchSpec::from_str(&d).into_diagnostic()?),
+            CondaEnvDep::Conda(d) => {
+                let match_spec = MatchSpec::from_str(&d).into_diagnostic()?;
+                if let Some(channel) = match_spec.clone().channel {
+                    picked_up_channels.push(channel);
+                }
+                conda_deps.push(match_spec);
+            }
             CondaEnvDep::Pip { pip } => pip_deps.extend(
                 pip.into_iter()
-                    .map(|d| {
-                        let req = pep508_rs::Requirement::from_str(&d).into_diagnostic()?;
+                    .map(|mut dep| {
+                        let re = Regex::new(r"/([^/]+)\.git").unwrap();
+                        if let Some(caps) = re.captures(dep.as_str()) {
+                            dep = caps.get(1).unwrap().as_str().to_string();
+                        }
+                        let req = pep508_rs::Requirement::from_str(&dep).into_diagnostic()?;
                         let name = rip::types::PackageName::from_str(req.name.as_str())?;
                         let requirement = PyPiRequirement::from(req);
                         Ok((name, requirement))
@@ -258,7 +289,25 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<(Vec<MatchSpec>,
         conda_deps.push(MatchSpec::from_str("pip").into_diagnostic()?);
     }
 
-    Ok((conda_deps, pip_deps))
+    Ok((conda_deps, pip_deps, picked_up_channels))
+}
+
+fn parse_channels(channels: Vec<String>) -> Vec<String> {
+    let mut new_channels = vec![];
+    for channel in channels {
+        if channel == "defaults" {
+            // https://docs.anaconda.com/free/working-with-conda/reference/default-repositories/#active-default-channels
+            new_channels.push("main".to_string());
+            new_channels.push("r".to_string());
+            new_channels.push("msys2".to_string());
+        } else {
+            let channel = channel.trim();
+            if !channel.is_empty() {
+                new_channels.push(channel.to_string());
+            }
+        }
+    }
+    new_channels
 }
 
 fn read_env_yml(path: PathBuf) -> miette::Result<CondaEnvFile> {
@@ -269,6 +318,8 @@ fn read_env_yml(path: PathBuf) -> miette::Result<CondaEnvFile> {
 mod tests {
     use super::*;
     use crate::cli::init::get_dir;
+    use itertools::Itertools;
+    use rattler_conda_types::ChannelConfig;
     use std::io::Read;
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
@@ -281,8 +332,13 @@ mod tests {
           - conda-forge
         dependencies:
           - python
+          - pytorch::torchvision
+          - conda-forge::pytest
+          - wheel=0.31.1
           - pip:
             - requests
+            - git+https://git@github.com/fsschneider/DeepOBS.git@develop#egg=deepobs
+            - torch==1.8.1
         "#;
         let conda_env_file_data: CondaEnvFile =
             serde_yaml::from_str(example_conda_env_file).unwrap();
@@ -293,35 +349,65 @@ mod tests {
             vec!["conda-forge".to_string()]
         );
 
-        let (conda_deps, pip_deps) = parse_dependencies(conda_env_file_data.dependencies).unwrap();
+        let (conda_deps, pip_deps, mut channels) =
+            parse_dependencies(conda_env_file_data.dependencies).unwrap();
+
+        channels.extend(
+            conda_env_file_data
+                .channels
+                .into_iter()
+                .map(|c| Arc::new(Channel::from_str(c, &ChannelConfig::default()).unwrap())),
+        );
+        let channels = channels.into_iter().unique().collect::<Vec<_>>();
+
+        assert_eq!(
+            channels,
+            vec![
+                Arc::new(Channel::from_str("pytorch", &ChannelConfig::default()).unwrap()),
+                Arc::new(Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap())
+            ],
+        );
 
         println!("{conda_deps:?}");
         assert_eq!(
             conda_deps,
             vec![
                 MatchSpec::from_str("python").unwrap(),
-                MatchSpec::from_str("pip").unwrap()
-            ]
-        );
-
-        assert_eq!(
-            conda_deps,
-            vec![
-                MatchSpec::from_str("python").unwrap(),
-                MatchSpec::from_str("pip").unwrap()
+                MatchSpec::from_str("pytorch::torchvision").unwrap(),
+                MatchSpec::from_str("conda-forge::pytest").unwrap(),
+                MatchSpec::from_str("wheel=0.31.1").unwrap(),
+                MatchSpec::from_str("pip").unwrap(),
             ]
         );
 
         assert_eq!(
             pip_deps,
-            vec![(
-                PackageName::from_str("requests").unwrap(),
-                PyPiRequirement {
-                    version: None,
-                    extras: None,
-                    index: None,
-                },
-            )]
+            vec![
+                (
+                    PackageName::from_str("requests").unwrap(),
+                    PyPiRequirement {
+                        version: None,
+                        extras: None,
+                        index: None,
+                    }
+                ),
+                (
+                    PackageName::from_str("DeepOBS").unwrap(),
+                    PyPiRequirement {
+                        version: None,
+                        extras: None,
+                        index: None,
+                    },
+                ),
+                (
+                    PackageName::from_str("torch").unwrap(),
+                    PyPiRequirement {
+                        version: pep440_rs::VersionSpecifiers::from_str("==1.8.1").ok(),
+                        extras: None,
+                        index: None,
+                    }
+                ),
+            ]
         );
     }
 
@@ -380,5 +466,33 @@ mod tests {
         assert!(create_or_append_file(dir.path(), template).is_err());
 
         dir.close().unwrap();
+    }
+
+    #[test]
+    fn test_import_from_env_yamls() {
+        let test_files_path = Path::new(&env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("environment_yamls");
+
+        let entries = match fs::read_dir(test_files_path) {
+            Ok(entries) => entries,
+            Err(e) => panic!("Failed to read directory: {}", e),
+        };
+
+        let mut paths = Vec::new();
+        for entry in entries {
+            let entry = entry.expect("Failed to read directory entry");
+            paths.push(entry.path());
+        }
+
+        for path in paths {
+            let env_info = read_env_yml(path).unwrap();
+            // Try `cargo insta test` to run all at once
+            insta::assert_debug_snapshot!((
+                parse_dependencies(env_info.dependencies).unwrap(),
+                parse_channels(env_info.channels),
+                env_info.name
+            ));
+        }
     }
 }
