@@ -157,7 +157,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         project.save()?;
 
-        let project = Project::load_or_else_discover(Some(&dir.join(consts::PROJECT_MANIFEST)))?;
         get_up_to_date_prefix(
             &project.default_environment(),
             LockFileUsage::Update,
