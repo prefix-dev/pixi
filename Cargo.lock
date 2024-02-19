@@ -1747,7 +1747,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.5",
  "tokio",
  "tower-service",
  "tracing",
@@ -3324,34 +3324,6 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.18.0"
-dependencies = [
- "chrono",
- "fxhash",
- "glob",
- "hex",
- "indexmap 2.2.2",
- "itertools",
- "lazy-regex",
- "nom",
- "purl",
- "rattler_digest 0.18.0",
- "rattler_macros 0.18.0",
- "regex",
- "serde",
- "serde_json",
- "serde_repr",
- "serde_with",
- "serde_yaml",
- "smallvec",
- "strum",
- "thiserror",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "rattler_conda_types"
-version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "085a4ebf784b325311890f7c1dfb9dc017cecb44049cfafef73e02e925e24e22"
 dependencies = [
@@ -3380,16 +3352,32 @@ dependencies = [
 ]
 
 [[package]]
-name = "rattler_digest"
+name = "rattler_conda_types"
 version = "0.18.0"
+source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
 dependencies = [
- "blake2",
- "digest",
+ "chrono",
+ "fxhash",
+ "glob",
  "hex",
- "md-5",
+ "indexmap 2.2.2",
+ "itertools",
+ "lazy-regex",
+ "nom",
+ "purl",
+ "rattler_digest 0.18.0 (git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844)",
+ "rattler_macros 0.18.0 (git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844)",
+ "regex",
  "serde",
+ "serde_json",
+ "serde_repr",
  "serde_with",
- "sha2",
+ "serde_yaml",
+ "smallvec",
+ "strum",
+ "thiserror",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -3409,8 +3397,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_digest"
+version = "0.18.0"
+source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
+dependencies = [
+ "blake2",
+ "digest",
+ "hex",
+ "md-5",
+ "serde",
+ "serde_with",
+ "sha2",
+]
+
+[[package]]
 name = "rattler_lock"
 version = "0.18.0"
+source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3419,8 +3422,8 @@ dependencies = [
  "pep440_rs 0.4.0",
  "pep508_rs",
  "purl",
- "rattler_conda_types 0.18.0",
- "rattler_digest 0.18.0",
+ "rattler_conda_types 0.18.0 (git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844)",
+ "rattler_digest 0.18.0 (git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844)",
  "serde",
  "serde-json-python-formatter",
  "serde_json",
@@ -3434,6 +3437,8 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a96e90500af30b653b0c4e08fa572a6d4dfc821c5e213b510a195987b8ed133"
 dependencies = [
  "quote",
  "syn 2.0.48",
@@ -3442,8 +3447,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a96e90500af30b653b0c4e08fa572a6d4dfc821c5e213b510a195987b8ed133"
+source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
 dependencies = [
  "quote",
  "syn 2.0.48",

@@ -50,7 +50,7 @@ platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 rattler = { version = "0.18.0", default-features = false }
 rattler_conda_types = { version = "0.18.0", default-features = false }
 rattler_digest = { version = "0.18.0", default-features = false }
-rattler_lock = { path = "../rattler/crates/rattler_lock", default-features = false }
+rattler_lock = { version = "0.18.0", default-features = false }
 rattler_networking = { version = "0.18.0", default-features = false }
 rattler_repodata_gateway = { version = "0.18.0", default-features = false, features = ["sparse"] }
 rattler_shell = { version = "0.18.0", default-features = false, features = ["sysinfo"] }
@@ -105,6 +105,7 @@ toml = "0.8.10"
 [patch.crates-io]
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
+rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
 
 #rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 #rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }

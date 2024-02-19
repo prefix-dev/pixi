@@ -10,7 +10,7 @@ use crate::{
     lock_file::{pypi, LockedCondaPackages, LockedPypiPackages, PypiRecord},
     project::manifest::{PyPiRequirement, SystemRequirements},
 };
-use distribution_types::{BuiltDist, Dist, IndexLocations, IndexUrls, Resolution};
+use distribution_types::{BuiltDist, Dist, FileLocation, IndexLocations, IndexUrls, Resolution};
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use miette::IntoDiagnostic;
@@ -22,7 +22,9 @@ use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_solve::{resolvo, SolverImpl};
 use std::cmp::min;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::{path::Path, sync::Arc};
+use url::Url;
 use uv_cache::Cache;
 use uv_client::{Connectivity, FlatIndex, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
@@ -141,7 +143,7 @@ fn convert_to_uv_platform(
 /// locked packages.
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
-    package_db: Arc<PackageDb>,
+    // package_db: Arc<PackageDb>,
     dependencies: IndexMap<PackageName, Vec<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
@@ -270,51 +272,59 @@ pub async fn resolve_pypi(
     // Clear message
     pb.set_message("");
 
-    // let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
-    // for dist in resolution.into_distributions() {
-    //     let file_location = match dist {
-    //         Dist::Built(BuiltDist::Registry(dist)) => dist,
-    //         Dist::Built(BuiltDist::DirectUrl(dist)) => dist.url.to_url(),
-    //         Dist::Built(BuiltDist::Path(dist)) => dist.url.to_url(),
-    //         // Dist::Source(_) => {}
-    //     }
-    // }
+    let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
+    for dist in resolution.into_distributions() {
+        let pypi_package_data = match dist {
+            Dist::Built(dist) => {
+                let (url, hash) = match &dist {
+                    BuiltDist::Registry(dist) => {
+                        let url = match &dist.file.url {
+                            /// Absolute URL.
+                            FileLocation::AbsoluteUrl(url) => {
+                                Url::from_str(url).expect("invalid absolute url")
+                            }
+                            FileLocation::Path(path) => {
+                                Url::from_file_path(path).expect("invalid path")
+                            }
+                            _ => todo!("unsupported URL"),
+                        };
 
-    // // Add pip packages
-    // let mut locked_packages = LockedPypiPackages::with_capacity(python_artifacts.len());
-    // for python_artifact in python_artifacts {
-    //     let (artifact, metadata) = package_db
-    //         // No need for a WheelBuilder here since any builds should have been done during the
-    //         // [`python::resolve_dependencies`] call.
-    //         .get_metadata(&python_artifact.artifacts, None)
-    //         .await
-    //         .expect("failed to get metadata for a package for which we have already fetched metadata during solving.")
-    //         .expect("no metadata for a package for which we have already fetched metadata during solving.");
-    //
-    //     let pkg_data = PypiPackageData {
-    //         name: python_artifact.name.to_string(),
-    //         version: python_artifact.version,
-    //         requires_dist: metadata.requires_dist,
-    //         requires_python: metadata.requires_python,
-    //         url: artifact.url.clone(),
-    //         hash: artifact
-    //             .hashes
-    //             .as_ref()
-    //             .and_then(|hash| PackageHashes::from_hashes(None, hash.sha256)),
-    //     };
-    //
-    //     let pkg_env = PypiPackageEnvironmentData {
-    //         extras: python_artifact
-    //             .extras
-    //             .into_iter()
-    //             .map(|e| e.as_str().to_string())
-    //             .collect(),
-    //     };
-    //
-    //     locked_packages.push((pkg_data, pkg_env));
-    // }
+                        let hash = match (dist.file.hashes.sha256, dist.file.hashes.md5) {
+                            (Some(sha256), None) => Some(PackageHashes::Sha256(sha256)),
+                            (None, Some(md5)) => Some(PackageHashes::Md5(md5)),
+                            (Some(sha256), Some(md5)) => {
+                                Some(PackageHashes::Md5Sha256(md5, sha256))
+                            }
+                            (None, None) => None,
+                        };
 
-    let locked_packages = vec![];
+                        (url, hash)
+                    }
+                    BuiltDist::DirectUrl(dist) => (dist.url.to_url(), None),
+                    BuiltDist::Path(dist) => (dist.url.to_url(), None),
+                };
+
+                let metadata = registry_client
+                    .wheel_metadata(&dist)
+                    .await
+                    .expect("failed to get wheel metadata");
+                PypiPackageData {
+                    name: metadata.name,
+                    version: metadata.version,
+                    requires_dist: metadata.requires_dist,
+                    requires_python: metadata.requires_python,
+                    url,
+                    hash,
+                }
+            }
+            Dist::Source(_) => {
+                todo!("source dists not yet supported");
+            }
+        };
+
+        // TODO: Store extras in the lock-file
+        locked_packages.push((pypi_package_data, PypiPackageEnvironmentData::default()));
+    }
 
     Ok(locked_packages)
 }
