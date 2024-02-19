@@ -1,5 +1,6 @@
 use crate::project::manifest::{LibCSystemRequirement, SystemRequirements};
 use crate::project::virtual_packages::{default_glibc_version, default_mac_os_version};
+use miette::{Context, IntoDiagnostic};
 use platform_host::Os;
 use platform_tags::Tags;
 use rattler_conda_types::{Arch, PackageRecord, Platform};
@@ -31,7 +32,7 @@ pub fn get_pypi_tags(
             Some(Arch::Ppc64) => platform_host::Arch::Powerpc64,
             Some(Arch::S390X) => platform_host::Arch::S390X,
             Some(unsupported_arch) => {
-                miette::miette!("unsupported arch for pypi packages '{unsupported_arch}'")
+                miette::bail!("unsupported arch for pypi packages '{unsupported_arch}'")
             }
         };
 
@@ -55,7 +56,7 @@ pub fn get_pypi_tags(
             }
             Some(("glibc", version)) => {
                 let Some((major, minor)) = version.as_major_minor() else {
-                    miette::miette!(
+                    miette::bail!(
                         "expected glibc version to be a major.minor version, but got '{version}'"
                     )
                 };
@@ -68,9 +69,7 @@ pub fn get_pypi_tags(
                 )
             }
             Some((family, _)) => {
-                return Err(miette::miette!(
-                    "unsupported libc family for pypi packages '{family}'"
-                ));
+                miette::bail!("unsupported libc family for pypi packages '{family}'");
             }
         }
     } else if platform.is_windows() {
@@ -80,7 +79,7 @@ pub fn get_pypi_tags(
             Some(Arch::X86_64) => platform_host::Arch::X86_64,
             Some(Arch::Aarch64) => platform_host::Arch::Aarch64,
             Some(unsupported_arch) => {
-                miette::miette!("unsupported arch for pypi packages '{unsupported_arch}'")
+                miette::bail!("unsupported arch for pypi packages '{unsupported_arch}'")
             }
         };
 
@@ -88,9 +87,9 @@ pub fn get_pypi_tags(
     } else if platform.is_osx() {
         let osx_version = system_requirements
             .macos
-            .unwrap_or_else(default_mac_os_version(platform));
+            .unwrap_or_else(|| default_mac_os_version(platform));
         let Some((major, minor)) = osx_version.as_major_minor() else {
-            miette::miette!(
+            miette::bail!(
                 "expected macos version to be a major.minor version, but got '{osx_version}'"
             )
         };
@@ -101,7 +100,7 @@ pub fn get_pypi_tags(
             Some(Arch::X86_64) => platform_host::Arch::X86_64,
             Some(Arch::Aarch64) => platform_host::Arch::Aarch64,
             Some(unsupported_arch) => {
-                miette::miette!("unsupported arch for pypi packages '{unsupported_arch}'")
+                miette::bail!("unsupported arch for pypi packages '{unsupported_arch}'")
             }
         };
 
@@ -113,26 +112,24 @@ pub fn get_pypi_tags(
             arch,
         )
     } else {
-        return Err(miette::miette!(
-            "unsupported platform for pypi packages {platform}"
-        ));
+        miette::bail!("unsupported platform for pypi packages {platform}")
     };
 
     // Build the wheel tags based on the interpreter, the target platform, and the python version.
     let Some(python_version) = python_record.version.as_major_minor() else {
-        return Err(miette::miette!(
+        miette::bail!(
             "expected python version to be a major.minor version, but got '{}'",
             &python_record.version
-        ));
+        );
     };
     let implementation_name = match python_record.name.as_normalized() {
         "python" => "cpython",
         "pypy" => "pypy",
         _ => {
-            return Err(miette::miette!(
+            miette::bail!(
                 "unsupported python implementation '{}'",
                 python_record.name.as_source()
-            ));
+            );
         }
     };
     let tags = Tags::from_env(
@@ -142,6 +139,7 @@ pub fn get_pypi_tags(
         // TODO: This might not be entirely correct..
         (python_version.0 as u8, python_version.1 as u8),
     )
+    .into_diagnostic()
     .context("failed to determine the python wheel tags for the target platform")?;
 
     Ok(tags)

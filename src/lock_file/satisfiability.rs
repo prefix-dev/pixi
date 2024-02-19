@@ -14,6 +14,7 @@ use std::{
     str::FromStr,
 };
 use thiserror::Error;
+use uv_normalize::PackageName;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -50,7 +51,7 @@ pub enum PlatformUnsat {
     FailedToDetermineMarkerEnvironment(#[source] Box<dyn Diagnostic + Send + Sync>),
 
     #[error("{0} requires python version {1} but the python interpreter in the lock-file has version {2}")]
-    PythonVersionMismatch(String, VersionSpecifiers, Box<pep440_rs::Version>),
+    PythonVersionMismatch(PackageName, VersionSpecifiers, Box<pep440_rs::Version>),
 }
 
 /// Verifies that all the requirements of the specified `environment` can be satisfied with the
@@ -340,10 +341,7 @@ pub fn verify_pypi_platform_satisfiability(
         // Loop over all requirements of the package and add them to the queue.
         for dependency in pkg_data.requires_dist.iter() {
             // Skip this requirement if it does not apply.
-            if !dependency.evaluate_markers(
-                &marker_environment,
-                requirement.extras.clone().unwrap_or_default(),
-            ) {
+            if !dependency.evaluate_markers(&marker_environment, &requirement.extras) {
                 continue;
             }
 
@@ -354,7 +352,7 @@ pub fn verify_pypi_platform_satisfiability(
 
             // Add the requirement to the queue.
             requirements_visited.insert(dependency.clone());
-            requirements.push((dependency.clone(), &pkg_data.name));
+            requirements.push((dependency.clone(), pkg_data.name.as_ref()));
         }
     }
 

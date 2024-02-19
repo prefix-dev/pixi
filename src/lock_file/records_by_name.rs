@@ -4,7 +4,6 @@ use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
-use std::str::FromStr;
 
 /// A struct that holds both a ``Vec` of `RepoDataRecord` and a mapping from name to index.
 #[derive(Clone, Debug, Default)]
@@ -135,10 +134,7 @@ impl PypiRecordsByName {
         let mut by_name = HashMap::with_capacity(min_size);
         let mut records = Vec::with_capacity(min_size);
         for record in iter {
-            let Ok(package_name) = uv_normalize::PackageName::from_str(&record.0.name) else {
-                continue;
-            };
-            match by_name.entry(package_name) {
+            match by_name.entry(record.0.name.clone()) {
                 Entry::Vacant(entry) => {
                     let idx = records.len();
                     records.push(record);
@@ -180,12 +176,8 @@ impl PypiRecordsByName {
 
             // Find all the dependencies of the package and add them to the queue
             for dependency in found_package.0.requires_dist.iter() {
-                let Ok(dependency_name) = uv_normalize::PackageName::from_str(&dependency.name)
-                else {
-                    continue;
-                };
-                if queued_names.insert(dependency_name.clone()) {
-                    queue.push(dependency_name);
+                if queued_names.insert(dependency.name.clone()) {
+                    queue.push(dependency.name.clone());
                 }
             }
 

@@ -21,9 +21,7 @@ use rattler_conda_types::{Channel, Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use reqwest_middleware::ClientWithMiddleware;
-use std::path::PathBuf;
 use std::{collections::HashMap, io::ErrorKind, path::Path, sync::Arc};
-use uv_interpreter::Interpreter;
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
 /// Errors when there is a file system error or the path does not align with the defined prefix.

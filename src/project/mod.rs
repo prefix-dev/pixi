@@ -8,7 +8,6 @@ pub mod virtual_packages;
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
-use once_cell::sync::OnceCell;
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
 use rattler_networking::AuthenticationMiddleware;
 use reqwest_middleware::ClientWithMiddleware;
@@ -24,12 +23,10 @@ use std::{
 };
 
 use crate::{
-    config,
     consts::{self, PROJECT_MANIFEST},
     task::Task,
 };
 use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
-use url::Url;
 
 use crate::task::TaskName;
 pub use dependencies::Dependencies;

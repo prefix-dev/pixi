@@ -94,7 +94,6 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Get the prefix with the conda packages installed.
         let platform = Platform::current();
-        let package_db = environment.project().pypi_package_db()?;
         let (prefix, python_status) = self.conda_prefix(environment).await?;
         let repodata_records = self
             .repodata_records(environment, platform)
@@ -1234,9 +1233,6 @@ async fn spawn_solve_pypi_task(
 
     // Get the system requirements for this environment
     let system_requirements = environment.system_requirements();
-
-    // Get the package database
-    let package_db = environment.project().pypi_package_db()?;
 
     // Wait until the conda records and prefix are available.
     let (repodata_records, (prefix, python_status)) = tokio::join!(repodata_records, prefix);

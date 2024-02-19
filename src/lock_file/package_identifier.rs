@@ -41,7 +41,7 @@ impl PypiPackageIdentifier {
         Ok(Self {
             name: package.data().package.name.clone(),
             version: package.data().package.version.clone(),
-            extras: package.extras().iter().collect(),
+            extras: package.extras().iter().cloned().collect(),
         })
     }
 
@@ -188,8 +188,8 @@ impl PypiPackageIdentifier {
         }
 
         // Check if the required extras exist
-        for extra in requirement.extras.iter().flat_map(|e| e.iter()) {
-            if !self.extras.contains(extra.as_str()) {
+        for extra in requirement.extras.iter() {
+            if !self.extras.contains(extra) {
                 return false;
             }
         }

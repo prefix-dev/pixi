@@ -257,7 +257,7 @@ mod tests {
             ["a", "b", "c"]
                 .into_iter()
                 .map(PackageName::new_unchecked)
-                .collect()
+                .collect::<HashSet<_>>()
         );
     }
 }
