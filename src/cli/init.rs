@@ -1,5 +1,6 @@
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
 use crate::project::manifest::PyPiRequirement;
+use crate::utils::conda_environment_file::{CondaEnvDep, CondaEnvFile};
 use crate::Project;
 use crate::{config::get_default_author, consts};
 use clap::Parser;
@@ -10,8 +11,6 @@ use minijinja::{context, Environment};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
 use regex::Regex;
 use rip::types::PackageName;
-use serde::Deserialize;
-use std::fs::File;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::str::FromStr;
@@ -36,22 +35,6 @@ pub struct Args {
     /// Environment.yml file to bootstrap the project.
     #[arg(short = 'i', long = "import")]
     pub env_file: Option<PathBuf>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct CondaEnvFile {
-    #[serde(default)]
-    name: Option<String>,
-    #[serde(default)]
-    channels: Vec<String>,
-    dependencies: Vec<CondaEnvDep>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(untagged)]
-pub enum CondaEnvDep {
-    Conda(String),
-    Pip { pip: Vec<String> },
 }
 
 /// The default channels to use for a new project.
@@ -101,50 +84,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Fail silently if it already exists or cannot be created.
     fs::create_dir_all(&dir).ok();
 
-    let (name, channels, conda_deps, pypi_deps) = if let Some(env_file) = args.env_file.clone() {
-        let env_info = read_env_yml(env_file)?;
-        let name = match env_info.name {
-            // Default to something to avoid errors
-            None => get_dir_name(&dir).unwrap_or_else(|_| String::from("new_project")),
-            Some(name) => name,
-        };
-        let channels = parse_channels(env_info.channels);
-        let (conda_deps, pip_deps, mut extra_channels) = parse_dependencies(env_info.dependencies)?;
-        extra_channels.extend(
-            channels
-                .into_iter()
-                .map(|c| Arc::new(Channel::from_str(c, &ChannelConfig::default()).unwrap())),
-        );
-        let mut channels: Vec<_> = extra_channels
-            .into_iter()
-            .unique()
-            .map(|c| c.name().to_string())
-            .collect();
-        if channels.is_empty() {
-            channels = DEFAULT_CHANNELS
-                .iter()
-                .copied()
-                .map(ToOwned::to_owned)
-                .collect()
-        }
-        (name, channels, conda_deps, pip_deps)
-    } else {
-        // Default to something to avoid errors
-        let name = get_dir_name(&dir).unwrap_or_else(|_| String::from("new_project"));
-
-        let channels = if let Some(channels) = args.channels {
-            channels
-        } else {
-            DEFAULT_CHANNELS
-                .iter()
-                .copied()
-                .map(ToOwned::to_owned)
-                .collect()
-        };
-
-        (name, channels, vec![], vec![])
-    };
-
     let version = "0.1.0";
     let author = get_default_author();
     let platforms = if args.platforms.is_empty() {
@@ -153,23 +92,35 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.platforms.clone()
     };
 
-    let rv = env
-        .render_named_str(
-            consts::PROJECT_MANIFEST,
-            PROJECT_TEMPLATE,
-            context! {
-                name,
-                version,
-                author,
-                channels,
-                platforms
-            },
-        )
-        .unwrap();
+    // If env file load that else use default template only
+    if let Some(env_file) = args.env_file {
+        let conda_env_file = CondaEnvFile::from_path(&env_file)?;
 
-    if conda_deps.is_empty() && pypi_deps.is_empty() {
-        fs::write(&manifest_path, rv).into_diagnostic()?;
-    } else {
+        let name = match conda_env_file.name() {
+            // Default to something to avoid errors
+            None => get_name_from_dir(&dir).unwrap_or_else(|_| String::from("new_project")),
+            Some(name) => name.to_string(),
+        };
+
+        // TODO: Improve this:
+        //  - Use .condarc as channel config
+        //  - Implement it for `[crate::project::manifest::ProjectManifest]` to do this for other filetypes, e.g. (pyproject.toml, requirements.txt)
+        let (conda_deps, pypi_deps, channels) = conda_env_to_manifest(conda_env_file)?;
+
+        let rv = env
+            .render_named_str(
+                consts::PROJECT_MANIFEST,
+                PROJECT_TEMPLATE,
+                context! {
+                    name,
+                    version,
+                    author,
+                    channels,
+                    platforms
+                },
+            )
+            .unwrap();
+
         let mut project = Project::from_str(&dir, &rv)?;
         for spec in conda_deps {
             match &args.platforms.is_empty() {
@@ -205,7 +156,44 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         }
         project.save()?;
-    }
+
+        let project = Project::load_or_else_discover(Some(&dir.join(consts::PROJECT_MANIFEST)))?;
+        get_up_to_date_prefix(
+            &project.default_environment(),
+            LockFileUsage::Update,
+            false,
+            IndexMap::default(),
+        )
+        .await?;
+    } else {
+        // Default to something to avoid errors
+        let name = get_name_from_dir(&dir).unwrap_or_else(|_| String::from("new_project"));
+
+        let channels = if let Some(channels) = args.channels {
+            channels
+        } else {
+            DEFAULT_CHANNELS
+                .iter()
+                .copied()
+                .map(ToOwned::to_owned)
+                .collect()
+        };
+
+        let rv = env
+            .render_named_str(
+                consts::PROJECT_MANIFEST,
+                PROJECT_TEMPLATE,
+                context! {
+                    name,
+                    version,
+                    author,
+                    channels,
+                    platforms
+                },
+            )
+            .unwrap();
+        fs::write(&manifest_path, rv).into_diagnostic()?;
+    };
 
     // create a .gitignore if one is missing
     if let Err(e) = create_or_append_file(&gitignore_path, GITIGNORE_TEMPLATE) {
@@ -225,18 +213,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    if args.env_file.is_some() {
-        // Install prefix if coming from an environment file
-        let project = Project::load_or_else_discover(Some(&dir.join(consts::PROJECT_MANIFEST)))?;
-        get_up_to_date_prefix(
-            &project.default_environment(),
-            LockFileUsage::Update,
-            false,
-            IndexMap::default(),
-        )
-        .await?;
-    }
-
     // Emit success
     eprintln!(
         "{}Initialized project in {}",
@@ -247,7 +223,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-fn get_dir_name(path: &Path) -> miette::Result<String> {
+fn get_name_from_dir(path: &Path) -> miette::Result<String> {
     Ok(path
         .file_name()
         .ok_or(miette::miette!(
@@ -296,6 +272,32 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
 type PipReq = (PackageName, PyPiRequirement);
 type ParsedDependencies = (Vec<MatchSpec>, Vec<PipReq>, Vec<Arc<Channel>>);
 
+fn conda_env_to_manifest(
+    env_info: CondaEnvFile,
+) -> miette::Result<(Vec<MatchSpec>, Vec<PipReq>, Vec<String>)> {
+    let channels = parse_channels(env_info.channels().clone());
+    let (conda_deps, pip_deps, mut extra_channels) =
+        parse_dependencies(env_info.dependencies().clone())?;
+    extra_channels.extend(
+        channels
+            .into_iter()
+            .map(|c| Arc::new(Channel::from_str(c, &ChannelConfig::default()).unwrap())),
+    );
+    let mut channels: Vec<_> = extra_channels
+        .into_iter()
+        .unique()
+        .map(|c| c.name().to_string())
+        .collect();
+    if channels.is_empty() {
+        channels = DEFAULT_CHANNELS
+            .iter()
+            .copied()
+            .map(ToOwned::to_owned)
+            .collect()
+    }
+
+    Ok((conda_deps, pip_deps, channels))
+}
 fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependencies> {
     let mut conda_deps = vec![];
     let mut pip_deps = vec![];
@@ -353,10 +355,6 @@ fn parse_channels(channels: Vec<String>) -> Vec<String> {
     new_channels
 }
 
-fn read_env_yml(path: PathBuf) -> miette::Result<CondaEnvFile> {
-    serde_yaml::from_reader(File::open(path).into_diagnostic()?).into_diagnostic()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -386,21 +384,18 @@ mod tests {
         let conda_env_file_data: CondaEnvFile =
             serde_yaml::from_str(example_conda_env_file).unwrap();
 
+        assert_eq!(conda_env_file_data.name(), Some("pixi_example_project"));
         assert_eq!(
-            conda_env_file_data.name,
-            Some("pixi_example_project".to_string())
-        );
-        assert_eq!(
-            conda_env_file_data.channels,
-            vec!["conda-forge".to_string()]
+            conda_env_file_data.channels(),
+            &vec!["conda-forge".to_string()]
         );
 
         let (conda_deps, pip_deps, mut channels) =
-            parse_dependencies(conda_env_file_data.dependencies).unwrap();
+            parse_dependencies(conda_env_file_data.dependencies().clone()).unwrap();
 
         channels.extend(
             conda_env_file_data
-                .channels
+                .channels()
                 .into_iter()
                 .map(|c| Arc::new(Channel::from_str(c, &ChannelConfig::default()).unwrap())),
         );
@@ -534,7 +529,7 @@ mod tests {
         }
 
         for path in paths {
-            let env_info = read_env_yml(path.clone()).unwrap();
+            let env_info = CondaEnvFile::from_path(&path).unwrap();
             // Try `cargo insta test` to run all at once
             let snapshot_name = format!(
                 "test_import_from_env_yaml.{}",
@@ -544,9 +539,9 @@ mod tests {
             insta::assert_debug_snapshot!(
                 snapshot_name,
                 (
-                    parse_dependencies(env_info.dependencies).unwrap(),
-                    parse_channels(env_info.channels),
-                    env_info.name
+                    parse_dependencies(env_info.dependencies().clone()).unwrap(),
+                    parse_channels(env_info.channels().clone()),
+                    env_info.name()
                 )
             );
         }
