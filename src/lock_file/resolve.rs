@@ -20,14 +20,22 @@ use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_solve::{resolvo, SolverImpl};
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 use url::Url;
 use uv_cache::Cache;
-use uv_client::{Connectivity, FlatIndex, FlatIndexClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndex, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{InMemoryIndex, Manifest, Options, Resolver};
 use uv_traits::{InFlight, NoBinary, NoBuild, SetupPyStrategy};
+
+struct PypiSolveContext {
+    interpreter: Interpreter,
+    registry_client: Arc<RegistryClient>,
+    index_locations: Arc<IndexLocations>,
+
+}
 
 /// This function takes as input a set of dependencies and system requirements and returns a set of
 /// locked packages.
@@ -61,6 +69,9 @@ pub async fn resolve_pypi(
     // Construct the marker environment for the target platform
     let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
 
+    // Determine the tags
+    let tags = get_pypi_tags(platform, system_requirements, python_record.as_ref())?;
+
     // Construct a fake interpreter from the conda environment.
     // TODO: Should we look into using the actual interpreter here?
     let interpreter = Interpreter::artificial(
@@ -72,9 +83,6 @@ pub async fn resolve_pypi(
         Path::new("invalid").to_path_buf(),
     );
 
-    // Determine the tags
-    let tags = get_pypi_tags(platform, system_requirements, python_record.as_ref())?;
-
     // Construct a cache
     // TODO: Figure out the right location
     let cache = Cache::temp()
@@ -82,13 +90,15 @@ pub async fn resolve_pypi(
         .context("failed to create cache")?;
 
     // Define where to get packages from
-    let index_locations = IndexLocations::default();
+    let index_locations = Arc::new(IndexLocations::default());
 
     // Construct a registry client
-    let registry_client = RegistryClientBuilder::new(cache.clone())
-        .index_urls(index_locations.index_urls())
-        .connectivity(Connectivity::Online)
-        .build();
+    let registry_client = Arc::new(
+        RegistryClientBuilder::new(cache.clone())
+            .index_urls(index_locations.index_urls())
+            .connectivity(Connectivity::Online)
+            .build(),
+    );
 
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
@@ -121,7 +131,7 @@ pub async fn resolve_pypi(
         &NoBuild::None,
         &NoBinary::None,
     )
-    .with_options(options.clone());
+        .with_options(options.clone());
 
     let resolution = Resolver::new(
         Manifest::simple(requirements),
@@ -134,10 +144,10 @@ pub async fn resolve_pypi(
         &index,
         &build_dispatch,
     )
-    .resolve()
-    .await
-    .into_diagnostic()
-    .context("failed to resolve pypi dependencies")?;
+        .resolve()
+        .await
+        .into_diagnostic()
+        .context("failed to resolve pypi dependencies")?;
     let resolution = Resolution::from(resolution);
 
     // Clear message
@@ -227,9 +237,9 @@ pub async fn resolve_conda(
         // Solve the task
         resolvo::Solver.solve(task).into_diagnostic()
     })
-    .await
-    .unwrap_or_else(|e| match e.try_into_panic() {
-        Ok(e) => std::panic::resume_unwind(e),
-        Err(_err) => Err(miette::miette!("cancelled")),
-    })
+        .await
+        .unwrap_or_else(|e| match e.try_into_panic() {
+            Ok(e) => std::panic::resume_unwind(e),
+            Err(_err) => Err(miette::miette!("cancelled")),
+        })
 }

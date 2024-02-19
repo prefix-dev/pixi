@@ -1238,51 +1238,52 @@ async fn spawn_solve_pypi_task(
     let (repodata_records, (prefix, python_status)) = tokio::join!(repodata_records, prefix);
 
     let environment_name = environment.name().clone();
-    let (pypi_packages, duration) = tokio::spawn(
-        async move {
-            let pb = SolveProgressBar::new(
-                global_multi_progress().add(ProgressBar::hidden()),
-                platform,
-                environment_name,
-            );
-            pb.start();
+    // let (pypi_packages, duration) = tokio::spawn(
+    let (pypi_packages, duration) = async move {
+        let pb = SolveProgressBar::new(
+            global_multi_progress().add(ProgressBar::hidden()),
+            platform,
+            environment_name,
+        );
+        pb.start();
 
-            let python_path = python_status
-                .location()
-                .map(|path| prefix.root().join(path))
-                .ok_or_else(|| miette::miette!("missing python interpreter from environment"))?;
+        let python_path = python_status
+            .location()
+            .map(|path| prefix.root().join(path))
+            .ok_or_else(|| miette::miette!("missing python interpreter from environment"))?;
 
-            let start = Instant::now();
+        let start = Instant::now();
 
-            let records = lock_file::resolve_pypi(
-                dependencies,
-                system_requirements,
-                &repodata_records.records,
-                &[],
-                platform,
-                &pb.pb,
-                &python_path,
-                prefix.root(),
-            )
-            .await?;
+        let records = lock_file::resolve_pypi(
+            dependencies,
+            system_requirements,
+            &repodata_records.records,
+            &[],
+            platform,
+            &pb.pb,
+            &python_path,
+            prefix.root(),
+        )
+        .await?;
 
-            let end = Instant::now();
+        let end = Instant::now();
 
-            pb.finish();
+        pb.finish();
 
-            Ok((PypiRecordsByName::from_iter(records), end - start))
-        }
-        .instrument(tracing::info_span!(
-            "resolve_pypi",
-            group = %environment.name().as_str(),
-            platform = %platform
-        )),
-    )
-    .await
-    .unwrap_or_else(|e| match e.try_into_panic() {
-        Ok(panic) => std::panic::resume_unwind(panic),
-        Err(_err) => Err(miette::miette!("the operation was cancelled")),
-    })?;
+        Ok((PypiRecordsByName::from_iter(records), end - start))
+    }
+    .instrument(tracing::info_span!(
+        "resolve_pypi",
+        group = %environment.name().as_str(),
+        platform = %platform
+    ))
+    .await?;
+    // )
+    // .await
+    // .unwrap_or_else(|e| match e.try_into_panic() {
+    //     Ok(panic) => std::panic::resume_unwind(panic),
+    //     Err(_err) => Err(miette::miette!("the operation was cancelled")),
+    // })?;
 
     Ok(TaskResult::PypiGroupSolved(
         environment.name().clone(),
