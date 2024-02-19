@@ -972,7 +972,7 @@ pub(crate) fn deserialize_opt_package_map<'de, D>(
 where
     D: Deserializer<'de>,
 {
-    deserialize_package_map(deserializer).map(Some)
+    Ok(Some(deserialize_package_map(deserializer)?))
 }
 
 impl<'de> Deserialize<'de> for ProjectManifest {
