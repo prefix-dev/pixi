@@ -382,7 +382,7 @@ impl Manifest {
         )?;
 
         // Add the pypi dependency to the table
-        dependency_table.insert(name.as_str(), (*requirement).clone().into());
+        dependency_table.insert(name.as_ref(), (*requirement).clone().into());
 
         // Add the dependency to the manifest as well
         self.default_feature_mut()
@@ -440,14 +440,14 @@ impl Manifest {
             feature_name,
             consts::PYPI_DEPENDENCIES,
         )?
-        .remove(dep.as_source_str())
+        .remove(dep.as_ref())
         .ok_or_else(|| {
             let table_name =
                 get_nested_toml_table_name(feature_name, platform, consts::PYPI_DEPENDENCIES);
 
             miette::miette!(
                 "Couldn't find {} in [{}]",
-                console::style(dep.as_source_str()).bold(),
+                console::style(dep.as_ref()).bold(),
                 console::style(table_name).bold(),
             )
         })?;

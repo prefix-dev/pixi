@@ -1,13 +1,15 @@
 use pep440_rs::VersionSpecifiers;
+use pep508_rs::Extras;
 use serde::{de, de::Error, Deserialize, Deserializer};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
+use uv_normalize::ExtraName;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PyPiRequirement {
     pub(crate) version: Option<pep440_rs::VersionSpecifiers>,
-    pub(crate) extras: Option<Vec<String>>,
+    pub(crate) extras: Option<Extras>,
     pub(crate) index: Option<String>,
 }
 
@@ -15,7 +17,7 @@ pub struct PyPiRequirement {
 #[derive(Debug, Clone, Error)]
 pub enum ParsePyPiRequirementError {
     #[error("invalid pep440 version specifier")]
-    Pep440Error(#[from] pep440_rs::VersionParseError),
+    Pep440Error(#[from] pep440_rs::VersionSpecifiersParseError),
 
     #[error("empty string is not allowed, did you mean '*'?")]
     EmptyStringNotAllowed,
@@ -112,7 +114,7 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
         };
         PyPiRequirement {
             version,
-            extras: req.extras,
+            extras: Some(Extras(req.extras)),
             index: None,
         }
     }
@@ -123,7 +125,11 @@ impl PyPiRequirement {
     pub fn as_pep508(&self, name: &uv_normalize::PackageName) -> pep508_rs::Requirement {
         pep508_rs::Requirement {
             name: name.as_str().to_string(),
-            extras: self.extras.clone(),
+            extras: self
+                .extras
+                .clone()
+                .map(|e| e.into_vec())
+                .unwrap_or_default(),
             version_or_url: self
                 .version
                 .clone()
@@ -159,9 +165,18 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
                         );
                     }
                 };
+                let mut extras = Vec::new();
+                if let Some(raw_extras) = raw_requirement.extras {
+                    extras = raw_extras
+                        .into_iter()
+                        .map(ExtraName::from_str)
+                        .collect::<Result<Vec<ExtraName>, _>>()
+                        .map_err(Error::custom)?;
+                }
+
                 Ok(PyPiRequirement {
+                    extras: Some(Extras(extras)),
                     version,
-                    extras: raw_requirement.extras,
                     index: raw_requirement.index,
                 })
             })
@@ -254,7 +269,7 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap()),
-                extras: Some(vec!("bar".to_string())),
+                extras: Some(Extras(vec![ExtraName::from_str("bar").unwrap()])),
                 index: Some("artifact-registry".to_string()),
             }
         );
@@ -272,7 +287,10 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12,<3.13.0").unwrap()),
-                extras: Some(vec!("bar".to_string(), "foo".to_string())),
+                extras: Some(Extras(vec![
+                    ExtraName::from_str("bar").unwrap(),
+                    ExtraName::from_str("foo").unwrap()
+                ])),
                 index: None,
             }
         );
@@ -293,7 +311,10 @@ mod tests {
             pypi_requirement,
             PyPiRequirement {
                 version: VersionSpecifiers::from_str("==1.2.3").ok(),
-                extras: Some(vec!["feature1".to_owned(), "feature2".to_owned()]),
+                extras: Some(Extras(vec![
+                    ExtraName::from_str("feature1").unwrap(),
+                    ExtraName::from_str("feature2").unwrap()
+                ])),
                 index: None,
             }
         );
