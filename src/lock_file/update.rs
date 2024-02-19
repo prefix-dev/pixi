@@ -66,7 +66,7 @@ pub struct UpdateLockFileOptions {
     /// a heuristic is used based on the number of cores available from the system.
     pub max_concurrent_solves: Option<usize>,
 
-    // Enviroment variables to use when updating lock file
+    // Environment variables to use when updating lock file
     pub env_variables: HashMap<String, String>,
 }
 

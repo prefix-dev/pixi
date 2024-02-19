@@ -173,7 +173,7 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
         .collect()
 }
 
-/// Return a combination of static enviroment variables generated from the project and the environment
+/// Return a combination of static environment variables generated from the project and the environment
 /// and from running activation script
 pub async fn get_env_and_activation_variables<'p>(
     environment: &'p Environment<'p>,
