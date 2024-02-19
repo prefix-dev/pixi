@@ -902,17 +902,6 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     index: None,
                 },
             ),
-            (
-                PackageName {
-                    source: "backobs",
-                    normalized: "backobs",
-                },
-                PyPiRequirement {
-                    version: None,
-                    extras: None,
-                    index: None,
-                },
-            ),
         ],
         [
             Channel {
@@ -1317,5 +1306,7 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
         ],
     ),
     [],
-    "cockpit",
+    Some(
+        "cockpit",
+    ),
 )

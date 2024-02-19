@@ -215,5 +215,7 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
         "r",
         "msys2",
     ],
-    "crnntf",
+    Some(
+        "crnntf",
+    ),
 )

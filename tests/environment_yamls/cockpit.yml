@@ -27,4 +27,3 @@ dependencies:
       - graphviz
       - sphinx-notfound-page
       - git+https://git@github.com/fsschneider/DeepOBS.git@develop#egg=deepobs
-      - git+https://git@github.com/f-dangel/backobs.git@development#egg=backobs

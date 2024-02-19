@@ -1,8 +1,9 @@
-use crate::cli::add::{add_conda_specs_to_project, add_pypi_specs_to_project};
+use crate::environment::{get_up_to_date_prefix, LockFileUsage};
 use crate::project::manifest::PyPiRequirement;
 use crate::Project;
 use crate::{config::get_default_author, consts};
 use clap::Parser;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
@@ -40,7 +41,7 @@ pub struct Args {
 #[derive(Deserialize, Debug)]
 pub struct CondaEnvFile {
     #[serde(default)]
-    name: String,
+    name: Option<String>,
     #[serde(default)]
     channels: Vec<String>,
     dependencies: Vec<CondaEnvDep>,
@@ -100,9 +101,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Fail silently if it already exists or cannot be created.
     fs::create_dir_all(&dir).ok();
 
-    let (name, channels, conda_deps, pip_deps) = if let Some(env_file) = args.env_file {
+    let (name, channels, conda_deps, pypi_deps) = if let Some(env_file) = args.env_file.clone() {
         let env_info = read_env_yml(env_file)?;
-        let name = env_info.name;
+        let name = match env_info.name {
+            // Default to something to avoid errors
+            None => get_dir_name(&dir).unwrap_or_else(|_| String::from("new_project")),
+            Some(name) => name,
+        };
         let channels = parse_channels(env_info.channels);
         let (conda_deps, pip_deps, mut extra_channels) = parse_dependencies(env_info.dependencies)?;
         extra_channels.extend(
@@ -124,16 +129,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         (name, channels, conda_deps, pip_deps)
     } else {
-        let name = dir
-            .file_name()
-            .ok_or_else(|| {
-                miette::miette!(
-                    "Cannot get file or directory name from the path: {}",
-                    dir.to_string_lossy()
-                )
-            })?
-            .to_string_lossy()
-            .to_string();
+        // Default to something to avoid errors
+        let name = get_dir_name(&dir).unwrap_or_else(|_| String::from("new_project"));
 
         let channels = if let Some(channels) = args.channels {
             channels
@@ -153,7 +150,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let platforms = if args.platforms.is_empty() {
         vec![Platform::current().to_string()]
     } else {
-        args.platforms
+        args.platforms.clone()
     };
 
     let rv = env
@@ -170,23 +167,43 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .unwrap();
 
-    if conda_deps.is_empty() && pip_deps.is_empty() {
+    if conda_deps.is_empty() && pypi_deps.is_empty() {
         fs::write(&manifest_path, rv).into_diagnostic()?;
     } else {
         let mut project = Project::from_str(&dir, &rv)?;
-
-        add_conda_specs_to_project(
-            &mut project,
-            conda_deps,
-            crate::SpecType::Run,
-            true,
-            true,
-            &vec![],
-        )
-        .await?;
-
-        add_pypi_specs_to_project(&mut project, pip_deps, &vec![], true, true).await?;
-
+        for spec in conda_deps {
+            match &args.platforms.is_empty() {
+                true => project
+                    .manifest
+                    .add_dependency(&spec, crate::SpecType::Run, None)?,
+                false => {
+                    for platform in args.platforms.iter() {
+                        // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
+                        project.manifest.add_dependency(
+                            &spec,
+                            crate::SpecType::Run,
+                            Some(platform.parse().into_diagnostic()?),
+                        )?;
+                    }
+                }
+            }
+        }
+        for spec in pypi_deps {
+            match &args.platforms.is_empty() {
+                true => project
+                    .manifest
+                    .add_pypi_dependency(&spec.0, &spec.1, None)?,
+                false => {
+                    for platform in args.platforms.iter() {
+                        project.manifest.add_pypi_dependency(
+                            &spec.0,
+                            &spec.1,
+                            Some(platform.parse().into_diagnostic()?),
+                        )?;
+                    }
+                }
+            }
+        }
         project.save()?;
     }
 
@@ -208,6 +225,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
+    if args.env_file.is_some() {
+        // Install prefix if coming from an environment file
+        let project = Project::load_or_else_discover(Some(&dir.join(consts::PROJECT_MANIFEST)))?;
+        get_up_to_date_prefix(
+            &project.default_environment(),
+            LockFileUsage::Update,
+            false,
+            IndexMap::default(),
+        )
+        .await?;
+    }
+
     // Emit success
     eprintln!(
         "{}Initialized project in {}",
@@ -216,6 +245,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     );
 
     Ok(())
+}
+
+fn get_dir_name(path: &Path) -> miette::Result<String> {
+    Ok(path
+        .file_name()
+        .ok_or(miette::miette!(
+            "Cannot get file or directory name from the path: {}",
+            path.to_string_lossy()
+        ))?
+        .to_string_lossy()
+        .to_string())
 }
 
 // When the specific template is not in the file or the file does not exist.
@@ -255,6 +295,7 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
 
 type PipReq = (PackageName, PyPiRequirement);
 type ParsedDependencies = (Vec<MatchSpec>, Vec<PipReq>, Vec<Arc<Channel>>);
+
 fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependencies> {
     let mut conda_deps = vec![];
     let mut pip_deps = vec![];
@@ -273,7 +314,9 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
                     .map(|mut dep| {
                         let re = Regex::new(r"/([^/]+)\.git").unwrap();
                         if let Some(caps) = re.captures(dep.as_str()) {
-                            dep = caps.get(1).unwrap().as_str().to_string();
+                            let name= caps.get(1).unwrap().as_str().to_string();
+                            tracing::warn!("The dependency '{}' is a git repository, as that is not available in pixi we'll try to install it as a package with the name: {}", dep, name);
+                            dep = name;
                         }
                         let req = pep508_rs::Requirement::from_str(&dep).into_diagnostic()?;
                         let name = rip::types::PackageName::from_str(req.name.as_str())?;
@@ -343,7 +386,10 @@ mod tests {
         let conda_env_file_data: CondaEnvFile =
             serde_yaml::from_str(example_conda_env_file).unwrap();
 
-        assert_eq!(conda_env_file_data.name, "pixi_example_project");
+        assert_eq!(
+            conda_env_file_data.name,
+            Some("pixi_example_project".to_string())
+        );
         assert_eq!(
             conda_env_file_data.channels,
             vec!["conda-forge".to_string()]
@@ -482,7 +528,9 @@ mod tests {
         let mut paths = Vec::new();
         for entry in entries {
             let entry = entry.expect("Failed to read directory entry");
-            paths.push(entry.path());
+            if entry.path().is_file() {
+                paths.push(entry.path());
+            }
         }
 
         for path in paths {

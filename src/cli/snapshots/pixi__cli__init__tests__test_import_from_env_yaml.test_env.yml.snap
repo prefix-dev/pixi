@@ -505,5 +505,7 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
         "msys2",
         "conda-forge",
     ],
-    "test_env",
+    Some(
+        "test_env",
+    ),
 )
