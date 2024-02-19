@@ -1,11 +1,8 @@
 use crate::project::manifest::{LibCSystemRequirement, SystemRequirements};
 use crate::project::virtual_packages::{default_glibc_version, default_mac_os_version};
-use itertools::Itertools;
 use platform_host::Os;
 use platform_tags::Tags;
-use rattler_conda_types::{Arch, PackageRecord, Platform, Version};
-use rip::python_env::{WheelTag, WheelTags};
-use std::str::FromStr;
+use rattler_conda_types::{Arch, PackageRecord, Platform};
 
 /// Returns true if the specified record refers to a version/variant of python.
 pub fn is_python_record(record: impl AsRef<PackageRecord>) -> bool {
@@ -89,13 +86,12 @@ pub fn get_pypi_tags(
 
         platform_host::Platform::new(Os::Windows, arch)
     } else if platform.is_osx() {
-        let Some((major, minor)) = system_requirements
+        let osx_version = system_requirements
             .macos
-            .unwrap_or_else(default_mac_os_version(platform))
-            .as_major_minor()
-        else {
+            .unwrap_or_else(default_mac_os_version(platform));
+        let Some((major, minor)) = osx_version.as_major_minor() else {
             miette::miette!(
-                "expected macos version to be a major.minor version, but got '{version}'"
+                "expected macos version to be a major.minor version, but got '{osx_version}'"
             )
         };
 
@@ -125,7 +121,8 @@ pub fn get_pypi_tags(
     // Build the wheel tags based on the interpreter, the target platform, and the python version.
     let Some(python_version) = python_record.version.as_major_minor() else {
         return Err(miette::miette!(
-            "expected python version to be a major.minor version, but got '{version}'"
+            "expected python version to be a major.minor version, but got '{}'",
+            &python_record.version
         ));
     };
     let implementation_name = match python_record.name.as_normalized() {
@@ -148,53 +145,4 @@ pub fn get_pypi_tags(
     .context("failed to determine the python wheel tags for the target platform")?;
 
     Ok(tags)
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_cpython_tags() {
-        let tags: Vec<_> = cpython_tags(&Version::from_str("3.11.2").unwrap(), vec!["win_amd64"])
-            .into_iter()
-            .map(|t| t.to_string())
-            .collect();
-        insta::assert_debug_snapshot!(tags);
-    }
-
-    #[test]
-    fn test_py_interpreter_range() {
-        let tags: Vec<_> = py_interpreter_range(&Version::from_str("3.11.2").unwrap()).collect();
-        insta::assert_debug_snapshot!(tags);
-    }
-
-    #[test]
-    fn test_compatible_tags() {
-        let tags: Vec<_> =
-            compatible_tags(&Version::from_str("3.11.2").unwrap(), vec!["win_amd64"])
-                .map(|t| t.to_string())
-                .collect();
-        insta::assert_debug_snapshot!(tags);
-    }
-
-    #[test]
-    fn test_linux_platform_tags() {
-        let tags: Vec<_> =
-            linux_platform_tags(Platform::Linux64, &Version::from_str("2.17").unwrap())
-                .into_iter()
-                .map(|t| t.to_string())
-                .collect();
-        insta::assert_debug_snapshot!(tags);
-    }
-
-    #[test]
-    fn test_mac_platform_tags() {
-        let tags: Vec<_> =
-            mac_platform_tags(Platform::OsxArm64, &Version::from_str("14.0").unwrap())
-                .into_iter()
-                .map(|t| t.to_string())
-                .collect();
-        insta::assert_debug_snapshot!(tags);
-    }
 }

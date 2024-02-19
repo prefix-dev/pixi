@@ -13,14 +13,13 @@ use distribution_types::{BuiltDist, Dist, FileLocation, IndexLocations, Resoluti
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
-use platform_host::{ Platform};
-use rattler::install::PythonInfo;
-use rattler_conda_types::{ GenericVirtualPackage, MatchSpec, RepoDataRecord};
+use platform_host::Platform;
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_solve::{resolvo, SolverImpl};
+use std::path::Path;
 use std::str::FromStr;
-use std::{path::Path};
 use url::Url;
 use uv_cache::Cache;
 use uv_client::{Connectivity, FlatIndex, FlatIndexClient, RegistryClientBuilder};
@@ -41,7 +40,7 @@ pub async fn resolve_pypi(
     _locked_pypi_records: &[PypiRecord],
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
-    python_info: &PythonInfo,
+    python_location: &Path,
     venv_root: &Path,
 ) -> miette::Result<LockedPypiPackages> {
     // Solve python packages
@@ -69,7 +68,7 @@ pub async fn resolve_pypi(
         marker_environment.clone(),
         venv_root.to_path_buf(),
         venv_root.to_path_buf(),
-        venv_root.join(python_info.path()),
+        python_location.to_path_buf(),
         Path::new("invalid").to_path_buf(),
     );
 
@@ -164,9 +163,9 @@ pub async fn resolve_pypi(
                             (Some(sha256), None) => Some(PackageHashes::Sha256(
                                 parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),
                             )),
-                            (None, Some(md5)) => {
-                                Some(PackageHashes::Md5(parse_digest_from_hex::<Md5>(md5).expect("invalid md5")))
-                            }
+                            (None, Some(md5)) => Some(PackageHashes::Md5(
+                                parse_digest_from_hex::<Md5>(md5).expect("invalid md5"),
+                            )),
                             (Some(sha256), Some(md5)) => Some(PackageHashes::Md5Sha256(
                                 parse_digest_from_hex::<Md5>(md5).expect("invalid md5"),
                                 parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),

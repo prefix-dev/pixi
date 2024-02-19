@@ -24,7 +24,6 @@ use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rip::resolve::solve_options::SDistResolution;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -35,7 +34,6 @@ use std::{
 };
 use tokio::sync::Semaphore;
 use tracing::Instrument;
-use uv_interpreter::Interpreter;
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -1260,20 +1258,21 @@ async fn spawn_solve_pypi_task(
             );
             pb.start();
 
+            let python_path = python_status
+                .location()
+                .map(|path| prefix.root().join(path))
+                .ok_or_else(|| miette::miette!("missing python interpreter from environment"))?;
+
             let start = Instant::now();
 
             let records = lock_file::resolve_pypi(
-                package_db,
                 dependencies,
                 system_requirements,
                 &repodata_records.records,
                 &[],
                 platform,
                 &pb.pb,
-                python_status
-                    .location()
-                    .map(|path| prefix.root().join(path))
-                    .as_deref(),
+                &python_path,
                 prefix.root(),
             )
             .await?;
