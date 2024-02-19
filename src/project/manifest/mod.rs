@@ -2437,4 +2437,44 @@ test = "test initial"
         );
         assert_display_snapshot!(manifest.document.to_string());
     }
+
+    #[test]
+    fn test_duplicate_dependency() {
+        let contents = format!(
+            r#"
+        {PROJECT_BOILERPLATE}
+
+        [dependencies]
+        Flask = "2.*"
+        flask = "2.*"
+        "#
+        );
+        let manifest = ProjectManifest::from_toml_str(&contents);
+
+        assert!(manifest.is_err());
+        assert!(manifest
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate dependency"));
+    }
+
+    #[test]
+    fn test_duplicate_host_dependency() {
+        let contents = format!(
+            r#"
+        {PROJECT_BOILERPLATE}
+
+        [host-dependencies]
+        LibC = "2.12"
+        libc = "2.12"
+        "#
+        );
+        let manifest = ProjectManifest::from_toml_str(&contents);
+
+        assert!(manifest.is_err());
+        assert!(manifest
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate dependency"));
+    }
 }
