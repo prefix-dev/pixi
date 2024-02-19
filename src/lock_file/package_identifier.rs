@@ -1,10 +1,10 @@
-use super::pypi_name_mapping;
 use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use rattler_lock::CondaPackage;
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
+use crate::pypi_name_mapping;
 
 /// Defines information about a Pypi package extracted from either a python package or from a
 /// conda package.

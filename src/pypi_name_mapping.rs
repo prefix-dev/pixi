@@ -31,11 +31,20 @@ pub async fn conda_pypi_name_mapping() -> miette::Result<&'static HashMap<String
     }).await
 }
 
+/// Amend the records with pypi purls if they are not present yet.
+pub async fn amend_pypi_purls(conda_packages: &mut [RepoDataRecord]) -> miette::Result<()> {
+    let conda_forge_mapping = conda_pypi_name_mapping().await?;
+    for record in conda_packages.iter_mut() {
+        amend_pypi_purls_for_record(record, conda_forge_mapping)?;
+    }
+    Ok(())
+}
+
 /// Updates the specified repodata record to include an optional PyPI package name if it is missing.
 ///
 /// This function guesses the PyPI package name from the conda package name if the record refers to
 /// a conda-forge package.
-pub fn amend_pypi_purls(
+fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
     conda_forge_mapping: &'static HashMap<String, String>,
 ) -> miette::Result<()> {

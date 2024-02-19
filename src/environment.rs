@@ -181,7 +181,6 @@ pub async fn update_prefix_pypi(
     pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
-    sdist_resolution: SDistResolution,
 ) -> miette::Result<()> {
     // Remove python packages from a previous python distribution if the python version changed.
     install_pypi::remove_old_python_distributions(prefix, platform, status)?;
@@ -201,7 +200,6 @@ pub async fn update_prefix_pypi(
                 platform,
                 status,
                 system_requirements,
-                sdist_resolution,
             )
         },
     )

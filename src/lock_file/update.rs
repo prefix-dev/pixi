@@ -1,20 +1,9 @@
-use crate::{
-    config, consts, environment,
-    environment::{
-        LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
-    },
-    load_lock_file, lock_file,
-    lock_file::{
-        update, OutdatedEnvironments, PypiPackageIdentifier, PypiRecordsByName,
-        RepoDataRecordsByName,
-    },
-    prefix::Prefix,
-    progress::global_multi_progress,
-    project::{Environment, GroupedEnvironment, GroupedEnvironmentName},
-    repodata::fetch_sparse_repodata_targets,
-    utils::BarrierCell,
-    EnvironmentName, Project,
-};
+use crate::{config, consts, environment, environment::{
+    LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+}, load_lock_file, lock_file, lock_file::{
+    update, OutdatedEnvironments, PypiPackageIdentifier, PypiRecordsByName,
+    RepoDataRecordsByName,
+}, prefix::Prefix, progress::global_multi_progress, project::{Environment, GroupedEnvironment, GroupedEnvironmentName}, repodata::fetch_sparse_repodata_targets, utils::BarrierCell, EnvironmentName, Project, pypi_name_mapping};
 use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
@@ -110,7 +99,6 @@ impl<'p> LockFileDerivedData<'p> {
             &pypi_records,
             &python_status,
             &environment.system_requirements(),
-            SDistResolution::default(),
         )
         .await?;
 
@@ -755,7 +743,6 @@ pub async fn ensure_up_to_date_lock_file(
                     platform,
                     repodata_future,
                     prefix_future,
-                    SDistResolution::default(),
                 );
 
                 pending_futures.push(pypi_solve_future.boxed_local());
@@ -1110,7 +1097,7 @@ async fn spawn_solve_conda_environment_task(
 
             // Add purl's for the conda packages that are also available as pypi packages if we need them.
             if has_pypi_dependencies {
-                lock_file::pypi::amend_pypi_purls(&mut records).await?;
+                pypi_name_mapping::amend_pypi_purls(&mut records).await?;
             }
 
             // Turn the records into a map by name
@@ -1226,7 +1213,6 @@ async fn spawn_solve_pypi_task(
     platform: Platform,
     repodata_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
     prefix: impl Future<Output = (Prefix, PythonStatus)>,
-    sdist_resolution: SDistResolution,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));

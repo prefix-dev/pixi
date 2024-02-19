@@ -2,7 +2,6 @@
 
 mod outdated;
 mod package_identifier;
-mod pypi_name_mapping;
 mod records_by_name;
 mod resolve;
 mod satisfiability;

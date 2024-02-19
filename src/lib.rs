@@ -20,6 +20,8 @@ pub mod utils;
 mod pypi_marker_env;
 mod pypi_tags;
 
+mod pypi_name_mapping;
+
 pub use activation::get_activation_env;
 pub use lock_file::load_lock_file;
 pub use lock_file::UpdateLockFileOptions;
