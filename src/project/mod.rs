@@ -12,8 +12,6 @@ use once_cell::sync::OnceCell;
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
 use rattler_networking::AuthenticationMiddleware;
 use reqwest_middleware::ClientWithMiddleware;
-use rip::index::PackageSources;
-use rip::{index::PackageDb, normalize_index_url};
 use std::hash::Hash;
 use std::{
     collections::{HashMap, HashSet},
@@ -91,7 +89,7 @@ pub struct Project {
     /// Root folder of the project
     root: PathBuf,
     /// The PyPI package db for this project
-    package_db: OnceCell<Arc<PackageDb>>,
+    // package_db: OnceCell<Arc<PackageDb>>,
     /// Reqwest client shared for this project
     client: reqwest::Client,
     /// Authenticated reqwest client shared for this project
@@ -118,7 +116,7 @@ impl Project {
             .build();
         Self {
             root: Default::default(),
-            package_db: Default::default(),
+            // package_db: Default::default(),
             client,
             authenticated_client,
             manifest,
@@ -174,7 +172,7 @@ impl Project {
 
         Ok(Self {
             root: root.to_owned(),
-            package_db: Default::default(),
+            // package_db: Default::default(),
             client: Default::default(),
             authenticated_client: reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
                 .with_arc(Arc::new(AuthenticationMiddleware::default()))
@@ -374,26 +372,26 @@ impl Project {
         self.manifest.has_pypi_dependencies()
     }
 
-    /// Returns the Python index URLs to use for this project.
-    pub fn pypi_index_url(&self) -> Url {
-        normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap())
-    }
-
-    /// Returns the package database used for caching python metadata, wheels and more. See the
-    /// documentation of [`rip::index::PackageDb`] for more information.
-    pub fn pypi_package_db(&self) -> miette::Result<Arc<PackageDb>> {
-        Ok(self
-            .package_db
-            .get_or_try_init(|| {
-                PackageDb::new(
-                    PackageSources::from(self.pypi_index_url()),
-                    self.authenticated_client().clone(),
-                    &config::get_cache_dir()?.join("pypi/"),
-                )
-                .map(Arc::new)
-            })?
-            .clone())
-    }
+    // /// Returns the Python index URLs to use for this project.
+    // pub fn pypi_index_url(&self) -> Url {
+    //     normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap())
+    // }
+    //
+    // /// Returns the package database used for caching python metadata, wheels and more. See the
+    // /// documentation of [`rip::index::PackageDb`] for more information.
+    // pub fn pypi_package_db(&self) -> miette::Result<Arc<PackageDb>> {
+    //     Ok(self
+    //         .package_db
+    //         .get_or_try_init(|| {
+    //             PackageDb::new(
+    //                 PackageSources::from(self.pypi_index_url()),
+    //                 self.authenticated_client().clone(),
+    //                 &config::get_cache_dir()?.join("pypi/"),
+    //             )
+    //             .map(Arc::new)
+    //         })?
+    //         .clone())
+    // }
 
     /// Returns the reqwest client used for http networking
     pub fn client(&self) -> &reqwest::Client {

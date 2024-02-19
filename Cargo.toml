@@ -37,6 +37,7 @@ humantime = "2.1.0"
 indexmap = { version = "2.2.2", features = ["serde"] }
 indicatif = "0.17.7"
 insta = { version = "1.34.0", features = ["yaml"] }
+install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 is_executable = "1.0.1"
 itertools = "0.12.1"
 lazy_static = "1.4.0"
@@ -82,11 +83,12 @@ url = "2.5.0"
 uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 uv-interpreter = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
-
 uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 uv-traits = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
+
 zip = { version = "0.6.6", default-features = false, features = ["deflate", "time"] }
 
 [target.'cfg(unix)'.dependencies]

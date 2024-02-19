@@ -21,7 +21,6 @@ use rattler_conda_types::{Channel, Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use reqwest_middleware::ClientWithMiddleware;
-use rip::{index::PackageDb, resolve::solve_options::SDistResolution};
 use std::path::PathBuf;
 use std::{collections::HashMap, io::ErrorKind, path::Path, sync::Arc};
 use uv_interpreter::Interpreter;
@@ -176,14 +175,13 @@ pub async fn update_prefix_pypi(
     environment_name: &EnvironmentName,
     prefix: &Prefix,
     platform: Platform,
-    package_db: Arc<PackageDb>,
     conda_records: &[RepoDataRecord],
     pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
 ) -> miette::Result<()> {
     // Remove python packages from a previous python distribution if the python version changed.
-    install_pypi::remove_old_python_distributions(prefix, platform, status)?;
+    // install_pypi::remove_old_python_distributions(prefix, platform, status)?;
 
     // Install and/or remove python packages
     progress::await_in_progress(
@@ -193,8 +191,8 @@ pub async fn update_prefix_pypi(
         ),
         |_| {
             install_pypi::update_python_distributions(
-                package_db,
                 prefix,
+                environment_name,
                 conda_records,
                 pypi_records,
                 platform,

@@ -1,9 +1,21 @@
-use crate::{config, consts, environment, environment::{
-    LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
-}, load_lock_file, lock_file, lock_file::{
-    update, OutdatedEnvironments, PypiPackageIdentifier, PypiRecordsByName,
-    RepoDataRecordsByName,
-}, prefix::Prefix, progress::global_multi_progress, project::{Environment, GroupedEnvironment, GroupedEnvironmentName}, repodata::fetch_sparse_repodata_targets, utils::BarrierCell, EnvironmentName, Project, pypi_name_mapping};
+use crate::{
+    config, consts, environment,
+    environment::{
+        LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+    },
+    load_lock_file, lock_file,
+    lock_file::{
+        update, OutdatedEnvironments, PypiPackageIdentifier, PypiRecordsByName,
+        RepoDataRecordsByName,
+    },
+    prefix::Prefix,
+    progress::global_multi_progress,
+    project::{Environment, GroupedEnvironment, GroupedEnvironmentName},
+    pypi_name_mapping,
+    repodata::fetch_sparse_repodata_targets,
+    utils::BarrierCell,
+    EnvironmentName, Project,
+};
 use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
@@ -94,7 +106,6 @@ impl<'p> LockFileDerivedData<'p> {
             environment.name(),
             &prefix,
             platform,
-            package_db,
             &repodata_records,
             &pypi_records,
             &python_status,
@@ -738,12 +749,8 @@ pub async fn ensure_up_to_date_lock_file(
                     .expect("prefix should be available now or in the future");
 
                 // Spawn a task to solve the pypi environment
-                let pypi_solve_future = spawn_solve_pypi_task(
-                    group.clone(),
-                    platform,
-                    repodata_future,
-                    prefix_future,
-                );
+                let pypi_solve_future =
+                    spawn_solve_pypi_task(group.clone(), platform, repodata_future, prefix_future);
 
                 pending_futures.push(pypi_solve_future.boxed_local());
 
