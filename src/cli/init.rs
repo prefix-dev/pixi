@@ -486,13 +486,21 @@ mod tests {
         }
 
         for path in paths {
-            let env_info = read_env_yml(path).unwrap();
+            let env_info = read_env_yml(path.clone()).unwrap();
             // Try `cargo insta test` to run all at once
-            insta::assert_debug_snapshot!((
-                parse_dependencies(env_info.dependencies).unwrap(),
-                parse_channels(env_info.channels),
-                env_info.name
-            ));
+            let snapshot_name = format!(
+                "test_import_from_env_yaml.{}",
+                path.file_name().unwrap().to_string_lossy()
+            );
+
+            insta::assert_debug_snapshot!(
+                snapshot_name,
+                (
+                    parse_dependencies(env_info.dependencies).unwrap(),
+                    parse_channels(env_info.channels),
+                    env_info.name
+                )
+            );
         }
     }
 }
