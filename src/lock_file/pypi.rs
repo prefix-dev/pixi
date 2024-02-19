@@ -12,9 +12,10 @@ use rip::python_env::PythonLocation;
 use rip::resolve::solve_options::{ResolveOptions, SDistResolution};
 use rip::resolve::{resolve, PinnedPackage};
 use rip::types::PackageName;
+use rip::wheel_builder::WheelBuilder;
 use std::path::Path;
 use std::sync::Arc;
-use std::{collections::HashMap, vec};
+use std::vec;
 
 /// Resolve python packages for the specified project.
 pub async fn resolve_dependencies<'db>(
@@ -84,22 +85,30 @@ pub async fn resolve_dependencies<'db>(
     };
 
     // Resolve the PyPi dependencies
-    let mut result = resolve(
-        package_db,
-        &requirements,
-        Arc::new(marker_environment),
-        Some(Arc::new(compatible_tags)),
-        conda_python_packages
+    let marker_environment = Arc::new(marker_environment);
+    let compatible_tags = Arc::new(compatible_tags);
+    let resolve_options = ResolveOptions {
+        sdist_resolution,
+        python_location,
+        locked_packages: conda_python_packages
             .into_iter()
             .map(|p| (p.name.clone(), p))
             .collect(),
-        HashMap::default(),
-        ResolveOptions {
-            sdist_resolution,
-            python_location,
-            ..Default::default()
-        },
-        HashMap::default(),
+        ..Default::default()
+    };
+    let mut result = resolve(
+        package_db.clone(),
+        &requirements,
+        marker_environment.clone(),
+        Some(compatible_tags.clone()),
+        WheelBuilder::new(
+            package_db,
+            marker_environment.clone(),
+            Some(compatible_tags.clone()),
+            resolve_options.clone(),
+        )
+        .expect("failed to create wheel builder"),
+        resolve_options,
     )
     .await
     .wrap_err("failed to resolve `pypi-dependencies`, due to underlying error")?;

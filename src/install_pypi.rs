@@ -16,9 +16,9 @@ use crate::pypi_tags::{is_python_record, project_platform_tags};
 use pep508_rs::MarkerEnvironment;
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
-use rip::artifacts::wheel::{InstallPaths, UnpackWheelOptions};
 use rip::artifacts::Wheel;
 use rip::index::PackageDb;
+use rip::install::{install_wheel, InstallPaths, InstallWheelOptions};
 use rip::python_env::{
     find_distributions_in_venv, uninstall_distribution, Distribution, PythonLocation, WheelTag,
     WheelTags,
@@ -27,7 +27,7 @@ use rip::types::{
     ArtifactHashes, ArtifactInfo, ArtifactName, Extra, HasArtifactName, NormalizedPackageName,
 };
 use rip::wheel_builder::WheelBuilder;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::ops::Deref;
 use std::path::Path;
 use std::str::FromStr;
@@ -189,26 +189,26 @@ async fn install_python_distributions(
             async move {
                 let pb_task = message_formatter.start(wheel.name().to_string()).await;
                 let unpack_result = tokio::task::spawn_blocking(move || {
-                    wheel
-                        .unpack(
-                            &root,
-                            &install_paths,
-                            &python_executable_path,
-                            &UnpackWheelOptions {
-                                installer: Some(PIXI_PYPI_INSTALLER.into()),
-                                extras: Some(extras),
-                                ..Default::default()
-                            },
-                        )
-                        .into_diagnostic()
-                        .and_then(|unpacked_wheel| {
-                            if let Some(hash) = hash {
-                                std::fs::write(unpacked_wheel.dist_info.join("HASH"), hash)
-                                    .into_diagnostic()
-                            } else {
-                                Ok(())
-                            }
-                        })
+                    install_wheel(
+                        &wheel,
+                        &root,
+                        &install_paths,
+                        &python_executable_path,
+                        &InstallWheelOptions {
+                            installer: Some(PIXI_PYPI_INSTALLER.into()),
+                            extras: Some(extras),
+                            ..Default::default()
+                        },
+                    )
+                    .into_diagnostic()
+                    .and_then(|unpacked_wheel| {
+                        if let Some(hash) = hash {
+                            std::fs::write(unpacked_wheel.dist_info.join("HASH"), hash)
+                                .into_diagnostic()
+                        } else {
+                            Ok(())
+                        }
+                    })
                 })
                 .map_err(JoinError::try_into_panic)
                 .await;
@@ -264,14 +264,22 @@ fn stream_python_artifacts(
     let stream_pb = pb.clone();
     let total_packages = packages_to_download.len();
 
+    let wheel_builder = WheelBuilder::new(
+        package_db.clone(),
+        marker_environment,
+        Some(compatible_tags),
+        resolve_options.deref().clone(),
+    )
+    .into_diagnostic()
+    .context("error in construction of WheelBuilder for `pypi-dependencies` installation")
+    .expect("die");
+
     let download_stream = stream::iter(packages_to_download)
         .map(move |(pkg_data, pkg_env_data)| {
             let pb = stream_pb.clone();
             let message_formatter = message_formatter.clone();
-            let marker_environment = marker_environment.clone();
-            let compatible_tags = compatible_tags.clone();
-            let resolve_options = resolve_options.clone();
             let package_db = package_db.clone();
+            let wheel_builder = wheel_builder.clone();
 
             async move {
                 // Determine the filename from the
@@ -286,16 +294,18 @@ fn stream_python_artifacts(
                         format!("'{}' is not a valid python package name", &pkg_data.name)
                     })?;
 
-                let artifact_name = ArtifactName::from_filename(filename, Some(pkg_data.url.clone()), &name)
-                    .expect("failed to convert filename to artifact name");
+                let artifact_name =
+                    ArtifactName::from_filename(filename, Some(pkg_data.url.clone()), &name)
+                        .expect("failed to convert filename to artifact name");
 
-                let (artifact_name, is_direct_url) = if let ArtifactName::STree(mut stree) = artifact_name{
-                    // populate resolved version of direct dependency
-                    stree.version = pkg_data.version.clone();
-                    (ArtifactName::STree(stree), true)
-                } else {
-                    (artifact_name, false)
-                };
+                let (artifact_name, is_direct_url) =
+                    if let ArtifactName::STree(mut stree) = artifact_name {
+                        // populate resolved version of direct dependency
+                        stree.version = pkg_data.version.clone();
+                        (ArtifactName::STree(stree), true)
+                    } else {
+                        (artifact_name, false)
+                    };
 
                 // Log out intent to install this python package.
                 tracing::info!("downloading python package {filename}");
@@ -315,29 +325,20 @@ fn stream_python_artifacts(
                 };
 
                 let (wheel, _) = tokio::spawn({
-                    let marker_environment = marker_environment.clone();
-                    let compatible_tags = compatible_tags.clone();
-                    let resolve_options = resolve_options.clone();
+                    let wheel_builder = wheel_builder.clone();
                     let package_db = package_db.clone();
                     async move {
-                        let wheel_builder = WheelBuilder::new(
-                            package_db.clone(),
-                            marker_environment,
-                            Some(compatible_tags),
-                            resolve_options.deref().clone(),
-                            HashMap::default(),
-                        )
-                            .into_diagnostic()
-                            .context("error in construction of WheelBuilder for `pypi-dependencies` installation")?;
-
                         // TODO: Maybe we should have a cache of wheels separate from the package_db. Since a
                         //   wheel can just be identified by its hash or url.
-                        package_db.get_wheel(&artifact_info, Some(&wheel_builder)).await
+                        package_db
+                            .get_wheel(&artifact_info, Some(wheel_builder.clone()))
+                            .await
                     }
                 })
-                .await.unwrap_or_else(|e| match e.try_into_panic() {
+                .await
+                .unwrap_or_else(|e| match e.try_into_panic() {
                     Ok(panic) => std::panic::resume_unwind(panic),
-                    Err(_) => Err(miette::miette!("operation was cancelled"))
+                    Err(_) => Err(miette::miette!("operation was cancelled")),
                 })?;
 
                 // Update the progress bar
@@ -382,7 +383,7 @@ pub fn remove_old_python_distributions(
     let python_version = match python_changed {
         PythonStatus::Removed { old } | PythonStatus::Changed { old, .. } => old,
         PythonStatus::Added { .. } | PythonStatus::DoesNotExist | PythonStatus::Unchanged(_) => {
-            return Ok(())
+            return Ok(());
         }
     };
 
@@ -510,7 +511,7 @@ fn extract_locked_tags(
 ) -> Vec<(&CombinedPypiPackageData, Option<IndexSet<WheelTag>>)> {
     desired_python_packages
         .into_iter()
-        .map(|pkg@(pkg_data, _pkg_env_data)| {
+        .map(|pkg @ (pkg_data, _pkg_env_data)| {
             // Extract the filename from the url and the name from the package name.
             let Some(filename) = pkg_data.url.path_segments().and_then(|s| s.last()) else {
                 tracing::warn!(

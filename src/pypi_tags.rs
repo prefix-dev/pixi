@@ -21,7 +21,7 @@ pub fn project_platform_tags(
     platform: Platform,
     system_requirements: &SystemRequirements,
     python_record: &PackageRecord,
-) -> WheelTags {
+) -> Tags {
     let platforms = project_platforms(platform, system_requirements);
 
     let mut tags = Vec::new();

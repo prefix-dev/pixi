@@ -35,6 +35,7 @@ use std::{
 };
 use tokio::sync::Semaphore;
 use tracing::Instrument;
+use uv_interpreter::Interpreter;
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -1273,7 +1274,7 @@ async fn spawn_solve_pypi_task(
                     .location()
                     .map(|path| prefix.root().join(path))
                     .as_deref(),
-                sdist_resolution,
+                prefix.root(),
             )
             .await?;
 
