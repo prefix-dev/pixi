@@ -11,7 +11,7 @@ use itertools::Itertools;
 use miette::{miette, Context, Diagnostic};
 use rattler_conda_types::Platform;
 
-use crate::activation::get_environment_variables;
+use crate::activation::{get_env_and_activation_variables, get_environment_variables};
 use crate::environment::verify_prefix_location_unchanged;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{
@@ -216,8 +216,12 @@ pub async fn get_task_env<'p>(
     lock_file_derived_data: &mut LockFileDerivedData<'p>,
     environment: &Environment<'p>,
 ) -> miette::Result<HashMap<String, String>> {
+    let env_variables = get_env_and_activation_variables(environment).await?;
+
     // Ensure there is a valid prefix
-    lock_file_derived_data.prefix(environment).await?;
+    lock_file_derived_data
+        .prefix(environment, env_variables)
+        .await?;
 
     // Get environment variables from the activation
     let activation_env = await_in_progress("activating environment", |_| {

@@ -52,6 +52,7 @@ pub async fn update_python_distributions(
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
     sdist_resolution: SDistResolution,
+    env_variables: HashMap<String, String>,
 ) -> miette::Result<()> {
     let Some(python_info) = status.current_info() else {
         // No python interpreter in the environment, so there is nothing to do here.
@@ -121,6 +122,7 @@ pub async fn update_python_distributions(
         compatible_tags,
         resolve_options,
         python_distributions_to_install.clone(),
+        env_variables,
     );
 
     // Remove python packages that need to be removed
@@ -240,6 +242,7 @@ fn stream_python_artifacts(
     compatible_tags: Arc<WheelTags>,
     resolve_options: Arc<ResolveOptions>,
     packages_to_download: Vec<&CombinedPypiPackageData>,
+    env_variables: HashMap<String, String>,
 ) -> (
     impl Stream<Item = miette::Result<(Option<String>, HashSet<Extra>, Wheel)>> + '_,
     Option<ProgressBar>,
@@ -272,6 +275,7 @@ fn stream_python_artifacts(
             let compatible_tags = compatible_tags.clone();
             let resolve_options = resolve_options.clone();
             let package_db = package_db.clone();
+            let env_variables = env_variables.clone();
 
             async move {
                 // Determine the filename from the
@@ -325,7 +329,7 @@ fn stream_python_artifacts(
                             marker_environment,
                             Some(compatible_tags),
                             resolve_options.deref().clone(),
-                            HashMap::default(),
+                            env_variables,
                         )
                             .into_diagnostic()
                             .context("error in construction of WheelBuilder for `pypi-dependencies` installation")?;

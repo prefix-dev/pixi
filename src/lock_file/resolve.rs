@@ -13,7 +13,7 @@ use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform, RepoDataRe
 use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_solve::{resolvo, SolverImpl};
 use rip::{index::PackageDb, resolve::solve_options::SDistResolution};
-use std::{path::Path, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 /// This function takes as input a set of dependencies and system requirements and returns a set of
 /// locked packages.
@@ -28,6 +28,7 @@ pub async fn resolve_pypi(
     pb: &ProgressBar,
     python_location: Option<&Path>,
     sdist_resolution: SDistResolution,
+    env_variables: HashMap<String, String>,
 ) -> miette::Result<LockedPypiPackages> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -39,6 +40,7 @@ pub async fn resolve_pypi(
         locked_conda_records,
         python_location,
         sdist_resolution,
+        env_variables,
     )
     .await?;
 

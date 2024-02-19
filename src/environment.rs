@@ -1,10 +1,11 @@
 use miette::IntoDiagnostic;
 
 use crate::{
+    activation::get_env_and_activation_variables,
     consts, install, install_pypi,
     lock_file::UpdateLockFileOptions,
     prefix::Prefix,
-    progress::{self},
+    progress,
     project::{
         manifest::{EnvironmentName, SystemRequirements},
         virtual_packages::verify_current_platform_has_required_virtual_packages,
@@ -150,12 +151,16 @@ pub async fn get_up_to_date_prefix(
     // Make sure the project is in a sane state
     sanity_check_project(project)?;
 
+    // Get env variables
+    let env_variables = get_env_and_activation_variables(environment).await?;
+
     // Ensure that the lock-file is up-to-date
     let mut lock_file = project
         .up_to_date_lock_file(UpdateLockFileOptions {
             existing_repo_data,
             lock_file_usage,
             no_install,
+            env_variables: env_variables.clone(),
             ..UpdateLockFileOptions::default()
         })
         .await?;
@@ -164,7 +169,7 @@ pub async fn get_up_to_date_prefix(
     if no_install {
         Ok(Prefix::new(environment.dir()))
     } else {
-        lock_file.prefix(environment).await
+        lock_file.prefix(environment, env_variables).await
     }
 }
 
@@ -180,6 +185,7 @@ pub async fn update_prefix_pypi(
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
     sdist_resolution: SDistResolution,
+    env_variables: HashMap<String, String>,
 ) -> miette::Result<()> {
     // Remove python packages from a previous python distribution if the python version changed.
     install_pypi::remove_old_python_distributions(prefix, platform, status)?;
@@ -200,6 +206,7 @@ pub async fn update_prefix_pypi(
                 status,
                 system_requirements,
                 sdist_resolution,
+                env_variables,
             )
         },
     )

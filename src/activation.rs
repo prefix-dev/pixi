@@ -173,17 +173,11 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
         .collect()
 }
 
-/// Determine the environment variables that need to be set in an interactive shell to make it
-/// function as if the environment has been activated. This method runs the activation scripts from
-/// the environment and stores the environment variables it added, finally it adds environment
-/// variables from the project.
-pub async fn get_activation_env<'p>(
+/// Return a combination of static enviroment variables generated from the project and the environment
+/// and from running activation script
+pub async fn get_env_and_activation_variables<'p>(
     environment: &'p Environment<'p>,
-    lock_file_usage: LockFileUsage,
 ) -> miette::Result<HashMap<String, String>> {
-    // Get the prefix which we can then activate.
-    get_up_to_date_prefix(environment, lock_file_usage, false, IndexMap::default()).await?;
-
     // Get environment variables from the activation
     let activation_env =
         await_in_progress("activating environment", |_| run_activation(environment))
@@ -197,6 +191,20 @@ pub async fn get_activation_env<'p>(
         .into_iter()
         .chain(environment_variables.into_iter())
         .collect())
+}
+
+/// Determine the environment variables that need to be set in an interactive shell to make it
+/// function as if the environment has been activated. This method runs the activation scripts from
+/// the environment and stores the environment variables it added, finally it adds environment
+/// variables from the project.
+pub async fn get_activation_env<'p>(
+    environment: &'p Environment<'p>,
+    lock_file_usage: LockFileUsage,
+) -> miette::Result<HashMap<String, String>> {
+    // Get the prefix which we can then activate.
+    get_up_to_date_prefix(environment, lock_file_usage, false, IndexMap::default()).await?;
+
+    get_env_and_activation_variables(environment).await
 }
 
 #[cfg(test)]
