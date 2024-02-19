@@ -376,8 +376,8 @@ exit
 This command prints the activation script of an environment.
 
 ##### Options
-- `--shell`: The shell for which the activation script should be printed. Defaults to the current shell.
-    Currently supported variants: [`Bash`,  `Zsh`,  `Xonsh`,  `CmdExe`,  `PowerShell`,  `Fish`,  `NuShell`]
+- `--shell <SHELL> (-s)`: The shell for which the activation script should be printed. Defaults to the current shell.
+    Currently supported variants: [`bash`,  `zsh`,  `xonsh`,  `cmd`,  `powershell`,  `fish`,  `nushell`]
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
@@ -387,6 +387,7 @@ This command prints the activation script of an environment.
 pixi shell-hook
 pixi shell-hook --shell bash
 pixi shell-hook --shell zsh
+pixi shell-hook -s powershell
 pixi shell-hook --manifest-path ~/myproject/pixi.toml
 pixi shell-hook --frozen
 pixi shell-hook --locked
