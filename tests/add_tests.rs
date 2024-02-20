@@ -316,3 +316,37 @@ async fn add_pypi_package_with_same_name_but_in_mapping() {
     ));
     assert!(!lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "numpy"));
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[serial]
+async fn add_pypi_package_with_same_name_but_in_mapping_differently() {
+    let pixi = PixiControl::new().unwrap();
+
+    pixi.init().await.unwrap();
+
+    pixi.add("python")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .with_install(false)
+        .await
+        .unwrap();
+
+    pixi.add("python-annoy>=1.17.2")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .await
+        .unwrap();
+
+    pixi.add("annoy")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "python-annoy>=1.17.2"
+    ));
+    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "annoy"));
+}
