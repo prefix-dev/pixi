@@ -1,3 +1,4 @@
+use crate::lock_file::UvResolutionContext;
 use crate::{
     config, consts, environment,
     environment::{
@@ -710,6 +711,7 @@ pub async fn ensure_up_to_date_lock_file(
     }
 
     // Spawn tasks to update the pypi packages.
+    let mut uv_context = None;
     for (environment, platform) in outdated
         .pypi
         .into_iter()
@@ -747,9 +749,24 @@ pub async fn ensure_up_to_date_lock_file(
                     .get_conda_prefix(&group)
                     .expect("prefix should be available now or in the future");
 
+                // Get the uv context
+                let uv_context = match &uv_context {
+                    None => {
+                        let context = UvResolutionContext::from_project(project)?;
+                        uv_context = Some(context.clone());
+                        context
+                    }
+                    Some(context) => context.clone(),
+                };
+
                 // Spawn a task to solve the pypi environment
-                let pypi_solve_future =
-                    spawn_solve_pypi_task(group.clone(), platform, repodata_future, prefix_future);
+                let pypi_solve_future = spawn_solve_pypi_task(
+                    uv_context,
+                    group.clone(),
+                    platform,
+                    repodata_future,
+                    prefix_future,
+                );
 
                 pending_futures.push(pypi_solve_future.boxed_local());
 
@@ -1215,6 +1232,7 @@ async fn spawn_extract_pypi_environment_task(
 
 /// A task that solves the pypi dependencies for a given environment.
 async fn spawn_solve_pypi_task(
+    resolution_context: UvResolutionContext,
     environment: GroupedEnvironment<'_>,
     platform: Platform,
     repodata_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
@@ -1255,6 +1273,7 @@ async fn spawn_solve_pypi_task(
         let start = Instant::now();
 
         let records = lock_file::resolve_pypi(
+            resolution_context,
             dependencies,
             system_requirements,
             &repodata_records.records,

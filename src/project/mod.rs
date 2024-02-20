@@ -6,12 +6,15 @@ pub mod manifest;
 mod solve_group;
 pub mod virtual_packages;
 
+use distribution_types::IndexLocations;
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
 use rattler_networking::AuthenticationMiddleware;
+use reqwest::Client;
 use reqwest_middleware::ClientWithMiddleware;
 use std::hash::Hash;
+use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     env,
@@ -85,8 +88,6 @@ impl SpecType {
 pub struct Project {
     /// Root folder of the project
     root: PathBuf,
-    /// The PyPI package db for this project
-    // package_db: OnceCell<Arc<PackageDb>>,
     /// Reqwest client shared for this project
     client: reqwest::Client,
     /// Authenticated reqwest client shared for this project
@@ -113,7 +114,6 @@ impl Project {
             .build();
         Self {
             root: Default::default(),
-            // package_db: Default::default(),
             client,
             authenticated_client,
             manifest,
@@ -167,13 +167,21 @@ impl Project {
                 )
             });
 
+        let timeout = 5 * 60;
+        let client = Client::builder()
+            .pool_max_idle_per_host(20)
+            .timeout(std::time::Duration::from_secs(timeout))
+            .build()
+            .expect("failed to create reqwest Client");
+
+        let authenticated_client = reqwest_middleware::ClientBuilder::new(client.clone())
+            .with_arc(Arc::new(AuthenticationMiddleware::default()))
+            .build();
+
         Ok(Self {
             root: root.to_owned(),
-            // package_db: Default::default(),
-            client: Default::default(),
-            authenticated_client: reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-                .with_arc(Arc::new(AuthenticationMiddleware::default()))
-                .build(),
+            client,
+            authenticated_client,
             manifest: manifest?,
         })
     }
@@ -369,11 +377,12 @@ impl Project {
         self.manifest.has_pypi_dependencies()
     }
 
-    // /// Returns the Python index URLs to use for this project.
-    // pub fn pypi_index_url(&self) -> Url {
-    //     normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap())
-    // }
-    //
+    /// Returns the Python index locations to use for this project.
+    pub fn pypi_index_locations(&self) -> IndexLocations {
+        /// TODO: Currently we just default to Pypi always.
+        IndexLocations::default()
+    }
+
     // /// Returns the package database used for caching python metadata, wheels and more. See the
     // /// documentation of [`rip::index::PackageDb`] for more information.
     // pub fn pypi_package_db(&self) -> miette::Result<Arc<PackageDb>> {

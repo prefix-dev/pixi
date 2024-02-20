@@ -2,6 +2,7 @@
 //!
 //! See [`resolve_pypi`] and [`resolve_conda`] for more information.
 
+use crate::config::get_cache_dir;
 use crate::consts::PROJECT_MANIFEST;
 use crate::progress::ProgressBarMessageFormatter;
 use crate::pypi_marker_env::determine_marker_environment;
@@ -9,6 +10,7 @@ use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::{
     lock_file::{LockedCondaPackages, LockedPypiPackages, PypiRecord},
     project::manifest::{PyPiRequirement, SystemRequirements},
+    Project,
 };
 use distribution_types::{
     BuiltDist, Dist, FileLocation, IndexLocations, Resolution, SourceDist, VersionOrUrl,
@@ -34,12 +36,36 @@ use uv_normalize::PackageName;
 use uv_resolver::{InMemoryIndex, Manifest, Options, Resolver};
 use uv_traits::{InFlight, NoBinary, NoBuild, SetupPyStrategy};
 
-// struct PypiSolveContext {
-//     interpreter: Interpreter,
-//     registry_client: Arc<RegistryClient>,
-//     index_locations: Arc<IndexLocations>,
-//
-// }
+/// Objects that are needed for resolutions which can be shared between different resolutions.
+#[derive(Clone)]
+pub struct UvResolutionContext {
+    cache: Cache,
+    registry_client: Arc<RegistryClient>,
+    in_flight: Arc<InFlight>,
+    index_locations: Arc<IndexLocations>,
+}
+
+impl UvResolutionContext {
+    pub fn from_project(project: &Project) -> miette::Result<Self> {
+        let cache = Cache::from_path(get_cache_dir().expect("missing caching directory"))
+            .into_diagnostic()
+            .context("failed to create uv cache")?;
+        let registry_client = Arc::new(
+            RegistryClientBuilder::new(cache.clone())
+                .connectivity(Connectivity::Online)
+                .build(),
+        );
+        let in_flight = Arc::new(InFlight::default());
+        let index_locations = Arc::new(project.pypi_index_locations());
+
+        Ok(Self {
+            cache,
+            registry_client,
+            in_flight,
+            index_locations,
+        })
+    }
+}
 
 /// This function takes as input a set of dependencies and system requirements and returns a set of
 /// locked packages.
@@ -84,7 +110,7 @@ impl uv_resolver::ResolverReporter for ResolveReporter {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
-    // package_db: Arc<PackageDb>,
+    context: UvResolutionContext,
     dependencies: IndexMap<PackageName, Vec<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
@@ -112,14 +138,8 @@ pub async fn resolve_pypi(
     // Construct the marker environment for the target platform
     let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
 
-    // Determine the tags
+    // Determine the tags for this particular solve.
     let tags = get_pypi_tags(platform, &system_requirements, python_record.as_ref())?;
-
-    // Construct a cache
-    // TODO: Figure out the right location
-    let cache = Cache::temp()
-        .into_diagnostic()
-        .context("failed to create cache")?;
 
     // Construct a fake interpreter from the conda environment.
     // TODO: Should we look into using the actual interpreter here?
@@ -137,27 +157,23 @@ pub async fn resolve_pypi(
         python_location.to_path_buf(),
         venv_root.join(lib_dir),
     );
-    // let current_platform = Platform::current().expect("unsupported platform");
-    // let interpreter = Interpreter::query(python_location, &current_platform, &cache)
-    //     .into_diagnostic()
-    //     .context("failed to create interpreter")?;
-
-    // Define where to get packages from
-    let index_locations = Arc::new(IndexLocations::default());
-
-    // Construct a registry client
-    let registry_client = Arc::new(
-        RegistryClientBuilder::new(cache.clone())
-            .index_urls(index_locations.index_urls())
-            .connectivity(Connectivity::Online)
-            .build(),
-    );
+    //
+    // // Define where to get packages from
+    // let index_locations = Arc::new(IndexLocations::default());
+    //
+    // // Construct a registry client
+    // let registry_client = Arc::new(
+    //     RegistryClientBuilder::new(cache.clone())
+    //         .index_urls(index_locations.index_urls())
+    //         .connectivity(Connectivity::Online)
+    //         .build(),
+    // );
 
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
-        let client = FlatIndexClient::new(&registry_client, &cache);
+        let client = FlatIndexClient::new(&context.registry_client, &context.cache);
         let entries = client
-            .fetch(index_locations.flat_index())
+            .fetch(context.index_locations.flat_index())
             .await
             .into_diagnostic()?;
         FlatIndex::from_entries(entries, &tags)
@@ -166,19 +182,15 @@ pub async fn resolve_pypi(
     // Create a shared in-memory index.
     let index = InMemoryIndex::default();
 
-    // Track in-flight downloads, builds, etc., across resolutions.
-    let in_flight = InFlight::default();
-
     let options = Options::default();
-
     let build_dispatch = BuildDispatch::new(
-        &registry_client,
-        &cache,
+        &context.registry_client,
+        &context.cache,
         &interpreter,
-        &index_locations,
+        &context.index_locations,
         &flat_index,
         &index,
-        &in_flight,
+        &context.in_flight,
         interpreter.sys_executable().to_path_buf(),
         SetupPyStrategy::default(),
         &NoBuild::None,
@@ -188,11 +200,11 @@ pub async fn resolve_pypi(
 
     let resolution = Resolver::new(
         Manifest::simple(requirements),
-        Options::default(),
+        options.clone(),
         &marker_environment,
         &interpreter,
         &tags,
-        &registry_client,
+        &context.registry_client,
         &flat_index,
         &index,
         &build_dispatch,
@@ -202,6 +214,7 @@ pub async fn resolve_pypi(
     .await
     .into_diagnostic()
     .context("failed to resolve pypi dependencies")?;
+
     let resolution = Resolution::from(resolution);
 
     // Clear message
@@ -233,7 +246,8 @@ pub async fn resolve_pypi(
                     BuiltDist::Path(dist) => (dist.url.to_url(), None),
                 };
 
-                let metadata = registry_client
+                let metadata = context
+                    .registry_client
                     .wheel_metadata(&dist)
                     .await
                     .expect("failed to get wheel metadata");
