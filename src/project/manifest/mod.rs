@@ -1381,7 +1381,7 @@ mod tests {
             .clone()
             .into_iter()
             .flat_map(|d| d.into_iter())
-            .map(|(name, spec)| format!("{} = {}", name.as_source_str(), Item::from(spec)))
+            .map(|(name, spec)| format!("{} = {}", name.as_ref(), Item::from(spec)))
             .join("\n"));
     }
 

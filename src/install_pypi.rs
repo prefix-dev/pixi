@@ -95,7 +95,7 @@ pub async fn update_python_distributions(
         Path::new("invalid").to_path_buf(),
     );
     /// Create a custom venv
-    let venv = Virtualenv::from_interpreter(interpreter, &venv_root);
+    let venv = Virtualenv::from_interpreter(interpreter, prefix.root());
 
     // Determine the current environment markers.
     let tags = venv.interpreter().tags().into_diagnostic()?;
