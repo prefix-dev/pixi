@@ -172,59 +172,6 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
         .collect()
 }
 
-// /// Downloads and caches the conda-forge conda-to-pypi name mapping.
-// pub async fn conda_pypi_name_mapping() -> miette::Result<&'static HashMap<String, String>> {
-//     static ENV_VARIABLES: OnceCell<HashMap<String, String>> = OnceCell::new();
-//     ENV_VARIABLES.get_or_try_init(async {
-//         let response = reqwest::get("https://raw.githubusercontent.com/regro/cf-graph-countyfair/master/mappings/pypi/name_mapping.json").await
-//             .into_diagnostic()
-//             .context("failed to download pypi name mapping")?;
-//         let mapping: Vec<CondaPyPiNameMapping> = response
-//             .json()
-//             .await
-//             .into_diagnostic()
-//             .context("failed to parse pypi name mapping")?;
-//         let mapping_by_name: HashMap<_, _> = mapping
-//             .into_iter()
-//             .map(|m| (m.conda_name, m.pypi_name))
-//             .collect();
-//         Ok(mapping_by_name)
-//     }).await
-// }
-
-/// Return a combination of static environment variables generated from the project and the environment
-/// and from running activation script
-// pub async fn get_env_and_activation_variables<'p>(
-//     environment: &'p Environment<'p>,
-// ) -> miette::Result<HashMap<String, String>> {
-//     // Get environment variables from the activation
-//     static ENVIROMENT_MAP: OnceCell<Mutex<HashMap<EnvironmentName, HashMap<String, String>>>> =
-//         OnceCell::new();
-
-//     let env_map = ENVIROMENT_MAP.get_or_try_init::<_, miette::Report>(|| {
-//         let m: HashMap<EnvironmentName, HashMap<String, String>> = HashMap::default();
-//         Ok(Mutex::new(m))
-//     })?;
-
-//     let mut locked = env_map.lock().await;
-
-//     if let Some(values) = locked.get(environment.name()) {
-//         return Ok(values.clone());
-//     }
-
-//     let activation_env = run_activation(environment).await?;
-
-//     let environment_variables = get_environment_variables(environment);
-
-//     let all_variables: HashMap<String, String> = activation_env
-//         .into_iter()
-//         .chain(environment_variables.into_iter())
-//         .collect();
-
-//     locked.insert(environment.name().clone(), all_variables);
-//     Ok(locked.get(environment.name()).unwrap().clone())
-// }
-
 /// Determine the environment variables that need to be set in an interactive shell to make it
 /// function as if the environment has been activated. This method runs the activation scripts from
 /// the environment and stores the environment variables it added, finally it adds environment
