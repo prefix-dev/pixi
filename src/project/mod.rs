@@ -14,7 +14,7 @@ use rattler_networking::AuthenticationMiddleware;
 use reqwest::Client;
 use reqwest_middleware::ClientWithMiddleware;
 use std::hash::Hash;
-use std::time::Duration;
+
 use std::{
     collections::{HashMap, HashSet},
     env,

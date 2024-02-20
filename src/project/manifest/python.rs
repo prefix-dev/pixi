@@ -1,10 +1,10 @@
 use pep440_rs::VersionSpecifiers;
-use pep508_rs::Extras;
+
 use serde::{de, de::Error, Deserialize, Deserializer};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
-use uv_normalize::{ExtraName, PackageName};
+use uv_normalize::{ExtraName};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PyPiRequirement {

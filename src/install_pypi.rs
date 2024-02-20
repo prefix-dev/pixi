@@ -1,10 +1,10 @@
 use crate::environment::PythonStatus;
 use crate::prefix::Prefix;
-use crate::progress::ProgressBarMessageFormatter;
-use crate::{progress, EnvironmentName};
-use futures::{stream, Stream, StreamExt, TryFutureExt, TryStreamExt};
-use indexmap::IndexSet;
-use indicatif::ProgressBar;
+
+use crate::{EnvironmentName};
+use futures::{StreamExt};
+
+
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 
@@ -13,26 +13,26 @@ use crate::lock_file::UvResolutionContext;
 use crate::project::manifest::SystemRequirements;
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::is_python_record;
-use distribution_types::{IndexLocations, Name};
+use distribution_types::{Name};
 use install_wheel_rs::linker::LinkMode;
-use pep440_rs::{VersionSpecifier, VersionSpecifiers};
-use pep508_rs::{MarkerEnvironment, Requirement, VersionOrUrl};
+use pep440_rs::{VersionSpecifiers};
+use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
-use std::collections::HashSet;
-use std::ops::Deref;
+
+
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::Arc;
+
 use std::time::Duration;
-use tokio::task::JoinError;
-use uv_cache::Cache;
-use uv_client::{FlatIndex, FlatIndexClient, RegistryClient, RegistryClientBuilder};
+
+
+use uv_client::{FlatIndex, FlatIndexClient};
 use uv_dispatch::BuildDispatch;
 use uv_installer::{Downloader, Plan, Planner, Reinstall, SitePackages};
 use uv_interpreter::{Interpreter, Virtualenv};
-use uv_resolver::InMemoryIndex;
-use uv_traits::{InFlight, NoBinary, NoBuild, SetupPyStrategy};
+
+use uv_traits::{NoBinary, NoBuild, SetupPyStrategy};
 
 /// The installer name for pypi packages installed by pixi.
 pub(crate) const PIXI_PYPI_INSTALLER: &str = env!("CARGO_PKG_NAME");
@@ -61,7 +61,7 @@ pub async fn update_python_distributions(
     python_packages: &[CombinedPypiPackageData],
     platform: Platform,
     status: &PythonStatus,
-    system_requirements: &SystemRequirements,
+    _system_requirements: &SystemRequirements,
     uv_context: UvResolutionContext,
 ) -> miette::Result<()> {
     let start = std::time::Instant::now();
@@ -70,10 +70,10 @@ pub async fn update_python_distributions(
         return Ok(());
     };
 
-    let python_location = prefix.root().join(&python_info.path);
+    let _python_location = prefix.root().join(&python_info.path);
 
     // Determine where packages would have been installed
-    let python_version = (
+    let _python_version = (
         python_info.short_version.0 as u32,
         python_info.short_version.1 as u32,
         0,

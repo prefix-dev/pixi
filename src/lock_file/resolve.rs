@@ -4,7 +4,7 @@
 
 use crate::config::get_cache_dir;
 use crate::consts::PROJECT_MANIFEST;
-use crate::progress::ProgressBarMessageFormatter;
+
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::{
@@ -18,7 +18,7 @@ use distribution_types::{
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
-use platform_host::{Os, Platform};
+use platform_host::{Platform};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData};
@@ -97,17 +97,17 @@ impl uv_resolver::ResolverReporter for ResolveReporter {
 
     fn on_complete(&self) {}
 
-    fn on_build_start(&self, dist: &SourceDist) -> usize {
+    fn on_build_start(&self, _dist: &SourceDist) -> usize {
         0
     }
 
-    fn on_build_complete(&self, dist: &SourceDist, id: usize) {}
+    fn on_build_complete(&self, _dist: &SourceDist, _id: usize) {}
 
-    fn on_checkout_start(&self, url: &Url, rev: &str) -> usize {
+    fn on_checkout_start(&self, _url: &Url, _rev: &str) -> usize {
         0
     }
 
-    fn on_checkout_complete(&self, url: &Url, rev: &str, index: usize) {}
+    fn on_checkout_complete(&self, _url: &Url, _rev: &str, _index: usize) {}
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -120,7 +120,7 @@ pub async fn resolve_pypi(
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
     python_location: &Path,
-    venv_root: &Path,
+    _venv_root: &Path,
 ) -> miette::Result<LockedPypiPackages> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
