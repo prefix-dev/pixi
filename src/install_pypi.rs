@@ -234,7 +234,6 @@ pub async fn update_python_distributions(
         let start = std::time::Instant::now();
 
         let downloader = Downloader::new(&uv_cache, tags, &client, &build_dispatch);
-        // .with_reporter(DownloadReporter::from(printer).with_length(remote.len() as u64));
 
         let wheels = downloader
             .download(remote.clone(), &in_flight)

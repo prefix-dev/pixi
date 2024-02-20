@@ -3,13 +3,16 @@
 //! See [`resolve_pypi`] and [`resolve_conda`] for more information.
 
 use crate::consts::PROJECT_MANIFEST;
+use crate::progress::ProgressBarMessageFormatter;
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::{
     lock_file::{LockedCondaPackages, LockedPypiPackages, PypiRecord},
     project::manifest::{PyPiRequirement, SystemRequirements},
 };
-use distribution_types::{BuiltDist, Dist, FileLocation, IndexLocations, Resolution, SourceDist};
+use distribution_types::{
+    BuiltDist, Dist, FileLocation, IndexLocations, Resolution, SourceDist, VersionOrUrl,
+};
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
@@ -55,6 +58,28 @@ fn parse_hashes_from_hex(sha256: &Option<String>, md5: &Option<String>) -> Optio
         )),
         (None, None) => None,
     }
+}
+
+struct ResolveReporter(ProgressBar);
+
+impl uv_resolver::ResolverReporter for ResolveReporter {
+    fn on_progress(&self, name: &PackageName, version: VersionOrUrl) {
+        self.0.set_message(format!("resolving {}{}", name, version));
+    }
+
+    fn on_complete(&self) {}
+
+    fn on_build_start(&self, dist: &SourceDist) -> usize {
+        0
+    }
+
+    fn on_build_complete(&self, dist: &SourceDist, id: usize) {}
+
+    fn on_checkout_start(&self, url: &Url, rev: &str) -> usize {
+        0
+    }
+
+    fn on_checkout_complete(&self, url: &Url, rev: &str, index: usize) {}
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -172,6 +197,7 @@ pub async fn resolve_pypi(
         &index,
         &build_dispatch,
     )
+    .with_reporter(ResolveReporter(pb.clone()))
     .resolve()
     .await
     .into_diagnostic()
