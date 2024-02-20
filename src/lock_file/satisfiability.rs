@@ -39,8 +39,8 @@ pub enum PlatformUnsat {
     #[error("there are more conda packages in the lock-file than are used by the environment")]
     TooManyCondaPackages,
 
-    #[error("there are more pypi packages in the lock-file than are used by the environment")]
-    TooManyPypiPackages,
+    #[error("there are more pypi packages in the lock-file than are used by the environment: {}", .0.iter().format(", "))]
+    TooManyPypiPackages(Vec<PackageName>),
 
     #[error("there are PyPi dependencies but a python interpreter is missing from the lock-file")]
     MissingPythonInterpreter,
@@ -256,7 +256,12 @@ pub fn verify_pypi_platform_satisfiability(
     // If there are no pypi packages specified in the requirement, we can skip verifying them.
     if requirements.is_empty() {
         return if !locked_pypi_environment.is_empty() {
-            Err(PlatformUnsat::TooManyPypiPackages)
+            Err(PlatformUnsat::TooManyPypiPackages(
+                locked_pypi_environment
+                    .iter()
+                    .map(|p| p.data().package.name.clone())
+                    .collect(),
+            ))
         } else {
             Ok(())
         };
@@ -358,7 +363,11 @@ pub fn verify_pypi_platform_satisfiability(
 
     // Make sure we don't have more packages than we need.
     if packages_visited.len() != locked_pypi_environment.len() {
-        return Err(PlatformUnsat::TooManyPypiPackages);
+        let extraneous_packages = HashSet::from_iter(0..locked_pypi_environment.len())
+            .difference(&packages_visited)
+            .map(|idx| locked_pypi_environment[*idx].data().package.name.clone())
+            .collect_vec();
+        return Err(PlatformUnsat::TooManyPypiPackages(extraneous_packages));
     }
 
     Ok(())

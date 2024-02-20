@@ -187,12 +187,13 @@ impl PypiPackageIdentifier {
             }
         }
 
-        // Check if the required extras exist
-        for extra in requirement.extras.iter() {
-            if !self.extras.contains(extra) {
-                return false;
-            }
-        }
+        // TODO: uv doesnt properly support this yet.
+        // // Check if the required extras exist
+        // for extra in requirement.extras.iter() {
+        //     if !self.extras.contains(extra) {
+        //         return false;
+        //     }
+        // }
 
         true
     }

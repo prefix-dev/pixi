@@ -209,7 +209,7 @@ pub async fn update_python_distributions(
             &flat_index,
             &no_binary,
         );
-        let resolution = wheel_finder.resolve(&remote).await.into_diagnostic()?;
+        let resolution = wheel_finder.resolve(&remote).await.into_diagnostic().context("wheel finder resolve failed")?;
 
         let s = if resolution.len() == 1 { "" } else { "s" };
         tracing::debug!(
