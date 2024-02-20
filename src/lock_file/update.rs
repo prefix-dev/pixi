@@ -1,5 +1,4 @@
 use crate::{
-    activation::get_env_and_activation_variables,
     config, consts,
     environment::{
         self, LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
@@ -65,9 +64,6 @@ pub struct UpdateLockFileOptions {
     /// The maximum number of concurrent solves that are allowed to run. If this value is None
     /// a heuristic is used based on the number of cores available from the system.
     pub max_concurrent_solves: Option<usize>,
-
-    // Environment variables to use when updating lock file
-    pub env_variables: HashMap<String, String>,
 }
 
 /// A struct that holds the lock-file and any potential derived data that was computed when calling
@@ -91,11 +87,7 @@ pub struct LockFileDerivedData<'p> {
 
 impl<'p> LockFileDerivedData<'p> {
     /// Returns the up-to-date prefix for the given environment.
-    pub async fn prefix(
-        &mut self,
-        environment: &Environment<'p>,
-        env_variables: HashMap<String, String>,
-    ) -> miette::Result<Prefix> {
+    pub async fn prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment) {
             return Ok(prefix.clone());
         }
@@ -108,6 +100,8 @@ impl<'p> LockFileDerivedData<'p> {
             .repodata_records(environment, platform)
             .unwrap_or_default();
         let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
+
+        let env_variables = environment.get_env_variables().await?;
 
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
@@ -760,7 +754,7 @@ pub async fn ensure_up_to_date_lock_file(
                     .expect("prefix should be available now or in the future");
 
                 // Get environment variables from the activation
-                let env_variables = get_env_and_activation_variables(&environment).await?;
+                let env_variables = environment.get_env_variables().await?;
 
                 // Spawn a task to solve the pypi environment
                 let pypi_solve_future = spawn_solve_pypi_task(

@@ -2,7 +2,7 @@ use indexmap::IndexMap;
 use std::collections::HashMap;
 
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
+use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
 use rattler_shell::{
     activation::{ActivationError, ActivationVariables, Activator, PathModificationBehavior},
@@ -11,7 +11,6 @@ use rattler_shell::{
 
 use crate::{
     environment::{get_up_to_date_prefix, LockFileUsage},
-    progress::await_in_progress,
     project::{manifest::EnvironmentName, Environment},
     Project,
 };
@@ -173,25 +172,58 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
         .collect()
 }
 
+// /// Downloads and caches the conda-forge conda-to-pypi name mapping.
+// pub async fn conda_pypi_name_mapping() -> miette::Result<&'static HashMap<String, String>> {
+//     static ENV_VARIABLES: OnceCell<HashMap<String, String>> = OnceCell::new();
+//     ENV_VARIABLES.get_or_try_init(async {
+//         let response = reqwest::get("https://raw.githubusercontent.com/regro/cf-graph-countyfair/master/mappings/pypi/name_mapping.json").await
+//             .into_diagnostic()
+//             .context("failed to download pypi name mapping")?;
+//         let mapping: Vec<CondaPyPiNameMapping> = response
+//             .json()
+//             .await
+//             .into_diagnostic()
+//             .context("failed to parse pypi name mapping")?;
+//         let mapping_by_name: HashMap<_, _> = mapping
+//             .into_iter()
+//             .map(|m| (m.conda_name, m.pypi_name))
+//             .collect();
+//         Ok(mapping_by_name)
+//     }).await
+// }
+
 /// Return a combination of static environment variables generated from the project and the environment
 /// and from running activation script
-pub async fn get_env_and_activation_variables<'p>(
-    environment: &'p Environment<'p>,
-) -> miette::Result<HashMap<String, String>> {
-    // Get environment variables from the activation
-    let activation_env =
-        await_in_progress("activating environment", |_| run_activation(environment))
-            .await
-            .wrap_err("failed to activate environment")?;
+// pub async fn get_env_and_activation_variables<'p>(
+//     environment: &'p Environment<'p>,
+// ) -> miette::Result<HashMap<String, String>> {
+//     // Get environment variables from the activation
+//     static ENVIROMENT_MAP: OnceCell<Mutex<HashMap<EnvironmentName, HashMap<String, String>>>> =
+//         OnceCell::new();
 
-    let environment_variables = get_environment_variables(environment);
+//     let env_map = ENVIROMENT_MAP.get_or_try_init::<_, miette::Report>(|| {
+//         let m: HashMap<EnvironmentName, HashMap<String, String>> = HashMap::default();
+//         Ok(Mutex::new(m))
+//     })?;
 
-    // Construct command environment by concatenating the environments
-    Ok(activation_env
-        .into_iter()
-        .chain(environment_variables.into_iter())
-        .collect())
-}
+//     let mut locked = env_map.lock().await;
+
+//     if let Some(values) = locked.get(environment.name()) {
+//         return Ok(values.clone());
+//     }
+
+//     let activation_env = run_activation(environment).await?;
+
+//     let environment_variables = get_environment_variables(environment);
+
+//     let all_variables: HashMap<String, String> = activation_env
+//         .into_iter()
+//         .chain(environment_variables.into_iter())
+//         .collect();
+
+//     locked.insert(environment.name().clone(), all_variables);
+//     Ok(locked.get(environment.name()).unwrap().clone())
+// }
 
 /// Determine the environment variables that need to be set in an interactive shell to make it
 /// function as if the environment has been activated. This method runs the activation scripts from
@@ -204,7 +236,7 @@ pub async fn get_activation_env<'p>(
     // Get the prefix which we can then activate.
     get_up_to_date_prefix(environment, lock_file_usage, false, IndexMap::default()).await?;
 
-    get_env_and_activation_variables(environment).await
+    environment.get_env_variables().await
 }
 
 #[cfg(test)]

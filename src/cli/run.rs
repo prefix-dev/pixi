@@ -11,7 +11,7 @@ use itertools::Itertools;
 use miette::{miette, Context, Diagnostic};
 use rattler_conda_types::Platform;
 
-use crate::activation::{get_env_and_activation_variables, get_environment_variables};
+use crate::activation::get_environment_variables;
 use crate::environment::verify_prefix_location_unchanged;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{
@@ -115,7 +115,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut task_idx = 0;
     let mut task_envs = HashMap::new();
     for task_id in task_graph.topological_order() {
-        let executable_task = ExecutableTask::from_task_graph(&task_graph, task_id);
+        let mut executable_task = ExecutableTask::from_task_graph(&task_graph, task_id);
 
         // If the task is not executable (e.g. an alias), we skip it. This ensures we don't
         // instantiate a prefix for an alias.
@@ -149,7 +149,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
                 let command_env =
-                    get_task_env(&mut lock_file, &executable_task.run_environment).await?;
+                    get_task_env(&mut lock_file, &mut executable_task.run_environment).await?;
                 entry.insert(command_env)
             }
         };
@@ -214,14 +214,10 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
 /// activation environment with the system environment variables.
 pub async fn get_task_env<'p>(
     lock_file_derived_data: &mut LockFileDerivedData<'p>,
-    environment: &Environment<'p>,
+    environment: &mut Environment<'p>,
 ) -> miette::Result<HashMap<String, String>> {
-    let env_variables = get_env_and_activation_variables(environment).await?;
-
     // Ensure there is a valid prefix
-    lock_file_derived_data
-        .prefix(environment, env_variables)
-        .await?;
+    lock_file_derived_data.prefix(environment).await?;
 
     // Get environment variables from the activation
     let activation_env = await_in_progress("activating environment", |_| {

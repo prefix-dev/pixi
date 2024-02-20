@@ -1,7 +1,6 @@
 use miette::IntoDiagnostic;
 
 use crate::{
-    activation::get_env_and_activation_variables,
     consts, install, install_pypi,
     lock_file::UpdateLockFileOptions,
     prefix::Prefix,
@@ -151,16 +150,12 @@ pub async fn get_up_to_date_prefix(
     // Make sure the project is in a sane state
     sanity_check_project(project)?;
 
-    // Get env variables
-    let env_variables = get_env_and_activation_variables(environment).await?;
-
     // Ensure that the lock-file is up-to-date
     let mut lock_file = project
         .up_to_date_lock_file(UpdateLockFileOptions {
             existing_repo_data,
             lock_file_usage,
             no_install,
-            env_variables: env_variables.clone(),
             ..UpdateLockFileOptions::default()
         })
         .await?;
@@ -169,7 +164,7 @@ pub async fn get_up_to_date_prefix(
     if no_install {
         Ok(Prefix::new(environment.dir()))
     } else {
-        lock_file.prefix(environment, env_variables).await
+        lock_file.prefix(environment).await
     }
 }
 

@@ -244,10 +244,7 @@ impl Project {
 
     /// Returns the default environment of the project.
     pub fn default_environment(&self) -> Environment<'_> {
-        Environment {
-            project: self,
-            environment: self.manifest.default_environment(),
-        }
+        Environment::new(self, self.manifest.default_environment())
     }
 
     /// Returns the environment with the given name or `None` if no such environment exists.
@@ -255,10 +252,7 @@ impl Project {
     where
         Q: Hash + Equivalent<EnvironmentName>,
     {
-        Some(Environment {
-            project: self,
-            environment: self.manifest.environment(name)?,
-        })
+        Some(Environment::new(self, self.manifest.environment(name)?))
     }
 
     /// Returns the environments in this project.
@@ -267,10 +261,7 @@ impl Project {
             .parsed
             .environments
             .iter()
-            .map(|env| Environment {
-                project: self,
-                environment: env,
-            })
+            .map(|env| Environment::new(self, env))
             .collect()
     }
 
