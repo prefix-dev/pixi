@@ -39,10 +39,11 @@ use uv_traits::{InFlight, NoBinary, NoBuild, SetupPyStrategy};
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
 pub struct UvResolutionContext {
-    cache: Cache,
-    registry_client: Arc<RegistryClient>,
-    in_flight: Arc<InFlight>,
-    index_locations: Arc<IndexLocations>,
+    pub cache: Cache,
+    pub registry_client: Arc<RegistryClient>,
+    pub in_flight: Arc<InFlight>,
+    pub index_locations: Arc<IndexLocations>,
+    pub in_memory_index: Arc<InMemoryIndex>,
 }
 
 impl UvResolutionContext {
@@ -57,12 +58,13 @@ impl UvResolutionContext {
         );
         let in_flight = Arc::new(InFlight::default());
         let index_locations = Arc::new(project.pypi_index_locations());
-
+        let in_memory_index = Arc::new(InMemoryIndex::default());
         Ok(Self {
             cache,
             registry_client,
             in_flight,
             index_locations,
+            in_memory_index,
         })
     }
 }
@@ -144,19 +146,22 @@ pub async fn resolve_pypi(
     // Construct a fake interpreter from the conda environment.
     // TODO: Should we look into using the actual interpreter here?
     let platform = Platform::current().expect("unsupported platform");
-    let lib_dir = if platform.os() == &Os::Windows {
-        "Lib"
-    } else {
-        "lib"
-    };
-    let interpreter = Interpreter::artificial(
-        platform.clone(),
-        marker_environment.clone(),
-        venv_root.to_path_buf(),
-        venv_root.to_path_buf(),
-        python_location.to_path_buf(),
-        venv_root.join(lib_dir),
-    );
+    // let lib_dir = if platform.os() == &Os::Windows {
+    //     "Lib"
+    // } else {
+    //     "lib"
+    // };
+    // let interpreter = Interpreter::artificial(
+    //     platform.clone(),
+    //     marker_environment.clone(),
+    //     venv_root.to_path_buf(),
+    //     venv_root.to_path_buf(),
+    //     python_location.to_path_buf(),
+    //     venv_root.join(lib_dir),
+    // );
+    let interpreter =
+        Interpreter::query(python_location, &platform, &context.cache).into_diagnostic()?;
+
     //
     // // Define where to get packages from
     // let index_locations = Arc::new(IndexLocations::default());
@@ -180,8 +185,6 @@ pub async fn resolve_pypi(
     };
 
     // Create a shared in-memory index.
-    let index = InMemoryIndex::default();
-
     let options = Options::default();
     let build_dispatch = BuildDispatch::new(
         &context.registry_client,
@@ -189,14 +192,14 @@ pub async fn resolve_pypi(
         &interpreter,
         &context.index_locations,
         &flat_index,
-        &index,
+        &context.in_memory_index,
         &context.in_flight,
         interpreter.sys_executable().to_path_buf(),
         SetupPyStrategy::default(),
         &NoBuild::None,
         &NoBinary::None,
     )
-    .with_options(options.clone());
+        .with_options(options.clone());
 
     let resolution = Resolver::new(
         Manifest::simple(requirements),
@@ -206,21 +209,26 @@ pub async fn resolve_pypi(
         &tags,
         &context.registry_client,
         &flat_index,
-        &index,
+        &context.in_memory_index,
         &build_dispatch,
     )
-    .with_reporter(ResolveReporter(pb.clone()))
-    .resolve()
-    .await
-    .into_diagnostic()
-    .context("failed to resolve pypi dependencies")?;
+        .with_reporter(ResolveReporter(pb.clone()))
+        .resolve()
+        .await
+        .into_diagnostic()
+        .context("failed to resolve pypi dependencies")?;
 
     let resolution = Resolution::from(resolution);
 
     // Clear message
     pb.set_message("");
 
-    let database = DistributionDatabase::new(&cache, &tags, &registry_client, &build_dispatch);
+    let database = DistributionDatabase::new(
+        &context.cache,
+        &tags,
+        &context.registry_client,
+        &build_dispatch,
+    );
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     for dist in resolution.into_distributions() {
         let pypi_package_data = match dist {
@@ -332,9 +340,9 @@ pub async fn resolve_conda(
         // Solve the task
         resolvo::Solver.solve(task).into_diagnostic()
     })
-    .await
-    .unwrap_or_else(|e| match e.try_into_panic() {
-        Ok(e) => std::panic::resume_unwind(e),
-        Err(_err) => Err(miette::miette!("cancelled")),
-    })
+        .await
+        .unwrap_or_else(|e| match e.try_into_panic() {
+            Ok(e) => std::panic::resume_unwind(e),
+            Err(_err) => Err(miette::miette!("cancelled")),
+        })
 }

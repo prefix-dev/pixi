@@ -9,6 +9,7 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 
 use crate::consts::PROJECT_MANIFEST;
+use crate::lock_file::UvResolutionContext;
 use crate::project::manifest::SystemRequirements;
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::is_python_record;
@@ -26,7 +27,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinError;
 use uv_cache::Cache;
-use uv_client::{FlatIndex, FlatIndexClient, RegistryClientBuilder};
+use uv_client::{FlatIndex, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
 use uv_installer::{Downloader, Plan, Planner, Reinstall, SitePackages};
 use uv_interpreter::{Interpreter, Virtualenv};
@@ -61,6 +62,7 @@ pub async fn update_python_distributions(
     platform: Platform,
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
+    uv_context: UvResolutionContext,
 ) -> miette::Result<()> {
     let start = std::time::Instant::now();
     let Some(python_info) = status.current_info() else {
@@ -82,8 +84,6 @@ pub async fn update_python_distributions(
         .find(|r| is_python_record(r))
         .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
 
-    let uv_cache = Cache::temp().into_diagnostic()?;
-
     let marker_environment = determine_marker_environment(platform, &python_record.package_record)?;
     let venv_root = prefix.root().join("envs").join(name.as_str());
     let interpreter = Interpreter::artificial(
@@ -101,40 +101,32 @@ pub async fn update_python_distributions(
     // Determine the current environment markers.
     let tags = venv.interpreter().tags().into_diagnostic()?;
 
-    // Prep the registry client.
-    let client = RegistryClientBuilder::new(uv_cache.clone()).build();
-
     // Resolve the flat indexes from `--find-links`.
 
-    let index_locations = IndexLocations::default();
     let flat_index = {
-        let client = FlatIndexClient::new(&client, &uv_cache);
+        let client = FlatIndexClient::new(&uv_context.registry_client, &uv_context.cache);
         let entries = client
-            .fetch(index_locations.flat_index())
+            .fetch(uv_context.index_locations.flat_index())
             .await
             .into_diagnostic()?;
         FlatIndex::from_entries(entries, tags)
     };
 
-    // Create a shared in-memory index.
-    let index = InMemoryIndex::default();
-
     // Track in-flight downloads, builds, etc., across resolutions.
-    let in_flight = InFlight::default();
     let no_build = NoBuild::None;
     let no_binary = NoBinary::None;
 
     // Prep the build context.
     let build_dispatch = BuildDispatch::new(
-        &client,
-        &uv_cache,
+        &uv_context.registry_client,
+        &uv_context.cache,
         venv.interpreter(),
-        &index_locations,
+        &uv_context.index_locations,
         &flat_index,
-        &index,
-        &in_flight,
+        &uv_context.in_memory_index,
+        &uv_context.in_flight,
         venv.python_executable(),
-        SetupPyStrategy::Pep517,
+        SetupPyStrategy::default(),
         &no_build,
         &no_binary,
     );
@@ -175,8 +167,8 @@ pub async fn update_python_distributions(
             site_packages,
             &Reinstall::None,
             &no_binary,
-            &index_locations,
-            &uv_cache,
+            &uv_context.index_locations,
+            &uv_context.cache,
             &venv,
             tags,
         )
@@ -207,7 +199,7 @@ pub async fn update_python_distributions(
 
         let wheel_finder = uv_resolver::DistFinder::new(
             tags,
-            &client,
+            &uv_context.registry_client,
             venv.interpreter(),
             &flat_index,
             &no_binary,
@@ -233,10 +225,15 @@ pub async fn update_python_distributions(
     } else {
         let start = std::time::Instant::now();
 
-        let downloader = Downloader::new(&uv_cache, tags, &client, &build_dispatch);
+        let downloader = Downloader::new(
+            &uv_context.cache,
+            tags,
+            &uv_context.registry_client,
+            &build_dispatch,
+        );
 
         let wheels = downloader
-            .download(remote.clone(), &in_flight)
+            .download(remote.clone(), &uv_context.in_flight)
             .await
             .into_diagnostic()
             .context("Failed to download distributions")?;

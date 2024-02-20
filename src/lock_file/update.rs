@@ -70,6 +70,8 @@ pub struct UpdateLockFileOptions {
 /// A struct that holds the lock-file and any potential derived data that was computed when calling
 /// `ensure_up_to_date_lock_file`.
 pub struct LockFileDerivedData<'p> {
+    pub project: &'p Project,
+
     /// The lock-file
     pub lock_file: LockFile,
 
@@ -84,6 +86,9 @@ pub struct LockFileDerivedData<'p> {
 
     /// A list of prefixes that have been updated while resolving all dependencies.
     pub updated_pypi_prefixes: HashMap<Environment<'p>, Prefix>,
+
+    /// The cached uv context
+    pub uv_context: Option<UvResolutionContext>,
 }
 
 impl<'p> LockFileDerivedData<'p> {
@@ -101,6 +106,15 @@ impl<'p> LockFileDerivedData<'p> {
             .unwrap_or_default();
         let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
 
+        let uv_context = match &self.uv_context {
+            None => {
+                let context = UvResolutionContext::from_project(self.project)?;
+                self.uv_context = Some(context.clone());
+                context
+            }
+            Some(context) => context.clone(),
+        };
+
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -110,6 +124,7 @@ impl<'p> LockFileDerivedData<'p> {
             &pypi_records,
             &python_status,
             &environment.system_requirements(),
+            uv_context,
         )
         .await?;
 
@@ -401,11 +416,13 @@ pub async fn ensure_up_to_date_lock_file(
         tracing::info!("skipping check if lock-file is up-to-date");
 
         return Ok(LockFileDerivedData {
+            project,
             lock_file,
             package_cache,
             repo_data: options.existing_repo_data,
             updated_conda_prefixes: Default::default(),
             updated_pypi_prefixes: Default::default(),
+            uv_context: None,
         });
     }
 
@@ -416,11 +433,13 @@ pub async fn ensure_up_to_date_lock_file(
 
         // If no-environment is outdated we can return early.
         return Ok(LockFileDerivedData {
+            project,
             lock_file,
             package_cache,
             repo_data: options.existing_repo_data,
             updated_conda_prefixes: Default::default(),
             updated_pypi_prefixes: Default::default(),
+            uv_context: None,
         });
     }
 
@@ -1009,12 +1028,14 @@ pub async fn ensure_up_to_date_lock_file(
     top_level_progress.finish_and_clear();
 
     Ok(LockFileDerivedData {
+        project,
         lock_file,
         package_cache,
         updated_conda_prefixes: context.take_instantiated_conda_prefixes(),
         updated_pypi_prefixes: HashMap::default(),
         repo_data: Arc::into_inner(context.repo_data)
             .expect("repo data should not be shared anymore"),
+        uv_context,
     })
 }
 

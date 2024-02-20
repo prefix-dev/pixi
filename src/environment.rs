@@ -1,5 +1,6 @@
 use miette::IntoDiagnostic;
 
+use crate::lock_file::UvResolutionContext;
 use crate::{
     consts, install, install_pypi,
     lock_file::UpdateLockFileOptions,
@@ -177,6 +178,7 @@ pub async fn update_prefix_pypi(
     pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
+    uv_context: UvResolutionContext,
 ) -> miette::Result<()> {
     // Remove python packages from a previous python distribution if the python version changed.
     // install_pypi::remove_old_python_distributions(prefix, platform, status)?;
@@ -196,6 +198,7 @@ pub async fn update_prefix_pypi(
                 platform,
                 status,
                 system_requirements,
+                uv_context,
             )
         },
     )
