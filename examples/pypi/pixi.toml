@@ -6,6 +6,10 @@ authors = ["Bas Zalmstra <bas@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
+
+[activation]
+scripts = ["activate.sh"]
+
 [tasks]
 start = "python pycosat_example.py"
 test = "python pycosat_example.py"
@@ -25,6 +29,7 @@ black = {version = "~=23.10", extras = ["jupyter"]}
 pyliblzfse = "*"
 pycosat = "*"
 plot-antenna = "==1.7"
+env_test_package = "==0.0.3"
 
 [system-requirements]
 # Tensorflow on macOS arm64 requires macOS 12.0 or higher
