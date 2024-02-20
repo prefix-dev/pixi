@@ -1,9 +1,8 @@
 use crate::environment::PythonStatus;
 use crate::prefix::Prefix;
 
-use crate::{EnvironmentName};
-use futures::{StreamExt};
-
+use crate::EnvironmentName;
+use futures::StreamExt;
 
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
@@ -12,20 +11,18 @@ use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::UvResolutionContext;
 use crate::project::manifest::SystemRequirements;
 use crate::pypi_marker_env::determine_marker_environment;
-use crate::pypi_tags::is_python_record;
-use distribution_types::{Name};
+use crate::pypi_tags::{get_pypi_tags, is_python_record};
+use distribution_types::{IndexLocations, Name};
 use install_wheel_rs::linker::LinkMode;
-use pep440_rs::{VersionSpecifiers};
+use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
-
 
 use std::path::Path;
 use std::str::FromStr;
 
 use std::time::Duration;
-
 
 use uv_client::{FlatIndex, FlatIndexClient};
 use uv_dispatch::BuildDispatch;
@@ -61,7 +58,7 @@ pub async fn update_python_distributions(
     python_packages: &[CombinedPypiPackageData],
     platform: Platform,
     status: &PythonStatus,
-    _system_requirements: &SystemRequirements,
+    system_requirements: &SystemRequirements,
     uv_context: UvResolutionContext,
 ) -> miette::Result<()> {
     let start = std::time::Instant::now();
@@ -70,7 +67,7 @@ pub async fn update_python_distributions(
         return Ok(());
     };
 
-    let _python_location = prefix.root().join(&python_info.path);
+    let python_location = prefix.root().join(&python_info.path);
 
     // Determine where packages would have been installed
     let _python_version = (
@@ -86,20 +83,28 @@ pub async fn update_python_distributions(
 
     let marker_environment = determine_marker_environment(platform, &python_record.package_record)?;
     let venv_root = prefix.root().join("envs").join(name.as_str());
-    let interpreter = Interpreter::artificial(
-        platform_host::Platform::current().expect("unsupported platform"),
-        marker_environment.clone(),
-        venv_root.to_path_buf(),
-        venv_root.to_path_buf(),
-        prefix.root().join(python_info.path()),
-        Path::new("invalid").to_path_buf(),
-    );
+    // let interpreter = Interpreter::artificial(
+    //     platform_host::Platform::current().expect("unsupported platform"),
+    //     marker_environment.clone(),
+    //     venv_root.to_path_buf(),
+    //     venv_root.to_path_buf(),
+    //     prefix.root().join(python_info.path()),
+    //     Path::new("invalid").to_path_buf(),
+    // );
+
+    let platform = platform_host::Platform::current().expect("unsupported platform");
+    let interpreter =
+        Interpreter::query(&python_location, &platform, &uv_context.cache).into_diagnostic()?;
 
     /// Create a custom venv
     let venv = Virtualenv::from_interpreter(interpreter, prefix.root());
 
     // Determine the current environment markers.
-    let tags = venv.interpreter().tags().into_diagnostic()?;
+    let tags = get_pypi_tags(
+        Platform::current(),
+        &system_requirements,
+        &python_record.package_record,
+    )?;
 
     // Resolve the flat indexes from `--find-links`.
 
@@ -109,7 +114,7 @@ pub async fn update_python_distributions(
             .fetch(uv_context.index_locations.flat_index())
             .await
             .into_diagnostic()?;
-        FlatIndex::from_entries(entries, tags)
+        FlatIndex::from_entries(entries, &tags)
     };
 
     // Track in-flight downloads, builds, etc., across resolutions.
@@ -170,7 +175,7 @@ pub async fn update_python_distributions(
             &uv_context.index_locations,
             &uv_context.cache,
             &venv,
-            tags,
+            &tags,
         )
         .expect("Failed to determine installation plan");
 
@@ -198,7 +203,7 @@ pub async fn update_python_distributions(
         let start = std::time::Instant::now();
 
         let wheel_finder = uv_resolver::DistFinder::new(
-            tags,
+            &tags,
             &uv_context.registry_client,
             venv.interpreter(),
             &flat_index,
@@ -227,7 +232,7 @@ pub async fn update_python_distributions(
 
         let downloader = Downloader::new(
             &uv_context.cache,
-            tags,
+            &tags,
             &uv_context.registry_client,
             &build_dispatch,
         );
