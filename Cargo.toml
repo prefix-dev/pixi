@@ -88,6 +88,7 @@ uv-interpreter = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 uv-traits = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 
 zip = { version = "0.6.6", default-features = false, features = ["deflate", "time"] }
 

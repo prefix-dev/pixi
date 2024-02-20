@@ -9,7 +9,7 @@ use crate::{
     lock_file::{LockedCondaPackages, LockedPypiPackages, PypiRecord},
     project::manifest::{PyPiRequirement, SystemRequirements},
 };
-use distribution_types::{BuiltDist, Dist, FileLocation, IndexLocations, Resolution};
+use distribution_types::{BuiltDist, Dist, FileLocation, IndexLocations, Resolution, SourceDist};
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
@@ -25,6 +25,7 @@ use url::Url;
 use uv_cache::Cache;
 use uv_client::{Connectivity, FlatIndex, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
+use uv_distribution::DistributionDatabase;
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{InMemoryIndex, Manifest, Options, Resolver};
@@ -39,6 +40,23 @@ use uv_traits::{InFlight, NoBinary, NoBuild, SetupPyStrategy};
 
 /// This function takes as input a set of dependencies and system requirements and returns a set of
 /// locked packages.
+
+fn parse_hashes_from_hex(sha256: &Option<String>, md5: &Option<String>) -> Option<PackageHashes> {
+    match (sha256, md5) {
+        (Some(sha256), None) => Some(PackageHashes::Sha256(
+            parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),
+        )),
+        (None, Some(md5)) => Some(PackageHashes::Md5(
+            parse_digest_from_hex::<Md5>(md5).expect("invalid md5"),
+        )),
+        (Some(sha256), Some(md5)) => Some(PackageHashes::Md5Sha256(
+            parse_digest_from_hex::<Md5>(md5).expect("invalid md5"),
+            parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),
+        )),
+        (None, None) => None,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
     // package_db: Arc<PackageDb>,
@@ -163,6 +181,7 @@ pub async fn resolve_pypi(
     // Clear message
     pb.set_message("");
 
+    let database = DistributionDatabase::new(&cache, &tags, &registry_client, &build_dispatch);
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     for dist in resolution.into_distributions() {
         let pypi_package_data = match dist {
@@ -179,19 +198,8 @@ pub async fn resolve_pypi(
                             _ => todo!("unsupported URL"),
                         };
 
-                        let hash = match (&dist.file.hashes.sha256, &dist.file.hashes.md5) {
-                            (Some(sha256), None) => Some(PackageHashes::Sha256(
-                                parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),
-                            )),
-                            (None, Some(md5)) => Some(PackageHashes::Md5(
-                                parse_digest_from_hex::<Md5>(md5).expect("invalid md5"),
-                            )),
-                            (Some(sha256), Some(md5)) => Some(PackageHashes::Md5Sha256(
-                                parse_digest_from_hex::<Md5>(md5).expect("invalid md5"),
-                                parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),
-                            )),
-                            (None, None) => None,
-                        };
+                        let hash =
+                            parse_hashes_from_hex(&dist.file.hashes.sha256, &dist.file.hashes.md5);
 
                         (url, hash)
                     }
@@ -212,8 +220,46 @@ pub async fn resolve_pypi(
                     hash,
                 }
             }
-            Dist::Source(_) => {
-                todo!("source dists not yet supported");
+            Dist::Source(source) => {
+                let hash = source
+                    .file()
+                    .map(|file| parse_hashes_from_hex(&file.hashes.sha256, &file.hashes.md5))
+                    .flatten();
+
+                let (metadata, url) = database
+                    .get_or_build_wheel_metadata(&Dist::Source(source.clone()))
+                    .await
+                    .into_diagnostic()?;
+
+                // Use the precise url if we got it back
+                // otherwise try to construct it from the source
+                let url = if let Some(url) = url {
+                    url
+                } else {
+                    match source {
+                        SourceDist::Registry(reg) => match &reg.file.url {
+                            FileLocation::AbsoluteUrl(url) => {
+                                Url::from_str(url).expect("invalid absolute url")
+                            }
+                            FileLocation::Path(path) => {
+                                Url::from_file_path(path).expect("invalid path")
+                            }
+                            _ => todo!("unsupported URL"),
+                        },
+                        SourceDist::DirectUrl(direct) => direct.url.to_url(),
+                        SourceDist::Git(git) => git.url.to_url(),
+                        SourceDist::Path(path) => path.url.to_url(),
+                    }
+                };
+
+                PypiPackageData {
+                    name: metadata.name,
+                    version: metadata.version,
+                    requires_dist: metadata.requires_dist,
+                    requires_python: metadata.requires_python,
+                    url,
+                    hash,
+                }
             }
         };
 

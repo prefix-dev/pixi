@@ -2977,6 +2977,7 @@ dependencies = [
  "uv-cache",
  "uv-client",
  "uv-dispatch",
+ "uv-distribution",
  "uv-installer",
  "uv-interpreter",
  "uv-normalize",
