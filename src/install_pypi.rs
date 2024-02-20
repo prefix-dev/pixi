@@ -2,7 +2,6 @@ use crate::environment::PythonStatus;
 use crate::prefix::Prefix;
 
 use crate::EnvironmentName;
-use futures::StreamExt;
 
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
@@ -12,14 +11,13 @@ use crate::lock_file::UvResolutionContext;
 use crate::project::manifest::SystemRequirements;
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
-use distribution_types::{IndexLocations, Name};
+use distribution_types::{Name};
 use install_wheel_rs::linker::LinkMode;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 
-use std::path::Path;
 use std::str::FromStr;
 
 use std::time::Duration;
@@ -81,22 +79,22 @@ pub async fn update_python_distributions(
         .find(|r| is_python_record(r))
         .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
 
-    let marker_environment = determine_marker_environment(platform, &python_record.package_record)?;
-    let venv_root = prefix.root().join("envs").join(name.as_str());
-    // let interpreter = Interpreter::artificial(
-    //     platform_host::Platform::current().expect("unsupported platform"),
-    //     marker_environment.clone(),
-    //     venv_root.to_path_buf(),
-    //     venv_root.to_path_buf(),
-    //     prefix.root().join(python_info.path()),
-    //     Path::new("invalid").to_path_buf(),
-    // );
+    // let marker_environment = determine_marker_environment(platform, &python_record.package_record)?;
+    // let venv_root = prefix.root().join("envs").join(name.as_str());
+    // // let interpreter = Interpreter::artificial(
+    // //     platform_host::Platform::current().expect("unsupported platform"),
+    // //     marker_environment.clone(),
+    // //     venv_root.to_path_buf(),
+    // //     venv_root.to_path_buf(),
+    // //     prefix.root().join(python_info.path()),
+    // //     Path::new("invalid").to_path_buf(),
+    // // );
 
     let platform = platform_host::Platform::current().expect("unsupported platform");
     let interpreter =
         Interpreter::query(&python_location, &platform, &uv_context.cache).into_diagnostic()?;
 
-    /// Create a custom venv
+    // Create a custom venv
     let venv = Virtualenv::from_interpreter(interpreter, prefix.root());
 
     // Determine the current environment markers.

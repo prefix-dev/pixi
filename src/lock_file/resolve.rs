@@ -4,7 +4,9 @@
 
 use crate::config::get_cache_dir;
 use crate::consts::PROJECT_MANIFEST;
+use std::collections::HashMap;
 
+use crate::lock_file::package_identifier;
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::{
@@ -13,12 +15,15 @@ use crate::{
     Project,
 };
 use distribution_types::{
-    BuiltDist, Dist, FileLocation, IndexLocations, Resolution, SourceDist, VersionOrUrl,
+    BuiltDist, Dist, FileLocation, IndexLocations, Name, Resolution, SourceDist, VersionOrUrl,
 };
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
+use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
-use platform_host::{Platform};
+use pep440_rs::{Operator, Version, VersionPattern, VersionSpecifier};
+use pep508_rs::Requirement;
+use platform_host::Platform;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData};
@@ -110,13 +115,29 @@ impl uv_resolver::ResolverReporter for ResolveReporter {
     fn on_checkout_complete(&self, _url: &Url, _rev: &str, _index: usize) {}
 }
 
+fn single_version_requirement(name: PackageName, version: Version) -> Requirement {
+    Requirement {
+        name,
+        version_or_url: Some(pep508_rs::VersionOrUrl::VersionSpecifier(
+            [
+                VersionSpecifier::new(Operator::Equal, VersionPattern::verbatim(version))
+                    .expect("this should always work"),
+            ]
+            .into_iter()
+            .collect(),
+        )),
+        extras: Vec::default(),
+        marker: None,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
     context: UvResolutionContext,
     dependencies: IndexMap<PackageName, Vec<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
-    _locked_pypi_records: &[PypiRecord],
+    locked_pypi_records: &[PypiRecord],
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
     python_location: &Path,
@@ -125,6 +146,33 @@ pub async fn resolve_pypi(
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
 
+    // Determine which pypi packages are already installed as conda package.
+    // Determine the python packages that are installed by the conda packages
+    let conda_python_packages =
+        package_identifier::PypiPackageIdentifier::from_records(locked_conda_records)
+            .into_diagnostic()
+            .context("failed to extract python packages from conda metadata")?
+            .into_iter()
+            .map(|p| (p.name.clone(), p))
+            .collect::<HashMap<_, _>>();
+
+    if !conda_python_packages.is_empty() {
+        tracing::info!(
+            "the following python packages are assumed to be installed by conda: {conda_python_packages}",
+            conda_python_packages =
+                conda_python_packages
+                    .values()
+                    .format_with(", ", |p, f| f(&format_args!(
+                        "{name} {version}",
+                        name = &p.name,
+                        version = &p.version
+                    )))
+        );
+    } else {
+        tracing::info!("there are no python packages installed by conda");
+    }
+
+    // Get the Pypi requirements
     let requirements = dependencies
         .iter()
         .flat_map(|(name, req)| req.iter().map(move |req| (name, req)))
@@ -146,33 +194,8 @@ pub async fn resolve_pypi(
     // Construct a fake interpreter from the conda environment.
     // TODO: Should we look into using the actual interpreter here?
     let platform = Platform::current().expect("unsupported platform");
-    // let lib_dir = if platform.os() == &Os::Windows {
-    //     "Lib"
-    // } else {
-    //     "lib"
-    // };
-    // let interpreter = Interpreter::artificial(
-    //     platform.clone(),
-    //     marker_environment.clone(),
-    //     venv_root.to_path_buf(),
-    //     venv_root.to_path_buf(),
-    //     python_location.to_path_buf(),
-    //     venv_root.join(lib_dir),
-    // );
     let interpreter =
         Interpreter::query(python_location, &platform, &context.cache).into_diagnostic()?;
-
-    //
-    // // Define where to get packages from
-    // let index_locations = Arc::new(IndexLocations::default());
-    //
-    // // Construct a registry client
-    // let registry_client = Arc::new(
-    //     RegistryClientBuilder::new(cache.clone())
-    //         .index_urls(index_locations.index_urls())
-    //         .connectivity(Connectivity::Online)
-    //         .build(),
-    // );
 
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
@@ -199,10 +222,27 @@ pub async fn resolve_pypi(
         &NoBuild::None,
         &NoBinary::None,
     )
-        .with_options(options.clone());
+    .with_options(options.clone());
+
+    let constraints = conda_python_packages
+        .values()
+        .map(|p| single_version_requirement(p.name.clone(), p.version.clone()))
+        .collect();
+
+    let preferences = locked_pypi_records
+        .iter()
+        .map(|p| single_version_requirement(p.0.name.clone(), p.0.version.clone()))
+        .collect();
 
     let resolution = Resolver::new(
-        Manifest::simple(requirements),
+        Manifest::new(
+            requirements,
+            constraints,
+            Vec::new(),
+            preferences,
+            None,
+            Vec::new(),
+        ),
         options.clone(),
         &marker_environment,
         &interpreter,
@@ -212,11 +252,11 @@ pub async fn resolve_pypi(
         &context.in_memory_index,
         &build_dispatch,
     )
-        .with_reporter(ResolveReporter(pb.clone()))
-        .resolve()
-        .await
-        .into_diagnostic()
-        .context("failed to resolve pypi dependencies")?;
+    .with_reporter(ResolveReporter(pb.clone()))
+    .resolve()
+    .await
+    .into_diagnostic()
+    .context("failed to resolve pypi dependencies")?;
 
     let resolution = Resolution::from(resolution);
 
@@ -231,6 +271,11 @@ pub async fn resolve_pypi(
     );
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     for dist in resolution.into_distributions() {
+        // If this refers to a conda package we can skip it
+        if conda_python_packages.contains_key(dist.name()) {
+            continue;
+        }
+
         let pypi_package_data = match dist {
             Dist::Built(dist) => {
                 let (url, hash) = match &dist {
@@ -340,9 +385,9 @@ pub async fn resolve_conda(
         // Solve the task
         resolvo::Solver.solve(task).into_diagnostic()
     })
-        .await
-        .unwrap_or_else(|e| match e.try_into_panic() {
-            Ok(e) => std::panic::resume_unwind(e),
-            Err(_err) => Err(miette::miette!("cancelled")),
-        })
+    .await
+    .unwrap_or_else(|e| match e.try_into_panic() {
+        Ok(e) => std::panic::resume_unwind(e),
+        Err(_err) => Err(miette::miette!("cancelled")),
+    })
 }

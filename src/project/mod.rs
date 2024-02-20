@@ -379,7 +379,7 @@ impl Project {
 
     /// Returns the Python index locations to use for this project.
     pub fn pypi_index_locations(&self) -> IndexLocations {
-        /// TODO: Currently we just default to Pypi always.
+        // TODO: Currently we just default to Pypi always.
         IndexLocations::default()
     }
 
