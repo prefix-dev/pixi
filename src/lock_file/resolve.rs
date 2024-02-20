@@ -13,7 +13,7 @@ use distribution_types::{BuiltDist, Dist, FileLocation, IndexLocations, Resoluti
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
-use platform_host::Platform;
+use platform_host::{Os, Platform};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData};
@@ -70,24 +70,34 @@ pub async fn resolve_pypi(
     let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
 
     // Determine the tags
-    let tags = get_pypi_tags(platform, system_requirements, python_record.as_ref())?;
-
-    // Construct a fake interpreter from the conda environment.
-    // TODO: Should we look into using the actual interpreter here?
-    let interpreter = Interpreter::artificial(
-        Platform::current().expect("unsupported platform"),
-        marker_environment.clone(),
-        venv_root.to_path_buf(),
-        venv_root.to_path_buf(),
-        python_location.to_path_buf(),
-        Path::new("invalid").to_path_buf(),
-    );
+    let tags = get_pypi_tags(platform, &system_requirements, python_record.as_ref())?;
 
     // Construct a cache
     // TODO: Figure out the right location
     let cache = Cache::temp()
         .into_diagnostic()
         .context("failed to create cache")?;
+
+    // Construct a fake interpreter from the conda environment.
+    // TODO: Should we look into using the actual interpreter here?
+    let platform = Platform::current().expect("unsupported platform");
+    let lib_dir = if platform.os() == &Os::Windows {
+        "Lib"
+    } else {
+        "lib"
+    };
+    let interpreter = Interpreter::artificial(
+        platform.clone(),
+        marker_environment.clone(),
+        venv_root.to_path_buf(),
+        venv_root.to_path_buf(),
+        python_location.to_path_buf(),
+        venv_root.join(lib_dir),
+    );
+    // let current_platform = Platform::current().expect("unsupported platform");
+    // let interpreter = Interpreter::query(python_location, &current_platform, &cache)
+    //     .into_diagnostic()
+    //     .context("failed to create interpreter")?;
 
     // Define where to get packages from
     let index_locations = Arc::new(IndexLocations::default());
@@ -127,7 +137,7 @@ pub async fn resolve_pypi(
         &index,
         &in_flight,
         interpreter.sys_executable().to_path_buf(),
-        SetupPyStrategy::Pep517,
+        SetupPyStrategy::default(),
         &NoBuild::None,
         &NoBinary::None,
     )

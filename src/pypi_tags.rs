@@ -18,7 +18,7 @@ pub fn package_name_is_python(record: &rattler_conda_types::PackageName) -> bool
 
 pub fn get_pypi_tags(
     platform: Platform,
-    system_requirements: SystemRequirements,
+    system_requirements: &SystemRequirements,
     python_record: &PackageRecord,
 ) -> miette::Result<Tags> {
     let platform = if platform.is_linux() {
@@ -87,6 +87,7 @@ pub fn get_pypi_tags(
     } else if platform.is_osx() {
         let osx_version = system_requirements
             .macos
+            .clone()
             .unwrap_or_else(|| default_mac_os_version(platform));
         let Some((major, minor)) = osx_version.as_major_minor() else {
             miette::bail!(
