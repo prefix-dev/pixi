@@ -249,8 +249,7 @@ pub async fn resolve_pypi(
             Dist::Source(source) => {
                 let hash = source
                     .file()
-                    .map(|file| parse_hashes_from_hex(&file.hashes.sha256, &file.hashes.md5))
-                    .flatten();
+                    .and_then(|file| parse_hashes_from_hex(&file.hashes.sha256, &file.hashes.md5));
 
                 let (metadata, url) = database
                     .get_or_build_wheel_metadata(&Dist::Source(source.clone()))
