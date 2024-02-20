@@ -94,6 +94,7 @@ pub async fn update_python_distributions(
         venv_root.join(python_info.path()),
         Path::new("invalid").to_path_buf(),
     );
+
     /// Create a custom venv
     let venv = Virtualenv::from_interpreter(interpreter, prefix.root());
 
