@@ -91,7 +91,7 @@ pub async fn update_python_distributions(
         marker_environment.clone(),
         venv_root.to_path_buf(),
         venv_root.to_path_buf(),
-        venv_root.join(python_info.path()),
+        prefix.root().join(python_info.path()),
         Path::new("invalid").to_path_buf(),
     );
 
