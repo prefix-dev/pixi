@@ -213,6 +213,11 @@ jobs:
           ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
           ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
 
+      # The Windows installer build
+      # To test this locally run:
+      # `cargo wix -v --no-build --nocapture -I install/windows/main.wxs --target x86_64-pc-windows-msvc --output target/wix/pixi-x86_64-pc-windows-msvc.msi --bin-path "C:/Program Files (x86)/WiX Toolset v3.14/bin"`
+      # Before you can do this make sure "Wix Toolset" is installed.
+      # You can get the exe from this repo: https://github.com/wixtoolset/wix3/releases/tag/wix314rtm
       - name: Build Installer
         continue-on-error: true
         if: matrix.os == 'windows-latest' && matrix.target != 'aarch64-pc-windows-msvc'

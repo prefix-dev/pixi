@@ -87,7 +87,7 @@
         <Property Id='DiskPrompt' Value='pixi Installation'/>
 
         <Directory Id='TARGETDIR' Name='SourceDir'>
-            <Directory Id="LocalAppDataFolder">
+            <Directory Id="$(var.PlatformProgramFilesFolder)">
                 <Directory Id="APPLICATIONFOLDER" Name="pixi" >
 
                     <!--
@@ -107,7 +107,7 @@
                     <Component Id='License' Guid='0ab111aa-4a6e-4322-a256-5d69a69dfb9e'>
                       <File Id='LicenseFile' Name='LICENSE' DiskId='1' Source='LICENSE' />
 
-                      <RegistryKey Root="HKCU" Key="Software\Prefix GmbH\pixi">
+                      <RegistryKey Root="HKLM" Key="Software\Prefix GmbH\pixi">
                           <RegistryValue Name="License" Value="1" Type="string" KeyPath="yes" />
                       </RegistryKey>
                     </Component>
@@ -135,9 +135,11 @@
                                 Action='set'
                                 System='no'/>
                         </Component>
+
+
                         <Component Id='binary0' Guid='f663c04b-5015-4f3d-b765-0541d9d6e7b6'>
 
-                            <RegistryKey Root="HKCU" Key="Software\Prefix GmbH\pixi">
+                            <RegistryKey Root="HKLM" Key="Software\Prefix GmbH\pixi">
                                 <RegistryValue Name="Flag" Value="1" Type="string" KeyPath="yes" />
                             </RegistryKey>
 
