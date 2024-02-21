@@ -1,1 +1,1 @@
-export $MY_SUPER_ENV=hello
+export MY_SUPER_ENV=hello

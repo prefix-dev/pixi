@@ -10,6 +10,9 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 [activation]
 scripts = ["activate.sh"]
 
+[target.win-64.activation]
+scripts = ["env_setup.bat"]
+
 [tasks]
 start = "python pycosat_example.py"
 test = "python pycosat_example.py"
