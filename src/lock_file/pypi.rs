@@ -91,7 +91,7 @@ pub async fn resolve_dependencies<'db>(
             // skip using the locked package in the case where conda and pypi package has the same name
             requirements.iter().all(|req| {
                 let has_different_name = req.name != pkg.name.as_str();
-                let found_in_mapping = mapping.get(pkg.name.as_str()) == Some(&req.name);
+                let found_in_mapping = mapping.values().contains(&pkg.name.as_str().to_string());
                 if !has_different_name && !found_in_mapping {
                     tracing::warn!("{} exists in both Conda and PyPI dependencies", pkg.name);
                 }
