@@ -348,5 +348,5 @@ async fn add_pypi_package_with_same_name_but_in_mapping_differently() {
         Platform::current(),
         "python-annoy>=1.17.2"
     ));
-    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "annoy"));
+    assert!(!lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "annoy"));
 }
