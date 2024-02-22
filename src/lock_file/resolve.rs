@@ -5,8 +5,9 @@
 use crate::config::get_cache_dir;
 use crate::consts::PROJECT_MANIFEST;
 use std::collections::HashMap;
+use std::future::Future;
 
-use crate::lock_file::package_identifier;
+use crate::lock_file::{package_identifier, PypiPackageIdentifier};
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::{
@@ -35,11 +36,13 @@ use url::Url;
 use uv_cache::Cache;
 use uv_client::{Connectivity, FlatIndex, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
-use uv_distribution::DistributionDatabase;
+use uv_distribution::{DistributionDatabase, Reporter};
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
-use uv_resolver::{InMemoryIndex, Manifest, Options, Resolver};
-use uv_traits::{InFlight, NoBinary, NoBuild, SetupPyStrategy};
+use uv_resolver::{
+    DefaultResolverProvider, InMemoryIndex, Manifest, Options, Resolver, ResolverProvider,
+};
+use uv_traits::{BuildContext, InFlight, NoBinary, NoBuild, SetupPyStrategy};
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
@@ -58,6 +61,7 @@ impl UvResolutionContext {
             .context("failed to create uv cache")?;
         let registry_client = Arc::new(
             RegistryClientBuilder::new(cache.clone())
+                .client(project.client().clone())
                 .connectivity(Connectivity::Online)
                 .build(),
         );
@@ -114,6 +118,32 @@ impl uv_resolver::ResolverReporter for ResolveReporter {
 
     fn on_checkout_complete(&self, _url: &Url, _rev: &str, _index: usize) {}
 }
+
+// struct CondaResolverProvider<'a, Context: BuildContext + Send + Sync> {
+//     fallback: DefaultResolverProvider<'a, Context>,
+//     conda_python_identifiers: Vec<PypiPackageIdentifier>,
+// }
+//
+// type PackageVersionsResult = Result<VersionsResponse, uv_client::Error>;
+// type WheelMetadataResult = Result<(Metadata21, Option<Url>), uv_distribution::Error>;
+//
+// impl<'a, Context: BuildContext + Send + Sync> ResolverProvider for CondaResolverProvider<'a, Context> {
+//     fn get_package_versions<'io>(&'io self, package_name: &'io PackageName) -> impl Future<Output=uv_resolver::resolver::provider::PackageVersionsResult> + Send + 'io {
+//         todo!()
+//     }
+//
+//     fn get_or_build_wheel_metadata<'io>(&'io self, dist: &'io Dist) -> impl Future<Output=uv_resolver::resolver::provider::WheelMetadataResult> + Send + 'io {
+//         self.fallback.get_or_build_wheel_metadata(dist)
+//     }
+//
+//     fn index_locations(&self) -> &IndexLocations {
+//         todo!()
+//     }
+//
+//     fn with_reporter(self, reporter: impl Reporter + 'static) -> Self {
+//         todo!()
+//     }
+// }
 
 fn single_version_requirement(name: PackageName, version: Version) -> Requirement {
     Requirement {
@@ -252,6 +282,8 @@ pub async fn resolve_pypi(
         &context.in_memory_index,
         &build_dispatch,
     )
+    .into_diagnostic()
+    .context("failed to resolve pypi dependencies")?
     .with_reporter(ResolveReporter(pb.clone()))
     .resolve()
     .await
