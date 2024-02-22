@@ -2674,7 +2674,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "assert_matches",
  "async-once-cell",
@@ -2726,6 +2726,7 @@ dependencies = [
  "serde_json",
  "serde_spanned",
  "serde_with",
+ "serde_yaml",
  "serial_test",
  "shlex",
  "signal-hook",
@@ -3036,9 +3037,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_installs_packages"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e17e7e35ce2368d1467350d7509abd74041df7f259bec73ff5bb22aaae4ff65f"
+checksum = "347eefdb6574abe870dc428c1d6b22e4a0481de88e094b14dca4427e20e9ce16"
 dependencies = [
  "async-once-cell",
  "async-recursion",

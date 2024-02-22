@@ -286,8 +286,16 @@ fn stream_python_artifacts(
                         format!("'{}' is not a valid python package name", &pkg_data.name)
                     })?;
 
-                let artifact_name = ArtifactName::from_filename(filename, &name)
+                let artifact_name = ArtifactName::from_filename(filename, Some(pkg_data.url.clone()), &name)
                     .expect("failed to convert filename to artifact name");
+
+                let (artifact_name, is_direct_url) = if let ArtifactName::STree(mut stree) = artifact_name{
+                    // populate resolved version of direct dependency
+                    stree.version = pkg_data.version.clone();
+                    (ArtifactName::STree(stree), true)
+                } else {
+                    (artifact_name, false)
+                };
 
                 // Log out intent to install this python package.
                 tracing::info!("downloading python package {filename}");
@@ -303,7 +311,7 @@ fn stream_python_artifacts(
                     requires_python: pkg_data.requires_python.clone(),
                     dist_info_metadata: Default::default(),
                     yanked: Default::default(),
-                    is_direct_url: false,
+                    is_direct_url,
                 };
 
                 let (wheel, _) = tokio::spawn({
@@ -518,7 +526,7 @@ fn extract_locked_tags(
             };
 
             // Determine the artifact type from the name and filename
-            match ArtifactName::from_filename(filename, &name) {
+            match ArtifactName::from_filename(filename, Some(pkg_data.url.clone()), &name) {
                 Ok(ArtifactName::Wheel(name)) => (pkg, Some(IndexSet::from_iter(name.all_tags_iter()))),
                 Ok(_) => (pkg, None),
                 Err(err) => {

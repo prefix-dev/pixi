@@ -1,0 +1,18 @@
+---
+
+name: lets-plot-python-module
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - numpy>=1.24.2
+  - jupyter=1.0.0
+  - pandas>=1.5.3
+  - geopandas>=0.12.2
+  - shapely>=2.0.0
+  - pytest>=7.2.1
+  - pip
+  - pip:
+      - pypng
+      - palettable

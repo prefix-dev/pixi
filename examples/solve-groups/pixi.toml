@@ -6,6 +6,9 @@ authors = ["Bas Zalmstra <zalmstra.bas@gmail.com>"]
 channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
+[dependencies]
+pytest = "*"
+
 [feature.max_py310.dependencies]
 python = "<=3.10"
 pydantic = "*"
@@ -15,7 +18,10 @@ python = ">=3.8"
 py-rattler = "*"
 
 [feature.min_py38.pypi-dependencies]
-pytest = "*"
+matplotlib = "*"
+
+[tasks]
+test = "pytest -s"
 
 [environments]
 # The solve-group mixes the dependencies of all features in the group and solves them together.
