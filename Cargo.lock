@@ -608,7 +608,7 @@ dependencies = [
 [[package]]
 name = "cache-key"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "hex",
  "seahash",
@@ -1044,7 +1044,7 @@ dependencies = [
 [[package]]
 name = "distribution-filename"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "pep440_rs 0.4.0",
  "platform-tags",
@@ -1058,13 +1058,14 @@ dependencies = [
 [[package]]
 name = "distribution-types"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "anyhow",
  "cache-key",
  "data-encoding",
  "distribution-filename",
  "fs-err",
+ "itertools",
  "once_cell",
  "pep440_rs 0.4.0",
  "pep508_rs",
@@ -1560,7 +1561,7 @@ dependencies = [
 [[package]]
 name = "gourgeist"
 version = "0.0.4"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "anstream",
  "cachedir",
@@ -1894,7 +1895,7 @@ dependencies = [
 [[package]]
 name = "install-wheel-rs"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "clap",
  "configparser",
@@ -2550,7 +2551,7 @@ dependencies = [
 [[package]]
 name = "once-map"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2769,7 +2770,7 @@ dependencies = [
 [[package]]
 name = "pep440_rs"
 version = "0.4.0"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "once_cell",
  "pubgrub",
@@ -2782,7 +2783,7 @@ dependencies = [
 [[package]]
 name = "pep508_rs"
 version = "0.2.3"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "derivative",
  "once_cell",
@@ -3001,7 +3002,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 [[package]]
 name = "platform-host"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "fs-err",
  "goblin",
@@ -3028,7 +3029,7 @@ dependencies = [
 [[package]]
 name = "platform-tags"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "platform-host",
  "rustc-hash",
@@ -3189,7 +3190,7 @@ dependencies = [
 [[package]]
 name = "pypi-types"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "chrono",
  "mailparse",
@@ -3281,7 +3282,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.18.0"
-source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
+source = "git+https://github.com/baszalmstra/rattler?rev=c17092264314da83f968ecbcf8cf081fbf5dbb74#c17092264314da83f968ecbcf8cf081fbf5dbb74"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3326,7 +3327,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.18.0"
-source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
+source = "git+https://github.com/baszalmstra/rattler?rev=c17092264314da83f968ecbcf8cf081fbf5dbb74#c17092264314da83f968ecbcf8cf081fbf5dbb74"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3355,7 +3356,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.18.0"
-source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
+source = "git+https://github.com/baszalmstra/rattler?rev=c17092264314da83f968ecbcf8cf081fbf5dbb74#c17092264314da83f968ecbcf8cf081fbf5dbb74"
 dependencies = [
  "blake2",
  "digest",
@@ -3370,7 +3371,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.18.0"
-source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
+source = "git+https://github.com/baszalmstra/rattler?rev=c17092264314da83f968ecbcf8cf081fbf5dbb74#c17092264314da83f968ecbcf8cf081fbf5dbb74"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3394,7 +3395,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.18.0"
-source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
+source = "git+https://github.com/baszalmstra/rattler?rev=c17092264314da83f968ecbcf8cf081fbf5dbb74#c17092264314da83f968ecbcf8cf081fbf5dbb74"
 dependencies = [
  "quote",
  "syn 2.0.48",
@@ -3403,7 +3404,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.18.0"
-source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
+source = "git+https://github.com/baszalmstra/rattler?rev=c17092264314da83f968ecbcf8cf081fbf5dbb74#c17092264314da83f968ecbcf8cf081fbf5dbb74"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3431,7 +3432,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.18.0"
-source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
+source = "git+https://github.com/baszalmstra/rattler?rev=c17092264314da83f968ecbcf8cf081fbf5dbb74#c17092264314da83f968ecbcf8cf081fbf5dbb74"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3457,7 +3458,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.18.0"
-source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
+source = "git+https://github.com/baszalmstra/rattler?rev=c17092264314da83f968ecbcf8cf081fbf5dbb74#c17092264314da83f968ecbcf8cf081fbf5dbb74"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3496,7 +3497,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.18.0"
-source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
+source = "git+https://github.com/baszalmstra/rattler?rev=c17092264314da83f968ecbcf8cf081fbf5dbb74#c17092264314da83f968ecbcf8cf081fbf5dbb74"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.2",
@@ -3513,7 +3514,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.18.0"
-source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
+source = "git+https://github.com/baszalmstra/rattler?rev=c17092264314da83f968ecbcf8cf081fbf5dbb74#c17092264314da83f968ecbcf8cf081fbf5dbb74"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3533,7 +3534,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.18.0"
-source = "git+https://github.com/baszalmstra/rattler?rev=d61c84e379e75fe7ed528f917085d14b0719d844#d61c84e379e75fe7ed528f917085d14b0719d844"
+source = "git+https://github.com/baszalmstra/rattler?rev=c17092264314da83f968ecbcf8cf081fbf5dbb74#c17092264314da83f968ecbcf8cf081fbf5dbb74"
 dependencies = [
  "cfg-if",
  "libloading",
@@ -3678,7 +3679,7 @@ dependencies = [
 [[package]]
 name = "requirements-txt"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "fs-err",
  "once_cell",
@@ -5088,7 +5089,7 @@ dependencies = [
 [[package]]
 name = "uv-build"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5118,7 +5119,7 @@ dependencies = [
 [[package]]
 name = "uv-cache"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "cache-key",
  "cachedir",
@@ -5139,7 +5140,7 @@ dependencies = [
 [[package]]
 name = "uv-client"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "async-trait",
  "async_http_range_reader",
@@ -5178,12 +5179,13 @@ dependencies = [
  "uv-cache",
  "uv-fs",
  "uv-normalize",
+ "uv-warnings",
 ]
 
 [[package]]
 name = "uv-dispatch"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5211,7 +5213,7 @@ dependencies = [
 [[package]]
 name = "uv-distribution"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "anyhow",
  "cache-key",
@@ -5248,7 +5250,7 @@ dependencies = [
 [[package]]
 name = "uv-extract"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "async-compression",
  "async_zip",
@@ -5268,7 +5270,7 @@ dependencies = [
 [[package]]
 name = "uv-fs"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "dunce",
  "fs-err",
@@ -5283,7 +5285,7 @@ dependencies = [
 [[package]]
 name = "uv-git"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -5308,7 +5310,7 @@ dependencies = [
 [[package]]
 name = "uv-installer"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "anyhow",
  "distribution-filename",
@@ -5343,7 +5345,7 @@ dependencies = [
 [[package]]
 name = "uv-interpreter"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "cache-key",
  "fs-err",
@@ -5368,7 +5370,7 @@ dependencies = [
 [[package]]
 name = "uv-normalize"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "rkyv",
  "serde",
@@ -5377,7 +5379,7 @@ dependencies = [
 [[package]]
 name = "uv-resolver"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "anstream",
  "anyhow",
@@ -5429,7 +5431,7 @@ dependencies = [
 [[package]]
 name = "uv-traits"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5444,7 +5446,7 @@ dependencies = [
 [[package]]
 name = "uv-warnings"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.5#07349e39e84a10b531b4316a140c8b7ae8bf59e4"
+source = "git+https://github.com/astral-sh/uv?tag=0.1.6#a269766c27ea6d31860b165ef5cb045be323cf16"
 dependencies = [
  "anstream",
  "once_cell",

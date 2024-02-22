@@ -28,7 +28,6 @@ console = { version = "0.15.8", features = ["windows-console-colors"] }
 deno_task_shell = "0.14.4"
 dialoguer = "0.11.0"
 dirs = "5.0.1"
-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 dunce = "1.0.4"
 flate2 = "1.0.28"
 futures = "0.3.30"
@@ -37,17 +36,12 @@ humantime = "2.1.0"
 indexmap = { version = "2.2.2", features = ["serde"] }
 indicatif = "0.17.7"
 insta = { version = "1.34.0", features = ["yaml"] }
-install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 is_executable = "1.0.1"
 itertools = "0.12.1"
 lazy_static = "1.4.0"
 miette = { version = "7.0.0", features = ["fancy", "supports-color", "supports-hyperlinks", "supports-unicode", "terminal_size", "textwrap"] }
 minijinja = { version = "1.0.12", features = ["builtins"] }
 once_cell = "1.19.0"
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
-platform-host = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
 rattler = { version = "0.18.0", default-features = false }
 rattler_conda_types = { version = "0.18.0", default-features = false }
 rattler_digest = { version = "0.18.0", default-features = false }
@@ -80,15 +74,22 @@ toml_edit = { version = "0.21.1", features = ["serde"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
-uv-interpreter = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
-uv-traits = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
+
+distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+platform-host = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+uv-interpreter = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+uv-traits = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
 
 zip = { version = "0.6.6", default-features = false, features = ["deflate", "time"] }
 
@@ -106,18 +107,18 @@ tokio = { version = "1.36.0", features = ["rt"] }
 toml = "0.8.10"
 
 [patch.crates-io]
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.5" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
+pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.6" }
 
-rattler = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_digest = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_networking = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
-rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "d61c84e379e75fe7ed528f917085d14b0719d844" }
+rattler = { git = "https://github.com/baszalmstra/rattler", rev = "c17092264314da83f968ecbcf8cf081fbf5dbb74" }
+rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "c17092264314da83f968ecbcf8cf081fbf5dbb74" }
+rattler_digest = { git = "https://github.com/baszalmstra/rattler", rev = "c17092264314da83f968ecbcf8cf081fbf5dbb74" }
+rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev = "c17092264314da83f968ecbcf8cf081fbf5dbb74" }
+rattler_networking = { git = "https://github.com/baszalmstra/rattler", rev = "c17092264314da83f968ecbcf8cf081fbf5dbb74" }
+rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev = "c17092264314da83f968ecbcf8cf081fbf5dbb74" }
+rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "c17092264314da83f968ecbcf8cf081fbf5dbb74" }
+rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "c17092264314da83f968ecbcf8cf081fbf5dbb74" }
+rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "c17092264314da83f968ecbcf8cf081fbf5dbb74" }
 #rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages", branch = "main"}
 #resolvo = { git = "https://github.com/mamba-org/resolvo.git", branch = "main" }
 #deno_task_shell = { path = "../deno_task_shell" }
