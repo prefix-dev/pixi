@@ -375,13 +375,19 @@ mod tests {
           - pytorch::torchvision
           - conda-forge::pytest
           - wheel=0.31.1
+          - sel(linux): blabla
           - pip:
             - requests
             - git+https://git@github.com/fsschneider/DeepOBS.git@develop#egg=deepobs
             - torch==1.8.1
         "#;
-        let conda_env_file_data: CondaEnvFile =
-            serde_yaml::from_str(example_conda_env_file).unwrap();
+
+        let f = tempfile::NamedTempFile::new().unwrap();
+        let path = f.path();
+        let mut file = std::fs::File::create(path).unwrap();
+        file.write_all(example_conda_env_file.as_bytes()).unwrap();
+
+        let conda_env_file_data = CondaEnvFile::from_path(path).unwrap();
 
         assert_eq!(conda_env_file_data.name(), Some("pixi_example_project"));
         assert_eq!(
