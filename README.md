@@ -76,6 +76,10 @@ brew install pixi
 The script will also update your ~/.bash_profile to include ~/.pixi/bin in your PATH, allowing you to invoke the pixi command from anywhere.
 You might need to restart your terminal or source your shell for the changes to take effect.
 
+### Distro Packages
+
+[![Packaging status](https://repology.org/badge/vertical-allrepos/pixi.svg)](https://repology.org/project/pixi/versions)
+
 #### Arch Linux
 
 You can install `pixi` from the [extra repository](https://archlinux.org/packages/extra/x86_64/pixi/) using [pacman](https://wiki.archlinux.org/title/Pacman):
