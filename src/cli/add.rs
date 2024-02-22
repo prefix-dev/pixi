@@ -333,8 +333,12 @@ pub async fn add_conda_specs_to_project(
             if let Some(versions_seen) = package_versions.get(&name).cloned() {
                 updated_spec.version = determine_version_constraint(&versions_seen);
             } else {
-                updated_spec.version =
-                    determine_latest_version(project, specs_platforms, &sparse_repo_data, &name)?;
+                updated_spec.version = determine_version_constraint(&determine_latest_versions(
+                    project,
+                    specs_platforms,
+                    &sparse_repo_data,
+                    &name,
+                )?);
             }
             updated_spec
         } else {
@@ -375,12 +379,13 @@ pub async fn add_conda_specs_to_project(
     Ok(())
 }
 
-fn determine_latest_version(
+/// Get all the latest versions found in the platforms repodata.
+fn determine_latest_versions(
     project: &Project,
     platforms: &Vec<Platform>,
     sparse_repo_data: &IndexMap<(Channel, Platform), SparseRepoData>,
     name: &PackageName,
-) -> miette::Result<Option<VersionSpec>> {
+) -> miette::Result<Vec<Version>> {
     // If we didn't find any versions, we'll just use the latest version we can find in the repodata.
     let mut found_records = Vec::new();
 
@@ -413,12 +418,10 @@ fn determine_latest_version(
     }
 
     // Determine the version constraint based on the max of every channel and platform.
-    Ok(determine_version_constraint(
-        &found_records
-            .iter()
-            .map(|record| record.package_record.version.version().clone())
-            .collect_vec(),
-    ))
+    Ok(found_records
+        .iter()
+        .map(|record| record.package_record.version.version().clone())
+        .collect_vec())
 }
 /// Given several specs determines the highest installable version for them.
 pub fn determine_best_version(
