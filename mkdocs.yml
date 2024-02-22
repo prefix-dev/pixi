@@ -12,9 +12,29 @@ theme:
     code: JetBrains Mono
 
   palette:
-    primary: yellow
-    accent: yellow
-    scheme: slate
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: prefix-light
+      accent: prefix-light
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: prefix
+      accent: prefix
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
 
   icon:
     edit: material/pencil
@@ -24,6 +44,7 @@ theme:
     - content.tabs.link
     - content.code.copy
     - content.action.edit
+    - content.code.annotate
     # - content.code.select Sponsor only
     - navigation.instant
     - navigation.instant.progress
@@ -40,7 +61,10 @@ edit_uri: edit/main/docs/
 
 markdown_extensions:
   - admonition
+  - def_list
   - footnotes
+  - pymdownx.tasklist:
+      custom_checkbox: true
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
@@ -67,6 +91,8 @@ extra:
       link: https://www.linkedin.com/company/prefix-dev
     - icon: fontawesome/brands/github
       link: https://github.com/prefix-dev
+  version:
+    provider: mike
 
 
 nav:
@@ -95,3 +121,12 @@ nav:
 plugins:
   - search
   - social
+  - mike:
+    # These fields are all optional; the defaults are as below...
+    # alias_type: symlink
+    # redirect_template: null
+    # deploy_prefix: ''
+    # canonical_version: null
+    # version_selector: true
+    # css_dir: css
+    # javascript_dir: js
