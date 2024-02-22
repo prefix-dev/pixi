@@ -118,8 +118,11 @@ fn locked_data_to_file(pkg: &PypiPackageData) -> distribution_types::File {
 }
 
 fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
-    let filename = DistFilename::try_from_normalized_filename(pkg.name.as_ref())
-        .expect("could not convert to dist filename");
+    tracing::warn!("{}", pkg.name.as_ref());
+    let filename = DistFilename::try_from_normalized_filename(pkg.name.as_ref()).expect(&format!(
+        "{} - could not convert to dist filename",
+        pkg.name.as_ref()
+    ));
 
     // Bit of a hack to create the file type
     let file = locked_data_to_file(pkg);
@@ -131,7 +134,7 @@ fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
 /// and what we need to download from the registry.
 /// Also determine what we need to remove.
 /// Ignores re-installs for now.
-pub fn whats_the_plan<'venv, 'a>(
+fn whats_the_plan<'venv, 'a>(
     required: &'a [CombinedPypiPackageData],
     installed: &SitePackages<'venv>,
     registry_index: &'a mut RegistryWheelIndex<'a>,
@@ -296,36 +299,14 @@ pub async fn update_python_distributions(
         &no_binary,
     );
 
-    let site_packages = SitePackages::from_executable(&venv).unwrap();
-
-    let requirements = python_packages
-        .iter()
-        .map(|(pkg, _)| {
-            let name = pkg.name.clone();
-            let version = pkg.version.clone();
-            Requirement {
-                name,
-                version_or_url: Some(VersionOrUrl::VersionSpecifier(
-                    VersionSpecifiers::from_str(&format!("=={}", version)).unwrap(),
-                )),
-                // TODO: add these
-                extras: vec![],
-                // TODO: add these
-                marker: None,
-            }
-        })
-        .collect_vec();
-
     let _lock = venv.lock().into_diagnostic()?;
     // TODO: need to resolve editables?
-    // Partition into those that should be linked from the cache (`local`), those that need to be
-    // downloaded (`remote`), and those that should be removed (`extraneous`).
-
-    // TODO: is it possible to use a cached resolve to actually avoid doing another resolve?
 
     let installed = SitePackages::from_executable(&venv).expect("could not create site-packages");
     let mut registry_index =
         RegistryWheelIndex::new(&uv_context.cache, &tags, &uv_context.index_locations);
+    // Partition into those that should be linked from the cache (`local`), those that need to be
+    // downloaded (`remote`), and those that should be removed (`extraneous`).
     let PixiInstallPlan {
         local,
         remote,
@@ -337,23 +318,28 @@ pub async fn update_python_distributions(
         &mut registry_index,
         &uv_context.cache,
     )?;
-    tracing::debug!(
+    tracing::warn!(
         "Resolved install plan: local={}, remote={}, reinstalls={}, extraneous={}",
         local.len(),
         remote.len(),
         reinstalls.len(),
         extraneous.len()
     );
+
+    for l in local.iter() {
+        tracing::warn!("{:?}", l);
+    }
+
     // Nothing to do.
     if remote.is_empty() && local.is_empty() && reinstalls.is_empty() && extraneous.is_empty() {
-        let s = if requirements.len() == 1 { "" } else { "s" };
+        let s = if python_packages.len() == 1 { "" } else { "s" };
         tracing::debug!(
             "{}",
             format!(
                 "Audited {} in {}",
                 format!(
                     "{num_requirements} package{s}",
-                    num_requirements = requirements.len()
+                    num_requirements = python_packages.len()
                 ),
                 elapsed(start.elapsed())
             )
