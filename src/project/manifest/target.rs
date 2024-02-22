@@ -130,6 +130,10 @@ impl Target {
 pub enum TargetSelector {
     // Platform specific configuration
     Platform(Platform),
+    Unix,
+    Linux,
+    Win,
+    MacOs,
     // TODO: Add minijinja coolness here.
 }
 
@@ -138,6 +142,10 @@ impl TargetSelector {
     pub fn matches(&self, platform: Platform) -> bool {
         match self {
             TargetSelector::Platform(p) => p == &platform,
+            TargetSelector::Linux => platform.is_linux(),
+            TargetSelector::Unix => platform.is_unix(),
+            TargetSelector::Win => platform.is_windows(),
+            TargetSelector::MacOs => platform.is_osx(),
         }
     }
 }
@@ -146,6 +154,10 @@ impl ToString for TargetSelector {
     fn to_string(&self) -> String {
         match self {
             TargetSelector::Platform(p) => p.to_string(),
+            TargetSelector::Linux => "linux".to_string(),
+            TargetSelector::Unix => "unix".to_string(),
+            TargetSelector::Win => "windows".to_string(),
+            TargetSelector::MacOs => "macos".to_string(),
         }
     }
 }
@@ -161,9 +173,16 @@ impl<'de> Deserialize<'de> for TargetSelector {
     where
         D: Deserializer<'de>,
     {
-        Ok(TargetSelector::Platform(Platform::deserialize(
-            deserializer,
-        )?))
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "linux" => Ok(TargetSelector::Linux),
+            "unix" => Ok(TargetSelector::Unix),
+            "windows" => Ok(TargetSelector::Win),
+            "macos" => Ok(TargetSelector::MacOs),
+            _ => Platform::from_str(&s)
+                .map(TargetSelector::Platform)
+                .map_err(serde::de::Error::custom),
+        }
     }
 }
 
