@@ -56,7 +56,7 @@ pub struct Args {
     /// - `pixi add --pypi boto3`
     /// - `pixi add --pypi "boto3==version"
     ///
-    #[arg(required = true, value_parser = Args::parse_specs)]
+    #[arg(required = true)]
     pub specs: Vec<String>,
 
     /// The path to 'pixi.toml'
@@ -86,21 +86,6 @@ pub struct Args {
     /// The platform(s) for which the dependency should be added
     #[arg(long, short)]
     pub platform: Vec<Platform>,
-}
-
-impl Args {
-    /// Custom string parser for the dependencies.
-    ///
-    /// Disallows strings with non-lowercase characters.
-    fn parse_specs(specs: &str) -> Result<String, String> {
-        if specs.chars().any(|v| !v.is_lowercase()) {
-            Err(String::from(
-                "please avoid using capitalized dependency names",
-            ))
-        } else {
-            Ok(specs.to_string())
-        }
-    }
 }
 
 impl DependencyType {
