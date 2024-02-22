@@ -84,6 +84,14 @@ You can install `pixi` from the [extra repository](https://archlinux.org/package
 pacman -S pixi
 ```
 
+#### Alpine Linux
+
+`pixi` is available for [Alpine Edge](https://pkgs.alpinelinux.org/packages?name=pixi&branch=edge). It can be installed via [apk](https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper) after enabling the [testing repository](https://wiki.alpinelinux.org/wiki/Repositories).
+
+```shell
+apk add pixi
+```
+
 ## Windows
 To install Pixi on Windows, open a PowerShell terminal (you may need to run it as an administrator) and run the following command:
 
