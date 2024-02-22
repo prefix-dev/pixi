@@ -2550,6 +2550,8 @@ bar = "*"
 
         assert_display_snapshot!(manifest.document.to_string());
     }
+
+    #[test]
     fn test_duplicate_dependency() {
         let contents = format!(
             r#"
