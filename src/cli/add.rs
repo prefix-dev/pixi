@@ -217,23 +217,9 @@ pub async fn add_pypi_specs_to_project(
         // TODO: Get best version
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            let dependencies = project.pypi_dependencies(None);
-            if let Some(package_name) = dependencies.keys().find(|pkg_name| &name == pkg_name) {
-                return Err(miette::miette!(
-                    "{} is already added as dependency.",
-                    console::style(package_name.as_source_str()).bold(),
-                ));
-            }
             project.manifest.add_pypi_dependency(name, spec, None)?;
         } else {
             for platform in specs_platforms.iter() {
-                let dependencies = project.pypi_dependencies(Some(*platform));
-                if let Some(package_name) = dependencies.keys().find(|pkg_name| &name == pkg_name) {
-                    return Err(miette::miette!(
-                        "{} is already added as dependency.",
-                        console::style(package_name.as_source_str()).bold(),
-                    ));
-                }
                 project
                     .manifest
                     .add_pypi_dependency(name, spec, Some(*platform))?;
@@ -329,25 +315,9 @@ pub async fn add_conda_specs_to_project(
 
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            let dependencies = project.dependencies(Some(spec_type), None);
-            if let Some(dependency) = dependencies.names().find(|d| spec.name.as_ref() == Some(d)) {
-                return Err(miette::miette!(
-                    "{} is already added as dependency.",
-                    console::style(dependency.as_normalized()).bold(),
-                ));
-            }
             project.manifest.add_dependency(&spec, spec_type, None)?;
         } else {
             for platform in specs_platforms.iter() {
-                let dependencies = project.dependencies(Some(spec_type), Some(*platform));
-                if let Some(dependency) =
-                    dependencies.names().find(|d| spec.name.as_ref() == Some(d))
-                {
-                    return Err(miette::miette!(
-                        "{} is already added as dependency.",
-                        console::style(dependency.as_normalized()).bold(),
-                    ));
-                }
                 project
                     .manifest
                     .add_dependency(&spec, spec_type, Some(*platform))?;
