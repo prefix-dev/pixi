@@ -192,10 +192,8 @@ pub async fn update_prefix_pypi(
         |_| {
             install_pypi::update_python_distributions(
                 prefix,
-                environment_name,
                 conda_records,
                 pypi_records,
-                platform,
                 status,
                 system_requirements,
                 uv_context,
