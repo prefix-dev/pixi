@@ -25,7 +25,6 @@ black = {version = "~=23.10", extras = ["jupyter"]}
 pyliblzfse = "*"
 pycosat = "*"
 plot-antenna = "==1.8"
-numpy = "<1.26"
 
 [system-requirements]
 # Tensorflow on macOS arm64 requires macOS 12.0 or higher
