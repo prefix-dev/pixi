@@ -76,23 +76,23 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
 
-distribution-types = { path = "../uv/crates/distribution-types" }
-distribution-filename = { path = "../uv/crates/distribution-filename" }
-install-wheel-rs = { path = "../uv/crates/install-wheel-rs" }
-pep440_rs = { path = "../uv/crates/pep440-rs" }
-pep508_rs = { path = "../uv/crates/pep508-rs" }
-uv-normalize = { path = "../uv/crates/uv-normalize" }
-platform-host = { path = "../uv/crates/platform-host" }
-platform-tags = { path = "../uv/crates/platform-tags" }
-pypi-types = { path = "../uv/crates/pypi-types" }
-uv-cache = { path = "../uv/crates/uv-cache" }
-uv-client = { path = "../uv/crates/uv-client" }
-uv-dispatch = { path = "../uv/crates/uv-dispatch" }
-uv-distribution = { path = "../uv/crates/uv-distribution" }
-uv-installer = { path = "../uv/crates/uv-installer" }
-uv-interpreter = { path = "../uv/crates/uv-interpreter" }
-uv-resolver = { path = "../uv/crates/uv-resolver" }
-uv-traits = { path = "../uv/crates/uv-traits" }
+distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+platform-host = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+uv-interpreter = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+uv-traits = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
 
 console-subscriber = { version = "0.2.0", optional = true }
 
@@ -112,29 +112,29 @@ tokio = { version = "1.36.0", features = ["rt"] }
 toml = "0.8.10"
 
 [patch.crates-io]
-pep440_rs = { path = "../uv/crates/pep440-rs" }
-pep508_rs = { path = "../uv/crates/pep508-rs" }
+# For pyproject-toml
+pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
 
-#rattler = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-#rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-#rattler_digest = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-#rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-#rattler_networking = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-#rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-#rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-#rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-#rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-#rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages", branch = "main"}
-#resolvo = { git = "https://github.com/mamba-org/resolvo.git", branch = "main" }
+rattler = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
+rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
+rattler_digest = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
+rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
+rattler_networking = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
+rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
+rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
+rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
+rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
+
 #deno_task_shell = { path = "../deno_task_shell" }
 
-rattler = { path = "../rattler/crates/rattler" }
-rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-rattler_digest = { path = "../rattler/crates/rattler_digest" }
-rattler_networking = { path = "../rattler/crates/rattler_networking" }
-rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-rattler_shell = { path = "../rattler/crates/rattler_shell" }
-rattler_solve = { path = "../rattler/crates/rattler_solve" }
-rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
-rattler_lock = { path = "../rattler/crates/rattler_lock" }
+#rattler = { path = "../rattler/crates/rattler" }
+#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
+#rattler_digest = { path = "../rattler/crates/rattler_digest" }
+#rattler_networking = { path = "../rattler/crates/rattler_networking" }
+#rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
+#rattler_shell = { path = "../rattler/crates/rattler_shell" }
+#rattler_solve = { path = "../rattler/crates/rattler_solve" }
+#rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
+#rattler_lock = { path = "../rattler/crates/rattler_lock" }
 #rip = { package = "rattler_installs_packages", path = "../rip" }
