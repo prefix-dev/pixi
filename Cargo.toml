@@ -45,7 +45,6 @@ console = { version = "0.15.8", features = ["windows-console-colors"] }
 deno_task_shell = "0.14.4"
 dialoguer = "0.11.0"
 dirs = "5.0.1"
-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
 dunce = "1.0.4"
 flate2 = "1.0.28"
 futures = "0.3.30"
@@ -54,7 +53,6 @@ humantime = "2.1.0"
 indexmap = { version = "2.2.2", features = ["serde"] }
 indicatif = "0.17.7"
 insta = { version = "1.34.0", features = ["yaml"] }
-install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
 is_executable = "1.0.1"
 itertools = "0.12.1"
 lazy_static = "1.4.0"
@@ -68,10 +66,6 @@ miette = { version = "7.0.0", features = [
 ] }
 minijinja = { version = "1.0.12", features = ["builtins"] }
 once_cell = "1.19.0"
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-platform-host = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
 rattler = { version = "0.18.0", default-features = false }
 rattler_conda_types = { version = "0.18.0", default-features = false }
 rattler_digest = { version = "0.18.0", default-features = false }
@@ -90,6 +84,7 @@ rattler_virtual_packages = { version = "0.18.0", default-features = false }
 regex = "1.10.3"
 reqwest = { version = "0.11.24", default-features = false }
 reqwest-middleware = "0.2.4"
+#rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rip", default-features = false }
 self-replace = "1.3.7"
 serde = "1.0.196"
 serde-untagged = "0.1.5"
@@ -102,8 +97,6 @@ strsim = "0.10.0"
 tabwriter = { version = "1.4.0", features = ["ansi_formatting"] }
 tar = "0.4.40"
 tempfile = "3.10.0"
-#rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rip", default-features = false }
-
 thiserror = "1.0.57"
 tokio = { version = "1.36.0", features = [
     "macros",
@@ -115,6 +108,14 @@ toml_edit = { version = "0.21.1", features = ["serde"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
+
+distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
+distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
+install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
+pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
+platform-host = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
+platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
 uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
 uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
 uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
@@ -124,6 +125,7 @@ uv-interpreter = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
 uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
 uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
 uv-traits = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
+pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
 
 zip = { version = "0.6.6", default-features = false, features = [
     "deflate",
@@ -149,6 +151,8 @@ tokio = { version = "1.36.0", features = ["rt"] }
 toml = "0.8.10"
 
 [patch.crates-io]
+pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
 
 rattler = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
 rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
