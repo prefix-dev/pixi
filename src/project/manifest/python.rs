@@ -4,7 +4,7 @@ use serde::{de, de::Error, Deserialize, Deserializer};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
-use uv_normalize::{ExtraName};
+use uv_normalize::ExtraName;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PyPiRequirement {
