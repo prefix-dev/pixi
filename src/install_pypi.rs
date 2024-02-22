@@ -337,6 +337,13 @@ pub async fn update_python_distributions(
         &mut registry_index,
         &uv_context.cache,
     )?;
+    tracing::debug!(
+        "Resolved install plan: local={}, remote={}, reinstalls={}, extraneous={}",
+        local.len(),
+        remote.len(),
+        reinstalls.len(),
+        extraneous.len()
+    );
     // Nothing to do.
     if remote.is_empty() && local.is_empty() && reinstalls.is_empty() && extraneous.is_empty() {
         let s = if requirements.len() == 1 { "" } else { "s" };

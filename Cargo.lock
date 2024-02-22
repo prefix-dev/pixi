@@ -1046,7 +1046,7 @@ name = "distribution-filename"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.1.7#12462e57303d7071ccb0cee9eebe9feffa94642d"
 dependencies = [
- "pep440_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "platform-tags",
  "rkyv",
  "serde",
@@ -1067,8 +1067,8 @@ dependencies = [
  "fs-err",
  "itertools",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
+ "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "platform-tags",
  "pypi-types",
  "rkyv",
@@ -1909,7 +1909,7 @@ dependencies = [
  "goblin",
  "mailparse",
  "once_cell",
- "pep440_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "platform-host",
  "platform-info",
  "plist",
@@ -2760,6 +2760,18 @@ dependencies = [
 [[package]]
 name = "pep440_rs"
 version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15efd4d885c29126cc93e12af3087896e2518bd5ca0fb328c19c4ef9cecfa8be"
+dependencies = [
+ "once_cell",
+ "serde",
+ "unicode-width",
+ "unscanny",
+]
+
+[[package]]
+name = "pep440_rs"
+version = "0.5.0"
 source = "git+https://github.com/astral-sh/uv?tag=0.1.7#12462e57303d7071ccb0cee9eebe9feffa94642d"
 dependencies = [
  "once_cell",
@@ -2773,11 +2785,28 @@ dependencies = [
 [[package]]
 name = "pep508_rs"
 version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1455babf8edd3eedcdfcb39700e455a4bb189e71b4f1fa0eacc9b244cc5a55e6"
+dependencies = [
+ "derivative",
+ "once_cell",
+ "pep440_rs 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex",
+ "serde",
+ "thiserror",
+ "unicode-width",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
+name = "pep508_rs"
+version = "0.4.2"
 source = "git+https://github.com/astral-sh/uv?tag=0.1.7#12462e57303d7071ccb0cee9eebe9feffa94642d"
 dependencies = [
  "derivative",
  "once_cell",
- "pep440_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "regex",
  "rkyv",
  "serde",
@@ -2907,7 +2936,6 @@ dependencies = [
  "deno_task_shell",
  "dialoguer",
  "dirs",
- "distribution-filename",
  "distribution-types",
  "dunce",
  "flate2",
@@ -2926,11 +2954,10 @@ dependencies = [
  "minijinja",
  "nix 0.27.1",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
+ "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "platform-host",
  "platform-tags",
- "pypi-types",
  "rattler",
  "rattler_conda_types",
  "rattler_digest",
@@ -3186,8 +3213,8 @@ dependencies = [
  "chrono",
  "mailparse",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
+ "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "regex",
  "rkyv",
  "serde",
@@ -3204,8 +3231,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b80f889b6d413c3f8963a2c7db03f95dd6e1d85e1074137cb2013ea2faa8898"
 dependencies = [
  "indexmap 2.2.2",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pep508_rs 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "toml",
 ]
@@ -3368,8 +3395,8 @@ dependencies = [
  "fxhash",
  "indexmap 2.2.2",
  "itertools",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
+ "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "purl",
  "rattler_conda_types",
  "rattler_digest",
@@ -3674,8 +3701,8 @@ source = "git+https://github.com/astral-sh/uv?tag=0.1.7#12462e57303d7071ccb0cee9
 dependencies = [
  "fs-err",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
+ "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "regex",
  "serde",
  "thiserror",
@@ -5088,7 +5115,7 @@ dependencies = [
  "indoc",
  "itertools",
  "once_cell",
- "pep508_rs",
+ "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "platform-host",
  "pypi-types",
  "pyproject-toml",
@@ -5144,8 +5171,8 @@ dependencies = [
  "html-escape",
  "http",
  "install-wheel-rs",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
+ "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "platform-tags",
  "pypi-types",
  "reqwest",
@@ -5183,7 +5210,7 @@ dependencies = [
  "futures",
  "gourgeist",
  "itertools",
- "pep508_rs",
+ "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "platform-host",
  "platform-tags",
  "pypi-types",
@@ -5213,8 +5240,8 @@ dependencies = [
  "futures",
  "install-wheel-rs",
  "nanoid",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
+ "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "platform-tags",
  "pypi-types",
  "reqwest",
@@ -5308,8 +5335,8 @@ dependencies = [
  "futures",
  "install-wheel-rs",
  "once-map",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
+ "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "platform-tags",
  "pypi-types",
  "rayon",
@@ -5339,8 +5366,8 @@ dependencies = [
  "cache-key",
  "fs-err",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
+ "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "platform-host",
  "platform-tags",
  "regex",
@@ -5387,8 +5414,8 @@ dependencies = [
  "once-map",
  "once_cell",
  "owo-colors",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
+ "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "petgraph",
  "platform-host",
  "platform-tags",
@@ -5425,7 +5452,7 @@ dependencies = [
  "anyhow",
  "distribution-types",
  "once-map",
- "pep508_rs",
+ "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?tag=0.1.7)",
  "tokio",
  "uv-cache",
  "uv-interpreter",
