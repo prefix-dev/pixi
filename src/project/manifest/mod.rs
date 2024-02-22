@@ -13,7 +13,6 @@ use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
 use crate::task::TaskName;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
-use ::serde::{Deserialize, Deserializer};
 pub use activation::Activation;
 pub use environment::{Environment, EnvironmentName};
 pub use feature::{Feature, FeatureName};
@@ -24,8 +23,12 @@ pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource};
 pub use python::PyPiRequirement;
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
-use serde_with::{serde_as, DisplayFromStr, PickFirst};
+use serde::de::{DeserializeSeed, MapAccess, Visitor};
+use serde::{Deserialize, Deserializer};
+use serde_with::serde_as;
+use std::fmt;
 use std::hash::Hash;
+use std::marker::PhantomData;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -893,6 +896,93 @@ impl ProjectManifest {
     }
 }
 
+struct PackageMap<'a>(&'a IndexMap<PackageName, NamelessMatchSpec>);
+
+impl<'de, 'a> DeserializeSeed<'de> for PackageMap<'a> {
+    type Value = PackageName;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let package_name = PackageName::deserialize(deserializer)?;
+        match self.0.get_key_value(&package_name) {
+            Some((package_name, _)) => {
+                 Err(serde::de::Error::custom(
+                    format!(
+                    "duplicate dependency: {} (please avoid using capitalized names for the dependencies)", package_name.as_source())
+                ))
+            }
+            None => Ok(package_name),
+        }
+    }
+}
+
+struct NamelessMatchSpecWrapper {}
+
+impl<'de, 'a> DeserializeSeed<'de> for &'a NamelessMatchSpecWrapper {
+    type Value = NamelessMatchSpec;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serde_untagged::UntaggedEnumVisitor::new()
+            .string(|str| NamelessMatchSpec::from_str(str).map_err(serde::de::Error::custom))
+            .map(|map| {
+                NamelessMatchSpec::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+            })
+            .expecting("either a map or a string")
+            .deserialize(deserializer)
+    }
+}
+
+pub(crate) fn deserialize_package_map<'de, D>(
+    deserializer: D,
+) -> Result<IndexMap<PackageName, NamelessMatchSpec>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct PackageMapVisitor(PhantomData<()>);
+
+    impl<'de> Visitor<'de> for PackageMapVisitor {
+        type Value = IndexMap<PackageName, NamelessMatchSpec>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            write!(formatter, "a map")
+        }
+
+        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+        where
+            A: MapAccess<'de>,
+        {
+            let mut result = IndexMap::new();
+            let match_spec = NamelessMatchSpecWrapper {};
+            while let Some((package_name, match_spec)) = map
+                .next_entry_seed::<PackageMap, &NamelessMatchSpecWrapper>(
+                    PackageMap(&result),
+                    &match_spec,
+                )?
+            {
+                result.insert(package_name, match_spec);
+            }
+
+            Ok(result)
+        }
+    }
+    let visitor = PackageMapVisitor(PhantomData);
+    deserializer.deserialize_seq(visitor)
+}
+
+pub(crate) fn deserialize_opt_package_map<'de, D>(
+    deserializer: D,
+) -> Result<Option<IndexMap<PackageName, NamelessMatchSpec>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Some(deserialize_package_map(deserializer)?))
+}
+
 impl<'de> Deserialize<'de> for ProjectManifest {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -916,16 +1006,13 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             //
             // #[serde(flatten)]
             // default_target: Target,
-            #[serde(default)]
-            #[serde_as(as = "IndexMap<_, PickFirst<(DisplayFromStr, _)>>")]
+            #[serde(default, deserialize_with = "deserialize_package_map")]
             dependencies: IndexMap<PackageName, NamelessMatchSpec>,
 
-            #[serde(default)]
-            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
+            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
             host_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
-            #[serde(default)]
-            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
+            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
             build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
             #[serde(default)]
@@ -949,7 +1036,6 @@ impl<'de> Deserialize<'de> for ProjectManifest {
         }
 
         let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
-
         let mut dependencies = HashMap::from_iter([(SpecType::Run, toml_manifest.dependencies)]);
         if let Some(host_deps) = toml_manifest.host_dependencies {
             dependencies.insert(SpecType::Host, host_deps);
@@ -2471,5 +2557,43 @@ bar = "*"
         );
 
         assert_display_snapshot!(manifest.document.to_string());
+    }
+    fn test_duplicate_dependency() {
+        let contents = format!(
+            r#"
+        {PROJECT_BOILERPLATE}
+
+        [dependencies]
+        Flask = "2.*"
+        flask = "2.*"
+        "#
+        );
+        let manifest = ProjectManifest::from_toml_str(&contents);
+
+        assert!(manifest.is_err());
+        assert!(manifest
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate dependency"));
+    }
+
+    #[test]
+    fn test_duplicate_host_dependency() {
+        let contents = format!(
+            r#"
+        {PROJECT_BOILERPLATE}
+
+        [host-dependencies]
+        LibC = "2.12"
+        libc = "2.12"
+        "#
+        );
+        let manifest = ProjectManifest::from_toml_str(&contents);
+
+        assert!(manifest.is_err());
+        assert!(manifest
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate dependency"));
     }
 }

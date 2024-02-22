@@ -28,6 +28,11 @@ It initializes a `pixi.toml` file and also prepares a `.gitignore` to prevent th
 
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--platform <PLATFORM> (-p)`: specify a platform that the project supports. (Allowed to be used more than once)
+- `--import <ENV_FILE> (-i)`: Import an existing conda environment file, e.g. `environment.yml`.
+!!! info "Importing an environment.yml"
+    When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
+    The `pixi.lock` will be created when you install the environment.
+    We don't support `git+` urls as dependencies for pip packages and for the `defaults` channel we use `main`, `r` and `msys2` as the default channels.
 
 ```shell
 pixi init myproject
@@ -35,6 +40,7 @@ pixi init ~/myproject
 pixi init  # Initializes directly in the current directory.
 pixi init --channel conda-forge --channel bioconda myproject
 pixi init --platform osx-64 --platform linux-64 myproject
+pixi init --import environment.yml
 ```
 
 ## `add`
@@ -378,8 +384,8 @@ exit
 This command prints the activation script of an environment.
 
 ##### Options
-- `--shell`: The shell for which the activation script should be printed. Defaults to the current shell.
-    Currently supported variants: [`Bash`,  `Zsh`,  `Xonsh`,  `CmdExe`,  `PowerShell`,  `Fish`,  `NuShell`]
+- `--shell <SHELL> (-s)`: The shell for which the activation script should be printed. Defaults to the current shell.
+    Currently supported variants: [`bash`,  `zsh`,  `xonsh`,  `cmd`,  `powershell`,  `fish`,  `nushell`]
 - `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
@@ -389,6 +395,7 @@ This command prints the activation script of an environment.
 pixi shell-hook
 pixi shell-hook --shell bash
 pixi shell-hook --shell zsh
+pixi shell-hook -s powershell
 pixi shell-hook --manifest-path ~/myproject/pixi.toml
 pixi shell-hook --frozen
 pixi shell-hook --locked

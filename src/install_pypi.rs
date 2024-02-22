@@ -7,6 +7,7 @@ use indexmap::IndexSet;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
+use rip::resolve::solve_options::{ResolveOptions, SDistResolution};
 
 use crate::consts::PROJECT_MANIFEST;
 use crate::project::manifest::SystemRequirements;
@@ -22,12 +23,12 @@ use rip::python_env::{
     find_distributions_in_venv, uninstall_distribution, Distribution, PythonLocation, WheelTag,
     WheelTags,
 };
-use rip::resolve::{ResolveOptions, SDistResolution};
 use rip::types::{
-    Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Extra, NormalizedPackageName,
+    ArtifactHashes, ArtifactInfo, ArtifactName, Extra, HasArtifactName, NormalizedPackageName,
 };
 use rip::wheel_builder::WheelBuilder;
 use std::collections::{HashMap, HashSet};
+use std::ops::Deref;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -285,8 +286,16 @@ fn stream_python_artifacts(
                         format!("'{}' is not a valid python package name", &pkg_data.name)
                     })?;
 
-                let artifact_name = ArtifactName::from_filename(filename, &name)
+                let artifact_name = ArtifactName::from_filename(filename, Some(pkg_data.url.clone()), &name)
                     .expect("failed to convert filename to artifact name");
+
+                let (artifact_name, is_direct_url) = if let ArtifactName::STree(mut stree) = artifact_name{
+                    // populate resolved version of direct dependency
+                    stree.version = pkg_data.version.clone();
+                    (ArtifactName::STree(stree), true)
+                } else {
+                    (artifact_name, false)
+                };
 
                 // Log out intent to install this python package.
                 tracing::info!("downloading python package {filename}");
@@ -302,19 +311,20 @@ fn stream_python_artifacts(
                     requires_python: pkg_data.requires_python.clone(),
                     dist_info_metadata: Default::default(),
                     yanked: Default::default(),
+                    is_direct_url,
                 };
 
-                let wheel = tokio::spawn({
+                let (wheel, _) = tokio::spawn({
                     let marker_environment = marker_environment.clone();
                     let compatible_tags = compatible_tags.clone();
                     let resolve_options = resolve_options.clone();
                     let package_db = package_db.clone();
                     async move {
                         let wheel_builder = WheelBuilder::new(
-                            &package_db,
-                            &marker_environment,
-                            Some(&compatible_tags),
-                            &resolve_options,
+                            package_db.clone(),
+                            marker_environment,
+                            Some(compatible_tags),
+                            resolve_options.deref().clone(),
                             HashMap::default(),
                         )
                             .into_diagnostic()
@@ -516,7 +526,7 @@ fn extract_locked_tags(
             };
 
             // Determine the artifact type from the name and filename
-            match ArtifactName::from_filename(filename, &name) {
+            match ArtifactName::from_filename(filename, Some(pkg_data.url.clone()), &name) {
                 Ok(ArtifactName::Wheel(name)) => (pkg, Some(IndexSet::from_iter(name.all_tags_iter()))),
                 Ok(_) => (pkg, None),
                 Err(err) => {

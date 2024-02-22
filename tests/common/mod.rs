@@ -15,7 +15,7 @@ use pixi::{
         task::{self, AddArgs, AliasArgs},
     },
     consts, EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
-    TaskGraphError, UpdateLockFileOptions,
+    TaskGraphError,
 };
 use rattler_conda_types::{MatchSpec, Platform};
 
@@ -25,6 +25,7 @@ use pixi::cli::LockFileUsageArgs;
 use pixi::task::TaskName;
 use pixi::FeatureName;
 use pixi::TaskExecutionError;
+use pixi::UpdateLockFileOptions;
 use rattler_lock::{LockFile, Package};
 use std::{
     path::{Path, PathBuf},
@@ -184,6 +185,7 @@ impl PixiControl {
                 path: self.project_path().to_path_buf(),
                 channels: None,
                 platforms: Vec::new(),
+                env_file: None,
             },
         }
     }
@@ -196,6 +198,7 @@ impl PixiControl {
                 path: self.project_path().to_path_buf(),
                 channels: None,
                 platforms,
+                env_file: None,
             },
         }
     }

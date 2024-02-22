@@ -13,7 +13,7 @@ use std::{
 
 impl ProjectManifest {
     /// Validate the project manifest.
-    pub fn validate(&self, source: NamedSource, root_folder: &Path) -> miette::Result<()> {
+    pub fn validate(&self, source: NamedSource<String>, root_folder: &Path) -> miette::Result<()> {
         // Check if the targets are defined for existing platforms
         for feature in self.features.values() {
             let platforms = feature
@@ -148,7 +148,7 @@ impl ProjectManifest {
 
 // Create an error report for using a platform that is not supported by the project.
 fn create_unsupported_platform_report(
-    source: NamedSource,
+    source: NamedSource<String>,
     span: Range<usize>,
     platform: &Platform,
     feature: &Feature,

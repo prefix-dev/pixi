@@ -7,7 +7,7 @@ use crate::{
 use clap::Parser;
 use itertools::{Either, Itertools};
 
-use crate::environment::GroupedEnvironment;
+use crate::project::grouped_environment::GroupedEnvironment;
 use indexmap::IndexMap;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{
