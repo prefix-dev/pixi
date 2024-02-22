@@ -138,7 +138,7 @@ pub fn whats_the_plan<'venv, 'a>(
     uv_cache: &Cache,
 ) -> miette::Result<PixiInstallPlan> {
     // Create a HashSet of PackageName and Version
-    let required_map: std::collections::HashMap<&PackageName, &PypiPackageData> =
+    let mut required_map: std::collections::HashMap<&PackageName, &PypiPackageData> =
         required.iter().map(|(pkg, _)| (&pkg.name, pkg)).collect();
 
     // Filter out conda packages
@@ -158,7 +158,7 @@ pub fn whats_the_plan<'venv, 'a>(
 
     // Walk over all installed packages and check if they are required
     for dist in installed {
-        if let Some(pkg) = required_map.get(&dist.name()) {
+        if let Some(pkg) = required_map.remove(&dist.name()) {
             // Check if the installed version is the same as the required version
             let same_version = match dist {
                 InstalledDist::Registry(reg) => reg.version == pkg.version,
@@ -184,7 +184,7 @@ pub fn whats_the_plan<'venv, 'a>(
             let wheel = registry_index
                 .get(&pkg.name)
                 .find(|(version, _)| **version == pkg.version);
-            if let Some((wheel, cached)) = wheel {
+            if let Some((_, cached)) = wheel {
                 local.push(CachedDist::Registry(cached.clone()));
             } else {
                 remote.push(convert_to_dist(pkg));
@@ -194,6 +194,26 @@ pub fn whats_the_plan<'venv, 'a>(
         } else {
             // We can uninstall
             extraneous.push(dist.clone());
+        }
+    }
+
+    // Now we need to check if we have any packages left in the required_map
+    for pkg in required_map.values() {
+        // Check if we need to revalidate
+        // In that case
+        if uv_cache.must_revalidate(&pkg.name) {
+            remote.push(convert_to_dist(pkg));
+            continue;
+        }
+
+        // Do we have in the cache?
+        let wheel = registry_index
+            .get(&pkg.name)
+            .find(|(version, _)| **version == pkg.version);
+        if let Some((_, cached)) = wheel {
+            local.push(CachedDist::Registry(cached.clone()));
+        } else {
+            remote.push(convert_to_dist(pkg));
         }
     }
 
