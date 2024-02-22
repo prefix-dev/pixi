@@ -367,14 +367,6 @@ impl Manifest {
             .or_default()
             .insert(name, spec);
 
-        // self.default_feature_mut()
-        //     .targets
-        //     .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
-        //     .dependencies
-        //     .entry(spec_type)
-        //     .or_default()
-        //     .insert(name, spec);
-
         Ok(())
     }
 

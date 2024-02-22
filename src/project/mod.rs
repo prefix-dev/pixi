@@ -7,6 +7,7 @@ mod solve_group;
 pub mod virtual_packages;
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
+use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
@@ -312,7 +313,7 @@ impl Project {
             .map(GroupedEnvironment::from)
             .collect();
         environments.extend(groups);
-        environments
+        environments.into_iter().unique().collect()
     }
 
     /// Returns the channels used by this project.
