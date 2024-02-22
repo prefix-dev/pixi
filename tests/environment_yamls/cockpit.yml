@@ -1,0 +1,29 @@
+name: cockpit
+dependencies:
+  - pip
+  - python
+  - pytorch::pytorch
+  - pytorch::torchvision
+  - conda-forge::black
+  - conda-forge::darglint
+  - conda-forge::flake8
+  - conda-forge::flake8-bugbear
+  - conda-forge::flake8-comprehensions
+  - conda-forge::isort
+  - conda-forge::palettable
+  - conda-forge::pydocstyle
+  - conda-forge::pytest
+  - conda-forge::pytest-cov
+  - conda-forge::pytest-benchmark
+  - conda-forge::m2r2
+  - conda-forge::sphinx
+  - conda-forge::sphinx-automodapi
+  - conda-forge::sphinx_rtd_theme
+  - conda-forge::matplotlib=3.4.3
+  - conda-forge::tikzplotlib
+  - pip:
+      - memory-profiler
+      - pre-commit
+      - graphviz
+      - sphinx-notfound-page
+      - git+https://git@github.com/fsschneider/DeepOBS.git@develop#egg=deepobs

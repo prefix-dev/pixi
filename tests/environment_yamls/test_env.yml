@@ -1,0 +1,23 @@
+name: test_env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+    - python=3.5.5
+    - setuptools>=39.1.0
+    - wheel<=0.31.1
+    - pip:
+        - package1 ==1.0.0
+        - package2 ==2.0
+        - package3 ==3
+        - package4 <=4.0.0
+        - package5 >=5.0.0
+        - package6 >6.0.0
+        - package7 <7.0.0
+        - package8 !=8.0.0
+        - package9
+        - package10[extra]
+        - package11[extra1,extra2]
+        - package12[extra1,extra2]==12.0.0
+        - package13[extra1,extra2]>=13.0.0
+        - package14[extra1,extra2]<=14.0.0

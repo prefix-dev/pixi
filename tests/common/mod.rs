@@ -185,6 +185,7 @@ impl PixiControl {
                 path: self.project_path().to_path_buf(),
                 channels: None,
                 platforms: Vec::new(),
+                env_file: None,
             },
         }
     }
@@ -197,6 +198,7 @@ impl PixiControl {
                 path: self.project_path().to_path_buf(),
                 channels: None,
                 platforms,
+                env_file: None,
             },
         }
     }

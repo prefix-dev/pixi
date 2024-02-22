@@ -2726,6 +2726,7 @@ dependencies = [
  "serde_json",
  "serde_spanned",
  "serde_with",
+ "serde_yaml",
  "serial_test",
  "shlex",
  "signal-hook",
