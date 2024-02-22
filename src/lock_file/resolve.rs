@@ -4,8 +4,9 @@
 
 use crate::config::get_cache_dir;
 use crate::consts::PROJECT_MANIFEST;
-use std::collections::HashMap;
-use std::future::Future;
+use std::collections::{BTreeMap, HashMap};
+use std::future::{ready, Future};
+use std::iter::once;
 
 use crate::lock_file::{package_identifier, PypiPackageIdentifier};
 use crate::pypi_marker_env::determine_marker_environment;
@@ -15,16 +16,22 @@ use crate::{
     project::manifest::{PyPiRequirement, SystemRequirements},
     Project,
 };
+use distribution_filename::WheelFilename;
+use distribution_types::Dist::Built;
 use distribution_types::{
-    BuiltDist, Dist, FileLocation, IndexLocations, Name, Resolution, SourceDist, VersionOrUrl,
+    BuiltDist, DirectUrlBuiltDist, DirectUrlSourceDist, Dist, DistributionMetadata, FileLocation,
+    IndexLocations, Name, PrioritizedDist, Resolution, SourceDist, VersionOrUrl,
+    WheelCompatibility,
 };
+use futures::{FutureExt, TryFutureExt};
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, Version, VersionPattern, VersionSpecifier};
-use pep508_rs::Requirement;
+use pep508_rs::{Requirement, VerbatimUrl};
 use platform_host::Platform;
+use pypi_types::Metadata21;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData};
@@ -34,13 +41,17 @@ use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
 use uv_cache::Cache;
-use uv_client::{Connectivity, FlatIndex, FlatIndexClient, RegistryClient, RegistryClientBuilder};
+use uv_client::{
+    Connectivity, FlatDistributions, FlatIndex, FlatIndexClient, RegistryClient,
+    RegistryClientBuilder,
+};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, Reporter};
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
-    DefaultResolverProvider, InMemoryIndex, Manifest, Options, Resolver, ResolverProvider,
+    DefaultResolverProvider, InMemoryIndex, Manifest, Options, PackageVersionsResult,
+    PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
 };
 use uv_traits::{BuildContext, InFlight, NoBinary, NoBuild, SetupPyStrategy};
 
@@ -104,9 +115,13 @@ impl uv_resolver::ResolverReporter for ResolveReporter {
         self.0.set_message(format!("resolving {}{}", name, version));
     }
 
-    fn on_complete(&self) {}
+    fn on_complete(&self) {
+        self.0.set_message("");
+    }
 
-    fn on_build_start(&self, _dist: &SourceDist) -> usize {
+    fn on_build_start(&self, dist: &SourceDist) -> usize {
+        self.0
+            .set_message(format!("building {}{}", dist.name(), dist.version_or_url()));
         0
     }
 
@@ -119,31 +134,87 @@ impl uv_resolver::ResolverReporter for ResolveReporter {
     fn on_checkout_complete(&self, _url: &Url, _rev: &str, _index: usize) {}
 }
 
-// struct CondaResolverProvider<'a, Context: BuildContext + Send + Sync> {
-//     fallback: DefaultResolverProvider<'a, Context>,
-//     conda_python_identifiers: Vec<PypiPackageIdentifier>,
-// }
-//
-// type PackageVersionsResult = Result<VersionsResponse, uv_client::Error>;
-// type WheelMetadataResult = Result<(Metadata21, Option<Url>), uv_distribution::Error>;
-//
-// impl<'a, Context: BuildContext + Send + Sync> ResolverProvider for CondaResolverProvider<'a, Context> {
-//     fn get_package_versions<'io>(&'io self, package_name: &'io PackageName) -> impl Future<Output=uv_resolver::resolver::provider::PackageVersionsResult> + Send + 'io {
-//         todo!()
-//     }
-//
-//     fn get_or_build_wheel_metadata<'io>(&'io self, dist: &'io Dist) -> impl Future<Output=uv_resolver::resolver::provider::WheelMetadataResult> + Send + 'io {
-//         self.fallback.get_or_build_wheel_metadata(dist)
-//     }
-//
-//     fn index_locations(&self) -> &IndexLocations {
-//         todo!()
-//     }
-//
-//     fn with_reporter(self, reporter: impl Reporter + 'static) -> Self {
-//         todo!()
-//     }
-// }
+struct CondaResolverProvider<'a, Context: BuildContext + Send + Sync> {
+    fallback: DefaultResolverProvider<'a, Context>,
+    conda_python_identifiers: &'a HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>,
+}
+
+impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
+    for CondaResolverProvider<'a, Context>
+{
+    fn get_package_versions<'io>(
+        &'io self,
+        package_name: &'io PackageName,
+    ) -> impl Future<Output = uv_resolver::PackageVersionsResult> + Send + 'io {
+        if let Some((repodata_record, identifier)) = self.conda_python_identifiers.get(package_name)
+        {
+            // If we encounter a package that was installed by conda we simply return a single
+            // available version in the form of a source distribution with the URL of the
+            // conda package.
+            //
+            // Obviously this is not a valid source distribution but it easies debugging.
+            let dist = Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist {
+                name: identifier.name.clone(),
+                url: VerbatimUrl::unknown(repodata_record.url.clone()),
+            }));
+
+            let prioritized_dist =
+                PrioritizedDist::from_source(dist, None, Default::default(), None);
+
+            return ready(Ok(VersionsResponse::Found(VersionMap::from(
+                BTreeMap::from_iter([(identifier.version.clone(), prioritized_dist)]),
+            ))))
+            .right_future();
+        }
+
+        // Otherwise use the default implementation
+        self.fallback
+            .get_package_versions(package_name)
+            .left_future()
+    }
+
+    fn get_or_build_wheel_metadata<'io>(
+        &'io self,
+        dist: &'io Dist,
+    ) -> impl Future<Output = uv_resolver::WheelMetadataResult> + Send + 'io {
+        if let Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist { url, name })) = dist {
+            if let Some((_, iden)) = self.conda_python_identifiers.get(name) {
+                /// If this is a Source dist and the package is actually installed by conda we
+                /// create fake metadata with no dependencies. We assume that all conda installed
+                /// packages are properly installed including its dependencies.
+                return ready(Ok((
+                    Metadata21 {
+                        metadata_version: "1.0".to_string(),
+                        name: name.clone(),
+                        version: iden.version.clone(),
+                        requires_dist: vec![],
+                        requires_python: None,
+                        // TODO: This field is not actually properly used.
+                        provides_extras: iden.extras.iter().cloned().collect(),
+                    },
+                    Some(url.to_url()),
+                )))
+                .left_future();
+            }
+        }
+
+        // Otherwise just call the default implementation
+        self.fallback
+            .get_or_build_wheel_metadata(dist)
+            .right_future()
+    }
+
+    fn index_locations(&self) -> &IndexLocations {
+        self.fallback.index_locations()
+    }
+
+    fn with_reporter(mut self, reporter: impl Reporter + 'static) -> Self {
+        Self {
+            fallback: self.fallback.with_reporter(reporter),
+            ..self
+        }
+    }
+}
 
 fn single_version_requirement(name: PackageName, version: Version) -> Requirement {
     Requirement {
@@ -178,13 +249,20 @@ pub async fn resolve_pypi(
 
     // Determine which pypi packages are already installed as conda package.
     // Determine the python packages that are installed by the conda packages
-    let conda_python_packages =
-        package_identifier::PypiPackageIdentifier::from_records(locked_conda_records)
-            .into_diagnostic()
-            .context("failed to extract python packages from conda metadata")?
-            .into_iter()
-            .map(|p| (p.name.clone(), p))
-            .collect::<HashMap<_, _>>();
+    let conda_python_packages = locked_conda_records
+        .iter()
+        .flat_map(|record| {
+            package_identifier::PypiPackageIdentifier::from_record(record).map_or_else(
+                |err| Either::Right(once(Err(err))),
+                |identifiers| {
+                    Either::Left(identifiers.into_iter().map(|i| Ok((record.clone(), i))))
+                },
+            )
+        })
+        .map_ok(|(record, p)| (p.name.clone(), (record.clone(), p)))
+        .collect::<Result<HashMap<_, _>, _>>()
+        .into_diagnostic()
+        .context("failed to extract python packages from conda metadata")?;
 
     if !conda_python_packages.is_empty() {
         tracing::info!(
@@ -192,7 +270,7 @@ pub async fn resolve_pypi(
             conda_python_packages =
                 conda_python_packages
                     .values()
-                    .format_with(", ", |p, f| f(&format_args!(
+                    .format_with(", ", |(_, p), f| f(&format_args!(
                         "{name} {version}",
                         name = &p.name,
                         version = &p.version
@@ -256,7 +334,14 @@ pub async fn resolve_pypi(
 
     let constraints = conda_python_packages
         .values()
-        .map(|p| single_version_requirement(p.name.clone(), p.version.clone()))
+        .map(|(repo, p)| Requirement {
+            name: p.name.clone(),
+            extras: vec![],
+            version_or_url: Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::unknown(
+                repo.url.clone(),
+            ))),
+            marker: None,
+        })
         .collect();
 
     let preferences = locked_pypi_records
@@ -264,23 +349,42 @@ pub async fn resolve_pypi(
         .map(|p| single_version_requirement(p.0.name.clone(), p.0.version.clone()))
         .collect();
 
-    let resolution = Resolver::new(
-        Manifest::new(
-            requirements,
-            constraints,
-            Vec::new(),
-            preferences,
-            None,
-            Vec::new(),
-        ),
-        options.clone(),
-        &marker_environment,
-        &interpreter,
-        &tags,
+    let manifest = Manifest::new(
+        requirements,
+        // Vec::new(),
+        constraints,
+        Vec::new(),
+        preferences,
+        None,
+        Vec::new(),
+    );
+
+    let fallback_provider = DefaultResolverProvider::new(
         &context.registry_client,
+        DistributionDatabase::new(
+            &context.cache,
+            &tags,
+            &context.registry_client,
+            &build_dispatch,
+        ),
         &flat_index,
+        &tags,
+        PythonRequirement::new(&interpreter, &marker_environment),
+        options.exclude_newer,
+        build_dispatch.no_binary(),
+    );
+    let provider = CondaResolverProvider {
+        fallback: fallback_provider,
+        conda_python_identifiers: &conda_python_packages,
+    };
+
+    let resolution = Resolver::new_custom_io(
+        manifest,
+        options,
+        &marker_environment,
+        PythonRequirement::new(&interpreter, &marker_environment),
         &context.in_memory_index,
-        &build_dispatch,
+        provider,
     )
     .into_diagnostic()
     .context("failed to resolve pypi dependencies")?
@@ -291,9 +395,6 @@ pub async fn resolve_pypi(
     .context("failed to resolve pypi dependencies")?;
 
     let resolution = Resolution::from(resolution);
-
-    // Clear message
-    pb.set_message("");
 
     let database = DistributionDatabase::new(
         &context.cache,

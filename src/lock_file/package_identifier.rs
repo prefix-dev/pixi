@@ -109,15 +109,15 @@ impl PypiPackageIdentifier {
         Ok(())
     }
 
-    /// Given a list of conda package records, extract the python packages that will be installed
-    /// when these conda packages are installed.
-    pub fn from_records(records: &[RepoDataRecord]) -> Result<Vec<Self>, ConversionError> {
-        let mut result = Vec::new();
-        for record in records {
-            Self::from_record_into(record, &mut result)?;
-        }
-        Ok(result)
-    }
+    // /// Given a list of conda package records, extract the python packages that will be installed
+    // /// when these conda packages are installed.
+    // pub fn from_records(records: &[RepoDataRecord]) -> Result<Vec<Self>, ConversionError> {
+    //     let mut result = Vec::new();
+    //     for record in records {
+    //         Self::from_record_into(record, &mut result)?;
+    //     }
+    //     Ok(result)
+    // }
 
     /// Tries to construct an instance from a generic PURL.
     ///

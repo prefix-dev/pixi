@@ -21,6 +21,7 @@ async-once-cell = "0.5.3"
 async-recursion = "1.0.5"
 async-scoped = { version = "0.8.0", features = ["use-tokio"] }
 chrono = "0.4.33"
+cfg-if = "1.0.0"
 clap = { version = "4.5.0", default-features = false, features = ["derive", "usage", "wrap_help", "std", "color", "error-context", "env"] }
 clap-verbosity-flag = "2.1.2"
 clap_complete = "4.5.0"
@@ -68,28 +69,32 @@ tabwriter = { version = "1.4.0", features = ["ansi_formatting"] }
 tar = "0.4.40"
 tempfile = "3.10.0"
 thiserror = "1.0.57"
-tokio = { version = "1.36.0", features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1.36.0", features = ["macros", "rt-multi-thread", "signal", "tracing"] }
 tokio-util = "0.7.10"
 toml_edit = { version = "0.21.1", features = ["serde"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
 
-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-platform-host = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-uv-interpreter = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-uv-traits = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
+distribution-types = { path = "../uv/crates/distribution-types" }
+distribution-filename = { path = "../uv/crates/distribution-filename" }
+install-wheel-rs = { path = "../uv/crates/install-wheel-rs" }
+pep440_rs = { path = "../uv/crates/pep440-rs" }
+pep508_rs = { path = "../uv/crates/pep508-rs" }
+uv-normalize = { path = "../uv/crates/uv-normalize" }
+platform-host = { path = "../uv/crates/platform-host" }
+platform-tags = { path = "../uv/crates/platform-tags" }
+pypi-types = { path = "../uv/crates/pypi-types" }
+uv-cache = { path = "../uv/crates/uv-cache" }
+uv-client = { path = "../uv/crates/uv-client" }
+uv-dispatch = { path = "../uv/crates/uv-dispatch" }
+uv-distribution = { path = "../uv/crates/uv-distribution" }
+uv-installer = { path = "../uv/crates/uv-installer" }
+uv-interpreter = { path = "../uv/crates/uv-interpreter" }
+uv-resolver = { path = "../uv/crates/uv-resolver" }
+uv-traits = { path = "../uv/crates/uv-traits" }
+
+console-subscriber = { version = "0.2.0", optional = true }
 
 zip = { version = "0.6.6", default-features = false, features = ["deflate", "time"] }
 
@@ -107,29 +112,29 @@ tokio = { version = "1.36.0", features = ["rt"] }
 toml = "0.8.10"
 
 [patch.crates-io]
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.7" }
+pep440_rs = { path = "../uv/crates/pep440-rs" }
+pep508_rs = { path = "../uv/crates/pep508-rs" }
 
-rattler = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-rattler_digest = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-rattler_networking = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
-rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
+#rattler = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
+#rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
+#rattler_digest = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
+#rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
+#rattler_networking = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
+#rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
+#rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
+#rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
+#rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "c4bb4826e46f09009c7dbe4caaed905e03263881" }
 #rip = { package = "rattler_installs_packages", git = "https://github.com/prefix-dev/rattler_installs_packages", branch = "main"}
 #resolvo = { git = "https://github.com/mamba-org/resolvo.git", branch = "main" }
 #deno_task_shell = { path = "../deno_task_shell" }
 
-#rattler = { path = "../rattler/crates/rattler" }
-#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-#rattler_digest = { path = "../rattler/crates/rattler_digest" }
-#rattler_networking = { path = "../rattler/crates/rattler_networking" }
-#rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-#rattler_shell = { path = "../rattler/crates/rattler_shell" }
-#rattler_solve = { path = "../rattler/crates/rattler_solve" }
-#rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
-#rattler_lock = { path = "../rattler/crates/rattler_lock" }
+rattler = { path = "../rattler/crates/rattler" }
+rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
+rattler_digest = { path = "../rattler/crates/rattler_digest" }
+rattler_networking = { path = "../rattler/crates/rattler_networking" }
+rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
+rattler_shell = { path = "../rattler/crates/rattler_shell" }
+rattler_solve = { path = "../rattler/crates/rattler_solve" }
+rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
+rattler_lock = { path = "../rattler/crates/rattler_lock" }
 #rip = { package = "rattler_installs_packages", path = "../rip" }
