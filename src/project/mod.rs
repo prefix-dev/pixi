@@ -1,7 +1,7 @@
 mod dependencies;
 mod environment;
 pub mod errors;
-mod grouped_environment;
+pub mod grouped_environment;
 pub mod manifest;
 mod solve_group;
 pub mod virtual_packages;
@@ -28,19 +28,18 @@ use std::{
 };
 
 use crate::activation::{get_environment_variables, run_activation};
+use crate::project::grouped_environment::GroupedEnvironment;
+use crate::task::TaskName;
 use crate::{
     config,
     consts::{self, PROJECT_MANIFEST},
     task::Task,
 };
-use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
-use url::Url;
-
-use crate::task::TaskName;
 pub use dependencies::Dependencies;
 pub use environment::Environment;
-pub use grouped_environment::{GroupedEnvironment, GroupedEnvironmentName};
+use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
 pub use solve_group::SolveGroup;
+use url::Url;
 
 use self::manifest::Environments;
 
@@ -312,6 +311,23 @@ impl Project {
                 project: self,
                 solve_group: group,
             })
+    }
+
+    /// Return the grouped environments, which are all solve-groups and the environments that need to be solved.
+    pub fn grouped_environments(&self) -> Vec<GroupedEnvironment> {
+        let mut environments = HashSet::new();
+        environments.extend(
+            self.environments()
+                .into_iter()
+                .filter(|env| env.solve_group().is_none())
+                .map(GroupedEnvironment::from),
+        );
+        environments.extend(
+            self.solve_groups()
+                .into_iter()
+                .map(GroupedEnvironment::from),
+        );
+        environments.into_iter().collect()
     }
 
     /// Returns the channels used by this project.

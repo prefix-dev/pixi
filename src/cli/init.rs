@@ -1,8 +1,8 @@
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
 use crate::project::manifest::PyPiRequirement;
 use crate::utils::conda_environment_file::{CondaEnvDep, CondaEnvFile};
-use crate::Project;
 use crate::{config::get_default_author, consts};
+use crate::{FeatureName, Project};
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -124,9 +124,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let mut project = Project::from_str(&dir, &rv)?;
         for spec in conda_deps {
             match &args.platforms.is_empty() {
-                true => project
-                    .manifest
-                    .add_dependency(&spec, crate::SpecType::Run, None)?,
+                true => project.manifest.add_dependency(
+                    &spec,
+                    crate::SpecType::Run,
+                    None,
+                    &FeatureName::default(),
+                )?,
                 false => {
                     for platform in args.platforms.iter() {
                         // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
@@ -134,6 +137,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             &spec,
                             crate::SpecType::Run,
                             Some(platform.parse().into_diagnostic()?),
+                            &FeatureName::default(),
                         )?;
                     }
                 }

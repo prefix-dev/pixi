@@ -1,3 +1,4 @@
+use crate::project::grouped_environment::GroupedEnvironmentName;
 use crate::{
     config, consts,
     environment::{
@@ -10,7 +11,7 @@ use crate::{
     },
     prefix::Prefix,
     progress::global_multi_progress,
-    project::{Environment, GroupedEnvironment, GroupedEnvironmentName},
+    project::{grouped_environment::GroupedEnvironment, Environment},
     repodata::fetch_sparse_repodata_targets,
     utils::BarrierCell,
     EnvironmentName, Project,
