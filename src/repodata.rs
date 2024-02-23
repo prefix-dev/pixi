@@ -6,9 +6,11 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, Platform};
+use rattler_repodata_gateway::fetch::FetchRepoDataOptions;
 use rattler_repodata_gateway::{fetch, sparse::SparseRepoData};
 use reqwest_middleware::ClientWithMiddleware;
 use std::{path::Path, time::Duration};
+
 impl Project {
     // TODO: Remove this function once everything is migrated to the new environment system.
     pub async fn fetch_sparse_repodata(
@@ -138,7 +140,13 @@ async fn fetch_repo_data_records_with_progress(
         channel.platform_url(platform),
         client,
         repodata_cache.to_path_buf(),
-        Default::default(),
+        FetchRepoDataOptions {
+            cache_action: Default::default(),
+            variant: Default::default(),
+            jlap_enabled: false,
+            zstd_enabled: true,
+            bz2_enabled: true,
+        },
         Some(Box::new(move |fetch::DownloadProgress { total, bytes }| {
             download_progress_progress_bar.set_length(total.unwrap_or(bytes));
             download_progress_progress_bar.set_position(bytes);
