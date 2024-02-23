@@ -179,11 +179,11 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
 pub async fn get_activation_env<'p>(
     environment: &'p Environment<'p>,
     lock_file_usage: LockFileUsage,
-) -> miette::Result<HashMap<String, String>> {
+) -> miette::Result<&HashMap<String, String>> {
     // Get the prefix which we can then activate.
     get_up_to_date_prefix(environment, lock_file_usage, false, IndexMap::default()).await?;
 
-    environment.get_env_variables().await
+    environment.project().get_env_variables(environment).await
 }
 
 #[cfg(test)]

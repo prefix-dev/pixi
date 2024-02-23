@@ -101,7 +101,7 @@ impl<'p> LockFileDerivedData<'p> {
             .unwrap_or_default();
         let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
 
-        let env_variables = environment.get_env_variables().await?;
+        let env_variables = environment.project().get_env_variables(environment).await?;
 
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
@@ -114,7 +114,7 @@ impl<'p> LockFileDerivedData<'p> {
             &python_status,
             &environment.system_requirements(),
             SDistResolution::default(),
-            env_variables,
+            env_variables.clone(),
         )
         .await?;
 
@@ -754,7 +754,7 @@ pub async fn ensure_up_to_date_lock_file(
                     .expect("prefix should be available now or in the future");
 
                 // Get environment variables from the activation
-                let env_variables = environment.get_env_variables().await?;
+                let env_variables = project.get_env_variables(&environment).await?;
 
                 // Spawn a task to solve the pypi environment
                 let pypi_solve_future = spawn_solve_pypi_task(
@@ -1235,7 +1235,7 @@ async fn spawn_solve_pypi_task(
     repodata_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
     prefix: impl Future<Output = (Prefix, PythonStatus)>,
     sdist_resolution: SDistResolution,
-    env_variables: HashMap<String, String>,
+    env_variables: &HashMap<String, String>,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1258,6 +1258,8 @@ async fn spawn_solve_pypi_task(
     let (repodata_records, (prefix, python_status)) = tokio::join!(repodata_records, prefix);
 
     let environment_name = environment.name().clone();
+
+    let envs = env_variables.clone();
 
     let (pypi_packages, duration) = tokio::spawn(
         async move {
@@ -1283,7 +1285,7 @@ async fn spawn_solve_pypi_task(
                     .map(|path| prefix.root().join(path))
                     .as_deref(),
                 sdist_resolution,
-                env_variables,
+                envs,
             )
             .await?;
 

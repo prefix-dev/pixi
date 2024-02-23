@@ -102,7 +102,7 @@ pub async fn resolve_dependencies<'db>(
             python_location,
             ..Default::default()
         },
-        env_variables,
+        env_variables.clone(),
     )
     .await
     .wrap_err("failed to resolve `pypi-dependencies`, due to underlying error")?;

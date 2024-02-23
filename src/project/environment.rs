@@ -4,23 +4,16 @@ use super::{
     manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
     PyPiRequirement, SolveGroup, SpecType,
 };
-use crate::{
-    activation::{get_environment_variables, run_activation},
-    task::TaskName,
-};
+use crate::task::TaskName;
 use crate::{task::Task, Project};
-use futures::lock::Mutex;
 use indexmap::{IndexMap, IndexSet};
 use itertools::{Either, Itertools};
 use rattler_conda_types::{Channel, Platform};
+use std::hash::{Hash, Hasher};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::Debug,
-};
-use std::{
-    hash::{Hash, Hasher},
-    sync::Arc,
 };
 
 /// Describes a single environment from a project manifest. This is used to describe environments
@@ -42,9 +35,6 @@ pub struct Environment<'p> {
 
     /// The environment that this environment is based on.
     pub(super) environment: &'p manifest::Environment,
-
-    /// The cache that contains environment variables
-    vars: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl Debug for Environment<'_> {
@@ -71,7 +61,6 @@ impl<'p> Environment<'p> {
         Self {
             project,
             environment,
-            vars: Arc::new(Mutex::new(HashMap::default())),
         }
     }
 
@@ -354,27 +343,6 @@ impl<'p> Environment<'p> {
     /// Returns true if the environments contains any reference to a pypi dependency.
     pub fn has_pypi_dependencies(&self) -> bool {
         self.features(true).any(|f| f.has_pypi_dependencies())
-    }
-
-    /// Return a combination of static environment variables generated from the project and the environment
-    /// and from running activation script
-    pub async fn get_env_variables(&self) -> miette::Result<HashMap<String, String>> {
-        let mut locked = self.vars.lock().await;
-
-        if !locked.is_empty() {
-            return Ok(locked.clone());
-        }
-        let activation_env = run_activation(self).await?;
-
-        let environment_variables = get_environment_variables(self);
-
-        let all_variables: HashMap<String, String> = activation_env
-            .into_iter()
-            .chain(environment_variables.into_iter())
-            .collect();
-
-        locked.extend(all_variables);
-        Ok(locked.clone())
     }
 }
 
