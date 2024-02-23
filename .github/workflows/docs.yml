@@ -113,3 +113,20 @@ jobs:
       - name: Deploy with mike 🚀
         run: |
           pixi run deploy-dev
+
+      - name: Setup Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+      - name: Copy file to gh-pages
+        run: |
+          git fetch
+          git checkout gh-pages
+          git checkout main -- install/install.sh install/install.ps1
+          mv install/install.sh install/install.ps1 .
+          git restore .
+          git restore --staged .
+          git add install.sh install.ps1
+          git commit -m "Update install scripts from main"
+          git push origin gh-pages
