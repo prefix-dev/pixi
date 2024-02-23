@@ -6,9 +6,11 @@ pub mod manifest;
 mod solve_group;
 pub mod virtual_packages;
 
+use async_once_cell::OnceCell as AsyncCell;
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
+
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
 use rattler_networking::AuthenticationMiddleware;
 use reqwest_middleware::ClientWithMiddleware;
@@ -25,6 +27,7 @@ use std::{
     sync::Arc,
 };
 
+use crate::activation::{get_environment_variables, run_activation};
 use crate::project::grouped_environment::GroupedEnvironment;
 use crate::task::TaskName;
 use crate::{
@@ -37,6 +40,8 @@ pub use environment::Environment;
 use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
 pub use solve_group::SolveGroup;
 use url::Url;
+
+use self::manifest::Environments;
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -97,6 +102,8 @@ pub struct Project {
     authenticated_client: ClientWithMiddleware,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
+    /// The cache that contains environment variables
+    env_vars: HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>>,
 }
 
 impl Debug for Project {
@@ -115,13 +122,27 @@ impl Project {
         let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
             .with_arc(Arc::new(AuthenticationMiddleware::default()))
             .build();
+
+        let env_vars = Project::init_env_vars(&manifest.parsed.environments);
+
         Self {
             root: Default::default(),
             package_db: Default::default(),
             client,
             authenticated_client,
             manifest,
+            env_vars,
         }
+    }
+
+    //Initialize empty map of environments variables
+    fn init_env_vars(
+        environments: &Environments,
+    ) -> HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>> {
+        environments
+            .iter()
+            .map(|environment| (environment.name.clone(), Arc::new(AsyncCell::new())))
+            .collect()
     }
 
     /// Constructs a project from a manifest.
@@ -169,7 +190,9 @@ impl Project {
                     consts::PROJECT_MANIFEST,
                     root.display()
                 )
-            });
+            })?;
+
+        let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
         Ok(Self {
             root: root.to_owned(),
@@ -178,7 +201,8 @@ impl Project {
             authenticated_client: reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
                 .with_arc(Arc::new(AuthenticationMiddleware::default()))
                 .build(),
-            manifest: manifest?,
+            manifest,
+            env_vars,
         })
     }
 
@@ -243,10 +267,7 @@ impl Project {
 
     /// Returns the default environment of the project.
     pub fn default_environment(&self) -> Environment<'_> {
-        Environment {
-            project: self,
-            environment: self.manifest.default_environment(),
-        }
+        Environment::new(self, self.manifest.default_environment())
     }
 
     /// Returns the environment with the given name or `None` if no such environment exists.
@@ -254,10 +275,7 @@ impl Project {
     where
         Q: Hash + Equivalent<EnvironmentName>,
     {
-        Some(Environment {
-            project: self,
-            environment: self.manifest.environment(name)?,
-        })
+        Some(Environment::new(self, self.manifest.environment(name)?))
     }
 
     /// Returns the environments in this project.
@@ -266,10 +284,7 @@ impl Project {
             .parsed
             .environments
             .iter()
-            .map(|env| Environment {
-                project: self,
-                environment: env,
-            })
+            .map(|env| Environment::new(self, env))
             .collect()
     }
 
@@ -420,6 +435,33 @@ impl Project {
     /// use authentication from `rattler_networking`
     pub fn authenticated_client(&self) -> &ClientWithMiddleware {
         &self.authenticated_client
+    }
+
+    /// Return a combination of static environment variables generated from the project and the environment
+    /// and from running activation script
+    pub async fn get_env_variables(
+        &self,
+        environment: &Environment<'_>,
+    ) -> miette::Result<&HashMap<String, String>> {
+        let cell = self.env_vars.get(environment.name()).ok_or_else(|| {
+            miette::miette!(
+                "{} environment should be already created during project creation",
+                environment.name()
+            )
+        })?;
+
+        cell.get_or_try_init::<miette::Report>(async {
+            let activation_env = run_activation(environment).await?;
+
+            let environment_variables = get_environment_variables(environment);
+
+            let all_variables: HashMap<String, String> = activation_env
+                .into_iter()
+                .chain(environment_variables.into_iter())
+                .collect();
+            Ok(all_variables)
+        })
+        .await
     }
 }
 

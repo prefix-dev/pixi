@@ -17,6 +17,8 @@ use std::sync::Arc;
 use std::{collections::HashMap, vec};
 
 /// Resolve python packages for the specified project.
+// TODO(nichita): extract in strunct passed args
+#[allow(clippy::too_many_arguments)]
 pub async fn resolve_dependencies<'db>(
     package_db: Arc<PackageDb>,
     dependencies: IndexMap<PackageName, Vec<PyPiRequirement>>,
@@ -25,6 +27,7 @@ pub async fn resolve_dependencies<'db>(
     conda_packages: &[RepoDataRecord],
     python_location: Option<&Path>,
     sdist_resolution: SDistResolution,
+    env_variables: HashMap<String, String>,
 ) -> miette::Result<Vec<PinnedPackage>> {
     if dependencies.is_empty() {
         return Ok(vec![]);
@@ -99,7 +102,7 @@ pub async fn resolve_dependencies<'db>(
             python_location,
             ..Default::default()
         },
-        HashMap::default(),
+        env_variables.clone(),
     )
     .await
     .wrap_err("failed to resolve `pypi-dependencies`, due to underlying error")?;

@@ -1,6 +1,6 @@
 use miette::IntoDiagnostic;
 use serde::Deserialize;
-use std::path::Path;
+use std::{io::BufRead, path::Path};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct CondaEnvFile {
@@ -34,7 +34,23 @@ impl CondaEnvFile {
     pub fn from_path(path: &Path) -> miette::Result<Self> {
         let file = std::fs::File::open(path).into_diagnostic()?;
         let reader = std::io::BufReader::new(file);
-        let env_file = serde_yaml::from_reader(reader).into_diagnostic()?;
+
+        let lines = reader
+            .lines()
+            .collect::<Result<Vec<String>, _>>()
+            .into_diagnostic()?;
+        let mut s = String::new();
+        for line in lines {
+            if line.contains("- sel(") {
+                tracing::warn!("Skipping micromamba sel(...) in line: \"{}\"", line.trim());
+                tracing::warn!("Please add the dependencies manually");
+                continue;
+            }
+            s.push_str(&line);
+            s.push('\n');
+        }
+
+        let env_file = serde_yaml::from_str(&s).into_diagnostic()?;
         Ok(env_file)
     }
 }

@@ -352,8 +352,18 @@ impl Manifest {
             miette::bail!("pixi does not support wildcard dependencies")
         };
 
+        // Check for duplicates.
+        if let Some(table_spec) = dependency_table.get(name.as_normalized()) {
+            if table_spec.as_value().and_then(|v| v.as_str()) == Some(&spec.to_string()) {
+                return Err(miette::miette!(
+                    "{} is already added.",
+                    console::style(name.as_normalized()).bold(),
+                ));
+            }
+        }
+
         // Store (or replace) in the document
-        dependency_table.insert(name.as_source(), Item::Value(spec.to_string().into()));
+        dependency_table.insert(name.as_normalized(), Item::Value(spec.to_string().into()));
 
         // Add the dependency to the manifest as well
         self.parsed
@@ -383,6 +393,16 @@ impl Manifest {
             &FeatureName::Default,
             consts::PYPI_DEPENDENCIES,
         )?;
+
+        // Check for duplicates.
+        if let Some(table_spec) = dependency_table.get(name.as_str()) {
+            if table_spec.to_string().trim() == requirement.to_string() {
+                return Err(miette::miette!(
+                    "{} is already added.",
+                    console::style(name.as_source_str()).bold(),
+                ));
+            }
+        }
 
         // Add the pypi dependency to the table
         dependency_table.insert(name.as_str(), (*requirement).clone().into());
