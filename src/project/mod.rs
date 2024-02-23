@@ -136,7 +136,7 @@ impl Project {
         }
     }
 
-    //Initialze empty map of environments variables
+    //Initialize empty map of environments variables
     fn init_env_vars(
         environments: &Environments,
     ) -> HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>> {
