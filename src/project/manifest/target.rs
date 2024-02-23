@@ -156,8 +156,8 @@ impl ToString for TargetSelector {
             TargetSelector::Platform(p) => p.to_string(),
             TargetSelector::Linux => "linux".to_string(),
             TargetSelector::Unix => "unix".to_string(),
-            TargetSelector::Win => "windows".to_string(),
-            TargetSelector::MacOs => "macos".to_string(),
+            TargetSelector::Win => "win".to_string(),
+            TargetSelector::MacOs => "osx".to_string(),
         }
     }
 }
@@ -177,8 +177,8 @@ impl<'de> Deserialize<'de> for TargetSelector {
         match s.as_str() {
             "linux" => Ok(TargetSelector::Linux),
             "unix" => Ok(TargetSelector::Unix),
-            "windows" => Ok(TargetSelector::Win),
-            "macos" => Ok(TargetSelector::MacOs),
+            "win" => Ok(TargetSelector::Win),
+            "osx" => Ok(TargetSelector::MacOs),
             _ => Platform::from_str(&s)
                 .map(TargetSelector::Platform)
                 .map_err(serde::de::Error::custom),

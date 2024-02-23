@@ -24,10 +24,10 @@ osx_arm64 = "*"
 [target.linux.dependencies]
 all_linux = "*"
 
-[target.windows.dependencies]
+[target.win.dependencies]
 all_win = "*"
 
-[target.macos.dependencies]
+[target.osx.dependencies]
 all_macos = "*"
 
 [target.unix.dependencies]
