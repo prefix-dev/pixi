@@ -7,7 +7,6 @@ mod solve_group;
 pub mod virtual_packages;
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
-use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
@@ -302,15 +301,17 @@ impl Project {
     /// Return the grouped environments, which are all solve-groups and the environments that need to be solved.
     pub fn grouped_environments(&self) -> Vec<GroupedEnvironment> {
         let mut environments = HashSet::new();
-        environments.extend(self
-            .environments()
-            .into_iter()
-            .filter(|env| env.solve_group().is_none())
-            .map(GroupedEnvironment::from))
-        environments.extend(self
-            .solve_groups()
-            .into_iter()
-            .map(GroupedEnvironment::from));
+        environments.extend(
+            self.environments()
+                .into_iter()
+                .filter(|env| env.solve_group().is_none())
+                .map(GroupedEnvironment::from),
+        );
+        environments.extend(
+            self.solve_groups()
+                .into_iter()
+                .map(GroupedEnvironment::from),
+        );
         environments.into_iter().collect()
     }
 
