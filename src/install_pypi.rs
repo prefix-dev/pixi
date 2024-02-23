@@ -1,11 +1,7 @@
 use crate::environment::PythonStatus;
 use crate::prefix::Prefix;
-use std::io;
-
-use crate::EnvironmentName;
 
 use distribution_filename::DistFilename;
-use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use uv_cache::Cache;
 
@@ -72,7 +68,7 @@ struct PixiInstallPlan {
 }
 
 /// Converts our locked data to a file
-fn locked_data_to_file(pkg: &PypiPackageData) -> distribution_types::File {
+fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_types::File {
     // Convert our url to a FileLocation
     let url = if pkg.url.scheme() == "file" {
         distribution_types::FileLocation::Path(
@@ -106,7 +102,7 @@ fn locked_data_to_file(pkg: &PypiPackageData) -> distribution_types::File {
     };
 
     distribution_types::File {
-        filename: pkg.name.as_ref().to_owned(),
+        filename: filename.to_string(),
         dist_info_metadata: None,
         hashes,
         requires_python: pkg.requires_python.clone(),
@@ -118,14 +114,15 @@ fn locked_data_to_file(pkg: &PypiPackageData) -> distribution_types::File {
 }
 
 fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
-    tracing::warn!("{}", pkg.name.as_ref());
-    let filename = DistFilename::try_from_normalized_filename(pkg.name.as_ref()).expect(&format!(
+    // Extract last component from url
+    let filename_raw = pkg.url.path_segments().unwrap().last().unwrap();
+    let filename = DistFilename::try_from_normalized_filename(filename_raw).expect(&format!(
         "{} - could not convert to dist filename",
         pkg.name.as_ref()
     ));
 
     // Bit of a hack to create the file type
-    let file = locked_data_to_file(pkg);
+    let file = locked_data_to_file(pkg, filename_raw);
 
     Dist::from_registry(filename, file, IndexUrl::Pypi)
 }
@@ -328,6 +325,10 @@ pub async fn update_python_distributions(
 
     for l in local.iter() {
         tracing::warn!("{:?}", l);
+    }
+
+    for r in remote.iter() {
+        tracing::warn!("remote - {:?}", r);
     }
 
     // Nothing to do.
