@@ -146,7 +146,7 @@ fn whats_the_plan<'venv, 'a>(
     let installed = installed.iter().filter(|dist| {
         dist.installer()
             .unwrap_or_default()
-            .is_some_and(|installer| installer == "conda")
+            .is_some_and(|installer| installer != "conda")
     });
 
     let mut extraneous = vec![];
@@ -155,6 +155,8 @@ fn whats_the_plan<'venv, 'a>(
     let mut reinstalls = vec![];
 
     // TODO: Do something with editable packages
+    // TODO: Check WheelTag correctness for installed packages
+    // TODO: Add source dependency support
 
     // Walk over all installed packages and check if they are required
     for dist in installed {
@@ -323,13 +325,13 @@ pub async fn update_python_distributions(
         extraneous.len()
     );
 
-    for l in local.iter() {
-        tracing::warn!("{:?}", l);
-    }
+    // for l in local.iter() {
+    //     tracing::warn!("{:?}", l);
+    // }
 
-    for r in remote.iter() {
-        tracing::warn!("remote - {:?}", r);
-    }
+    // for r in remote.iter() {
+    //     tracing::warn!("remote - {:?}", r);
+    // }
 
     // Nothing to do.
     if remote.is_empty() && local.is_empty() && reinstalls.is_empty() && extraneous.is_empty() {
