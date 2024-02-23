@@ -427,10 +427,12 @@ impl Project {
         &self,
         environment: &Environment<'_>,
     ) -> miette::Result<&HashMap<String, String>> {
-        let cell = self
-            .env_vars
-            .get(environment.name())
-            .expect("it should be already present");
+        let cell = self.env_vars.get(environment.name()).ok_or_else(|| {
+            miette::miette!(
+                "{} environment should be already created during project creation",
+                environment.name()
+            )
+        })?;
 
         cell.get_or_try_init::<miette::Report>(async {
             let activation_env = run_activation(environment).await?;
