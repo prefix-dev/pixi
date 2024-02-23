@@ -342,19 +342,25 @@ The target table is currently implemented for the following sub-tables:
 
 The target table is defined using `[target.PLATFORM.SUB-TABLE]`.
 E.g `[target.linux-64.dependencies]`
-The platform can be any of the target [platforms](#platforms) but must also be defined there.
+
+The platform can be any of:
+
+- `win`, `osx`, `linux` or `unix` (`unix` matches `linux` and `osx`)
+- or any of the (more) specific [target platforms](#platforms), e.g. `linux-64`, `osx-arm64`
+
 The sub-table can be any of the specified above.
 
 To make it a bit more clear, let's look at an example below.
 Currently, pixi combines the top level tables like `dependencies` with the target-specific ones into a single set.
 Which, in the case of dependencies, can both add or overwrite dependencies.
-In the example below, we have `cmake` being used for all targets but on `osx-64` a different version of python will be selected.
+In the example below, we have `cmake` being used for all targets but on `osx-64` or `osx-arm64` a different version of python will be selected.
+
 ```toml
 [dependencies]
 cmake = "3.26.4"
 python = "3.10"
 
-[target.osx-64.dependencies]
+[target.osx.dependencies]
 python = "3.11"
 ```
 
