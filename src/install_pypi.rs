@@ -1,7 +1,9 @@
 use crate::environment::PythonStatus;
 use crate::prefix::Prefix;
+use crate::progress::{self, ProgressBarMessageFormatter, ScopedTask};
 
 use distribution_filename::DistFilename;
+use indicatif::ProgressBar;
 use miette::{IntoDiagnostic, WrapErr};
 use uv_cache::Cache;
 
@@ -17,8 +19,10 @@ use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 
+use std::collections::HashMap;
 use std::str::FromStr;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use uv_client::{FlatIndex, FlatIndexClient};
@@ -227,6 +231,120 @@ fn whats_the_plan<'venv, 'a>(
     })
 }
 
+fn create_progress(length: u64, message: &'static str) -> ProgressBar {
+    // Construct a progress bar to provide some indication on what is currently downloading.
+    //  For instance if we could also show at what speed the downloads are progressing or the total
+    //  size of the downloads that would really help the user I think.
+    let pb = progress::global_multi_progress().add(ProgressBar::new(length));
+    pb.set_style(progress::default_progress_style());
+    pb.set_prefix(message);
+    pb.enable_steady_tick(Duration::from_millis(100));
+    pb
+}
+
+/// Reports on download progress.
+struct UvReporter {
+    pb: ProgressBar,
+    fmt: ProgressBarMessageFormatter,
+    scoped_tasks: Arc<std::sync::Mutex<Vec<Option<ScopedTask>>>>,
+}
+
+impl UvReporter {
+    fn new(length: u64, top_level_message: &'static str) -> Self {
+        let pb = create_progress(length, top_level_message);
+        let fmt = ProgressBarMessageFormatter::new(pb.clone());
+
+        Self {
+            pb,
+            fmt,
+            scoped_tasks: Arc::new(std::sync::Mutex::new(vec![])),
+        }
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<Vec<Option<ScopedTask>>> {
+        self.scoped_tasks.lock().expect("progress lock poison")
+    }
+
+    fn start_sync(&self, message: String) -> usize {
+        let task = self.fmt.start_sync(message);
+        let mut lock = self.lock();
+        lock.push(Some(task));
+        lock.len() - 1
+    }
+
+    fn finish(&self, id: usize) {
+        let mut lock = self.lock();
+        let len = lock.len();
+        let task = lock
+            .get_mut(id)
+            .expect(&format!("progres bar error idx ({id}) > {len}"))
+            .take();
+        if let Some(task) = task {
+            task.finish_sync();
+        }
+    }
+
+    fn finish_all(&self) {
+        self.pb.finish_and_clear()
+    }
+
+    fn increment_progress(&self) {
+        self.pb.inc(1);
+    }
+}
+
+impl uv_installer::DownloadReporter for UvReporter {
+    fn on_progress(&self, _dist: &CachedDist) {
+        self.increment_progress();
+    }
+
+    fn on_complete(&self) {
+        self.finish_all();
+    }
+
+    fn on_build_start(&self, dist: &distribution_types::SourceDist) -> usize {
+        self.start_sync(format!("building {}", dist.name().as_ref()))
+    }
+
+    fn on_build_complete(&self, _dist: &distribution_types::SourceDist, id: usize) {
+        self.finish(id);
+    }
+
+    fn on_editable_build_start(&self, dist: &distribution_types::LocalEditable) -> usize {
+        let path = dist.path.file_name();
+        if let Some(path) = path {
+            self.start_sync(format!(
+                "building editable source {}",
+                path.to_string_lossy()
+            ))
+        } else {
+            self.start_sync("building editable source".to_string())
+        }
+    }
+
+    fn on_editable_build_complete(&self, dist: &distribution_types::LocalEditable, id: usize) {
+        self.finish(id);
+    }
+
+    fn on_checkout_start(&self, url: &url::Url, rev: &str) -> usize {
+        self.start_sync(format!("cloning {}", url.to_string()))
+    }
+
+    fn on_checkout_complete(&self, url: &url::Url, rev: &str, index: usize) {
+        self.finish(index);
+    }
+}
+
+impl uv_installer::InstallReporter for UvReporter {
+    fn on_install_progress(&self, wheel: &CachedDist) {
+        self.increment_progress();
+    }
+
+    fn on_install_complete(&self) {
+        self.finish_all()
+    }
+}
+
 /// Installs and/or remove python distributions.
 // TODO: refactor arguments in struct
 #[allow(clippy::too_many_arguments)]
@@ -269,7 +387,6 @@ pub async fn update_python_distributions(
     )?;
 
     // Resolve the flat indexes from `--find-links`.
-
     let flat_index = {
         let client = FlatIndexClient::new(&uv_context.registry_client, &uv_context.cache);
         let entries = client
@@ -361,7 +478,8 @@ pub async fn update_python_distributions(
             &tags,
             &uv_context.registry_client,
             &build_dispatch,
-        );
+        )
+        .with_reporter(UvReporter::new(remote.len() as u64, "Downloading"));
 
         let wheels = downloader
             .download(remote.clone(), &uv_context.in_flight)
@@ -421,7 +539,7 @@ pub async fn update_python_distributions(
         let start = std::time::Instant::now();
         uv_installer::Installer::new(&venv)
             .with_link_mode(LinkMode::default())
-            // .with_reporter(InstallReporter::from(printer).with_length(wheels.len() as u64))
+            .with_reporter(UvReporter::new(wheels.len() as u64, "Installing"))
             .install(&wheels)
             .unwrap();
 
