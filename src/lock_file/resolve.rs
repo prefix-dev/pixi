@@ -50,7 +50,7 @@ use uv_distribution::{DistributionDatabase, Reporter};
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
-    DefaultResolverProvider, InMemoryIndex, Manifest, Options, PackageVersionsResult,
+    DefaultResolverProvider, DistFinder, InMemoryIndex, Manifest, Options, PackageVersionsResult,
     PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
 };
 use uv_traits::{BuildContext, InFlight, NoBinary, NoBuild, SetupPyStrategy};
@@ -62,7 +62,6 @@ pub struct UvResolutionContext {
     pub registry_client: Arc<RegistryClient>,
     pub in_flight: Arc<InFlight>,
     pub index_locations: Arc<IndexLocations>,
-    pub in_memory_index: Arc<InMemoryIndex>,
 }
 
 impl UvResolutionContext {
@@ -78,13 +77,11 @@ impl UvResolutionContext {
         );
         let in_flight = Arc::new(InFlight::default());
         let index_locations = Arc::new(project.pypi_index_locations());
-        let in_memory_index = Arc::new(InMemoryIndex::default());
         Ok(Self {
             cache,
             registry_client,
             in_flight,
             index_locations,
-            in_memory_index,
         })
     }
 }
@@ -115,9 +112,7 @@ impl uv_resolver::ResolverReporter for ResolveReporter {
         self.0.set_message(format!("resolving {}{}", name, version));
     }
 
-    fn on_complete(&self) {
-        self.0.set_message("");
-    }
+    fn on_complete(&self) {}
 
     fn on_build_start(&self, dist: &SourceDist) -> usize {
         self.0
@@ -315,6 +310,8 @@ pub async fn resolve_pypi(
         FlatIndex::from_entries(entries, &tags)
     };
 
+    let in_memory_index = InMemoryIndex::default();
+
     // Create a shared in-memory index.
     let options = Options::default();
     let build_dispatch = BuildDispatch::new(
@@ -323,7 +320,7 @@ pub async fn resolve_pypi(
         &interpreter,
         &context.index_locations,
         &flat_index,
-        &context.in_memory_index,
+        &in_memory_index,
         &context.in_flight,
         interpreter.sys_executable().to_path_buf(),
         SetupPyStrategy::default(),
@@ -383,7 +380,7 @@ pub async fn resolve_pypi(
         options,
         &marker_environment,
         PythonRequirement::new(&interpreter, &marker_environment),
-        &context.in_memory_index,
+        &in_memory_index,
         provider,
     )
     .into_diagnostic()
@@ -402,6 +399,19 @@ pub async fn resolve_pypi(
         &context.registry_client,
         &build_dispatch,
     );
+
+    let resolution = DistFinder::new(
+        &tags,
+        &context.registry_client,
+        &interpreter,
+        &flat_index,
+        build_dispatch.no_binary(),
+    )
+    .resolve(&resolution.requirements())
+    .await
+    .into_diagnostic()
+    .context("failed to find matching pypi distributions for the resolution")?;
+
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     for dist in resolution.into_distributions() {
         // If this refers to a conda package we can skip it

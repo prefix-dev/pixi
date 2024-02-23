@@ -6,6 +6,7 @@ use distribution_filename::DistFilename;
 use indicatif::ProgressBar;
 use miette::{IntoDiagnostic, WrapErr};
 use uv_cache::Cache;
+use uv_resolver::InMemoryIndex;
 
 use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::UvResolutionContext;
@@ -400,6 +401,8 @@ pub async fn update_python_distributions(
     let no_build = NoBuild::None;
     let no_binary = NoBinary::None;
 
+    let in_memory_index = InMemoryIndex::default();
+
     // Prep the build context.
     let build_dispatch = BuildDispatch::new(
         &uv_context.registry_client,
@@ -407,7 +410,7 @@ pub async fn update_python_distributions(
         venv.interpreter(),
         &uv_context.index_locations,
         &flat_index,
-        &uv_context.in_memory_index,
+        &in_memory_index,
         &uv_context.in_flight,
         venv.python_executable(),
         SetupPyStrategy::default(),

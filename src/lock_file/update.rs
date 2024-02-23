@@ -1282,7 +1282,7 @@ async fn spawn_solve_pypi_task(
         let pb = SolveProgressBar::new(
             global_multi_progress().add(ProgressBar::hidden()),
             platform,
-            environment_name,
+            environment_name.clone(),
         );
         pb.start();
 
@@ -1304,7 +1304,14 @@ async fn spawn_solve_pypi_task(
             &python_path,
             prefix.root(),
         )
-        .await?;
+        .await
+        .with_context(|| {
+            format!(
+                "failed to solve the conda requirements of '{}' '{}'",
+                environment_name.fancy_display(),
+                consts::PLATFORM_STYLE.apply_to(platform)
+            )
+        })?;
 
         let end = Instant::now();
 
