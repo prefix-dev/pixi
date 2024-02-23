@@ -301,19 +301,17 @@ impl Project {
 
     /// Return the grouped environments, which are all solve-groups and the environments that need to be solved.
     pub fn grouped_environments(&self) -> Vec<GroupedEnvironment> {
-        let mut environments = self
+        let mut environments = HashSet::new();
+        environments.extend(self
             .environments()
             .into_iter()
             .filter(|env| env.solve_group().is_none())
-            .map(GroupedEnvironment::from)
-            .collect::<Vec<GroupedEnvironment>>();
-        let groups: Vec<GroupedEnvironment> = self
+            .map(GroupedEnvironment::from))
+        environments.extend(self
             .solve_groups()
             .into_iter()
-            .map(GroupedEnvironment::from)
-            .collect();
-        environments.extend(groups);
-        environments.into_iter().unique().collect()
+            .map(GroupedEnvironment::from));
+        environments.into_iter().collect()
     }
 
     /// Returns the channels used by this project.
