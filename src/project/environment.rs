@@ -56,6 +56,14 @@ impl<'p> PartialEq for Environment<'p> {
 impl<'p> Eq for Environment<'p> {}
 
 impl<'p> Environment<'p> {
+    /// Return new instance of Environment
+    pub fn new(project: &'p Project, environment: &'p manifest::Environment) -> Self {
+        Self {
+            project,
+            environment,
+        }
+    }
+
     /// Returns true if this environment is the default environment.
     pub fn is_default(&self) -> bool {
         self.environment.name == EnvironmentName::Default

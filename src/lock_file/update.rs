@@ -1,11 +1,11 @@
 use crate::{
-    config, consts, environment,
+    config, consts,
     environment::{
-        LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+        self, LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
     },
-    load_lock_file, lock_file,
+    load_lock_file,
     lock_file::{
-        update, OutdatedEnvironments, PypiPackageIdentifier, PypiRecordsByName,
+        self, update, OutdatedEnvironments, PypiPackageIdentifier, PypiRecordsByName,
         RepoDataRecordsByName,
     },
     prefix::Prefix,
@@ -101,6 +101,8 @@ impl<'p> LockFileDerivedData<'p> {
             .unwrap_or_default();
         let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
 
+        let env_variables = environment.project().get_env_variables(environment).await?;
+
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -112,6 +114,7 @@ impl<'p> LockFileDerivedData<'p> {
             &python_status,
             &environment.system_requirements(),
             SDistResolution::default(),
+            env_variables.clone(),
         )
         .await?;
 
@@ -750,6 +753,9 @@ pub async fn ensure_up_to_date_lock_file(
                     .get_conda_prefix(&group)
                     .expect("prefix should be available now or in the future");
 
+                // Get environment variables from the activation
+                let env_variables = project.get_env_variables(&environment).await?;
+
                 // Spawn a task to solve the pypi environment
                 let pypi_solve_future = spawn_solve_pypi_task(
                     group.clone(),
@@ -757,6 +763,7 @@ pub async fn ensure_up_to_date_lock_file(
                     repodata_future,
                     prefix_future,
                     SDistResolution::default(),
+                    env_variables,
                 );
 
                 pending_futures.push(pypi_solve_future.boxed_local());
@@ -1228,6 +1235,7 @@ async fn spawn_solve_pypi_task(
     repodata_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
     prefix: impl Future<Output = (Prefix, PythonStatus)>,
     sdist_resolution: SDistResolution,
+    env_variables: &HashMap<String, String>,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1250,6 +1258,9 @@ async fn spawn_solve_pypi_task(
     let (repodata_records, (prefix, python_status)) = tokio::join!(repodata_records, prefix);
 
     let environment_name = environment.name().clone();
+
+    let envs = env_variables.clone();
+
     let (pypi_packages, duration) = tokio::spawn(
         async move {
             let pb = SolveProgressBar::new(
@@ -1274,6 +1285,7 @@ async fn spawn_solve_pypi_task(
                     .map(|path| prefix.root().join(path))
                     .as_deref(),
                 sdist_resolution,
+                envs,
             )
             .await?;
 

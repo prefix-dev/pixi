@@ -4,7 +4,7 @@ use crate::{
     consts, install, install_pypi,
     lock_file::UpdateLockFileOptions,
     prefix::Prefix,
-    progress::{self},
+    progress,
     project::{
         manifest::{EnvironmentName, SystemRequirements},
         virtual_packages::verify_current_platform_has_required_virtual_packages,
@@ -180,6 +180,7 @@ pub async fn update_prefix_pypi(
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
     sdist_resolution: SDistResolution,
+    env_variables: HashMap<String, String>,
 ) -> miette::Result<()> {
     // Remove python packages from a previous python distribution if the python version changed.
     install_pypi::remove_old_python_distributions(prefix, platform, status)?;
@@ -200,6 +201,7 @@ pub async fn update_prefix_pypi(
                 status,
                 system_requirements,
                 sdist_resolution,
+                env_variables,
             )
         },
     )
