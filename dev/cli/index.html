@@ -1668,6 +1668,7 @@ It will only add if the package with its version constraint is able to work with
 <li><code>--no-install</code>: Don't install the package to the environment, only add the package to the lock-file.</li>
 <li><code>--no-lockfile-update</code>: Don't update the lock-file, implies the <code>--no-install</code> flag.</li>
 <li><code>--platform &lt;PLATFORM&gt; (-p)</code>: The platform for which the dependency should be added. (Allowed to be used more than once)</li>
+<li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the dependency should be added.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>numpy
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>numpy<span class="w"> </span>pandas<span class="w"> </span><span class="s2">&quot;pytorch&gt;=1.8&quot;</span>
@@ -1679,6 +1680,7 @@ It will only add if the package with its version constraint is able to work with
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>pixi<span class="w"> </span>add<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>--build<span class="w"> </span>clang
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>pixi<span class="w"> </span>add<span class="w"> </span>--no-install<span class="w"> </span>numpy
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>pixi<span class="w"> </span>add<span class="w"> </span>--no-lockfile-update<span class="w"> </span>numpy
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>featurex<span class="w"> </span>numpy
 </span></code></pre></div>
 <h2 id="install"><code>install</code><a class="headerlink" href="#install" title="Permanent link">#</a></h2>
 <p>Installs all dependencies specified in the lockfile <code>pixi.lock</code>.
