@@ -1,7 +1,11 @@
 mod common;
 
+use std::path::PathBuf;
+
 use crate::{common::package_database::PackageDatabase, common::PixiControl};
-use rattler_conda_types::{Channel, ChannelConfig};
+use insta::assert_debug_snapshot;
+use pixi::Project;
+use rattler_conda_types::{Channel, ChannelConfig, Platform};
 use tempfile::TempDir;
 use url::Url;
 
@@ -44,4 +48,21 @@ async fn add_channel() {
     )
     .unwrap();
     assert!(project.channels().contains(&local_channel));
+}
+
+#[tokio::test]
+async fn parse_project() {
+    fn dependency_names(project: &Project, platform: Platform) -> Vec<String> {
+        project
+            .dependencies(None, Some(platform))
+            .iter()
+            .map(|dep| dep.0.as_normalized().to_string())
+            .collect()
+    }
+
+    let pixi_toml = include_str!("./pixi_tomls/many_targets.toml");
+    let project = Project::from_str(&PathBuf::from("./many"), pixi_toml).unwrap();
+    assert_debug_snapshot!(dependency_names(&project, Platform::Linux64));
+    assert_debug_snapshot!(dependency_names(&project, Platform::OsxArm64));
+    assert_debug_snapshot!(dependency_names(&project, Platform::Win64));
 }

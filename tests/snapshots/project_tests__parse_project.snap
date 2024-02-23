@@ -1,0 +1,10 @@
+---
+source: tests/project_tests.rs
+expression: "dependency_names(&project, Platform::Linux64)"
+---
+[
+    "all",
+    "linux",
+    "all_linux",
+    "all_unix",
+]
