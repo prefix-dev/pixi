@@ -1,3 +1,4 @@
+use crate::project::manifest::Feature;
 use crate::{
     consts,
     prefix::Prefix,
@@ -9,7 +10,9 @@ use crate::{
     EnvironmentName, Project, SpecType,
 };
 use indexmap::{IndexMap, IndexSet};
+use itertools::Either;
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform};
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 /// Either a solve group or an individual environment without a solve group.
@@ -137,11 +140,29 @@ impl<'p> GroupedEnvironment<'p> {
         }
     }
 
+    pub fn platforms(&self) -> HashSet<Platform> {
+        match self {
+            GroupedEnvironment::Group(group) => group
+                .environments()
+                .flat_map(|env| env.platforms())
+                .collect(),
+            GroupedEnvironment::Environment(env) => env.platforms(),
+        }
+    }
+
     /// Returns true if the group has any Pypi dependencies.
     pub fn has_pypi_dependencies(&self) -> bool {
         match self {
             GroupedEnvironment::Group(group) => group.has_pypi_dependencies(),
             GroupedEnvironment::Environment(env) => env.has_pypi_dependencies(),
+        }
+    }
+
+    /// Returns the features of the group
+    pub fn features(&self) -> impl Iterator<Item = &'p Feature> + DoubleEndedIterator + 'p {
+        match self {
+            GroupedEnvironment::Group(group) => Either::Left(group.features(true)),
+            GroupedEnvironment::Environment(env) => Either::Right(env.features(true)),
         }
     }
 }

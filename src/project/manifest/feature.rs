@@ -17,8 +17,9 @@ use std::collections::HashMap;
 use std::fmt;
 
 /// The name of a feature. This is either a string or default for the default feature.
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Default)]
 pub enum FeatureName {
+    #[default]
     Default,
     Named(String),
 }
@@ -100,7 +101,7 @@ impl fmt::Display for FeatureName {
 ///
 /// Individual features cannot be used directly, instead they are grouped together into
 /// environments. Environments are then locked and installed.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Feature {
     /// The name of the feature or `None` if the feature is the default feature.
     pub name: FeatureName,

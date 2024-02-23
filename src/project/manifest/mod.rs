@@ -341,14 +341,11 @@ impl Manifest {
         spec: &MatchSpec,
         spec_type: SpecType,
         platform: Option<Platform>,
+        feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Find the table toml table to add the dependency to.
-        let dependency_table = get_or_insert_toml_table(
-            &mut self.document,
-            platform,
-            &FeatureName::Default,
-            spec_type.name(),
-        )?;
+        let dependency_table =
+            get_or_insert_toml_table(&mut self.document, platform, feature_name, spec_type.name())?;
 
         // Determine the name of the package to add
         let (Some(name), spec) = spec.clone().into_nameless() else {
@@ -369,7 +366,10 @@ impl Manifest {
         dependency_table.insert(name.as_normalized(), Item::Value(spec.to_string().into()));
 
         // Add the dependency to the manifest as well
-        self.default_feature_mut()
+        self.parsed
+            .features
+            .entry(feature_name.clone())
+            .or_default()
             .targets
             .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
             .dependencies
@@ -2455,6 +2455,119 @@ test = "test initial"
             &FeatureName::Named("test".to_string()),
             "tasks",
         );
+        assert_display_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_dependency() {
+        let file_contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[dependencies]
+foo = "*"
+
+[feature.test.dependencies]
+bar = "*"
+            "#;
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        manifest
+            .add_dependency(
+                &MatchSpec::from_str(" baz >=1.2.3").unwrap(),
+                SpecType::Run,
+                None,
+                &FeatureName::Default,
+            )
+            .unwrap();
+        assert_eq!(
+            manifest
+                .default_feature()
+                .targets
+                .default()
+                .dependencies
+                .get(&SpecType::Run)
+                .unwrap()
+                .get(&PackageName::from_str("baz").unwrap())
+                .unwrap()
+                .to_string(),
+            ">=1.2.3".to_string()
+        );
+        manifest
+            .add_dependency(
+                &MatchSpec::from_str(" bal >=2.3").unwrap(),
+                SpecType::Run,
+                None,
+                &FeatureName::Named("test".to_string()),
+            )
+            .unwrap();
+
+        assert_eq!(
+            manifest
+                .feature(&FeatureName::Named("test".to_string()))
+                .unwrap()
+                .targets
+                .default()
+                .dependencies
+                .get(&SpecType::Run)
+                .unwrap()
+                .get(&PackageName::from_str("bal").unwrap())
+                .unwrap()
+                .to_string(),
+            ">=2.3".to_string()
+        );
+
+        manifest
+            .add_dependency(
+                &MatchSpec::from_str(" boef >=2.3").unwrap(),
+                SpecType::Run,
+                Some(Platform::Linux64),
+                &FeatureName::Named("extra".to_string()),
+            )
+            .unwrap();
+
+        assert_eq!(
+            manifest
+                .feature(&FeatureName::Named("extra".to_string()))
+                .unwrap()
+                .targets
+                .for_target(&TargetSelector::Platform(Platform::Linux64))
+                .unwrap()
+                .dependencies
+                .get(&SpecType::Run)
+                .unwrap()
+                .get(&PackageName::from_str("boef").unwrap())
+                .unwrap()
+                .to_string(),
+            ">=2.3".to_string()
+        );
+
+        manifest
+            .add_dependency(
+                &MatchSpec::from_str(" cmake >=2.3").unwrap(),
+                SpecType::Build,
+                Some(Platform::Linux64),
+                &FeatureName::Named("build".to_string()),
+            )
+            .unwrap();
+
+        assert_eq!(
+            manifest
+                .feature(&FeatureName::Named("build".to_string()))
+                .unwrap()
+                .targets
+                .for_target(&TargetSelector::Platform(Platform::Linux64))
+                .unwrap()
+                .dependencies
+                .get(&SpecType::Build)
+                .unwrap()
+                .get(&PackageName::from_str("cmake").unwrap())
+                .unwrap()
+                .to_string(),
+            ">=2.3".to_string()
+        );
+
         assert_display_snapshot!(manifest.document.to_string());
     }
 
