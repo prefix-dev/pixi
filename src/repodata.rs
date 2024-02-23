@@ -141,11 +141,8 @@ async fn fetch_repo_data_records_with_progress(
         client,
         repodata_cache.to_path_buf(),
         FetchRepoDataOptions {
-            cache_action: Default::default(),
-            variant: Default::default(),
             jlap_enabled: false,
-            zstd_enabled: true,
-            bz2_enabled: true,
+            ..FetchRepoDataOptions::default()
         },
         Some(Box::new(move |fetch::DownloadProgress { total, bytes }| {
             download_progress_progress_bar.set_length(total.unwrap_or(bytes));
