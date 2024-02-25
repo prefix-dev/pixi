@@ -2,6 +2,7 @@
 
 pub mod builders;
 pub mod package_database;
+pub mod pypi_server;
 
 use crate::common::builders::{
     AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, TaskAddBuilder,
