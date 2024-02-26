@@ -113,11 +113,11 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
             if !no_binary {
                 let p = if last { " " } else { "|" };
                 message.push_str(&format!(
-                    "\n{}   └─ bin: {}",
+                    "\n{}   └─ exec: {}",
                     p,
                     pkgi.binaries
                         .iter()
-                        .map(|x| format!("{}*", console::style(x).green()))
+                        .map(|x| console::style(x).green())
                         .join(", ")
                 ));
             }
