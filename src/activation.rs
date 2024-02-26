@@ -225,7 +225,14 @@ mod tests {
 
     #[test]
     fn test_metadata_project_env() {
-        let project = Project::discover().unwrap();
+        let project = r#"
+        [project]
+        name = "pixi"
+        version = "0.1.0"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "osx-64", "win-64"]
+        "#;
+        let project = Project::from_str(Path::new(""), project).unwrap();
         let env = project.get_metadata_env();
 
         assert_eq!(env.get("PIXI_PROJECT_NAME").unwrap(), project.name());
