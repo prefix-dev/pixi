@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::str::FromStr;
 
 use clap::Parser;
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::PackageName;
 
@@ -98,35 +99,27 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
             let no_binary = pkgi.binaries.is_empty();
 
             if last {
-                message.push_str("└─");
+                message.push_str("└──");
             } else {
-                message.push_str("├─");
+                message.push_str("├──");
             }
 
-            let p = if no_binary { "─" } else { "┬" };
-
             message.push_str(&format!(
-                "{} {}@{}",
-                p,
+                " {} {}",
                 console::style(&pkgi.name.as_source()).bold(),
-                &pkgi.version
+                console::style(&pkgi.version).bright().black()
             ));
 
             if !no_binary {
-                let len = pkgi.binaries.len();
-                for (idx, bin) in pkgi.binaries.iter().enumerate() {
-                    let end = (idx + 1) == len;
-
-                    if last {
-                        message.push_str("\n  ");
-                    } else {
-                        message.push_str("\n│ ");
-                    }
-
-                    let p = if end { "└" } else { "├" };
-
-                    message.push_str(&format!("{}──[bin] {}", p, bin));
-                }
+                let p = if last { " " } else { "|" };
+                message.push_str(&format!(
+                    "\n{}   └─ bin: {}",
+                    p,
+                    pkgi.binaries
+                        .iter()
+                        .map(|x| format!("{}*", console::style(x).green()))
+                        .join(", ")
+                ));
             }
 
             if !last {
@@ -134,7 +127,7 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
             }
         }
 
-        eprintln!("{}:\n{}", path.display(), message);
+        eprintln!("Gobal install location: {}\n{}", path.display(), message);
     }
 
     Ok(())
