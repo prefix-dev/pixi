@@ -454,6 +454,30 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#traditional-conda-activate-like-activation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Traditional conda activate-like activation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Traditional conda activate-like activation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#using-pixi-with-direnv" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using pixi with direnv
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#environment-variables" class="md-nav__link">
     <span class="md-ellipsis">
       Environment variables
@@ -938,6 +962,30 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#traditional-conda-activate-like-activation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Traditional conda activate-like activation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Traditional conda activate-like activation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#using-pixi-with-direnv" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using pixi with direnv
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#environment-variables" class="md-nav__link">
     <span class="md-ellipsis">
       Environment variables
@@ -1056,6 +1104,39 @@ More information about tasks can be found in the <a href="../advanced/advanced_t
 It sets the <code>PATH</code> and some more environment variables. But more importantly it also runs activation scripts that are presented by the installed packages.
 An example of this would be the <a href="https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh"><code>libglib_activate.sh</code></a> script.
 Thus, just adding the <code>bin</code> directory to the <code>PATH</code> is not enough.</p>
+<h2 id="traditional-conda-activate-like-activation">Traditional <code>conda activate</code>-like activation<a class="headerlink" href="#traditional-conda-activate-like-activation" title="Permanent link">#</a></h2>
+<p>If you prefer to use the traditional <code>conda activate</code>-like activation, you could use the <code>pixi shell-hook</code> command.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>$<span class="w"> </span>which<span class="w"> </span>python
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>python<span class="w"> </span>not<span class="w"> </span>found
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>$<span class="w"> </span><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>$<span class="w"> </span><span class="o">(</span>default<span class="o">)</span><span class="w"> </span>which<span class="w"> </span>python
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>/path/to/project/.pixi/envs/default/bin/python
+</span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>It is not encouraged to use the traditional <code>conda activate</code>-like activation, as deactivating the environment is not really possible. Use <code>pixi shell</code> instead.</p>
+</div>
+<h3 id="using-pixi-with-direnv">Using <code>pixi</code> with <code>direnv</code><a class="headerlink" href="#using-pixi-with-direnv" title="Permanent link">#</a></h3>
+<p>This allows you to use <code>pixi</code> in combination with <code>direnv</code>.
+Enter the following into your <code>.envrc</code> file:</p>
+<div class="language-shell highlight"><span class="filename">.envrc</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="c1"># (1)!</span>
+</span></code></pre></div>
+<ol>
+<li>This installs if needed, and activates the environment. <code>direnv</code> ensures that the environment is deactivated when you leave the directory.</li>
+</ol>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>my-project
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>direnv:<span class="w"> </span>error<span class="w"> </span>/my-project/.envrc<span class="w"> </span>is<span class="w"> </span>blocked.<span class="w"> </span>Run<span class="w"> </span><span class="sb">`</span>direnv<span class="w"> </span>allow<span class="sb">`</span><span class="w"> </span>to<span class="w"> </span>approve<span class="w"> </span>its<span class="w"> </span>content
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>$<span class="w"> </span>direnv<span class="w"> </span>allow
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>direnv:<span class="w"> </span>loading<span class="w"> </span>/my-project/.envrc
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>✔<span class="w"> </span>Project<span class="w"> </span><span class="k">in</span><span class="w"> </span>/my-project<span class="w"> </span>is<span class="w"> </span>ready<span class="w"> </span>to<span class="w"> </span>use!
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>direnv:<span class="w"> </span><span class="nb">export</span><span class="w"> </span>+CONDA_DEFAULT_ENV<span class="w"> </span>+CONDA_PREFIX<span class="w"> </span>+PIXI_ENVIRONMENT_NAME<span class="w"> </span>+PIXI_ENVIRONMENT_PLATFORMS<span class="w"> </span>+PIXI_PROJECT_MANIFEST<span class="w"> </span>+PIXI_PROJECT_NAME<span class="w"> </span>+PIXI_PROJECT_ROOT<span class="w"> </span>+PIXI_PROJECT_VERSION<span class="w"> </span>+PIXI_PROMPT<span class="w"> </span>~PATH
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>$<span class="w"> </span>which<span class="w"> </span>python
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>/my-project/.pixi/envs/default/bin/python
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>..
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>direnv:<span class="w"> </span>unloading
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>$<span class="w"> </span>which<span class="w"> </span>python
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>python<span class="w"> </span>not<span class="w"> </span>found
+</span></code></pre></div>
 <h2 id="environment-variables">Environment variables<a class="headerlink" href="#environment-variables" title="Permanent link">#</a></h2>
 <p>The following environment variables are set by pixi, when using the <code>pixi run</code>, <code>pixi shell</code>, or <code>pixi shell-hook</code> command:</p>
 <ul>
