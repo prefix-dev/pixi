@@ -86,6 +86,47 @@ It sets the `PATH` and some more environment variables. But more importantly it 
 An example of this would be the [`libglib_activate.sh`](https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh) script.
 Thus, just adding the `bin` directory to the `PATH` is not enough.
 
+## Traditional `conda activate`-like activation
+
+If you prefer to use the traditional `conda activate`-like activation, you could use the `pixi shell-hook` command.
+
+```shell
+$ which python
+python not found
+$ eval "$(pixi shell-hook)"
+$ (default) which python
+/path/to/project/.pixi/envs/default/bin/python
+```
+
+!!! warning
+    It is not encouraged to use the traditional `conda activate`-like activation, as deactivating the environment is not really possible. Use `pixi shell` instead.
+
+### Using `pixi` with `direnv`
+
+This allows you to use `pixi` in combination with `direnv`.
+Enter the following into your `.envrc` file:
+
+```shell title=".envrc"
+eval "$(pixi shell-hook)" # (1)!
+```
+
+1. This installs if needed, and activates the environment. `direnv` ensures that the environment is deactivated when you leave the directory.
+
+```shell
+$ cd my-project
+direnv: error /my-project/.envrc is blocked. Run `direnv allow` to approve its content
+$ direnv allow
+direnv: loading /my-project/.envrc
+✔ Project in /my-project is ready to use!
+direnv: export +CONDA_DEFAULT_ENV +CONDA_PREFIX +PIXI_ENVIRONMENT_NAME +PIXI_ENVIRONMENT_PLATFORMS +PIXI_PROJECT_MANIFEST +PIXI_PROJECT_NAME +PIXI_PROJECT_ROOT +PIXI_PROJECT_VERSION +PIXI_PROMPT ~PATH
+$ which python
+/my-project/.pixi/envs/default/bin/python
+$ cd ..
+direnv: unloading
+$ which python
+python not found
+```
+
 ## Environment variables
 The following environment variables are set by pixi, when using the `pixi run`, `pixi shell`, or `pixi shell-hook` command:
 
