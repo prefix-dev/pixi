@@ -106,7 +106,7 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
 
             message.push_str(&format!(
                 " {} {}",
-                console::style(&pkgi.name.as_source()).bold(),
+                console::style(&pkgi.name.as_source()).bold().magenta(),
                 console::style(&pkgi.version).bright().black()
             ));
 
