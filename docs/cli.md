@@ -28,6 +28,11 @@ It initializes a `pixi.toml` file and also prepares a `.gitignore` to prevent th
 
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--platform <PLATFORM> (-p)`: specify a platform that the project supports. (Allowed to be used more than once)
+- `--import <ENV_FILE> (-i)`: Import an existing conda environment file, e.g. `environment.yml`.
+!!! info "Importing an environment.yml"
+    When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
+    The `pixi.lock` will be created when you install the environment.
+    We don't support `git+` urls as dependencies for pip packages and for the `defaults` channel we use `main`, `r` and `msys2` as the default channels.
 
 ```shell
 pixi init myproject
@@ -35,6 +40,7 @@ pixi init ~/myproject
 pixi init  # Initializes directly in the current directory.
 pixi init --channel conda-forge --channel bioconda myproject
 pixi init --platform osx-64 --platform linux-64 myproject
+pixi init --import environment.yml
 ```
 
 ## `add`
@@ -58,6 +64,7 @@ It will only add if the package with its version constraint is able to work with
 - `--no-install`: Don't install the package to the environment, only add the package to the lock-file.
 - `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
+- `--feature <FEATURE> (-f)`: The feature for which the dependency should be added.
 
 ```shell
 pixi add numpy
@@ -70,6 +77,7 @@ pixi add --pypi requests[security]
 pixi add --platform osx-64 --build clang
 pixi add --no-install numpy
 pixi add --no-lockfile-update numpy
+pixi add --feature featurex numpy
 ```
 
 ## `install`

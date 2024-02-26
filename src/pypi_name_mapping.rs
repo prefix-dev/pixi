@@ -1,6 +1,12 @@
+use crate::config::get_cache_dir;
 use async_once_cell::OnceCell;
+use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
+use rattler_networking::retry_policies::ExponentialBackoff;
+use reqwest::Client;
+use reqwest_middleware::ClientBuilder;
+use reqwest_retry::RetryTransientMiddleware;
 use serde::Deserialize;
 use std::{collections::HashMap, str::FromStr};
 use url::Url;
@@ -15,7 +21,22 @@ struct CondaPyPiNameMapping {
 pub async fn conda_pypi_name_mapping() -> miette::Result<&'static HashMap<String, String>> {
     static MAPPING: OnceCell<HashMap<String, String>> = OnceCell::new();
     MAPPING.get_or_try_init(async {
-        let response = reqwest::get("https://raw.githubusercontent.com/regro/cf-graph-countyfair/master/mappings/pypi/name_mapping.json").await
+
+        // Construct a client with a retry policy and local caching
+        let retry_policy =
+            ExponentialBackoff::builder().build_with_max_retries(3);
+        let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
+        let cache_strategy = Cache(HttpCache {
+            mode: CacheMode::Default,
+            manager: CACacheManager { path: get_cache_dir().expect("missing cache directory").join("http-cache") },
+            options: HttpCacheOptions::default(),
+        });
+        let client = ClientBuilder::new(Client::new())
+            .with(cache_strategy)
+            .with(retry_strategy)
+            .build();
+
+        let response = client.get("https://raw.githubusercontent.com/regro/cf-graph-countyfair/master/mappings/pypi/name_mapping.json").send().await
             .into_diagnostic()
             .context("failed to download pypi name mapping")?;
         let mapping: Vec<CondaPyPiNameMapping> = response

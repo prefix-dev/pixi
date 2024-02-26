@@ -56,13 +56,12 @@ impl<'p> SolveGroup<'p> {
     pub fn environments(
         &self,
     ) -> impl Iterator<Item = Environment<'p>> + DoubleEndedIterator + ExactSizeIterator + 'p {
-        self.solve_group
-            .environments
-            .iter()
-            .map(|env_idx| Environment {
-                project: self.project,
-                environment: &self.project.manifest.parsed.environments.environments[*env_idx],
-            })
+        self.solve_group.environments.iter().map(|env_idx| {
+            Environment::new(
+                self.project,
+                &self.project.manifest.parsed.environments.environments[*env_idx],
+            )
+        })
     }
 
     /// Returns all features that are part of the solve group.

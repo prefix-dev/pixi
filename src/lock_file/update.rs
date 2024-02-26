@@ -1,17 +1,18 @@
 use crate::lock_file::UvResolutionContext;
+use crate::project::grouped_environment::GroupedEnvironmentName;
 use crate::{
-    config, consts, environment,
+    config, consts,
     environment::{
-        LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+        self, LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
     },
-    load_lock_file, lock_file,
+    load_lock_file,
     lock_file::{
-        update, OutdatedEnvironments, PypiPackageIdentifier, PypiRecordsByName,
+        self, update, OutdatedEnvironments, PypiPackageIdentifier, PypiRecordsByName,
         RepoDataRecordsByName,
     },
     prefix::Prefix,
     progress::global_multi_progress,
-    project::{Environment, GroupedEnvironment, GroupedEnvironmentName},
+    project::{grouped_environment::GroupedEnvironment, Environment},
     pypi_name_mapping,
     repodata::fetch_sparse_repodata_targets,
     utils::BarrierCell,
@@ -114,6 +115,9 @@ impl<'p> LockFileDerivedData<'p> {
             }
             Some(context) => context.clone(),
         };
+
+        // TODO(tim): get support for this somehow with uv
+        let _env_variables = environment.project().get_env_variables(environment).await?;
 
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
@@ -777,6 +781,8 @@ pub async fn ensure_up_to_date_lock_file(
                     }
                     Some(context) => context.clone(),
                 };
+                // Get environment variables from the activation
+                let _env_variables = project.get_env_variables(&environment).await?;
 
                 // Spawn a task to solve the pypi environment
                 let pypi_solve_future = spawn_solve_pypi_task(

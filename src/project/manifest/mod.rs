@@ -13,7 +13,6 @@ use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
 use crate::task::TaskName;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
-use ::serde::{Deserialize, Deserializer};
 pub use activation::Activation;
 pub use environment::{Environment, EnvironmentName};
 pub use feature::{Feature, FeatureName};
@@ -24,8 +23,12 @@ pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource};
 pub use python::PyPiRequirement;
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
-use serde_with::{serde_as, DisplayFromStr, PickFirst};
+use serde::de::{DeserializeSeed, MapAccess, Visitor};
+use serde::{Deserialize, Deserializer};
+use serde_with::serde_as;
+use std::fmt;
 use std::hash::Hash;
+use std::marker::PhantomData;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -338,25 +341,35 @@ impl Manifest {
         spec: &MatchSpec,
         spec_type: SpecType,
         platform: Option<Platform>,
+        feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Find the table toml table to add the dependency to.
-        let dependency_table = get_or_insert_toml_table(
-            &mut self.document,
-            platform,
-            &FeatureName::Default,
-            spec_type.name(),
-        )?;
+        let dependency_table =
+            get_or_insert_toml_table(&mut self.document, platform, feature_name, spec_type.name())?;
 
         // Determine the name of the package to add
         let (Some(name), spec) = spec.clone().into_nameless() else {
             miette::bail!("pixi does not support wildcard dependencies")
         };
 
+        // Check for duplicates.
+        if let Some(table_spec) = dependency_table.get(name.as_normalized()) {
+            if table_spec.as_value().and_then(|v| v.as_str()) == Some(spec.to_string().as_str()) {
+                return Err(miette::miette!(
+                    "{} is already added.",
+                    console::style(name.as_normalized()).bold(),
+                ));
+            }
+        }
+
         // Store (or replace) in the document
-        dependency_table.insert(name.as_source(), Item::Value(spec.to_string().into()));
+        dependency_table.insert(name.as_normalized(), Item::Value(spec.to_string().into()));
 
         // Add the dependency to the manifest as well
-        self.default_feature_mut()
+        self.parsed
+            .features
+            .entry(feature_name.clone())
+            .or_default()
             .targets
             .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
             .dependencies
@@ -380,6 +393,16 @@ impl Manifest {
             &FeatureName::Default,
             consts::PYPI_DEPENDENCIES,
         )?;
+
+        // Check for duplicates.
+        if let Some(table_spec) = dependency_table.get(name.as_ref()) {
+            if table_spec.to_string().trim() == requirement.to_string() {
+                return Err(miette::miette!(
+                    "{} is already added.",
+                    console::style(name.as_ref()).bold(),
+                ));
+            }
+        }
 
         // Add the pypi dependency to the table
         dependency_table.insert(name.as_ref(), (*requirement).clone().into());
@@ -885,6 +908,93 @@ impl ProjectManifest {
     }
 }
 
+struct PackageMap<'a>(&'a IndexMap<PackageName, NamelessMatchSpec>);
+
+impl<'de, 'a> DeserializeSeed<'de> for PackageMap<'a> {
+    type Value = PackageName;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let package_name = PackageName::deserialize(deserializer)?;
+        match self.0.get_key_value(&package_name) {
+            Some((package_name, _)) => {
+                 Err(serde::de::Error::custom(
+                    format!(
+                    "duplicate dependency: {} (please avoid using capitalized names for the dependencies)", package_name.as_source())
+                ))
+            }
+            None => Ok(package_name),
+        }
+    }
+}
+
+struct NamelessMatchSpecWrapper {}
+
+impl<'de, 'a> DeserializeSeed<'de> for &'a NamelessMatchSpecWrapper {
+    type Value = NamelessMatchSpec;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serde_untagged::UntaggedEnumVisitor::new()
+            .string(|str| NamelessMatchSpec::from_str(str).map_err(serde::de::Error::custom))
+            .map(|map| {
+                NamelessMatchSpec::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+            })
+            .expecting("either a map or a string")
+            .deserialize(deserializer)
+    }
+}
+
+pub(crate) fn deserialize_package_map<'de, D>(
+    deserializer: D,
+) -> Result<IndexMap<PackageName, NamelessMatchSpec>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct PackageMapVisitor(PhantomData<()>);
+
+    impl<'de> Visitor<'de> for PackageMapVisitor {
+        type Value = IndexMap<PackageName, NamelessMatchSpec>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            write!(formatter, "a map")
+        }
+
+        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+        where
+            A: MapAccess<'de>,
+        {
+            let mut result = IndexMap::new();
+            let match_spec = NamelessMatchSpecWrapper {};
+            while let Some((package_name, match_spec)) = map
+                .next_entry_seed::<PackageMap, &NamelessMatchSpecWrapper>(
+                    PackageMap(&result),
+                    &match_spec,
+                )?
+            {
+                result.insert(package_name, match_spec);
+            }
+
+            Ok(result)
+        }
+    }
+    let visitor = PackageMapVisitor(PhantomData);
+    deserializer.deserialize_seq(visitor)
+}
+
+pub(crate) fn deserialize_opt_package_map<'de, D>(
+    deserializer: D,
+) -> Result<Option<IndexMap<PackageName, NamelessMatchSpec>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Some(deserialize_package_map(deserializer)?))
+}
+
 impl<'de> Deserialize<'de> for ProjectManifest {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -908,16 +1018,13 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             //
             // #[serde(flatten)]
             // default_target: Target,
-            #[serde(default)]
-            #[serde_as(as = "IndexMap<_, PickFirst<(DisplayFromStr, _)>>")]
+            #[serde(default, deserialize_with = "deserialize_package_map")]
             dependencies: IndexMap<PackageName, NamelessMatchSpec>,
 
-            #[serde(default)]
-            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
+            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
             host_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
-            #[serde(default)]
-            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
+            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
             build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
             #[serde(default)]
@@ -941,7 +1048,6 @@ impl<'de> Deserialize<'de> for ProjectManifest {
         }
 
         let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
-
         let mut dependencies = HashMap::from_iter([(SpecType::Run, toml_manifest.dependencies)]);
         if let Some(host_deps) = toml_manifest.host_dependencies {
             dependencies.insert(SpecType::Host, host_deps);
@@ -2350,5 +2456,158 @@ test = "test initial"
             "tasks",
         );
         assert_display_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_dependency() {
+        let file_contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[dependencies]
+foo = "*"
+
+[feature.test.dependencies]
+bar = "*"
+            "#;
+        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        manifest
+            .add_dependency(
+                &MatchSpec::from_str(" baz >=1.2.3").unwrap(),
+                SpecType::Run,
+                None,
+                &FeatureName::Default,
+            )
+            .unwrap();
+        assert_eq!(
+            manifest
+                .default_feature()
+                .targets
+                .default()
+                .dependencies
+                .get(&SpecType::Run)
+                .unwrap()
+                .get(&PackageName::from_str("baz").unwrap())
+                .unwrap()
+                .to_string(),
+            ">=1.2.3".to_string()
+        );
+        manifest
+            .add_dependency(
+                &MatchSpec::from_str(" bal >=2.3").unwrap(),
+                SpecType::Run,
+                None,
+                &FeatureName::Named("test".to_string()),
+            )
+            .unwrap();
+
+        assert_eq!(
+            manifest
+                .feature(&FeatureName::Named("test".to_string()))
+                .unwrap()
+                .targets
+                .default()
+                .dependencies
+                .get(&SpecType::Run)
+                .unwrap()
+                .get(&PackageName::from_str("bal").unwrap())
+                .unwrap()
+                .to_string(),
+            ">=2.3".to_string()
+        );
+
+        manifest
+            .add_dependency(
+                &MatchSpec::from_str(" boef >=2.3").unwrap(),
+                SpecType::Run,
+                Some(Platform::Linux64),
+                &FeatureName::Named("extra".to_string()),
+            )
+            .unwrap();
+
+        assert_eq!(
+            manifest
+                .feature(&FeatureName::Named("extra".to_string()))
+                .unwrap()
+                .targets
+                .for_target(&TargetSelector::Platform(Platform::Linux64))
+                .unwrap()
+                .dependencies
+                .get(&SpecType::Run)
+                .unwrap()
+                .get(&PackageName::from_str("boef").unwrap())
+                .unwrap()
+                .to_string(),
+            ">=2.3".to_string()
+        );
+
+        manifest
+            .add_dependency(
+                &MatchSpec::from_str(" cmake >=2.3").unwrap(),
+                SpecType::Build,
+                Some(Platform::Linux64),
+                &FeatureName::Named("build".to_string()),
+            )
+            .unwrap();
+
+        assert_eq!(
+            manifest
+                .feature(&FeatureName::Named("build".to_string()))
+                .unwrap()
+                .targets
+                .for_target(&TargetSelector::Platform(Platform::Linux64))
+                .unwrap()
+                .dependencies
+                .get(&SpecType::Build)
+                .unwrap()
+                .get(&PackageName::from_str("cmake").unwrap())
+                .unwrap()
+                .to_string(),
+            ">=2.3".to_string()
+        );
+
+        assert_display_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_duplicate_dependency() {
+        let contents = format!(
+            r#"
+        {PROJECT_BOILERPLATE}
+
+        [dependencies]
+        Flask = "2.*"
+        flask = "2.*"
+        "#
+        );
+        let manifest = ProjectManifest::from_toml_str(&contents);
+
+        assert!(manifest.is_err());
+        assert!(manifest
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate dependency"));
+    }
+
+    #[test]
+    fn test_duplicate_host_dependency() {
+        let contents = format!(
+            r#"
+        {PROJECT_BOILERPLATE}
+
+        [host-dependencies]
+        LibC = "2.12"
+        libc = "2.12"
+        "#
+        );
+        let manifest = ProjectManifest::from_toml_str(&contents);
+
+        assert!(manifest.is_err());
+        assert!(manifest
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate dependency"));
     }
 }

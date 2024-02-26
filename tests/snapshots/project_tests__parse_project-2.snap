@@ -1,0 +1,10 @@
+---
+source: tests/project_tests.rs
+expression: "dependency_names(&project, Platform::OsxArm64)"
+---
+[
+    "all",
+    "osx_arm64",
+    "all_macos",
+    "all_unix",
+]

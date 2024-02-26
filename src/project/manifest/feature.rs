@@ -2,6 +2,7 @@ use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelec
 use crate::consts;
 use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
 use crate::project::manifest::target::Targets;
+use crate::project::manifest::{deserialize_opt_package_map, deserialize_package_map};
 use crate::project::SpecType;
 use crate::task::{Task, TaskName};
 use crate::utils::spanned::PixiSpanned;
@@ -10,14 +11,15 @@ use itertools::Either;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_with::{serde_as, DisplayFromStr, PickFirst};
+use serde_with::serde_as;
 use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
 use std::fmt;
 
 /// The name of a feature. This is either a string or default for the default feature.
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Default)]
 pub enum FeatureName {
+    #[default]
     Default,
     Named(String),
 }
@@ -99,7 +101,7 @@ impl fmt::Display for FeatureName {
 ///
 /// Individual features cannot be used directly, instead they are grouped together into
 /// environments. Environments are then locked and installed.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Feature {
     /// The name of the feature or `None` if the feature is the default feature.
     pub name: FeatureName,
@@ -232,16 +234,13 @@ impl<'de> Deserialize<'de> for Feature {
             #[serde(default)]
             target: IndexMap<PixiSpanned<TargetSelector>, Target>,
 
-            #[serde(default)]
-            #[serde_as(as = "IndexMap<_, PickFirst<(DisplayFromStr, _)>>")]
+            #[serde(default, deserialize_with = "deserialize_package_map")]
             dependencies: IndexMap<PackageName, NamelessMatchSpec>,
 
-            #[serde(default)]
-            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
+            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
             host_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
-            #[serde(default)]
-            #[serde_as(as = "Option<IndexMap<_, PickFirst<(DisplayFromStr, _)>>>")]
+            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
             build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
             #[serde(default)]
@@ -257,7 +256,6 @@ impl<'de> Deserialize<'de> for Feature {
         }
 
         let inner = FeatureInner::deserialize(deserializer)?;
-
         let mut dependencies = HashMap::from_iter([(SpecType::Run, inner.dependencies)]);
         if let Some(host_deps) = inner.host_dependencies {
             dependencies.insert(SpecType::Host, host_deps);

@@ -1,19 +1,20 @@
-use miette::IntoDiagnostic;
-
 use crate::lock_file::UvResolutionContext;
+use crate::project::grouped_environment::GroupedEnvironmentName;
 use crate::{
     consts, install, install_pypi,
     lock_file::UpdateLockFileOptions,
     prefix::Prefix,
-    progress::{self},
+    progress,
     project::{
+        grouped_environment::GroupedEnvironment,
         manifest::{EnvironmentName, SystemRequirements},
         virtual_packages::verify_current_platform_has_required_virtual_packages,
-        Environment, GroupedEnvironment, GroupedEnvironmentName,
+        Environment,
     },
     Project,
 };
 use indexmap::IndexMap;
+use miette::IntoDiagnostic;
 use rattler::{
     install::{PythonInfo, Transaction},
     package_cache::PackageCache,
