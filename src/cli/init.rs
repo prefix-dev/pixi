@@ -437,7 +437,7 @@ mod tests {
                     PackageName::from_str("requests").unwrap(),
                     PyPiRequirement {
                         version: None,
-                        extras: None,
+                        extras: Some(vec![]),
                         index: None,
                     }
                 ),
@@ -445,7 +445,7 @@ mod tests {
                     PackageName::from_str("DeepOBS").unwrap(),
                     PyPiRequirement {
                         version: None,
-                        extras: None,
+                        extras: Some(vec![]),
                         index: None,
                     },
                 ),
@@ -453,7 +453,7 @@ mod tests {
                     PackageName::from_str("torch").unwrap(),
                     PyPiRequirement {
                         version: pep440_rs::VersionSpecifiers::from_str("==1.8.1").ok(),
-                        extras: None,
+                        extras: Some(vec![]),
                         index: None,
                     }
                 ),
