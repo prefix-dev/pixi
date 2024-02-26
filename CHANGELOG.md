@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.15.1] - 2024-02-26
+### 📃 Details
+
+#### Added
+- Add prefix to project info json output by @baszalmstra in [#859](https://github.com/prefix-dev/pixi/pull/859)
+
+#### Changed
+- New `pixi global list` display format by @chawyehsu in [#723](https://github.com/prefix-dev/pixi/pull/723)
+- Add direnv usage by @pavelzw in [#845](https://github.com/prefix-dev/pixi/pull/845)
+- Add docker example by @pavelzw in [#846](https://github.com/prefix-dev/pixi/pull/846)
+- Install/remove multiple packages globally by @chawyehsu in [#854](https://github.com/prefix-dev/pixi/pull/854)
+
+#### Fixed
+- Prefix file in `init --import` by @ruben-arts in [#855](https://github.com/prefix-dev/pixi/pull/855)
+- Environment and feature names in pixi info --json by @baszalmstra in [#857](https://github.com/prefix-dev/pixi/pull/857)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.15.0..v0.15.1)
 
 ## [0.15.0](https://github.com/ruben-arts/pixi/compare/v0.14.0...v0.15.0) - 2024-02-23
 
