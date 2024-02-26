@@ -2,8 +2,9 @@ use super::{
     dependencies::Dependencies,
     errors::{UnknownTask, UnsupportedPlatformError},
     manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
-    PyPiRequirement, SpecType,
+    PyPiRequirement, SolveGroup, SpecType,
 };
+use crate::task::TaskName;
 use crate::{task::Task, Project};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{Either, Itertools};
@@ -45,21 +46,29 @@ impl Debug for Environment<'_> {
     }
 }
 
-impl Hash for Environment<'_> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.environment.name.hash(state)
-    }
-}
-
-impl<'p> PartialEq<Self> for Environment<'p> {
+impl<'p> PartialEq for Environment<'p> {
     fn eq(&self, other: &Self) -> bool {
-        self.environment.name == other.environment.name
+        std::ptr::eq(self.project, other.project)
+            && std::ptr::eq(self.environment, other.environment)
     }
 }
 
-impl Eq for Environment<'_> {}
+impl<'p> Eq for Environment<'p> {}
 
 impl<'p> Environment<'p> {
+    /// Return new instance of Environment
+    pub fn new(project: &'p Project, environment: &'p manifest::Environment) -> Self {
+        Self {
+            project,
+            environment,
+        }
+    }
+
+    /// Returns true if this environment is the default environment.
+    pub fn is_default(&self) -> bool {
+        self.environment.name == EnvironmentName::Default
+    }
+
     /// Returns the project this environment belongs to.
     pub fn project(&self) -> &'p Project {
         self.project
@@ -68,6 +77,18 @@ impl<'p> Environment<'p> {
     /// Returns the name of this environment.
     pub fn name(&self) -> &EnvironmentName {
         &self.environment.name
+    }
+
+    /// Returns the solve group to which this environment belongs, or `None` if no solve group was
+    /// specified.
+    pub fn solve_group(&self) -> Option<SolveGroup<'p>> {
+        self.environment
+            .solve_group
+            .map(|solve_group_idx| SolveGroup {
+                project: self.project,
+                solve_group: &self.project.manifest.parsed.solve_groups.solve_groups
+                    [solve_group_idx],
+            })
     }
 
     /// Returns the manifest definition of this environment. See the documentation of
@@ -86,19 +107,24 @@ impl<'p> Environment<'p> {
 
     /// Returns references to the features that make up this environment. The default feature is
     /// always added at the end.
-    pub fn features(&self) -> impl Iterator<Item = &'p Feature> + DoubleEndedIterator + '_ {
-        self.environment
-            .features
-            .iter()
-            .map(|feature_name| {
-                self.project
-                    .manifest
-                    .parsed
-                    .features
-                    .get(&FeatureName::Named(feature_name.clone()))
-                    .expect("feature usage should have been validated upfront")
-            })
-            .chain([self.project.manifest.default_feature()])
+    pub fn features(
+        &self,
+        include_default: bool,
+    ) -> impl Iterator<Item = &'p Feature> + DoubleEndedIterator + 'p {
+        let environment_features = self.environment.features.iter().map(|feature_name| {
+            self.project
+                .manifest
+                .parsed
+                .features
+                .get(&FeatureName::Named(feature_name.clone()))
+                .expect("feature usage should have been validated upfront")
+        });
+
+        if include_default {
+            Either::Left(environment_features.chain([self.project.manifest.default_feature()]))
+        } else {
+            Either::Right(environment_features)
+        }
     }
 
     /// Returns the channels associated with this environment.
@@ -111,7 +137,7 @@ impl<'p> Environment<'p> {
     /// used instead. However, these are not considered during deduplication. This means the default
     /// channels are always added to the end of the list.
     pub fn channels(&self) -> IndexSet<&'p Channel> {
-        self.features()
+        self.features(true)
             .filter_map(|feature| match feature.name {
                 // Use the user-specified channels of each feature if the feature defines them. Only
                 // for the default feature do we use the default channels from the project metadata
@@ -144,7 +170,7 @@ impl<'p> Environment<'p> {
     /// Features can specify which platforms they support through the `platforms` key. If a feature
     /// does not specify any platforms the features defined by the project are used.
     pub fn platforms(&self) -> HashSet<Platform> {
-        self.features()
+        self.features(true)
             .map(|feature| {
                 match &feature.platforms {
                     Some(platforms) => &platforms.value,
@@ -169,27 +195,34 @@ impl<'p> Environment<'p> {
     pub fn tasks(
         &self,
         platform: Option<Platform>,
-    ) -> Result<HashMap<&'p str, &'p Task>, UnsupportedPlatformError> {
+        include_default: bool,
+    ) -> Result<HashMap<&'p TaskName, &'p Task>, UnsupportedPlatformError> {
         self.validate_platform_support(platform)?;
         let result = self
-            .features()
+            .features(include_default)
             .flat_map(|feature| feature.targets.resolve(platform))
             .rev() // Reverse to get the most specific targets last.
             .flat_map(|target| target.tasks.iter())
-            .map(|(name, task)| (name.as_str(), task))
             .collect();
         Ok(result)
     }
 
     /// Returns the task with the given `name` and for the specified `platform` or an `UnknownTask`
     /// which explains why the task was not available.
-    pub fn task(&self, name: &str, platform: Option<Platform>) -> Result<&'p Task, UnknownTask> {
-        match self.tasks(platform).map(|tasks| tasks.get(name).copied()) {
+    pub fn task(
+        &self,
+        name: &TaskName,
+        platform: Option<Platform>,
+    ) -> Result<&'p Task, UnknownTask> {
+        match self
+            .tasks(platform, true)
+            .map(|tasks| tasks.get(name).copied())
+        {
             Err(_) | Ok(None) => Err(UnknownTask {
                 project: self.project,
                 environment: self.name().clone(),
                 platform,
-                task_name: name.to_string(),
+                task_name: name.clone(),
             }),
             Ok(Some(task)) => Ok(task),
         }
@@ -200,8 +233,32 @@ impl<'p> Environment<'p> {
     /// The system requirements of the environment are the union of the system requirements of all
     /// the features that make up the environment. If multiple features specify a requirement for
     /// the same system package, the highest is chosen.
+    ///
+    /// If an environment defines a solve group the system requirements of all environments in the
+    /// solve group are also combined. This means that if two environments in the same solve group
+    /// specify conflicting system requirements that the highest system requirements are chosen.
+    ///
+    /// This is done to ensure that the requirements of all environments in the same solve group are
+    /// compatible with each other.
+    ///
+    /// If you want to get the system requirements for this environment without taking the solve
+    /// group into account, use the [`Self::local_system_requirements`] method.
     pub fn system_requirements(&self) -> SystemRequirements {
-        self.features()
+        if let Some(solve_group) = self.solve_group() {
+            solve_group.system_requirements()
+        } else {
+            self.local_system_requirements()
+        }
+    }
+
+    /// Returns the system requirements for this environment without taking the solve-group into
+    /// account.
+    ///
+    /// The system requirements of the environment are the union of the system requirements of all
+    /// the features that make up the environment. If multiple features specify a requirement for
+    /// the same system package, the highest is chosen.
+    pub fn local_system_requirements(&self) -> SystemRequirements {
+        self.features(true)
             .map(|feature| &feature.system_requirements)
             .fold(SystemRequirements::default(), |acc, req| {
                 acc.union(req)
@@ -215,7 +272,7 @@ impl<'p> Environment<'p> {
     /// requirement for the same package that both requirements are returned. The different
     /// requirements per package are sorted in the same order as the features they came from.
     pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
-        self.features()
+        self.features(true)
             .filter_map(|f| f.dependencies(kind, platform))
             .map(|deps| Dependencies::from(deps.into_owned()))
             .reduce(|acc, deps| acc.union(&deps))
@@ -231,7 +288,7 @@ impl<'p> Environment<'p> {
         &self,
         platform: Option<Platform>,
     ) -> IndexMap<rip::types::PackageName, Vec<PyPiRequirement>> {
-        self.features()
+        self.features(true)
             .filter_map(|f| f.pypi_dependencies(platform))
             .fold(IndexMap::default(), |mut acc, deps| {
                 // Either clone the values from the Cow or move the values from the owned map.
@@ -258,7 +315,7 @@ impl<'p> Environment<'p> {
     /// The activation scripts of all features are combined in the order they are defined for the
     /// environment.
     pub fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
-        self.features()
+        self.features(true)
             .filter_map(|f| f.activation_scripts(platform))
             .flatten()
             .cloned()
@@ -285,7 +342,13 @@ impl<'p> Environment<'p> {
 
     /// Returns true if the environments contains any reference to a pypi dependency.
     pub fn has_pypi_dependencies(&self) -> bool {
-        self.features().any(|f| f.has_pypi_dependencies())
+        self.features(true).any(|f| f.has_pypi_dependencies())
+    }
+}
+
+impl<'p> Hash for Environment<'p> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.environment.name.hash(state);
     }
 }
 
@@ -367,7 +430,7 @@ mod tests {
 
         let task = manifest
             .default_environment()
-            .task("foo", None)
+            .task(&"foo".into(), None)
             .unwrap()
             .as_single_command()
             .unwrap();
@@ -376,7 +439,7 @@ mod tests {
 
         let task_osx = manifest
             .default_environment()
-            .task("foo", Some(Platform::Linux64))
+            .task(&"foo".into(), Some(Platform::Linux64))
             .unwrap()
             .as_single_command()
             .unwrap();
@@ -385,7 +448,7 @@ mod tests {
 
         assert!(manifest
             .default_environment()
-            .tasks(Some(Platform::Osx64))
+            .tasks(Some(Platform::Osx64), true)
             .is_err())
     }
 

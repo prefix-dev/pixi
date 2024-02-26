@@ -1,15 +1,17 @@
+use std::io;
+use std::io::{stdout, Write};
 use std::path::PathBuf;
 
 use clap::Parser;
-use comfy_table::presets::NOTHING;
-use comfy_table::{Attribute, Cell, Color, ContentArrangement, Table};
+use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
 use rattler_conda_types::Platform;
 use rattler_lock::Package;
 use serde::Serialize;
 
-use crate::lock_file::load_lock_file;
+use crate::lock_file::UpdateLockFileOptions;
+use crate::project::manifest::EnvironmentName;
 use crate::Project;
 
 // an enum to sort by size or name
@@ -47,6 +49,17 @@ pub struct Args {
     /// The path to 'pixi.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
+
+    /// The environment to list packages for. Defaults to the default environment.
+    #[arg(short, long)]
+    pub environment: Option<String>,
+
+    #[clap(flatten)]
+    pub lock_file_usage: super::LockFileUsageArgs,
+
+    /// Don't install the environment for pypi solving, only update the lock-file if it can solve without installing.
+    #[arg(long)]
+    pub no_install: bool,
 }
 
 #[derive(Serialize)]
@@ -61,24 +74,28 @@ struct PackageToOutput {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    // Load the project
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())
-        .ok()
-        .ok_or_else(|| miette::miette!("No project found"))?;
+    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let environment_name = args
+        .environment
+        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
+    let environment = project
+        .environment(&environment_name)
+        .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
+
+    let lock_file = project
+        .up_to_date_lock_file(UpdateLockFileOptions {
+            lock_file_usage: args.lock_file_usage.into(),
+            no_install: args.no_install,
+            ..UpdateLockFileOptions::default()
+        })
+        .await?;
 
     // Load the platform
     let platform = args.platform.unwrap_or_else(Platform::current);
 
-    // Load the environment
-    let environment = project.default_environment();
-
-    // Load the lockfile
-    let lock_file = load_lock_file(&project)
-        .await
-        .map_err(|_| miette::miette!("Cannot load lockfile. Did you run `pixi install` first?"))?;
-
     // Get all the packages in the environment.
     let locked_deps = lock_file
+        .lock_file
         .environment(environment.name().as_str())
         .and_then(|env| env.packages(platform).map(Vec::from_iter))
         .unwrap_or_default();
@@ -90,7 +107,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|p| p.as_source().to_string())
         .collect_vec();
 
-    // Convert the the list of package record to specific output format
+    // Convert the list of package record to specific output format
     let mut packages_to_output = locked_deps
         .iter()
         .map(|p| create_package_to_output(p, &project_dependency_names))
@@ -133,67 +150,56 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         json_packages(&packages_to_output, args.json_pretty);
     } else {
         // print packages as table
-        print_packages_as_table(&packages_to_output);
+        print_packages_as_table(&packages_to_output).expect("an io error occurred");
     }
 
     Ok(())
 }
 
-fn print_packages_as_table(packages: &Vec<PackageToOutput>) {
-    // Initialize table
-    let mut table = Table::new();
+fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
+    let mut writer = tabwriter::TabWriter::new(stdout());
 
-    table
-        .load_preset(NOTHING)
-        // .apply_modifier(UTF8_NO_BORDERS)
-        .set_content_arrangement(ContentArrangement::Dynamic);
-
-    // Add headers
-    table.set_header(vec![
-        Cell::new("Package").add_attribute(Attribute::Bold),
-        Cell::new("Version").add_attribute(Attribute::Bold),
-        Cell::new("Build").add_attribute(Attribute::Bold),
-        Cell::new("Size").add_attribute(Attribute::Bold),
-        Cell::new("Kind").add_attribute(Attribute::Bold),
-        Cell::new("Source").add_attribute(Attribute::Bold),
-    ]);
+    let header_style = console::Style::new().bold();
+    writeln!(
+        writer,
+        "{}\t{}\t{}\t{}\t{}\t{}",
+        header_style.apply_to("Package"),
+        header_style.apply_to("Version"),
+        header_style.apply_to("Build"),
+        header_style.apply_to("Size"),
+        header_style.apply_to("Kind"),
+        header_style.apply_to("Source")
+    )?;
 
     for package in packages {
-        // Convert size to human readable format
-        let size_human = match package.size_bytes {
-            Some(size_bytes) => human_bytes(size_bytes as f64).to_string(),
-            None => "".to_string(),
-        };
-
-        let package_name = if package.is_explicit {
-            Cell::new(&package.name)
-                .fg(Color::Green)
-                .add_attribute(Attribute::Bold)
+        if package.is_explicit {
+            write!(
+                writer,
+                "{}",
+                console::style(&package.name).fg(Color::Green).bold()
+            )?
         } else {
-            Cell::new(&package.name)
+            write!(writer, "{}", &package.name)?;
         };
 
-        table.add_row(vec![
-            package_name,
-            Cell::new(&package.version),
-            Cell::new(
-                package
-                    .build
-                    .as_ref()
-                    .map_or_else(|| "".to_string(), |b| b.to_owned()),
-            ),
-            Cell::new(size_human),
-            Cell::new(&package.kind),
-            Cell::new(
-                package
-                    .source
-                    .as_ref()
-                    .map_or_else(|| "".to_string(), |s| s.to_owned()),
-            ),
-        ]);
+        // Convert size to human readable format
+        let size_human = package
+            .size_bytes
+            .map(|size| human_bytes(size as f64))
+            .unwrap_or_default();
+
+        writeln!(
+            writer,
+            "\t{}\t{}\t{}\t{}\t{}",
+            &package.version,
+            package.build.as_deref().unwrap_or(""),
+            size_human,
+            &package.kind,
+            package.source.as_deref().unwrap_or("")
+        )?;
     }
 
-    println!("{table}");
+    writer.flush()
 }
 
 fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {

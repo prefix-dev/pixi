@@ -35,4 +35,7 @@ RUN --mount=type=cache,target=/root/.cache/rattler pixi install
 COPY ../../. ./
 
 # Build pixi a custom pixi version in a docker container by running pixi the latest pixi ;)
-RUN pixi run build
+RUN pixi run install
+
+# Add .cargo/bin to the path
+ENV PATH="/root/.cargo/bin:${PATH}"

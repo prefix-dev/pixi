@@ -29,8 +29,7 @@
 `pixi` is a cross-platform, multi-language package manager and workflow tool built on the foundation of the conda ecosystem. It provides developers with an exceptional experience similar to popular package managers like `cargo` or `yarn`, but for any language.
 
 Developed with ❤️ at [prefix.dev](https://prefix.dev).
-
-![Real-time pixi_demo](https://github.com/ruben-arts/pixi/assets/12893423/8b1a1273-a210-4be2-a664-32076c535428)
+[![Real-time pixi_demo](https://github.com/prefix-dev/pixi/assets/12893423/0fc8f8c8-ac13-4c14-891b-dc613f25475b)](https://asciinema.org/a/636482)
 
 ## Highlights
 
@@ -74,29 +73,24 @@ curl -fsSL https://pixi.sh/install.sh | bash
 # or with brew
 brew install pixi
 ```
+
 The script will also update your ~/.bash_profile to include ~/.pixi/bin in your PATH, allowing you to invoke the pixi command from anywhere.
 You might need to restart your terminal or source your shell for the changes to take effect.
 
-#### Arch Linux
+### Windows
 
-You can install `pixi` from the [extra repository](https://archlinux.org/packages/extra/x86_64/pixi/) using [pacman](https://wiki.archlinux.org/title/Pacman):
-
-```sh
-pacman -S pixi
-```
-
-## Windows
 To install Pixi on Windows, open a PowerShell terminal (you may need to run it as an administrator) and run the following command:
 
 ```powershell
 iwr -useb https://pixi.sh/install.ps1 | iex
 ```
+
 The script will inform you once the installation is successful and add the ~/.pixi/bin directory to your PATH, which will allow you to run the pixi command from any location.
 Or with `winget`
-```
+
+```shell
 winget install prefix-dev.pixi
 ```
-
 
 ### Autocompletion
 
@@ -118,7 +112,27 @@ Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-
 
 And then restart the shell or source the shell config file.
 
-## Install from source
+### Distro Packages
+
+[![Packaging status](https://repology.org/badge/vertical-allrepos/pixi.svg)](https://repology.org/project/pixi/versions)
+
+#### Arch Linux
+
+You can install `pixi` from the [extra repository](https://archlinux.org/packages/extra/x86_64/pixi/) using [pacman](https://wiki.archlinux.org/title/Pacman):
+
+```shell
+pacman -S pixi
+```
+
+#### Alpine Linux
+
+`pixi` is available for [Alpine Edge](https://pkgs.alpinelinux.org/packages?name=pixi&branch=edge). It can be installed via [apk](https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper) after enabling the [testing repository](https://wiki.alpinelinux.org/wiki/Repositories).
+
+```shell
+apk add pixi
+```
+
+## Build/install from source
 
 `pixi` is 100% written in Rust and therefore it can be installed, built and tested with cargo.
 To start using `pixi` from a source build run:
@@ -140,17 +154,22 @@ If you have any issues building because of the dependency on `rattler` checkout
 it's [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try)
 
 ## Uninstall
+
 To uninstall the pixi binary should be removed.
 Delete `pixi` from the `$PIXI_DIR` which is default to `~/.pixi/bin/pixi`
 
 So on Linux its:
+
 ```shell
 rm ~/.pixi/bin/pixi
 ```
+
 and on Windows:
+
 ```shell
 $PIXI_BIN = "$Env:LocalAppData\pixi\bin\pixi"; Remove-Item -Path $PIXI_BIN
 ```
+
 After this command you can still use the tools you installed with `pixi`.
 To remove these as well just remove the whole `~/.pixi` directory and remove the directory from your path.
 
@@ -211,6 +230,7 @@ pixi run cowpy "Thanks for using pixi"
 ```
 
 Activate a shell in the environment
+
 ```shell
 pixi shell
 cowpy "Thanks for using pixi"
@@ -258,6 +278,7 @@ We're very active and would be happy to welcome you to our
 community. [Join our discord server today!][chat-url]
 
 <a name="pixibuilt"></a>
+
 ## Built using pixi
 
 To see what's being built with `pixi` check out the [Community](/docs/Community.md) page.

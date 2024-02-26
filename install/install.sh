@@ -80,7 +80,7 @@ update_shell() {
     LINE=$2
 
     # shell update can be suppressed by `PIXI_NO_PATH_UPDATE` env var
-    [[ ! -z "$PIXI_NO_PATH_UPDATE" ]] && return
+    [[ ! -z "${PIXI_NO_PATH_UPDATE-}" ]] && echo "No path update because PIXI_NO_PATH_UPDATE has a value" && return
 
     # Create the file if it doesn't exist
     if [ -f "$FILE" ]; then

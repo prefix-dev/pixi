@@ -45,7 +45,7 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
             print_no_packages_found_message();
             return Ok(());
         };
-        let prefix = Prefix::new(bin_env_prefix)?;
+        let prefix = Prefix::new(bin_env_prefix);
 
         let Ok(bin_prefix) = BinDir::from_existing().await else {
             print_no_packages_found_message();

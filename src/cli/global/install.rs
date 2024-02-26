@@ -7,6 +7,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
+use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord};
 use rattler_networking::AuthenticationMiddleware;
 use rattler_repodata_gateway::sparse::SparseRepoData;
@@ -426,6 +427,8 @@ pub(super) async fn globally_install_package(
 
         locked_packages: vec![],
         pinned_packages: vec![],
+
+        timeout: None,
     };
 
     // Solve it
@@ -433,7 +436,7 @@ pub(super) async fn globally_install_package(
 
     // Create the binary environment prefix where we install or update the package
     let BinEnvDir(bin_prefix) = BinEnvDir::create(&package_name).await?;
-    let prefix = Prefix::new(bin_prefix)?;
+    let prefix = Prefix::new(bin_prefix);
     let prefix_records = prefix.find_installed_packages(None).await?;
 
     // Create the transaction that we need
@@ -448,17 +451,19 @@ pub(super) async fn globally_install_package(
 
     // Execute the transaction if there is work to do
     if has_transactions {
+        let package_cache = Arc::new(PackageCache::new(config::get_cache_dir()?.join("pkgs")));
+
         // Execute the operations that are returned by the solver.
-        await_in_progress(
-            "creating virtual environment",
+        await_in_progress("creating virtual environment", |pb| {
             execute_transaction(
+                package_cache,
                 &transaction,
                 &prefix_records,
                 prefix.root().to_path_buf(),
-                config::get_cache_dir()?,
                 authenticated_client,
-            ),
-        )
+                pb,
+            )
+        })
         .await?;
     }
 

@@ -1,7 +1,8 @@
+use indexmap::IndexMap;
 use std::collections::HashMap;
 
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
+use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
 use rattler_shell::{
     activation::{ActivationError, ActivationVariables, Activator, PathModificationBehavior},
@@ -10,7 +11,6 @@ use rattler_shell::{
 
 use crate::{
     environment::{get_up_to_date_prefix, LockFileUsage},
-    progress::await_in_progress,
     project::{manifest::EnvironmentName, Environment},
     Project,
 };
@@ -117,7 +117,9 @@ pub fn get_activator<'p>(
 }
 
 /// Runs and caches the activation script.
-async fn run_activation(environment: &Environment<'_>) -> miette::Result<HashMap<String, String>> {
+pub async fn run_activation(
+    environment: &Environment<'_>,
+) -> miette::Result<HashMap<String, String>> {
     let activator = get_activator(environment, ShellEnum::default()).map_err(|e| {
         miette::miette!(format!(
             "failed to create activator for {:?}\n{}",
@@ -177,29 +179,11 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
 pub async fn get_activation_env<'p>(
     environment: &'p Environment<'p>,
     lock_file_usage: LockFileUsage,
-) -> miette::Result<HashMap<String, String>> {
+) -> miette::Result<&HashMap<String, String>> {
     // Get the prefix which we can then activate.
-    get_up_to_date_prefix(
-        environment,
-        lock_file_usage,
-        false,
-        None,
-        Default::default(),
-    )
-    .await?;
+    get_up_to_date_prefix(environment, lock_file_usage, false, IndexMap::default()).await?;
 
-    // Get environment variables from the activation
-    let activation_env = await_in_progress("activating environment", run_activation(environment))
-        .await
-        .wrap_err("failed to activate environment")?;
-
-    let environment_variables = get_environment_variables(environment);
-
-    // Construct command environment by concatenating the environments
-    Ok(activation_env
-        .into_iter()
-        .chain(environment_variables.into_iter())
-        .collect())
+    environment.project().get_env_variables(environment).await
 }
 
 #[cfg(test)]

@@ -66,4 +66,4 @@ On Linux, one can use `GNOME Keyring` (or just Keyring) to access credentials th
 ## Fallback storage
 
 If you run on a server with none of the aforementioned keychains available, then pixi falls back to store the credentials in an _insecure_ JSON file.
-This JSON file is located at `~/.rattler/rattler_auth_store.json` and contains the credentials.
+This JSON file is located at `~/.rattler/credentials.json` and contains the credentials.

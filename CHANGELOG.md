@@ -4,6 +4,179 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.15.0](https://github.com/ruben-arts/pixi/compare/v0.14.0...v0.15.0) - 2024-02-23
+
+### ✨ Highlights
+- `[pypi-dependencies]` now get build in the created environment so it uses the conda installed build tools.
+- `pixi init --import env.yml` to import an existing conda environment file.
+- `[target.unix.dependencies]` to specify dependencies for unix systems instead of per platform.
+
+### 📃 Details
+#### Added
+- pass environment variables during pypi resolution and install ([#818](https://github.com/ruben-arts/pixi/pull/818))
+- skip micromamba style selector lines and warn about them ([#830](https://github.com/ruben-arts/pixi/pull/830))
+- add import yml flag ([#792](https://github.com/ruben-arts/pixi/pull/792))
+- check duplicate dependencies ([#717](https://github.com/ruben-arts/pixi/pull/717))
+- *(ci)* check conventional PR title ([#820](https://github.com/ruben-arts/pixi/pull/820))
+- add `--feature` to `pixi add` ([#803](https://github.com/ruben-arts/pixi/pull/803))
+- add windows, macos, linux and unix to targets ([#832](https://github.com/ruben-arts/pixi/pull/832))
+
+#### Fixed
+- cache and retry pypi name mapping ([#839](https://github.com/ruben-arts/pixi/pull/839))
+- check duplicates while adding dependencies ([#829](https://github.com/ruben-arts/pixi/pull/829))
+- logic `PIXI_NO_PATH_UPDATE` variable ([#822](https://github.com/ruben-arts/pixi/pull/822))
+
+#### Other
+- add `mike` to the documentation and update looks ([#809](https://github.com/ruben-arts/pixi/pull/809))
+- add instructions for installing on Alpine Linux ([#828](https://github.com/ruben-arts/pixi/pull/828))
+- more error reporting in `self-update` ([#823](https://github.com/ruben-arts/pixi/pull/823))
+- disabled `jlap` for now ([#836](https://github.com/ruben-arts/pixi/pull/823))
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.14.0..v0.15.0)
+
+## [0.14.0] - 2024-02-15
+
+### ✨ Highlights
+Now, `solve-groups` can be used in `[environments]` to ensure dependency alignment across different environments without simultaneous installation.
+This feature is particularly beneficial for managing identical dependencies in `test` and `production` environments.
+Example configuration:
+
+```toml
+[environments]
+test = { features = ["prod", "test"], solve-groups = ["group1"] }
+prod = { features = ["prod"], solve-groups = ["group1"] }
+```
+This setup simplifies managing dependencies that must be consistent across `test` and `production`.
+
+### 📃 Details
+
+#### Added
+- Add index field to pypi requirements by @vlad-ivanov-name in [#784](https://github.com/prefix-dev/pixi/pull/784)
+- Add `-f`/`--feature` to the `pixi project platform` command by @ruben-arts in [#785](https://github.com/prefix-dev/pixi/pull/785)
+- Warn user when unused features are defined by @ruben-arts in [#762](https://github.com/prefix-dev/pixi/pull/762)
+- Disambiguate tasks interactive by @baszalmstra in [#766](https://github.com/prefix-dev/pixi/pull/766)
+- Solve groups for conda by @baszalmstra in [#783](https://github.com/prefix-dev/pixi/pull/783)
+- Pypi solve groups by @baszalmstra in [#802](https://github.com/prefix-dev/pixi/pull/802)
+- Enable reflinks by @baszalmstra in [#729](https://github.com/prefix-dev/pixi/pull/729)
+
+#### Changed
+- Add environment name to the progress by @ruben-arts in [#788](https://github.com/prefix-dev/pixi/pull/788)
+- Set color scheme by @ruben-arts in [#773](https://github.com/prefix-dev/pixi/pull/773)
+- Update lock on `pixi list` by @ruben-arts in [#775](https://github.com/prefix-dev/pixi/pull/775)
+- Use default env if task available in it. by @ruben-arts in [#772](https://github.com/prefix-dev/pixi/pull/772)
+- Color environment name in install step by @ruben-arts in [#795](https://github.com/prefix-dev/pixi/pull/795)
+
+#### Fixed
+- Running cuda env and using those tasks. by @ruben-arts in [#764](https://github.com/prefix-dev/pixi/pull/764)
+- Make svg a gif by @ruben-arts in [#782](https://github.com/prefix-dev/pixi/pull/782)
+- Fmt by @ruben-arts
+- Check for correct platform in task env creation by @ruben-arts in [#759](https://github.com/prefix-dev/pixi/pull/759)
+- Remove using source name by @ruben-arts in [#765](https://github.com/prefix-dev/pixi/pull/765)
+- Auto-guessing of the shell in the `shell-hook` by @ruben-arts in https://github.com/prefix-dev/pixi/pull/811
+- `sdist` with direct references by @nichmor in https://github.com/prefix-dev/pixi/pull/813
+
+#### Miscellaneous
+- Add slim-trees to community projects by @pavelzw in [#760](https://github.com/prefix-dev/pixi/pull/760)
+- Add test to default env in polarify example
+- Add multiple machine example by @ruben-arts in [#757](https://github.com/prefix-dev/pixi/pull/757)
+- Add more documentation on `environments` by @ruben-arts in [#790](https://github.com/prefix-dev/pixi/pull/790)
+- Update rip and rattler by @wolfv in [#798](https://github.com/prefix-dev/pixi/pull/798)
+- Rattler 0.18.0 by @baszalmstra in [#805](https://github.com/prefix-dev/pixi/pull/805)
+- Rip 0.8.0 by @nichmor in [#806](https://github.com/prefix-dev/pixi/pull/806)
+- Fix authentication path by @pavelzw in [#796](https://github.com/prefix-dev/pixi/pull/796)
+- Initial addition of integration test by @ruben-arts in https://github.com/prefix-dev/pixi/pull/804
+
+
+## New Contributors
+* @vlad-ivanov-name made their first contribution in [#784](https://github.com/prefix-dev/pixi/pull/784)
+* @nichmor made their first contribution in [#806](https://github.com/prefix-dev/pixi/pull/806)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.13.0..v0.14.0)
+
+## [0.13.0] - 2024-02-01
+### ✨ Highlights
+This release is pretty crazy in amount of features! The major ones are:
+- We added support for multiple environments. :tada: Checkout the [documentation](https://pixi.sh/configuration/#the-feature-and-environments-tables)
+- We added support for `sdist` installation, which greatly improves the amount of packages that can be installed from PyPI. :rocket:
+
+> [!IMPORTANT]
+>
+> Renaming of `PIXI_PACKAGE_*` variables:
+> ```
+> PIXI_PACKAGE_ROOT -> PIXI_PROJECT_ROOT
+> PIXI_PACKAGE_NAME ->  PIXI_PROJECT_NAME
+> PIXI_PACKAGE_MANIFEST -> PIXI_PROJECT_MANIFEST
+> PIXI_PACKAGE_VERSION -> PIXI_PROJECT_VERSION
+> PIXI_PACKAGE_PLATFORMS -> PIXI_ENVIRONMENT_PLATFORMS
+> ```
+> Check documentation here: https://pixi.sh/environment/
+
+> [!IMPORTANT]
+>
+> The `.pixi/env/` folder has been moved to accommodate multiple environments.
+> If you only have one environment it is now named `.pixi/envs/default`.
+
+### 📃 Details
+
+#### Added
+- Add support for multiple environment:
+  - Update to rattler lock v4 by @baszalmstra in [#698](https://github.com/prefix-dev/pixi/pull/698)
+  - Multi-env installation and usage by @baszalmstra in [#721](https://github.com/prefix-dev/pixi/pull/721)
+  - Update all environments in the lock-file when requesting an environment by @baszalmstra in [#711](https://github.com/prefix-dev/pixi/pull/711)
+  - Run tasks in the env they are defined by @baszalmstra in [#731](https://github.com/prefix-dev/pixi/pull/731)
+  - `polarify` use-case as an example by @ruben-arts in [#735](https://github.com/prefix-dev/pixi/pull/735)
+  - Make environment name parsing strict by @ruben-arts in [#673](https://github.com/prefix-dev/pixi/pull/673)
+  - Use named environments (only "default" for now) by @ruben-arts in [#674](https://github.com/prefix-dev/pixi/pull/674)
+  - Use task graph instead of traversal by @baszalmstra in [#725](https://github.com/prefix-dev/pixi/pull/725)
+  - Multi env documentation by @ruben-arts in [#703](https://github.com/prefix-dev/pixi/pull/703)
+  - `pixi info -e/--environment` option by @ruben-arts in [#676](https://github.com/prefix-dev/pixi/pull/676)
+  - `pixi channel add -f/--feature` option by @ruben-arts in [#700](https://github.com/prefix-dev/pixi/pull/700)
+  - `pixi channel remove -f/--feature` option by @ruben-arts in [#706](https://github.com/prefix-dev/pixi/pull/706)
+  - `pixi remove -f/--feature` option by @ruben-arts in [#680](https://github.com/prefix-dev/pixi/pull/680)
+  - `pixi task list -e/--environment` option by @ruben-arts in [#694](https://github.com/prefix-dev/pixi/pull/694)
+  - `pixi task remove -f/--feature` option by @ruben-arts in [#694](https://github.com/prefix-dev/pixi/pull/694)
+  - `pixi install -e/--environment` option by @ruben-arts in [#722](https://github.com/prefix-dev/pixi/pull/722)
+
+
+- Support for sdists in `pypi-dependencies` by @tdejager in [#664](https://github.com/prefix-dev/pixi/pull/664)
+- Add pre-release support to `pypi-dependencies` by @tdejager in [#716](https://github.com/prefix-dev/pixi/pull/716)
+
+
+- Support adding dependencies for project's unsupported platforms by @orhun in [#668](https://github.com/prefix-dev/pixi/pull/668)
+- Add `pixi list` command by @hadim in [#665](https://github.com/prefix-dev/pixi/pull/665)
+- Add `pixi shell-hook` command by @orhun in [#672](https://github.com/prefix-dev/pixi/pull/672)[#679](https://github.com/prefix-dev/pixi/pull/679) [#684](https://github.com/prefix-dev/pixi/pull/684)
+- Use env variable to configure locked, frozen and color by @hadim in [#726](https://github.com/prefix-dev/pixi/pull/726)
+- `pixi self-update` by @hadim in [#675](https://github.com/prefix-dev/pixi/pull/675)
+- Add `PIXI_NO_PATH_UPDATE` for PATH update suppression by @chawyehsu in [#692](https://github.com/prefix-dev/pixi/pull/692)
+- Set the cache directory by @ruben-arts in [#683](https://github.com/prefix-dev/pixi/pull/683)
+
+
+#### Changed
+- Use consistent naming for tests module by @orhun in [#678](https://github.com/prefix-dev/pixi/pull/678)
+- Install pixi and add to the path in docker example by @ruben-arts in [#743](https://github.com/prefix-dev/pixi/pull/743)
+- Simplify the deserializer of `PyPiRequirement` by @orhun in [#744](https://github.com/prefix-dev/pixi/pull/744)
+- Use `tabwriter` instead of `comfy_table` by @baszalmstra in [#745](https://github.com/prefix-dev/pixi/pull/745)
+- Document environment variables by @ruben-arts in [#746](https://github.com/prefix-dev/pixi/pull/746)
+
+#### Fixed
+- Quote part of the task that has brackets (`[ or ]`) by @JafarAbdi in [#677](https://github.com/prefix-dev/pixi/pull/677)
+- Package clobber and `__pycache__` removal issues by @wolfv in [#573](https://github.com/prefix-dev/pixi/pull/573)
+- Non-global reqwest client by @tdejager in [#693](https://github.com/prefix-dev/pixi/pull/693)
+- Fix broken pipe error during search by @orhun in [#699](https://github.com/prefix-dev/pixi/pull/699)
+- Make `pixi search` result correct by @chawyehsu in [#713](https://github.com/prefix-dev/pixi/pull/713)
+- Allow the tasks for all platforms to be shown in `pixi info` by @ruben-arts in [#728](https://github.com/prefix-dev/pixi/pull/728)
+- Flaky tests while installing pypi dependencies by @baszalmstra in [#732](https://github.com/prefix-dev/pixi/pull/732)
+- Linux install script by @mariusvniekerk in [#737](https://github.com/prefix-dev/pixi/pull/737)
+- Download wheels in parallel to avoid deadlock by @baszalmstra in [#752](https://github.com/prefix-dev/pixi/pull/752)
+
+## New Contributors
+* @JafarAbdi made their first contribution in [#677](https://github.com/prefix-dev/pixi/pull/677)
+* @mariusvniekerk made their first contribution in [#737](https://github.com/prefix-dev/pixi/pull/737)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.12.0..v0.13.0)
+
+
 ## [0.12.0] - 2024-01-15
 ### ✨ Highlights
 

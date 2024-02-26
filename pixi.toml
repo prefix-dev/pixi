@@ -1,6 +1,5 @@
 [project]
 name = "pixi"
-version = "0.12.0"
 description = "Package management made easy!"
 authors = ["Wolf Vollprecht <wolf@prefix.dev>", "Bas Zalmstra <bas@prefix.dev>", "Tim de Jager <tim@prefix.dev>", "Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge"]
@@ -12,24 +11,32 @@ install = "cargo install --path . --locked"
 test = "cargo test"
 test-all = "cargo test --all-features"
 lint = "pre-commit run --all"
-docs = { cmd = "mkdocs serve" }
-build-docs = { cmd = "mkdocs build --strict" }
 
 [dependencies]
 # Dev dependencies
 pre-commit = "~=3.3.0"
 
 # Needed for building rattler
-rust = "~=1.73.0"
+rust = "~=1.75.0"
 openssl = "3.*"
 pkg-config = "0.29.*"
 git = "2.42.0.*"
 
-# Documentation building
-mkdocs = "1.5.3.*"
-mkdocs-material = "9.4.4.*"
-pillow = ">=9.4.0.*"
-cairosvg = "2.7.1.*"
-
 [target.linux-64.dependencies]
 compilers = ">=1.6.0"
+
+[feature.docs.dependencies]
+mkdocs = "1.5.3.*"
+mkdocs-material = ">=9.5.*"
+pillow = ">=9.4.0.*"
+cairosvg = "2.7.1.*"
+mike = "2.0.0.*"
+
+[feature.docs.tasks]
+build-docs = "mkdocs build --strict"
+docs = "mkdocs serve"
+deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
+deploy-dev = "mike deploy --push dev devel"
+
+[environments]
+docs = ["docs"]

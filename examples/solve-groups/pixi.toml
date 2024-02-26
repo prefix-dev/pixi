@@ -1,0 +1,39 @@
+[project]
+name = "solve-groups"
+version = "0.1.0"
+description = "Add a short description here"
+authors = ["Bas Zalmstra <zalmstra.bas@gmail.com>"]
+channels = ["conda-forge"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
+[dependencies]
+pytest = "*"
+
+[feature.max_py310.dependencies]
+python = "<=3.10"
+pydantic = "*"
+
+[feature.min_py38.dependencies]
+python = ">=3.8"
+py-rattler = "*"
+
+[feature.min_py38.pypi-dependencies]
+matplotlib = "*"
+
+[tasks]
+test = "pytest -s"
+
+[environments]
+# The solve-group mixes the dependencies of all features in the group and solves them together.
+# Both environments should have at most python 3.10, even though `min-py38` environment only
+# specifies a lower bound.
+#
+# The environments do not contain any dependencies from the other environments. This means that
+# the `min-py38` environment does not contain `pydantic` and the `max-py310` environment does not
+# contain `py-rattler`.
+min-py38 = { features = ["min_py38"], solve-group = "group1" }
+max-py310 = { features = ["max_py310"], solve-group = "group1" }
+
+# The default environment does not specify a solve-group which means the python version does not
+# have an upperbound.
+default = ["min_py38"]

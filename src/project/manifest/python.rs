@@ -1,9 +1,5 @@
 use pep440_rs::VersionSpecifiers;
-use serde::{
-    de,
-    de::{Error, MapAccess, Visitor},
-    Deserialize, Deserializer,
-};
+use serde::{de, de::Error, Deserialize, Deserializer};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
@@ -12,6 +8,7 @@ use toml_edit::Item;
 pub struct PyPiRequirement {
     pub(crate) version: Option<pep440_rs::VersionSpecifiers>,
     pub(crate) extras: Option<Vec<String>>,
+    pub(crate) index: Option<String>,
 }
 
 /// The type of parse error that occurred when parsing match spec.
@@ -84,6 +81,7 @@ impl FromStr for PyPiRequirement {
             Ok(Self {
                 version: None,
                 extras: None,
+                index: None,
             })
         } else if s.starts_with(|c: char| c.is_ascii_digit()) {
             Err(ParsePyPiRequirementError::MissingOperator(s.to_string()))
@@ -95,6 +93,7 @@ impl FromStr for PyPiRequirement {
                         .map_err(ParsePyPiRequirementError::Pep440Error)?,
                 ),
                 extras: None,
+                index: None,
             })
         }
     }
@@ -114,6 +113,7 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
         PyPiRequirement {
             version,
             extras: req.extras,
+            index: None,
         }
     }
 }
@@ -137,49 +137,36 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
     where
         D: Deserializer<'de>,
     {
-        struct RequirementVisitor;
-        impl<'de> Visitor<'de> for RequirementVisitor {
-            type Value = PyPiRequirement;
-
-            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-                formatter.write_str("a mapping from package names to a pypi requirement")
-            }
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: Error,
-            {
-                PyPiRequirement::from_str(v).map_err(Error::custom)
-            }
-            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
-            where
-                A: MapAccess<'de>,
-            {
+        serde_untagged::UntaggedEnumVisitor::new()
+            .string(|str| PyPiRequirement::from_str(str).map_err(Error::custom))
+            .map(|map| {
                 // Use a temp struct to deserialize into when it is a map.
                 #[derive(Deserialize)]
                 struct RawPyPiRequirement {
                     version: Option<String>,
                     extras: Option<Vec<String>>,
+                    index: Option<String>,
                 }
                 let raw_requirement =
                     RawPyPiRequirement::deserialize(de::value::MapAccessDeserializer::new(map))?;
-
                 // Parse the * in version or allow for no version with extras.
                 let mut version = None;
                 if let Some(raw_version) = raw_requirement.version {
                     if raw_version != "*" {
                         version = Some(
                             VersionSpecifiers::from_str(raw_version.as_str())
-                                .map_err(A::Error::custom)?,
+                                .map_err(Error::custom)?,
                         );
                     }
-                }
+                };
                 Ok(PyPiRequirement {
                     version,
                     extras: raw_requirement.extras,
+                    index: raw_requirement.index,
                 })
-            }
-        }
-        deserializer.deserialize_any(RequirementVisitor {})
+            })
+            .expecting("either a map or a string")
+            .deserialize(deserializer)
     }
 }
 
@@ -211,7 +198,8 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap()),
-                extras: None
+                extras: None,
+                index: None,
             }
         );
         let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
@@ -220,7 +208,8 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str("==3.12.0").unwrap()),
-                extras: None
+                extras: None,
+                index: None,
             }
         );
 
@@ -230,7 +219,8 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str("~=2.1.3").unwrap()),
-                extras: None
+                extras: None,
+                index: None,
             }
         );
 
@@ -240,7 +230,8 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: None,
-                extras: None
+                extras: None,
+                index: None,
             }
         );
     }
@@ -248,7 +239,13 @@ mod tests {
     #[test]
     fn test_extended() {
         let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
-            toml_edit::de::from_str(r#"foo = { version=">=3.12", extras = ["bar"] }"#).unwrap();
+            toml_edit::de::from_str(
+                r#"
+                foo = { version=">=3.12", extras = ["bar"], index = "artifact-registry" }
+                "#,
+            )
+            .unwrap();
+
         assert_eq!(
             requirement.first().unwrap().0,
             &rip::types::PackageName::from_str("foo").unwrap()
@@ -257,7 +254,8 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap()),
-                extras: Some(vec!("bar".to_string()))
+                extras: Some(vec!("bar".to_string())),
+                index: Some("artifact-registry".to_string()),
             }
         );
 
@@ -274,7 +272,61 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12,<3.13.0").unwrap()),
-                extras: Some(vec!("bar".to_string(), "foo".to_string()))
+                extras: Some(vec!("bar".to_string(), "foo".to_string())),
+                index: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_pypi_requirement_from_map() {
+        let json_string = r#"
+            {
+                "version": "==1.2.3",
+                "extras": ["feature1", "feature2"]
+            }
+        "#;
+        let result: Result<PyPiRequirement, _> = serde_json::from_str(json_string);
+        assert!(result.is_ok());
+        let pypi_requirement: PyPiRequirement = result.unwrap();
+        assert_eq!(
+            pypi_requirement,
+            PyPiRequirement {
+                version: VersionSpecifiers::from_str("==1.2.3").ok(),
+                extras: Some(vec!["feature1".to_owned(), "feature2".to_owned()]),
+                index: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_pypi_requirement_from_str() {
+        let json_string = r#""==1.2.3""#;
+        let result: Result<PyPiRequirement, _> = serde_json::from_str(json_string);
+        assert!(result.is_ok());
+        let pypi_requirement: PyPiRequirement = result.unwrap();
+        assert_eq!(
+            pypi_requirement,
+            PyPiRequirement {
+                version: VersionSpecifiers::from_str("==1.2.3").ok(),
+                extras: None,
+                index: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_pypi_requirement_from_str_with_star() {
+        let json_string = r#""*""#;
+        let result: Result<PyPiRequirement, _> = serde_json::from_str(json_string);
+        assert!(result.is_ok());
+        let pypi_requirement: PyPiRequirement = result.unwrap();
+        assert_eq!(
+            pypi_requirement,
+            PyPiRequirement {
+                version: None,
+                extras: None,
+                index: None,
             }
         );
     }

@@ -30,7 +30,7 @@ configure = { cmd = [
 build = { cmd = ["ninja", "-C", ".build"], depends_on = ["configure"] }
 
 # Using environment variables
-run = "python main.py $PIXI_PACKAGE_ROOT"
+run = "python main.py $PIXI_PROJECT_ROOT"
 set = "export VAR=hello && echo $VAR"
 
 # Cross platform file operations

@@ -6,7 +6,7 @@ use std::{
 use flate2::read::GzDecoder;
 use tar::Archive;
 
-use miette::IntoDiagnostic;
+use miette::{Context, IntoDiagnostic};
 use reqwest::Client;
 use serde::Deserialize;
 
@@ -211,15 +211,28 @@ async fn retrieve_target_version(version: &Option<String>) -> miette::Result<Git
         .header("User-Agent", user_agent())
         .send()
         .await
-        .expect("Failed to fetch latest version from github");
+        .expect("Failed to fetch from GitHub, client panic.");
+
+    // Catch errors from the GitHub API
+    if !res.status().is_success() {
+        return Err(miette::miette!(
+            "Failed to fetch the release from github, status {}, body: {}",
+            res.status(),
+            res.text()
+                .await
+                .expect("Failed to fetch GitHub release body, body text panic.")
+        ));
+    }
 
     let body = res
         .text()
         .await
-        .expect("Failed to fetch latest version from github");
+        .expect("Failed to fetch GitHub release body, body text panic.");
 
     // compare target version with current version
-    serde_json::from_str::<GithubRelease>(&body).into_diagnostic()
+    serde_json::from_str::<GithubRelease>(&body)
+        .into_diagnostic()
+        .with_context(|| format!("Failed to parse the Release from github: {:#?}", body))
 }
 
 fn pixi_binary_name() -> String {

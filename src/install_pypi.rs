@@ -7,11 +7,13 @@ use indexmap::IndexSet;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
+use rip::resolve::solve_options::{ResolveOptions, SDistResolution};
 
 use crate::consts::PROJECT_MANIFEST;
 use crate::project::manifest::SystemRequirements;
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{is_python_record, project_platform_tags};
+use pep508_rs::MarkerEnvironment;
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 use rip::artifacts::wheel::{InstallPaths, UnpackWheelOptions};
@@ -19,15 +21,17 @@ use rip::artifacts::Wheel;
 use rip::index::PackageDb;
 use rip::python_env::{
     find_distributions_in_venv, uninstall_distribution, Distribution, PythonLocation, WheelTag,
+    WheelTags,
 };
-use rip::resolve::{ResolveOptions, SDistResolution};
 use rip::types::{
-    Artifact, ArtifactHashes, ArtifactInfo, ArtifactName, Extra, NormalizedPackageName,
+    ArtifactHashes, ArtifactInfo, ArtifactName, Extra, HasArtifactName, NormalizedPackageName,
 };
 use rip::wheel_builder::WheelBuilder;
 use std::collections::{HashMap, HashSet};
+use std::ops::Deref;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinError;
 
@@ -40,7 +44,7 @@ type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
 // TODO: refactor arguments in struct
 #[allow(clippy::too_many_arguments)]
 pub async fn update_python_distributions(
-    package_db: &PackageDb,
+    package_db: Arc<PackageDb>,
     prefix: &Prefix,
     conda_package: &[RepoDataRecord],
     python_packages: &[CombinedPypiPackageData],
@@ -48,6 +52,7 @@ pub async fn update_python_distributions(
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
     sdist_resolution: SDistResolution,
+    env_variables: HashMap<String, String>,
 ) -> miette::Result<()> {
     let Some(python_info) = status.current_info() else {
         // No python interpreter in the environment, so there is nothing to do here.
@@ -91,29 +96,33 @@ pub async fn update_python_distributions(
         .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
 
     // Determine the environment markers
-    let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
+    let marker_environment = Arc::new(determine_marker_environment(
+        platform,
+        python_record.as_ref(),
+    )?);
 
     // Determine the compatible tags
-    let compatible_tags =
-        project_platform_tags(platform, system_requirements, python_record.as_ref());
+    let compatible_tags = Arc::new(project_platform_tags(
+        platform,
+        system_requirements,
+        python_record.as_ref(),
+    ));
 
-    let wheel_builder = WheelBuilder::new(
-        package_db,
-        &marker_environment,
-        Some(&compatible_tags),
-        &ResolveOptions {
-            sdist_resolution,
-            python_location: PythonLocation::Custom(python_location),
-            clean_env: false,
-        },
-        HashMap::default(),
-    );
+    // Define the resolve options for local wheel building
+    let resolve_options = Arc::new(ResolveOptions {
+        sdist_resolution,
+        python_location: PythonLocation::Custom(python_location),
+        ..Default::default()
+    });
 
     // Start downloading the python packages that we want in the background.
     let (package_stream, package_stream_pb) = stream_python_artifacts(
         package_db,
+        marker_environment,
+        compatible_tags,
+        resolve_options,
         python_distributions_to_install.clone(),
-        Some(&wheel_builder),
+        env_variables,
     );
 
     // Remove python packages that need to be removed
@@ -227,12 +236,15 @@ async fn install_python_distributions(
 
 /// Creates a stream which downloads the specified python packages. The stream will download the
 /// packages in parallel and yield them as soon as they become available.
-fn stream_python_artifacts<'a>(
-    package_db: &'a PackageDb,
-    packages_to_download: Vec<&'a CombinedPypiPackageData>,
-    wheel_builder: Option<&'a WheelBuilder<'a, 'a>>,
+fn stream_python_artifacts(
+    package_db: Arc<PackageDb>,
+    marker_environment: Arc<MarkerEnvironment>,
+    compatible_tags: Arc<WheelTags>,
+    resolve_options: Arc<ResolveOptions>,
+    packages_to_download: Vec<&CombinedPypiPackageData>,
+    env_variables: HashMap<String, String>,
 ) -> (
-    impl Stream<Item = miette::Result<(Option<String>, HashSet<Extra>, Wheel)>> + 'a,
+    impl Stream<Item = miette::Result<(Option<String>, HashSet<Extra>, Wheel)>> + '_,
     Option<ProgressBar>,
 ) {
     if packages_to_download.is_empty() {
@@ -259,6 +271,12 @@ fn stream_python_artifacts<'a>(
         .map(move |(pkg_data, pkg_env_data)| {
             let pb = stream_pb.clone();
             let message_formatter = message_formatter.clone();
+            let marker_environment = marker_environment.clone();
+            let compatible_tags = compatible_tags.clone();
+            let resolve_options = resolve_options.clone();
+            let package_db = package_db.clone();
+            let env_variables = env_variables.clone();
+
             async move {
                 // Determine the filename from the
                 let filename = pkg_data
@@ -272,8 +290,16 @@ fn stream_python_artifacts<'a>(
                         format!("'{}' is not a valid python package name", &pkg_data.name)
                     })?;
 
-                let artifact_name = ArtifactName::from_filename(filename, &name)
+                let artifact_name = ArtifactName::from_filename(filename, Some(pkg_data.url.clone()), &name)
                     .expect("failed to convert filename to artifact name");
+
+                let (artifact_name, is_direct_url) = if let ArtifactName::STree(mut stree) = artifact_name{
+                    // populate resolved version of direct dependency
+                    stree.version = pkg_data.version.clone();
+                    (ArtifactName::STree(stree), true)
+                } else {
+                    (artifact_name, false)
+                };
 
                 // Log out intent to install this python package.
                 tracing::info!("downloading python package {filename}");
@@ -289,11 +315,34 @@ fn stream_python_artifacts<'a>(
                     requires_python: pkg_data.requires_python.clone(),
                     dist_info_metadata: Default::default(),
                     yanked: Default::default(),
+                    is_direct_url,
                 };
 
-                // TODO: Maybe we should have a cache of wheels separate from the package_db. Since a
-                //   wheel can just be identified by its hash or url.
-                let wheel: Wheel = package_db.get_wheel(&artifact_info, wheel_builder).await?;
+                let (wheel, _) = tokio::spawn({
+                    let marker_environment = marker_environment.clone();
+                    let compatible_tags = compatible_tags.clone();
+                    let resolve_options = resolve_options.clone();
+                    let package_db = package_db.clone();
+                    async move {
+                        let wheel_builder = WheelBuilder::new(
+                            package_db.clone(),
+                            marker_environment,
+                            Some(compatible_tags),
+                            resolve_options.deref().clone(),
+                            env_variables,
+                        )
+                            .into_diagnostic()
+                            .context("error in construction of WheelBuilder for `pypi-dependencies` installation")?;
+
+                        // TODO: Maybe we should have a cache of wheels separate from the package_db. Since a
+                        //   wheel can just be identified by its hash or url.
+                        package_db.get_wheel(&artifact_info, Some(&wheel_builder)).await
+                    }
+                })
+                .await.unwrap_or_else(|e| match e.try_into_panic() {
+                    Ok(panic) => std::panic::resume_unwind(panic),
+                    Err(_) => Err(miette::miette!("operation was cancelled"))
+                })?;
 
                 // Update the progress bar
                 pb_task.finish().await;
@@ -481,7 +530,7 @@ fn extract_locked_tags(
             };
 
             // Determine the artifact type from the name and filename
-            match ArtifactName::from_filename(filename, &name) {
+            match ArtifactName::from_filename(filename, Some(pkg_data.url.clone()), &name) {
                 Ok(ArtifactName::Wheel(name)) => (pkg, Some(IndexSet::from_iter(name.all_tags_iter()))),
                 Ok(_) => (pkg, None),
                 Err(err) => {

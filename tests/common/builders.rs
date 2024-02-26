@@ -24,13 +24,17 @@
 //! ```
 
 use futures::FutureExt;
-use pixi::cli::{add, init, install, project, task};
-use pixi::project::{DependencyType, SpecType};
+use pixi::task::TaskName;
+use pixi::{
+    cli::{add, init, install, project, task},
+    DependencyType, SpecType,
+};
 use rattler_conda_types::Platform;
-use rip::resolve::SDistResolution;
-use std::future::{Future, IntoFuture};
-use std::path::{Path, PathBuf};
-use std::pin::Pin;
+use std::{
+    future::{Future, IntoFuture},
+    path::{Path, PathBuf},
+    pin::Pin,
+};
 use url::Url;
 
 /// Strings from an iterator
@@ -65,10 +69,10 @@ impl InitBuilder {
 
 impl IntoFuture for InitBuilder {
     type Output = miette::Result<()>;
-    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'static>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(init::execute(self.args))
+        init::execute(self.args).boxed_local()
     }
 }
 
@@ -128,11 +132,6 @@ impl AddBuilder {
         self.args.platform.extend(platforms.iter());
         self
     }
-
-    pub fn with_sdist_resolution(mut self, sdist_resolution: SDistResolution) -> Self {
-        self.args.sdist_resolution = sdist_resolution;
-        self
-    }
 }
 
 impl IntoFuture for AddBuilder {
@@ -157,8 +156,8 @@ impl TaskAddBuilder {
     }
 
     /// Depends on these commands
-    pub fn with_depends_on(mut self, depends: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
-        self.args.depends_on = Some(string_from_iter(depends));
+    pub fn with_depends_on(mut self, depends: Vec<TaskName>) -> Self {
+        self.args.depends_on = Some(depends);
         self
     }
 
@@ -184,8 +183,8 @@ pub struct TaskAliasBuilder {
 
 impl TaskAliasBuilder {
     /// Depends on these commands
-    pub fn with_depends_on(mut self, depends: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
-        self.args.depends_on = string_from_iter(depends);
+    pub fn with_depends_on(mut self, depends: Vec<TaskName>) -> Self {
+        self.args.depends_on = depends;
         self
     }
 

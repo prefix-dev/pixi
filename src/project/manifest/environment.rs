@@ -3,7 +3,7 @@ use crate::utils::spanned::PixiSpanned;
 use lazy_static::lazy_static;
 use miette::Diagnostic;
 use regex::Regex;
-use serde::{self, Deserialize, Deserializer};
+use serde::{self, Deserialize, Deserializer, Serialize};
 use std::borrow::Borrow;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -11,7 +11,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 /// The name of an environment. This is either a string or default for the default environment.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum EnvironmentName {
     Default,
     Named(String),
@@ -32,6 +32,16 @@ impl EnvironmentName {
             EnvironmentName::Named(name) => name.as_str(),
         }
     }
+
+    /// Returns true if the environment is the default environment.
+    pub fn is_default(&self) -> bool {
+        matches!(self, EnvironmentName::Default)
+    }
+
+    /// Returns a styled version of the environment name for display in the console.
+    pub fn fancy_display(&self) -> console::StyledObject<&str> {
+        console::style(self.as_str()).magenta()
+    }
 }
 
 impl Borrow<str> for EnvironmentName {
@@ -46,6 +56,12 @@ impl fmt::Display for EnvironmentName {
             EnvironmentName::Default => write!(f, "{}", consts::DEFAULT_ENVIRONMENT_NAME),
             EnvironmentName::Named(name) => write!(f, "{}", name),
         }
+    }
+}
+
+impl PartialEq<str> for EnvironmentName {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
     }
 }
 
@@ -106,7 +122,7 @@ pub struct Environment {
 
     /// An optional solver-group. Multiple environments can share the same solve-group. All the
     /// dependencies of the environment that share the same solve-group will be solved together.
-    pub solve_group: Option<String>,
+    pub solve_group: Option<usize>,
 }
 
 /// Helper struct to deserialize the environment from TOML.
@@ -114,6 +130,7 @@ pub struct Environment {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(super) struct TomlEnvironment {
+    #[serde(default)]
     pub features: PixiSpanned<Vec<String>>,
     pub solve_group: Option<String>,
 }
@@ -122,27 +139,7 @@ pub(super) enum TomlEnvironmentMapOrSeq {
     Map(TomlEnvironment),
     Seq(Vec<String>),
 }
-impl TomlEnvironmentMapOrSeq {
-    pub fn into_environment(self, name: EnvironmentName) -> Environment {
-        match self {
-            TomlEnvironmentMapOrSeq::Map(TomlEnvironment {
-                features,
-                solve_group,
-            }) => Environment {
-                name,
-                features: features.value,
-                features_source_loc: features.span,
-                solve_group,
-            },
-            TomlEnvironmentMapOrSeq::Seq(features) => Environment {
-                name,
-                features,
-                features_source_loc: None,
-                solve_group: None,
-            },
-        }
-    }
-}
+
 impl<'de> Deserialize<'de> for TomlEnvironmentMapOrSeq {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

@@ -1,4 +1,5 @@
 use crate::project::manifest::activation::Activation;
+use crate::task::TaskName;
 use crate::utils::spanned::PixiSpanned;
 use crate::{
     project::{manifest::error::SpecIsMissing, manifest::PyPiRequirement, SpecType},
@@ -28,7 +29,7 @@ pub struct Target {
     pub activation: Option<Activation>,
 
     /// Target specific tasks to run in the environment
-    pub tasks: HashMap<String, Task>,
+    pub tasks: HashMap<TaskName, Task>,
 }
 
 impl Target {
@@ -129,6 +130,10 @@ impl Target {
 pub enum TargetSelector {
     // Platform specific configuration
     Platform(Platform),
+    Unix,
+    Linux,
+    Win,
+    MacOs,
     // TODO: Add minijinja coolness here.
 }
 
@@ -137,6 +142,10 @@ impl TargetSelector {
     pub fn matches(&self, platform: Platform) -> bool {
         match self {
             TargetSelector::Platform(p) => p == &platform,
+            TargetSelector::Linux => platform.is_linux(),
+            TargetSelector::Unix => platform.is_unix(),
+            TargetSelector::Win => platform.is_windows(),
+            TargetSelector::MacOs => platform.is_osx(),
         }
     }
 }
@@ -145,6 +154,10 @@ impl ToString for TargetSelector {
     fn to_string(&self) -> String {
         match self {
             TargetSelector::Platform(p) => p.to_string(),
+            TargetSelector::Linux => "linux".to_string(),
+            TargetSelector::Unix => "unix".to_string(),
+            TargetSelector::Win => "win".to_string(),
+            TargetSelector::MacOs => "osx".to_string(),
         }
     }
 }
@@ -160,9 +173,16 @@ impl<'de> Deserialize<'de> for TargetSelector {
     where
         D: Deserializer<'de>,
     {
-        Ok(TargetSelector::Platform(Platform::deserialize(
-            deserializer,
-        )?))
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "linux" => Ok(TargetSelector::Linux),
+            "unix" => Ok(TargetSelector::Unix),
+            "win" => Ok(TargetSelector::Win),
+            "osx" => Ok(TargetSelector::MacOs),
+            _ => Platform::from_str(&s)
+                .map(TargetSelector::Platform)
+                .map_err(serde::de::Error::custom),
+        }
     }
 }
 
@@ -197,7 +217,7 @@ impl<'de> Deserialize<'de> for Target {
 
             /// Target specific tasks to run in the environment
             #[serde(default)]
-            tasks: HashMap<String, Task>,
+            tasks: HashMap<TaskName, Task>,
         }
 
         let target = TomlTarget::deserialize(deserializer)?;

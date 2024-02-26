@@ -4,7 +4,7 @@ use clap::Parser;
 use clap_complete;
 use clap_verbosity_flag::Verbosity;
 use miette::IntoDiagnostic;
-use std::io::IsTerminal;
+use std::{env, io::IsTerminal};
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
 pub mod add;
@@ -38,7 +38,7 @@ struct Args {
     verbose: Verbosity,
 
     /// Whether the log needs to be colored.
-    #[clap(long, default_value = "auto", global = true)]
+    #[clap(long, default_value = "auto", global = true, env = "PIXI_COLOR")]
     color: ColorOutput,
 }
 
@@ -60,7 +60,6 @@ pub enum Command {
     Run(run::Args),
     #[clap(alias = "s")]
     Shell(shell::Args),
-    #[clap(hide = true)]
     ShellHook(shell_hook::Args),
     #[clap(alias = "g")]
     Global(global::Args),
@@ -78,15 +77,15 @@ pub enum Command {
     List(list::Args),
 }
 
-#[derive(Parser, Debug, Default)]
+#[derive(Parser, Debug, Default, Copy, Clone)]
 #[group(multiple = false)]
 /// Lock file usage from the CLI
 pub struct LockFileUsageArgs {
     /// Don't check or update the lockfile, continue with previously installed environment.
-    #[clap(long, conflicts_with = "locked")]
+    #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
     pub frozen: bool,
     /// Check if lockfile is up to date, aborts when lockfile isn't up to date with the manifest file.
-    #[clap(long, conflicts_with = "frozen")]
+    #[clap(long, conflicts_with = "frozen", env = "PIXI_LOCKED")]
     pub locked: bool,
 }
 
@@ -114,6 +113,16 @@ pub async fn execute() -> miette::Result<()> {
                 .build(),
         )
     }))?;
+
+    // Honor FORCE_COLOR and NO_COLOR environment variables.
+    // Those take precedence over the CLI flag and PIXI_COLOR
+    let use_colors = match env::var("FORCE_COLOR") {
+        Ok(_) => true,
+        Err(_) => match env::var("NO_COLOR") {
+            Ok(_) => false,
+            Err(_) => use_colors,
+        },
+    };
 
     // Enable disable colors for the colors crate
     console::set_colors_enabled(use_colors);
@@ -156,6 +165,22 @@ pub async fn execute() -> miette::Result<()> {
             format!("rattler_installs_packages={}", pixi_level)
                 .parse()
                 .into_diagnostic()?,
+        )
+        .add_directive(
+            format!(
+                "rattler_networking::authentication_storage::backends::file={}",
+                LevelFilter::OFF
+            )
+            .parse()
+            .into_diagnostic()?,
+        )
+        .add_directive(
+            format!(
+                "rattler_networking::authentication_storage::storage={}",
+                LevelFilter::OFF
+            )
+            .parse()
+            .into_diagnostic()?,
         );
 
     // Setup the tracing subscriber

@@ -1,7 +1,8 @@
 use crate::common::PixiControl;
 use pixi::cli::run::Args;
-use pixi::project::manifest::FeatureName;
-use pixi::task::{CmdArgs, Task};
+use pixi::task::TaskName;
+use pixi::FeatureName;
+use pixi::{CmdArgs, Task};
 use rattler_conda_types::Platform;
 use std::fs;
 use std::path::PathBuf;
@@ -15,23 +16,26 @@ pub async fn add_remove_task() {
 
     // Simple task
     pixi.tasks()
-        .add("test", None, FeatureName::Default)
+        .add("test".into(), None, FeatureName::Default)
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
 
     let project = pixi.project().unwrap();
-    let tasks = project.default_environment().tasks(None).unwrap();
-    let task = tasks.get("test").unwrap();
+    let tasks = project.default_environment().tasks(None, true).unwrap();
+    let task = tasks.get(&<TaskName>::from("test")).unwrap();
     assert!(matches!(task, Task::Plain(s) if s == "echo hello"));
 
     // Remove the task
-    pixi.tasks().remove("test", None, None).await.unwrap();
+    pixi.tasks()
+        .remove("test".into(), None, None)
+        .await
+        .unwrap();
     assert_eq!(
         pixi.project()
             .unwrap()
             .default_environment()
-            .tasks(None)
+            .tasks(None, true)
             .unwrap()
             .len(),
         0
@@ -45,21 +49,21 @@ pub async fn add_command_types() {
 
     // Add a command with dependencies
     pixi.tasks()
-        .add("test", None, FeatureName::Default)
+        .add("test".into(), None, FeatureName::Default)
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
     pixi.tasks()
-        .add("test2", None, FeatureName::Default)
+        .add("test2".into(), None, FeatureName::Default)
         .with_commands(["echo hello", "echo bonjour"])
-        .with_depends_on(["test"])
+        .with_depends_on(vec!["test".into()])
         .execute()
         .unwrap();
 
     let project = pixi.project().unwrap();
-    let tasks = project.default_environment().tasks(None).unwrap();
-    let task2 = tasks.get("test2").unwrap();
-    let task = tasks.get("test").unwrap();
+    let tasks = project.default_environment().tasks(None, true).unwrap();
+    let task2 = tasks.get(&<TaskName>::from("test2")).unwrap();
+    let task = tasks.get(&<TaskName>::from("test")).unwrap();
     assert!(matches!(task2, Task::Execute(cmd) if matches!(cmd.cmd, CmdArgs::Single(_))));
     assert!(matches!(task2, Task::Execute(cmd) if !cmd.depends_on.is_empty()));
 
@@ -71,14 +75,14 @@ pub async fn add_command_types() {
 
     // Create an alias
     pixi.tasks()
-        .alias("testing", None)
-        .with_depends_on(["test", "test3"])
+        .alias("testing".into(), None)
+        .with_depends_on(vec!["test".into(), "test3".into()])
         .execute()
         .unwrap();
     let project = pixi.project().unwrap();
-    let tasks = project.default_environment().tasks(None).unwrap();
-    let task = tasks.get("testing").unwrap();
-    assert!(matches!(task, Task::Alias(a) if a.depends_on.get(0).unwrap() == "test"));
+    let tasks = project.default_environment().tasks(None, true).unwrap();
+    let task = tasks.get(&<TaskName>::from("testing")).unwrap();
+    assert!(matches!(task, Task::Alias(a) if a.depends_on.get(0).unwrap().as_str() == "test"));
 }
 
 #[tokio::test]
@@ -87,20 +91,20 @@ async fn test_alias() {
     pixi.init().without_channels().await.unwrap();
 
     pixi.tasks()
-        .add("hello", None, FeatureName::Default)
+        .add("hello".into(), None, FeatureName::Default)
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
 
     pixi.tasks()
-        .add("world", None, FeatureName::Default)
+        .add("world".into(), None, FeatureName::Default)
         .with_commands(["echo world"])
         .execute()
         .unwrap();
 
     pixi.tasks()
-        .add("helloworld", None, FeatureName::Default)
-        .with_depends_on(["hello", "world"])
+        .add("helloworld".into(), None, FeatureName::Default)
+        .with_depends_on(vec!["hello".into(), "world".into()])
         .execute()
         .unwrap();
 
@@ -126,7 +130,7 @@ pub async fn add_remove_target_specific_task() {
 
     // Simple task
     pixi.tasks()
-        .add("test", Some(Platform::Win64), FeatureName::Default)
+        .add("test".into(), Some(Platform::Win64), FeatureName::Default)
         .with_commands(["echo only_on_windows"])
         .execute()
         .unwrap();
@@ -134,28 +138,28 @@ pub async fn add_remove_target_specific_task() {
     let project = pixi.project().unwrap();
     let task = *project
         .default_environment()
-        .tasks(Some(Platform::Win64))
+        .tasks(Some(Platform::Win64), true)
         .unwrap()
-        .get("test")
+        .get(&<TaskName>::from("test"))
         .unwrap();
     assert!(matches!(task, Task::Plain(s) if s == "echo only_on_windows"));
 
     // Simple task
     pixi.tasks()
-        .add("test", None, FeatureName::Default)
+        .add("test".into(), None, FeatureName::Default)
         .with_commands(["echo hello"])
         .execute()
         .unwrap();
 
     // Remove the task
     pixi.tasks()
-        .remove("test", Some(Platform::Win64), None)
+        .remove("test".into(), Some(Platform::Win64), None)
         .await
         .unwrap();
     assert_eq!(
         project
             .default_environment()
-            .tasks(Some(Platform::Win64))
+            .tasks(Some(Platform::Win64), true)
             .unwrap()
             .len(),
         // The default task is still there
@@ -172,7 +176,7 @@ async fn test_cwd() {
     fs::create_dir(pixi.project_path().join("test")).unwrap();
 
     pixi.tasks()
-        .add("pwd-test", None, FeatureName::Default)
+        .add("pwd-test".into(), None, FeatureName::Default)
         .with_commands(["pwd"])
         .with_cwd(PathBuf::from("test"))
         .execute()
@@ -192,7 +196,7 @@ async fn test_cwd() {
 
     // Test that an unknown cwd gives an error
     pixi.tasks()
-        .add("unknown-cwd", None, FeatureName::Default)
+        .add("unknown-cwd".into(), None, FeatureName::Default)
         .with_commands(["pwd"])
         .with_cwd(PathBuf::from("tests"))
         .execute()

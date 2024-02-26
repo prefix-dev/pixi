@@ -1,40 +1,47 @@
 mod dependencies;
 mod environment;
 pub mod errors;
+pub mod grouped_environment;
 pub mod manifest;
+mod solve_group;
 pub mod virtual_packages;
 
+use async_once_cell::OnceCell as AsyncCell;
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 use once_cell::sync::OnceCell;
-use rattler_conda_types::{
-    Channel, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
-};
+
+use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
 use rattler_networking::AuthenticationMiddleware;
 use reqwest_middleware::ClientWithMiddleware;
+use rip::index::PackageSources;
 use rip::{index::PackageDb, normalize_index_url};
 use std::hash::Hash;
 use std::{
     collections::{HashMap, HashSet},
     env,
     ffi::OsStr,
-    fmt::{Debug, Display, Formatter},
+    fmt::{Debug, Formatter},
     fs,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
+use crate::activation::{get_environment_variables, run_activation};
+use crate::project::grouped_environment::GroupedEnvironment;
+use crate::task::TaskName;
 use crate::{
     config,
     consts::{self, PROJECT_MANIFEST},
     task::Task,
 };
-use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
-use rip::types::NormalizedPackageName;
-use url::Url;
-
 pub use dependencies::Dependencies;
 pub use environment::Environment;
+use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
+pub use solve_group::SolveGroup;
+use url::Url;
+
+use self::manifest::Environments;
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -52,6 +59,7 @@ impl DependencyType {
         }
     }
 }
+
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 /// What kind of dependency spec do we have
 pub enum SpecType {
@@ -79,7 +87,8 @@ impl SpecType {
     }
 }
 
-/// The pixi project, this main struct to interact with the project. This struct holds the [`Manifest`] and has functions to modify or request information from it.
+/// The pixi project, this main struct to interact with the project. This struct holds the
+/// `Manifest` and has functions to modify or request information from it.
 /// This allows in the future to have multiple environments or manifests linked to a project.
 #[derive(Clone)]
 pub struct Project {
@@ -93,6 +102,8 @@ pub struct Project {
     authenticated_client: ClientWithMiddleware,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
+    /// The cache that contains environment variables
+    env_vars: HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>>,
 }
 
 impl Debug for Project {
@@ -111,13 +122,27 @@ impl Project {
         let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
             .with_arc(Arc::new(AuthenticationMiddleware::default()))
             .build();
+
+        let env_vars = Project::init_env_vars(&manifest.parsed.environments);
+
         Self {
             root: Default::default(),
             package_db: Default::default(),
             client,
             authenticated_client,
             manifest,
+            env_vars,
         }
+    }
+
+    //Initialize empty map of environments variables
+    fn init_env_vars(
+        environments: &Environments,
+    ) -> HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>> {
+        environments
+            .iter()
+            .map(|environment| (environment.name.clone(), Arc::new(AsyncCell::new())))
+            .collect()
     }
 
     /// Constructs a project from a manifest.
@@ -139,7 +164,7 @@ impl Project {
 
     /// Returns the source code of the project as [`NamedSource`].
     /// Used in error reporting.
-    pub fn manifest_named_source(&self) -> NamedSource {
+    pub fn manifest_named_source(&self) -> NamedSource<String> {
         NamedSource::new(PROJECT_MANIFEST, self.manifest.contents.clone())
     }
 
@@ -165,7 +190,9 @@ impl Project {
                     consts::PROJECT_MANIFEST,
                     root.display()
                 )
-            });
+            })?;
+
+        let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
         Ok(Self {
             root: root.to_owned(),
@@ -174,7 +201,8 @@ impl Project {
             authenticated_client: reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
                 .with_arc(Arc::new(AuthenticationMiddleware::default()))
                 .build(),
-            manifest: manifest?,
+            manifest,
+            env_vars,
         })
     }
 
@@ -217,6 +245,11 @@ impl Project {
         self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
     }
 
+    /// Returns the solve group directory
+    pub fn solve_group_environments_dir(&self) -> PathBuf {
+        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+    }
+
     /// Returns the path to the manifest file.
     pub fn manifest_path(&self) -> PathBuf {
         self.manifest.path.clone()
@@ -234,10 +267,7 @@ impl Project {
 
     /// Returns the default environment of the project.
     pub fn default_environment(&self) -> Environment<'_> {
-        Environment {
-            project: self,
-            environment: self.manifest.default_environment(),
-        }
+        Environment::new(self, self.manifest.default_environment())
     }
 
     /// Returns the environment with the given name or `None` if no such environment exists.
@@ -245,10 +275,7 @@ impl Project {
     where
         Q: Hash + Equivalent<EnvironmentName>,
     {
-        Some(Environment {
-            project: self,
-            environment: self.manifest.environment(name)?,
-        })
+        Some(Environment::new(self, self.manifest.environment(name)?))
     }
 
     /// Returns the environments in this project.
@@ -257,11 +284,50 @@ impl Project {
             .parsed
             .environments
             .iter()
-            .map(|(_name, env)| Environment {
+            .map(|env| Environment::new(self, env))
+            .collect()
+    }
+
+    /// Returns all the solve groups in the project.
+    pub fn solve_groups(&self) -> Vec<SolveGroup> {
+        self.manifest
+            .parsed
+            .solve_groups
+            .iter()
+            .map(|group| SolveGroup {
                 project: self,
-                environment: env,
+                solve_group: group,
             })
             .collect()
+    }
+
+    /// Returns the solve group with the given name or `None` if no such group exists.
+    pub fn solve_group(&self, name: &str) -> Option<SolveGroup> {
+        self.manifest
+            .parsed
+            .solve_groups
+            .find(name)
+            .map(|group| SolveGroup {
+                project: self,
+                solve_group: group,
+            })
+    }
+
+    /// Return the grouped environments, which are all solve-groups and the environments that need to be solved.
+    pub fn grouped_environments(&self) -> Vec<GroupedEnvironment> {
+        let mut environments = HashSet::new();
+        environments.extend(
+            self.environments()
+                .into_iter()
+                .filter(|env| env.solve_group().is_none())
+                .map(GroupedEnvironment::from),
+        );
+        environments.extend(
+            self.solve_groups()
+                .into_iter()
+                .map(GroupedEnvironment::from),
+        );
+        environments.into_iter().collect()
     }
 
     /// Returns the channels used by this project.
@@ -281,9 +347,9 @@ impl Project {
     /// Get the tasks of this project
     ///
     /// TODO: Remove this function and use the tasks from the default environment instead.
-    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&str, &Task> {
+    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&TaskName, &Task> {
         self.default_environment()
-            .tasks(platform)
+            .tasks(platform, true)
             .unwrap_or_default()
     }
 
@@ -292,7 +358,7 @@ impl Project {
     /// platform.
     ///
     /// TODO: Remove this function and use the `task` function from the default environment instead.
-    pub fn task_opt(&self, name: &str, platform: Option<Platform>) -> Option<&Task> {
+    pub fn task_opt(&self, name: &TaskName, platform: Option<Platform>) -> Option<&Task> {
         self.default_environment().task(name, platform).ok()
     }
 
@@ -340,26 +406,24 @@ impl Project {
     }
 
     /// Returns the Python index URLs to use for this project.
-    pub fn pypi_index_urls(&self) -> Vec<Url> {
-        let index_url = normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap());
-        vec![index_url]
+    pub fn pypi_index_url(&self) -> Url {
+        normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap())
     }
 
     /// Returns the package database used for caching python metadata, wheels and more. See the
     /// documentation of [`rip::index::PackageDb`] for more information.
-    pub fn pypi_package_db(&self) -> miette::Result<&PackageDb> {
+    pub fn pypi_package_db(&self) -> miette::Result<Arc<PackageDb>> {
         Ok(self
             .package_db
             .get_or_try_init(|| {
                 PackageDb::new(
-                    self.client().clone(),
-                    &self.pypi_index_urls(),
+                    PackageSources::from(self.pypi_index_url()),
+                    self.authenticated_client().clone(),
                     &config::get_cache_dir()?.join("pypi/"),
                 )
-                .into_diagnostic()
                 .map(Arc::new)
             })?
-            .as_ref())
+            .clone())
     }
 
     /// Returns the reqwest client used for http networking
@@ -372,6 +436,33 @@ impl Project {
     pub fn authenticated_client(&self) -> &ClientWithMiddleware {
         &self.authenticated_client
     }
+
+    /// Return a combination of static environment variables generated from the project and the environment
+    /// and from running activation script
+    pub async fn get_env_variables(
+        &self,
+        environment: &Environment<'_>,
+    ) -> miette::Result<&HashMap<String, String>> {
+        let cell = self.env_vars.get(environment.name()).ok_or_else(|| {
+            miette::miette!(
+                "{} environment should be already created during project creation",
+                environment.name()
+            )
+        })?;
+
+        cell.get_or_try_init::<miette::Report>(async {
+            let activation_env = run_activation(environment).await?;
+
+            let environment_variables = get_environment_variables(environment);
+
+            let all_variables: HashMap<String, String> = activation_env
+                .into_iter()
+                .chain(environment_variables.into_iter())
+                .collect();
+            Ok(all_variables)
+        })
+        .await
+    }
 }
 
 /// Iterates over the current directory and all its parent directories and returns the first
@@ -381,27 +472,6 @@ pub fn find_project_root() -> Option<PathBuf> {
     std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent())
         .find(|dir| dir.join(consts::PROJECT_MANIFEST).is_file())
         .map(Path::to_path_buf)
-}
-
-#[derive(Eq, PartialEq, Hash)]
-pub enum DependencyName {
-    Conda(PackageName),
-    PyPi(NormalizedPackageName),
-}
-
-#[derive(Clone)]
-pub enum DependencyKind {
-    Conda(MatchSpec),
-    PyPi(pep508_rs::Requirement),
-}
-
-impl Display for DependencyKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DependencyKind::Conda(spec) => write!(f, "{}", spec),
-            DependencyKind::PyPi(req) => write!(f, "{}", req),
-        }
-    }
 }
 
 #[cfg(test)]
