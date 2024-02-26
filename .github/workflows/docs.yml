@@ -93,7 +93,8 @@ jobs:
 
   docs-dev:
     # Don't run on forks
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && !startsWith(github.event.inputs.tag, 'v')
+    # DONT MERGE THIS BEFORE THIS IS UNCOMMENTED
+#    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && !startsWith(github.event.inputs.tag, 'v')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
