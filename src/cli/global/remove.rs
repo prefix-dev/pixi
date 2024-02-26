@@ -5,7 +5,7 @@ use clap::Parser;
 use clap_verbosity_flag::{Level, Verbosity};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::MatchSpec;
+use rattler_conda_types::{MatchSpec, PackageName};
 
 use crate::cli::global::install::{
     find_and_map_executable_scripts, find_designated_package, BinDir, BinEnvDir, BinScriptMapping,
@@ -16,21 +16,41 @@ use crate::prefix::Prefix;
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
-    /// Specifies the package that is to be removed.
-    package: String,
+    /// Specifies the package(s) that is to be removed.
+    #[arg(num_args = 1..)]
+    package: Vec<String>,
     #[command(flatten)]
     verbose: Verbosity,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    // Find the MatchSpec we want to install
-    let package_matchspec = MatchSpec::from_str(&args.package).into_diagnostic()?;
-    let package_name = package_matchspec.name.clone().ok_or_else(|| {
-        miette::miette!(
-            "could not find package name in MatchSpec {}",
-            package_matchspec
-        )
-    })?;
+    // Find the MatchSpec we want to remove
+    let specs = args
+        .package
+        .into_iter()
+        .map(|package_str| MatchSpec::from_str(&package_str))
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
+    let packages = specs
+        .into_iter()
+        .map(|spec| {
+            spec.name
+                .clone()
+                .ok_or_else(|| miette::miette!("could not find package name in MatchSpec {}", spec))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    for package_name in packages {
+        remove_global_package(package_name, &args.verbose).await?;
+    }
+
+    Ok(())
+}
+
+async fn remove_global_package(
+    package_name: PackageName,
+    verbose: &Verbosity,
+) -> miette::Result<()> {
     let BinEnvDir(bin_prefix) = BinEnvDir::from_existing(&package_name).await?;
     let prefix = Prefix::new(bin_prefix.clone());
 
@@ -56,7 +76,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let dirs_to_remove: Vec<_> = vec![bin_prefix];
 
-    if args.verbose.log_level().unwrap_or(Level::Error) >= Level::Warn {
+    if verbose.log_level().unwrap_or(Level::Error) >= Level::Warn {
         let whitespace = console::Emoji("  ", "").to_string();
         let names_to_remove = dirs_to_remove
             .iter()
