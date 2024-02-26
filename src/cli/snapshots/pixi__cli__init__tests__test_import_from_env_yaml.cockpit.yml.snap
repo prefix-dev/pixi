@@ -1,6 +1,6 @@
 ---
 source: src/cli/init.rs
-expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_channels(env_info.channels), env_info.name)"
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
     (
@@ -848,57 +848,62 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
         ],
         [
             (
-                PackageName {
-                    source: "memory-profiler",
-                    normalized: "memory-profiler",
-                },
+                PackageName(
+                    "memory-profiler",
+                ),
                 PyPiRequirement {
                     version: None,
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "pre-commit",
-                    normalized: "pre-commit",
-                },
+                PackageName(
+                    "pre-commit",
+                ),
                 PyPiRequirement {
                     version: None,
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "graphviz",
-                    normalized: "graphviz",
-                },
+                PackageName(
+                    "graphviz",
+                ),
                 PyPiRequirement {
                     version: None,
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "sphinx-notfound-page",
-                    normalized: "sphinx-notfound-page",
-                },
+                PackageName(
+                    "sphinx-notfound-page",
+                ),
                 PyPiRequirement {
                     version: None,
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "DeepOBS",
-                    normalized: "deepobs",
-                },
+                PackageName(
+                    "deepobs",
+                ),
                 PyPiRequirement {
                     version: None,
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),

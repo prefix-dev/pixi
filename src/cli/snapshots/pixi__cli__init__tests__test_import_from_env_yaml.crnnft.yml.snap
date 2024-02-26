@@ -1,6 +1,6 @@
 ---
 source: src/cli/init.rs
-expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_channels(env_info.channels), env_info.name)"
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
     (
@@ -133,77 +133,71 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
         ],
         [
             (
-                PackageName {
-                    source: "tensorflow_gpu",
-                    normalized: "tensorflow-gpu",
-                },
+                PackageName(
+                    "tensorflow-gpu",
+                ),
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
                                     operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            1,
-                                            15,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "1.15.0",
                                 },
                             ],
                         ),
                     ),
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "numpy",
-                    normalized: "numpy",
-                },
+                PackageName(
+                    "numpy",
+                ),
                 PyPiRequirement {
                     version: None,
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "opencv_python",
-                    normalized: "opencv-python",
-                },
+                PackageName(
+                    "opencv-python",
+                ),
                 PyPiRequirement {
                     version: None,
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "matplotlib",
-                    normalized: "matplotlib",
-                },
+                PackageName(
+                    "matplotlib",
+                ),
                 PyPiRequirement {
                     version: None,
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "easydict",
-                    normalized: "easydict",
-                },
+                PackageName(
+                    "easydict",
+                ),
                 PyPiRequirement {
                     version: None,
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),

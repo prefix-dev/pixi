@@ -1,6 +1,6 @@
 ---
 source: src/cli/init.rs
-expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_channels(env_info.channels), env_info.name)"
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
     (
@@ -102,395 +102,299 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
         ],
         [
             (
-                PackageName {
-                    source: "package1",
-                    normalized: "package1",
-                },
+                PackageName(
+                    "package1",
+                ),
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
                                     operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            1,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "1.0.0",
                                 },
                             ],
                         ),
                     ),
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "package2",
-                    normalized: "package2",
-                },
+                PackageName(
+                    "package2",
+                ),
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
                                     operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            2,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "2.0",
                                 },
                             ],
                         ),
                     ),
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "package3",
-                    normalized: "package3",
-                },
+                PackageName(
+                    "package3",
+                ),
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
                                     operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            3,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "3",
                                 },
                             ],
                         ),
                     ),
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "package4",
-                    normalized: "package4",
-                },
+                PackageName(
+                    "package4",
+                ),
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
                                     operator: LessThanEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            4,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "4.0.0",
                                 },
                             ],
                         ),
                     ),
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "package5",
-                    normalized: "package5",
-                },
+                PackageName(
+                    "package5",
+                ),
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
                                     operator: GreaterThanEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            5,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "5.0.0",
                                 },
                             ],
                         ),
                     ),
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "package6",
-                    normalized: "package6",
-                },
+                PackageName(
+                    "package6",
+                ),
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
                                     operator: GreaterThan,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            6,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "6.0.0",
                                 },
                             ],
                         ),
                     ),
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "package7",
-                    normalized: "package7",
-                },
+                PackageName(
+                    "package7",
+                ),
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
                                     operator: LessThan,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            7,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "7.0.0",
                                 },
                             ],
                         ),
                     ),
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "package8",
-                    normalized: "package8",
-                },
+                PackageName(
+                    "package8",
+                ),
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
                                     operator: NotEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            8,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "8.0.0",
                                 },
                             ],
                         ),
                     ),
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "package9",
-                    normalized: "package9",
-                },
+                PackageName(
+                    "package9",
+                ),
                 PyPiRequirement {
                     version: None,
-                    extras: None,
+                    extras: Some(
+                        [],
+                    ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "package10",
-                    normalized: "package10",
-                },
+                PackageName(
+                    "package10",
+                ),
                 PyPiRequirement {
                     version: None,
                     extras: Some(
                         [
-                            "extra",
+                            ExtraName(
+                                "extra",
+                            ),
                         ],
                     ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "package11",
-                    normalized: "package11",
-                },
+                PackageName(
+                    "package11",
+                ),
                 PyPiRequirement {
                     version: None,
                     extras: Some(
                         [
-                            "extra1",
-                            "extra2",
+                            ExtraName(
+                                "extra1",
+                            ),
+                            ExtraName(
+                                "extra2",
+                            ),
                         ],
                     ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "package12",
-                    normalized: "package12",
-                },
+                PackageName(
+                    "package12",
+                ),
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
                                     operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            12,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "12.0.0",
                                 },
                             ],
                         ),
                     ),
                     extras: Some(
                         [
-                            "extra1",
-                            "extra2",
+                            ExtraName(
+                                "extra1",
+                            ),
+                            ExtraName(
+                                "extra2",
+                            ),
                         ],
                     ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "package13",
-                    normalized: "package13",
-                },
+                PackageName(
+                    "package13",
+                ),
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
                                     operator: GreaterThanEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            13,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "13.0.0",
                                 },
                             ],
                         ),
                     ),
                     extras: Some(
                         [
-                            "extra1",
-                            "extra2",
+                            ExtraName(
+                                "extra1",
+                            ),
+                            ExtraName(
+                                "extra2",
+                            ),
                         ],
                     ),
                     index: None,
                 },
             ),
             (
-                PackageName {
-                    source: "package14",
-                    normalized: "package14",
-                },
+                PackageName(
+                    "package14",
+                ),
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
                                     operator: LessThanEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            14,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "14.0.0",
                                 },
                             ],
                         ),
                     ),
                     extras: Some(
                         [
-                            "extra1",
-                            "extra2",
+                            ExtraName(
+                                "extra1",
+                            ),
+                            ExtraName(
+                                "extra2",
+                            ),
                         ],
                     ),
                     index: None,
