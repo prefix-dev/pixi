@@ -88,7 +88,7 @@ jobs:
 
       - name: Deploy with mike 🚀
         run: |
-          pixi run mike deploy --push --update-aliases $RELEASE_VERSION latest
+          pixi run -e docs mike deploy --push --update-aliases $RELEASE_VERSION latest
 
   docs-dev:
     # Don't run on forks
