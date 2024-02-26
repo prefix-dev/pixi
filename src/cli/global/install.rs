@@ -29,8 +29,9 @@ use std::{
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
-    /// Specifies the package that is to be installed.
-    package: String,
+    /// Specifies the package(s) that is to be installed.
+    #[arg(num_args = 1..)]
+    package: Vec<String>,
 
     /// Represents the channels from which the package will be installed.
     /// Multiple channels can be specified by using this field multiple times.
@@ -337,42 +338,58 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .build();
 
     // Find the MatchSpec we want to install
-    let package_matchspec = MatchSpec::from_str(&args.package).into_diagnostic()?;
+    let specs = args
+        .package
+        .into_iter()
+        .map(|package_str| MatchSpec::from_str(&package_str))
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
 
     // Fetch sparse repodata
     let platform_sparse_repodata =
         fetch_sparse_repodata(&channels, [Platform::current()], &authenticated_client).await?;
 
-    // Install the package
-    let (prefix_package, scripts, _) = globally_install_package(
-        package_matchspec,
-        &platform_sparse_repodata,
-        &channel_config,
-        authenticated_client,
-    )
-    .await?;
-
-    let channel_name = channel_name_from_prefix(&prefix_package, &channel_config);
-    let whitespace = console::Emoji("  ", "").to_string();
-
-    eprintln!(
-        "{}Installed package {} {} {} from {}",
-        console::style(console::Emoji("✔ ", "")).green(),
-        console::style(
-            prefix_package
-                .repodata_record
-                .package_record
-                .name
-                .as_source()
+    // Install the package(s)
+    let mut executables = vec![];
+    for package_matchspec in specs {
+        let (prefix_package, scripts, _) = globally_install_package(
+            package_matchspec,
+            &platform_sparse_repodata,
+            &channel_config,
+            authenticated_client.clone(),
         )
-        .bold(),
-        console::style(prefix_package.repodata_record.package_record.version).bold(),
-        console::style(prefix_package.repodata_record.package_record.build).bold(),
-        channel_name,
-    );
+        .await?;
 
+        let channel_name = channel_name_from_prefix(&prefix_package, &channel_config);
+
+        eprintln!(
+            "{}Installed package {} {} {} from {}",
+            console::style(console::Emoji("✔ ", "")).green(),
+            console::style(
+                prefix_package
+                    .repodata_record
+                    .package_record
+                    .name
+                    .as_source()
+            )
+            .bold(),
+            console::style(prefix_package.repodata_record.package_record.version).bold(),
+            console::style(prefix_package.repodata_record.package_record.build).bold(),
+            channel_name,
+        );
+
+        executables.extend(scripts);
+    }
+
+    print_executables_available(executables).await?;
+
+    Ok(())
+}
+
+async fn print_executables_available(executables: Vec<PathBuf>) -> miette::Result<()> {
     let BinDir(bin_dir) = BinDir::from_existing().await?;
-    let script_names = scripts
+    let whitespace = console::Emoji("  ", "").to_string();
+    let executable = executables
         .into_iter()
         .map(|path| {
             path.strip_prefix(&bin_dir)
@@ -384,10 +401,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if is_bin_folder_on_path() {
         eprintln!(
-            "{whitespace}These apps are now globally available:\n{whitespace} -  {script_names}",
+            "{whitespace}These executables are now globally available:\n{whitespace} -  {executable}",
         )
     } else {
-        eprintln!("{whitespace}These apps have been added to {}\n{whitespace} -  {script_names}\n\n{} To use them, make sure to add {} to your PATH",
+        eprintln!("{whitespace}These executables have been added to {}\n{whitespace} -  {executable}\n\n{} To use them, make sure to add {} to your PATH",
                   console::style(&bin_dir.display()).bold(),
                   console::style("!").yellow().bold(),
                   console::style(&bin_dir.display()).bold()
@@ -403,7 +420,7 @@ pub(super) async fn globally_install_package(
     channel_config: &ChannelConfig,
     authenticated_client: ClientWithMiddleware,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
-    let package_name = package_name(&package_matchspec)?;
+    let package_name: PackageName = package_name(&package_matchspec)?;
 
     let available_packages = SparseRepoData::load_records_recursive(
         sparse_repodata.values(),
