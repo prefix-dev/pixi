@@ -1624,20 +1624,24 @@ Allowing you to make different sets of tasks or dependencies per platform.</p>
 <li><a href="#the-tasks-table"><code>tasks</code></a></li>
 </ul>
 <p>The target table is defined using <code>[target.PLATFORM.SUB-TABLE]</code>.
-E.g <code>[target.linux-64.dependencies]</code>
-The platform can be any of the target <a href="#platforms">platforms</a> but must also be defined there.
-The sub-table can be any of the specified above.</p>
+E.g <code>[target.linux-64.dependencies]</code></p>
+<p>The platform can be any of:</p>
+<ul>
+<li><code>win</code>, <code>osx</code>, <code>linux</code> or <code>unix</code> (<code>unix</code> matches <code>linux</code> and <code>osx</code>)</li>
+<li>or any of the (more) specific <a href="#platforms">target platforms</a>, e.g. <code>linux-64</code>, <code>osx-arm64</code></li>
+</ul>
+<p>The sub-table can be any of the specified above.</p>
 <p>To make it a bit more clear, let's look at an example below.
 Currently, pixi combines the top level tables like <code>dependencies</code> with the target-specific ones into a single set.
 Which, in the case of dependencies, can both add or overwrite dependencies.
-In the example below, we have <code>cmake</code> being used for all targets but on <code>osx-64</code> a different version of python will be selected.
+In the example below, we have <code>cmake</code> being used for all targets but on <code>osx-64</code> or <code>osx-arm64</code> a different version of python will be selected.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="k">[dependencies]</span>
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="n">cmake</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.26.4&quot;</span>
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.10&quot;</span>
 </span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>
-</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="k">[target.osx-64.dependencies]</span>
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="k">[target.osx.dependencies]</span>
 </span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.11&quot;</span>
-</span></code></pre></div></p>
+</span></code></pre></div>
 <p>Here are some more examples:
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="k">[target.win-64.activation]</span>
 </span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.bat&quot;</span><span class="p">]</span>

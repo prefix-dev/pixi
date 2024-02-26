@@ -1634,12 +1634,20 @@ It initializes a <code>pixi.toml</code> file and also prepares a <code>.gitignor
 <ul>
 <li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses. Defaults to <code>conda-forge</code>. (Allowed to be used more than once)</li>
 <li><code>--platform &lt;PLATFORM&gt; (-p)</code>: specify a platform that the project supports. (Allowed to be used more than once)</li>
+<li><code>--import &lt;ENV_FILE&gt; (-i)</code>: Import an existing conda environment file, e.g. <code>environment.yml</code>.</li>
 </ul>
+<div class="admonition info">
+<p class="admonition-title">Importing an environment.yml</p>
+<p>When importing an environment, the <code>pixi.toml</code> will be created with the dependencies from the environment file.
+The <code>pixi.lock</code> will be created when you install the environment.
+We don't support <code>git+</code> urls as dependencies for pip packages and for the <code>defaults</code> channel we use <code>main</code>, <code>r</code> and <code>msys2</code> as the default channels.</p>
+</div>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>myproject
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pixi<span class="w"> </span>init<span class="w"> </span>~/myproject
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pixi<span class="w"> </span>init<span class="w">  </span><span class="c1"># Initializes directly in the current directory.</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>pixi<span class="w"> </span>init<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>myproject
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>pixi<span class="w"> </span>init<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>--platform<span class="w"> </span>linux-64<span class="w"> </span>myproject
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>pixi<span class="w"> </span>init<span class="w"> </span>--import<span class="w"> </span>environment.yml
 </span></code></pre></div>
 <h2 id="add"><code>add</code><a class="headerlink" href="#add" title="Permanent link">#</a></h2>
 <p>Adds dependencies to the <code>pixi.toml</code>.
@@ -1660,6 +1668,7 @@ It will only add if the package with its version constraint is able to work with
 <li><code>--no-install</code>: Don't install the package to the environment, only add the package to the lock-file.</li>
 <li><code>--no-lockfile-update</code>: Don't update the lock-file, implies the <code>--no-install</code> flag.</li>
 <li><code>--platform &lt;PLATFORM&gt; (-p)</code>: The platform for which the dependency should be added. (Allowed to be used more than once)</li>
+<li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the dependency should be added.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>numpy
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>numpy<span class="w"> </span>pandas<span class="w"> </span><span class="s2">&quot;pytorch&gt;=1.8&quot;</span>
@@ -1671,6 +1680,7 @@ It will only add if the package with its version constraint is able to work with
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>pixi<span class="w"> </span>add<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>--build<span class="w"> </span>clang
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>pixi<span class="w"> </span>add<span class="w"> </span>--no-install<span class="w"> </span>numpy
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>pixi<span class="w"> </span>add<span class="w"> </span>--no-lockfile-update<span class="w"> </span>numpy
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>featurex<span class="w"> </span>numpy
 </span></code></pre></div>
 <h2 id="install"><code>install</code><a class="headerlink" href="#install" title="Permanent link">#</a></h2>
 <p>Installs all dependencies specified in the lockfile <code>pixi.lock</code>.
@@ -1933,8 +1943,8 @@ To exit the pixi shell, simply run <code>exit</code>.</p>
 <p>This command prints the activation script of an environment.</p>
 <h5 id="options_12">Options<a class="headerlink" href="#options_12" title="Permanent link">#</a></h5>
 <ul>
-<li><code>--shell</code>: The shell for which the activation script should be printed. Defaults to the current shell.
-    Currently supported variants: [<code>Bash</code>,  <code>Zsh</code>,  <code>Xonsh</code>,  <code>CmdExe</code>,  <code>PowerShell</code>,  <code>Fish</code>,  <code>NuShell</code>]</li>
+<li><code>--shell &lt;SHELL&gt; (-s)</code>: The shell for which the activation script should be printed. Defaults to the current shell.
+    Currently supported variants: [<code>bash</code>,  <code>zsh</code>,  <code>xonsh</code>,  <code>cmd</code>,  <code>powershell</code>,  <code>fish</code>,  <code>nushell</code>]</li>
 <li><code>--manifest-path</code>: the path to <code>pixi.toml</code>, by default it searches for one in the parent directories.</li>
 <li><code>--frozen</code>: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
 <li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <code>pixi.toml</code><sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
@@ -1943,10 +1953,11 @@ To exit the pixi shell, simply run <code>exit</code>.</p>
 <p><div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>shell-hook
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--shell<span class="w"> </span>bash
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--shell<span class="w"> </span>zsh
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--manifest-path<span class="w"> </span>~/myproject/pixi.toml
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--frozen
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--locked
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--environment<span class="w"> </span>cuda
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>-s<span class="w"> </span>powershell
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--manifest-path<span class="w"> </span>~/myproject/pixi.toml
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--frozen
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--locked
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--environment<span class="w"> </span>cuda
 </span></code></pre></div>
 Example use-case, when you want to get rid of the <code>pixi</code> executable in a Docker container.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--shell<span class="w"> </span>bash<span class="w"> </span>&gt;<span class="w"> </span>/etc/profile.d/pixi.sh
