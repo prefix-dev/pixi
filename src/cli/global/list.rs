@@ -127,7 +127,7 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
             }
         }
 
-        eprintln!("Gobal install location: {}\n{}", path.display(), message);
+        eprintln!("Global install location: {}\n{}", path.display(), message);
     }
 
     Ok(())
