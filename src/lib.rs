@@ -19,6 +19,7 @@ pub mod utils;
 
 mod pypi_marker_env;
 mod pypi_tags;
+mod uv_reporter;
 
 mod pypi_name_mapping;
 

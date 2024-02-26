@@ -4,6 +4,7 @@
 
 use crate::config::get_cache_dir;
 use crate::consts::PROJECT_MANIFEST;
+use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::collections::{BTreeMap, HashMap};
 use std::future::{ready, Future};
 use std::iter::once;
@@ -16,14 +17,12 @@ use crate::{
     project::manifest::{PyPiRequirement, SystemRequirements},
     Project,
 };
-use distribution_filename::WheelFilename;
-use distribution_types::Dist::Built;
+
 use distribution_types::{
-    BuiltDist, DirectUrlBuiltDist, DirectUrlSourceDist, Dist, DistributionMetadata, FileLocation,
-    IndexLocations, Name, PrioritizedDist, Resolution, SourceDist, VersionOrUrl,
-    WheelCompatibility,
+    BuiltDist, DirectUrlSourceDist, Dist, DistributionMetadata, FileLocation, IndexLocations, Name,
+    PrioritizedDist, Resolution, SourceDist, VersionOrUrl,
 };
-use futures::{FutureExt, TryFutureExt};
+use futures::FutureExt;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
@@ -41,17 +40,14 @@ use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
 use uv_cache::Cache;
-use uv_client::{
-    Connectivity, FlatDistributions, FlatIndex, FlatIndexClient, RegistryClient,
-    RegistryClientBuilder,
-};
+use uv_client::{Connectivity, FlatIndex, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, Reporter};
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
-    DefaultResolverProvider, DistFinder, InMemoryIndex, Manifest, Options, PackageVersionsResult,
-    PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
+    DefaultResolverProvider, DistFinder, InMemoryIndex, Manifest, Options, PythonRequirement,
+    Resolver, ResolverProvider, VersionMap, VersionsResponse,
 };
 use uv_traits::{BuildContext, InFlight, NoBinary, NoBuild, SetupPyStrategy};
 
@@ -174,9 +170,9 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
     ) -> impl Future<Output = uv_resolver::WheelMetadataResult> + Send + 'io {
         if let Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist { url, name })) = dist {
             if let Some((_, iden)) = self.conda_python_identifiers.get(name) {
-                /// If this is a Source dist and the package is actually installed by conda we
-                /// create fake metadata with no dependencies. We assume that all conda installed
-                /// packages are properly installed including its dependencies.
+                // If this is a Source dist and the package is actually installed by conda we
+                // create fake metadata with no dependencies. We assume that all conda installed
+                // packages are properly installed including its dependencies.
                 return ready(Ok((
                     Metadata21 {
                         metadata_version: "1.0".to_string(),
@@ -203,7 +199,7 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
         self.fallback.index_locations()
     }
 
-    fn with_reporter(mut self, reporter: impl Reporter + 'static) -> Self {
+    fn with_reporter(self, reporter: impl Reporter + 'static) -> Self {
         Self {
             fallback: self.fallback.with_reporter(reporter),
             ..self
@@ -385,7 +381,9 @@ pub async fn resolve_pypi(
     )
     .into_diagnostic()
     .context("failed to resolve pypi dependencies")?
-    .with_reporter(ResolveReporter(pb.clone()))
+    .with_reporter(UvReporter::new(
+        UvReporterOptions::new().with_existing(pb.clone()),
+    ))
     .resolve()
     .await
     .into_diagnostic()

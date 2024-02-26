@@ -152,10 +152,16 @@ impl ScopedTask {
 impl ProgressBarMessageFormatter {
     /// Construct a new instance that will update the given progress bar.
     pub fn new(progress_bar: ProgressBar) -> Self {
+        Self::new_with_capacity(progress_bar, 50)
+    }
+
+    /// Construct a new instance that will update the given progress bar.
+    /// Allows the user to specify a custom capacity for the internal channel.
+    pub fn new_with_capacity(progress_bar: ProgressBar, capacity: usize) -> Self {
         let pb = progress_bar.clone();
-        let (tx, mut rx) = channel::<Operation>(20);
+        let (tx, mut rx) = channel::<Operation>(capacity);
         tokio::spawn(async move {
-            let mut pending = VecDeque::with_capacity(20);
+            let mut pending = VecDeque::with_capacity(capacity);
             while let Some(msg) = rx.recv().await {
                 match msg {
                     Operation::Started(op) => pending.push_back(op),

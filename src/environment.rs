@@ -173,7 +173,7 @@ pub async fn get_up_to_date_prefix(
 pub async fn update_prefix_pypi(
     environment_name: &EnvironmentName,
     prefix: &Prefix,
-    platform: Platform,
+    _platform: Platform,
     conda_records: &[RepoDataRecord],
     pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
     status: &PythonStatus,
