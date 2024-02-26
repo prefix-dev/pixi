@@ -29,6 +29,9 @@ concurrency:
   group: "pages"
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build-docs:
     if: github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/v')
