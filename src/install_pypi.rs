@@ -114,10 +114,8 @@ fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_ty
 fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
     // Extract last component from url
     let filename_raw = pkg.url.path_segments().unwrap().last().unwrap();
-    let filename = DistFilename::try_from_normalized_filename(filename_raw).expect(&format!(
-        "{} - could not convert to dist filename",
-        pkg.name.as_ref()
-    ));
+    let filename = DistFilename::try_from_normalized_filename(filename_raw)
+        .unwrap_or_else(|| panic!("{} - could not convert to dist filename", pkg.name.as_ref()));
 
     // Bit of a hack to create the file type
     let file = locked_data_to_file(pkg, filename_raw);
@@ -129,9 +127,9 @@ fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
 /// and what we need to download from the registry.
 /// Also determine what we need to remove.
 /// Ignores re-installs for now.
-fn whats_the_plan<'venv, 'a>(
+fn whats_the_plan<'a>(
     required: &'a [CombinedPypiPackageData],
-    installed: &SitePackages<'venv>,
+    installed: &SitePackages<'_>,
     registry_index: &'a mut RegistryWheelIndex<'a>,
     uv_cache: &Cache,
 ) -> miette::Result<PixiInstallPlan> {
@@ -262,7 +260,7 @@ pub async fn update_python_distributions(
     // Determine the current environment markers.
     let tags = get_pypi_tags(
         Platform::current(),
-        &system_requirements,
+        system_requirements,
         &python_record.package_record,
     )?;
 

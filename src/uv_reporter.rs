@@ -1,10 +1,8 @@
 use crate::progress::{self, ProgressBarMessageFormatter, ScopedTask};
-use distribution_filename::WheelFilename;
-use distribution_types::{CachedDist, DistributionMetadata, Name, SourceDist, VersionOrUrl};
+use distribution_types::{CachedDist, Name, VersionOrUrl};
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
-use url::Url;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use uv_normalize::PackageName;
 
 fn create_progress(length: u64, message: &'static str) -> ProgressBar {
@@ -124,7 +122,7 @@ impl UvReporter {
         let len = lock.len();
         let task = lock
             .get_mut(id)
-            .expect(&format!("progres bar error idx ({id}) > {len}"))
+            .unwrap_or_else(|| panic!("progress bar error idx ({id}) > {len}"))
             .take();
         if let Some(task) = task {
             task.finish_sync();
@@ -177,7 +175,7 @@ impl uv_installer::DownloadReporter for UvReporter {
     }
 
     fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
-        self.start_sync(format!("cloning {}", url.to_string()))
+        self.start_sync(format!("cloning {}", url))
     }
 
     fn on_checkout_complete(&self, _url: &url::Url, _rev: &str, index: usize) {
@@ -213,7 +211,7 @@ impl uv_resolver::ResolverReporter for UvReporter {
     }
 
     fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
-        self.start_sync(format!("cloning {}", url.to_string()))
+        self.start_sync(format!("cloning {}", url))
     }
 
     fn on_checkout_complete(&self, _url: &url::Url, _rev: &str, index: usize) {

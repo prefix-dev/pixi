@@ -323,7 +323,7 @@ pub async fn resolve_pypi(
         &NoBuild::None,
         &NoBinary::None,
     )
-    .with_options(options.clone());
+    .with_options(options);
 
     let constraints = conda_python_packages
         .values()

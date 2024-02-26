@@ -1233,7 +1233,7 @@ async fn spawn_extract_pypi_environment_task(
                 .iter()
                 .filter_map(|record| PypiPackageIdentifier::from_record(record).ok())
                 .flatten()
-                .map(|identifier| (identifier.name.clone().into(), identifier))
+                .map(|identifier| (identifier.name.clone(), identifier))
                 .collect::<HashMap<_, _>>();
 
             Arc::new(
