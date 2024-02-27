@@ -1313,7 +1313,7 @@ async fn spawn_solve_pypi_task(
         .await
         .with_context(|| {
             format!(
-                "failed to solve the conda requirements of '{}' '{}'",
+                "failed to solve the pypi requirements of '{}' '{}'",
                 environment_name.fancy_display(),
                 consts::PLATFORM_STYLE.apply_to(platform)
             )
