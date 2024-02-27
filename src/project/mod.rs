@@ -123,7 +123,7 @@ impl Project {
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
         Self {
-            root: Default::default(),
+            root: manifest.path.parent().unwrap_or(Path::new("")).to_owned(),
             client,
             authenticated_client,
             manifest,

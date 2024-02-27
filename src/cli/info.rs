@@ -52,7 +52,7 @@ pub struct EnvironmentInfo {
     platforms: Vec<Platform>,
     tasks: Vec<TaskName>,
     channels: Vec<String>,
-    // prefix: Option<PathBuf>, add when PR 674 is merged
+    prefix: PathBuf,
 }
 
 impl Display for EnvironmentInfo {
@@ -323,7 +323,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             .into_iter()
                             .filter_map(|c| c.name.clone())
                             .collect(),
-                        // prefix: env.dir(),
+                        prefix: env.dir(),
                         tasks,
                     }
                 })

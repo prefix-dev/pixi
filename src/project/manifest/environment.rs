@@ -3,7 +3,8 @@ use crate::utils::spanned::PixiSpanned;
 use lazy_static::lazy_static;
 use miette::Diagnostic;
 use regex::Regex;
-use serde::{self, Deserialize, Deserializer, Serialize};
+use serde::{self, Deserialize, Deserializer};
+use serde_with::SerializeDisplay;
 use std::borrow::Borrow;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -11,7 +12,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 /// The name of an environment. This is either a string or default for the default environment.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, SerializeDisplay)]
 pub enum EnvironmentName {
     Default,
     Named(String),
