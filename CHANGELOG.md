@@ -22,33 +22,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [Full commit history](https://github.com/prefix-dev/pixi/compare/v0.15.0..v0.15.1)
 
-## [0.15.0](https://github.com/ruben-arts/pixi/compare/v0.14.0...v0.15.0) - 2024-02-23
+## [0.15.0](https://github.com/prefix-dev/pixi/compare/v0.14.0...v0.15.0) - 2024-02-23
 
-### ✨ Highlights
+## ✨ Highlights
 - `[pypi-dependencies]` now get build in the created environment so it uses the conda installed build tools.
 - `pixi init --import env.yml` to import an existing conda environment file.
 - `[target.unix.dependencies]` to specify dependencies for unix systems instead of per platform.
 
+> [!WARNING]
+> This versions build failed, use `v0.15.1`
+
 ### 📃 Details
 #### Added
-- pass environment variables during pypi resolution and install ([#818](https://github.com/ruben-arts/pixi/pull/818))
-- skip micromamba style selector lines and warn about them ([#830](https://github.com/ruben-arts/pixi/pull/830))
-- add import yml flag ([#792](https://github.com/ruben-arts/pixi/pull/792))
-- check duplicate dependencies ([#717](https://github.com/ruben-arts/pixi/pull/717))
-- *(ci)* check conventional PR title ([#820](https://github.com/ruben-arts/pixi/pull/820))
-- add `--feature` to `pixi add` ([#803](https://github.com/ruben-arts/pixi/pull/803))
-- add windows, macos, linux and unix to targets ([#832](https://github.com/ruben-arts/pixi/pull/832))
+- pass environment variables during pypi resolution and install ([#818](https://github.com/prefix-dev/pixi/pull/818))
+- skip micromamba style selector lines and warn about them ([#830](https://github.com/prefix-dev/pixi/pull/830))
+- add import yml flag ([#792](https://github.com/prefix-dev/pixi/pull/792))
+- check duplicate dependencies ([#717](https://github.com/prefix-dev/pixi/pull/717))
+- *(ci)* check conventional PR title ([#820](https://github.com/prefix-dev/pixi/pull/820))
+- add `--feature` to `pixi add` ([#803](https://github.com/prefix-dev/pixi/pull/803))
+- add windows, macos, linux and unix to targets ([#832](https://github.com/prefix-dev/pixi/pull/832))
 
 #### Fixed
-- cache and retry pypi name mapping ([#839](https://github.com/ruben-arts/pixi/pull/839))
-- check duplicates while adding dependencies ([#829](https://github.com/ruben-arts/pixi/pull/829))
-- logic `PIXI_NO_PATH_UPDATE` variable ([#822](https://github.com/ruben-arts/pixi/pull/822))
+- cache and retry pypi name mapping ([#839](https://github.com/prefix-dev/pixi/pull/839))
+- check duplicates while adding dependencies ([#829](https://github.com/prefix-dev/pixi/pull/829))
+- logic `PIXI_NO_PATH_UPDATE` variable ([#822](https://github.com/prefix-dev/pixi/pull/822))
 
 #### Other
-- add `mike` to the documentation and update looks ([#809](https://github.com/ruben-arts/pixi/pull/809))
-- add instructions for installing on Alpine Linux ([#828](https://github.com/ruben-arts/pixi/pull/828))
-- more error reporting in `self-update` ([#823](https://github.com/ruben-arts/pixi/pull/823))
-- disabled `jlap` for now ([#836](https://github.com/ruben-arts/pixi/pull/823))
+- add `mike` to the documentation and update looks ([#809](https://github.com/prefix-dev/pixi/pull/809))
+- add instructions for installing on Alpine Linux ([#828](https://github.com/prefix-dev/pixi/pull/828))
+- more error reporting in `self-update` ([#823](https://github.com/prefix-dev/pixi/pull/823))
+- disabled `jlap` for now ([#836](https://github.com/prefix-dev/pixi/pull/823))
 
 [Full commit history](https://github.com/prefix-dev/pixi/compare/v0.14.0..v0.15.0)
 
