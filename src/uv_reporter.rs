@@ -151,7 +151,13 @@ impl uv_installer::DownloadReporter for UvReporter {
     }
 
     fn on_build_start(&self, dist: &distribution_types::SourceDist) -> usize {
-        self.start_sync(format!("building {}", dist.name().as_ref()))
+        self.start_sync(format!(
+            "building {}=={}",
+            dist.name().as_ref(),
+            dist.version()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "unknown".to_string())
+        ))
     }
 
     fn on_build_complete(&self, _dist: &distribution_types::SourceDist, id: usize) {
@@ -203,7 +209,13 @@ impl uv_resolver::ResolverReporter for UvReporter {
     }
 
     fn on_build_start(&self, dist: &distribution_types::SourceDist) -> usize {
-        self.start_sync(format!("building {}", dist.name().as_ref()))
+        self.start_sync(format!(
+            "building {}=={}",
+            dist.name().as_ref(),
+            dist.version()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "unknown".to_string())
+        ))
     }
 
     fn on_build_complete(&self, _dist: &distribution_types::SourceDist, id: usize) {

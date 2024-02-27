@@ -254,6 +254,8 @@ pub async fn update_python_distributions(
     let interpreter =
         Interpreter::query(&python_location, &platform, &uv_context.cache).into_diagnostic()?;
 
+    tracing::debug!("[Install] Using Python Interpreter: {:?}", interpreter);
+
     // Create a custom venv
     let venv = Virtualenv::from_interpreter(interpreter, prefix.root());
 

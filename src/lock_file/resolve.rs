@@ -300,6 +300,8 @@ pub async fn resolve_pypi(
     let interpreter =
         Interpreter::query(python_location, &platform, &context.cache).into_diagnostic()?;
 
+    tracing::debug!("[Resolve] Using Python Interpreter: {:?}", interpreter);
+
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
         let client = FlatIndexClient::new(&context.registry_client, &context.cache);
