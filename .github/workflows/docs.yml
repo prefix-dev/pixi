@@ -128,5 +128,6 @@ jobs:
           git restore .
           git restore --staged .
           git add install.sh install.ps1
-          git commit -m "Update install scripts from main"
+          # Check diff before committing
+          git diff-index --quiet HEAD || git commit -m "Update install scripts from main"
           git push origin gh-pages
