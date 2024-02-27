@@ -18,9 +18,10 @@ use crate::{
     Project,
 };
 
+use distribution_types::FileLocation;
 use distribution_types::{
-    BuiltDist, DirectUrlSourceDist, Dist, DistributionMetadata, FileLocation, IndexLocations, Name,
-    PrioritizedDist, Resolution, SourceDist, VersionOrUrl,
+    BuiltDist, DirectUrlSourceDist, Dist, IndexLocations, Name, PrioritizedDist, Resolution,
+    SourceDist,
 };
 use futures::FutureExt;
 use indexmap::IndexMap;
@@ -103,30 +104,6 @@ fn parse_hashes_from_hex(sha256: &Option<String>, md5: &Option<String>) -> Optio
         )),
         (None, None) => None,
     }
-}
-
-struct ResolveReporter(ProgressBar);
-
-impl uv_resolver::ResolverReporter for ResolveReporter {
-    fn on_progress(&self, name: &PackageName, version: VersionOrUrl) {
-        self.0.set_message(format!("resolving {}{}", name, version));
-    }
-
-    fn on_complete(&self) {}
-
-    fn on_build_start(&self, dist: &SourceDist) -> usize {
-        self.0
-            .set_message(format!("building {}{}", dist.name(), dist.version_or_url()));
-        0
-    }
-
-    fn on_build_complete(&self, _dist: &SourceDist, _id: usize) {}
-
-    fn on_checkout_start(&self, _url: &Url, _rev: &str) -> usize {
-        0
-    }
-
-    fn on_checkout_complete(&self, _url: &Url, _rev: &str, _index: usize) {}
 }
 
 struct CondaResolverProvider<'a, Context: BuildContext + Send + Sync> {
