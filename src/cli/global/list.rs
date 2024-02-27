@@ -135,9 +135,8 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
 
 pub(super) async fn list_global_packages() -> Result<Vec<PackageName>, miette::ErrReport> {
     let mut packages = vec![];
-    let mut dir_contents = tokio::fs::read_dir(bin_env_dir()?)
-        .await
-        .into_diagnostic()?;
+    let Ok(mut dir_contents) = tokio::fs::read_dir(bin_env_dir()?)
+        .await else {return Ok(packages)};
 
     while let Some(entry) = dir_contents.next_entry().await.into_diagnostic()? {
         if entry.file_type().await.into_diagnostic()?.is_dir() {
