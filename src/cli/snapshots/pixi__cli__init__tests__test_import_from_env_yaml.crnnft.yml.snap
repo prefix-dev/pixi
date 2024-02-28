@@ -147,9 +147,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    extras: Some(
-                        [],
-                    ),
+                    extras: None,
                     index: None,
                 },
             ),
@@ -159,9 +157,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 ),
                 PyPiRequirement {
                     version: None,
-                    extras: Some(
-                        [],
-                    ),
+                    extras: None,
                     index: None,
                 },
             ),
@@ -171,9 +167,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 ),
                 PyPiRequirement {
                     version: None,
-                    extras: Some(
-                        [],
-                    ),
+                    extras: None,
                     index: None,
                 },
             ),
@@ -183,9 +177,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 ),
                 PyPiRequirement {
                     version: None,
-                    extras: Some(
-                        [],
-                    ),
+                    extras: None,
                     index: None,
                 },
             ),
@@ -195,9 +187,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 ),
                 PyPiRequirement {
                     version: None,
-                    extras: Some(
-                        [],
-                    ),
+                    extras: None,
                     index: None,
                 },
             ),
