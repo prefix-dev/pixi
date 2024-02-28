@@ -4,13 +4,14 @@ mod environment;
 mod error;
 mod feature;
 mod metadata;
-mod python;
+pub(crate) mod python;
 mod system_requirements;
 mod target;
 mod validation;
 
 use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
+use crate::project::manifest::python::PyPiPackageName;
 use crate::task::TaskName;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 pub use activation::Activation;
@@ -382,7 +383,7 @@ impl Manifest {
 
     pub fn add_pypi_dependency(
         &mut self,
-        name: &uv_normalize::PackageName,
+        name: &PyPiPackageName,
         requirement: &PyPiRequirement,
         platform: Option<Platform>,
     ) -> miette::Result<()> {
@@ -395,17 +396,17 @@ impl Manifest {
         )?;
 
         // Check for duplicates.
-        if let Some(table_spec) = dependency_table.get(name.as_ref()) {
+        if let Some(table_spec) = dependency_table.get(name.as_source()) {
             if table_spec.to_string().trim() == requirement.to_string() {
                 return Err(miette::miette!(
                     "{} is already added.",
-                    console::style(name.as_ref()).bold(),
+                    console::style(name.as_source()).bold(),
                 ));
             }
         }
 
         // Add the pypi dependency to the table
-        dependency_table.insert(name.as_ref(), (*requirement).clone().into());
+        dependency_table.insert(name.as_source(), (*requirement).clone().into());
 
         // Add the dependency to the manifest as well
         self.default_feature_mut()
@@ -453,24 +454,24 @@ impl Manifest {
     /// Removes a pypi dependency from `pixi.toml`.
     pub fn remove_pypi_dependency(
         &mut self,
-        dep: &uv_normalize::PackageName,
+        dep: &PyPiPackageName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-    ) -> miette::Result<(uv_normalize::PackageName, PyPiRequirement)> {
+    ) -> miette::Result<(PyPiPackageName, PyPiRequirement)> {
         get_or_insert_toml_table(
             &mut self.document,
             platform,
             feature_name,
             consts::PYPI_DEPENDENCIES,
         )?
-        .remove(dep.as_ref())
+        .remove(dep.as_source())
         .ok_or_else(|| {
             let table_name =
                 get_nested_toml_table_name(feature_name, platform, consts::PYPI_DEPENDENCIES);
 
             miette::miette!(
                 "Couldn't find {} in [{}]",
-                console::style(dep.as_ref()).bold(),
+                console::style(dep.as_source()).bold(),
                 console::style(table_name).bold(),
             )
         })?;
@@ -1028,7 +1029,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
             #[serde(default)]
-            pypi_dependencies: Option<IndexMap<uv_normalize::PackageName, PyPiRequirement>>,
+            pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
 
             /// Additional information to activate an environment.
             #[serde(default)]
@@ -1487,7 +1488,7 @@ mod tests {
             .clone()
             .into_iter()
             .flat_map(|d| d.into_iter())
-            .map(|(name, spec)| format!("{} = {}", name.as_ref(), Item::from(spec)))
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), Item::from(spec)))
             .join("\n"));
     }
 
@@ -1551,7 +1552,7 @@ mod tests {
     ) {
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
 
-        let package_name = uv_normalize::PackageName::from_str(name).unwrap();
+        let package_name = PyPiPackageName::from_str(name).unwrap();
 
         // Initially the dependency should exist
         assert!(manifest
@@ -2238,10 +2239,7 @@ platforms = ["linux-64", "win-64"]
                 .pypi_dependencies
                 .as_ref()
                 .unwrap()
-                .get(
-                    &uv_normalize::PackageName::from_str("torch")
-                        .expect("torch should be a valid name")
-                )
+                .get(&PyPiPackageName::from_str("torch").expect("torch should be a valid name"))
                 .expect("pypi requirement should be available")
                 .version
                 .clone()

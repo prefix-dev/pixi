@@ -126,7 +126,7 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
             //
             // Obviously this is not a valid source distribution but it easies debugging.
             let dist = Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist {
-                name: identifier.name.clone(),
+                name: identifier.name.as_normalized().clone(),
                 url: VerbatimUrl::unknown(repodata_record.url.clone()),
             }));
 
@@ -231,7 +231,7 @@ pub async fn resolve_pypi(
                 },
             )
         })
-        .map_ok(|(record, p)| (p.name.clone(), (record.clone(), p)))
+        .map_ok(|(record, p)| (p.name.as_normalized().clone(), (record.clone(), p)))
         .collect::<Result<HashMap<_, _>, _>>()
         .into_diagnostic()
         .context("failed to extract python packages from conda metadata")?;
@@ -244,7 +244,7 @@ pub async fn resolve_pypi(
                     .values()
                     .format_with(", ", |(_, p), f| f(&format_args!(
                         "{name} {version}",
-                        name = &p.name,
+                        name = &p.name.as_source(),
                         version = &p.version
                     )))
         );
@@ -313,7 +313,7 @@ pub async fn resolve_pypi(
     let constraints = conda_python_packages
         .values()
         .map(|(repo, p)| Requirement {
-            name: p.name.clone(),
+            name: p.name.as_normalized().clone(),
             extras: vec![],
             version_or_url: Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::unknown(
                 repo.url.clone(),

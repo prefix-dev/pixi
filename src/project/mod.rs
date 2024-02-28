@@ -36,6 +36,7 @@ use crate::{
 };
 use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
 
+use crate::project::manifest::python::PyPiPackageName;
 pub use dependencies::Dependencies;
 pub use environment::Environment;
 pub use solve_group::SolveGroup;
@@ -392,7 +393,7 @@ impl Project {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<uv_normalize::PackageName, Vec<PyPiRequirement>> {
+    ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
         self.default_environment().pypi_dependencies(platform)
     }
 

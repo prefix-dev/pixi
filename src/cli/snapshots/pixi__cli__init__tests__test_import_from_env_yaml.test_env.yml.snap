@@ -102,9 +102,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
         ],
         [
             (
-                PackageName(
-                    "package1",
-                ),
+                PyPiPackageName {
+                    source: "package1",
+                    normalized: PackageName(
+                        "package1",
+                    ),
+                },
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
@@ -121,9 +124,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "package2",
-                ),
+                PyPiPackageName {
+                    source: "package2",
+                    normalized: PackageName(
+                        "package2",
+                    ),
+                },
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
@@ -140,9 +146,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "package3",
-                ),
+                PyPiPackageName {
+                    source: "package3",
+                    normalized: PackageName(
+                        "package3",
+                    ),
+                },
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
@@ -159,9 +168,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "package4",
-                ),
+                PyPiPackageName {
+                    source: "package4",
+                    normalized: PackageName(
+                        "package4",
+                    ),
+                },
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
@@ -178,9 +190,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "package5",
-                ),
+                PyPiPackageName {
+                    source: "package5",
+                    normalized: PackageName(
+                        "package5",
+                    ),
+                },
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
@@ -197,9 +212,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "package6",
-                ),
+                PyPiPackageName {
+                    source: "package6",
+                    normalized: PackageName(
+                        "package6",
+                    ),
+                },
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
@@ -216,9 +234,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "package7",
-                ),
+                PyPiPackageName {
+                    source: "package7",
+                    normalized: PackageName(
+                        "package7",
+                    ),
+                },
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
@@ -235,9 +256,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "package8",
-                ),
+                PyPiPackageName {
+                    source: "package8",
+                    normalized: PackageName(
+                        "package8",
+                    ),
+                },
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
@@ -254,9 +278,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "package9",
-                ),
+                PyPiPackageName {
+                    source: "package9",
+                    normalized: PackageName(
+                        "package9",
+                    ),
+                },
                 PyPiRequirement {
                     version: None,
                     extras: None,
@@ -264,9 +291,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "package10",
-                ),
+                PyPiPackageName {
+                    source: "package10",
+                    normalized: PackageName(
+                        "package10",
+                    ),
+                },
                 PyPiRequirement {
                     version: None,
                     extras: Some(
@@ -280,9 +310,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "package11",
-                ),
+                PyPiPackageName {
+                    source: "package11",
+                    normalized: PackageName(
+                        "package11",
+                    ),
+                },
                 PyPiRequirement {
                     version: None,
                     extras: Some(
@@ -299,9 +332,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "package12",
-                ),
+                PyPiPackageName {
+                    source: "package12",
+                    normalized: PackageName(
+                        "package12",
+                    ),
+                },
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
@@ -327,9 +363,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "package13",
-                ),
+                PyPiPackageName {
+                    source: "package13",
+                    normalized: PackageName(
+                        "package13",
+                    ),
+                },
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
@@ -355,9 +394,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "package14",
-                ),
+                PyPiPackageName {
+                    source: "package14",
+                    normalized: PackageName(
+                        "package14",
+                    ),
+                },
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
