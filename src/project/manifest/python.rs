@@ -114,9 +114,14 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
         } else {
             None
         };
+        let extras = if !req.extras.is_empty() {
+            Some(req.extras)
+        } else {
+            None
+        };
         PyPiRequirement {
             version,
-            extras: Some(req.extras),
+            extras,
             index: None,
         }
     }
@@ -197,6 +202,10 @@ mod tests {
             pypi.to_string(),
             "{ version = \"==1.0.0\", extras = [\"testing\"] }"
         );
+
+        let req = pep508_rs::Requirement::from_str("numpy").unwrap();
+        let pypi = PyPiRequirement::from(req);
+        assert_eq!(pypi.to_string(), "\"*\"");
     }
 
     #[test]
