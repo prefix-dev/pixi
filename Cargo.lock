@@ -364,9 +364,9 @@ dependencies = [
 
 [[package]]
 name = "async_http_range_reader"
-version = "0.6.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5143aaae4ec035a5d7cfda666eab896fe5428a2a8ab09ca651a2dce3a8f06912"
+checksum = "cf8eeab30c68da4dc2c51f3afc4327ab06fe0f3f028ca423f7ca398c7ed8c5e7"
 dependencies = [
  "bisection",
  "futures",
@@ -700,7 +700,7 @@ dependencies = [
 [[package]]
 name = "cache-key"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "hex",
  "seahash",
@@ -832,7 +832,6 @@ dependencies = [
  "anstream",
  "anstyle",
  "clap_lex",
- "strsim 0.11.0",
  "terminal_size",
 ]
 
@@ -1053,7 +1052,7 @@ dependencies = [
  "ident_case",
  "proc-macro2",
  "quote",
- "strsim 0.10.0",
+ "strsim",
  "syn 2.0.51",
 ]
 
@@ -1181,9 +1180,9 @@ dependencies = [
 [[package]]
 name = "distribution-filename"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
- "pep440_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "platform-tags",
  "rkyv",
  "serde",
@@ -1195,7 +1194,7 @@ dependencies = [
 [[package]]
 name = "distribution-types"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "anyhow",
  "cache-key",
@@ -1204,8 +1203,8 @@ dependencies = [
  "fs-err",
  "itertools 0.12.1",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
+ "pep508_rs 0.4.2 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "platform-tags",
  "pypi-types",
  "rkyv",
@@ -1217,6 +1216,7 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
+ "uv-auth",
  "uv-fs",
  "uv-git",
  "uv-normalize",
@@ -1699,7 +1699,7 @@ dependencies = [
 [[package]]
 name = "gourgeist"
 version = "0.0.4"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "anstream",
  "cachedir",
@@ -1956,7 +1956,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.6",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -2115,31 +2115,27 @@ dependencies = [
 [[package]]
 name = "install-wheel-rs"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
- "clap",
  "configparser",
  "csv",
  "data-encoding",
  "distribution-filename",
  "fs-err",
- "fs2",
- "goblin",
  "mailparse",
  "once_cell",
- "pep440_rs",
+ "pathdiff",
+ "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "platform-host",
  "platform-info",
  "plist",
  "pypi-types",
- "rayon",
  "reflink-copy",
  "regex",
  "rustc-hash",
  "serde",
  "serde_json",
  "sha2",
- "target-lexicon",
  "tempfile",
  "thiserror",
  "tracing",
@@ -2818,7 +2814,7 @@ dependencies = [
 [[package]]
 name = "once-map"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "dashmap",
  "tokio",
@@ -3023,9 +3019,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "pathdiff"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8835116a5c179084a830efb3adc117ab007512b535bc1a21c991d3b32a6b44dd"
+
+[[package]]
 name = "pep440_rs"
 version = "0.5.0"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15efd4d885c29126cc93e12af3087896e2518bd5ca0fb328c19c4ef9cecfa8be"
+dependencies = [
+ "once_cell",
+ "serde",
+ "unicode-width",
+ "unscanny",
+]
+
+[[package]]
+name = "pep440_rs"
+version = "0.5.0"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "once_cell",
  "pubgrub",
@@ -3038,11 +3052,28 @@ dependencies = [
 [[package]]
 name = "pep508_rs"
 version = "0.4.2"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1455babf8edd3eedcdfcb39700e455a4bb189e71b4f1fa0eacc9b244cc5a55e6"
 dependencies = [
  "derivative",
  "once_cell",
- "pep440_rs",
+ "pep440_rs 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex",
+ "serde",
+ "thiserror",
+ "unicode-width",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
+name = "pep508_rs"
+version = "0.4.2"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+dependencies = [
+ "derivative",
+ "once_cell",
+ "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "regex",
  "rkyv",
  "serde",
@@ -3193,8 +3224,8 @@ dependencies = [
  "minijinja",
  "nix 0.27.1",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
+ "pep508_rs 0.4.2 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "platform-host",
  "platform-tags",
  "pypi-types",
@@ -3223,7 +3254,7 @@ dependencies = [
  "shlex",
  "signal-hook",
  "spdx",
- "strsim 0.10.0",
+ "strsim",
  "tabwriter",
  "tar",
  "tempfile",
@@ -3262,7 +3293,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 [[package]]
 name = "platform-host"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "fs-err",
  "goblin",
@@ -3289,7 +3320,7 @@ dependencies = [
 [[package]]
 name = "platform-tags"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "platform-host",
  "rustc-hash",
@@ -3482,13 +3513,13 @@ dependencies = [
 [[package]]
 name = "pypi-types"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "chrono",
  "mailparse",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
+ "pep508_rs 0.4.2 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "regex",
  "rkyv",
  "serde",
@@ -3505,8 +3536,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b80f889b6d413c3f8963a2c7db03f95dd6e1d85e1074137cb2013ea2faa8898"
 dependencies = [
  "indexmap 2.2.3",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pep508_rs 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "toml",
 ]
@@ -3669,8 +3700,8 @@ dependencies = [
  "fxhash",
  "indexmap 2.2.3",
  "itertools 0.12.1",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
+ "pep508_rs 0.4.2 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "purl",
  "rattler_conda_types",
  "rattler_digest",
@@ -3971,12 +4002,12 @@ dependencies = [
 [[package]]
 name = "requirements-txt"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "fs-err",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
+ "pep508_rs 0.4.2 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "regex",
  "serde",
  "thiserror",
@@ -4778,12 +4809,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
-name = "strsim"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ee073c9e4cd00e28217186dbe12796d692868f432bf2e97ee73bed0c56dfa01"
-
-[[package]]
 name = "strum"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5471,9 +5496,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "uv-auth"
+version = "0.0.1"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+dependencies = [
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "uv-build"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5482,11 +5516,12 @@ dependencies = [
  "indoc",
  "itertools 0.12.1",
  "once_cell",
- "pep508_rs",
+ "pep508_rs 0.4.2 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "platform-host",
  "pypi-types",
  "pyproject-toml",
  "regex",
+ "rustc-hash",
  "serde",
  "serde_json",
  "tempfile",
@@ -5503,7 +5538,7 @@ dependencies = [
 [[package]]
 name = "uv-cache"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "cache-key",
  "cachedir",
@@ -5524,7 +5559,7 @@ dependencies = [
 [[package]]
 name = "uv-client"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "async-trait",
  "async_http_range_reader",
@@ -5538,8 +5573,8 @@ dependencies = [
  "html-escape",
  "http",
  "install-wheel-rs",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
+ "pep508_rs 0.4.2 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "platform-tags",
  "pypi-types",
  "reqwest",
@@ -5560,6 +5595,7 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
+ "uv-auth",
  "uv-cache",
  "uv-fs",
  "uv-normalize",
@@ -5569,7 +5605,7 @@ dependencies = [
 [[package]]
 name = "uv-dispatch"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5577,10 +5613,11 @@ dependencies = [
  "futures",
  "gourgeist",
  "itertools 0.12.1",
- "pep508_rs",
+ "pep508_rs 0.4.2 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "platform-host",
  "platform-tags",
  "pypi-types",
+ "rustc-hash",
  "tempfile",
  "tokio",
  "tracing",
@@ -5597,7 +5634,7 @@ dependencies = [
 [[package]]
 name = "uv-distribution"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "anyhow",
  "cache-key",
@@ -5607,8 +5644,8 @@ dependencies = [
  "futures",
  "install-wheel-rs",
  "nanoid",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
+ "pep508_rs 0.4.2 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "platform-tags",
  "pypi-types",
  "reqwest",
@@ -5634,7 +5671,7 @@ dependencies = [
 [[package]]
 name = "uv-extract"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "async-compression",
  "async_zip",
@@ -5647,13 +5684,14 @@ dependencies = [
  "tokio",
  "tokio-tar",
  "tokio-util",
+ "tracing",
  "zip",
 ]
 
 [[package]]
 name = "uv-fs"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "dunce",
  "fs-err",
@@ -5668,12 +5706,13 @@ dependencies = [
 [[package]]
 name = "uv-git"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
  "cache-key",
  "cargo-util",
+ "fs-err",
  "git2",
  "glob",
  "hex",
@@ -5693,7 +5732,7 @@ dependencies = [
 [[package]]
 name = "uv-installer"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "anyhow",
  "distribution-filename",
@@ -5702,16 +5741,19 @@ dependencies = [
  "futures",
  "install-wheel-rs",
  "once-map",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
+ "pep508_rs 0.4.2 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "platform-tags",
  "pypi-types",
+ "pyproject-toml",
  "rayon",
  "requirements-txt",
  "rustc-hash",
+ "serde",
  "tempfile",
  "thiserror",
  "tokio",
+ "toml",
  "tracing",
  "url",
  "uv-cache",
@@ -5728,13 +5770,15 @@ dependencies = [
 [[package]]
 name = "uv-interpreter"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "cache-key",
+ "configparser",
  "fs-err",
+ "install-wheel-rs",
  "once_cell",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
+ "pep508_rs 0.4.2 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "platform-host",
  "platform-tags",
  "regex",
@@ -5753,7 +5797,7 @@ dependencies = [
 [[package]]
 name = "uv-normalize"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "rkyv",
  "serde",
@@ -5762,7 +5806,7 @@ dependencies = [
 [[package]]
 name = "uv-resolver"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "anstream",
  "anyhow",
@@ -5781,8 +5825,8 @@ dependencies = [
  "once-map",
  "once_cell",
  "owo-colors",
- "pep440_rs",
- "pep508_rs",
+ "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
+ "pep508_rs 0.4.2 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "petgraph",
  "platform-host",
  "platform-tags",
@@ -5814,12 +5858,14 @@ dependencies = [
 [[package]]
 name = "uv-traits"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "anyhow",
  "distribution-types",
  "once-map",
- "pep508_rs",
+ "pep508_rs 0.4.2 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
+ "serde",
+ "serde_json",
  "tokio",
  "uv-cache",
  "uv-interpreter",
@@ -5829,7 +5875,7 @@ dependencies = [
 [[package]]
 name = "uv-warnings"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.8#f0b39a36b46786891042100ecdf4837c73b9d3cb"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
 dependencies = [
  "anstream",
  "once_cell",

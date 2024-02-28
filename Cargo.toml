@@ -49,7 +49,6 @@ deno_task_shell = "0.14.4"
 dialoguer = "0.11.0"
 dirs = "5.0.1"
 distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-
 distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
 dunce = "1.0.4"
 flate2 = "1.0.28"
@@ -157,8 +156,8 @@ toml = "0.8.10"
 
 [patch.crates-io]
 # For pyproject-toml
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+# pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+# pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
 
 rattler = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
 rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
@@ -169,9 +168,7 @@ rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev
 rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
 rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
 rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
-
 #deno_task_shell = { path = "../deno_task_shell" }
-
 #rattler = { path = "../rattler/crates/rattler" }
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 #rattler_digest = { path = "../rattler/crates/rattler_digest" }
@@ -182,3 +179,23 @@ rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev
 #rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
 #rattler_lock = { path = "../rattler/crates/rattler_lock" }
 #rip = { package = "rattler_installs_packages", path = "../rip" }
+
+# When using a local version of uv, the following lines should be used instead of the above
+[patch.'https://github.com/astral-sh/uv']
+pep440_rs = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+pep508_rs = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+uv-cache = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+uv-client = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+uv-dispatch = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+uv-distribution = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+uv-installer = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+uv-interpreter = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+uv-normalize = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+uv-resolver = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+uv-traits = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+distribution-filename = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+distribution-types = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+install-wheel-rs = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+platform-host = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+platform-tags = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+pypi-types = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
