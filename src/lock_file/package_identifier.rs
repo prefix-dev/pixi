@@ -177,7 +177,7 @@ impl PypiPackageIdentifier {
             }
         }
 
-        // TODO: uv doesnt properly support this yet.
+        // TODO: uv doesn't properly support this yet.
         // // Check if the required extras exist
         // for extra in requirement.extras.iter() {
         //     if !self.extras.contains(extra) {
