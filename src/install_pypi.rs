@@ -20,6 +20,7 @@ use install_wheel_rs::linker::LinkMode;
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use uv_client::{FlatIndex, FlatIndexClient};
@@ -29,7 +30,7 @@ use uv_installer::{Downloader, SitePackages};
 use uv_interpreter::{Interpreter, Virtualenv};
 use uv_normalize::PackageName;
 
-use uv_traits::{NoBinary, NoBuild, SetupPyStrategy};
+use uv_traits::{ConfigSettings, NoBinary, NoBuild, SetupPyStrategy};
 
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
 
@@ -233,6 +234,7 @@ pub async fn update_python_distributions(
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
     uv_context: UvResolutionContext,
+    environment_variables: &HashMap<String, String>,
 ) -> miette::Result<()> {
     let start = std::time::Instant::now();
     let Some(python_info) = status.current_info() else {
@@ -252,7 +254,7 @@ pub async fn update_python_distributions(
 
     let platform = platform_host::Platform::current().expect("unsupported platform");
     let interpreter =
-        Interpreter::query(&python_location, &platform, &uv_context.cache).into_diagnostic()?;
+        Interpreter::query(&python_location, platform, &uv_context.cache).into_diagnostic()?;
 
     tracing::debug!("[Install] Using Python Interpreter: {:?}", interpreter);
 
@@ -281,6 +283,7 @@ pub async fn update_python_distributions(
     let no_binary = NoBinary::None;
 
     let in_memory_index = InMemoryIndex::default();
+    let config_settings = ConfigSettings::default();
 
     // Prep the build context.
     let build_dispatch = BuildDispatch::new(
@@ -291,11 +294,12 @@ pub async fn update_python_distributions(
         &flat_index,
         &in_memory_index,
         &uv_context.in_flight,
-        venv.python_executable(),
         SetupPyStrategy::default(),
+        &config_settings,
         &no_build,
         &no_binary,
-    );
+    )
+    .with_sdist_build_env_vars(environment_variables.iter());
 
     let _lock = venv.lock().into_diagnostic()?;
     // TODO: need to resolve editables?

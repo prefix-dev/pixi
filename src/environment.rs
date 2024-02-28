@@ -180,14 +180,14 @@ pub async fn update_prefix_pypi(
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
     uv_context: UvResolutionContext,
+    environment_variables: &HashMap<String, String>,
 ) -> miette::Result<()> {
     // Remove python packages from a previous python distribution if the python version changed.
-    // install_pypi::remove_old_python_distributions(prefix, platform, status)?;
 
     // Install and/or remove python packages
     progress::await_in_progress(
         format!(
-            "updating pypi package in '{}'",
+            "updating pypi packages in '{}'",
             environment_name.fancy_display()
         ),
         |_| {
@@ -198,6 +198,7 @@ pub async fn update_prefix_pypi(
                 status,
                 system_requirements,
                 uv_context,
+                environment_variables,
             )
         },
     )

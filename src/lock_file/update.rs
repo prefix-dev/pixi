@@ -117,7 +117,7 @@ impl<'p> LockFileDerivedData<'p> {
         };
 
         // TODO(tim): get support for this somehow with uv
-        let _env_variables = environment.project().get_env_variables(environment).await?;
+        let env_variables = environment.project().get_env_variables(environment).await?;
 
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
@@ -129,6 +129,7 @@ impl<'p> LockFileDerivedData<'p> {
             &python_status,
             &environment.system_requirements(),
             uv_context,
+            env_variables,
         )
         .await?;
 
@@ -782,7 +783,7 @@ pub async fn ensure_up_to_date_lock_file(
                     Some(context) => context.clone(),
                 };
                 // Get environment variables from the activation
-                let _env_variables = project.get_env_variables(&environment).await?;
+                let env_variables = project.get_env_variables(&environment).await?;
 
                 // Spawn a task to solve the pypi environment
                 let pypi_solve_future = spawn_solve_pypi_task(
@@ -791,6 +792,7 @@ pub async fn ensure_up_to_date_lock_file(
                     platform,
                     repodata_future,
                     prefix_future,
+                    env_variables,
                 );
 
                 pending_futures.push(pypi_solve_future.boxed_local());
@@ -1264,6 +1266,7 @@ async fn spawn_solve_pypi_task(
     platform: Platform,
     repodata_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
     prefix: impl Future<Output = (Prefix, PythonStatus)>,
+    env_variables: &HashMap<String, String>,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1308,7 +1311,7 @@ async fn spawn_solve_pypi_task(
             platform,
             &pb.pb,
             &python_path,
-            prefix.root(),
+            env_variables,
         )
         .await
         .with_context(|| {

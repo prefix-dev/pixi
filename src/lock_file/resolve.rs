@@ -50,7 +50,7 @@ use uv_resolver::{
     DefaultResolverProvider, DistFinder, InMemoryIndex, Manifest, Options, PythonRequirement,
     Resolver, ResolverProvider, VersionMap, VersionsResponse,
 };
-use uv_traits::{BuildContext, InFlight, NoBinary, NoBuild, SetupPyStrategy};
+use uv_traits::{BuildContext, ConfigSettings, InFlight, NoBinary, NoBuild, SetupPyStrategy};
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
@@ -214,7 +214,7 @@ pub async fn resolve_pypi(
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
     python_location: &Path,
-    _venv_root: &Path,
+    env_variables: &HashMap<String, String>,
 ) -> miette::Result<LockedPypiPackages> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -275,7 +275,7 @@ pub async fn resolve_pypi(
     // TODO: Should we look into using the actual interpreter here?
     let platform = Platform::current().expect("unsupported platform");
     let interpreter =
-        Interpreter::query(python_location, &platform, &context.cache).into_diagnostic()?;
+        Interpreter::query(python_location, platform, &context.cache).into_diagnostic()?;
 
     tracing::debug!("[Resolve] Using Python Interpreter: {:?}", interpreter);
 
@@ -290,6 +290,7 @@ pub async fn resolve_pypi(
     };
 
     let in_memory_index = InMemoryIndex::default();
+    let config_settings = ConfigSettings::default();
 
     // Create a shared in-memory index.
     let options = Options::default();
@@ -301,12 +302,13 @@ pub async fn resolve_pypi(
         &flat_index,
         &in_memory_index,
         &context.in_flight,
-        interpreter.sys_executable().to_path_buf(),
         SetupPyStrategy::default(),
+        &config_settings,
         &NoBuild::None,
         &NoBinary::None,
     )
-    .with_options(options);
+    .with_options(options)
+    .with_sdist_build_env_vars(env_variables.iter());
 
     let constraints = conda_python_packages
         .values()
