@@ -1,3 +1,6 @@
+use crate::project::virtual_packages::{
+    verify_current_platform_has_required_virtual_packages, VerifyCurrentPlatformError,
+};
 use crate::project::Environment;
 use crate::task::error::AmbiguousTaskError;
 use crate::task::task_environment::{FindTaskError, FindTaskSource, SearchEnvironments};
@@ -131,7 +134,6 @@ impl<'p> TaskGraph<'p> {
                         Some(explicit_env) if task_env.is_default() => explicit_env,
                         _ => task_env,
                     };
-
                     return Self::from_root(
                         project,
                         search_envs,
@@ -152,6 +154,7 @@ impl<'p> TaskGraph<'p> {
             .explicit_environment
             .clone()
             .unwrap_or_else(|| project.default_environment());
+        verify_current_platform_has_required_virtual_packages(&run_environment)?;
         Self::from_root(
             project,
             search_envs,
@@ -286,6 +289,10 @@ pub enum TaskGraphError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     AmbiguousTask(AmbiguousTaskError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnsupportedPlatform(#[from] VerifyCurrentPlatformError),
 }
 
 #[cfg(test)]
