@@ -114,11 +114,6 @@ jobs:
         run: |
           pixi run deploy-dev
 
-      - name: Setup Git
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-
       - name: Copy file to gh-pages
         run: |
           git fetch
