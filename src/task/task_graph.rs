@@ -337,7 +337,7 @@ mod test {
         [project]
         name = "pixi"
         channels = ["conda-forge"]
-        platforms = ["linux-64"]
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64]
         [tasks]
         root = "echo root"
         task1 = {cmd="echo task1", depends_on=["root"]}
@@ -360,7 +360,7 @@ mod test {
         [project]
         name = "pixi"
         channels = ["conda-forge"]
-        platforms = ["linux-64"]
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64]
         [tasks]
         root = {cmd="echo root", depends_on=["task1"]}
         task1 = {cmd="echo task1", depends_on=["root"]}
@@ -383,7 +383,7 @@ mod test {
         [project]
         name = "pixi"
         channels = ["conda-forge"]
-        platforms = ["linux-64"]
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64]
         [tasks]
         root = "echo root"
         task1 = {cmd="echo task1", depends_on=["root"]}
@@ -408,7 +408,7 @@ mod test {
         [project]
         name = "pixi"
         channels = ["conda-forge"]
-        platforms = ["linux-64"]
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64]
     "#,
                 &["echo bla"],
                 None,
@@ -426,7 +426,7 @@ mod test {
         [project]
         name = "pixi"
         channels = ["conda-forge"]
-        platforms = ["linux-64"]
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64]
 
         [feature.build.tasks]
         build = "echo build"
@@ -450,7 +450,7 @@ mod test {
         [project]
         name = "pixi"
         channels = ["conda-forge"]
-        platforms = ["linux-64"]
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64]
 
         [tasks]
         start = "hello world"
@@ -477,7 +477,7 @@ mod test {
         [project]
         name = "pixi"
         channels = ["conda-forge"]
-        platforms = ["linux-64"]
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64]
 
         [tasks]
         train = "python train.py"
