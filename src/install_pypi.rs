@@ -6,6 +6,8 @@ use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use distribution_filename::DistFilename;
 
 use miette::{IntoDiagnostic, WrapErr};
+use pep440_rs::Version;
+use pep508_rs::VerbatimUrl;
 use uv_cache::Cache;
 use uv_resolver::InMemoryIndex;
 
@@ -27,7 +29,7 @@ use uv_client::{FlatIndex, FlatIndexClient};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::RegistryWheelIndex;
 use uv_installer::{Downloader, SitePackages};
-use uv_interpreter::{Interpreter, Virtualenv};
+use uv_interpreter::{Interpreter, PythonEnvironment};
 use uv_normalize::PackageName;
 
 use uv_traits::{ConfigSettings, NoBinary, NoBuild, SetupPyStrategy};
@@ -121,7 +123,11 @@ fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
     // Bit of a hack to create the file type
     let file = locked_data_to_file(pkg, filename_raw);
 
-    Dist::from_registry(filename, file, IndexUrl::Pypi)
+    Dist::from_registry(
+        filename,
+        file,
+        IndexUrl::Pypi(VerbatimUrl::from_url(pkg.url.clone())),
+    )
 }
 
 /// Figure out what we can link from the cache locally
@@ -133,6 +139,7 @@ fn whats_the_plan<'a>(
     installed: &SitePackages<'_>,
     registry_index: &'a mut RegistryWheelIndex<'a>,
     uv_cache: &Cache,
+    python_version: &Version,
 ) -> miette::Result<PixiInstallPlan> {
     // Create a HashSet of PackageName and Version
     let mut required_map: std::collections::HashMap<&PackageName, &PypiPackageData> =
@@ -164,8 +171,18 @@ fn whats_the_plan<'a>(
                 InstalledDist::Url(direct_url) => direct_url.url == pkg.url,
             };
 
-            // Don't do anything if the version is the same
+            // Do some extra checks if the version is the same
             if same_version {
+                if let Ok(metadata) = dist.metadata() {
+                    if let Some(requires_python) = metadata.requires_python {
+                        // If the installed package requires a different python version
+                        if !requires_python.contains(python_version) {
+                            reinstalls.push(dist.clone());
+                        }
+                    }
+                } else {
+                    tracing::warn!("could not get metadata for {}", dist.name());
+                }
                 continue;
             }
 
@@ -259,7 +276,7 @@ pub async fn update_python_distributions(
     tracing::debug!("[Install] Using Python Interpreter: {:?}", interpreter);
 
     // Create a custom venv
-    let venv = Virtualenv::from_interpreter(interpreter, prefix.root());
+    let venv = PythonEnvironment::from_interpreter(interpreter, prefix.root());
 
     // Determine the current environment markers.
     let tags = get_pypi_tags(
@@ -299,7 +316,7 @@ pub async fn update_python_distributions(
         &no_build,
         &no_binary,
     )
-    .with_sdist_build_env_vars(environment_variables.iter());
+    .with_build_extra_env_vars(environment_variables.iter());
 
     let _lock = venv.lock().into_diagnostic()?;
     // TODO: need to resolve editables?
@@ -319,6 +336,7 @@ pub async fn update_python_distributions(
         &installed,
         &mut registry_index,
         &uv_context.cache,
+        venv.interpreter().python_version(),
     )?;
     tracing::debug!(
         "Resolved install plan: local={}, remote={}, reinstalls={}, extraneous={}",

@@ -31,7 +31,6 @@ black = { version = "~=23.10", extras = ["jupyter"] }
 # sdists:
 pyliblzfse = "*"
 pycosat = "*"
-# TODO(tim): fix env-passing in uv
 env_test_package = "==0.0.3"
 plot-antenna = "==1.8"
 

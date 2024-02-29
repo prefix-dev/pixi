@@ -308,7 +308,7 @@ pub async fn resolve_pypi(
         &NoBinary::None,
     )
     .with_options(options)
-    .with_sdist_build_env_vars(env_variables.iter());
+    .with_build_extra_env_vars(env_variables.iter());
 
     let constraints = conda_python_packages
         .values()

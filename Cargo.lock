@@ -700,7 +700,7 @@ dependencies = [
 [[package]]
 name = "cache-key"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "hex",
  "seahash",
@@ -1180,7 +1180,7 @@ dependencies = [
 [[package]]
 name = "distribution-filename"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "pep440_rs 0.5.0 (git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building)",
  "platform-tags",
@@ -1194,7 +1194,7 @@ dependencies = [
 [[package]]
 name = "distribution-types"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "anyhow",
  "cache-key",
@@ -1699,7 +1699,7 @@ dependencies = [
 [[package]]
 name = "gourgeist"
 version = "0.0.4"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "anstream",
  "cachedir",
@@ -1956,7 +1956,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.6",
  "tokio",
  "tower-service",
  "tracing",
@@ -2115,7 +2115,7 @@ dependencies = [
 [[package]]
 name = "install-wheel-rs"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "configparser",
  "csv",
@@ -2814,7 +2814,7 @@ dependencies = [
 [[package]]
 name = "once-map"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "dashmap",
  "tokio",
@@ -3039,7 +3039,7 @@ dependencies = [
 [[package]]
 name = "pep440_rs"
 version = "0.5.0"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "once_cell",
  "pubgrub",
@@ -3069,7 +3069,7 @@ dependencies = [
 [[package]]
 name = "pep508_rs"
 version = "0.4.2"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "derivative",
  "once_cell",
@@ -3293,7 +3293,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 [[package]]
 name = "platform-host"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "fs-err",
  "goblin",
@@ -3320,7 +3320,7 @@ dependencies = [
 [[package]]
 name = "platform-tags"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "platform-host",
  "rustc-hash",
@@ -3513,7 +3513,7 @@ dependencies = [
 [[package]]
 name = "pypi-types"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "chrono",
  "mailparse",
@@ -4002,7 +4002,7 @@ dependencies = [
 [[package]]
 name = "requirements-txt"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "fs-err",
  "once_cell",
@@ -5498,7 +5498,7 @@ dependencies = [
 [[package]]
 name = "uv-auth"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "tracing",
  "url",
@@ -5507,7 +5507,7 @@ dependencies = [
 [[package]]
 name = "uv-build"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5538,7 +5538,7 @@ dependencies = [
 [[package]]
 name = "uv-cache"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "cache-key",
  "cachedir",
@@ -5559,7 +5559,7 @@ dependencies = [
 [[package]]
 name = "uv-client"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "async-trait",
  "async_http_range_reader",
@@ -5605,7 +5605,7 @@ dependencies = [
 [[package]]
 name = "uv-dispatch"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5634,7 +5634,7 @@ dependencies = [
 [[package]]
 name = "uv-distribution"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "anyhow",
  "cache-key",
@@ -5671,7 +5671,7 @@ dependencies = [
 [[package]]
 name = "uv-extract"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "async-compression",
  "async_zip",
@@ -5691,7 +5691,7 @@ dependencies = [
 [[package]]
 name = "uv-fs"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "dunce",
  "fs-err",
@@ -5706,7 +5706,7 @@ dependencies = [
 [[package]]
 name = "uv-git"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -5732,7 +5732,7 @@ dependencies = [
 [[package]]
 name = "uv-installer"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "anyhow",
  "distribution-filename",
@@ -5770,7 +5770,7 @@ dependencies = [
 [[package]]
 name = "uv-interpreter"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "cache-key",
  "configparser",
@@ -5797,7 +5797,7 @@ dependencies = [
 [[package]]
 name = "uv-normalize"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "rkyv",
  "serde",
@@ -5806,7 +5806,7 @@ dependencies = [
 [[package]]
 name = "uv-resolver"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "anstream",
  "anyhow",
@@ -5858,7 +5858,7 @@ dependencies = [
 [[package]]
 name = "uv-traits"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5875,7 +5875,7 @@ dependencies = [
 [[package]]
 name = "uv-warnings"
 version = "0.0.1"
-source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#2b6411c4fc87a6619f26f65918a7b075685eae17"
+source = "git+https://github.com/tdejager/uv?branch=feat/env-variables-for-sdist-building#d079f2c1e1543555fa2e0b787d3976fbaa35a550"
 dependencies = [
  "anstream",
  "once_cell",
