@@ -644,7 +644,7 @@ dependencies = [
 [[package]]
 name = "cache-key"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "hex",
  "seahash",
@@ -1090,9 +1090,9 @@ dependencies = [
 [[package]]
 name = "distribution-filename"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
- "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep440_rs",
  "platform-tags",
  "rkyv",
  "serde",
@@ -1104,7 +1104,7 @@ dependencies = [
 [[package]]
 name = "distribution-types"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "anyhow",
  "cache-key",
@@ -1113,8 +1113,8 @@ dependencies = [
  "fs-err",
  "itertools",
  "once_cell",
- "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
- "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep440_rs",
+ "pep508_rs",
  "platform-tags",
  "pypi-types",
  "rkyv",
@@ -1609,7 +1609,7 @@ dependencies = [
 [[package]]
 name = "gourgeist"
 version = "0.0.4"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "anstream",
  "cachedir",
@@ -2000,7 +2000,7 @@ dependencies = [
 [[package]]
 name = "install-wheel-rs"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "configparser",
  "csv",
@@ -2010,7 +2010,7 @@ dependencies = [
  "mailparse",
  "once_cell",
  "pathdiff",
- "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep440_rs",
  "platform-host",
  "platform-info",
  "plist",
@@ -2685,7 +2685,7 @@ dependencies = [
 [[package]]
 name = "once-map"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2898,19 +2898,7 @@ checksum = "8835116a5c179084a830efb3adc117ab007512b535bc1a21c991d3b32a6b44dd"
 [[package]]
 name = "pep440_rs"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15efd4d885c29126cc93e12af3087896e2518bd5ca0fb328c19c4ef9cecfa8be"
-dependencies = [
- "once_cell",
- "serde",
- "unicode-width",
- "unscanny",
-]
-
-[[package]]
-name = "pep440_rs"
-version = "0.5.0"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "once_cell",
  "pubgrub",
@@ -2923,28 +2911,11 @@ dependencies = [
 [[package]]
 name = "pep508_rs"
 version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1455babf8edd3eedcdfcb39700e455a4bb189e71b4f1fa0eacc9b244cc5a55e6"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "derivative",
  "once_cell",
- "pep440_rs 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "regex",
- "serde",
- "thiserror",
- "unicode-width",
- "url",
- "urlencoding",
-]
-
-[[package]]
-name = "pep508_rs"
-version = "0.4.2"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
-dependencies = [
- "derivative",
- "once_cell",
- "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep440_rs",
  "regex",
  "rkyv",
  "serde",
@@ -3095,8 +3066,8 @@ dependencies = [
  "minijinja",
  "nix 0.28.0",
  "once_cell",
- "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
- "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep440_rs",
+ "pep508_rs",
  "platform-host",
  "platform-tags",
  "pypi-types",
@@ -3164,7 +3135,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 [[package]]
 name = "platform-host"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "fs-err",
  "goblin",
@@ -3191,7 +3162,7 @@ dependencies = [
 [[package]]
 name = "platform-tags"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "platform-host",
  "rustc-hash",
@@ -3352,13 +3323,13 @@ dependencies = [
 [[package]]
 name = "pypi-types"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "chrono",
  "mailparse",
  "once_cell",
- "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
- "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep440_rs",
+ "pep508_rs",
  "regex",
  "rkyv",
  "serde",
@@ -3375,8 +3346,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b80f889b6d413c3f8963a2c7db03f95dd6e1d85e1074137cb2013ea2faa8898"
 dependencies = [
  "indexmap 2.2.4",
- "pep440_rs 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "pep508_rs 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pep440_rs",
+ "pep508_rs",
  "serde",
  "toml",
 ]
@@ -3444,7 +3415,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#1d4ae7d6021bea878ab8cb3c22de81d712c29165"
+source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3489,7 +3460,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#1d4ae7d6021bea878ab8cb3c22de81d712c29165"
+source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3518,7 +3489,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#1d4ae7d6021bea878ab8cb3c22de81d712c29165"
+source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
 dependencies = [
  "blake2",
  "digest",
@@ -3533,14 +3504,14 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#1d4ae7d6021bea878ab8cb3c22de81d712c29165"
+source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
 dependencies = [
  "chrono",
  "fxhash",
  "indexmap 2.2.4",
  "itertools",
- "pep440_rs 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "pep508_rs 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pep440_rs",
+ "pep508_rs",
  "purl",
  "rattler_conda_types",
  "rattler_digest",
@@ -3556,7 +3527,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#1d4ae7d6021bea878ab8cb3c22de81d712c29165"
+source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
 dependencies = [
  "quote",
  "syn 2.0.52",
@@ -3565,7 +3536,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#1d4ae7d6021bea878ab8cb3c22de81d712c29165"
+source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3593,7 +3564,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#1d4ae7d6021bea878ab8cb3c22de81d712c29165"
+source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3619,7 +3590,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#1d4ae7d6021bea878ab8cb3c22de81d712c29165"
+source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3658,7 +3629,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#1d4ae7d6021bea878ab8cb3c22de81d712c29165"
+source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.4",
@@ -3675,7 +3646,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#1d4ae7d6021bea878ab8cb3c22de81d712c29165"
+source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3695,7 +3666,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#1d4ae7d6021bea878ab8cb3c22de81d712c29165"
+source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
 dependencies = [
  "cfg-if 1.0.0",
  "libloading",
@@ -3840,12 +3811,12 @@ dependencies = [
 [[package]]
 name = "requirements-txt"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "fs-err",
  "once_cell",
- "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
- "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep440_rs",
+ "pep508_rs",
  "regex",
  "serde",
  "thiserror",
@@ -5265,7 +5236,7 @@ dependencies = [
 [[package]]
 name = "uv-auth"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "tracing",
  "url",
@@ -5274,7 +5245,7 @@ dependencies = [
 [[package]]
 name = "uv-build"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5283,7 +5254,7 @@ dependencies = [
  "indoc",
  "itertools",
  "once_cell",
- "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep508_rs",
  "platform-host",
  "pypi-types",
  "pyproject-toml",
@@ -5305,7 +5276,7 @@ dependencies = [
 [[package]]
 name = "uv-cache"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "cache-key",
  "cachedir",
@@ -5326,7 +5297,7 @@ dependencies = [
 [[package]]
 name = "uv-client"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "async-trait",
  "async_http_range_reader",
@@ -5340,8 +5311,8 @@ dependencies = [
  "html-escape",
  "http",
  "install-wheel-rs",
- "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
- "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep440_rs",
+ "pep508_rs",
  "platform-tags",
  "pypi-types",
  "reqwest",
@@ -5372,7 +5343,7 @@ dependencies = [
 [[package]]
 name = "uv-dispatch"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5380,7 +5351,7 @@ dependencies = [
  "futures",
  "gourgeist",
  "itertools",
- "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep508_rs",
  "platform-host",
  "platform-tags",
  "pypi-types",
@@ -5401,7 +5372,7 @@ dependencies = [
 [[package]]
 name = "uv-distribution"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "anyhow",
  "cache-key",
@@ -5411,8 +5382,8 @@ dependencies = [
  "futures",
  "install-wheel-rs",
  "nanoid",
- "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
- "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep440_rs",
+ "pep508_rs",
  "platform-tags",
  "pypi-types",
  "reqwest",
@@ -5438,7 +5409,7 @@ dependencies = [
 [[package]]
 name = "uv-extract"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "async-compression",
  "async_zip",
@@ -5458,7 +5429,7 @@ dependencies = [
 [[package]]
 name = "uv-fs"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "dunce",
  "fs-err",
@@ -5473,7 +5444,7 @@ dependencies = [
 [[package]]
 name = "uv-git"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -5499,7 +5470,7 @@ dependencies = [
 [[package]]
 name = "uv-installer"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "anyhow",
  "distribution-filename",
@@ -5508,8 +5479,8 @@ dependencies = [
  "futures",
  "install-wheel-rs",
  "once-map",
- "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
- "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep440_rs",
+ "pep508_rs",
  "platform-tags",
  "pypi-types",
  "pyproject-toml",
@@ -5537,15 +5508,15 @@ dependencies = [
 [[package]]
 name = "uv-interpreter"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "cache-key",
  "configparser",
  "fs-err",
  "install-wheel-rs",
  "once_cell",
- "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
- "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep440_rs",
+ "pep508_rs",
  "platform-host",
  "platform-tags",
  "regex",
@@ -5564,7 +5535,7 @@ dependencies = [
 [[package]]
 name = "uv-normalize"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "rkyv",
  "serde",
@@ -5573,7 +5544,7 @@ dependencies = [
 [[package]]
 name = "uv-resolver"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "anstream",
  "anyhow",
@@ -5592,8 +5563,8 @@ dependencies = [
  "once-map",
  "once_cell",
  "owo-colors",
- "pep440_rs 0.5.0 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
- "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep440_rs",
+ "pep508_rs",
  "petgraph",
  "platform-host",
  "platform-tags",
@@ -5625,12 +5596,12 @@ dependencies = [
 [[package]]
 name = "uv-traits"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "anyhow",
  "distribution-types",
  "once-map",
- "pep508_rs 0.4.2 (git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f)",
+ "pep508_rs",
  "serde",
  "serde_json",
  "tokio",
@@ -5642,7 +5613,7 @@ dependencies = [
 [[package]]
 name = "uv-warnings"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?rev=0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f#0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f"
+source = "git+https://github.com/astral-sh/uv?rev=9a99aa777618c55d21a9376699a2aeb646501bd6#9a99aa777618c55d21a9376699a2aeb646501bd6"
 dependencies = [
  "anstream",
  "once_cell",

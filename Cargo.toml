@@ -46,8 +46,8 @@ console = { version = "0.15.8", features = ["windows-console-colors"] }
 deno_task_shell = "0.14.4"
 dialoguer = "0.11.0"
 dirs = "5.0.1"
-distribution-filename = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-distribution-types = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+distribution-filename = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+distribution-types = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
 dunce = "1.0.4"
 flate2 = "1.0.28"
 futures = "0.3.30"
@@ -58,7 +58,7 @@ indexmap = { version = "2.2.4", features = ["serde"] }
 indicatif = "0.17.8"
 insta = { version = "1.35.1", features = ["yaml"] }
 
-install-wheel-rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+install-wheel-rs = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
 is_executable = "1.0.1"
 itertools = "0.12.1"
 lazy_static = "1.4.0"
@@ -72,11 +72,11 @@ miette = { version = "7.1.0", features = [
 ] }
 minijinja = { version = "1.0.12", features = ["builtins"] }
 once_cell = "1.19.0"
-pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-platform-host = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-platform-tags = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-pypi-types = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+platform-host = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+platform-tags = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+pypi-types = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
 rattler = { version = "0.19.0", default-features = false }
 rattler_conda_types = { version = "0.19.0", default-features = false }
 rattler_digest = { version = "0.19.0", default-features = false }
@@ -120,15 +120,15 @@ toml_edit = { version = "0.22.6", features = ["serde"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
-uv-cache = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-uv-client = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-uv-installer = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-uv-interpreter = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-uv-traits = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+uv-cache = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+uv-client = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+uv-installer = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+uv-interpreter = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+uv-traits = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
 zip = { version = "0.6.6", default-features = false, features = [
     "deflate",
     "time",
@@ -155,8 +155,8 @@ toml = "0.8.10"
 [patch.crates-io]
 # For pyproject-toml
 # If you change this also change the versions in the the patch section for astral
-# pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
 
 rattler = { git = "https://github.com/tdejager/rattler", branch = "feat/update-peps" }
 rattler_conda_types = { git = "https://github.com/tdejager/rattler", branch = "feat/update-peps" }
@@ -168,7 +168,8 @@ rattler_shell = { git = "https://github.com/tdejager/rattler", branch = "feat/up
 rattler_solve = { git = "https://github.com/tdejager/rattler", branch = "feat/update-peps" }
 rattler_virtual_packages = { git = "https://github.com/tdejager/rattler", branch = "feat/update-peps" }
 #deno_task_shell = { path = "../deno_task_shell" }#rattler = { path = "../rattler/crates/rattler" }
-#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }#rattler_digest = { path = "../rattler/crates/rattler_digest" }
+#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
+#rattler_digest = { path = "../rattler/crates/rattler_digest" }
 #rattler_networking = { path = "../rattler/crates/rattler_networking" }
 #rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
 #rattler_shell = { path = "../rattler/crates/rattler_shell" }
@@ -179,20 +180,20 @@ rattler_virtual_packages = { git = "https://github.com/tdejager/rattler", branch
 
 # Change these lines if you want a patched version of astral
 # [patch.'https://github.com/astral-sh/uv']
-# pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# uv-cache = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# uv-client = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# uv-dispatch = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# uv-distribution = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# uv-installer = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# uv-interpreter = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# uv-normalize = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# uv-resolver = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# uv-traits = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# distribution-filename = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# distribution-types = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# install-wheel-rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# platform-host = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# platform-tags = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-# pypi-types = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+# pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# uv-cache = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# uv-client = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# uv-dispatch = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# uv-distribution = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# uv-installer = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# uv-interpreter = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# uv-normalize = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# uv-resolver = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# uv-traits = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# distribution-filename = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# distribution-types = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# install-wheel-rs = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# platform-host = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# platform-tags = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
+# pypi-types = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
