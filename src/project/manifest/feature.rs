@@ -10,14 +10,14 @@ use indexmap::IndexMap;
 use itertools::Either;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use serde::de::Error;
-use serde::{Deserialize, Deserializer, Serialize};
-use serde_with::serde_as;
+use serde::{Deserialize, Deserializer};
+use serde_with::{serde_as, SerializeDisplay};
 use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
 use std::fmt;
 
 /// The name of a feature. This is either a string or default for the default feature.
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, SerializeDisplay, Default)]
 pub enum FeatureName {
     #[default]
     Default,

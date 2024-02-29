@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::fmt::Display;
 use std::str::FromStr;
 
 use clap::Parser;
@@ -8,8 +7,8 @@ use miette::IntoDiagnostic;
 use rattler_conda_types::PackageName;
 
 use crate::cli::global::install::{
-    bin_env_dir, find_and_map_executable_scripts, find_designated_package, BinDir, BinEnvDir,
-    BinScriptMapping,
+    bin_env_dir, find_and_map_executable_scripts, find_designated_package, home_path, BinDir,
+    BinEnvDir, BinScriptMapping,
 };
 use crate::prefix::Prefix;
 
@@ -19,23 +18,14 @@ pub struct Args {}
 
 #[derive(Debug)]
 struct InstalledPackageInfo {
+    /// The name of the installed package
     name: PackageName,
-    binaries: Vec<String>,
-}
 
-impl Display for InstalledPackageInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let binaries = self
-            .binaries
-            .iter()
-            .map(|name| format!("[bin] {}", console::style(name).bold()))
-            .join("\n     -  ");
-        write!(
-            f,
-            "  -  [package] {}\n     -  {binaries}",
-            console::style(&self.name.as_source()).bold()
-        )
-    }
+    /// The binaries installed by this package
+    binaries: Vec<String>,
+
+    /// The version of the installed package
+    version: String,
 }
 
 fn print_no_packages_found_message() {
@@ -86,22 +76,58 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
                 .into_iter()
                 .collect();
 
+        let version = prefix_package
+            .repodata_record
+            .package_record
+            .version
+            .to_string();
         package_info.push(InstalledPackageInfo {
             name: package_name,
             binaries,
+            version,
         });
     }
 
     if package_info.is_empty() {
         print_no_packages_found_message();
     } else {
-        eprintln!(
-            "Globally installed binary packages:\n{}",
-            package_info
-                .into_iter()
-                .map(|pkg| pkg.to_string())
-                .join("\n")
-        );
+        let path = home_path()?;
+        let len = package_info.len();
+        let mut message = String::new();
+        for (idx, pkgi) in package_info.into_iter().enumerate() {
+            let last = (idx + 1) == len;
+            let no_binary = pkgi.binaries.is_empty();
+
+            if last {
+                message.push_str("└──");
+            } else {
+                message.push_str("├──");
+            }
+
+            message.push_str(&format!(
+                " {} {}",
+                console::style(&pkgi.name.as_source()).bold().magenta(),
+                console::style(&pkgi.version).bright().black()
+            ));
+
+            if !no_binary {
+                let p = if last { " " } else { "|" };
+                message.push_str(&format!(
+                    "\n{}   └─ exec: {}",
+                    p,
+                    pkgi.binaries
+                        .iter()
+                        .map(|x| console::style(x).green())
+                        .join(", ")
+                ));
+            }
+
+            if !last {
+                message.push('\n');
+            }
+        }
+
+        eprintln!("Global install location: {}\n{}", path.display(), message);
     }
 
     Ok(())
@@ -109,9 +135,9 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
 
 pub(super) async fn list_global_packages() -> Result<Vec<PackageName>, miette::ErrReport> {
     let mut packages = vec![];
-    let mut dir_contents = tokio::fs::read_dir(bin_env_dir()?)
-        .await
-        .into_diagnostic()?;
+    let Ok(mut dir_contents) = tokio::fs::read_dir(bin_env_dir()?).await else {
+        return Ok(vec![]);
+    };
 
     while let Some(entry) = dir_contents.next_entry().await.into_diagnostic()? {
         if entry.file_type().await.into_diagnostic()?.is_dir() {

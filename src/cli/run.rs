@@ -8,7 +8,7 @@ use crate::consts;
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
-use miette::{miette, Context, Diagnostic};
+use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use rattler_conda_types::Platform;
 
 use crate::activation::get_environment_variables;
@@ -76,7 +76,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Verify that the current platform has the required virtual packages for the environment.
     if let Some(ref explicit_environment) = explicit_environment {
-        verify_current_platform_has_required_virtual_packages(explicit_environment)?;
+        verify_current_platform_has_required_virtual_packages(explicit_environment)
+            .into_diagnostic()?;
     }
 
     // Ensure that the lock-file is up-to-date.

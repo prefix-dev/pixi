@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
+use rattler_shell::activation::ActivationError::FailedToRunActivationScript;
 use rattler_shell::{
     activation::{ActivationError, ActivationVariables, Activator, PathModificationBehavior},
     shell::ShellEnum,
@@ -128,7 +129,7 @@ pub async fn run_activation(
         ))
     })?;
 
-    let activator_result = tokio::task::spawn_blocking(move || {
+    let activator_result = match tokio::task::spawn_blocking(move || {
         // Run and cache the activation script
         activator.run_activation(ActivationVariables {
             // Get the current PATH variable
@@ -143,7 +144,35 @@ pub async fn run_activation(
     })
     .await
     .into_diagnostic()?
-    .into_diagnostic()?;
+    {
+        Ok(activator) => activator,
+        Err(e) => {
+            match e {
+                FailedToRunActivationScript {
+                    script,
+                    stdout,
+                    stderr,
+                    status,
+                } => {
+                    return Err(miette::miette!(format!(
+                            "Failed to run activation script for {:?}. Status: {}. Stdout: {}. Stderr: {}. Script: {}",
+                            environment.name(), // Make sure `environment` is accessible here
+                            status,
+                            stdout,
+                            stderr,
+                            script,
+                        )));
+                }
+                _ => {
+                    // Handle other activation errors
+                    return Err(miette::miette!(format!(
+                        "An activation error occurred: {:?}",
+                        e
+                    )));
+                }
+            }
+        }
+    };
 
     Ok(activator_result)
 }
@@ -225,7 +254,14 @@ mod tests {
 
     #[test]
     fn test_metadata_project_env() {
-        let project = Project::discover().unwrap();
+        let project = r#"
+        [project]
+        name = "pixi"
+        version = "0.1.0"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "osx-64", "win-64"]
+        "#;
+        let project = Project::from_str(Path::new(""), project).unwrap();
         let env = project.get_metadata_env();
 
         assert_eq!(env.get("PIXI_PROJECT_NAME").unwrap(), project.name());

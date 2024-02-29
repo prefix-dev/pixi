@@ -5,33 +5,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.15.0](https://github.com/ruben-arts/pixi/compare/v0.14.0...v0.15.0) - 2024-02-23
+## [0.15.1](https://github.com/ruben-arts/pixi/compare/v0.15.1...v0.15.2)  - 2024-02-29
+### 📃 Details
 
-### ✨ Highlights
+#### Changed
+- Add more info to a failure of activation by @ruben-arts in [#873](https://github.com/prefix-dev/pixi/pull/873)
+
+#### Fixed
+- Improve global list UX when there is no global env dir created by @sumanth-manchala in [#865](https://github.com/prefix-dev/pixi/pull/865)
+- Update rattler to `v0.19.0` by @AliPiccioniQC in [#885](https://github.com/prefix-dev/pixi/pull/885)
+- Error on `pixi run` if platform is not supported by @ruben-arts in [#878](https://github.com/prefix-dev/pixi/pull/878)
+
+
+### New Contributors
+- @sumanth-manchala made their first contribution in [#865](https://github.com/prefix-dev/pixi/pull/865)
+- @AliPiccioniQC made their first contribution in [#885](https://github.com/prefix-dev/pixi/pull/885)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.15.1..v0.15.2)
+
+
+## [0.15.1](https://github.com/ruben-arts/pixi/compare/v0.15.0...v0.15.1) - 2024-02-26
+### 📃 Details
+
+#### Added
+- Add prefix to project info json output by @baszalmstra in [#859](https://github.com/prefix-dev/pixi/pull/859)
+
+#### Changed
+- New `pixi global list` display format by @chawyehsu in [#723](https://github.com/prefix-dev/pixi/pull/723)
+- Add direnv usage by @pavelzw in [#845](https://github.com/prefix-dev/pixi/pull/845)
+- Add docker example by @pavelzw in [#846](https://github.com/prefix-dev/pixi/pull/846)
+- Install/remove multiple packages globally by @chawyehsu in [#854](https://github.com/prefix-dev/pixi/pull/854)
+
+#### Fixed
+- Prefix file in `init --import` by @ruben-arts in [#855](https://github.com/prefix-dev/pixi/pull/855)
+- Environment and feature names in pixi info --json by @baszalmstra in [#857](https://github.com/prefix-dev/pixi/pull/857)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.15.0..v0.15.1)
+
+## [0.15.0](https://github.com/prefix-dev/pixi/compare/v0.14.0...v0.15.0) - 2024-02-23
+
+## ✨ Highlights
 - `[pypi-dependencies]` now get build in the created environment so it uses the conda installed build tools.
 - `pixi init --import env.yml` to import an existing conda environment file.
 - `[target.unix.dependencies]` to specify dependencies for unix systems instead of per platform.
 
+> [!WARNING]
+> This versions build failed, use `v0.15.1`
+
 ### 📃 Details
 #### Added
-- pass environment variables during pypi resolution and install ([#818](https://github.com/ruben-arts/pixi/pull/818))
-- skip micromamba style selector lines and warn about them ([#830](https://github.com/ruben-arts/pixi/pull/830))
-- add import yml flag ([#792](https://github.com/ruben-arts/pixi/pull/792))
-- check duplicate dependencies ([#717](https://github.com/ruben-arts/pixi/pull/717))
-- *(ci)* check conventional PR title ([#820](https://github.com/ruben-arts/pixi/pull/820))
-- add `--feature` to `pixi add` ([#803](https://github.com/ruben-arts/pixi/pull/803))
-- add windows, macos, linux and unix to targets ([#832](https://github.com/ruben-arts/pixi/pull/832))
+- pass environment variables during pypi resolution and install ([#818](https://github.com/prefix-dev/pixi/pull/818))
+- skip micromamba style selector lines and warn about them ([#830](https://github.com/prefix-dev/pixi/pull/830))
+- add import yml flag ([#792](https://github.com/prefix-dev/pixi/pull/792))
+- check duplicate dependencies ([#717](https://github.com/prefix-dev/pixi/pull/717))
+- *(ci)* check conventional PR title ([#820](https://github.com/prefix-dev/pixi/pull/820))
+- add `--feature` to `pixi add` ([#803](https://github.com/prefix-dev/pixi/pull/803))
+- add windows, macos, linux and unix to targets ([#832](https://github.com/prefix-dev/pixi/pull/832))
 
 #### Fixed
-- cache and retry pypi name mapping ([#839](https://github.com/ruben-arts/pixi/pull/839))
-- check duplicates while adding dependencies ([#829](https://github.com/ruben-arts/pixi/pull/829))
-- logic `PIXI_NO_PATH_UPDATE` variable ([#822](https://github.com/ruben-arts/pixi/pull/822))
+- cache and retry pypi name mapping ([#839](https://github.com/prefix-dev/pixi/pull/839))
+- check duplicates while adding dependencies ([#829](https://github.com/prefix-dev/pixi/pull/829))
+- logic `PIXI_NO_PATH_UPDATE` variable ([#822](https://github.com/prefix-dev/pixi/pull/822))
 
 #### Other
-- add `mike` to the documentation and update looks ([#809](https://github.com/ruben-arts/pixi/pull/809))
-- add instructions for installing on Alpine Linux ([#828](https://github.com/ruben-arts/pixi/pull/828))
-- more error reporting in `self-update` ([#823](https://github.com/ruben-arts/pixi/pull/823))
-- disabled `jlap` for now ([#836](https://github.com/ruben-arts/pixi/pull/823))
+- add `mike` to the documentation and update looks ([#809](https://github.com/prefix-dev/pixi/pull/809))
+- add instructions for installing on Alpine Linux ([#828](https://github.com/prefix-dev/pixi/pull/828))
+- more error reporting in `self-update` ([#823](https://github.com/prefix-dev/pixi/pull/823))
+- disabled `jlap` for now ([#836](https://github.com/prefix-dev/pixi/pull/823))
 
 [Full commit history](https://github.com/prefix-dev/pixi/compare/v0.14.0..v0.15.0)
 
