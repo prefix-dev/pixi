@@ -80,7 +80,8 @@ pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
     )?;
 
     // Make sure the system requirements are met
-    verify_current_platform_has_required_virtual_packages(&project.default_environment())?;
+    verify_current_platform_has_required_virtual_packages(&project.default_environment())
+        .into_diagnostic()?;
 
     // TODO: remove on a 1.0 release
     // Check for old `env` folder as we moved to `envs` in 0.13.0
