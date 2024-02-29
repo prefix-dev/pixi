@@ -15,14 +15,12 @@ native-tls = [
     "reqwest/native-tls",
     "rattler_repodata_gateway/native-tls",
     "rattler/native-tls",
-    "rip/native-tls",
 ]
 rustls-tls = [
     "reqwest/rustls-tls",
     "reqwest/rustls-tls-native-roots",
     "rattler_repodata_gateway/rustls-tls",
     "rattler/rustls-tls",
-    "rip/rustls-tls",
 ]
 slow_integration_tests = []
 
@@ -98,7 +96,6 @@ regex = "1.10.3"
 reqwest = { version = "0.11.24", default-features = false }
 reqwest-middleware = "0.2.4"
 reqwest-retry = "0.3.0"
-rip = { package = "rattler_installs_packages", version = "0.8.1", default-features = false }
 self-replace = "1.3.7"
 serde = "1.0.197"
 serde-untagged = "0.1.5"
@@ -158,19 +155,20 @@ toml = "0.8.10"
 [patch.crates-io]
 # For pyproject-toml
 # If you change this also change the versions in the the patch section for astral
-pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+# pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+# pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
 
-# rattler = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
-# rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
-# rattler_digest = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
-# rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
-# rattler_networking = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
-# rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
-# rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
-# rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
-# rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
-#deno_task_shell = { path = "../deno_task_shell" }#rattler = { path = "../rattler/crates/rattler" }#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }#rattler_digest = { path = "../rattler/crates/rattler_digest" }
+rattler = { git = "https://github.com/tdejager/rattler", branch = "feat/update-peps" }
+rattler_conda_types = { git = "https://github.com/tdejager/rattler", branch = "feat/update-peps" }
+rattler_digest = { git = "https://github.com/tdejager/rattler", branch = "feat/update-peps" }
+rattler_lock = { git = "https://github.com/tdejager/rattler", branch = "feat/update-peps" }
+rattler_networking = { git = "https://github.com/tdejager/rattler", branch = "feat/update-peps" }
+rattler_repodata_gateway = { git = "https://github.com/tdejager/rattler", branch = "feat/update-peps" }
+rattler_shell = { git = "https://github.com/tdejager/rattler", branch = "feat/update-peps" }
+rattler_solve = { git = "https://github.com/tdejager/rattler", branch = "feat/update-peps" }
+rattler_virtual_packages = { git = "https://github.com/tdejager/rattler", branch = "feat/update-peps" }
+#deno_task_shell = { path = "../deno_task_shell" }#rattler = { path = "../rattler/crates/rattler" }
+#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }#rattler_digest = { path = "../rattler/crates/rattler_digest" }
 #rattler_networking = { path = "../rattler/crates/rattler_networking" }
 #rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
 #rattler_shell = { path = "../rattler/crates/rattler_shell" }
