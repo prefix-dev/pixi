@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
+use rattler_shell::activation::ActivationError::FailedToRunActivationScript;
 use rattler_shell::{
     activation::{ActivationError, ActivationVariables, Activator, PathModificationBehavior},
     shell::ShellEnum,
@@ -128,7 +129,7 @@ pub async fn run_activation(
         ))
     })?;
 
-    let activator_result = tokio::task::spawn_blocking(move || {
+    let activator_result = match tokio::task::spawn_blocking(move || {
         // Run and cache the activation script
         activator.run_activation(ActivationVariables {
             // Get the current PATH variable
@@ -143,7 +144,35 @@ pub async fn run_activation(
     })
     .await
     .into_diagnostic()?
-    .into_diagnostic()?;
+    {
+        Ok(activator) => activator,
+        Err(e) => {
+            match e {
+                FailedToRunActivationScript {
+                    script,
+                    stdout,
+                    stderr,
+                    status,
+                } => {
+                    return Err(miette::miette!(format!(
+                            "Failed to run activation script for {:?}. Status: {}. Stdout: {}. Stderr: {}. Script: {}",
+                            environment.name(), // Make sure `environment` is accessible here
+                            status,
+                            stdout,
+                            stderr,
+                            script,
+                        )));
+                }
+                _ => {
+                    // Handle other activation errors
+                    return Err(miette::miette!(format!(
+                        "An activation error occurred: {:?}",
+                        e
+                    )));
+                }
+            }
+        }
+    };
 
     Ok(activator_result)
 }
