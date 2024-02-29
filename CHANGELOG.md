@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update rattler to `v0.19.0` by @AliPiccioniQC in [#885](https://github.com/prefix-dev/pixi/pull/885)
 - Error on `pixi run` if platform is not supported by @ruben-arts in [#878](https://github.com/prefix-dev/pixi/pull/878)
 
+
+### New Contributors
+- @sumanth-manchala made their first contribution in [#865](https://github.com/prefix-dev/pixi/pull/865)
+- @AliPiccioniQC made their first contribution in [#885](https://github.com/prefix-dev/pixi/pull/885)
+
 [Full commit history](https://github.com/prefix-dev/pixi/compare/v0.15.1..v0.15.2)
 
 
