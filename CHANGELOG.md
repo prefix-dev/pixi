@@ -4,7 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-## [0.15.1] - 2024-02-26
+
+## [0.15.1](https://github.com/ruben-arts/pixi/compare/v0.15.1...v0.15.2)  - 2024-02-29
+### 📃 Details
+
+#### Changed
+- Add more info to a failure of activation by @ruben-arts in [#873](https://github.com/prefix-dev/pixi/pull/873)
+
+#### Fixed
+- Improve global list UX when there is no global env dir created by @sumanth-manchala in [#865](https://github.com/prefix-dev/pixi/pull/865)
+- Update rattler to `v0.19.0` by @AliPiccioniQC in [#885](https://github.com/prefix-dev/pixi/pull/885)
+- Error on `pixi run` if platform is not supported by @ruben-arts in [#878](https://github.com/prefix-dev/pixi/pull/878)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.15.1..v0.15.2)
+
+
+## [0.15.1](https://github.com/ruben-arts/pixi/compare/v0.15.0...v0.15.1) - 2024-02-26
 ### 📃 Details
 
 #### Added
