@@ -25,6 +25,8 @@ rustls-tls = [
 ]
 slow_integration_tests = []
 
+# IMPORTANT: Don't change the astral-sh/uv dependency versions here do it in the patch section
+# And if you add a uv dependency add it to the patch section please
 [dependencies]
 assert_matches = "1.5.0"
 async-once-cell = "0.5.3"
@@ -48,8 +50,8 @@ console-subscriber = { version = "0.2.0", optional = true }
 deno_task_shell = "0.14.4"
 dialoguer = "0.11.0"
 dirs = "5.0.1"
-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+distribution-filename = { git = "https://github.com/astral-sh/uv" }
+distribution-types = { git = "https://github.com/astral-sh/uv" }
 dunce = "1.0.4"
 flate2 = "1.0.28"
 futures = "0.3.30"
@@ -59,7 +61,7 @@ humantime = "2.1.0"
 indexmap = { version = "2.2.2", features = ["serde"] }
 indicatif = "0.17.7"
 insta = { version = "1.34.0", features = ["yaml"] }
-install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+install-wheel-rs = { git = "https://github.com/astral-sh/uv" }
 is_executable = "1.0.1"
 itertools = "0.12.1"
 lazy_static = "1.4.0"
@@ -73,11 +75,11 @@ miette = { version = "7.0.0", features = [
 ] }
 minijinja = { version = "1.0.12", features = ["builtins"] }
 once_cell = "1.19.0"
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-platform-host = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+pep440_rs = { git = "https://github.com/astral-sh/uv" }
+pep508_rs = { git = "https://github.com/astral-sh/uv" }
+platform-host = { git = "https://github.com/astral-sh/uv" }
+platform-tags = { git = "https://github.com/astral-sh/uv" }
+pypi-types = { git = "https://github.com/astral-sh/uv" }
 rattler = { version = "0.18.0", default-features = false }
 rattler_conda_types = { version = "0.18.0", default-features = false }
 rattler_digest = { version = "0.18.0", default-features = false }
@@ -121,15 +123,15 @@ toml_edit = { version = "0.21.1", features = ["serde"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-uv-interpreter = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-uv-traits = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+uv-cache = { git = "https://github.com/astral-sh/uv" }
+uv-client = { git = "https://github.com/astral-sh/uv" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv" }
+uv-distribution = { git = "https://github.com/astral-sh/uv" }
+uv-installer = { git = "https://github.com/astral-sh/uv" }
+uv-interpreter = { git = "https://github.com/astral-sh/uv" }
+uv-normalize = { git = "https://github.com/astral-sh/uv" }
+uv-resolver = { git = "https://github.com/astral-sh/uv" }
+uv-traits = { git = "https://github.com/astral-sh/uv" }
 
 zip = { version = "0.6.6", default-features = false, features = [
     "deflate",
@@ -156,8 +158,9 @@ toml = "0.8.10"
 
 [patch.crates-io]
 # For pyproject-toml
-# pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
-# pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.8" }
+# If you change this also change the versions in the the patch section for astral
+pep440_rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
 
 rattler = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
 rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
@@ -168,10 +171,7 @@ rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev
 rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
 rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
 rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "e18356d674913385eb2c4ebb5a3407a329907409" }
-#deno_task_shell = { path = "../deno_task_shell" }
-#rattler = { path = "../rattler/crates/rattler" }
-#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-#rattler_digest = { path = "../rattler/crates/rattler_digest" }
+#deno_task_shell = { path = "../deno_task_shell" }#rattler = { path = "../rattler/crates/rattler" }#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }#rattler_digest = { path = "../rattler/crates/rattler_digest" }
 #rattler_networking = { path = "../rattler/crates/rattler_networking" }
 #rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
 #rattler_shell = { path = "../rattler/crates/rattler_shell" }
@@ -180,22 +180,25 @@ rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev
 #rattler_lock = { path = "../rattler/crates/rattler_lock" }
 #rip = { package = "rattler_installs_packages", path = "../rip" }
 
-# When using a local version of uv, the following lines should be used instead of the above
+
+# IMPORTANT: This is a temporary patch to use the uv crate from git
+# until the crates are published change stuff here and not in the dependencies section
+# ALSO change the pep440_rs and pep508_rs in the crates-io section, otherwise pyproject fails
 [patch.'https://github.com/astral-sh/uv']
-pep440_rs = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-pep508_rs = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-uv-cache = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-uv-client = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-uv-dispatch = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-uv-distribution = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-uv-installer = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-uv-interpreter = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-uv-normalize = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-uv-resolver = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-uv-traits = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-distribution-filename = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-distribution-types = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-install-wheel-rs = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-platform-host = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-platform-tags = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
-pypi-types = { git = "https://github.com/tdejager/uv", branch = "feat/env-variables-for-sdist-building" }
+pep440_rs = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+pep508_rs = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+uv-cache = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+uv-client = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+uv-dispatch = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+uv-distribution = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+uv-installer = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+uv-interpreter = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+uv-normalize = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+uv-resolver = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+uv-traits = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+distribution-filename = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+distribution-types = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+install-wheel-rs = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+platform-host = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+platform-tags = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
+pypi-types = { git = "https://github.com/tdejager/uv", rev = "0fbfa110139f9af1ef15f8e4665c6b7a5fc4a39f" }
