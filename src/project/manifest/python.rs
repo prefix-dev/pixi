@@ -4,7 +4,55 @@ use serde::{de, de::Error, Deserialize, Deserializer};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
-use uv_normalize::ExtraName;
+use uv_normalize::{ExtraName, InvalidNameError, PackageName};
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct PyPiPackageName {
+    source: String,
+    normalized: PackageName,
+}
+impl<'de> Deserialize<'de> for PyPiPackageName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serde_untagged::UntaggedEnumVisitor::new()
+            .string(|str| PyPiPackageName::from_str(str).map_err(Error::custom))
+            .expecting("a string")
+            .deserialize(deserializer)
+    }
+}
+
+impl PyPiPackageName {
+    pub fn from_str(name: &str) -> Result<Self, InvalidNameError> {
+        Ok(Self {
+            source: name.to_string(),
+            normalized: uv_normalize::PackageName::from_str(name)?,
+        })
+    }
+    pub fn from_normalized(normalized: PackageName) -> Self {
+        Self {
+            source: normalized.as_ref().to_string(),
+            normalized,
+        }
+    }
+
+    pub fn as_normalized(&self) -> &PackageName {
+        &self.normalized
+    }
+
+    pub fn as_source(&self) -> &str {
+        &self.source
+    }
+}
+
+impl FromStr for PyPiPackageName {
+    type Err = InvalidNameError;
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        Self::from_str(name)
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PyPiRequirement {
@@ -358,4 +406,7 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn test_pypi_package_name() {}
 }

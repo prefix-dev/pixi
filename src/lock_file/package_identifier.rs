@@ -1,3 +1,4 @@
+use crate::project::manifest::python::PyPiPackageName;
 use crate::pypi_name_mapping;
 use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
@@ -5,12 +6,11 @@ use rattler_lock::CondaPackage;
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
-
 /// Defines information about a Pypi package extracted from either a python package or from a
 /// conda package.
 #[derive(Debug)]
 pub struct PypiPackageIdentifier {
-    pub name: uv_normalize::PackageName,
+    pub name: PyPiPackageName,
     pub version: pep440_rs::Version,
     pub extras: HashSet<ExtraName>,
 }
@@ -29,7 +29,7 @@ impl PypiPackageIdentifier {
         package: &rattler_lock::PypiPackage,
     ) -> Result<Self, ConversionError> {
         Ok(Self {
-            name: package.data().package.name.clone(),
+            name: PyPiPackageName::from_normalized(package.data().package.name.clone()),
             version: package.data().package.version.clone(),
             extras: package.extras().iter().cloned().collect(),
         })
@@ -61,7 +61,7 @@ impl PypiPackageIdentifier {
             let version = pep440_rs::Version::from_str(&record.version.as_str()).ok();
             if let (Some(name), Some(version)) = (name, version) {
                 result.push(PypiPackageIdentifier {
-                    name,
+                    name: PyPiPackageName::from_normalized(name),
                     version,
                     // TODO: We can't really tell which python extras are enabled in a conda package.
                     extras: Default::default(),
@@ -98,7 +98,7 @@ impl PypiPackageIdentifier {
                 pep440_rs::Version::from_str(&record.package_record.version.as_str()).ok();
             if let (Some(name), Some(version)) = (name, version) {
                 result.push(PypiPackageIdentifier {
-                    name,
+                    name: PyPiPackageName::from_normalized(name),
                     version,
                     // TODO: We can't really tell which python extras are enabled in a conda package.
                     extras: Default::default(),
@@ -152,7 +152,7 @@ impl PypiPackageIdentifier {
         let extras = HashSet::new();
 
         Ok(Self {
-            name,
+            name: PyPiPackageName::from_normalized(name),
             version,
             extras,
         })
@@ -160,7 +160,7 @@ impl PypiPackageIdentifier {
 
     pub fn satisfies(&self, requirement: &Requirement) -> bool {
         // Verify the name of the package
-        if self.name != requirement.name {
+        if self.name.as_normalized() != &requirement.name {
             return false;
         }
 

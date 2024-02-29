@@ -1,3 +1,4 @@
+use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::Feature;
 use crate::{
     consts,
@@ -109,7 +110,7 @@ impl<'p> GroupedEnvironment<'p> {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<uv_normalize::PackageName, Vec<PyPiRequirement>> {
+    ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
         match self {
             GroupedEnvironment::Group(group) => group.pypi_dependencies(platform),
             GroupedEnvironment::Environment(env) => env.pypi_dependencies(platform),

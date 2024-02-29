@@ -1241,13 +1241,16 @@ async fn spawn_extract_pypi_environment_task(
                 .iter()
                 .filter_map(|record| PypiPackageIdentifier::from_record(record).ok())
                 .flatten()
-                .map(|identifier| (identifier.name.clone(), identifier))
+                .map(|identifier| (identifier.name.as_normalized().clone(), identifier))
                 .collect::<HashMap<_, _>>();
 
             Arc::new(
-                solve_group_records
-                    .await
-                    .subset(dependencies.into_keys(), &conda_package_identifiers),
+                solve_group_records.await.subset(
+                    dependencies
+                        .into_keys()
+                        .map(|name| name.as_normalized().clone()),
+                    &conda_package_identifiers,
+                ),
             )
         }
     };
@@ -1304,7 +1307,10 @@ async fn spawn_solve_pypi_task(
 
         let records = lock_file::resolve_pypi(
             resolution_context,
-            dependencies,
+            dependencies
+                .into_iter()
+                .map(|(name, requirement)| (name.as_normalized().clone(), requirement))
+                .collect(),
             system_requirements,
             &repodata_records.records,
             &[],

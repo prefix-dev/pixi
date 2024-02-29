@@ -848,9 +848,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
         ],
         [
             (
-                PackageName(
-                    "memory-profiler",
-                ),
+                PyPiPackageName {
+                    source: "memory-profiler",
+                    normalized: PackageName(
+                        "memory-profiler",
+                    ),
+                },
                 PyPiRequirement {
                     version: None,
                     extras: None,
@@ -858,9 +861,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "pre-commit",
-                ),
+                PyPiPackageName {
+                    source: "pre-commit",
+                    normalized: PackageName(
+                        "pre-commit",
+                    ),
+                },
                 PyPiRequirement {
                     version: None,
                     extras: None,
@@ -868,9 +874,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "graphviz",
-                ),
+                PyPiPackageName {
+                    source: "graphviz",
+                    normalized: PackageName(
+                        "graphviz",
+                    ),
+                },
                 PyPiRequirement {
                     version: None,
                     extras: None,
@@ -878,9 +887,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "sphinx-notfound-page",
-                ),
+                PyPiPackageName {
+                    source: "sphinx-notfound-page",
+                    normalized: PackageName(
+                        "sphinx-notfound-page",
+                    ),
+                },
                 PyPiRequirement {
                     version: None,
                     extras: None,
@@ -888,9 +900,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "deepobs",
-                ),
+                PyPiPackageName {
+                    source: "deepobs",
+                    normalized: PackageName(
+                        "deepobs",
+                    ),
+                },
                 PyPiRequirement {
                     version: None,
                     extras: None,

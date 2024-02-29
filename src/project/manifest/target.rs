@@ -1,4 +1,5 @@
 use crate::project::manifest::activation::Activation;
+use crate::project::manifest::python::PyPiPackageName;
 use crate::task::TaskName;
 use crate::utils::spanned::PixiSpanned;
 use crate::{
@@ -23,7 +24,7 @@ pub struct Target {
     pub dependencies: HashMap<SpecType, IndexMap<PackageName, NamelessMatchSpec>>,
 
     /// Specific python dependencies
-    pub pypi_dependencies: Option<IndexMap<uv_normalize::PackageName, PyPiRequirement>>,
+    pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -209,7 +210,7 @@ impl<'de> Deserialize<'de> for Target {
             build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
             #[serde(default)]
-            pypi_dependencies: Option<IndexMap<uv_normalize::PackageName, PyPiRequirement>>,
+            pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
 
             /// Additional information to activate an environment.
             #[serde(default)]

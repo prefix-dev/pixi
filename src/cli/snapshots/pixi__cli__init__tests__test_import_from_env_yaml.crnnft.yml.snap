@@ -133,9 +133,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
         ],
         [
             (
-                PackageName(
-                    "tensorflow-gpu",
-                ),
+                PyPiPackageName {
+                    source: "tensorflow-gpu",
+                    normalized: PackageName(
+                        "tensorflow-gpu",
+                    ),
+                },
                 PyPiRequirement {
                     version: Some(
                         VersionSpecifiers(
@@ -152,9 +155,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "numpy",
-                ),
+                PyPiPackageName {
+                    source: "numpy",
+                    normalized: PackageName(
+                        "numpy",
+                    ),
+                },
                 PyPiRequirement {
                     version: None,
                     extras: None,
@@ -162,9 +168,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "opencv-python",
-                ),
+                PyPiPackageName {
+                    source: "opencv-python",
+                    normalized: PackageName(
+                        "opencv-python",
+                    ),
+                },
                 PyPiRequirement {
                     version: None,
                     extras: None,
@@ -172,9 +181,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "matplotlib",
-                ),
+                PyPiPackageName {
+                    source: "matplotlib",
+                    normalized: PackageName(
+                        "matplotlib",
+                    ),
+                },
                 PyPiRequirement {
                     version: None,
                     extras: None,
@@ -182,9 +194,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName(
-                    "easydict",
-                ),
+                PyPiPackageName {
+                    source: "easydict",
+                    normalized: PackageName(
+                        "easydict",
+                    ),
+                },
                 PyPiRequirement {
                     version: None,
                     extras: None,

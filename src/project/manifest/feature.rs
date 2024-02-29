@@ -1,6 +1,7 @@
 use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelector};
 use crate::consts;
 use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
+use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::target::Targets;
 use crate::project::manifest::{deserialize_opt_package_map, deserialize_package_map};
 use crate::project::SpecType;
@@ -176,7 +177,7 @@ impl Feature {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> Option<Cow<'_, IndexMap<uv_normalize::PackageName, PyPiRequirement>>> {
+    ) -> Option<Cow<'_, IndexMap<PyPiPackageName, PyPiRequirement>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
@@ -244,7 +245,7 @@ impl<'de> Deserialize<'de> for Feature {
             build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
             #[serde(default)]
-            pypi_dependencies: Option<IndexMap<uv_normalize::PackageName, PyPiRequirement>>,
+            pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
 
             /// Additional information to activate an environment.
             #[serde(default)]

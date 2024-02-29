@@ -249,7 +249,7 @@ pub fn verify_pypi_platform_satisfiability(
         .iter()
         .flat_map(|(name, reqs)| {
             reqs.iter()
-                .map(move |req| (req.as_pep508(name), "<environment>"))
+                .map(move |req| (req.as_pep508(name.as_normalized()), "<environment>"))
         })
         .collect_vec();
 
@@ -275,7 +275,7 @@ pub fn verify_pypi_platform_satisfiability(
     let mut name_to_package_identifiers = HashMap::new();
     for (idx, (identifier, _)) in package_identifiers.iter().enumerate() {
         name_to_package_identifiers
-            .entry(identifier.name.clone())
+            .entry(identifier.name.as_normalized())
             .or_insert_with(Vec::new)
             .push(idx);
     }
