@@ -3415,7 +3415,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
+source = "git+https://github.com/mamba-org/rattler?rev=7e0a130f0603fc2ff204649df9adba78422de2c8#7e0a130f0603fc2ff204649df9adba78422de2c8"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3460,7 +3460,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
+source = "git+https://github.com/mamba-org/rattler?rev=7e0a130f0603fc2ff204649df9adba78422de2c8#7e0a130f0603fc2ff204649df9adba78422de2c8"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3489,7 +3489,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
+source = "git+https://github.com/mamba-org/rattler?rev=7e0a130f0603fc2ff204649df9adba78422de2c8#7e0a130f0603fc2ff204649df9adba78422de2c8"
 dependencies = [
  "blake2",
  "digest",
@@ -3504,7 +3504,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
+source = "git+https://github.com/mamba-org/rattler?rev=7e0a130f0603fc2ff204649df9adba78422de2c8#7e0a130f0603fc2ff204649df9adba78422de2c8"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3527,7 +3527,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
+source = "git+https://github.com/mamba-org/rattler?rev=7e0a130f0603fc2ff204649df9adba78422de2c8#7e0a130f0603fc2ff204649df9adba78422de2c8"
 dependencies = [
  "quote",
  "syn 2.0.52",
@@ -3536,7 +3536,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
+source = "git+https://github.com/mamba-org/rattler?rev=7e0a130f0603fc2ff204649df9adba78422de2c8#7e0a130f0603fc2ff204649df9adba78422de2c8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3564,7 +3564,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
+source = "git+https://github.com/mamba-org/rattler?rev=7e0a130f0603fc2ff204649df9adba78422de2c8#7e0a130f0603fc2ff204649df9adba78422de2c8"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3590,7 +3590,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
+source = "git+https://github.com/mamba-org/rattler?rev=7e0a130f0603fc2ff204649df9adba78422de2c8#7e0a130f0603fc2ff204649df9adba78422de2c8"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3629,7 +3629,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
+source = "git+https://github.com/mamba-org/rattler?rev=7e0a130f0603fc2ff204649df9adba78422de2c8#7e0a130f0603fc2ff204649df9adba78422de2c8"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.4",
@@ -3646,7 +3646,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
+source = "git+https://github.com/mamba-org/rattler?rev=7e0a130f0603fc2ff204649df9adba78422de2c8#7e0a130f0603fc2ff204649df9adba78422de2c8"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3666,7 +3666,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.19.0"
-source = "git+https://github.com/tdejager/rattler?branch=feat/update-peps#98111a6d0a9de4ba9e7aad745d67383f916bc091"
+source = "git+https://github.com/mamba-org/rattler?rev=7e0a130f0603fc2ff204649df9adba78422de2c8#7e0a130f0603fc2ff204649df9adba78422de2c8"
 dependencies = [
  "cfg-if 1.0.0",
  "libloading",
