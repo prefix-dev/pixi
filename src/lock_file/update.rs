@@ -1340,12 +1340,6 @@ async fn spawn_solve_pypi_task(
         platform = %platform
     ))
     .await?;
-    // )
-    // .await
-    // .unwrap_or_else(|e| match e.try_into_panic() {
-    //     Ok(panic) => std::panic::resume_unwind(panic),
-    //     Err(_err) => Err(miette::miette!("the operation was cancelled")),
-    // })?;
 
     Ok(TaskResult::PypiGroupSolved(
         environment.name().clone(),
