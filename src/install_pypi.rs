@@ -323,7 +323,6 @@ pub async fn update_python_distributions(
 
     let platform = platform_host::Platform::current().expect("unsupported platform");
 
-    dbg!(&status);
     // If we have changed interpreter, we need to uninstall all site-packages from the old interpreter
     if let PythonStatus::Changed { old, new: _ } = status {
         let site_packages_path = prefix.root().join(&old.site_packages_path);
