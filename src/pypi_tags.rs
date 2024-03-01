@@ -121,7 +121,7 @@ pub fn get_pypi_tags(
         miette::bail!(
             "expected python version to be a major.minor version, but got '{}'",
             &python_record.version
-        );``
+        );
     };
     let implementation_name = match python_record.name.as_normalized() {
         "python" => "cpython",
