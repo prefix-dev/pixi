@@ -35,12 +35,7 @@ pub struct Args {
     /// `alias=something,url=https://example.com/simple[,auth_helper=auth_helper_id]`
     ///
     /// The `auth_helper` argument is optional.
-    #[arg(
-        short,
-        long = "pypi-index",
-        id = "pypi-index",
-        conflicts_with = "env_file"
-    )]
+    #[arg(long = "pypi-index", id = "pypi-index", conflicts_with = "env_file")]
     pub pypi_indices: Option<Vec<String>>,
 
     /// Platforms that the project supports.
