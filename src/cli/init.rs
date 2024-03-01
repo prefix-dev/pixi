@@ -580,7 +580,7 @@ mod tests {
         file.write_all(example_conda_env_file.as_bytes()).unwrap();
 
         let conda_env_file_data = CondaEnvFile::from_path(path).unwrap();
-        let (conda_deps, pip_deps, mut channels) =
+        let (conda_deps, pip_deps, _) =
             parse_dependencies(conda_env_file_data.dependencies().clone()).unwrap();
 
         assert_eq!(conda_deps, vec![MatchSpec::from_str("pip==24.0").unwrap(),]);
