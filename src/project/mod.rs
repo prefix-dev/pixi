@@ -13,6 +13,7 @@ use once_cell::sync::OnceCell;
 
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
 use rattler_networking::AuthenticationMiddleware;
+use reqwest::Client;
 use reqwest_middleware::ClientWithMiddleware;
 use rip::index::PackageSources;
 use rip::{index::PackageDb, normalize_index_url};
@@ -194,15 +195,28 @@ impl Project {
 
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
+        static APP_USER_AGENT: &str =
+            concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+
+        let timeout = 5 * 60;
+        let client = Client::builder()
+            .pool_max_idle_per_host(20)
+            .user_agent(APP_USER_AGENT)
+            .timeout(std::time::Duration::from_secs(timeout))
+            .build()
+            .expect("failed to create reqwest Client");
+
+        let authenticated_client = reqwest_middleware::ClientBuilder::new(client.clone())
+            .with_arc(Arc::new(AuthenticationMiddleware::default()))
+            .build();
+
         Ok(Self {
             root: root.to_owned(),
             package_db: Default::default(),
-            client: Default::default(),
-            authenticated_client: reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-                .with_arc(Arc::new(AuthenticationMiddleware::default()))
-                .build(),
-            manifest,
             env_vars,
+            client,
+            authenticated_client,
+            manifest,
         })
     }
 
