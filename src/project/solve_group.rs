@@ -1,4 +1,5 @@
 use super::{manifest, Dependencies, Environment, Project};
+use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::{PyPiRequirement, SystemRequirements};
 use crate::{FeatureName, SpecType};
 use indexmap::{IndexMap, IndexSet};
@@ -115,7 +116,7 @@ impl<'p> SolveGroup<'p> {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<rip::types::PackageName, Vec<PyPiRequirement>> {
+    ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
         self.features(true)
             .filter_map(|f| f.pypi_dependencies(platform))
             .fold(IndexMap::default(), |mut acc, deps| {
@@ -256,7 +257,7 @@ mod tests {
             ["a", "b", "c"]
                 .into_iter()
                 .map(PackageName::new_unchecked)
-                .collect()
+                .collect::<HashSet<_>>()
         );
     }
 }
