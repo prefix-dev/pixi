@@ -116,6 +116,11 @@ case "$(basename "$SHELL")" in
         update_shell ~/.zshrc "$LINE"
         ;;
 
+    tcsh)
+        LINE="set path = ( \$path ${BIN_DIR} )"
+        update_shell ~/.tcshrc "$LINE"
+        ;;
+
     *)
         echo "Unsupported shell: $(basename "$0")"
         ;;
