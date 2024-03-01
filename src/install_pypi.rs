@@ -36,7 +36,7 @@ use uv_traits::{ConfigSettings, NoBinary, NoBuild, SetupPyStrategy};
 
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
 
-pub(super) fn elapsed(duration: Duration) -> String {
+fn elapsed(duration: Duration) -> String {
     let secs = duration.as_secs();
 
     if secs >= 60 {
@@ -130,6 +130,49 @@ fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
     )
 }
 
+enum ValidateInstall {
+    /// Keep this package
+    Keep,
+    /// Reinstall this package
+    Reinstall,
+}
+
+/// Check if a package needs to be reinstalled
+fn need_reinstall(
+    installed: &InstalledDist,
+    required: &PypiPackageData,
+    python_version: &Version,
+) -> ValidateInstall {
+    // Check if the installed version is the same as the required version
+    let same_version = match installed {
+        InstalledDist::Registry(reg) => reg.version == required.version,
+        InstalledDist::Url(direct_url) => direct_url.url == required.url,
+    };
+
+    // Reinstall if the version is the not same
+    if !same_version {
+        return ValidateInstall::Reinstall;
+    }
+
+    // Do some extra checks if the version is the same
+    let metadata = if let Ok(metadata) = installed.metadata() {
+        metadata
+    } else {
+        tracing::warn!("could not get metadata for {}", installed.name());
+        // Can't be sure lets reinstall
+        return ValidateInstall::Reinstall;
+    };
+
+    if let Some(requires_python) = metadata.requires_python {
+        // If the installed package requires a different python version
+        if !requires_python.contains(python_version) {
+            return ValidateInstall::Reinstall;
+        }
+    }
+
+    ValidateInstall::Keep
+}
+
 /// Figure out what we can link from the cache locally
 /// and what we need to download from the registry.
 /// Also determine what we need to remove.
@@ -165,29 +208,16 @@ fn whats_the_plan<'a>(
     // Walk over all installed packages and check if they are required
     for dist in installed {
         if let Some(pkg) = required_map.remove(&dist.name()) {
-            // Check if the installed version is the same as the required version
-            let same_version = match dist {
-                InstalledDist::Registry(reg) => reg.version == pkg.version,
-                InstalledDist::Url(direct_url) => direct_url.url == pkg.url,
-            };
-
-            // Do some extra checks if the version is the same
-            if same_version {
-                if let Ok(metadata) = dist.metadata() {
-                    if let Some(requires_python) = metadata.requires_python {
-                        // If the installed package requires a different python version
-                        if !requires_python.contains(python_version) {
-                            reinstalls.push(dist.clone());
-                        }
-                    }
-                } else {
-                    tracing::warn!("could not get metadata for {}", dist.name());
+            // Check if we need to reinstall
+            match need_reinstall(dist, pkg, python_version) {
+                ValidateInstall::Keep => {
+                    // Continue with the loop
+                    continue;
                 }
-                continue;
+                ValidateInstall::Reinstall => {
+                    reinstalls.push(dist.clone());
+                }
             }
-
-            // Otherwise, we need to check if we get it remote or local
-            reinstalls.push(dist.clone());
 
             // Check if we need to revalidate
             // In that case
