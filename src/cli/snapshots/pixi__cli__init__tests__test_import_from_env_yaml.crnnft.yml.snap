@@ -1,6 +1,6 @@
 ---
 source: src/cli/init.rs
-expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_channels(env_info.channels), env_info.name)"
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
     (
@@ -104,23 +104,6 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                         ),
                     ),
                 ),
-                build: None,
-                build_number: None,
-                file_name: None,
-                channel: None,
-                subdir: None,
-                namespace: None,
-                md5: None,
-                sha256: None,
-            },
-            MatchSpec {
-                name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "pip",
-                    },
-                ),
-                version: None,
                 build: None,
                 build_number: None,
                 file_name: None,
