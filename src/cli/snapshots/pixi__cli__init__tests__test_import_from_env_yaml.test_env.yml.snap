@@ -1,6 +1,6 @@
 ---
 source: src/cli/init.rs
-expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_channels(env_info.channels), env_info.name)"
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
     (
@@ -102,9 +102,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
         ],
         [
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package1",
-                    normalized: "package1",
+                    normalized: PackageName(
+                        "package1",
+                    ),
                 },
                 PyPiRequirement {
                     version: Some(
@@ -112,18 +114,7 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             [
                                 VersionSpecifier {
                                     operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            1,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "1.0.0",
                                 },
                             ],
                         ),
@@ -133,9 +124,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package2",
-                    normalized: "package2",
+                    normalized: PackageName(
+                        "package2",
+                    ),
                 },
                 PyPiRequirement {
                     version: Some(
@@ -143,17 +136,7 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             [
                                 VersionSpecifier {
                                     operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            2,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "2.0",
                                 },
                             ],
                         ),
@@ -163,9 +146,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package3",
-                    normalized: "package3",
+                    normalized: PackageName(
+                        "package3",
+                    ),
                 },
                 PyPiRequirement {
                     version: Some(
@@ -173,16 +158,7 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             [
                                 VersionSpecifier {
                                     operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            3,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "3",
                                 },
                             ],
                         ),
@@ -192,9 +168,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package4",
-                    normalized: "package4",
+                    normalized: PackageName(
+                        "package4",
+                    ),
                 },
                 PyPiRequirement {
                     version: Some(
@@ -202,18 +180,7 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             [
                                 VersionSpecifier {
                                     operator: LessThanEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            4,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "4.0.0",
                                 },
                             ],
                         ),
@@ -223,9 +190,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package5",
-                    normalized: "package5",
+                    normalized: PackageName(
+                        "package5",
+                    ),
                 },
                 PyPiRequirement {
                     version: Some(
@@ -233,18 +202,7 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             [
                                 VersionSpecifier {
                                     operator: GreaterThanEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            5,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "5.0.0",
                                 },
                             ],
                         ),
@@ -254,9 +212,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package6",
-                    normalized: "package6",
+                    normalized: PackageName(
+                        "package6",
+                    ),
                 },
                 PyPiRequirement {
                     version: Some(
@@ -264,18 +224,7 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             [
                                 VersionSpecifier {
                                     operator: GreaterThan,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            6,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "6.0.0",
                                 },
                             ],
                         ),
@@ -285,9 +234,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package7",
-                    normalized: "package7",
+                    normalized: PackageName(
+                        "package7",
+                    ),
                 },
                 PyPiRequirement {
                     version: Some(
@@ -295,18 +246,7 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             [
                                 VersionSpecifier {
                                     operator: LessThan,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            7,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "7.0.0",
                                 },
                             ],
                         ),
@@ -316,9 +256,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package8",
-                    normalized: "package8",
+                    normalized: PackageName(
+                        "package8",
+                    ),
                 },
                 PyPiRequirement {
                     version: Some(
@@ -326,18 +268,7 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             [
                                 VersionSpecifier {
                                     operator: NotEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            8,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "8.0.0",
                                 },
                             ],
                         ),
@@ -347,9 +278,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package9",
-                    normalized: "package9",
+                    normalized: PackageName(
+                        "package9",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
@@ -358,40 +291,52 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package10",
-                    normalized: "package10",
+                    normalized: PackageName(
+                        "package10",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
                     extras: Some(
                         [
-                            "extra",
+                            ExtraName(
+                                "extra",
+                            ),
                         ],
                     ),
                     index: None,
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package11",
-                    normalized: "package11",
+                    normalized: PackageName(
+                        "package11",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
                     extras: Some(
                         [
-                            "extra1",
-                            "extra2",
+                            ExtraName(
+                                "extra1",
+                            ),
+                            ExtraName(
+                                "extra2",
+                            ),
                         ],
                     ),
                     index: None,
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package12",
-                    normalized: "package12",
+                    normalized: PackageName(
+                        "package12",
+                    ),
                 },
                 PyPiRequirement {
                     version: Some(
@@ -399,35 +344,30 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             [
                                 VersionSpecifier {
                                     operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            12,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "12.0.0",
                                 },
                             ],
                         ),
                     ),
                     extras: Some(
                         [
-                            "extra1",
-                            "extra2",
+                            ExtraName(
+                                "extra1",
+                            ),
+                            ExtraName(
+                                "extra2",
+                            ),
                         ],
                     ),
                     index: None,
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package13",
-                    normalized: "package13",
+                    normalized: PackageName(
+                        "package13",
+                    ),
                 },
                 PyPiRequirement {
                     version: Some(
@@ -435,35 +375,30 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             [
                                 VersionSpecifier {
                                     operator: GreaterThanEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            13,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "13.0.0",
                                 },
                             ],
                         ),
                     ),
                     extras: Some(
                         [
-                            "extra1",
-                            "extra2",
+                            ExtraName(
+                                "extra1",
+                            ),
+                            ExtraName(
+                                "extra2",
+                            ),
                         ],
                     ),
                     index: None,
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "package14",
-                    normalized: "package14",
+                    normalized: PackageName(
+                        "package14",
+                    ),
                 },
                 PyPiRequirement {
                     version: Some(
@@ -471,26 +406,19 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             [
                                 VersionSpecifier {
                                     operator: LessThanEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            14,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
+                                    version: "14.0.0",
                                 },
                             ],
                         ),
                     ),
                     extras: Some(
                         [
-                            "extra1",
-                            "extra2",
+                            ExtraName(
+                                "extra1",
+                            ),
+                            ExtraName(
+                                "extra2",
+                            ),
                         ],
                     ),
                     index: None,

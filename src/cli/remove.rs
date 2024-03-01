@@ -7,6 +7,7 @@ use miette::miette;
 use rattler_conda_types::Platform;
 
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
+use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::FeatureName;
 use crate::{consts, project::SpecType, Project};
 
@@ -88,14 +89,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
     let mut sucessful_output: Vec<String> = Vec::with_capacity(deps.len());
     if args.pypi {
-        let all_pkg_name = convert_pkg_name::<rip::types::PackageName>(&deps)?;
+        let all_pkg_name = convert_pkg_name::<PyPiPackageName>(&deps)?;
         for dep in all_pkg_name.iter() {
             let (name, req) =
                 project
                     .manifest
                     .remove_pypi_dependency(dep, args.platform, &feature_name)?;
             sucessful_output.push(format_ok_message(
-                name.as_str(),
+                name.as_source(),
                 &req.to_string(),
                 &table_name,
             ));

@@ -1,6 +1,6 @@
 ---
 source: src/cli/init.rs
-expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_channels(env_info.channels), env_info.name)"
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
     (
@@ -221,9 +221,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
         ],
         [
             (
-                PackageName {
+                PyPiPackageName {
                     source: "pypng",
-                    normalized: "pypng",
+                    normalized: PackageName(
+                        "pypng",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
@@ -232,9 +234,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "palettable",
-                    normalized: "palettable",
+                    normalized: PackageName(
+                        "palettable",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
