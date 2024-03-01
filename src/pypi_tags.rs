@@ -26,7 +26,7 @@ pub fn get_pypi_tags(
             None => unreachable!("every platform we support has an arch"),
             Some(Arch::X86) => platform_host::Arch::X86,
             Some(Arch::X86_64) => platform_host::Arch::X86_64,
-            Some(Arch::Aarch64) => platform_host::Arch::Aarch64,
+            Some(Arch::Aarch64 | Arch::Arm64) => platform_host::Arch::Aarch64,
             Some(Arch::ArmV7l) => platform_host::Arch::Armv7L,
             Some(Arch::Ppc64le) => platform_host::Arch::Powerpc64Le,
             Some(Arch::Ppc64) => platform_host::Arch::Powerpc64,
@@ -77,7 +77,7 @@ pub fn get_pypi_tags(
             None => unreachable!("every platform we support has an arch"),
             Some(Arch::X86) => platform_host::Arch::X86,
             Some(Arch::X86_64) => platform_host::Arch::X86_64,
-            Some(Arch::Aarch64) => platform_host::Arch::Aarch64,
+            Some(Arch::Aarch64 | Arch::Arm64) => platform_host::Arch::Aarch64,
             Some(unsupported_arch) => {
                 miette::bail!("unsupported arch for pypi packages '{unsupported_arch}'")
             }
@@ -99,7 +99,7 @@ pub fn get_pypi_tags(
             None => unreachable!("every platform we support has an arch"),
             Some(Arch::X86) => platform_host::Arch::X86,
             Some(Arch::X86_64) => platform_host::Arch::X86_64,
-            Some(Arch::Aarch64) => platform_host::Arch::Aarch64,
+            Some(Arch::Aarch64 | Arch::Arm64) => platform_host::Arch::Aarch64,
             Some(unsupported_arch) => {
                 miette::bail!("unsupported arch for pypi packages '{unsupported_arch}'")
             }
@@ -121,7 +121,7 @@ pub fn get_pypi_tags(
         miette::bail!(
             "expected python version to be a major.minor version, but got '{}'",
             &python_record.version
-        );
+        );``
     };
     let implementation_name = match python_record.name.as_normalized() {
         "python" => "cpython",
