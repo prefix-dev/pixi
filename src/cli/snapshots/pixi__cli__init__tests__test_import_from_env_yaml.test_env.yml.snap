@@ -1,6 +1,6 @@
 ---
 source: src/cli/init.rs
-expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_channels(env_info.channels), env_info.name)"
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
     (
@@ -107,29 +107,33 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package1",
                 },
                 PyPiRequirement {
-                    version: Some(
-                        VersionSpecifiers(
-                            [
-                                VersionSpecifier {
-                                    operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            1,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
-                                },
-                            ],
-                        ),
+                    requirement: Version(
+                        VersionOrStar {
+                            version: Some(
+                                VersionSpecifiers(
+                                    [
+                                        VersionSpecifier {
+                                            operator: Equal,
+                                            version: Version {
+                                                epoch: 0,
+                                                release: [
+                                                    1,
+                                                    0,
+                                                    0,
+                                                ],
+                                                pre: None,
+                                                post: None,
+                                                dev: None,
+                                                local: None,
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            index: None,
+                        },
                     ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -138,28 +142,32 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package2",
                 },
                 PyPiRequirement {
-                    version: Some(
-                        VersionSpecifiers(
-                            [
-                                VersionSpecifier {
-                                    operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            2,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
-                                },
-                            ],
-                        ),
+                    requirement: Version(
+                        VersionOrStar {
+                            version: Some(
+                                VersionSpecifiers(
+                                    [
+                                        VersionSpecifier {
+                                            operator: Equal,
+                                            version: Version {
+                                                epoch: 0,
+                                                release: [
+                                                    2,
+                                                    0,
+                                                ],
+                                                pre: None,
+                                                post: None,
+                                                dev: None,
+                                                local: None,
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            index: None,
+                        },
                     ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -168,27 +176,31 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package3",
                 },
                 PyPiRequirement {
-                    version: Some(
-                        VersionSpecifiers(
-                            [
-                                VersionSpecifier {
-                                    operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            3,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
-                                },
-                            ],
-                        ),
+                    requirement: Version(
+                        VersionOrStar {
+                            version: Some(
+                                VersionSpecifiers(
+                                    [
+                                        VersionSpecifier {
+                                            operator: Equal,
+                                            version: Version {
+                                                epoch: 0,
+                                                release: [
+                                                    3,
+                                                ],
+                                                pre: None,
+                                                post: None,
+                                                dev: None,
+                                                local: None,
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            index: None,
+                        },
                     ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -197,29 +209,33 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package4",
                 },
                 PyPiRequirement {
-                    version: Some(
-                        VersionSpecifiers(
-                            [
-                                VersionSpecifier {
-                                    operator: LessThanEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            4,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
-                                },
-                            ],
-                        ),
+                    requirement: Version(
+                        VersionOrStar {
+                            version: Some(
+                                VersionSpecifiers(
+                                    [
+                                        VersionSpecifier {
+                                            operator: LessThanEqual,
+                                            version: Version {
+                                                epoch: 0,
+                                                release: [
+                                                    4,
+                                                    0,
+                                                    0,
+                                                ],
+                                                pre: None,
+                                                post: None,
+                                                dev: None,
+                                                local: None,
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            index: None,
+                        },
                     ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -228,29 +244,33 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package5",
                 },
                 PyPiRequirement {
-                    version: Some(
-                        VersionSpecifiers(
-                            [
-                                VersionSpecifier {
-                                    operator: GreaterThanEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            5,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
-                                },
-                            ],
-                        ),
+                    requirement: Version(
+                        VersionOrStar {
+                            version: Some(
+                                VersionSpecifiers(
+                                    [
+                                        VersionSpecifier {
+                                            operator: GreaterThanEqual,
+                                            version: Version {
+                                                epoch: 0,
+                                                release: [
+                                                    5,
+                                                    0,
+                                                    0,
+                                                ],
+                                                pre: None,
+                                                post: None,
+                                                dev: None,
+                                                local: None,
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            index: None,
+                        },
                     ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -259,29 +279,33 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package6",
                 },
                 PyPiRequirement {
-                    version: Some(
-                        VersionSpecifiers(
-                            [
-                                VersionSpecifier {
-                                    operator: GreaterThan,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            6,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
-                                },
-                            ],
-                        ),
+                    requirement: Version(
+                        VersionOrStar {
+                            version: Some(
+                                VersionSpecifiers(
+                                    [
+                                        VersionSpecifier {
+                                            operator: GreaterThan,
+                                            version: Version {
+                                                epoch: 0,
+                                                release: [
+                                                    6,
+                                                    0,
+                                                    0,
+                                                ],
+                                                pre: None,
+                                                post: None,
+                                                dev: None,
+                                                local: None,
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            index: None,
+                        },
                     ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -290,29 +314,33 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package7",
                 },
                 PyPiRequirement {
-                    version: Some(
-                        VersionSpecifiers(
-                            [
-                                VersionSpecifier {
-                                    operator: LessThan,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            7,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
-                                },
-                            ],
-                        ),
+                    requirement: Version(
+                        VersionOrStar {
+                            version: Some(
+                                VersionSpecifiers(
+                                    [
+                                        VersionSpecifier {
+                                            operator: LessThan,
+                                            version: Version {
+                                                epoch: 0,
+                                                release: [
+                                                    7,
+                                                    0,
+                                                    0,
+                                                ],
+                                                pre: None,
+                                                post: None,
+                                                dev: None,
+                                                local: None,
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            index: None,
+                        },
                     ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -321,29 +349,33 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package8",
                 },
                 PyPiRequirement {
-                    version: Some(
-                        VersionSpecifiers(
-                            [
-                                VersionSpecifier {
-                                    operator: NotEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            8,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
-                                },
-                            ],
-                        ),
+                    requirement: Version(
+                        VersionOrStar {
+                            version: Some(
+                                VersionSpecifiers(
+                                    [
+                                        VersionSpecifier {
+                                            operator: NotEqual,
+                                            version: Version {
+                                                epoch: 0,
+                                                release: [
+                                                    8,
+                                                    0,
+                                                    0,
+                                                ],
+                                                pre: None,
+                                                post: None,
+                                                dev: None,
+                                                local: None,
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            index: None,
+                        },
                     ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -352,9 +384,13 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package9",
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -363,13 +399,17 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package10",
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: Some(
                         [
                             "extra",
                         ],
                     ),
-                    index: None,
                 },
             ),
             (
@@ -378,14 +418,18 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package11",
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: Some(
                         [
                             "extra1",
                             "extra2",
                         ],
                     ),
-                    index: None,
                 },
             ),
             (
@@ -394,26 +438,31 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package12",
                 },
                 PyPiRequirement {
-                    version: Some(
-                        VersionSpecifiers(
-                            [
-                                VersionSpecifier {
-                                    operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            12,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
-                                },
-                            ],
-                        ),
+                    requirement: Version(
+                        VersionOrStar {
+                            version: Some(
+                                VersionSpecifiers(
+                                    [
+                                        VersionSpecifier {
+                                            operator: Equal,
+                                            version: Version {
+                                                epoch: 0,
+                                                release: [
+                                                    12,
+                                                    0,
+                                                    0,
+                                                ],
+                                                pre: None,
+                                                post: None,
+                                                dev: None,
+                                                local: None,
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            index: None,
+                        },
                     ),
                     extras: Some(
                         [
@@ -421,7 +470,6 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             "extra2",
                         ],
                     ),
-                    index: None,
                 },
             ),
             (
@@ -430,26 +478,31 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package13",
                 },
                 PyPiRequirement {
-                    version: Some(
-                        VersionSpecifiers(
-                            [
-                                VersionSpecifier {
-                                    operator: GreaterThanEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            13,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
-                                },
-                            ],
-                        ),
+                    requirement: Version(
+                        VersionOrStar {
+                            version: Some(
+                                VersionSpecifiers(
+                                    [
+                                        VersionSpecifier {
+                                            operator: GreaterThanEqual,
+                                            version: Version {
+                                                epoch: 0,
+                                                release: [
+                                                    13,
+                                                    0,
+                                                    0,
+                                                ],
+                                                pre: None,
+                                                post: None,
+                                                dev: None,
+                                                local: None,
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            index: None,
+                        },
                     ),
                     extras: Some(
                         [
@@ -457,7 +510,6 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             "extra2",
                         ],
                     ),
-                    index: None,
                 },
             ),
             (
@@ -466,26 +518,31 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "package14",
                 },
                 PyPiRequirement {
-                    version: Some(
-                        VersionSpecifiers(
-                            [
-                                VersionSpecifier {
-                                    operator: LessThanEqual,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            14,
-                                            0,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
-                                },
-                            ],
-                        ),
+                    requirement: Version(
+                        VersionOrStar {
+                            version: Some(
+                                VersionSpecifiers(
+                                    [
+                                        VersionSpecifier {
+                                            operator: LessThanEqual,
+                                            version: Version {
+                                                epoch: 0,
+                                                release: [
+                                                    14,
+                                                    0,
+                                                    0,
+                                                ],
+                                                pre: None,
+                                                post: None,
+                                                dev: None,
+                                                local: None,
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            index: None,
+                        },
                     ),
                     extras: Some(
                         [
@@ -493,7 +550,6 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                             "extra2",
                         ],
                     ),
-                    index: None,
                 },
             ),
         ],

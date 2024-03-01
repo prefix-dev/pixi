@@ -1,6 +1,6 @@
 ---
 source: src/cli/init.rs
-expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_channels(env_info.channels), env_info.name)"
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
     (
@@ -853,9 +853,13 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "memory-profiler",
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -864,9 +868,13 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "pre-commit",
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -875,9 +883,13 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "graphviz",
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -886,9 +898,13 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "sphinx-notfound-page",
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -897,9 +913,13 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "deepobs",
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
         ],

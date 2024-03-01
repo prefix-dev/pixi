@@ -1,14 +1,110 @@
 use pep440_rs::VersionSpecifiers;
-use serde::{de, de::Error, Deserialize, Deserializer};
+use serde::{de, de::Error, Deserialize, Deserializer, Serialize};
+use std::path::PathBuf;
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
+use url::Url;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]
 pub struct PyPiRequirement {
-    pub(crate) version: Option<pep440_rs::VersionSpecifiers>,
+    #[serde(flatten)]
+    pub(crate) requirement: PyPiRequirementType,
     pub(crate) extras: Option<Vec<String>>,
+}
+
+#[derive(Default, Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct VersionOrStar {
+    pub(crate) version: Option<VersionSpecifiers>,
     pub(crate) index: Option<String>,
+}
+
+impl FromStr for VersionOrStar {
+    type Err = ParsePyPiRequirementError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+
+        if s.is_empty() {
+            return Err(ParsePyPiRequirementError::EmptyStringNotAllowed);
+        }
+        if s == "*" {
+            // Accept a star as an any requirement, which is represented by the none.
+            Ok(Self::default())
+        } else if s.starts_with(|c: char| c.is_ascii_digit()) {
+            Err(ParsePyPiRequirementError::MissingOperator(s.to_string()))
+        } else {
+            // From string can only parse the version specifier.
+            Ok(Self {
+                version: Some(
+                    pep440_rs::VersionSpecifiers::from_str(s)
+                        .map_err(ParsePyPiRequirementError::Pep440Error)?,
+                ),
+                index: None,
+            })
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for VersionOrStar {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serde_untagged::UntaggedEnumVisitor::new()
+            .string(|str| VersionOrStar::from_str(str).map_err(Error::custom))
+            .map(|map| {
+                #[derive(Deserialize)]
+                pub struct RawVersionOrStar {
+                    version: Option<String>,
+                    index: Option<String>,
+                }
+                let raw_version_or_star =
+                    RawVersionOrStar::deserialize(de::value::MapAccessDeserializer::new(map))?;
+                let mut version = None;
+                if let Some(raw_version) = raw_version_or_star.version {
+                    if raw_version != "*" {
+                        version = Some(
+                            VersionSpecifiers::from_str(raw_version.as_str())
+                                .map_err(Error::custom)?,
+                        );
+                    }
+                };
+                Ok(VersionOrStar {
+                    version,
+                    index: raw_version_or_star.index,
+                })
+            })
+            .expecting("either a map or a string")
+            .deserialize(deserializer)
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[serde(untagged, rename_all = "snake_case")]
+pub enum PyPiRequirementType {
+    Git {
+        git: Url,
+        branch: Option<String>,
+        tag: Option<String>,
+        rev: Option<String>,
+        subdirectory: Option<String>,
+    },
+    Path {
+        path: PathBuf,
+        editable: Option<bool>,
+    },
+    Url {
+        url: Url,
+    },
+    // Always try last to avoid serializing as version when it is not.
+    Version(VersionOrStar),
+}
+
+impl Default for PyPiRequirementType {
+    fn default() -> Self {
+        PyPiRequirementType::Version(VersionOrStar::default())
+    }
 }
 
 /// The type of parse error that occurred when parsing match spec.
@@ -34,68 +130,115 @@ impl fmt::Display for PyPiRequirement {
 impl From<PyPiRequirement> for Item {
     /// PyPiRequirement to a toml_edit item, to put in the manifest file.
     fn from(val: PyPiRequirement) -> Item {
-        if val.extras.is_some() {
-            // If extras is defined use an inline table
-            let mut table = toml_edit::Table::new().into_inline_table();
-
-            // First add the version
-            if val.version.is_some() {
-                let v = val.version.expect("Expect a version here").to_string();
-                table.insert(
-                    "version",
-                    toml_edit::Value::String(toml_edit::Formatted::new(v)),
-                );
-            } else {
-                table.insert(
-                    "version",
-                    toml_edit::Value::String(toml_edit::Formatted::new("*".to_string())),
-                );
+        let mut req_item = match val.requirement {
+            PyPiRequirementType::Version(VersionOrStar { version, index }) => {
+                if let (Some(version), Some(index)) = (&version, &index) {
+                    let mut table = toml_edit::Table::new().into_inline_table();
+                    table.insert(
+                        "version",
+                        toml_edit::Value::String(toml_edit::Formatted::new(version.to_string())),
+                    );
+                    table.insert(
+                        "index",
+                        toml_edit::Value::String(toml_edit::Formatted::new(index.to_string())),
+                    );
+                    Item::Value(toml_edit::Value::InlineTable(table))
+                } else if let Some(version) = version {
+                    // When there are extras, prepare inline table.
+                    if val.extras.is_some() {
+                        let mut table = toml_edit::Table::new().into_inline_table();
+                        table.insert(
+                            "version",
+                            toml_edit::Value::String(toml_edit::Formatted::new(
+                                version.to_string(),
+                            )),
+                        );
+                        Item::Value(toml_edit::Value::InlineTable(table))
+                    } else {
+                        // When there are no extras, just use the string representation.
+                        Item::Value(toml_edit::Value::String(toml_edit::Formatted::new(
+                            version.to_string(),
+                        )))
+                    }
+                } else if let Some(index) = index {
+                    let mut table = toml_edit::Table::new().into_inline_table();
+                    // When there is no version, use the star.
+                    table.insert(
+                        "version",
+                        toml_edit::Value::String(toml_edit::Formatted::new("*".to_string())),
+                    );
+                    table.insert(
+                        "index",
+                        toml_edit::Value::String(toml_edit::Formatted::new(index.to_string())),
+                    );
+                    Item::Value(toml_edit::Value::InlineTable(table))
+                } else if val.extras.is_some() {
+                    // If extras is defined use an inline table
+                    let mut table = toml_edit::Table::new().into_inline_table();
+                    // First add the version
+                    table.insert(
+                        "version",
+                        toml_edit::Value::String(toml_edit::Formatted::new("*".to_string())),
+                    );
+                    Item::Value(toml_edit::Value::InlineTable(table))
+                } else {
+                    // Without extras use the string representation.
+                    return Item::Value(toml_edit::Value::String(toml_edit::Formatted::new(
+                        "*".to_string(),
+                    )));
+                }
             }
-            // Add extras as an array.
+            PyPiRequirementType::Git {
+                git: _,
+                branch: _,
+                tag: _,
+                rev: _,
+                subdirectory: _,
+            } => {
+                unimplemented!("git")
+            }
+            PyPiRequirementType::Path {
+                path: _,
+                editable: _,
+            } => {
+                unimplemented!("path")
+            }
+            PyPiRequirementType::Url { url: _ } => {
+                unimplemented!("url")
+            }
+        };
+
+        // TODO: extras need to be added to the table.
+        if let Some(extras) = val.extras {
+            let mut empty_table = toml_edit::Table::new().into_inline_table();
+            let table = req_item.as_inline_table_mut().unwrap_or(&mut empty_table);
             table.insert(
                 "extras",
-                toml_edit::Value::Array(toml_edit::Array::from_iter(val.extras.unwrap())),
+                toml_edit::Value::Array(
+                    extras
+                        .iter()
+                        .map(|extra| {
+                            toml_edit::Value::String(toml_edit::Formatted::new(extra.clone()))
+                        })
+                        .collect(),
+                ),
             );
-            Item::Value(toml_edit::Value::InlineTable(table))
+            Item::Value(toml_edit::Value::InlineTable(table.to_owned()))
         } else {
-            // Without extras use the string representation.
-            if val.version.is_some() {
-                Item::Value(val.version.unwrap().to_string().into())
-            } else {
-                Item::Value("*".into())
-            }
+            req_item
         }
     }
 }
+
 impl FromStr for PyPiRequirement {
     type Err = ParsePyPiRequirementError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.trim();
-
-        if s.is_empty() {
-            return Err(ParsePyPiRequirementError::EmptyStringNotAllowed);
-        }
-        if s == "*" {
-            // Accept a star as an any requirement, which is represented by the none.
-            Ok(Self {
-                version: None,
-                extras: None,
-                index: None,
-            })
-        } else if s.starts_with(|c: char| c.is_ascii_digit()) {
-            Err(ParsePyPiRequirementError::MissingOperator(s.to_string()))
-        } else {
-            // From string can only parse the version specifier.
-            Ok(Self {
-                version: Some(
-                    pep440_rs::VersionSpecifiers::from_str(s)
-                        .map_err(ParsePyPiRequirementError::Pep440Error)?,
-                ),
-                extras: None,
-                index: None,
-            })
-        }
+        // From string can only parse the version specifier.
+        Ok(Self {
+            requirement: PyPiRequirementType::Version(VersionOrStar::from_str(s)?),
+            extras: None,
+        })
     }
 }
 
@@ -111,9 +254,11 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
             None
         };
         PyPiRequirement {
-            version,
+            requirement: PyPiRequirementType::Version(VersionOrStar {
+                version,
+                index: None,
+            }),
             extras: req.extras,
-            index: None,
         }
     }
 }
@@ -121,17 +266,34 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
 impl PyPiRequirement {
     /// Returns the requirements as [`pep508_rs::Requirement`]s.
     pub fn as_pep508(&self, name: &rip::types::PackageName) -> pep508_rs::Requirement {
+        let version_or_url = match &self.requirement {
+            PyPiRequirementType::Version(VersionOrStar { version, index: _ }) => version
+                .as_ref()
+                .map(|v| pep508_rs::VersionOrUrl::VersionSpecifier(v.clone())),
+            PyPiRequirementType::Git {
+                git,
+                branch: _,
+                tag: _,
+                rev: _,
+                subdirectory: _,
+            } => Some(pep508_rs::VersionOrUrl::Url(git.clone())),
+            PyPiRequirementType::Path {
+                path: _,
+                editable: _,
+            } => {
+                unimplemented!("No path to url conversion yet.")
+            }
+            PyPiRequirementType::Url { url } => Some(pep508_rs::VersionOrUrl::Url(url.clone())),
+        };
         pep508_rs::Requirement {
             name: name.as_str().to_string(),
             extras: self.extras.clone(),
-            version_or_url: self
-                .version
-                .clone()
-                .map(pep508_rs::VersionOrUrl::VersionSpecifier),
+            version_or_url,
             marker: None,
         }
     }
 }
+
 impl<'de> Deserialize<'de> for PyPiRequirement {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -140,29 +302,18 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
         serde_untagged::UntaggedEnumVisitor::new()
             .string(|str| PyPiRequirement::from_str(str).map_err(Error::custom))
             .map(|map| {
-                // Use a temp struct to deserialize into when it is a map.
+                // Just use normal deserializer
                 #[derive(Deserialize)]
                 struct RawPyPiRequirement {
-                    version: Option<String>,
+                    #[serde(flatten)]
+                    requirement: Option<PyPiRequirementType>,
                     extras: Option<Vec<String>>,
-                    index: Option<String>,
                 }
-                let raw_requirement =
+                let raw_pypi_requirement =
                     RawPyPiRequirement::deserialize(de::value::MapAccessDeserializer::new(map))?;
-                // Parse the * in version or allow for no version with extras.
-                let mut version = None;
-                if let Some(raw_version) = raw_requirement.version {
-                    if raw_version != "*" {
-                        version = Some(
-                            VersionSpecifiers::from_str(raw_version.as_str())
-                                .map_err(Error::custom)?,
-                        );
-                    }
-                };
                 Ok(PyPiRequirement {
-                    version,
-                    extras: raw_requirement.extras,
-                    index: raw_requirement.index,
+                    requirement: raw_pypi_requirement.requirement.unwrap_or_default(),
+                    extras: raw_pypi_requirement.extras,
                 })
             })
             .expecting("either a map or a string")
@@ -197,9 +348,11 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement {
-                version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap()),
-                extras: None,
-                index: None,
+                requirement: PyPiRequirementType::Version(VersionOrStar {
+                    version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap()),
+                    index: None
+                }),
+                ..PyPiRequirement::default()
             }
         );
         let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
@@ -207,9 +360,11 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement {
-                version: Some(pep440_rs::VersionSpecifiers::from_str("==3.12.0").unwrap()),
-                extras: None,
-                index: None,
+                requirement: PyPiRequirementType::Version(VersionOrStar {
+                    version: Some(pep440_rs::VersionSpecifiers::from_str("==3.12.0").unwrap()),
+                    index: None
+                }),
+                ..PyPiRequirement::default()
             }
         );
 
@@ -218,22 +373,17 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement {
-                version: Some(pep440_rs::VersionSpecifiers::from_str("~=2.1.3").unwrap()),
-                extras: None,
-                index: None,
+                requirement: PyPiRequirementType::Version(VersionOrStar {
+                    version: Some(pep440_rs::VersionSpecifiers::from_str("~=2.1.3").unwrap()),
+                    index: None
+                }),
+                ..PyPiRequirement::default()
             }
         );
 
         let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(r#"foo = "*""#).unwrap();
-        assert_eq!(
-            requirement.first().unwrap().1,
-            &PyPiRequirement {
-                version: None,
-                extras: None,
-                index: None,
-            }
-        );
+        assert_eq!(requirement.first().unwrap().1, &PyPiRequirement::default());
     }
 
     #[test]
@@ -253,9 +403,12 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement {
-                version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap()),
+                requirement: PyPiRequirementType::Version(VersionOrStar {
+                    version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap()),
+                    index: Some("artifact-registry".to_string())
+                }),
                 extras: Some(vec!("bar".to_string())),
-                index: Some("artifact-registry".to_string()),
+                ..PyPiRequirement::default()
             }
         );
 
@@ -271,9 +424,13 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement {
-                version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12,<3.13.0").unwrap()),
+                requirement: PyPiRequirementType::Version(VersionOrStar {
+                    version: Some(
+                        pep440_rs::VersionSpecifiers::from_str(">=3.12,<3.13.0").unwrap()
+                    ),
+                    index: None
+                }),
                 extras: Some(vec!("bar".to_string(), "foo".to_string())),
-                index: None,
             }
         );
     }
@@ -292,9 +449,12 @@ mod tests {
         assert_eq!(
             pypi_requirement,
             PyPiRequirement {
-                version: VersionSpecifiers::from_str("==1.2.3").ok(),
+                requirement: PyPiRequirementType::Version(VersionOrStar {
+                    version: Some(pep440_rs::VersionSpecifiers::from_str("==1.2.3").unwrap()),
+                    index: None
+                }),
                 extras: Some(vec!["feature1".to_owned(), "feature2".to_owned()]),
-                index: None,
+                ..PyPiRequirement::default()
             }
         );
     }
@@ -308,9 +468,11 @@ mod tests {
         assert_eq!(
             pypi_requirement,
             PyPiRequirement {
-                version: VersionSpecifiers::from_str("==1.2.3").ok(),
-                extras: None,
-                index: None,
+                requirement: PyPiRequirementType::Version(VersionOrStar {
+                    version: Some(pep440_rs::VersionSpecifiers::from_str("==1.2.3").unwrap()),
+                    index: None
+                }),
+                ..PyPiRequirement::default()
             }
         );
     }
@@ -321,12 +483,139 @@ mod tests {
         let result: Result<PyPiRequirement, _> = serde_json::from_str(json_string);
         assert!(result.is_ok());
         let pypi_requirement: PyPiRequirement = result.unwrap();
+        assert_eq!(pypi_requirement, PyPiRequirement::default());
+    }
+
+    #[test]
+    fn test_deserialize_pypi_from_path() {
+        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
+            toml_edit::de::from_str(
+                r#"
+                foo = { path = "../numpy-test" }
+                "#,
+            )
+            .unwrap();
         assert_eq!(
-            pypi_requirement,
-            PyPiRequirement {
-                version: None,
-                extras: None,
-                index: None,
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                requirement: PyPiRequirementType::Path {
+                    path: PathBuf::from("../numpy-test"),
+                    editable: None
+                },
+                ..PyPiRequirement::default()
+            }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_pypi_from_url() {
+        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
+            toml_edit::de::from_str(
+                r#"
+                foo = { url = "https://test.url.com"}
+                "#,
+            )
+            .unwrap();
+        assert_eq!(
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                requirement: PyPiRequirementType::Url {
+                    url: Url::parse("https://test.url.com").unwrap()
+                },
+                ..PyPiRequirement::default()
+            }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_pypi_from_git() {
+        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
+            toml_edit::de::from_str(
+                r#"
+                foo = { git = "https://test.url.git" }
+                "#,
+            )
+            .unwrap();
+        assert_eq!(
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                requirement: PyPiRequirementType::Git {
+                    git: Url::parse("https://test.url.git").unwrap(),
+                    branch: None,
+                    tag: None,
+                    rev: None,
+                    subdirectory: None
+                },
+                ..PyPiRequirement::default()
+            }
+        );
+    }
+    #[test]
+    fn test_deserialize_pypi_from_git_branch() {
+        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
+            toml_edit::de::from_str(
+                r#"
+                foo = { git = "https://test.url.git", branch = "main" }
+                "#,
+            )
+            .unwrap();
+        assert_eq!(
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                requirement: PyPiRequirementType::Git {
+                    git: Url::parse("https://test.url.git").unwrap(),
+                    branch: Some("main".to_string()),
+                    tag: None,
+                    rev: None,
+                    subdirectory: None
+                },
+                ..PyPiRequirement::default()
+            }
+        );
+    }
+    #[test]
+    fn test_deserialize_pypi_from_git_tag() {
+        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
+            toml_edit::de::from_str(
+                r#"
+                foo = { git = "https://test.url.git", tag = "v.1.2.3" }
+                "#,
+            )
+            .unwrap();
+        assert_eq!(
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                requirement: PyPiRequirementType::Git {
+                    git: Url::parse("https://test.url.git").unwrap(),
+                    tag: Some("v.1.2.3".to_string()),
+                    branch: None,
+                    rev: None,
+                    subdirectory: None
+                },
+                ..PyPiRequirement::default()
+            }
+        );
+    }
+    #[test]
+    fn test_deserialize_pypi_from_git_rev() {
+        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
+            toml_edit::de::from_str(
+                r#"
+                foo = { git = "https://test.url.git", rev = "123456" }
+                "#,
+            )
+            .unwrap();
+        assert_eq!(
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                requirement: PyPiRequirementType::Git {
+                    git: Url::parse("https://test.url.git").unwrap(),
+                    rev: Some("123456".to_string()),
+                    tag: None,
+                    branch: None,
+                    subdirectory: None
+                },
+                ..PyPiRequirement::default()
             }
         );
     }

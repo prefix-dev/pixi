@@ -1,6 +1,6 @@
 ---
 source: src/cli/init.rs
-expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_channels(env_info.channels), env_info.name)"
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
     (
@@ -138,29 +138,33 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "tensorflow-gpu",
                 },
                 PyPiRequirement {
-                    version: Some(
-                        VersionSpecifiers(
-                            [
-                                VersionSpecifier {
-                                    operator: Equal,
-                                    version: Version {
-                                        epoch: 0,
-                                        release: [
-                                            1,
-                                            15,
-                                            0,
-                                        ],
-                                        pre: None,
-                                        post: None,
-                                        dev: None,
-                                        local: None,
-                                    },
-                                },
-                            ],
-                        ),
+                    requirement: Version(
+                        VersionOrStar {
+                            version: Some(
+                                VersionSpecifiers(
+                                    [
+                                        VersionSpecifier {
+                                            operator: Equal,
+                                            version: Version {
+                                                epoch: 0,
+                                                release: [
+                                                    1,
+                                                    15,
+                                                    0,
+                                                ],
+                                                pre: None,
+                                                post: None,
+                                                dev: None,
+                                                local: None,
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            index: None,
+                        },
                     ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -169,9 +173,13 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "numpy",
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -180,9 +188,13 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "opencv-python",
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -191,9 +203,13 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "matplotlib",
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -202,9 +218,13 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                     normalized: "easydict",
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
         ],

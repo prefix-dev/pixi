@@ -4,7 +4,7 @@ mod environment;
 mod error;
 mod feature;
 mod metadata;
-mod python;
+pub mod python;
 mod system_requirements;
 mod target;
 mod validation;
@@ -2243,11 +2243,9 @@ platforms = ["linux-64", "win-64"]
                         .expect("torch should be a valid name")
                 )
                 .expect("pypi requirement should be available")
-                .version
                 .clone()
-                .unwrap()
                 .to_string(),
-            "~=1.9.0"
+            "\"~=1.9.0\""
         );
         assert_eq!(
             cuda_feature
