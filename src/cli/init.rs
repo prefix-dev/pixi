@@ -333,7 +333,14 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
         }
     }
 
-    if !pip_deps.is_empty() {
+    if !pip_deps.is_empty()
+        && !conda_deps.iter().any(|spec| {
+            spec.name
+                .as_ref()
+                .filter(|name| name.as_normalized() == "pip")
+                .is_some()
+        })
+    {
         conda_deps.push(MatchSpec::from_str("pip").into_diagnostic()?);
     }
 
@@ -554,5 +561,40 @@ mod tests {
                 )
             );
         }
+    }
+    #[test]
+    fn test_parse_conda_env_file_with_explicit_pip_dep() {
+        let example_conda_env_file = r#"
+        name: pixi_example_project
+        channels:
+          - conda-forge
+        dependencies:
+          - pip==24.0
+          - pip:
+            - requests
+        "#;
+
+        let f = tempfile::NamedTempFile::new().unwrap();
+        let path = f.path();
+        let mut file = std::fs::File::create(path).unwrap();
+        file.write_all(example_conda_env_file.as_bytes()).unwrap();
+
+        let conda_env_file_data = CondaEnvFile::from_path(path).unwrap();
+        let (conda_deps, pip_deps, mut channels) =
+            parse_dependencies(conda_env_file_data.dependencies().clone()).unwrap();
+
+        assert_eq!(conda_deps, vec![MatchSpec::from_str("pip==24.0").unwrap(),]);
+
+        assert_eq!(
+            pip_deps,
+            vec![(
+                PackageName::from_str("requests").unwrap(),
+                PyPiRequirement {
+                    version: None,
+                    extras: None,
+                    index: None,
+                }
+            ),]
+        );
     }
 }
