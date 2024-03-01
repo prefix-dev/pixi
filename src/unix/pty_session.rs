@@ -89,8 +89,8 @@ impl PtySession {
 
         // Create a FDSet for the select call
         let mut fd_set = FdSet::new();
-        fd_set.insert(&process_stdout_fd);
-        fd_set.insert(&stdin_fd);
+        fd_set.insert(process_stdout_fd);
+        fd_set.insert(stdin_fd);
 
         // Create a buffer for reading from the process
         let mut buf = [0u8; 2048];
@@ -138,7 +138,7 @@ impl PtySession {
                 }
             } else {
                 // We have new data coming from the process
-                if select_set.contains(&process_stdout_fd) {
+                if select_set.contains(process_stdout_fd) {
                     let bytes_read = self.process_stdout.read(&mut buf).unwrap_or(0);
                     if bytes_read > 0 {
                         io::stdout().write_all(&buf[..bytes_read])?;
@@ -147,7 +147,7 @@ impl PtySession {
                 }
 
                 // or from stdin
-                if select_set.contains(&stdin_fd) {
+                if select_set.contains(stdin_fd) {
                     let bytes_read = io::stdin().read(&mut buf)?;
                     self.process_stdin.write_all(&buf[..bytes_read])?;
                     self.process_stdin.flush()?;

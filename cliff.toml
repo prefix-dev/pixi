@@ -35,10 +35,12 @@ body = """
 {% for group, commits in commits | group_by(attribute="group") %}
     #### {{ group | upper_first }}
     {%- for commit in commits %}
-        - {{ commit.message | upper_first | trim }}\
-            {% if commit.github.username %} by @{{ commit.github.username }}{%- endif -%}
-            {% if commit.github.pr_number %} in [#{{ commit.github.pr_number }}]\
-            (https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/pull/{{ commit.github.pr_number }}){%- endif -%}
+        {% if commit.github.pr_labels is not containing("skip-release-notes") %}
+            - {{ commit.message | upper_first | trim }}\
+                {% if commit.github.username %} by @{{ commit.github.username }}{%- endif -%}
+                {% if commit.github.pr_number %} in [#{{ commit.github.pr_number }}]\
+                    (https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/pull/{{ commit.github.pr_number }}){%- endif -%}
+        {% endif %}
     {% endfor %}
 {% endfor %}
 

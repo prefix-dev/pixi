@@ -1,10 +1,14 @@
 use super::manifest::{LibCSystemRequirement, SystemRequirements};
+use crate::project::errors::UnsupportedPlatformError;
 use crate::project::Environment;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::Diagnostic;
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
-use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
+use rattler_virtual_packages::{
+    Archspec, Cuda, DetectVirtualPackageError, LibC, Linux, Osx, VirtualPackage,
+};
 use std::collections::HashMap;
+use thiserror::Error;
 
 /// The default GLIBC version to use. This is used when no system requirements are specified.
 pub fn default_glibc_version() -> Version {
@@ -99,24 +103,56 @@ impl Environment<'_> {
     }
 }
 
+/// An error that occurs when the current platform does not satisfy the minimal virtual package
+/// requirements.
+#[derive(Debug, Error, Diagnostic)]
+pub enum VerifyCurrentPlatformError {
+    #[error("The current platform does not satisfy the minimal virtual package requirements")]
+    UnsupportedPlatform(#[from] Box<UnsupportedPlatformError>),
+
+    #[error(transparent)]
+    DetectionVirtualPackagesError(#[from] DetectVirtualPackageError),
+
+    #[error("The current system has a mismatching virtual package. The project requires '{required}' to be on build '{required_build_string}' but the system has build '{local_build_string}'")]
+    MismatchingBuildString {
+        required: String,
+        required_build_string: String,
+        local_build_string: String,
+    },
+
+    #[error("The current system has a mismatching virtual package. The project requires '{required}' to be at least version '{required_version}' but the system has version '{local_version}'")]
+    MismatchingVersion {
+        required: String,
+        required_version: Box<Version>,
+        local_version: Box<Version>,
+    },
+
+    #[error("The platform you are running on should at least have the virtual package {required} on version {required_version}, build_string: {required_build_string}")]
+    MissingVirtualPackage {
+        required: String,
+        required_version: Box<Version>,
+        required_build_string: String,
+    },
+}
+
 /// Verifies if the current platform satisfies the minimal virtual package requirements.
 pub fn verify_current_platform_has_required_virtual_packages(
     environment: &Environment<'_>,
-) -> miette::Result<()> {
+) -> Result<(), VerifyCurrentPlatformError> {
     let current_platform = Platform::current();
 
     // Is the current platform in the list of supported platforms?
     if !environment.platforms().contains(&current_platform) {
-        return Err(miette::miette!(
-            "The current platform '{}' is not supported by the `{}` environment. Supported platforms: {}",
-            current_platform,
-            environment.name(),
-            environment.platforms().iter().map(|plat| plat.as_str()).join(", ")
-        ));
+        return Err(VerifyCurrentPlatformError::from(Box::new(
+            UnsupportedPlatformError {
+                environments_platforms: environment.platforms().into_iter().collect_vec(),
+                platform: current_platform,
+                environment: environment.name().clone(),
+            },
+        )));
     }
 
-    let system_virtual_packages = VirtualPackage::current()
-        .into_diagnostic()?
+    let system_virtual_packages = VirtualPackage::current()?
         .iter()
         .cloned()
         .map(GenericVirtualPackage::from)
@@ -128,18 +164,27 @@ pub fn verify_current_platform_has_required_virtual_packages(
     for req_pkg in required_pkgs {
         if let Some(local_vpkg) = system_virtual_packages.get(&req_pkg.name) {
             if req_pkg.build_string != local_vpkg.build_string {
-                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be on build '{}' but the system has build '{}'", req_pkg.name.as_source(), req_pkg.build_string, local_vpkg.build_string);
+                return Err(VerifyCurrentPlatformError::MismatchingBuildString {
+                    required: req_pkg.name.as_source().to_string(),
+                    required_build_string: req_pkg.build_string.clone(),
+                    local_build_string: local_vpkg.build_string.clone(),
+                });
             }
 
             if req_pkg.version > local_vpkg.version {
                 // This case can simply happen because the default system requirements in get_minimal_virtual_packages() is higher than required.
-                miette::bail!("The current system has a mismatching virtual package. The project requires '{}' to be at least version '{}' but the system has version '{}'\n\n\
-                Try setting the following in your pixi.toml:\n\
-                [system-requirements]\n\
-                {} = \"{}\"", req_pkg.name.as_source(), req_pkg.version, local_vpkg.version, req_pkg.name.as_normalized().strip_prefix("__").unwrap_or(local_vpkg.name.as_normalized()), local_vpkg.version);
+                return Err(VerifyCurrentPlatformError::MismatchingVersion {
+                    required: req_pkg.name.as_source().to_string(),
+                    required_version: Box::from(req_pkg.version),
+                    local_version: Box::from(local_vpkg.version.clone()),
+                });
             }
         } else {
-            miette::bail!("The platform you are running on should at least have the virtual package {} on version {}, build_string: {}", req_pkg.name.as_source(), req_pkg.version, req_pkg.build_string)
+            return Err(VerifyCurrentPlatformError::MissingVirtualPackage {
+                required: req_pkg.name.as_source().to_string(),
+                required_version: Box::from(req_pkg.version),
+                required_build_string: req_pkg.build_string.clone(),
+            });
         }
     }
 
