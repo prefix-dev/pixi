@@ -315,7 +315,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         pypi_dependencies: env
                             .pypi_dependencies(Some(Platform::current()))
                             .into_iter()
-                            .map(|(name, _p)| name.as_str().to_string())
+                            .map(|(name, _p)| name.as_source().to_string())
                             .collect(),
                         platforms: env.platforms().into_iter().collect(),
                         channels: env

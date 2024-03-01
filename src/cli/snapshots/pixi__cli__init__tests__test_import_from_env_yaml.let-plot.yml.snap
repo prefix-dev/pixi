@@ -204,9 +204,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
         ],
         [
             (
-                PackageName {
+                PyPiPackageName {
                     source: "pypng",
-                    normalized: "pypng",
+                    normalized: PackageName(
+                        "pypng",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
@@ -215,9 +217,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "palettable",
-                    normalized: "palettable",
+                    normalized: PackageName(
+                        "palettable",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,

@@ -831,9 +831,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
         ],
         [
             (
-                PackageName {
+                PyPiPackageName {
                     source: "memory-profiler",
-                    normalized: "memory-profiler",
+                    normalized: PackageName(
+                        "memory-profiler",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
@@ -842,9 +844,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "pre-commit",
-                    normalized: "pre-commit",
+                    normalized: PackageName(
+                        "pre-commit",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
@@ -853,9 +857,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "graphviz",
-                    normalized: "graphviz",
+                    normalized: PackageName(
+                        "graphviz",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
@@ -864,9 +870,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "sphinx-notfound-page",
-                    normalized: "sphinx-notfound-page",
+                    normalized: PackageName(
+                        "sphinx-notfound-page",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
@@ -875,9 +883,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
             ),
             (
-                PackageName {
-                    source: "DeepOBS",
-                    normalized: "deepobs",
+                PyPiPackageName {
+                    source: "deepobs",
+                    normalized: PackageName(
+                        "deepobs",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,

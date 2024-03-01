@@ -5,6 +5,7 @@ use clap_complete;
 use clap_verbosity_flag::Verbosity;
 use miette::IntoDiagnostic;
 use std::{env, io::IsTerminal};
+use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
 pub mod add;
@@ -184,14 +185,27 @@ pub async fn execute() -> miette::Result<()> {
         );
 
     // Setup the tracing subscriber
-    tracing_subscriber::fmt()
+    let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(use_colors)
-        .with_env_filter(env_filter)
         .with_writer(IndicatifWriter::new(progress::global_multi_progress()))
-        .without_time()
-        .finish()
-        .try_init()
-        .into_diagnostic()?;
+        .without_time();
+
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "console-subscriber")]
+        {
+            let console_layer = console_subscriber::spawn();
+            tracing_subscriber::registry()
+                .with(console_layer)
+                .with(env_filter)
+                .with(fmt_layer)
+                .init();
+        } else {
+            tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt_layer)
+            .init();
+        }
+    }
 
     // Execute the command
     execute_command(args.command).await

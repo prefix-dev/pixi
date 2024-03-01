@@ -1,4 +1,5 @@
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
+use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::PyPiRequirement;
 use crate::utils::conda_environment_file::{CondaEnvDep, CondaEnvFile};
 use crate::{config::get_default_author, consts};
@@ -10,7 +11,6 @@ use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
 use regex::Regex;
-use rip::types::PackageName;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::str::FromStr;
@@ -272,7 +272,7 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
     }
 }
 
-type PipReq = (PackageName, PyPiRequirement);
+type PipReq = (PyPiPackageName, PyPiRequirement);
 type ParsedDependencies = (Vec<MatchSpec>, Vec<PipReq>, Vec<Arc<Channel>>);
 
 fn conda_env_to_manifest(
@@ -324,7 +324,7 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
                             dep = name;
                         }
                         let req = pep508_rs::Requirement::from_str(&dep).into_diagnostic()?;
-                        let name = rip::types::PackageName::from_str(req.name.as_str())?;
+                        let name = PyPiPackageName::from_normalized(req.name.clone());
                         let requirement = PyPiRequirement::from(req);
                         Ok((name, requirement))
                     })
@@ -441,7 +441,7 @@ mod tests {
             pip_deps,
             vec![
                 (
-                    PackageName::from_str("requests").unwrap(),
+                    PyPiPackageName::from_str("requests").unwrap(),
                     PyPiRequirement {
                         version: None,
                         extras: None,
@@ -449,7 +449,8 @@ mod tests {
                     }
                 ),
                 (
-                    PackageName::from_str("DeepOBS").unwrap(),
+                    // TODO: Fix that we can not have the source variant of the name.
+                    PyPiPackageName::from_str("deepobs").unwrap(),
                     PyPiRequirement {
                         version: None,
                         extras: None,
@@ -457,7 +458,7 @@ mod tests {
                     },
                 ),
                 (
-                    PackageName::from_str("torch").unwrap(),
+                    PyPiPackageName::from_str("torch").unwrap(),
                     PyPiRequirement {
                         version: pep440_rs::VersionSpecifiers::from_str("==1.8.1").ok(),
                         extras: None,
