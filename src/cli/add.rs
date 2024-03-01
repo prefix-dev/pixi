@@ -76,6 +76,10 @@ pub struct Args {
     #[arg(long, conflicts_with_all = ["host", "build"])]
     pub pypi: bool,
 
+    /// The alias of the index to use for the pypi dependencies
+    #[arg(long, conflicts_with_all = ["host", "build"])]
+    pub pypi_index_alias: Option<String>,
+
     /// Don't update lockfile, implies the no-install as well.
     #[clap(long, conflicts_with = "no_install")]
     pub no_lockfile_update: bool,
@@ -169,7 +173,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .into_iter()
                 .map(|req| {
                     let name = rip::types::PackageName::from_str(req.name.as_str())?;
-                    let requirement = PyPiRequirement::from(req);
+                    let requirement =
+                        PyPiRequirement::from_pep508(req, args.pypi_index_alias.clone());
                     Ok((name, requirement))
                 })
                 .collect::<Result<Vec<_>, rip::types::ParsePackageNameError>>()

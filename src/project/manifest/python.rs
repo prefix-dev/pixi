@@ -139,6 +139,12 @@ impl PyPiRequirement {
             marker: None,
         }
     }
+
+    pub fn from_pep508(req: pep508_rs::Requirement, index_alias: Option<String>) -> Self {
+        let mut result = PyPiRequirement::from(req);
+        result.index = index_alias;
+        result
+    }
 }
 impl<'de> Deserialize<'de> for PyPiRequirement {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

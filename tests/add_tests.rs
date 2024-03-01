@@ -3,6 +3,7 @@ mod common;
 use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
+use pixi::cli::init::PypiIndexArg;
 use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
 use pixi::{DependencyType, SpecType};
 use rattler_conda_types::{PackageName, Platform};
@@ -247,4 +248,49 @@ async fn add_sdist_functionality() {
         .with_install(true)
         .await
         .unwrap();
+}
+
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[serial]
+async fn install_private_pypi() -> miette::Result<()> {
+    let (url, _server) = common::pypi_server::make_simple_server(
+        &["pixi-private-package-1", "pixi-private-package-2"],
+        None,
+    )
+    .await?;
+
+    let pixi = PixiControl::new()?;
+    pixi.init()
+        .with_pypi_index(PypiIndexArg::new("local", &url, None))
+        .await?;
+
+    pixi.add("python==3.10")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .with_install(true)
+        .await?;
+
+    pixi.add("pixi-private-package-1")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .with_pypi_index("local")
+        .await?;
+
+    let lock = pixi.lock_file().await?;
+    assert!(lock.contains_pypi_package(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "pixi-private-package-1"
+    ));
+
+    // pytest doesn't exist in local registry
+    let add_failure = pixi
+        .add("pytest")
+        .set_type(DependencyType::PypiDependency)
+        .with_install(true)
+        .with_pypi_index("local")
+        .await;
+
+    assert!(add_failure.is_err());
+    Ok(())
 }

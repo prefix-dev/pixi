@@ -2,8 +2,12 @@ use axum::http::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::Router;
+use base64::prelude::BASE64_URL_SAFE_NO_PAD;
+use base64::Engine;
 use build_html::{Html, HtmlContainer};
 use indoc::formatdoc;
+use itertools::Itertools;
+use miette::{miette, IntoDiagnostic};
 use rattler_networking::Authentication;
 use std::collections::BTreeSet;
 use std::future::IntoFuture;
@@ -13,7 +17,6 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tower_http::add_extension::AddExtensionLayer;
 use tower_http::auth::AddAuthorizationLayer;
-use url::Url;
 use zip::write::FileOptions;
 use zip::ZipWriter;
 
@@ -39,30 +42,88 @@ fn make_wheel_file() -> String {
     "}
 }
 
-fn make_wheel(package_name: &str) -> anyhow::Result<Vec<u8>> {
+fn normalize_package_name(package_name: &str) -> String {
+    package_name.replace('-', "_")
+}
+
+fn record_hash(data: &[u8]) -> String {
+    let hash = rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(data).to_vec();
+    BASE64_URL_SAFE_NO_PAD.encode(&hash)
+}
+
+struct ArchiveFile {
+    path_name: String,
+    data: Vec<u8>,
+}
+
+fn make_record_file(record_path: &str, files: &[&ArchiveFile]) -> String {
+    let files = files
+        .iter()
+        .map(|file| {
+            let hash = record_hash(&file.data);
+            format!("{},sha256={},{}", file.path_name, hash, file.data.len())
+        })
+        .join("\n");
+
+    formatdoc! {"
+        {files}
+        {record_path},,
+    "}
+}
+
+fn make_wheel(package_name: &str) -> miette::Result<Vec<u8>> {
+    let normalized_name = normalize_package_name(package_name);
+    let dist_info = format!("{}-{}.dist-info", normalized_name, WHEEL_VERSION);
+
+    let metadata_file = ArchiveFile {
+        path_name: format!("{}/METADATA", dist_info),
+        data: make_manifest_file(package_name).into_bytes(),
+    };
+
+    let top_level_file = ArchiveFile {
+        path_name: format!("{}/top_level.txt", dist_info),
+        data: normalized_name.clone().into_bytes(),
+    };
+
+    let wheel_file = ArchiveFile {
+        path_name: format!("{}/WHEEL", dist_info),
+        data: make_wheel_file().into_bytes(),
+    };
+
+    let init_py_file = ArchiveFile {
+        path_name: format!("{}/{}", normalized_name, INIT_PY),
+        data: Vec::new(),
+    };
+
+    let record_file_path = format!("{}/RECORD", dist_info);
+    let record_file = make_record_file(
+        &record_file_path,
+        &[&metadata_file, &top_level_file, &wheel_file, &init_py_file],
+    );
+
+    let record_file = ArchiveFile {
+        path_name: record_file_path,
+        data: record_file.into_bytes(),
+    };
+
+    let files = [
+        metadata_file,
+        top_level_file,
+        wheel_file,
+        init_py_file,
+        record_file,
+    ];
+
     let mut buffer: Vec<u8> = Vec::new();
     let mut zip = ZipWriter::new(std::io::Cursor::new(&mut buffer));
 
     let options = FileOptions::default();
+    for file in files.into_iter() {
+        zip.start_file(file.path_name, options).into_diagnostic()?;
+        zip.write_all(&file.data).into_diagnostic()?;
+    }
 
-    // Create METADATA file
-    let metadata_filename = format!("{}-{}.dist-info/METADATA", package_name, WHEEL_VERSION);
-    let metadata_content = make_manifest_file(package_name);
-    zip.start_file(&metadata_filename, options)?;
-    zip.write_all(metadata_content.as_bytes())?;
-
-    // Create WHEEL file
-    let wheel_filename = format!("{}-{}.dist-info/WHEEL", package_name, WHEEL_VERSION);
-    let wheel_content = make_wheel_file();
-    zip.start_file(&wheel_filename, options)?;
-    zip.write_all(wheel_content.as_bytes())?;
-
-    // Add __init__.py file
-    let init_py_filename = format!("{}/{}", package_name, INIT_PY);
-    zip.start_file(&init_py_filename, options)?;
-    zip.write_all(b"")?;
-
-    zip.finish()?;
+    zip.finish().into_diagnostic()?;
     drop(zip);
 
     Ok(buffer)
@@ -91,7 +152,8 @@ async fn get_package_links(
         return axum::http::StatusCode::NOT_FOUND.into_response();
     }
 
-    let wheel_name = format!("{}-{}-{}.whl", requested_package, WHEEL_VERSION, WHEEL_TAG);
+    let normalized_name = requested_package.replace('-', "_");
+    let wheel_name = format!("{}-{}-{}.whl", normalized_name, WHEEL_VERSION, WHEEL_TAG);
 
     let mut document = build_html::HtmlPage::new();
     let href = format!("/files/{wheel_name}");
@@ -110,17 +172,27 @@ async fn get_wheel(
     };
 
     let parts = requested_file.split('-').collect::<Vec<_>>();
-    let (base_name, version, tag) = match parts.as_slice() {
-        [base_name, version, tag] => (*base_name, *version, *tag),
+    let (base_name, version, py_ver, abi, platform) = match parts.as_slice() {
+        [base_name, version, py_ver, abi, platform] => {
+            (*base_name, *version, *py_ver, *abi, *platform)
+        }
         _ => return axum::http::StatusCode::NOT_FOUND.into_response(),
     };
 
+    let tag = format!("{}-{}-{}", py_ver, abi, platform);
     if version != WHEEL_VERSION || tag != WHEEL_TAG {
         return axum::http::StatusCode::NOT_FOUND.into_response();
     }
 
     let base_name = base_name.to_string();
-    if !served_packages.contains(&base_name) {
+    if served_packages
+        .iter()
+        .find(|value| {
+            let value = value.replace('-', "_");
+            value == base_name
+        })
+        .is_none()
+    {
         return axum::http::StatusCode::NOT_FOUND.into_response();
     }
 
@@ -137,10 +209,10 @@ async fn get_wheel(
 pub async fn make_simple_server(
     package_names: &[&str],
     require_auth: Option<Authentication>,
-) -> anyhow::Result<(Url, JoinHandle<Result<(), std::io::Error>>)> {
+) -> miette::Result<(String, JoinHandle<Result<(), std::io::Error>>)> {
     let addr = SocketAddr::new([127, 0, 0, 1].into(), 0);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    let address = listener.local_addr()?;
+    let address = listener.local_addr().into_diagnostic()?;
 
     let package_names = package_names
         .iter()
@@ -161,13 +233,13 @@ pub async fn make_simple_server(
         Some(Authentication::BearerToken(token)) => {
             router.layer(AddAuthorizationLayer::bearer(&token))
         }
-        Some(_) => return Err(anyhow::anyhow!("Unsupported authentication method")),
+        Some(_) => return Err(miette!("Unsupported authentication method")),
         None => router,
     };
 
     let server = axum::serve(listener, router).into_future();
     let join_handle = tokio::spawn(server);
 
-    let url = format!("http://{}/simple/", address).parse()?;
+    let url = format!("http://{}/simple/", address);
     Ok((url, join_handle))
 }

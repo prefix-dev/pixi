@@ -24,7 +24,9 @@
 //! ```
 
 use futures::FutureExt;
+use pixi::cli::init::PypiIndexArg;
 use pixi::task::TaskName;
+use pixi::utils::serde_key_value::to_key_value_str;
 use pixi::{
     cli::{add, init, install, project, task},
     DependencyType, SpecType,
@@ -63,6 +65,16 @@ impl InitBuilder {
 
     pub fn without_channels(mut self) -> Self {
         self.args.channels = Some(vec![]);
+        self
+    }
+
+    pub fn with_pypi_index(mut self, index: PypiIndexArg) -> Self {
+        let arg = to_key_value_str(index).expect("failed to serialize argument");
+
+        self.args
+            .pypi_indices
+            .get_or_insert_with(Default::default)
+            .push(arg);
         self
     }
 }
@@ -111,6 +123,13 @@ impl AddBuilder {
                 self.args.pypi = true;
             }
         }
+        self
+    }
+
+    /// When adding pip dependencies, use specified index
+    /// referred to by alias
+    pub fn with_pypi_index(mut self, alias: &str) -> Self {
+        self.args.pypi_index_alias = Some(alias.to_string());
         self
     }
 

@@ -387,6 +387,27 @@ impl Manifest {
         requirement: &PyPiRequirement,
         platform: Option<Platform>,
     ) -> miette::Result<()> {
+        match (
+            self.parsed.project.pypi_indices.as_ref(),
+            requirement.index.as_ref(),
+        ) {
+            (Some(indices), Some(index)) => {
+                if !indices.contains_key(index) {
+                    return Err(miette::miette!(
+                        "pypi index {} does not exist",
+                        console::style(index).bold(),
+                    ));
+                }
+            }
+            (None, Some(index)) => {
+                return Err(miette::miette!(
+                    "pypi index {} does not exist; no indices are defined",
+                    console::style(index).bold(),
+                ));
+            }
+            _ => {}
+        }
+
         // Find the table toml table to add the dependency to.
         let dependency_table = get_or_insert_toml_table(
             &mut self.document,

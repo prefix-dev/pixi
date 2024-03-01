@@ -1,6 +1,7 @@
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
 use crate::project::manifest::PyPiRequirement;
 use crate::utils::conda_environment_file::{CondaEnvDep, CondaEnvFile};
+use crate::utils::serde_key_value::from_key_value_str;
 use crate::{config::get_default_author, consts};
 use crate::{FeatureName, Project};
 use clap::Parser;
@@ -11,6 +12,7 @@ use minijinja::{context, Environment};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
 use regex::Regex;
 use rip::types::PackageName;
+use serde::{Deserialize, Serialize};
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::str::FromStr;
@@ -28,6 +30,19 @@ pub struct Args {
     #[arg(short, long = "channel", id = "channel", conflicts_with = "env_file")]
     pub channels: Option<Vec<String>>,
 
+    /// Pypi indices to use in the project. Additional indices can be specified as:
+    ///
+    /// `alias=something,url=https://example.com/simple[,auth_helper=auth_helper_id]`
+    ///
+    /// The `auth_helper` argument is optional.
+    #[arg(
+        short,
+        long = "pypi-index",
+        id = "pypi-index",
+        conflicts_with = "env_file"
+    )]
+    pub pypi_indices: Option<Vec<String>>,
+
     /// Platforms that the project supports.
     #[arg(short, long = "platform", id = "platform")]
     pub platforms: Vec<String>,
@@ -35,6 +50,23 @@ pub struct Args {
     /// Environment.yml file to bootstrap the project.
     #[arg(short = 'i', long = "import")]
     pub env_file: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PypiIndexArg {
+    pub alias: String,
+    pub url: String,
+    pub auth_helper: Option<String>,
+}
+
+impl PypiIndexArg {
+    pub fn new(alias: &str, url: &str, auth_helper: Option<&str>) -> Self {
+        Self {
+            alias: alias.to_string(),
+            url: url.to_string(),
+            auth_helper: auth_helper.map(str::to_string),
+        }
+    }
 }
 
 /// The default channels to use for a new project.
@@ -52,6 +84,14 @@ authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
 channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
 platforms = ["{{ platforms|join("\", \"") }}"]
+{%- if pypi_indices %}
+{%- for index in pypi_indices %}
+
+[project.pypi-indices.{{ index.alias }}]
+url = "{{ index.url }}"
+{%- if index.auth_helper %}cred_helper = "{{ index.auth_helper }}"{%- endif %}
+{%- endfor %}
+{%- endif %}
 
 [tasks]
 
@@ -182,6 +222,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .collect()
         };
 
+        let pypi_indices = args.pypi_indices.unwrap_or_default();
+        let pypi_indices = parse_pypi_indices(pypi_indices)?;
+
         let rv = env
             .render_named_str(
                 consts::PROJECT_MANIFEST,
@@ -191,10 +234,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     version,
                     author,
                     channels,
+                    pypi_indices,
                     platforms
                 },
             )
             .unwrap();
+
+        eprintln!("{}", rv);
+
         fs::write(&manifest_path, rv).into_diagnostic()?;
     };
 
@@ -356,6 +403,13 @@ fn parse_channels(channels: Vec<String>) -> Vec<String> {
         }
     }
     new_channels
+}
+
+fn parse_pypi_indices(values: Vec<String>) -> miette::Result<Vec<PypiIndexArg>> {
+    values
+        .iter()
+        .map(|value| from_key_value_str::<PypiIndexArg>(value))
+        .collect::<miette::Result<_>>()
 }
 
 #[cfg(test)]

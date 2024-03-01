@@ -185,6 +185,7 @@ impl PixiControl {
             args: init::Args {
                 path: self.project_path().to_path_buf(),
                 channels: None,
+                pypi_indices: None,
                 platforms: Vec::new(),
                 env_file: None,
             },
@@ -198,6 +199,7 @@ impl PixiControl {
             args: init::Args {
                 path: self.project_path().to_path_buf(),
                 channels: None,
+                pypi_indices: None,
                 platforms,
                 env_file: None,
             },
@@ -217,6 +219,7 @@ impl PixiControl {
                 no_lockfile_update: false,
                 platform: Default::default(),
                 pypi: false,
+                pypi_index_alias: None,
                 feature: None,
             },
         }

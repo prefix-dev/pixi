@@ -2915,6 +2915,7 @@ dependencies = [
  "async-recursion",
  "async-scoped",
  "axum",
+ "base64",
  "build_html",
  "chrono",
  "clap",
