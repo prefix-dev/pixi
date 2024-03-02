@@ -379,7 +379,6 @@ fn parse_channels(channels: Vec<String>) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::cli::init::get_dir;
-    use itertools::Itertools;
     use std::io::Read;
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
