@@ -589,7 +589,7 @@ mod tests {
         assert_eq!(
             pip_deps,
             vec![(
-                PackageName::from_str("requests").unwrap(),
+                PyPiPackageName::from_str("requests").unwrap(),
                 PyPiRequirement {
                     version: None,
                     extras: None,
