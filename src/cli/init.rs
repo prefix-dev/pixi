@@ -281,15 +281,25 @@ fn conda_env_to_manifest(
     let channels = parse_channels(env_info.channels().clone());
     let (conda_deps, pip_deps, mut extra_channels) =
         parse_dependencies(env_info.dependencies().clone())?;
+    let channel_config = ChannelConfig::default();
     extra_channels.extend(
         channels
             .into_iter()
-            .map(|c| Arc::new(Channel::from_str(c, &ChannelConfig::default()).unwrap())),
+            .map(|c| Arc::new(Channel::from_str(c, &channel_config).unwrap())),
     );
     let mut channels: Vec<_> = extra_channels
         .into_iter()
         .unique()
-        .map(|c| c.name().to_string())
+        .map(|c| {
+            if c.base_url()
+                .as_str()
+                .starts_with(channel_config.channel_alias.as_str())
+            {
+                c.name().to_string()
+            } else {
+                c.base_url().to_string()
+            }
+        })
         .collect();
     if channels.is_empty() {
         channels = DEFAULT_CHANNELS
@@ -369,8 +379,6 @@ fn parse_channels(channels: Vec<String>) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::cli::init::get_dir;
-    use itertools::Itertools;
-    use rattler_conda_types::ChannelConfig;
     use std::io::Read;
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
@@ -381,6 +389,7 @@ mod tests {
         name: pixi_example_project
         channels:
           - conda-forge
+          - https://custom-server.com/channel
         dependencies:
           - python
           - pytorch::torchvision
@@ -403,26 +412,21 @@ mod tests {
         assert_eq!(conda_env_file_data.name(), Some("pixi_example_project"));
         assert_eq!(
             conda_env_file_data.channels(),
-            &vec!["conda-forge".to_string()]
+            &vec![
+                "conda-forge".to_string(),
+                "https://custom-server.com/channel".to_string()
+            ]
         );
 
-        let (conda_deps, pip_deps, mut channels) =
-            parse_dependencies(conda_env_file_data.dependencies().clone()).unwrap();
-
-        channels.extend(
-            conda_env_file_data
-                .channels()
-                .into_iter()
-                .map(|c| Arc::new(Channel::from_str(c, &ChannelConfig::default()).unwrap())),
-        );
-        let channels = channels.into_iter().unique().collect::<Vec<_>>();
+        let (conda_deps, pip_deps, channels) = conda_env_to_manifest(conda_env_file_data).unwrap();
 
         assert_eq!(
             channels,
             vec![
-                Arc::new(Channel::from_str("pytorch", &ChannelConfig::default()).unwrap()),
-                Arc::new(Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap())
-            ],
+                "pytorch".to_string(),
+                "conda-forge".to_string(),
+                "https://custom-server.com/channel/".to_string()
+            ]
         );
 
         println!("{conda_deps:?}");
