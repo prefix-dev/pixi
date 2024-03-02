@@ -1,6 +1,6 @@
+use std::io;
 use std::io::{stdout, Write};
 use std::path::PathBuf;
-use std::{env, io};
 
 use clap::Parser;
 use console::Color;
@@ -51,7 +51,7 @@ pub struct Args {
     pub manifest_path: Option<PathBuf>,
 
     /// The environment to list packages for. Defaults to the default environment.
-    #[arg(short, long)]
+    #[arg(short, long, env = "PIXI_ENVIRONMENT_NAME")]
     pub environment: Option<String>,
 
     #[clap(flatten)]
@@ -75,13 +75,9 @@ struct PackageToOutput {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment_name = args.environment.map_or_else(
-        || {
-            env::var("PIXI_ENVIRONMENT_NAME")
-                .map_or_else(|_| EnvironmentName::Default, EnvironmentName::Named)
-        },
-        EnvironmentName::Named,
-    );
+    let environment_name = args
+        .environment
+        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
     let environment = project
         .environment(&environment_name)
         .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
