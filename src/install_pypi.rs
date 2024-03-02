@@ -188,12 +188,11 @@ fn whats_the_plan<'a>(
     let mut required_map: std::collections::HashMap<&PackageName, &PypiPackageData> =
         required.iter().map(|(pkg, _)| (&pkg.name, pkg)).collect();
 
-    // Filter out conda packages
-    // Ignore packages without an installer
+    // Filter out packages not installed by uv
     let installed = installed.iter().filter(|dist| {
         dist.installer()
             .unwrap_or_default()
-            .is_some_and(|installer| installer != "conda")
+            .is_some_and(|installer| installer == "uv")
     });
 
     let mut extraneous = vec![];
