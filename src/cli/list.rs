@@ -52,7 +52,7 @@ pub struct Args {
 
     /// The environment to list packages for. Defaults to the default environment.
     #[arg(short, long, env = "PIXI_ENVIRONMENT_NAME")]
-    pub environment: Option<String>,
+    pub environment: Option<EnvironmentName>,
 
     #[clap(flatten)]
     pub lock_file_usage: super::LockFileUsageArgs,
@@ -75,9 +75,7 @@ struct PackageToOutput {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment_name = args
-        .environment
-        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
+    let environment_name = args.environment.unwrap_or(EnvironmentName::Default);
     let environment = project
         .environment(&environment_name)
         .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
