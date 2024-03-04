@@ -101,12 +101,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .unwrap_or_default();
 
     // Get the explicit project dependencies
-    let project_dependency_names = environment
+    let mut project_dependency_names = environment
         .dependencies(None, Some(platform))
         .names()
         .map(|p| p.as_source().to_string())
         .collect_vec();
-
+    project_dependency_names.extend(
+        environment
+            .pypi_dependencies(Some(platform))
+            .into_iter()
+            .map(|(name, _)| name.as_source().to_string()),
+    );
     // Convert the list of package record to specific output format
     let mut packages_to_output = locked_deps
         .iter()
