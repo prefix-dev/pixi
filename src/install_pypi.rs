@@ -294,7 +294,7 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
 
     // Uninstall all packages in old site-packages
     for dist_info in installed {
-        let summary = uv_installer::uninstall(&dist_info)
+        let _summary = uv_installer::uninstall(&dist_info)
             .await
             .expect("unistallation of old site-packages failed");
     }
