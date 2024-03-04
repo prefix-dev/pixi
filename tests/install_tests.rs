@@ -240,5 +240,13 @@ async fn pypi_reinstall_python() {
 
     // Check if site-packages has entries, should be empty now
     let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
-    assert!(installed_311.iter().count() == 0);
+
+    if cfg!(not(target_os = "windows")) {
+        // On non-windows the site-packages should be empty
+        assert!(installed_311.iter().count() == 0);
+    } else {
+        // Windows should still contain some packages
+        // This is because the site-packages is not prefixed with the python version
+        assert!(installed_311.iter().count() > 0);
+    }
 }
