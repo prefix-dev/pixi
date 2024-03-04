@@ -1,5 +1,6 @@
 use crate::environment::get_up_to_date_prefix;
 use crate::project::manifest::EnvironmentName;
+use crate::task::TaskName;
 use crate::Project;
 use clap::Parser;
 use indexmap::IndexMap;
@@ -22,7 +23,7 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let environment_name = args
-        .environment
+        .environment.clone()
         .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
     let environment = project
         .environment(&environment_name)
@@ -35,6 +36,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         IndexMap::default(),
     )
     .await?;
+
+    if environment.task(&TaskName::from("postinstall"), None).is_ok() {
+        tracing::info!("`postintall` task detected in current environment");
+
+        // Construct arguments to call postinstall task
+        let args: crate::cli::run::Args = crate::cli::run::Args {
+            task: vec!["postinstall".to_string()],
+            manifest_path: args.manifest_path,
+            lock_file_usage: args.lock_file_usage,
+            environment: args.environment,
+        };
+
+        // Execute postinstall task
+        crate::cli::run::execute(args).await?;
+    }
 
     // Emit success
     eprintln!(

@@ -5,6 +5,7 @@ use crate::common::package_database::{Package, PackageDatabase};
 use common::{LockFileExt, PixiControl};
 use pixi::cli::{run, LockFileUsageArgs};
 use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
+use pixi::FeatureName;
 use rattler_conda_types::Platform;
 use serial_test::serial;
 use tempfile::TempDir;
@@ -193,4 +194,28 @@ async fn install_frozen() {
     assert_eq!(result.exit_code, 0);
     assert_eq!(result.stdout.trim(), "Python 3.9.1");
     assert!(result.stderr.is_empty());
+}
+
+// Test `pixi run postinstall` executes after `pixi install`
+#[tokio::test]
+#[serial]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn postinstall() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+    // Add and update lockfile with this version of python
+    pixi.add("python==3.9.1").await.unwrap();
+    
+    // Add a simple postinstall task
+    pixi.tasks()
+        .add("postinstall".into(), None, FeatureName::Default)
+        .with_commands(["python --version"])
+        .execute()
+        .unwrap();
+
+    // Run install
+    pixi.install().await.unwrap();
+
+    // TODO: Check if postinstall task was executed
+    // How to capture stdout/stderr from the postinstall task?
 }
