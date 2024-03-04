@@ -107,35 +107,35 @@ impl<'p> LockFileDerivedData<'p> {
             .unwrap_or_default();
         let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
 
-        let uv_context = match &self.uv_context {
-            None => {
-                let context = UvResolutionContext::from_project(self.project)?;
-                self.uv_context = Some(context.clone());
-                context
-            }
-            Some(context) => context.clone(),
-        };
+        if environment.has_pypi_dependencies() {
+            let uv_context = match &self.uv_context {
+                None => {
+                    let context = UvResolutionContext::from_project(self.project)?;
+                    self.uv_context = Some(context.clone());
+                    context
+                }
+                Some(context) => context.clone(),
+            };
 
-        // TODO(tim): get support for this somehow with uv
-        let env_variables = environment.project().get_env_variables(environment).await?;
+            let env_variables = environment.project().get_env_variables(environment).await?;
+            // Update the prefix with Pypi records
+            environment::update_prefix_pypi(
+                environment.name(),
+                &prefix,
+                platform,
+                &repodata_records,
+                &pypi_records,
+                &python_status,
+                &environment.system_requirements(),
+                uv_context,
+                env_variables,
+            )
+            .await?;
 
-        // Update the prefix with Pypi records
-        environment::update_prefix_pypi(
-            environment.name(),
-            &prefix,
-            platform,
-            &repodata_records,
-            &pypi_records,
-            &python_status,
-            &environment.system_requirements(),
-            uv_context,
-            env_variables,
-        )
-        .await?;
-
-        // Store that we updated the environment, so we won't have to do it again.
-        self.updated_pypi_prefixes
-            .insert(environment.clone(), prefix.clone());
+            // Store that we updated the environment, so we won't have to do it again.
+            self.updated_pypi_prefixes
+                .insert(environment.clone(), prefix.clone());
+        }
 
         Ok(prefix)
     }

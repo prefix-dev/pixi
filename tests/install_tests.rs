@@ -1,5 +1,7 @@
 mod common;
 
+use std::path::Path;
+
 use crate::common::builders::string_from_iter;
 use crate::common::package_database::{Package, PackageDatabase};
 use common::{LockFileExt, PixiControl};
@@ -8,6 +10,7 @@ use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
 use rattler_conda_types::Platform;
 use serial_test::serial;
 use tempfile::TempDir;
+use uv_interpreter::PythonEnvironment;
 
 /// Should add a python version to the environment and lock file that matches the specified version
 /// and run it
@@ -193,4 +196,57 @@ async fn install_frozen() {
     assert_eq!(result.exit_code, 0);
     assert_eq!(result.stdout.trim(), "Python 3.9.1");
     assert!(result.stderr.is_empty());
+}
+
+fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnvironment {
+    let python = if cfg!(target_os = "windows") {
+        prefix.join("python.exe")
+    } else {
+        prefix.join("bin/python")
+    };
+    let platform = platform_host::Platform::current().unwrap();
+    // Current interpreter and venv
+    let interpreter = uv_interpreter::Interpreter::query(&python, platform, &cache).unwrap();
+    uv_interpreter::PythonEnvironment::from_interpreter(interpreter, &prefix)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[serial]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn pypi_reinstall_python() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+    // Add and update lockfile with this version of python
+    pixi.add("python==3.11").with_install(true).await.unwrap();
+
+    // Add flask from pypi
+    pixi.add("flask")
+        .with_install(true)
+        .set_type(pixi::DependencyType::PypiDependency)
+        .await
+        .unwrap();
+
+    let prefix = pixi.project().unwrap().root().join(".pixi/envs/default");
+
+    let cache = uv_cache::Cache::temp().unwrap();
+
+    // Check if site-packages has entries
+    let env = create_uv_environment(&prefix, &cache);
+    let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
+    assert!(installed_311.iter().count() > 0);
+
+    // Reinstall python
+    pixi.add("python==3.12").with_install(true).await.unwrap();
+
+    // Check if site-packages has entries, should be empty now
+    let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
+
+    if cfg!(not(target_os = "windows")) {
+        // On non-windows the site-packages should be empty
+        assert!(installed_311.iter().count() == 0);
+    } else {
+        // Windows should still contain some packages
+        // This is because the site-packages is not prefixed with the python version
+        assert!(installed_311.iter().count() > 0);
+    }
 }

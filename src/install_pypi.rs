@@ -23,6 +23,7 @@ use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 
 use std::collections::HashMap;
+use std::path::Path;
 use std::time::Duration;
 
 use uv_client::{FlatIndex, FlatIndexClient};
@@ -270,6 +271,37 @@ fn whats_the_plan<'a>(
     })
 }
 
+/// If the python interpreter is outdated, we need to uninstall all outdated site packages.
+/// from the old interpreter.
+async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Result<()> {
+    // Check if the old interpreter is outdated
+    let mut installed = vec![];
+    for entry in std::fs::read_dir(site_packages).into_diagnostic()? {
+        let entry = entry.into_diagnostic()?;
+        if entry.file_type().into_diagnostic()?.is_dir() {
+            let path = entry.path();
+
+            let installed_dist = InstalledDist::try_from_path(&path);
+            let Ok(installed_dist) = installed_dist else {
+                continue;
+            };
+
+            if let Some(installed_dist) = installed_dist {
+                installed.push(installed_dist);
+            }
+        }
+    }
+
+    // Uninstall all packages in old site-packages
+    for dist_info in installed {
+        let _summary = uv_installer::uninstall(&dist_info)
+            .await
+            .expect("unistallation of old site-packages failed");
+    }
+
+    Ok(())
+}
+
 /// Installs and/or remove python distributions.
 // TODO: refactor arguments in struct
 #[allow(clippy::too_many_arguments)]
@@ -288,26 +320,21 @@ pub async fn update_python_distributions(
         return Ok(());
     };
 
-    let python_location = prefix.root().join(&python_info.path);
+    let platform = platform_host::Platform::current().expect("unsupported platform");
 
-    // Determine where packages would have been installed
-    let _python_version = (python_info.short_version.1 as u32, 0);
+    // If we have changed interpreter, we need to uninstall all site-packages from the old interpreter
+    if let PythonStatus::Changed { old, new: _ } = status {
+        let site_packages_path = prefix.root().join(&old.site_packages_path);
+        if site_packages_path.exists() {
+            uninstall_outdated_site_packages(&site_packages_path).await?;
+        }
+    }
 
+    // Determine the current environment markers.
     let python_record = conda_package
         .iter()
         .find(|r| is_python_record(r))
         .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
-
-    let platform = platform_host::Platform::current().expect("unsupported platform");
-    let interpreter =
-        Interpreter::query(&python_location, platform, &uv_context.cache).into_diagnostic()?;
-
-    tracing::debug!("[Install] Using Python Interpreter: {:?}", interpreter);
-
-    // Create a custom venv
-    let venv = PythonEnvironment::from_interpreter(interpreter, prefix.root());
-
-    // Determine the current environment markers.
     let tags = get_pypi_tags(
         Platform::current(),
         system_requirements,
@@ -331,6 +358,13 @@ pub async fn update_python_distributions(
     let in_memory_index = InMemoryIndex::default();
     let config_settings = ConfigSettings::default();
 
+    let python_location = prefix.root().join(&python_info.path);
+    let interpreter =
+        Interpreter::query(&python_location, platform, &uv_context.cache).into_diagnostic()?;
+
+    tracing::debug!("[Install] Using Python Interpreter: {:?}", interpreter);
+    // Create a custom venv
+    let venv = PythonEnvironment::from_interpreter(interpreter, prefix.root());
     // Prep the build context.
     let build_dispatch = BuildDispatch::new(
         &uv_context.registry_client,
@@ -438,7 +472,7 @@ pub async fn update_python_distributions(
         for dist_info in extraneous.iter().chain(reinstalls.iter()) {
             let summary = uv_installer::uninstall(dist_info)
                 .await
-                .expect("uinstall did not work");
+                .expect("uninstall did not work");
             tracing::debug!(
                 "Uninstalled {} ({} file{}, {} director{})",
                 dist_info.name(),
