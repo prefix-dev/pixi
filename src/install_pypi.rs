@@ -33,7 +33,7 @@ use uv_installer::{Downloader, SitePackages};
 use uv_interpreter::{Interpreter, PythonEnvironment};
 use uv_normalize::PackageName;
 
-use uv_traits::{ConfigSettings, NoBinary, NoBuild, SetupPyStrategy};
+use uv_traits::{ConfigSettings, SetupPyStrategy};
 
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
 
@@ -351,10 +351,6 @@ pub async fn update_python_distributions(
         FlatIndex::from_entries(entries, &tags)
     };
 
-    // Track in-flight downloads, builds, etc., across resolutions.
-    let no_build = NoBuild::None;
-    let no_binary = NoBinary::None;
-
     let in_memory_index = InMemoryIndex::default();
     let config_settings = ConfigSettings::default();
 
@@ -376,8 +372,8 @@ pub async fn update_python_distributions(
         &uv_context.in_flight,
         SetupPyStrategy::default(),
         &config_settings,
-        &no_build,
-        &no_binary,
+        &uv_context.no_build,
+        &uv_context.no_binary,
     )
     .with_build_extra_env_vars(environment_variables.iter());
 
