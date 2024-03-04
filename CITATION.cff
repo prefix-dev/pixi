@@ -1,0 +1,25 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: pixi
+message: >-
+  If pixi contributes to a project that leads to a
+  scientific publication, please acknowledge this fact by
+  citing according to this file.
+type: software
+authors:
+  - given-names: pixi open-source contributors
+repository-code: 'https://github.com/prefix-dev/pixi'
+url: 'https://pixi.sh'
+abstract: >-
+  A cross-platform, language agnostic, package/project management tool for
+  development in virtual environments.
+keywords:
+  - package-management
+  - project-management
+  - virtual-environments
+  - conda
+  - pypi
+  - development-tools
+license: BSD-3-Clause
