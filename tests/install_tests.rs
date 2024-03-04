@@ -205,7 +205,7 @@ async fn postinstall() {
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
     pixi.add("python==3.9.1").await.unwrap();
-    
+
     // Add a simple postinstall task
     pixi.tasks()
         .add("postinstall".into(), None, FeatureName::Default)

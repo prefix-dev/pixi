@@ -23,7 +23,8 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let environment_name = args
-        .environment.clone()
+        .environment
+        .clone()
         .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
     let environment = project
         .environment(&environment_name)
@@ -37,7 +38,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await?;
 
-    if environment.task(&TaskName::from("postinstall"), None).is_ok() {
+    if environment
+        .task(&TaskName::from("postinstall"), None)
+        .is_ok()
+    {
         tracing::info!("`postintall` task detected in current environment");
 
         // Construct arguments to call postinstall task
