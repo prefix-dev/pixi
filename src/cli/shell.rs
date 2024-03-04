@@ -220,15 +220,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     #[cfg(target_family = "windows")]
     let res = match interactive_shell {
         ShellEnum::NuShell(nushell) => {
-            start_nu_shell(nushell, &env, prompt::get_nu_prompt(prompt_name.as_str())).await
+            start_nu_shell(nushell, env, prompt::get_nu_prompt(prompt_name.as_str())).await
         }
         ShellEnum::PowerShell(pwsh) => start_powershell(
             pwsh,
-            &env,
+            env,
             prompt::get_powershell_prompt(prompt_name.as_str()),
         ),
         ShellEnum::CmdExe(cmdexe) => {
-            start_cmdexe(cmdexe, &env, prompt::get_cmd_prompt(prompt_name.as_str()))
+            start_cmdexe(cmdexe, env, prompt::get_cmd_prompt(prompt_name.as_str()))
         }
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell);
