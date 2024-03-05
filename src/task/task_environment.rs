@@ -118,7 +118,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
         source: FindTaskSource<'p>,
     ) -> Result<TaskAndEnvironment<'p>, FindTaskError> {
         // If no explicit environment was specified
-        if matches!(source, FindTaskSource::CmdArgs) && self.explicit_environment.is_none() {
+        if self.explicit_environment.is_none() {
             let default_env = self.project.default_environment();
             // If the default environment has the task
             if let Ok(default_env_task) = default_env.task(&name, self.platform) {
