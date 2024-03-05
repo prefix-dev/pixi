@@ -1167,7 +1167,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 mod tests {
     use super::*;
     use crate::project::manifest::channel::PrioritizedChannel;
-    use insta::assert_display_snapshot;
+    use insta::assert_snapshot;
     use rattler_conda_types::{Channel, ChannelConfig};
     use rstest::*;
     use std::str::FromStr;
@@ -1345,7 +1345,7 @@ mod tests {
         let examples = [r#"[target.foobar.dependencies]
             invalid_platform = "henk""#];
 
-        assert_display_snapshot!(examples
+        assert_snapshot!(examples
             .into_iter()
             .map(|example| ProjectManifest::from_toml_str(&format!(
                 "{PROJECT_BOILERPLATE}\n{example}"
@@ -1362,7 +1362,7 @@ mod tests {
             format!("{PROJECT_BOILERPLATE}\n[foobar]"),
             format!("{PROJECT_BOILERPLATE}\n[target.win-64.hostdependencies]"),
         ];
-        assert_display_snapshot!(examples
+        assert_snapshot!(examples
             .into_iter()
             .map(|example| ProjectManifest::from_toml_str(&example)
                 .unwrap_err()
@@ -1449,7 +1449,7 @@ mod tests {
 
         let manifest = ProjectManifest::from_toml_str(&contents).unwrap();
 
-        assert_display_snapshot!(manifest
+        assert_snapshot!(manifest
             .default_feature()
             .targets
             .iter()
@@ -1479,7 +1479,7 @@ mod tests {
             "#
         );
 
-        assert_display_snapshot!(toml_edit::de::from_str::<ProjectManifest>(&contents)
+        assert_snapshot!(toml_edit::de::from_str::<ProjectManifest>(&contents)
             .expect("parsing should succeed!")
             .default_feature()
             .targets
@@ -1538,7 +1538,7 @@ mod tests {
             .is_none());
 
         // Write the toml to string and verify the content
-        assert_display_snapshot!(
+        assert_snapshot!(
             format!("test_remove_{}", name),
             manifest.document.to_string()
         );
@@ -1586,7 +1586,7 @@ mod tests {
             .is_none());
 
         // Write the toml to string and verify the content
-        assert_display_snapshot!(
+        assert_snapshot!(
             format!("test_remove_pypi_{}", name),
             manifest.document.to_string()
         );
@@ -2053,7 +2053,7 @@ platforms = ["linux-64", "win-64"]
             ]
         );
 
-        assert_display_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
@@ -2394,7 +2394,7 @@ test = "test initial"
                 &FeatureName::Named("test".to_string()),
             )
             .unwrap();
-        assert_display_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
@@ -2453,7 +2453,7 @@ test = "test initial"
             &FeatureName::Named("test".to_string()),
             "tasks",
         );
-        assert_display_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
@@ -2566,7 +2566,7 @@ bar = "*"
             ">=2.3".to_string()
         );
 
-        assert_display_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
