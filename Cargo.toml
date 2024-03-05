@@ -54,9 +54,9 @@ futures = "0.3.30"
 http-cache-reqwest = "0.13.0"
 human_bytes = "0.4.3"
 humantime = "2.1.0"
-indexmap = { version = "2.2.4", features = ["serde"] }
+indexmap = { version = "2.2.5", features = ["serde"] }
 indicatif = "0.17.8"
-insta = { version = "1.35.1", features = ["yaml"] }
+insta = { version = "1.36.1", features = ["yaml"] }
 
 install-wheel-rs = { git = "https://github.com/astral-sh/uv", rev = "9a99aa777618c55d21a9376699a2aeb646501bd6" }
 is_executable = "1.0.1"

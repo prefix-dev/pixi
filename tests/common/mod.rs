@@ -203,7 +203,7 @@ impl PixiControl {
         }
     }
 
-    /// Initialize pixi project inside a temporary directory. Returns a [`AddBuilder`]. To execute
+    /// Add dependencies to the project. Returns an [`AddBuilder`].
     /// the command and await the result call `.await` on the return value.
     pub fn add(&self, spec: &str) -> AddBuilder {
         AddBuilder {

@@ -59,6 +59,8 @@ pub struct UvResolutionContext {
     pub registry_client: Arc<RegistryClient>,
     pub in_flight: Arc<InFlight>,
     pub index_locations: Arc<IndexLocations>,
+    pub no_build: NoBuild,
+    pub no_binary: NoBinary,
 }
 
 impl UvResolutionContext {
@@ -83,6 +85,8 @@ impl UvResolutionContext {
             registry_client,
             in_flight,
             index_locations,
+            no_build: NoBuild::None,
+            no_binary: NoBinary::None,
         })
     }
 }
@@ -304,8 +308,8 @@ pub async fn resolve_pypi(
         &context.in_flight,
         SetupPyStrategy::default(),
         &config_settings,
-        &NoBuild::None,
-        &NoBinary::None,
+        &context.no_build,
+        &context.no_binary,
     )
     .with_options(options)
     .with_build_extra_env_vars(env_variables.iter());
