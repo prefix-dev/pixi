@@ -1535,8 +1535,19 @@ Even if the dependency defines a channel that channel should be added to the <co
 </span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="n">pytorch-cpu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;~=1.1&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="pypi-dependencies-beta-feature"><code>pypi-dependencies</code> (Beta feature)<a class="headerlink" href="#pypi-dependencies-beta-feature" title="Permanent link">#</a></h3>
-<p>Add any PyPI package that you want to install in the environment after the conda installation is finished.
-These are not available on <a href="https://prefix.dev/channels">prefix.dev</a> but on <a href="https://pypi.org/">pypi.org</a>.</p>
+<details class="info">
+<summary>Details regarding the PyPI integration</summary>
+<p>We use <a href="https://github.com/astral-sh/uv"><code>uv</code></a>, which is a new fast pip replacement written in Rust.</p>
+<p>We integrate uv as a library, so we use the uv resolver, to which we pass the conda packages as 'locked'.
+This disallows uv from installing these dependencies itself, and  ensures it uses the exact version of these packages in the resolution.
+This is unique amongst conda based package managers, which usually just call pip from a subprocess.</p>
+<p>The uv resolution is included in the lock file directly.</p>
+</details>
+<p>Pixi directly supports depending on PyPI packages, the PyPA calls a distributed package a 'distribution'.
+There are <a href="https://packaging.python.org/en/latest/specifications/source-distribution-format/">Source</a> and <a href="https://packaging.python.org/en/latest/specifications/binary-distribution-format/">Binary</a> distributions both
+of which are supported by pixi.
+These distributions are installed into the environment after the conda environment has been resolved and installed.
+PyPI packages are not indexed on <a href="https://prefix.dev/channels">prefix.dev</a> but can be viewed on <a href="https://pypi.org/">pypi.org</a>.</p>
 <div class="admonition warning">
 <p class="admonition-title">Important considerations</p>
 <ul>
@@ -1547,26 +1558,38 @@ These are not available on <a href="https://prefix.dev/channels">prefix.dev</a> 
 <li>Private PyPI repositories</li>
 </ul>
 </li>
-<li><strong>Version specification</strong>: These dependencies don't follow the conda matchspec specification.
-The <code>version</code> is a <a href="https://docs.rs/pep440_rs/0.3.12/pep440_rs/struct.VersionSpecifiers.html"><code>VersionSpecifier</code></a> and the <code>extras</code> are a list of <code>Strings</code>.
-So see the example below to see what type of definition is allowed.</li>
 </ul>
 </div>
+<h4 id="pep404-version-specification">PEP404 Version specification:<a class="headerlink" href="#pep404-version-specification" title="Permanent link">#</a></h4>
+<p>These dependencies don't follow the conda matchspec specification.
+The <code>version</code> is a string specification of the version according to <a href="https://packaging.python.org/en/latest/specifications/version-specifiers/">PEP404/PyPA</a>.
+Additionally, a list of extra's can be included, which are essentially optional dependencies.
+Note that this <code>version</code> is distinct from the conda MatchSpec type.
+See the example below to see how this is used in practice:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">[dependencies]</span>
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.6&quot;</span><span class="w"> </span><span class="c1"># Python is needed for the pypi dependencies!</span>
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
-</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="k">[pypi-dependencies]</span>
-</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="n">pytest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w">  </span><span class="c1"># This means any version (this `*` is custom in pixi)</span>
-</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="n">pre-commit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;~=3.5.0&quot;</span><span class="w"> </span><span class="c1"># Single string is of type VersionSpecifiers</span>
-</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="n">requests</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;= 2.8.1, ==2.8.*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">extras</span><span class="p">=[</span><span class="s2">&quot;security&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;tests&quot;</span><span class="p">]}</span><span class="w"> </span><span class="c1"># Using the map allows the user to add `extras`</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># When using pypi-dependencies, python is needed to resolve pypi dependencies</span>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="c1"># make sure to include this</span>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.6&quot;</span>
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>
+</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="k">[pypi-dependencies]</span>
+</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="n">pytest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w">  </span><span class="c1"># This means any version (the wildcard `*` is a pixi addition, not part of the specification)</span>
+</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="n">pre-commit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;~=3.5.0&quot;</span><span class="w"> </span><span class="c1"># This is a single version specifier</span>
+</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="c1"># Using the toml map allows the user to add `extras`</span>
+</span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a><span class="n">requests</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;= 2.8.1, ==2.8.*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">extras</span><span class="p">=[</span><span class="s2">&quot;security&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;tests&quot;</span><span class="p">]}</span>
 </span></code></pre></div>
-<details class="info">
-<summary>We use <code>rip</code> not <code>pip</code></summary>
-<p>We use <a href="https://github.com/prefix-dev/rip"><code>rip</code></a> which is our custom pypi package resolver.
-The <code>rip</code> resolve step is invoked after the conda dependencies have been resolved.
-As the conda packages can also install python packages, which are used in the rip resolver.
-Also <code>rip</code> needs to know the version of python that is being used.</p>
+<details class="tip">
+<summary>Did you know you can use: <code>add --pypi</code>?</summary>
+<p>Use the <code>--pypi</code> flag with the <code>add</code> command to quickly add PyPI packages from the CLI.
+E.g <code>pixi add --pypi flask</code></p>
 </details>
+<h4 id="source-dependencies">Source dependencies<a class="headerlink" href="#source-dependencies" title="Permanent link">#</a></h4>
+<p>The <a href="https://packaging.python.org/en/latest/specifications/source-distribution-format/">Source Distribution Format</a> is a source based format (sdist for short), that a package can include alongside the binary wheel format.
+Because these distributions need to be built, the need a python executable to do this.
+This is why python needs to be present in a conda environment.
+Sdists usually depend on system packages to be built, especially when compiling C/C++ based python bindings.
+Think for example of Python SDL2 bindindings depending on the C library: SDL2.
+To help built these dependencies we activate the conda environment that includes these pypi dependencies before resolving.
+This way when a source distribution depends on <code>gcc</code> for example, it's used from the conda environment instead of the system.</p>
 <h3 id="host-dependencies"><code>host-dependencies</code><a class="headerlink" href="#host-dependencies" title="Permanent link">#</a></h3>
 <p>This table contains dependencies that are needed to build your project but which should not be included when your project is installed as part of another project.
 In other words, these dependencies are available during the build but are no longer available when your project is installed.
