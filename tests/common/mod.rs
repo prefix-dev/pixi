@@ -163,6 +163,14 @@ impl PixiControl {
         Ok(pixi)
     }
 
+    /// Updates the complete manifest
+    pub fn update_manifest(&self, manifest: &str) -> miette::Result<()> {
+        std::fs::write(&self.manifest_path(), manifest)
+            .into_diagnostic()
+            .context("failed to write pixi.toml")?;
+        Ok(())
+    }
+
     /// Loads the project manifest and returns it.
     pub fn project(&self) -> miette::Result<Project> {
         Project::load_or_else_discover(Some(&self.manifest_path()))

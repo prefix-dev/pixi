@@ -1,4 +1,5 @@
 use super::{verify_environment_satisfiability, verify_platform_satisfiability, PlatformUnsat};
+use crate::lock_file::satisfiability::EnvironmentUnsat;
 use crate::{consts, project::Environment, project::SolveGroup, Project};
 use itertools::Itertools;
 use rattler_conda_types::Platform;
@@ -15,6 +16,10 @@ pub struct OutdatedEnvironments<'p> {
 
     /// The pypi environments that are considered out of date with the lock-file.
     pub pypi: HashMap<Environment<'p>, HashSet<Platform>>,
+
+    /// Records the environments for which the lock-file content should also be discarded. This is
+    /// the case for instance when the order of the channels changed.
+    pub disregard_locked_content: HashSet<Environment<'p>>,
 }
 
 impl<'p> OutdatedEnvironments<'p> {
@@ -23,9 +28,16 @@ impl<'p> OutdatedEnvironments<'p> {
     pub fn from_project_and_lock_file(project: &'p Project, lock_file: &LockFile) -> Self {
         let mut outdated_conda: HashMap<_, HashSet<_>> = HashMap::new();
         let mut outdated_pypi: HashMap<_, HashSet<_>> = HashMap::new();
+        let mut disregard_locked_content = HashSet::new();
 
         // Find all targets that are not satisfied by the lock-file
-        find_unsatisfiable_targets(project, lock_file, &mut outdated_conda, &mut outdated_pypi);
+        find_unsatisfiable_targets(
+            project,
+            lock_file,
+            &mut outdated_conda,
+            &mut outdated_pypi,
+            &mut disregard_locked_content,
+        );
 
         // Extend the outdated targets to include the solve groups
         let (mut conda_solve_groups_out_of_date, mut pypi_solve_groups_out_of_date) =
@@ -70,6 +82,7 @@ impl<'p> OutdatedEnvironments<'p> {
         Self {
             conda: outdated_conda,
             pypi: outdated_pypi,
+            disregard_locked_content,
         }
     }
 
@@ -87,6 +100,7 @@ fn find_unsatisfiable_targets<'p>(
     lock_file: &LockFile,
     outdated_conda: &mut HashMap<Environment<'p>, HashSet<Platform>>,
     outdated_pypi: &mut HashMap<Environment<'p>, HashSet<Platform>>,
+    disregard_locked_content: &mut HashSet<Environment<'p>>,
 ) {
     for environment in project.environments() {
         let platforms = environment.platforms();
@@ -117,6 +131,13 @@ fn find_unsatisfiable_targets<'p>(
                 .entry(environment.clone())
                 .or_default()
                 .extend(platforms);
+
+            match unsat {
+                EnvironmentUnsat::ChannelsMismatch => {
+                    // If the channels mismatched we also cannot trust any of the locked content.
+                    disregard_locked_content.insert(environment.clone());
+                }
+            }
 
             continue;
         }
