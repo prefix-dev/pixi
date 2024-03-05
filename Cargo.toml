@@ -34,9 +34,9 @@ futures = "0.3.30"
 http-cache-reqwest = "0.13.0"
 human_bytes = "0.4.3"
 humantime = "2.1.0"
-indexmap = { version = "2.2.4", features = ["serde"] }
+indexmap = { version = "2.2.5", features = ["serde"] }
 indicatif = "0.17.8"
-insta = { version = "1.35.1", features = ["yaml"] }
+insta = { version = "1.36.1", features = ["yaml"] }
 is_executable = "1.0.1"
 itertools = "0.12.1"
 lazy_static = "1.4.0"
