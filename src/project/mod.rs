@@ -490,7 +490,7 @@ pub fn find_project_root() -> Option<PathBuf> {
 mod tests {
     use super::*;
     use crate::project::manifest::FeatureName;
-    use insta::{assert_debug_snapshot, assert_display_snapshot};
+    use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use std::str::FromStr;
@@ -567,7 +567,7 @@ mod tests {
         .unwrap();
         let project = Project::from_manifest(manifest);
 
-        assert_display_snapshot!(format_dependencies(
+        assert_snapshot!(format_dependencies(
             project.dependencies(None, Some(Platform::Linux64))
         ));
     }
@@ -600,7 +600,7 @@ mod tests {
         .unwrap();
         let project = Project::from_manifest(manifest);
 
-        assert_display_snapshot!(format_dependencies(
+        assert_snapshot!(format_dependencies(
             project.dependencies(None, Some(Platform::Linux64))
         ));
     }
@@ -629,7 +629,7 @@ mod tests {
         .unwrap();
         let project = Project::from_manifest(manifest);
 
-        assert_display_snapshot!(format!(
+        assert_snapshot!(format!(
             "= Linux64\n{}\n\n= Win64\n{}\n\n= OsxArm64\n{}",
             fmt_activation_scripts(project.activation_scripts(Some(Platform::Linux64))),
             fmt_activation_scripts(project.activation_scripts(Some(Platform::Win64))),
