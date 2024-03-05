@@ -587,6 +587,25 @@ mod tests {
             }
         );
     }
+    #[test]
+    fn test_deserialize_pypi_from_path_editable() {
+        let requirement: IndexMap<PyPiPackageName, PyPiRequirement> = toml_edit::de::from_str(
+            r#"
+                foo = { path = "../numpy-test", editable = true }
+                "#,
+        )
+        .unwrap();
+        assert_eq!(
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                requirement: PyPiRequirementType::Path {
+                    path: PathBuf::from("../numpy-test"),
+                    editable: Some(true),
+                },
+                extras: None,
+            }
+        );
+    }
 
     #[test]
     fn test_deserialize_pypi_from_url() {
