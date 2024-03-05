@@ -243,34 +243,62 @@ pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 ```
 
 ### `pypi-dependencies` (Beta feature)
-Add any PyPI package that you want to install in the environment after the conda installation is finished.
-These are not available on [prefix.dev](https://prefix.dev/channels) but on [pypi.org](https://pypi.org/).
+??? info "Details regarding the PyPI integration"
+    We use [`uv`](https://github.com/astral-sh/uv), which is a new fast pip replacement written in Rust.
+
+    We integrate uv as a library, so we use the uv resolver, to which we pass the conda packages as 'locked'.
+    This disallows uv from installing these dependencies itself, and  ensures it uses the exact version of these packages in the resolution.
+    This is unique amongst conda based package managers, which usually just call pip from a subprocess.
+
+    The uv resolution is included in the lock file directly.
+
+Pixi directly supports depending on PyPI packages, the PyPA calls a distributed package a 'distribution'.
+There are [Source](https://packaging.python.org/en/latest/specifications/source-distribution-format/) and [Binary](https://packaging.python.org/en/latest/specifications/binary-distribution-format/) distributions both
+of which are supported by pixi.
+These distributions are installed into the environment after the conda environment has been resolved and installed.
+PyPI packages are not indexed on [prefix.dev](https://prefix.dev/channels) but can be viewed on [pypi.org](https://pypi.org/).
+
 !!! warning "Important considerations"
     - **Stability**: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the `dependencies` table where possible.
     - **Compatibility limitations**: Currently, pixi doesn't support:
         - `git` dependencies (`git+https://github.com/package-org/package.git`)
         - Source dependencies
         - Private PyPI repositories
-    - **Version specification**: These dependencies don't follow the conda matchspec specification.
-    The `version` is a [`VersionSpecifier`](https://docs.rs/pep440_rs/0.3.12/pep440_rs/struct.VersionSpecifiers.html) and the `extras` are a list of `Strings`.
-    So see the example below to see what type of definition is allowed.
+
+#### PEP404 Version specification:
+These dependencies don't follow the conda matchspec specification.
+The `version` is a string specification of the version according to [PEP404/PyPA](https://packaging.python.org/en/latest/specifications/version-specifiers/).
+Additionally, a list of extra's can be included, which are essentially optional dependencies.
+Note that this `version` is distinct from the conda MatchSpec type.
+See the example below to see how this is used in practice:
 
 
 ```toml
 [dependencies]
-python = ">=3.6" # Python is needed for the pypi dependencies!
+# When using pypi-dependencies, python is needed to resolve pypi dependencies
+# make sure to include this
+python = ">=3.6"
 
 [pypi-dependencies]
-pytest = "*"  # This means any version (this `*` is custom in pixi)
-pre-commit = "~=3.5.0" # Single string is of type VersionSpecifiers
-requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]} # Using the map allows the user to add `extras`
+pytest = "*"  # This means any version (the wildcard `*` is a pixi addition, not part of the specification)
+pre-commit = "~=3.5.0" # This is a single version specifier
+# Using the toml map allows the user to add `extras`
+requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]}
 ```
 
-??? info "We use `rip` not `pip`"
-    We use [`rip`](https://github.com/prefix-dev/rip) which is our custom pypi package resolver.
-    The `rip` resolve step is invoked after the conda dependencies have been resolved.
-    As the conda packages can also install python packages, which are used in the rip resolver.
-    Also `rip` needs to know the version of python that is being used.
+
+??? tip "Did you know you can use: `add --pypi`?"
+    Use the `--pypi` flag with the `add` command to quickly add PyPI packages from the CLI.
+    E.g `pixi add --pypi flask`
+
+#### Source dependencies
+The [Source Distribution Format](https://packaging.python.org/en/latest/specifications/source-distribution-format/) is a source based format (sdist for short), that a package can include alongside the binary wheel format.
+Because these distributions need to be built, the need a python executable to do this.
+This is why python needs to be present in a conda environment.
+Sdists usually depend on system packages to be built, especially when compiling C/C++ based python bindings.
+Think for example of Python SDL2 bindindings depending on the C library: SDL2.
+To help built these dependencies we activate the conda environment that includes these pypi dependencies before resolving.
+This way when a source distribution depends on `gcc` for example, it's used from the conda environment instead of the system.
 
 ### `host-dependencies`
 
