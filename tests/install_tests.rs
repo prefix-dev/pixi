@@ -54,7 +54,6 @@ async fn install_run_python() {
 /// version `2` is available. This is because `bar` was previously locked to version `1` and it is
 /// still a valid solution to keep using version `1` of bar.
 #[tokio::test]
-#[serial]
 async fn test_incremental_lock_file() {
     let mut package_database = PackageDatabase::default();
 
@@ -249,4 +248,56 @@ async fn pypi_reinstall_python() {
         // This is because the site-packages is not prefixed with the python version
         assert!(installed_311.iter().count() > 0);
     }
+}
+
+#[tokio::test]
+async fn test_channels_changed() {
+    // Write a channel with a package `bar` with only one version
+    let mut package_database_a = PackageDatabase::default();
+    package_database_a.add_package(Package::build("bar", "2").finish());
+    let channel_a = package_database_a.into_channel().await.unwrap();
+
+    // Write another channel with a package `bar` with only one version but another one.
+    let mut package_database_b = PackageDatabase::default();
+    package_database_b.add_package(Package::build("bar", "1").finish());
+    let channel_b = package_database_b.into_channel().await.unwrap();
+
+    let platform = Platform::current();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-channel-change"
+    channels = ["{channel_a}"]
+    platforms = ["{platform}"]
+
+    [dependencies]
+    bar = "*"
+    "#,
+        channel_a = channel_a.url(),
+    ))
+    .unwrap();
+
+    // Get an up-to-date lockfile and verify that bar version 2 was selected from channel `a`.
+    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    assert!(lock_file.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, platform, "bar ==2"));
+
+    // Switch the channel around
+    let platform = Platform::current();
+    pixi.update_manifest(&format!(
+        r#"
+    [project]
+    name = "test-channel-change"
+    channels = ["{channel_b}"]
+    platforms = ["{platform}"]
+
+    [dependencies]
+    bar = "*"
+    "#,
+        channel_b = channel_b.url()
+    ))
+    .unwrap();
+
+    // Get an up-to-date lockfile and verify that bar version 1 was now selected from channel `b`.
+    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    assert!(lock_file.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, platform, "bar ==1"));
 }

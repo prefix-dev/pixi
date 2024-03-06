@@ -546,6 +546,14 @@ pub async fn ensure_up_to_date_lock_file(
     let locked_grouped_repodata_records = all_grouped_environments
         .iter()
         .filter_map(|group| {
+            // If any content of the environments in the group are outdated we need to disregard the locked content.
+            if group
+                .environments()
+                .any(|e| outdated.disregard_locked_content.contains(&e))
+            {
+                return None;
+            }
+
             let records = match group {
                 GroupedEnvironment::Environment(env) => locked_repodata_records.get(env)?.clone(),
                 GroupedEnvironment::Group(group) => {
