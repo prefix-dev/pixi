@@ -23,6 +23,7 @@ use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource};
 pub use python::PyPiRequirement;
+use rattler_conda_types::ParseStrictness::Strict;
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
 use serde::de::{DeserializeSeed, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
@@ -941,7 +942,9 @@ impl<'de, 'a> DeserializeSeed<'de> for &'a NamelessMatchSpecWrapper {
         D: Deserializer<'de>,
     {
         serde_untagged::UntaggedEnumVisitor::new()
-            .string(|str| NamelessMatchSpec::from_str(str).map_err(serde::de::Error::custom))
+            .string(|str| {
+                NamelessMatchSpec::from_str(str, Strict).map_err(serde::de::Error::custom)
+            })
             .map(|map| {
                 NamelessMatchSpec::deserialize(serde::de::value::MapAccessDeserializer::new(map))
             })
@@ -1168,7 +1171,7 @@ mod tests {
     use super::*;
     use crate::project::manifest::channel::PrioritizedChannel;
     use insta::assert_snapshot;
-    use rattler_conda_types::{Channel, ChannelConfig};
+    use rattler_conda_types::{Channel, ChannelConfig, ParseStrictness};
     use rstest::*;
     use std::str::FromStr;
     use tempfile::tempdir;
@@ -2473,7 +2476,7 @@ bar = "*"
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" baz >=1.2.3").unwrap(),
+                &MatchSpec::from_str(" baz >=1.2.3", Strict).unwrap(),
                 SpecType::Run,
                 None,
                 &FeatureName::Default,
@@ -2494,7 +2497,7 @@ bar = "*"
         );
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" bal >=2.3").unwrap(),
+                &MatchSpec::from_str(" bal >=2.3", Strict).unwrap(),
                 SpecType::Run,
                 None,
                 &FeatureName::Named("test".to_string()),
@@ -2518,7 +2521,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" boef >=2.3").unwrap(),
+                &MatchSpec::from_str(" boef >=2.3", Strict).unwrap(),
                 SpecType::Run,
                 Some(Platform::Linux64),
                 &FeatureName::Named("extra".to_string()),
@@ -2543,7 +2546,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" cmake >=2.3").unwrap(),
+                &MatchSpec::from_str(" cmake >=2.3", ParseStrictness::Strict).unwrap(),
                 SpecType::Build,
                 Some(Platform::Linux64),
                 &FeatureName::Named("build".to_string()),

@@ -13,8 +13,8 @@ use indexmap::IndexMap;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{
     version_spec::{LogicalOperator, RangeOperator},
-    Channel, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version, VersionBumpType,
-    VersionSpec,
+    Channel, MatchSpec, NamelessMatchSpec, PackageName, ParseStrictness, Platform, Version,
+    VersionBumpType, VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl};
@@ -142,7 +142,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .specs
                 .clone()
                 .into_iter()
-                .map(|s| MatchSpec::from_str(&s))
+                .map(|s| MatchSpec::from_str(&s, ParseStrictness::Strict))
                 .collect::<Result<Vec<_>, _>>()
                 .into_diagnostic()?;
             add_conda_specs_to_project(

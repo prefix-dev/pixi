@@ -9,6 +9,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
+use rattler_conda_types::ParseStrictness::Strict;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
 use regex::Regex;
 use std::io::{Error, ErrorKind, Write};
@@ -318,7 +319,7 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
     for dep in deps {
         match dep {
             CondaEnvDep::Conda(d) => {
-                let match_spec = MatchSpec::from_str(&d).into_diagnostic()?;
+                let match_spec = MatchSpec::from_str(&d, Strict).into_diagnostic()?;
                 if let Some(channel) = match_spec.clone().channel {
                     picked_up_channels.push(channel);
                 }
@@ -351,7 +352,7 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
                 .is_some()
         })
     {
-        conda_deps.push(MatchSpec::from_str("pip").into_diagnostic()?);
+        conda_deps.push(MatchSpec::from_str("pip", Strict).into_diagnostic()?);
     }
 
     Ok((conda_deps, pip_deps, picked_up_channels))
@@ -433,11 +434,11 @@ mod tests {
         assert_eq!(
             conda_deps,
             vec![
-                MatchSpec::from_str("python").unwrap(),
-                MatchSpec::from_str("pytorch::torchvision").unwrap(),
-                MatchSpec::from_str("conda-forge::pytest").unwrap(),
-                MatchSpec::from_str("wheel=0.31.1").unwrap(),
-                MatchSpec::from_str("pip").unwrap(),
+                MatchSpec::from_str("python", Strict).unwrap(),
+                MatchSpec::from_str("pytorch::torchvision", Strict).unwrap(),
+                MatchSpec::from_str("conda-forge::pytest", Strict).unwrap(),
+                MatchSpec::from_str("wheel=0.31.1", Strict).unwrap(),
+                MatchSpec::from_str("pip", Strict).unwrap(),
             ]
         );
 
@@ -588,7 +589,10 @@ mod tests {
         let (conda_deps, pip_deps, _) =
             parse_dependencies(conda_env_file_data.dependencies().clone()).unwrap();
 
-        assert_eq!(conda_deps, vec![MatchSpec::from_str("pip==24.0").unwrap(),]);
+        assert_eq!(
+            conda_deps,
+            vec![MatchSpec::from_str("pip==24.0", Strict).unwrap(),]
+        );
 
         assert_eq!(
             pip_deps,

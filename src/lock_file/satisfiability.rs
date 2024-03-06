@@ -7,12 +7,10 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::Requirement;
+use rattler_conda_types::ParseStrictness::Strict;
 use rattler_conda_types::{MatchSpec, ParseMatchSpecError, Platform};
 use rattler_lock::{CondaPackage, Package, PypiPackage};
-use std::{
-    collections::{HashMap, HashSet},
-    str::FromStr,
-};
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 use uv_normalize::PackageName;
 
@@ -223,7 +221,7 @@ pub fn verify_conda_platform_satisfiability(
             .file_name()
             .unwrap_or_else(|| record.package_record().name.as_normalized());
         for depends in &record.package_record().depends {
-            let spec = MatchSpec::from_str(depends.as_str())
+            let spec = MatchSpec::from_str(depends.as_str(), Strict)
                 .map_err(|e| PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e))?;
             specs.push((spec, source))
         }

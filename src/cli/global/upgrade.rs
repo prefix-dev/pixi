@@ -1,8 +1,8 @@
-use std::str::FromStr;
 use std::sync::Arc;
 
 use clap::Parser;
 use miette::IntoDiagnostic;
+use rattler_conda_types::ParseStrictness::Strict;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
 use rattler_networking::AuthenticationMiddleware;
 
@@ -41,7 +41,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
 
     // Find the MatchSpec we want to install
-    let package_matchspec = MatchSpec::from_str(&package).into_diagnostic()?;
+    let package_matchspec = MatchSpec::from_str(&package, Strict).into_diagnostic()?;
 
     // Return with error if this package is not globally installed.
     if !list_global_packages()
