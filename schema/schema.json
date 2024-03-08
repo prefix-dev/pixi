@@ -1,0 +1,1184 @@
+{
+  "$defs": {
+    "Activation": {
+      "additionalProperties": false,
+      "properties": {
+        "scripts": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The scripts to run when the environment is activated",
+          "examples": [
+            "activate.sh",
+            "activate.bat"
+          ],
+          "title": "Scripts"
+        }
+      },
+      "title": "Activation",
+      "type": "object"
+    },
+    "ChannelInlineTable": {
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "format": "uri",
+              "minLength": 1,
+              "type": "string"
+            }
+          ],
+          "description": "The channel the packages needs to be fetched from",
+          "title": "Channel"
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The priority of the channel",
+          "title": "Priority"
+        }
+      },
+      "required": [
+        "channel"
+      ],
+      "title": "ChannelInlineTable",
+      "type": "object"
+    },
+    "Environment": {
+      "additionalProperties": false,
+      "properties": {
+        "features": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The features that define the environment",
+          "title": "Features"
+        },
+        "solve-group": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The group name for environments that should be solved together",
+          "title": "Solve-Group"
+        }
+      },
+      "title": "Environment",
+      "type": "object"
+    },
+    "Feature": {
+      "additionalProperties": false,
+      "properties": {
+        "channels": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/ChannelInlineTable"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The conda channels that can be used in the feature",
+          "title": "Channels"
+        },
+        "platforms": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The platforms that the feature supports, union of all features combined in one environment is used for the environment.",
+          "title": "Platforms"
+        },
+        "dependencies": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/MatchspecTable"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The conda dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
+          "title": "Dependencies"
+        },
+        "host-dependencies": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/MatchspecTable"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The host conda dependencies, used in the build process",
+          "title": "Host-Dependencies"
+        },
+        "build-dependencies": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/MatchspecTable"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The build conda dependencies, used in the build process",
+          "title": "Build-Dependencies"
+        },
+        "pypi-dependencies": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/PyPIRequirementTable"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The pypi dependencies",
+          "title": "Pypi-Dependencies"
+        },
+        "tasks": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TaskInlineTable"
+                  },
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The tasks of the project",
+          "title": "Tasks"
+        },
+        "activation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Activation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The scripts used on the activation of the project"
+        },
+        "system-requirements": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SystemRequirements"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The system requirements of the project"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/Target"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The targets of the project",
+          "examples": [
+            {
+              "linux": {
+                "dependencies": {
+                  "python": "3.8"
+                }
+              }
+            }
+          ],
+          "title": "Target"
+        }
+      },
+      "title": "Feature",
+      "type": "object"
+    },
+    "LibcFamily": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The family of the libc",
+          "examples": [
+            "glibc",
+            "musl"
+          ],
+          "title": "Family"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The version of libc",
+          "title": "Version"
+        }
+      },
+      "title": "LibcFamily",
+      "type": "object"
+    },
+    "MatchspecTable": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The version of the package in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
+          "title": "Version"
+        },
+        "build": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The build string of the package",
+          "title": "Build"
+        },
+        "channel": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The channel the packages needs to be fetched from",
+          "examples": [
+            "conda-forge",
+            "pytorch",
+            "https://repo.prefix.dev/conda-forge"
+          ],
+          "title": "Channel"
+        }
+      },
+      "title": "MatchspecTable",
+      "type": "object"
+    },
+    "Project": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "The name of the project, we advice to use the name of the repository",
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The version of the project, we advice to use semver",
+          "examples": [
+            "1.2.3"
+          ],
+          "title": "Version"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A short description of the project",
+          "title": "Description"
+        },
+        "authors": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The authors of the project",
+          "examples": [
+            "John Doe <j.doe@prefix.dev>"
+          ],
+          "title": "Authors"
+        },
+        "channels": {
+          "default": null,
+          "description": "The conda channels that can be used in the project",
+          "items": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/ChannelInlineTable"
+              }
+            ]
+          },
+          "title": "Channels",
+          "type": "array"
+        },
+        "platforms": {
+          "description": "The platforms that the project supports",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Platforms",
+          "type": "array"
+        },
+        "license": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The license of the project",
+          "title": "License"
+        },
+        "license_file": {
+          "anyOf": [
+            {
+              "pattern": "^[^\\\\]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The path to the license file of the project",
+          "title": "License File"
+        },
+        "readme": {
+          "anyOf": [
+            {
+              "pattern": "^[^\\\\]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The path to the readme file of the project",
+          "title": "Readme"
+        },
+        "homepage": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The url of the homepage of the project",
+          "title": "Homepage"
+        },
+        "repository": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The url of the repository of the project",
+          "title": "Repository"
+        },
+        "documentation": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The url of the documentation of the project",
+          "title": "Documentation"
+        }
+      },
+      "required": [
+        "name",
+        "platforms"
+      ],
+      "title": "Project",
+      "type": "object"
+    },
+    "PyPIRequirementTable": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
+          "title": "Version"
+        },
+        "extras": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The extras of the package",
+          "title": "Extras"
+        }
+      },
+      "title": "PyPIRequirementTable",
+      "type": "object"
+    },
+    "SystemRequirements": {
+      "additionalProperties": false,
+      "properties": {
+        "linux": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum version of the linux kernel",
+          "title": "Linux"
+        },
+        "unix": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the project supports unix",
+          "examples": [
+            "true"
+          ],
+          "title": "Unix"
+        },
+        "libc": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LibcFamily"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum version of glibc",
+          "title": "Libc"
+        },
+        "cuda": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum version of cuda",
+          "title": "Cuda"
+        },
+        "archspec": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The architecture the project supports",
+          "title": "Archspec"
+        },
+        "macos": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum version of macos",
+          "title": "Macos"
+        }
+      },
+      "title": "SystemRequirements",
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "properties": {
+        "dependencies": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/MatchspecTable"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The conda dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
+          "title": "Dependencies"
+        },
+        "host-dependencies": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/MatchspecTable"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The host conda dependencies, used in the build process",
+          "title": "Host-Dependencies"
+        },
+        "build-dependencies": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/MatchspecTable"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The build conda dependencies, used in the build process",
+          "title": "Build-Dependencies"
+        },
+        "pypi-dependencies": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/PyPIRequirementTable"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The pypi dependencies",
+          "title": "Pypi-Dependencies"
+        },
+        "tasks": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TaskInlineTable"
+                  },
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The tasks of the project",
+          "title": "Tasks"
+        },
+        "activation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Activation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The scripts used on the activation of the project"
+        }
+      },
+      "title": "Target",
+      "type": "object"
+    },
+    "TaskInlineTable": {
+      "additionalProperties": false,
+      "properties": {
+        "cmd": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The command to run the task",
+          "title": "Cmd"
+        },
+        "cwd": {
+          "anyOf": [
+            {
+              "pattern": "^[^\\\\]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The working directory to run the task",
+          "title": "Cwd"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The tasks that this task depends on",
+          "title": "Depends On"
+        }
+      },
+      "title": "TaskInlineTable",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Project"
+        }
+      ],
+      "description": "The projects metadata information"
+    },
+    "dependencies": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The conda dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
+      "title": "Dependencies"
+    },
+    "host-dependencies": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The host conda dependencies, used in the build process",
+      "title": "Host-Dependencies"
+    },
+    "build-dependencies": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The build conda dependencies, used in the build process",
+      "title": "Build-Dependencies"
+    },
+    "pypi-dependencies": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/PyPIRequirementTable"
+              }
+            ]
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The pypi dependencies",
+      "title": "Pypi-Dependencies"
+    },
+    "tasks": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TaskInlineTable"
+              },
+              {
+                "minLength": 1,
+                "type": "string"
+              }
+            ]
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The tasks of the project",
+      "title": "Tasks"
+    },
+    "system-requirements": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SystemRequirements"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The system requirements of the project"
+    },
+    "environments": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Environment"
+              },
+              {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The environments of the project",
+      "title": "Environments"
+    },
+    "feature": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Feature"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The features of the project",
+      "title": "Feature"
+    },
+    "activation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Activation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The scripts used on the activation of the project"
+    },
+    "target": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Target"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The targets of the project",
+      "examples": [
+        {
+          "linux": {
+            "dependencies": {
+              "python": "3.8"
+            }
+          }
+        }
+      ],
+      "title": "Target"
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "BaseManifest",
+  "type": "object"
+}

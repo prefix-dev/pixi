@@ -1,6 +1,7 @@
 import argparse
 import ctypes
 import sys
+
 from loguru import logger as log
 
 log.remove()
@@ -49,7 +50,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "n",
         type=int,
-        nargs='?',
+        nargs="?",
         default=10,
         help="Number for which to calculate the factorial."
     )
