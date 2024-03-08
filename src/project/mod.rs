@@ -479,6 +479,10 @@ impl Project {
         })
         .await
     }
+
+    pub(crate) fn task_cache_folder(&self) -> PathBuf {
+        self.pixi_dir().join(consts::TASK_CACHE_DIR)
+    }
 }
 
 /// Iterates over the current directory and all its parent directories and returns the first

@@ -31,10 +31,19 @@ configure = { cmd = [
     # We wanna build in the .build directory
     "-B",
     ".build",
-] }
+], sources = ["CMakeLists.txt"] }
 
 # Build the executable but make sure CMake is configured first.
-build = { cmd = ["ninja", "-C", ".build"], depends_on = ["configure"] }
+[feature.build.tasks.build]
+cmd = ["ninja", "-C", ".build"]
+depends_on = ["configure"]
+sources = [
+    "CMakeLists.txt",
+    "src/*"
+]
+generates = [
+    ".build/bin/sdl_example"
+]
 
 [environments]
 build = ["build"]

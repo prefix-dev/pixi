@@ -1,4 +1,5 @@
 use crate::consts::TASK_STYLE;
+use crate::lock_file::LockFileDerivedData;
 use crate::project::Environment;
 use crate::task::TaskName;
 use crate::{
@@ -19,6 +20,9 @@ use std::{
 };
 use thiserror::Error;
 use tokio::task::JoinHandle;
+
+use super::task_hash::TaskCache;
+use super::TaskHash;
 
 /// Runs task in project.
 #[derive(Default, Debug)]
@@ -180,6 +184,68 @@ impl<'p> ExecutableTask<'p> {
             stdout: stdout_handle.await.unwrap(),
             stderr: stderr_handle.await.unwrap(),
         })
+    }
+
+    pub(crate) async fn can_skip(
+        &self,
+        lock_file: &LockFileDerivedData<'_>,
+    ) -> Result<bool, std::io::Error> {
+        tracing::info!("Checking if task can be skipped");
+        let task_cache_folder = self.project().task_cache_folder();
+
+        let project_name = self.project().name();
+        let environment_name = self.run_environment.name();
+
+        let cache_name = format!(
+            "{}-{}-{}.json",
+            project_name,
+            environment_name,
+            self.name().unwrap_or("default")
+        );
+
+        let cache_file = task_cache_folder.join(cache_name);
+        if cache_file.exists() {
+            let cache = std::fs::read_to_string(&cache_file).unwrap();
+            let cache: TaskCache = serde_json::from_str(&cache).unwrap();
+            let hash = TaskHash::from_task(self, &lock_file.lock_file).await;
+            if let Ok(Some(hash)) = hash {
+                return Ok(hash.computation_hash() == cache.hash);
+            }
+        }
+        Ok(false)
+    }
+
+    pub(crate) async fn save_cache(
+        &self,
+        lock_file: &LockFileDerivedData<'_>,
+    ) -> Result<(), std::io::Error> {
+        let task_cache_folder = self.project().task_cache_folder();
+        if !task_cache_folder.exists() {
+            std::fs::create_dir_all(&task_cache_folder)?;
+        }
+        let project_name = self.project().name();
+        let environment_name = self.run_environment.name();
+
+        let cache_name = format!(
+            "{}-{}-{}.json",
+            project_name,
+            environment_name,
+            self.name().unwrap_or("default")
+        );
+
+        let cache_file = task_cache_folder.join(cache_name);
+        if let Some(hash) = TaskHash::from_task(self, &lock_file.lock_file)
+            .await
+            .unwrap()
+        {
+            let cache = TaskCache {
+                hash: hash.computation_hash(),
+            };
+            let cache = serde_json::to_string(&cache).unwrap();
+            std::fs::write(&cache_file, cache)
+        } else {
+            Ok(())
+        }
     }
 }
 

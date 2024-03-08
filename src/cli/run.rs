@@ -142,6 +142,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             );
         }
 
+        // check task cache
+        if executable_task
+            .can_skip(&lock_file)
+            .await
+            .into_diagnostic()?
+        {
+            eprintln!("Task can be skipped (cache hit) 🚀");
+            task_idx += 1;
+            continue;
+        }
+
         // If we don't have a command environment yet, we need to compute it. We lazily compute the
         // task environment because we only need the environment if a task is actually executed.
         let task_env: &_ = match task_envs.entry(executable_task.run_environment.clone()) {
@@ -167,6 +178,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(err) => return Err(err.into()),
         }
+
+        // Update the task cache with the new hash
+        executable_task
+            .save_cache(&lock_file)
+            .await
+            .into_diagnostic()?;
     }
 
     Ok(())
