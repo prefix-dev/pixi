@@ -28,4 +28,4 @@ jobs:
 
         - name: Test Schema
           run: |
-            pixi run test-schema
+            pixi run -e default test-schema
