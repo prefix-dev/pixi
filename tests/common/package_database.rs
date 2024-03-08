@@ -11,6 +11,19 @@ use rattler_conda_types::{
     VersionWithSource,
 };
 use std::{collections::HashSet, path::Path};
+use tempfile::TempDir;
+use url::Url;
+
+pub struct LocalChannel {
+    dir: TempDir,
+    db: PackageDatabase,
+}
+
+impl LocalChannel {
+    pub fn url(&self) -> Url {
+        Url::from_file_path(self.dir.path()).unwrap()
+    }
+}
 
 /// A database of packages
 #[derive(Default, Clone, Debug)]
@@ -79,6 +92,13 @@ impl PackageDatabase {
         }
 
         Ok(())
+    }
+
+    /// Converts this database into a local channel which can be referenced by a pixi project.
+    pub async fn into_channel(self) -> miette::Result<LocalChannel> {
+        let dir = TempDir::new().into_diagnostic()?;
+        self.write_repodata(dir.path()).await?;
+        Ok(LocalChannel { dir, db: self })
     }
 
     /// Returns all packages for the specified platform.

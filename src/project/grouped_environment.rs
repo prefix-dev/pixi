@@ -53,6 +53,14 @@ impl<'p> From<Environment<'p>> for GroupedEnvironment<'p> {
 }
 
 impl<'p> GroupedEnvironment<'p> {
+    /// Returns an iterator over all the environments in the group.
+    pub fn environments(&self) -> impl Iterator<Item = Environment<'p>> {
+        match self {
+            GroupedEnvironment::Group(group) => Either::Left(group.environments()),
+            GroupedEnvironment::Environment(env) => Either::Right(std::iter::once(env.clone())),
+        }
+    }
+
     /// Constructs a `GroupedEnvironment` from a `GroupedEnvironmentName`.
     pub fn from_name(project: &'p Project, name: &GroupedEnvironmentName) -> Option<Self> {
         match name {
