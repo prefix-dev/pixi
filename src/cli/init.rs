@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
-use rattler_conda_types::ParseStrictness::Strict;
+use rattler_conda_types::ParseStrictness::{Lenient, Strict};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
 use regex::Regex;
 use std::io::{Error, ErrorKind, Write};
@@ -319,7 +319,7 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
     for dep in deps {
         match dep {
             CondaEnvDep::Conda(d) => {
-                let match_spec = MatchSpec::from_str(&d, Strict).into_diagnostic()?;
+                let match_spec = MatchSpec::from_str(&d, Lenient).into_diagnostic()?;
                 if let Some(channel) = match_spec.clone().channel {
                     picked_up_channels.push(channel);
                 }
