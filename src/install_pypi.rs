@@ -360,7 +360,7 @@ pub async fn update_python_distributions(
 
     tracing::debug!("[Install] Using Python Interpreter: {:?}", interpreter);
     // Create a custom venv
-    let venv = PythonEnvironment::from_interpreter(interpreter, prefix.root());
+    let venv = PythonEnvironment::from_interpreter(interpreter);
     // Prep the build context.
     let build_dispatch = BuildDispatch::new(
         &uv_context.registry_client,
@@ -372,6 +372,7 @@ pub async fn update_python_distributions(
         &uv_context.in_flight,
         SetupPyStrategy::default(),
         &config_settings,
+        uv_traits::BuildIsolation::Isolated,
         &uv_context.no_build,
         &uv_context.no_binary,
     )

@@ -308,6 +308,7 @@ pub async fn resolve_pypi(
         &context.in_flight,
         SetupPyStrategy::default(),
         &config_settings,
+        uv_traits::BuildIsolation::Isolated,
         &context.no_build,
         &context.no_binary,
     )
