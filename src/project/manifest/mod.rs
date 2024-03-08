@@ -948,7 +948,7 @@ impl<'de, 'a> DeserializeSeed<'de> for &'a NamelessMatchSpecWrapper {
                     Err(_) => {
                         let spec = NamelessMatchSpec::from_str(str, Lenient).map_err(serde::de::Error::custom)?;
                         tracing::warn!("Parsed '{str}' as '{spec}', in a future version this will become an error.", spec=&spec);
-                        return Ok(spec);
+                        Ok(spec)
                     }
                 }
             })
