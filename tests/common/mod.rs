@@ -17,7 +17,7 @@ use pixi::{
     consts, EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
     TaskGraphError,
 };
-use rattler_conda_types::{MatchSpec, Platform};
+use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::cli::run::get_task_env;
@@ -405,13 +405,13 @@ pub trait IntoMatchSpec {
 
 impl IntoMatchSpec for &str {
     fn into(self) -> MatchSpec {
-        MatchSpec::from_str(self).unwrap()
+        MatchSpec::from_str(self, Lenient).unwrap()
     }
 }
 
 impl IntoMatchSpec for String {
     fn into(self) -> MatchSpec {
-        MatchSpec::from_str(&self).unwrap()
+        MatchSpec::from_str(&self, Lenient).unwrap()
     }
 }
 
