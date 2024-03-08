@@ -397,18 +397,18 @@ mod tests {
           - conda-forge::pytest
           - wheel=0.31.1
           - sel(linux): blabla
+          - foo >=1.2.3.*  # only valid when parsing in lenient mode
           - pip:
             - requests
             - git+https://git@github.com/fsschneider/DeepOBS.git@develop#egg=deepobs
             - torch==1.8.1
         "#;
 
-        let f = tempfile::NamedTempFile::new().unwrap();
-        let path = f.path();
-        let mut file = std::fs::File::create(path).unwrap();
-        file.write_all(example_conda_env_file.as_bytes()).unwrap();
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        f.write_all(example_conda_env_file.as_bytes()).unwrap();
+        let (_file, path) = f.into_parts();
 
-        let conda_env_file_data = CondaEnvFile::from_path(path).unwrap();
+        let conda_env_file_data = CondaEnvFile::from_path(&path).unwrap();
 
         assert_eq!(conda_env_file_data.name(), Some("pixi_example_project"));
         assert_eq!(
@@ -438,6 +438,7 @@ mod tests {
                 MatchSpec::from_str("pytorch::torchvision", Strict).unwrap(),
                 MatchSpec::from_str("conda-forge::pytest", Strict).unwrap(),
                 MatchSpec::from_str("wheel=0.31.1", Strict).unwrap(),
+                MatchSpec::from_str("foo >=1.2.3", Strict).unwrap(),
                 MatchSpec::from_str("pip", Strict).unwrap(),
             ]
         );

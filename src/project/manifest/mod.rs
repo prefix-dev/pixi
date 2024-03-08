@@ -23,7 +23,7 @@ use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource};
 pub use python::PyPiRequirement;
-use rattler_conda_types::ParseStrictness::Strict;
+use rattler_conda_types::ParseStrictness::{Lenient, Strict};
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
 use serde::de::{DeserializeSeed, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
@@ -943,7 +943,14 @@ impl<'de, 'a> DeserializeSeed<'de> for &'a NamelessMatchSpecWrapper {
     {
         serde_untagged::UntaggedEnumVisitor::new()
             .string(|str| {
-                NamelessMatchSpec::from_str(str, Strict).map_err(serde::de::Error::custom)
+                match NamelessMatchSpec::from_str(str, Strict) {
+                    Ok(spec) => Ok(spec),
+                    Err(_) => {
+                        let spec = NamelessMatchSpec::from_str(str, Lenient).map_err(serde::de::Error::custom)?;
+                        tracing::warn!("Parsed '{str}' as '{spec}', in a future version this will become an error.", spec=&spec);
+                        return Ok(spec);
+                    }
+                }
             })
             .map(|map| {
                 NamelessMatchSpec::deserialize(serde::de::value::MapAccessDeserializer::new(map))
