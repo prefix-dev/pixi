@@ -5,7 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.15.1](https://github.com/ruben-arts/pixi/compare/v0.15.1...v0.15.2)  - 2024-02-29
+## [0.16.0] - 2024-03-09
+### ✨ Highlights
+- This release removes [`rip`]() and add [`uv`]() as the PyPI resolver and installer.
+
+### 📃 Details
+#### Added
+- Add tcsh install support by @obust in [#898](https://github.com/prefix-dev/pixi/pull/898)
+- Add user agent to pixi http client by @baszalmstra in [#892](https://github.com/prefix-dev/pixi/pull/892)
+- Add a schema for the pixi.toml by @ruben-arts in [#936](https://github.com/prefix-dev/pixi/pull/936)
+
+#### Changed
+- Switch from rip to uv by @tdejager in [#863](https://github.com/prefix-dev/pixi/pull/863)
+- Move uv options into context by @tdejager in [#911](https://github.com/prefix-dev/pixi/pull/911)
+- Add Deltares projects to Community.md by @Hofer-Julian in [#920](https://github.com/prefix-dev/pixi/pull/920)
+- Upgrade to uv 0.1.16, updated for changes in the API by @tdejager in [#935](https://github.com/prefix-dev/pixi/pull/935)
+
+#### Fixed
+- Made the uv re-install logic a bit more clear by @tdejager in [#894](https://github.com/prefix-dev/pixi/pull/894)
+- Avoid duplicate pip dependency while importing environment.yaml by @sumanth-manchala in [#890](https://github.com/prefix-dev/pixi/pull/890)
+- Handle custom channels when importing from env yaml by @sumanth-manchala in [#901](https://github.com/prefix-dev/pixi/pull/901)
+- Pip editable installs getting uninstalled by @renan-r-santos in [#902](https://github.com/prefix-dev/pixi/pull/902)
+- Highlight pypi deps in pixi list by @sumanth-manchala in [#907](https://github.com/prefix-dev/pixi/pull/907)
+- Default to the default environment if possible by @ruben-arts in [#921](https://github.com/prefix-dev/pixi/pull/921)
+- Switching channels by @baszalmstra in [#923](https://github.com/prefix-dev/pixi/pull/923)
+- Use correct name of the channel on adding by @ruben-arts in [#928](https://github.com/prefix-dev/pixi/pull/928)
+- Turn back on jlap for faster repodata fetching by @ruben-arts in [#937](https://github.com/prefix-dev/pixi/pull/937)
+- Remove dists site-packages's when python interpreter changes by @tdejager in [#896](https://github.com/prefix-dev/pixi/pull/896)
+
+## New Contributors
+* @obust made their first contribution in [#898](https://github.com/prefix-dev/pixi/pull/898)
+* @renan-r-santos made their first contribution in [#902](https://github.com/prefix-dev/pixi/pull/902)
+
+[Full Commit history](https://github.com/prefix-dev/pixi/compare/v0.15.2..v0.16.0)
+
+
+## [0.15.2](https://github.com/prefix-dev/pixi/compare/v0.15.1...v0.15.2)  - 2024-02-29
 ### 📃 Details
 
 #### Changed
@@ -24,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [Full commit history](https://github.com/prefix-dev/pixi/compare/v0.15.1..v0.15.2)
 
 
-## [0.15.1](https://github.com/ruben-arts/pixi/compare/v0.15.0...v0.15.1) - 2024-02-26
+## [0.15.1](https://github.com/prefix-dev/pixi/compare/v0.15.0...v0.15.1) - 2024-02-26
 ### 📃 Details
 
 #### Added
