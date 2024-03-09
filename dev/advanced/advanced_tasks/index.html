@@ -1080,46 +1080,32 @@ The task shell is a limited implementation of a bourne-shell interface.</p>
 </ul>
 <h3 id="syntax">Syntax<a class="headerlink" href="#syntax" title="Permanent link">#</a></h3>
 <ul>
-<li><strong>Boolean list:</strong> use <code>&amp;&amp;</code> or <code>||</code> to separate two commands.<ul>
-<li><code>&amp;&amp;</code>: if the command before <code>&amp;&amp;</code> succeeds continue with the next command.</li>
-<li><code>||</code>: if the command before <code>||</code> fails continue with the next command.</li>
-</ul>
-</li>
+<li><strong>Boolean list:</strong> use <code>&amp;&amp;</code> or <code>||</code> to separate two commands.
+    - <code>&amp;&amp;</code>: if the command before <code>&amp;&amp;</code> succeeds continue with the next command.
+    - <code>||</code>: if the command before <code>||</code> fails continue with the next command.</li>
 <li><strong>Sequential lists:</strong> use <code>;</code> to run two commands without checking if the first command failed or succeeded.</li>
-<li><strong>Environment variables:</strong><ul>
-<li>Set env variable using: <code>export ENV_VAR=value</code></li>
-<li>Use env variable using: <code>$ENV_VAR</code></li>
-<li>unset env variable using <code>unset ENV_VAR</code></li>
-</ul>
-</li>
-<li><strong>Shell variables:</strong> Shell variables are similar to environment variables, but won’t be exported to spawned commands.<ul>
-<li>Set them: <code>VAR=value</code></li>
-<li>use them: <code>VAR=value &amp;&amp; echo $VAR</code></li>
-</ul>
-</li>
-<li><strong>Pipelines:</strong> Use the stdout output of a command into the stdin a following command<ul>
-<li><code>|</code>: <code>echo Hello | python receiving_app.py</code></li>
-<li><code>|&amp;</code>: use this to also get the stderr as input.</li>
-</ul>
-</li>
-<li><strong>Command substitution:</strong> <code>$()</code> to use the output of a command as input for another command.<ul>
-<li><code>python main.py $(git rev-parse HEAD)</code></li>
-</ul>
-</li>
+<li><strong>Environment variables:</strong>
+    - Set env variable using: <code>export ENV_VAR=value</code>
+    - Use env variable using: <code>$ENV_VAR</code>
+    - unset env variable using <code>unset ENV_VAR</code></li>
+<li><strong>Shell variables:</strong> Shell variables are similar to environment variables, but won’t be exported to spawned commands.
+    - Set them: <code>VAR=value</code>
+    - use them: <code>VAR=value &amp;&amp; echo $VAR</code></li>
+<li><strong>Pipelines:</strong> Use the stdout output of a command into the stdin a following command
+    - <code>|</code>: <code>echo Hello | python receiving_app.py</code>
+    - <code>|&amp;</code>: use this to also get the stderr as input.</li>
+<li><strong>Command substitution:</strong> <code>$()</code> to use the output of a command as input for another command.
+    - <code>python main.py $(git rev-parse HEAD)</code></li>
 <li><strong>Negate exit code:</strong> <code>!</code> before any command will negate the exit code from 1 to 0 or visa-versa.</li>
-<li><strong>Redirects:</strong> <code>&gt;</code> to redirect the stdout to a file.<ul>
-<li><code>echo hello &gt; file.txt</code> will put <code>hello</code> in <code>file.txt</code> and overwrite existing text.</li>
-<li><code>python main.py 2&gt; file.txt</code> will put the <code>stderr</code> output in <code>file.txt</code>.</li>
-<li><code>python main.py &amp;&gt; file.txt</code> will put the <code>stderr</code> <strong>and</strong> <code>stdout</code> in <code>file.txt</code>.</li>
-<li><code>echo hello &gt; file.txt</code> will append <code>hello</code> to the existing <code>file.txt</code>.</li>
-</ul>
-</li>
-<li><strong>Glob expansion:</strong> <code>*</code> to expand all options.<ul>
-<li><code>echo *.py</code> will echo all filenames that end with <code>.py</code></li>
-<li><code>echo **/*.py</code> will echo all filenames that end with <code>.py</code> in this directory and all descendant directories.</li>
-<li><code>echo data[0-9].csv</code> will echo all filenames that have a single number after <code>data</code> and before <code>.csv</code></li>
-</ul>
-</li>
+<li><strong>Redirects:</strong> <code>&gt;</code> to redirect the stdout to a file.
+    - <code>echo hello &gt; file.txt</code> will put <code>hello</code> in <code>file.txt</code> and overwrite existing text.
+    - <code>python main.py 2&gt; file.txt</code> will put the <code>stderr</code> output in <code>file.txt</code>.
+    - <code>python main.py &amp;&gt; file.txt</code> will put the <code>stderr</code> <strong>and</strong> <code>stdout</code> in <code>file.txt</code>.
+    - <code>echo hello &gt; file.txt</code> will append <code>hello</code> to the existing <code>file.txt</code>.</li>
+<li><strong>Glob expansion:</strong> <code>*</code> to expand all options.
+    - <code>echo *.py</code> will echo all filenames that end with <code>.py</code>
+    - <code>echo **/*.py</code> will echo all filenames that end with <code>.py</code> in this directory and all descendant directories.
+    - <code>echo data[0-9].csv</code> will echo all filenames that have a single number after <code>data</code> and before <code>.csv</code></li>
 </ul>
 <p>More info in <a href="https://deno.land/manual@v1.35.0/tools/task_runner#task-runner"><code>deno_task_shell</code> documentation</a>.</p>
 

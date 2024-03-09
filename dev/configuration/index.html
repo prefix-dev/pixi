@@ -1552,12 +1552,10 @@ PyPI packages are not indexed on <a href="https://prefix.dev/channels">prefix.de
 <p class="admonition-title">Important considerations</p>
 <ul>
 <li><strong>Stability</strong>: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the <code>dependencies</code> table where possible.</li>
-<li><strong>Compatibility limitations</strong>: Currently, pixi doesn't support:<ul>
-<li><code>git</code> dependencies (<code>git+https://github.com/package-org/package.git</code>)</li>
-<li>Source dependencies</li>
-<li>Private PyPI repositories</li>
-</ul>
-</li>
+<li><strong>Compatibility limitations</strong>: Currently, pixi doesn't support:
+    - <code>git</code> dependencies (<code>git+https://github.com/package-org/package.git</code>)
+    - Source dependencies
+    - Private PyPI repositories</li>
 </ul>
 </div>
 <h4 id="pep404-version-specification">PEP404 Version specification:<a class="headerlink" href="#pep404-version-specification" title="Permanent link">#</a></h4>
