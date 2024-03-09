@@ -1,23 +1,24 @@
-import rerun as rr
-import networkx as nx
-import yaml
-import numpy as np
 import hashlib
 import sys
 
-# Give relative path or default to local pixi.lock
-lockfile_path = sys.argv[1] if len(sys.argv) > 1 else 'pixi.lock'
+import networkx as nx
+import numpy as np
+import rerun as rr
+import yaml
 
-with open(lockfile_path, 'r') as file:
+# Give relative path or default to local pixi.lock
+lockfile_path = sys.argv[1] if len(sys.argv) > 1 else "pixi.lock"
+
+with open(lockfile_path) as file:
     lockfile_data = yaml.safe_load(file)
 
-package_data = lockfile_data['package']
-package_names = [package['name'] for package in package_data]
+package_data = lockfile_data["package"]
+package_names = [package["name"] for package in package_data]
 
 graph = nx.DiGraph()
 for package in package_data:
-    package_name = package['name']
-    dependencies = package.get('dependencies', [])
+    package_name = package["name"]
+    dependencies = package.get("dependencies", [])
     graph.add_node(package_name)
     for i, dep in enumerate(dependencies):
         graph.add_edge(package_name, dep.split(" ")[0])
@@ -26,7 +27,7 @@ rr.init("fdg", spawn=True)
 rr.connect()
 
 def hash_string_to_int(string):
-    return int(hashlib.sha256(string.encode('utf-8')).hexdigest(), 16) % (10 ** 8)
+    return int(hashlib.sha256(string.encode("utf-8")).hexdigest(), 16) % (10 ** 8)
 
 
 # Memoization dictionary

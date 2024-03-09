@@ -1,5 +1,6 @@
-import cv2
 import os
+
+import cv2
 import requests
 
 
@@ -35,7 +36,7 @@ def capture_and_grayscale():
 
     # Check if the webcam is opened correctly
     if not working_cam.isOpened():
-        raise IOError("Cannot open webcam")
+        raise OSError("Cannot open webcam")
 
     while True:
         # Read the current frame from the webcam
