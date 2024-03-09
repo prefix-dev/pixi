@@ -8,7 +8,9 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord};
+use rattler_conda_types::{
+    Channel, ChannelConfig, MatchSpec, PackageName, ParseStrictness, Platform, PrefixRecord,
+};
 use rattler_networking::AuthenticationMiddleware;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
@@ -19,11 +21,9 @@ use rattler_shell::{
 use rattler_solve::{resolvo, SolverImpl};
 use reqwest_middleware::ClientWithMiddleware;
 use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::{
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use ParseStrictness::Strict;
 
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
@@ -341,7 +341,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let specs = args
         .package
         .into_iter()
-        .map(|package_str| MatchSpec::from_str(&package_str))
+        .map(|package_str| MatchSpec::from_str(&package_str, Strict))
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 

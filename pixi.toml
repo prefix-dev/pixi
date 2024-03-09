@@ -33,8 +33,8 @@ compilers = ">=1.6.0"
 
 [feature.docs.dependencies]
 mkdocs = "1.5.3.*"
-mkdocs-material = ">=9.5.*"
-pillow = ">=9.4.0.*"
+mkdocs-material = ">=9.5"
+pillow = ">=9.4.0"
 cairosvg = "2.7.1.*"
 mike = "2.0.0.*"
 
