@@ -23,8 +23,11 @@ use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource};
 pub use python::PyPiRequirement;
-use rattler_conda_types::ParseStrictness::{Lenient, Strict};
-use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{
+    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName,
+    ParseStrictness::{Lenient, Strict},
+    Platform, Version,
+};
 use serde::de::{DeserializeSeed, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_with::serde_as;
@@ -567,7 +570,17 @@ impl Manifest {
                     }
                     self.parsed.project.channels.push(channel.clone());
 
-                    stored_channels.insert(channel.channel.name().to_string());
+                    // If channel base is part of the default config, use the name otherwise the base url.
+                    if channel
+                        .channel
+                        .base_url
+                        .as_str()
+                        .contains(ChannelConfig::default().channel_alias.as_str())
+                    {
+                        stored_channels.insert(channel.channel.name().to_string());
+                    } else {
+                        stored_channels.insert(channel.channel.base_url.to_string());
+                    }
                 }
             }
             FeatureName::Named(_) => {
@@ -2062,6 +2075,22 @@ platforms = ["linux-64", "win-64"]
                 }
             ]
         );
+
+        // Test custom channel urls
+        let custom_channel = PrioritizedChannel {
+            channel: Channel::from_str("https://custom.com/channel", &ChannelConfig::default())
+                .unwrap(),
+            priority: None,
+        };
+        manifest
+            .add_channels([custom_channel.clone()].into_iter(), &FeatureName::Default)
+            .unwrap();
+        assert!(manifest
+            .parsed
+            .project
+            .channels
+            .iter()
+            .any(|c| c.channel == custom_channel.channel));
 
         assert_snapshot!(manifest.document.to_string());
     }
