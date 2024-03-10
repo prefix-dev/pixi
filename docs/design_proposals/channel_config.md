@@ -106,7 +106,7 @@ These channels will also be used by `rattler-build` if you don't specify other c
 name = "conda-forge"
 mirrors = [
     "https://conda.anaconda.org/conda-forge",
-    {url = "https://repo.artifactory.com/conda-mirror-conda-forge", use_zstd = false}
+    {url = "https://repo.artifactory.com/conda-mirror-conda-forge", use_zstd = false},
     "oci://ghcr.io/conda-channel-mirrors/conda-forge"
 ]
 ```
