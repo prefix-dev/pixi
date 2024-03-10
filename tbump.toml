@@ -1,0 +1,42 @@
+github_url = "https://github.com/scikit-hep/pyhf/"
+
+[version]
+current = "0.16.0"
+
+# Example of a semver regexp.
+# Make sure this matches current_version before
+# using tbump
+regex = '''
+  (?P<major>\d+)
+  \.
+  (?P<minor>\d+)
+  \.
+  (?P<patch>\d+)
+  (rc
+    (?P<candidate>\d+)
+  )?
+  '''
+
+[git]
+# The current version will get updated when tbump is run
+message_template = "Bump version: 0.16.0 → {new_version}"
+tag_template = "v{new_version}"
+
+# For each file to patch, add a [[file]] config
+# section containing the path of the file, relative to the
+# tbump.toml location.
+[[file]]
+src = "tbump.toml"
+# Restrict search to make it explicit why tbump.toml
+# is even included as a file to bump, as it will get
+# its version.current attribute bumped anyway.
+search = "Bump version: {current_version} → "
+
+[[file]]
+src = "CITATION.cff"
+
+[[field]]
+# the name of the field
+name = "candidate"
+# the default value to use, if there is no match
+default = ""
