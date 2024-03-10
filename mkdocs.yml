@@ -81,6 +81,7 @@ markdown_extensions:
   - toc:
       toc_depth: 3
       permalink: "#"
+  - mdx_truly_sane_lists
 
 extra:
   homepage: https://prefix.dev

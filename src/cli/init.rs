@@ -1,4 +1,5 @@
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
+use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::PyPiRequirement;
 use crate::utils::conda_environment_file::{CondaEnvDep, CondaEnvFile};
 use crate::{config::get_default_author, consts};
@@ -8,9 +9,9 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
+use rattler_conda_types::ParseStrictness::{Lenient, Strict};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
 use regex::Regex;
-use rip::types::PackageName;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::str::FromStr;
@@ -272,7 +273,7 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
     }
 }
 
-type PipReq = (PackageName, PyPiRequirement);
+type PipReq = (PyPiPackageName, PyPiRequirement);
 type ParsedDependencies = (Vec<MatchSpec>, Vec<PipReq>, Vec<Arc<Channel>>);
 
 fn conda_env_to_manifest(
@@ -281,15 +282,25 @@ fn conda_env_to_manifest(
     let channels = parse_channels(env_info.channels().clone());
     let (conda_deps, pip_deps, mut extra_channels) =
         parse_dependencies(env_info.dependencies().clone())?;
+    let channel_config = ChannelConfig::default();
     extra_channels.extend(
         channels
             .into_iter()
-            .map(|c| Arc::new(Channel::from_str(c, &ChannelConfig::default()).unwrap())),
+            .map(|c| Arc::new(Channel::from_str(c, &channel_config).unwrap())),
     );
     let mut channels: Vec<_> = extra_channels
         .into_iter()
         .unique()
-        .map(|c| c.name().to_string())
+        .map(|c| {
+            if c.base_url()
+                .as_str()
+                .starts_with(channel_config.channel_alias.as_str())
+            {
+                c.name().to_string()
+            } else {
+                c.base_url().to_string()
+            }
+        })
         .collect();
     if channels.is_empty() {
         channels = DEFAULT_CHANNELS
@@ -308,7 +319,7 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
     for dep in deps {
         match dep {
             CondaEnvDep::Conda(d) => {
-                let match_spec = MatchSpec::from_str(&d).into_diagnostic()?;
+                let match_spec = MatchSpec::from_str(&d, Lenient).into_diagnostic()?;
                 if let Some(channel) = match_spec.clone().channel {
                     picked_up_channels.push(channel);
                 }
@@ -324,7 +335,7 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
                             dep = name;
                         }
                         let req = pep508_rs::Requirement::from_str(&dep).into_diagnostic()?;
-                        let name = rip::types::PackageName::from_str(req.name.as_str())?;
+                        let name = PyPiPackageName::from_normalized(req.name.clone());
                         let requirement = PyPiRequirement::from(req);
                         Ok((name, requirement))
                     })
@@ -333,8 +344,15 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
         }
     }
 
-    if !pip_deps.is_empty() {
-        conda_deps.push(MatchSpec::from_str("pip").into_diagnostic()?);
+    if !pip_deps.is_empty()
+        && !conda_deps.iter().any(|spec| {
+            spec.name
+                .as_ref()
+                .filter(|name| name.as_normalized() == "pip")
+                .is_some()
+        })
+    {
+        conda_deps.push(MatchSpec::from_str("pip", Strict).into_diagnostic()?);
     }
 
     Ok((conda_deps, pip_deps, picked_up_channels))
@@ -362,8 +380,6 @@ fn parse_channels(channels: Vec<String>) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::cli::init::get_dir;
-    use itertools::Itertools;
-    use rattler_conda_types::ChannelConfig;
     use std::io::Read;
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
@@ -374,59 +390,56 @@ mod tests {
         name: pixi_example_project
         channels:
           - conda-forge
+          - https://custom-server.com/channel
         dependencies:
           - python
           - pytorch::torchvision
           - conda-forge::pytest
           - wheel=0.31.1
           - sel(linux): blabla
+          - foo >=1.2.3.*  # only valid when parsing in lenient mode
           - pip:
             - requests
             - git+https://git@github.com/fsschneider/DeepOBS.git@develop#egg=deepobs
             - torch==1.8.1
         "#;
 
-        let f = tempfile::NamedTempFile::new().unwrap();
-        let path = f.path();
-        let mut file = std::fs::File::create(path).unwrap();
-        file.write_all(example_conda_env_file.as_bytes()).unwrap();
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        f.write_all(example_conda_env_file.as_bytes()).unwrap();
+        let (_file, path) = f.into_parts();
 
-        let conda_env_file_data = CondaEnvFile::from_path(path).unwrap();
+        let conda_env_file_data = CondaEnvFile::from_path(&path).unwrap();
 
         assert_eq!(conda_env_file_data.name(), Some("pixi_example_project"));
         assert_eq!(
             conda_env_file_data.channels(),
-            &vec!["conda-forge".to_string()]
+            &vec![
+                "conda-forge".to_string(),
+                "https://custom-server.com/channel".to_string()
+            ]
         );
 
-        let (conda_deps, pip_deps, mut channels) =
-            parse_dependencies(conda_env_file_data.dependencies().clone()).unwrap();
-
-        channels.extend(
-            conda_env_file_data
-                .channels()
-                .into_iter()
-                .map(|c| Arc::new(Channel::from_str(c, &ChannelConfig::default()).unwrap())),
-        );
-        let channels = channels.into_iter().unique().collect::<Vec<_>>();
+        let (conda_deps, pip_deps, channels) = conda_env_to_manifest(conda_env_file_data).unwrap();
 
         assert_eq!(
             channels,
             vec![
-                Arc::new(Channel::from_str("pytorch", &ChannelConfig::default()).unwrap()),
-                Arc::new(Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap())
-            ],
+                "pytorch".to_string(),
+                "conda-forge".to_string(),
+                "https://custom-server.com/channel/".to_string()
+            ]
         );
 
         println!("{conda_deps:?}");
         assert_eq!(
             conda_deps,
             vec![
-                MatchSpec::from_str("python").unwrap(),
-                MatchSpec::from_str("pytorch::torchvision").unwrap(),
-                MatchSpec::from_str("conda-forge::pytest").unwrap(),
-                MatchSpec::from_str("wheel=0.31.1").unwrap(),
-                MatchSpec::from_str("pip").unwrap(),
+                MatchSpec::from_str("python", Strict).unwrap(),
+                MatchSpec::from_str("pytorch::torchvision", Strict).unwrap(),
+                MatchSpec::from_str("conda-forge::pytest", Strict).unwrap(),
+                MatchSpec::from_str("wheel=0.31.1", Strict).unwrap(),
+                MatchSpec::from_str("foo >=1.2.3", Strict).unwrap(),
+                MatchSpec::from_str("pip", Strict).unwrap(),
             ]
         );
 
@@ -434,7 +447,7 @@ mod tests {
             pip_deps,
             vec![
                 (
-                    PackageName::from_str("requests").unwrap(),
+                    PyPiPackageName::from_str("requests").unwrap(),
                     PyPiRequirement {
                         version: None,
                         extras: None,
@@ -442,7 +455,8 @@ mod tests {
                     }
                 ),
                 (
-                    PackageName::from_str("DeepOBS").unwrap(),
+                    // TODO: Fix that we can not have the source variant of the name.
+                    PyPiPackageName::from_str("deepobs").unwrap(),
                     PyPiRequirement {
                         version: None,
                         extras: None,
@@ -450,7 +464,7 @@ mod tests {
                     },
                 ),
                 (
-                    PackageName::from_str("torch").unwrap(),
+                    PyPiPackageName::from_str("torch").unwrap(),
                     PyPiRequirement {
                         version: pep440_rs::VersionSpecifiers::from_str("==1.8.1").ok(),
                         extras: None,
@@ -554,5 +568,43 @@ mod tests {
                 )
             );
         }
+    }
+    #[test]
+    fn test_parse_conda_env_file_with_explicit_pip_dep() {
+        let example_conda_env_file = r#"
+        name: pixi_example_project
+        channels:
+          - conda-forge
+        dependencies:
+          - pip==24.0
+          - pip:
+            - requests
+        "#;
+
+        let f = tempfile::NamedTempFile::new().unwrap();
+        let path = f.path();
+        let mut file = std::fs::File::create(path).unwrap();
+        file.write_all(example_conda_env_file.as_bytes()).unwrap();
+
+        let conda_env_file_data = CondaEnvFile::from_path(path).unwrap();
+        let (conda_deps, pip_deps, _) =
+            parse_dependencies(conda_env_file_data.dependencies().clone()).unwrap();
+
+        assert_eq!(
+            conda_deps,
+            vec![MatchSpec::from_str("pip==24.0", Strict).unwrap(),]
+        );
+
+        assert_eq!(
+            pip_deps,
+            vec![(
+                PyPiPackageName::from_str("requests").unwrap(),
+                PyPiRequirement {
+                    version: None,
+                    extras: None,
+                    index: None,
+                }
+            ),]
+        );
     }
 }

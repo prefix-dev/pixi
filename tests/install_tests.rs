@@ -1,5 +1,7 @@
 mod common;
 
+use std::path::Path;
+
 use crate::common::builders::string_from_iter;
 use crate::common::package_database::{Package, PackageDatabase};
 use common::{LockFileExt, PixiControl};
@@ -8,6 +10,7 @@ use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
 use rattler_conda_types::Platform;
 use serial_test::serial;
 use tempfile::TempDir;
+use uv_interpreter::PythonEnvironment;
 
 /// Should add a python version to the environment and lock file that matches the specified version
 /// and run it
@@ -51,7 +54,6 @@ async fn install_run_python() {
 /// version `2` is available. This is because `bar` was previously locked to version `1` and it is
 /// still a valid solution to keep using version `1` of bar.
 #[tokio::test]
-#[serial]
 async fn test_incremental_lock_file() {
     let mut package_database = PackageDatabase::default();
 
@@ -193,4 +195,109 @@ async fn install_frozen() {
     assert_eq!(result.exit_code, 0);
     assert_eq!(result.stdout.trim(), "Python 3.9.1");
     assert!(result.stderr.is_empty());
+}
+
+fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnvironment {
+    let python = if cfg!(target_os = "windows") {
+        prefix.join("python.exe")
+    } else {
+        prefix.join("bin/python")
+    };
+    let platform = platform_host::Platform::current().unwrap();
+    // Current interpreter and venv
+    let interpreter = uv_interpreter::Interpreter::query(&python, platform, &cache).unwrap();
+    uv_interpreter::PythonEnvironment::from_interpreter(interpreter)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[serial]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn pypi_reinstall_python() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+    // Add and update lockfile with this version of python
+    pixi.add("python==3.11").with_install(true).await.unwrap();
+
+    // Add flask from pypi
+    pixi.add("flask")
+        .with_install(true)
+        .set_type(pixi::DependencyType::PypiDependency)
+        .await
+        .unwrap();
+
+    let prefix = pixi.project().unwrap().root().join(".pixi/envs/default");
+
+    let cache = uv_cache::Cache::temp().unwrap();
+
+    // Check if site-packages has entries
+    let env = create_uv_environment(&prefix, &cache);
+    let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
+    assert!(installed_311.iter().count() > 0);
+
+    // Reinstall python
+    pixi.add("python==3.12").with_install(true).await.unwrap();
+
+    // Check if site-packages has entries, should be empty now
+    let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
+
+    if cfg!(not(target_os = "windows")) {
+        // On non-windows the site-packages should be empty
+        assert!(installed_311.iter().count() == 0);
+    } else {
+        // Windows should still contain some packages
+        // This is because the site-packages is not prefixed with the python version
+        assert!(installed_311.iter().count() > 0);
+    }
+}
+
+#[tokio::test]
+async fn test_channels_changed() {
+    // Write a channel with a package `bar` with only one version
+    let mut package_database_a = PackageDatabase::default();
+    package_database_a.add_package(Package::build("bar", "2").finish());
+    let channel_a = package_database_a.into_channel().await.unwrap();
+
+    // Write another channel with a package `bar` with only one version but another one.
+    let mut package_database_b = PackageDatabase::default();
+    package_database_b.add_package(Package::build("bar", "1").finish());
+    let channel_b = package_database_b.into_channel().await.unwrap();
+
+    let platform = Platform::current();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-channel-change"
+    channels = ["{channel_a}"]
+    platforms = ["{platform}"]
+
+    [dependencies]
+    bar = "*"
+    "#,
+        channel_a = channel_a.url(),
+    ))
+    .unwrap();
+
+    // Get an up-to-date lockfile and verify that bar version 2 was selected from channel `a`.
+    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    assert!(lock_file.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, platform, "bar ==2"));
+
+    // Switch the channel around
+    let platform = Platform::current();
+    pixi.update_manifest(&format!(
+        r#"
+    [project]
+    name = "test-channel-change"
+    channels = ["{channel_b}"]
+    platforms = ["{platform}"]
+
+    [dependencies]
+    bar = "*"
+    "#,
+        channel_b = channel_b.url()
+    ))
+    .unwrap();
+
+    // Get an up-to-date lockfile and verify that bar version 1 was now selected from channel `b`.
+    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+    assert!(lock_file.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, platform, "bar ==1"));
 }

@@ -1,6 +1,6 @@
 ---
 source: src/cli/init.rs
-expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_channels(env_info.channels), env_info.name)"
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
     (
@@ -828,29 +828,14 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 md5: None,
                 sha256: None,
             },
-            MatchSpec {
-                name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "pip",
-                    },
-                ),
-                version: None,
-                build: None,
-                build_number: None,
-                file_name: None,
-                channel: None,
-                subdir: None,
-                namespace: None,
-                md5: None,
-                sha256: None,
-            },
         ],
         [
             (
-                PackageName {
+                PyPiPackageName {
                     source: "memory-profiler",
-                    normalized: "memory-profiler",
+                    normalized: PackageName(
+                        "memory-profiler",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
@@ -859,9 +844,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "pre-commit",
-                    normalized: "pre-commit",
+                    normalized: PackageName(
+                        "pre-commit",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
@@ -870,9 +857,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "graphviz",
-                    normalized: "graphviz",
+                    normalized: PackageName(
+                        "graphviz",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
@@ -881,9 +870,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
+                PyPiPackageName {
                     source: "sphinx-notfound-page",
-                    normalized: "sphinx-notfound-page",
+                    normalized: PackageName(
+                        "sphinx-notfound-page",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,
@@ -892,9 +883,11 @@ expression: "(parse_dependencies(env_info.dependencies).unwrap(),\n    parse_cha
                 },
             ),
             (
-                PackageName {
-                    source: "DeepOBS",
-                    normalized: "deepobs",
+                PyPiPackageName {
+                    source: "deepobs",
+                    normalized: PackageName(
+                        "deepobs",
+                    ),
                 },
                 PyPiRequirement {
                     version: None,

@@ -4,13 +4,14 @@ mod environment;
 mod error;
 mod feature;
 mod metadata;
-mod python;
+pub(crate) mod python;
 mod system_requirements;
 mod target;
 mod validation;
 
 use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
+use crate::project::manifest::python::PyPiPackageName;
 use crate::task::TaskName;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 pub use activation::Activation;
@@ -22,7 +23,11 @@ use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource};
 pub use python::PyPiRequirement;
-use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{
+    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName,
+    ParseStrictness::{Lenient, Strict},
+    Platform, Version,
+};
 use serde::de::{DeserializeSeed, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_with::serde_as;
@@ -354,7 +359,7 @@ impl Manifest {
 
         // Check for duplicates.
         if let Some(table_spec) = dependency_table.get(name.as_normalized()) {
-            if table_spec.as_value().and_then(|v| v.as_str()) == Some(&spec.to_string()) {
+            if table_spec.as_value().and_then(|v| v.as_str()) == Some(spec.to_string().as_str()) {
                 return Err(miette::miette!(
                     "{} is already added.",
                     console::style(name.as_normalized()).bold(),
@@ -382,7 +387,7 @@ impl Manifest {
 
     pub fn add_pypi_dependency(
         &mut self,
-        name: &rip::types::PackageName,
+        name: &PyPiPackageName,
         requirement: &PyPiRequirement,
         platform: Option<Platform>,
     ) -> miette::Result<()> {
@@ -395,17 +400,17 @@ impl Manifest {
         )?;
 
         // Check for duplicates.
-        if let Some(table_spec) = dependency_table.get(name.as_str()) {
+        if let Some(table_spec) = dependency_table.get(name.as_source()) {
             if table_spec.to_string().trim() == requirement.to_string() {
                 return Err(miette::miette!(
                     "{} is already added.",
-                    console::style(name.as_source_str()).bold(),
+                    console::style(name.as_source()).bold(),
                 ));
             }
         }
 
         // Add the pypi dependency to the table
-        dependency_table.insert(name.as_str(), (*requirement).clone().into());
+        dependency_table.insert(name.as_source(), (*requirement).clone().into());
 
         // Add the dependency to the manifest as well
         self.default_feature_mut()
@@ -453,24 +458,24 @@ impl Manifest {
     /// Removes a pypi dependency from `pixi.toml`.
     pub fn remove_pypi_dependency(
         &mut self,
-        dep: &rip::types::PackageName,
+        dep: &PyPiPackageName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-    ) -> miette::Result<(rip::types::PackageName, PyPiRequirement)> {
+    ) -> miette::Result<(PyPiPackageName, PyPiRequirement)> {
         get_or_insert_toml_table(
             &mut self.document,
             platform,
             feature_name,
             consts::PYPI_DEPENDENCIES,
         )?
-        .remove(dep.as_source_str())
+        .remove(dep.as_source())
         .ok_or_else(|| {
             let table_name =
                 get_nested_toml_table_name(feature_name, platform, consts::PYPI_DEPENDENCIES);
 
             miette::miette!(
                 "Couldn't find {} in [{}]",
-                console::style(dep.as_source_str()).bold(),
+                console::style(dep.as_source()).bold(),
                 console::style(table_name).bold(),
             )
         })?;
@@ -565,7 +570,17 @@ impl Manifest {
                     }
                     self.parsed.project.channels.push(channel.clone());
 
-                    stored_channels.insert(channel.channel.name().to_string());
+                    // If channel base is part of the default config, use the name otherwise the base url.
+                    if channel
+                        .channel
+                        .base_url
+                        .as_str()
+                        .contains(ChannelConfig::default().channel_alias.as_str())
+                    {
+                        stored_channels.insert(channel.channel.name().to_string());
+                    } else {
+                        stored_channels.insert(channel.channel.base_url.to_string());
+                    }
                 }
             }
             FeatureName::Named(_) => {
@@ -940,7 +955,16 @@ impl<'de, 'a> DeserializeSeed<'de> for &'a NamelessMatchSpecWrapper {
         D: Deserializer<'de>,
     {
         serde_untagged::UntaggedEnumVisitor::new()
-            .string(|str| NamelessMatchSpec::from_str(str).map_err(serde::de::Error::custom))
+            .string(|str| {
+                match NamelessMatchSpec::from_str(str, Strict) {
+                    Ok(spec) => Ok(spec),
+                    Err(_) => {
+                        let spec = NamelessMatchSpec::from_str(str, Lenient).map_err(serde::de::Error::custom)?;
+                        tracing::warn!("Parsed '{str}' as '{spec}', in a future version this will become an error.", spec=&spec);
+                        Ok(spec)
+                    }
+                }
+            })
             .map(|map| {
                 NamelessMatchSpec::deserialize(serde::de::value::MapAccessDeserializer::new(map))
             })
@@ -1028,7 +1052,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             build_dependencies: Option<IndexMap<PackageName, NamelessMatchSpec>>,
 
             #[serde(default)]
-            pypi_dependencies: Option<IndexMap<rip::types::PackageName, PyPiRequirement>>,
+            pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
 
             /// Additional information to activate an environment.
             #[serde(default)]
@@ -1166,8 +1190,8 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 mod tests {
     use super::*;
     use crate::project::manifest::channel::PrioritizedChannel;
-    use insta::assert_display_snapshot;
-    use rattler_conda_types::{Channel, ChannelConfig};
+    use insta::assert_snapshot;
+    use rattler_conda_types::{Channel, ChannelConfig, ParseStrictness};
     use rstest::*;
     use std::str::FromStr;
     use tempfile::tempdir;
@@ -1344,7 +1368,7 @@ mod tests {
         let examples = [r#"[target.foobar.dependencies]
             invalid_platform = "henk""#];
 
-        assert_display_snapshot!(examples
+        assert_snapshot!(examples
             .into_iter()
             .map(|example| ProjectManifest::from_toml_str(&format!(
                 "{PROJECT_BOILERPLATE}\n{example}"
@@ -1361,7 +1385,7 @@ mod tests {
             format!("{PROJECT_BOILERPLATE}\n[foobar]"),
             format!("{PROJECT_BOILERPLATE}\n[target.win-64.hostdependencies]"),
         ];
-        assert_display_snapshot!(examples
+        assert_snapshot!(examples
             .into_iter()
             .map(|example| ProjectManifest::from_toml_str(&example)
                 .unwrap_err()
@@ -1448,7 +1472,7 @@ mod tests {
 
         let manifest = ProjectManifest::from_toml_str(&contents).unwrap();
 
-        assert_display_snapshot!(manifest
+        assert_snapshot!(manifest
             .default_feature()
             .targets
             .iter()
@@ -1478,7 +1502,7 @@ mod tests {
             "#
         );
 
-        assert_display_snapshot!(toml_edit::de::from_str::<ProjectManifest>(&contents)
+        assert_snapshot!(toml_edit::de::from_str::<ProjectManifest>(&contents)
             .expect("parsing should succeed!")
             .default_feature()
             .targets
@@ -1487,7 +1511,7 @@ mod tests {
             .clone()
             .into_iter()
             .flat_map(|d| d.into_iter())
-            .map(|(name, spec)| format!("{} = {}", name.as_source_str(), Item::from(spec)))
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), Item::from(spec)))
             .join("\n"));
     }
 
@@ -1537,7 +1561,7 @@ mod tests {
             .is_none());
 
         // Write the toml to string and verify the content
-        assert_display_snapshot!(
+        assert_snapshot!(
             format!("test_remove_{}", name),
             manifest.document.to_string()
         );
@@ -1551,7 +1575,7 @@ mod tests {
     ) {
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
 
-        let package_name = rip::types::PackageName::from_str(name).unwrap();
+        let package_name = PyPiPackageName::from_str(name).unwrap();
 
         // Initially the dependency should exist
         assert!(manifest
@@ -1585,7 +1609,7 @@ mod tests {
             .is_none());
 
         // Write the toml to string and verify the content
-        assert_display_snapshot!(
+        assert_snapshot!(
             format!("test_remove_pypi_{}", name),
             manifest.document.to_string()
         );
@@ -2052,7 +2076,23 @@ platforms = ["linux-64", "win-64"]
             ]
         );
 
-        assert_display_snapshot!(manifest.document.to_string());
+        // Test custom channel urls
+        let custom_channel = PrioritizedChannel {
+            channel: Channel::from_str("https://custom.com/channel", &ChannelConfig::default())
+                .unwrap(),
+            priority: None,
+        };
+        manifest
+            .add_channels([custom_channel.clone()].into_iter(), &FeatureName::Default)
+            .unwrap();
+        assert!(manifest
+            .parsed
+            .project
+            .channels
+            .iter()
+            .any(|c| c.channel == custom_channel.channel));
+
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
@@ -2238,10 +2278,7 @@ platforms = ["linux-64", "win-64"]
                 .pypi_dependencies
                 .as_ref()
                 .unwrap()
-                .get(
-                    &rip::types::PackageName::from_str("torch")
-                        .expect("torch should be a valid name")
-                )
+                .get(&PyPiPackageName::from_str("torch").expect("torch should be a valid name"))
                 .expect("pypi requirement should be available")
                 .version
                 .clone()
@@ -2396,7 +2433,7 @@ test = "test initial"
                 &FeatureName::Named("test".to_string()),
             )
             .unwrap();
-        assert_display_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
@@ -2455,7 +2492,7 @@ test = "test initial"
             &FeatureName::Named("test".to_string()),
             "tasks",
         );
-        assert_display_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
@@ -2475,7 +2512,7 @@ bar = "*"
         let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" baz >=1.2.3").unwrap(),
+                &MatchSpec::from_str(" baz >=1.2.3", Strict).unwrap(),
                 SpecType::Run,
                 None,
                 &FeatureName::Default,
@@ -2496,7 +2533,7 @@ bar = "*"
         );
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" bal >=2.3").unwrap(),
+                &MatchSpec::from_str(" bal >=2.3", Strict).unwrap(),
                 SpecType::Run,
                 None,
                 &FeatureName::Named("test".to_string()),
@@ -2520,7 +2557,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" boef >=2.3").unwrap(),
+                &MatchSpec::from_str(" boef >=2.3", Strict).unwrap(),
                 SpecType::Run,
                 Some(Platform::Linux64),
                 &FeatureName::Named("extra".to_string()),
@@ -2545,7 +2582,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" cmake >=2.3").unwrap(),
+                &MatchSpec::from_str(" cmake >=2.3", ParseStrictness::Strict).unwrap(),
                 SpecType::Build,
                 Some(Platform::Linux64),
                 &FeatureName::Named("build".to_string()),
@@ -2568,7 +2605,7 @@ bar = "*"
             ">=2.3".to_string()
         );
 
-        assert_display_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]

@@ -2,10 +2,9 @@
 source: src/project/manifest/mod.rs
 expression: manifest.document.to_string()
 ---
-
 [project]
 name = "foo"
-channels = ["conda-forge"]
+channels = ["conda-forge", "https://custom.com/channel/"]
 platforms = ["linux-64", "win-64"]
 
 [dependencies]
@@ -17,4 +16,3 @@ channels = ["test", "test2"]
 
 [feature.cuda]
 channels = ["nvidia"]
-        

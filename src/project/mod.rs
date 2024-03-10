@@ -7,16 +7,16 @@ mod solve_group;
 pub mod virtual_packages;
 
 use async_once_cell::OnceCell as AsyncCell;
+use distribution_types::IndexLocations;
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
-use once_cell::sync::OnceCell;
 
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
 use rattler_networking::AuthenticationMiddleware;
+use reqwest::Client;
 use reqwest_middleware::ClientWithMiddleware;
-use rip::index::PackageSources;
-use rip::{index::PackageDb, normalize_index_url};
 use std::hash::Hash;
+
 use std::{
     collections::{HashMap, HashSet},
     env,
@@ -31,15 +31,15 @@ use crate::activation::{get_environment_variables, run_activation};
 use crate::project::grouped_environment::GroupedEnvironment;
 use crate::task::TaskName;
 use crate::{
-    config,
     consts::{self, PROJECT_MANIFEST},
     task::Task,
 };
+use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
+
+use crate::project::manifest::python::PyPiPackageName;
 pub use dependencies::Dependencies;
 pub use environment::Environment;
-use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
 pub use solve_group::SolveGroup;
-use url::Url;
 
 use self::manifest::Environments;
 
@@ -94,8 +94,6 @@ impl SpecType {
 pub struct Project {
     /// Root folder of the project
     root: PathBuf,
-    /// The PyPI package db for this project
-    package_db: OnceCell<Arc<PackageDb>>,
     /// Reqwest client shared for this project
     client: reqwest::Client,
     /// Authenticated reqwest client shared for this project
@@ -118,16 +116,12 @@ impl Debug for Project {
 impl Project {
     /// Constructs a new instance from an internal manifest representation
     pub fn from_manifest(manifest: Manifest) -> Self {
-        let client = reqwest::Client::new();
-        let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-            .with_arc(Arc::new(AuthenticationMiddleware::default()))
-            .build();
+        let (client, authenticated_client) = build_reqwest_clients();
 
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
         Self {
             root: manifest.path.parent().unwrap_or(Path::new("")).to_owned(),
-            package_db: Default::default(),
             client,
             authenticated_client,
             manifest,
@@ -194,13 +188,12 @@ impl Project {
 
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
+        let (client, authenticated_client) = build_reqwest_clients();
+
         Ok(Self {
             root: root.to_owned(),
-            package_db: Default::default(),
-            client: Default::default(),
-            authenticated_client: reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-                .with_arc(Arc::new(AuthenticationMiddleware::default()))
-                .build(),
+            client,
+            authenticated_client,
             manifest,
             env_vars,
         })
@@ -388,7 +381,7 @@ impl Project {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<rip::types::PackageName, Vec<PyPiRequirement>> {
+    ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
         self.default_environment().pypi_dependencies(platform)
     }
 
@@ -405,26 +398,27 @@ impl Project {
         self.manifest.has_pypi_dependencies()
     }
 
-    /// Returns the Python index URLs to use for this project.
-    pub fn pypi_index_url(&self) -> Url {
-        normalize_index_url(Url::parse("https://pypi.org/simple/").unwrap())
+    /// Returns the Python index locations to use for this project.
+    pub fn pypi_index_locations(&self) -> IndexLocations {
+        // TODO: Currently we just default to Pypi always.
+        IndexLocations::default()
     }
 
-    /// Returns the package database used for caching python metadata, wheels and more. See the
-    /// documentation of [`rip::index::PackageDb`] for more information.
-    pub fn pypi_package_db(&self) -> miette::Result<Arc<PackageDb>> {
-        Ok(self
-            .package_db
-            .get_or_try_init(|| {
-                PackageDb::new(
-                    PackageSources::from(self.pypi_index_url()),
-                    self.authenticated_client().clone(),
-                    &config::get_cache_dir()?.join("pypi/"),
-                )
-                .map(Arc::new)
-            })?
-            .clone())
-    }
+    // /// Returns the package database used for caching python metadata, wheels and more. See the
+    // /// documentation of [`rip::index::PackageDb`] for more information.
+    // pub fn pypi_package_db(&self) -> miette::Result<Arc<PackageDb>> {
+    //     Ok(self
+    //         .package_db
+    //         .get_or_try_init(|| {
+    //             PackageDb::new(
+    //                 PackageSources::from(self.pypi_index_url()),
+    //                 self.authenticated_client().clone(),
+    //                 &config::get_cache_dir()?.join("pypi/"),
+    //             )
+    //             .map(Arc::new)
+    //         })?
+    //         .clone())
+    // }
 
     /// Returns the reqwest client used for http networking
     pub fn client(&self) -> &reqwest::Client {
@@ -465,6 +459,24 @@ impl Project {
     }
 }
 
+fn build_reqwest_clients() -> (Client, ClientWithMiddleware) {
+    static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+
+    let timeout = 5 * 60;
+    let client = Client::builder()
+        .pool_max_idle_per_host(20)
+        .user_agent(APP_USER_AGENT)
+        .timeout(std::time::Duration::from_secs(timeout))
+        .build()
+        .expect("failed to create reqwest Client");
+
+    let authenticated_client = reqwest_middleware::ClientBuilder::new(client.clone())
+        .with_arc(Arc::new(AuthenticationMiddleware::default()))
+        .build();
+
+    (client, authenticated_client)
+}
+
 /// Iterates over the current directory and all its parent directories and returns the first
 /// directory path that contains the [`consts::PROJECT_MANIFEST`].
 pub fn find_project_root() -> Option<PathBuf> {
@@ -478,7 +490,7 @@ pub fn find_project_root() -> Option<PathBuf> {
 mod tests {
     use super::*;
     use crate::project::manifest::FeatureName;
-    use insta::{assert_debug_snapshot, assert_display_snapshot};
+    use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use std::str::FromStr;
@@ -555,7 +567,7 @@ mod tests {
         .unwrap();
         let project = Project::from_manifest(manifest);
 
-        assert_display_snapshot!(format_dependencies(
+        assert_snapshot!(format_dependencies(
             project.dependencies(None, Some(Platform::Linux64))
         ));
     }
@@ -588,7 +600,7 @@ mod tests {
         .unwrap();
         let project = Project::from_manifest(manifest);
 
-        assert_display_snapshot!(format_dependencies(
+        assert_snapshot!(format_dependencies(
             project.dependencies(None, Some(Platform::Linux64))
         ));
     }
@@ -617,7 +629,7 @@ mod tests {
         .unwrap();
         let project = Project::from_manifest(manifest);
 
-        assert_display_snapshot!(format!(
+        assert_snapshot!(format!(
             "= Linux64\n{}\n\n= Win64\n{}\n\n= OsxArm64\n{}",
             fmt_activation_scripts(project.activation_scripts(Some(Platform::Linux64))),
             fmt_activation_scripts(project.activation_scripts(Some(Platform::Win64))),
