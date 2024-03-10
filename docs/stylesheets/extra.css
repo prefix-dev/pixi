@@ -12,6 +12,7 @@
 
 [data-md-color-accent=prefix] {
   --md-accent-fg-color: #fa0;
+  --md-accent2-fg-color: #eab308;
   --md-accent-fg-color--transparent: #ffaa001a;
   --md-accent-bg-color: #000000de;
   --md-accent-bg-color--light: #0000008a
