@@ -3,11 +3,14 @@ use futures::{stream, StreamExt, TryStreamExt};
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig, Platform};
 use rattler_networking::AuthenticationMiddleware;
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::prefix::Prefix;
 use crate::repodata::fetch_sparse_repodata;
 
-use super::{install::globally_install_package, list::list_global_packages};
+use super::install::{find_designated_package, globally_install_package, BinEnvDir};
+use super::list::list_global_packages;
 
 const UPGRADE_ALL_CONCURRENCY: usize = 5;
 
@@ -37,6 +40,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
 
     let packages = list_global_packages().await?;
+
+    // Map packages to current prefix record
+    let mut pkg_to_orig_record = HashMap::new();
+    for package_name in packages.iter() {
+        let BinEnvDir(bin_env_prefix) = BinEnvDir::from_existing(package_name).await?;
+        let prefix = Prefix::new(bin_env_prefix);
+
+        // Find the installed package in the environment
+        let prefix_package = find_designated_package(&prefix, package_name).await?;
+        pkg_to_orig_record.insert(package_name.clone(), prefix_package);
+    }
 
     let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
         .with_arc(Arc::new(AuthenticationMiddleware::default()))
@@ -69,10 +83,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if upgraded {
             packages_upgraded += 1;
             let record = prefix_record.repodata_record.package_record;
+            let orig_record = pkg_to_orig_record
+                .get(&record.name)
+                .expect("global package should already exist")
+                .repodata_record
+                .package_record
+                .clone();
             eprintln!(
-                "Upgraded {} {}",
+                "Upgraded {}: {} {} -> {} {}",
                 console::style(record.name.as_normalized()).bold(),
+                console::style(orig_record.version).bold(),
+                console::style(orig_record.build).bold(),
                 console::style(record.version).bold(),
+                console::style(record.build).bold()
             );
         }
     }
