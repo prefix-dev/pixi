@@ -7,14 +7,12 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::Requirement;
+use rattler_conda_types::ParseStrictness::Strict;
 use rattler_conda_types::{MatchSpec, ParseMatchSpecError, Platform};
 use rattler_lock::{CondaPackage, Package, PypiPackage};
-use rip::types::NormalizedPackageName;
-use std::{
-    collections::{HashMap, HashSet},
-    str::FromStr,
-};
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
+use uv_normalize::PackageName;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -39,8 +37,8 @@ pub enum PlatformUnsat {
     #[error("there are more conda packages in the lock-file than are used by the environment")]
     TooManyCondaPackages,
 
-    #[error("there are more pypi packages in the lock-file than are used by the environment")]
-    TooManyPypiPackages,
+    #[error("there are more pypi packages in the lock-file than are used by the environment: {}", .0.iter().format(", "))]
+    TooManyPypiPackages(Vec<PackageName>),
 
     #[error("there are PyPi dependencies but a python interpreter is missing from the lock-file")]
     MissingPythonInterpreter,
@@ -51,7 +49,7 @@ pub enum PlatformUnsat {
     FailedToDetermineMarkerEnvironment(#[source] Box<dyn Diagnostic + Send + Sync>),
 
     #[error("{0} requires python version {1} but the python interpreter in the lock-file has version {2}")]
-    PythonVersionMismatch(String, VersionSpecifiers, Box<pep440_rs::Version>),
+    PythonVersionMismatch(PackageName, VersionSpecifiers, Box<pep440_rs::Version>),
 }
 
 /// Verifies that all the requirements of the specified `environment` can be satisfied with the
@@ -223,7 +221,7 @@ pub fn verify_conda_platform_satisfiability(
             .file_name()
             .unwrap_or_else(|| record.package_record().name.as_normalized());
         for depends in &record.package_record().depends {
-            let spec = MatchSpec::from_str(depends.as_str())
+            let spec = MatchSpec::from_str(depends.as_str(), Strict)
                 .map_err(|e| PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e))?;
             specs.push((spec, source))
         }
@@ -249,14 +247,19 @@ pub fn verify_pypi_platform_satisfiability(
         .iter()
         .flat_map(|(name, reqs)| {
             reqs.iter()
-                .map(move |req| (req.as_pep508(name), "<environment>"))
+                .map(move |req| (req.as_pep508(name.as_normalized()), "<environment>"))
         })
         .collect_vec();
 
     // If there are no pypi packages specified in the requirement, we can skip verifying them.
     if requirements.is_empty() {
         return if !locked_pypi_environment.is_empty() {
-            Err(PlatformUnsat::TooManyPypiPackages)
+            Err(PlatformUnsat::TooManyPypiPackages(
+                locked_pypi_environment
+                    .iter()
+                    .map(|p| p.data().package.name.clone())
+                    .collect(),
+            ))
         } else {
             Ok(())
         };
@@ -270,7 +273,7 @@ pub fn verify_pypi_platform_satisfiability(
     let mut name_to_package_identifiers = HashMap::new();
     for (idx, (identifier, _)) in package_identifiers.iter().enumerate() {
         name_to_package_identifiers
-            .entry(identifier.name.clone())
+            .entry(identifier.name.as_normalized())
             .or_insert_with(Vec::new)
             .push(idx);
     }
@@ -298,18 +301,9 @@ pub fn verify_pypi_platform_satisfiability(
 
     // Iterate over all the requirements and find a packages that match the requirements.
     while let Some((requirement, source)) = requirements.pop() {
-        // Convert the name to a normalized string. If the name is not valid, we also won't be able
-        // to satisfy the requirement.
-        let Ok(name) = NormalizedPackageName::from_str(requirement.name.as_str()) else {
-            return Err(PlatformUnsat::UnsatisfiableRequirement(
-                requirement,
-                source.to_string(),
-            ));
-        };
-
         // Look-up the identifier that matches the requirement
         let matched_package = name_to_package_identifiers
-            .get(&name)
+            .get(&requirement.name)
             .into_iter()
             .flat_map(|idxs| idxs.iter().map(|idx| &package_identifiers[*idx]))
             .find(|(identifier, _pypi_package_idx)| identifier.satisfies(&requirement));
@@ -350,10 +344,7 @@ pub fn verify_pypi_platform_satisfiability(
         // Loop over all requirements of the package and add them to the queue.
         for dependency in pkg_data.requires_dist.iter() {
             // Skip this requirement if it does not apply.
-            if !dependency.evaluate_markers(
-                &marker_environment,
-                requirement.extras.clone().unwrap_or_default(),
-            ) {
+            if !dependency.evaluate_markers(&marker_environment, &requirement.extras) {
                 continue;
             }
 
@@ -364,13 +355,17 @@ pub fn verify_pypi_platform_satisfiability(
 
             // Add the requirement to the queue.
             requirements_visited.insert(dependency.clone());
-            requirements.push((dependency.clone(), &pkg_data.name));
+            requirements.push((dependency.clone(), pkg_data.name.as_ref()));
         }
     }
 
     // Make sure we don't have more packages than we need.
     if packages_visited.len() != locked_pypi_environment.len() {
-        return Err(PlatformUnsat::TooManyPypiPackages);
+        let extraneous_packages = HashSet::from_iter(0..locked_pypi_environment.len())
+            .difference(&packages_visited)
+            .map(|idx| locked_pypi_environment[*idx].data().package.name.clone())
+            .collect_vec();
+        return Err(PlatformUnsat::TooManyPypiPackages(extraneous_packages));
     }
 
     Ok(())

@@ -1,3 +1,4 @@
+use crate::lock_file::UvResolutionContext;
 use crate::project::grouped_environment::GroupedEnvironmentName;
 use crate::{
     consts, install, install_pypi,
@@ -22,7 +23,6 @@ use rattler_conda_types::{Channel, Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use reqwest_middleware::ClientWithMiddleware;
-use rip::{index::PackageDb, resolve::solve_options::SDistResolution};
 use std::{collections::HashMap, io::ErrorKind, path::Path, sync::Arc};
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
@@ -175,42 +175,38 @@ pub async fn get_up_to_date_prefix(
 pub async fn update_prefix_pypi(
     environment_name: &EnvironmentName,
     prefix: &Prefix,
-    platform: Platform,
-    package_db: Arc<PackageDb>,
+    _platform: Platform,
     conda_records: &[RepoDataRecord],
     pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
-    sdist_resolution: SDistResolution,
-    env_variables: HashMap<String, String>,
+    uv_context: UvResolutionContext,
+    environment_variables: &HashMap<String, String>,
 ) -> miette::Result<()> {
     // Remove python packages from a previous python distribution if the python version changed.
-    install_pypi::remove_old_python_distributions(prefix, platform, status)?;
 
     // Install and/or remove python packages
     progress::await_in_progress(
         format!(
-            "updating pypi package in '{}'",
+            "updating pypi packages in '{}'",
             environment_name.fancy_display()
         ),
         |_| {
             install_pypi::update_python_distributions(
-                package_db,
                 prefix,
                 conda_records,
                 pypi_records,
-                platform,
                 status,
                 system_requirements,
-                sdist_resolution,
-                env_variables,
+                uv_context,
+                environment_variables,
             )
         },
     )
     .await
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum PythonStatus {
     /// The python interpreter changed from `old` to `new`.
     Changed { old: PythonInfo, new: PythonInfo },

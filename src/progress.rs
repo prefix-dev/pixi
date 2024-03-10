@@ -138,15 +138,30 @@ impl ScopedTask {
         }
         self.pb.clone()
     }
+    /// Finishes the execution of the task.
+    pub fn finish_sync(mut self) -> ProgressBar {
+        // Send the finished operation. If this fails the receiving end was most likely already
+        // closed and we can just ignore the error.
+        if let Some(sender) = self.sender.take() {
+            let _ = sender.try_send(Operation::Finished(std::mem::take(&mut self.name)));
+        }
+        self.pb.clone()
+    }
 }
 
 impl ProgressBarMessageFormatter {
     /// Construct a new instance that will update the given progress bar.
     pub fn new(progress_bar: ProgressBar) -> Self {
+        Self::new_with_capacity(progress_bar, 50)
+    }
+
+    /// Construct a new instance that will update the given progress bar.
+    /// Allows the user to specify a custom capacity for the internal channel.
+    pub fn new_with_capacity(progress_bar: ProgressBar, capacity: usize) -> Self {
         let pb = progress_bar.clone();
-        let (tx, mut rx) = channel::<Operation>(20);
+        let (tx, mut rx) = channel::<Operation>(capacity);
         tokio::spawn(async move {
-            let mut pending = VecDeque::with_capacity(20);
+            let mut pending = VecDeque::with_capacity(capacity);
             while let Some(msg) = rx.recv().await {
                 match msg {
                     Operation::Started(op) => pending.push_back(op),
@@ -163,7 +178,11 @@ impl ProgressBarMessageFormatter {
                 } else if pending.len() == 1 {
                     progress_bar.set_message(pending[0].clone());
                 } else {
-                    progress_bar.set_message(format!("{} (+{})", pending[0], pending.len() - 1));
+                    progress_bar.set_message(format!(
+                        "{} (+{})",
+                        pending.back().unwrap(),
+                        pending.len() - 1
+                    ));
                 }
             }
         });
@@ -183,6 +202,20 @@ impl ProgressBarMessageFormatter {
             .send(Operation::Started(op.clone()))
             .await
             .unwrap();
+        ScopedTask {
+            name: op,
+            sender: Some(self.sender.clone()),
+            pb: self.pb.clone(),
+        }
+    }
+
+    /// Adds the start of another task to the progress bar and returns an object that is used to
+    /// mark the lifetime of the task. If the object is dropped the task is considered finished.
+    #[must_use]
+    pub fn start_sync(&self, op: String) -> ScopedTask {
+        self.sender
+            .try_send(Operation::Started(op.clone()))
+            .expect("could not send operation, channel full or closed");
         ScopedTask {
             name: op,
             sender: Some(self.sender.clone()),

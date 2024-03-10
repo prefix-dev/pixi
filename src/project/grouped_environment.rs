@@ -1,3 +1,4 @@
+use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::Feature;
 use crate::{
     consts,
@@ -52,6 +53,14 @@ impl<'p> From<Environment<'p>> for GroupedEnvironment<'p> {
 }
 
 impl<'p> GroupedEnvironment<'p> {
+    /// Returns an iterator over all the environments in the group.
+    pub fn environments(&self) -> impl Iterator<Item = Environment<'p>> {
+        match self {
+            GroupedEnvironment::Group(group) => Either::Left(group.environments()),
+            GroupedEnvironment::Environment(env) => Either::Right(std::iter::once(env.clone())),
+        }
+    }
+
     /// Constructs a `GroupedEnvironment` from a `GroupedEnvironmentName`.
     pub fn from_name(project: &'p Project, name: &GroupedEnvironmentName) -> Option<Self> {
         match name {
@@ -109,7 +118,7 @@ impl<'p> GroupedEnvironment<'p> {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<rip::types::PackageName, Vec<PyPiRequirement>> {
+    ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
         match self {
             GroupedEnvironment::Group(group) => group.pypi_dependencies(platform),
             GroupedEnvironment::Environment(env) => env.pypi_dependencies(platform),

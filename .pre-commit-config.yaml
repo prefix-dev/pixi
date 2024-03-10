@@ -1,6 +1,6 @@
 repos:
   -   repo: https://github.com/pre-commit/pre-commit-hooks
-      rev: v4.4.0
+      rev: v4.5.0
       hooks:
         -   id: check-yaml
         -   id: end-of-file-fixer
@@ -8,7 +8,7 @@ repos:
   # Use ruff for python examples
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.0.274
+    rev: v0.3.1
     hooks:
       - id: ruff
         args: [ --fix, --exit-non-zero-on-fix ]
@@ -41,7 +41,7 @@ repos:
           entry: cargo test
           pass_filenames: false
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.5
+    rev: v2.2.6
     hooks:
     - id: codespell
 exclude: ".snap"

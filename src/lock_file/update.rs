@@ -1,3 +1,4 @@
+use crate::lock_file::UvResolutionContext;
 use crate::project::grouped_environment::GroupedEnvironmentName;
 use crate::{
     config, consts,
@@ -12,6 +13,7 @@ use crate::{
     prefix::Prefix,
     progress::global_multi_progress,
     project::{grouped_environment::GroupedEnvironment, Environment},
+    pypi_name_mapping,
     repodata::fetch_sparse_repodata_targets,
     utils::BarrierCell,
     EnvironmentName, Project,
@@ -25,7 +27,6 @@ use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rip::resolve::solve_options::SDistResolution;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -70,6 +71,8 @@ pub struct UpdateLockFileOptions {
 /// A struct that holds the lock-file and any potential derived data that was computed when calling
 /// `ensure_up_to_date_lock_file`.
 pub struct LockFileDerivedData<'p> {
+    pub project: &'p Project,
+
     /// The lock-file
     pub lock_file: LockFile,
 
@@ -84,6 +87,9 @@ pub struct LockFileDerivedData<'p> {
 
     /// A list of prefixes that have been updated while resolving all dependencies.
     pub updated_pypi_prefixes: HashMap<Environment<'p>, Prefix>,
+
+    /// The cached uv context
+    pub uv_context: Option<UvResolutionContext>,
 }
 
 impl<'p> LockFileDerivedData<'p> {
@@ -95,33 +101,41 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Get the prefix with the conda packages installed.
         let platform = Platform::current();
-        let package_db = environment.project().pypi_package_db()?;
         let (prefix, python_status) = self.conda_prefix(environment).await?;
         let repodata_records = self
             .repodata_records(environment, platform)
             .unwrap_or_default();
         let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
 
-        let env_variables = environment.project().get_env_variables(environment).await?;
+        if environment.has_pypi_dependencies() {
+            let uv_context = match &self.uv_context {
+                None => {
+                    let context = UvResolutionContext::from_project(self.project)?;
+                    self.uv_context = Some(context.clone());
+                    context
+                }
+                Some(context) => context.clone(),
+            };
 
-        // Update the prefix with Pypi records
-        environment::update_prefix_pypi(
-            environment.name(),
-            &prefix,
-            platform,
-            package_db,
-            &repodata_records,
-            &pypi_records,
-            &python_status,
-            &environment.system_requirements(),
-            SDistResolution::default(),
-            env_variables.clone(),
-        )
-        .await?;
+            let env_variables = environment.project().get_env_variables(environment).await?;
+            // Update the prefix with Pypi records
+            environment::update_prefix_pypi(
+                environment.name(),
+                &prefix,
+                platform,
+                &repodata_records,
+                &pypi_records,
+                &python_status,
+                &environment.system_requirements(),
+                uv_context,
+                env_variables,
+            )
+            .await?;
 
-        // Store that we updated the environment, so we won't have to do it again.
-        self.updated_pypi_prefixes
-            .insert(environment.clone(), prefix.clone());
+            // Store that we updated the environment, so we won't have to do it again.
+            self.updated_pypi_prefixes
+                .insert(environment.clone(), prefix.clone());
+        }
 
         Ok(prefix)
     }
@@ -407,11 +421,13 @@ pub async fn ensure_up_to_date_lock_file(
         tracing::info!("skipping check if lock-file is up-to-date");
 
         return Ok(LockFileDerivedData {
+            project,
             lock_file,
             package_cache,
             repo_data: options.existing_repo_data,
             updated_conda_prefixes: Default::default(),
             updated_pypi_prefixes: Default::default(),
+            uv_context: None,
         });
     }
 
@@ -422,11 +438,13 @@ pub async fn ensure_up_to_date_lock_file(
 
         // If no-environment is outdated we can return early.
         return Ok(LockFileDerivedData {
+            project,
             lock_file,
             package_cache,
             repo_data: options.existing_repo_data,
             updated_conda_prefixes: Default::default(),
             updated_pypi_prefixes: Default::default(),
+            uv_context: None,
         });
     }
 
@@ -528,6 +546,14 @@ pub async fn ensure_up_to_date_lock_file(
     let locked_grouped_repodata_records = all_grouped_environments
         .iter()
         .filter_map(|group| {
+            // If any content of the environments in the group are outdated we need to disregard the locked content.
+            if group
+                .environments()
+                .any(|e| outdated.disregard_locked_content.contains(&e))
+            {
+                return None;
+            }
+
             let records = match group {
                 GroupedEnvironment::Environment(env) => locked_repodata_records.get(env)?.clone(),
                 GroupedEnvironment::Group(group) => {
@@ -717,6 +743,7 @@ pub async fn ensure_up_to_date_lock_file(
     }
 
     // Spawn tasks to update the pypi packages.
+    let mut uv_context = None;
     for (environment, platform) in outdated
         .pypi
         .into_iter()
@@ -754,16 +781,25 @@ pub async fn ensure_up_to_date_lock_file(
                     .get_conda_prefix(&group)
                     .expect("prefix should be available now or in the future");
 
+                // Get the uv context
+                let uv_context = match &uv_context {
+                    None => {
+                        let context = UvResolutionContext::from_project(project)?;
+                        uv_context = Some(context.clone());
+                        context
+                    }
+                    Some(context) => context.clone(),
+                };
                 // Get environment variables from the activation
                 let env_variables = project.get_env_variables(&environment).await?;
 
                 // Spawn a task to solve the pypi environment
                 let pypi_solve_future = spawn_solve_pypi_task(
+                    uv_context,
                     group.clone(),
                     platform,
                     repodata_future,
                     prefix_future,
-                    SDistResolution::default(),
                     env_variables,
                 );
 
@@ -1008,12 +1044,14 @@ pub async fn ensure_up_to_date_lock_file(
     top_level_progress.finish_and_clear();
 
     Ok(LockFileDerivedData {
+        project,
         lock_file,
         package_cache,
         updated_conda_prefixes: context.take_instantiated_conda_prefixes(),
         updated_pypi_prefixes: HashMap::default(),
         repo_data: Arc::into_inner(context.repo_data)
             .expect("repo data should not be shared anymore"),
+        uv_context,
     })
 }
 
@@ -1119,7 +1157,7 @@ async fn spawn_solve_conda_environment_task(
 
             // Add purl's for the conda packages that are also available as pypi packages if we need them.
             if has_pypi_dependencies {
-                lock_file::pypi::amend_pypi_purls(&mut records).await?;
+                pypi_name_mapping::amend_pypi_purls(&mut records).await?;
             }
 
             // Turn the records into a map by name
@@ -1211,13 +1249,16 @@ async fn spawn_extract_pypi_environment_task(
                 .iter()
                 .filter_map(|record| PypiPackageIdentifier::from_record(record).ok())
                 .flatten()
-                .map(|identifier| (identifier.name.clone().into(), identifier))
+                .map(|identifier| (identifier.name.as_normalized().clone(), identifier))
                 .collect::<HashMap<_, _>>();
 
             Arc::new(
-                solve_group_records
-                    .await
-                    .subset(dependencies.into_keys(), &conda_package_identifiers),
+                solve_group_records.await.subset(
+                    dependencies
+                        .into_keys()
+                        .map(|name| name.as_normalized().clone()),
+                    &conda_package_identifiers,
+                ),
             )
         }
     };
@@ -1231,11 +1272,11 @@ async fn spawn_extract_pypi_environment_task(
 
 /// A task that solves the pypi dependencies for a given environment.
 async fn spawn_solve_pypi_task(
+    resolution_context: UvResolutionContext,
     environment: GroupedEnvironment<'_>,
     platform: Platform,
     repodata_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
     prefix: impl Future<Output = (Prefix, PythonStatus)>,
-    sdist_resolution: SDistResolution,
     env_variables: &HashMap<String, String>,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
@@ -1252,61 +1293,61 @@ async fn spawn_solve_pypi_task(
     // Get the system requirements for this environment
     let system_requirements = environment.system_requirements();
 
-    // Get the package database
-    let package_db = environment.project().pypi_package_db()?;
-
     // Wait until the conda records and prefix are available.
     let (repodata_records, (prefix, python_status)) = tokio::join!(repodata_records, prefix);
 
     let environment_name = environment.name().clone();
+    // let (pypi_packages, duration) = tokio::spawn(
+    let (pypi_packages, duration) = async move {
+        let pb = SolveProgressBar::new(
+            global_multi_progress().add(ProgressBar::hidden()),
+            platform,
+            environment_name.clone(),
+        );
+        pb.start();
 
-    let envs = env_variables.clone();
+        let python_path = python_status
+            .location()
+            .map(|path| prefix.root().join(path))
+            .ok_or_else(|| miette::miette!("missing python interpreter from environment"))?;
 
-    let (pypi_packages, duration) = tokio::spawn(
-        async move {
-            let pb = SolveProgressBar::new(
-                global_multi_progress().add(ProgressBar::hidden()),
-                platform,
-                environment_name,
-            );
-            pb.start();
+        let start = Instant::now();
 
-            let start = Instant::now();
-
-            let records = lock_file::resolve_pypi(
-                package_db,
-                dependencies,
-                system_requirements,
-                &repodata_records.records,
-                &[],
-                platform,
-                &pb.pb,
-                python_status
-                    .location()
-                    .map(|path| prefix.root().join(path))
-                    .as_deref(),
-                sdist_resolution,
-                envs,
+        let records = lock_file::resolve_pypi(
+            resolution_context,
+            dependencies
+                .into_iter()
+                .map(|(name, requirement)| (name.as_normalized().clone(), requirement))
+                .collect(),
+            system_requirements,
+            &repodata_records.records,
+            &[],
+            platform,
+            &pb.pb,
+            &python_path,
+            env_variables,
+        )
+        .await
+        .with_context(|| {
+            format!(
+                "failed to solve the pypi requirements of '{}' '{}'",
+                environment_name.fancy_display(),
+                consts::PLATFORM_STYLE.apply_to(platform)
             )
-            .await?;
+        })?;
 
-            let end = Instant::now();
+        let end = Instant::now();
 
-            pb.finish();
+        pb.finish();
 
-            Ok((PypiRecordsByName::from_iter(records), end - start))
-        }
-        .instrument(tracing::info_span!(
-            "resolve_pypi",
-            group = %environment.name().as_str(),
-            platform = %platform
-        )),
-    )
-    .await
-    .unwrap_or_else(|e| match e.try_into_panic() {
-        Ok(panic) => std::panic::resume_unwind(panic),
-        Err(_err) => Err(miette::miette!("the operation was cancelled")),
-    })?;
+        Ok::<(_, _), miette::Report>((PypiRecordsByName::from_iter(records), end - start))
+    }
+    .instrument(tracing::info_span!(
+        "resolve_pypi",
+        group = %environment.name().as_str(),
+        platform = %platform
+    ))
+    .await?;
 
     Ok(TaskResult::PypiGroupSolved(
         environment.name().clone(),

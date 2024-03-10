@@ -1,10 +1,10 @@
 use std::collections::HashSet;
-use std::str::FromStr;
 
 use clap::Parser;
 use clap_verbosity_flag::{Level, Verbosity};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use rattler_conda_types::ParseStrictness::Strict;
 use rattler_conda_types::{MatchSpec, PackageName};
 
 use crate::cli::global::install::{
@@ -28,7 +28,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let specs = args
         .package
         .into_iter()
-        .map(|package_str| MatchSpec::from_str(&package_str))
+        .map(|package_str| MatchSpec::from_str(&package_str, Strict))
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
     let packages = specs

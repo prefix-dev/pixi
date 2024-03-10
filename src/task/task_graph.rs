@@ -499,4 +499,61 @@ mod test {
             vec![r#"python train.py --cuda"#, r#"python test.py --cuda"#]
         );
     }
+
+    #[test]
+    fn test_multi_env_defaults() {
+        // It should select foobar and foo in the default environment
+        assert_eq!(
+            commands_in_order(
+                r#"
+        [project]
+        name = "pixi"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
+        [tasks]
+        foo = "echo foo"
+        foobar = { cmd = "echo bar", depends_on = ["foo"] }
+
+        [feature.build.tasks]
+        build = "echo build"
+
+        [environments]
+        build = ["build"]
+    "#,
+                &["foobar"],
+                None,
+                None
+            ),
+            vec![r#"echo foo"#, r#"echo bar"#]
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_multi_env_defaults_ambigu() {
+        // As foo is really ambiguous it should panic
+        commands_in_order(
+            r#"
+        [project]
+        name = "pixi"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
+        [tasks]
+        foo = "echo foo"
+        foobar = { cmd = "echo bar", depends_on = ["foo"] }
+
+        [feature.build.tasks]
+        build = "echo build"
+        foo = "echo foo abmiguity"
+
+        [environments]
+        build = ["build"]
+    "#,
+            &["foobar"],
+            None,
+            None,
+        );
+    }
 }

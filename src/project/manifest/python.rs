@@ -1,13 +1,63 @@
 use pep440_rs::VersionSpecifiers;
+
 use serde::{de, de::Error, Deserialize, Deserializer};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
+use uv_normalize::{ExtraName, InvalidNameError, PackageName};
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct PyPiPackageName {
+    source: String,
+    normalized: PackageName,
+}
+impl<'de> Deserialize<'de> for PyPiPackageName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serde_untagged::UntaggedEnumVisitor::new()
+            .string(|str| PyPiPackageName::from_str(str).map_err(Error::custom))
+            .expecting("a string")
+            .deserialize(deserializer)
+    }
+}
+
+impl PyPiPackageName {
+    pub fn from_str(name: &str) -> Result<Self, InvalidNameError> {
+        Ok(Self {
+            source: name.to_string(),
+            normalized: uv_normalize::PackageName::from_str(name)?,
+        })
+    }
+    pub fn from_normalized(normalized: PackageName) -> Self {
+        Self {
+            source: normalized.as_ref().to_string(),
+            normalized,
+        }
+    }
+
+    pub fn as_normalized(&self) -> &PackageName {
+        &self.normalized
+    }
+
+    pub fn as_source(&self) -> &str {
+        &self.source
+    }
+}
+
+impl FromStr for PyPiPackageName {
+    type Err = InvalidNameError;
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        Self::from_str(name)
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PyPiRequirement {
     pub(crate) version: Option<pep440_rs::VersionSpecifiers>,
-    pub(crate) extras: Option<Vec<String>>,
+    pub(crate) extras: Option<Vec<ExtraName>>,
     pub(crate) index: Option<String>,
 }
 
@@ -15,7 +65,7 @@ pub struct PyPiRequirement {
 #[derive(Debug, Clone, Error)]
 pub enum ParsePyPiRequirementError {
     #[error("invalid pep440 version specifier")]
-    Pep440Error(#[from] pep440_rs::Pep440Error),
+    Pep440Error(#[from] pep440_rs::VersionSpecifiersParseError),
 
     #[error("empty string is not allowed, did you mean '*'?")]
     EmptyStringNotAllowed,
@@ -54,7 +104,9 @@ impl From<PyPiRequirement> for Item {
             // Add extras as an array.
             table.insert(
                 "extras",
-                toml_edit::Value::Array(toml_edit::Array::from_iter(val.extras.unwrap())),
+                toml_edit::Value::Array(toml_edit::Array::from_iter(
+                    val.extras.unwrap().iter().map(|e| e.to_string()),
+                )),
             );
             Item::Value(toml_edit::Value::InlineTable(table))
         } else {
@@ -110,9 +162,14 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
         } else {
             None
         };
+        let extras = if !req.extras.is_empty() {
+            Some(req.extras)
+        } else {
+            None
+        };
         PyPiRequirement {
             version,
-            extras: req.extras,
+            extras,
             index: None,
         }
     }
@@ -120,10 +177,10 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
 
 impl PyPiRequirement {
     /// Returns the requirements as [`pep508_rs::Requirement`]s.
-    pub fn as_pep508(&self, name: &rip::types::PackageName) -> pep508_rs::Requirement {
+    pub fn as_pep508(&self, name: &uv_normalize::PackageName) -> pep508_rs::Requirement {
         pep508_rs::Requirement {
-            name: name.as_str().to_string(),
-            extras: self.extras.clone(),
+            name: name.clone(),
+            extras: self.extras.clone().unwrap_or_default(),
             version_or_url: self
                 .version
                 .clone()
@@ -159,9 +216,18 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
                         );
                     }
                 };
+                let mut extras = Vec::new();
+                if let Some(raw_extras) = raw_requirement.extras {
+                    extras = raw_extras
+                        .into_iter()
+                        .map(|e| ExtraName::from_str(&e))
+                        .collect::<Result<Vec<ExtraName>, _>>()
+                        .map_err(Error::custom)?;
+                }
+
                 Ok(PyPiRequirement {
+                    extras: Some(extras),
                     version,
-                    extras: raw_requirement.extras,
                     index: raw_requirement.index,
                 })
             })
@@ -184,15 +250,19 @@ mod tests {
             pypi.to_string(),
             "{ version = \"==1.0.0\", extras = [\"testing\"] }"
         );
+
+        let req = pep508_rs::Requirement::from_str("numpy").unwrap();
+        let pypi = PyPiRequirement::from(req);
+        assert_eq!(pypi.to_string(), "\"*\"");
     }
 
     #[test]
     fn test_only_version() {
-        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
+        let requirement: IndexMap<uv_normalize::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(r#"foo = ">=3.12""#).unwrap();
         assert_eq!(
             requirement.first().unwrap().0,
-            &rip::types::PackageName::from_str("foo").unwrap()
+            &uv_normalize::PackageName::from_str("foo").unwrap()
         );
         assert_eq!(
             requirement.first().unwrap().1,
@@ -202,7 +272,7 @@ mod tests {
                 index: None,
             }
         );
-        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
+        let requirement: IndexMap<uv_normalize::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(r#"foo = "==3.12.0""#).unwrap();
         assert_eq!(
             requirement.first().unwrap().1,
@@ -213,7 +283,7 @@ mod tests {
             }
         );
 
-        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
+        let requirement: IndexMap<uv_normalize::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(r#"foo = "~=2.1.3""#).unwrap();
         assert_eq!(
             requirement.first().unwrap().1,
@@ -224,7 +294,7 @@ mod tests {
             }
         );
 
-        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
+        let requirement: IndexMap<uv_normalize::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(r#"foo = "*""#).unwrap();
         assert_eq!(
             requirement.first().unwrap().1,
@@ -238,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_extended() {
-        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
+        let requirement: IndexMap<uv_normalize::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(
                 r#"
                 foo = { version=">=3.12", extras = ["bar"], index = "artifact-registry" }
@@ -248,31 +318,34 @@ mod tests {
 
         assert_eq!(
             requirement.first().unwrap().0,
-            &rip::types::PackageName::from_str("foo").unwrap()
+            &uv_normalize::PackageName::from_str("foo").unwrap()
         );
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap()),
-                extras: Some(vec!("bar".to_string())),
+                extras: Some(vec![ExtraName::from_str("bar").unwrap()]),
                 index: Some("artifact-registry".to_string()),
             }
         );
 
-        let requirement: IndexMap<rip::types::PackageName, PyPiRequirement> =
+        let requirement: IndexMap<uv_normalize::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(
                 r#"bar = { version=">=3.12,<3.13.0", extras = ["bar", "foo"] }"#,
             )
             .unwrap();
         assert_eq!(
             requirement.first().unwrap().0,
-            &rip::types::PackageName::from_str("bar").unwrap()
+            &uv_normalize::PackageName::from_str("bar").unwrap()
         );
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement {
                 version: Some(pep440_rs::VersionSpecifiers::from_str(">=3.12,<3.13.0").unwrap()),
-                extras: Some(vec!("bar".to_string(), "foo".to_string())),
+                extras: Some(vec![
+                    ExtraName::from_str("bar").unwrap(),
+                    ExtraName::from_str("foo").unwrap()
+                ]),
                 index: None,
             }
         );
@@ -293,7 +366,10 @@ mod tests {
             pypi_requirement,
             PyPiRequirement {
                 version: VersionSpecifiers::from_str("==1.2.3").ok(),
-                extras: Some(vec!["feature1".to_owned(), "feature2".to_owned()]),
+                extras: Some(vec![
+                    ExtraName::from_str("feature1").unwrap(),
+                    ExtraName::from_str("feature2").unwrap()
+                ]),
                 index: None,
             }
         );
@@ -330,4 +406,7 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn test_pypi_package_name() {}
 }

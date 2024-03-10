@@ -4,6 +4,7 @@ use super::{
     manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
     PyPiRequirement, SolveGroup, SpecType,
 };
+use crate::project::manifest::python::PyPiPackageName;
 use crate::task::TaskName;
 use crate::{task::Task, Project};
 use indexmap::{IndexMap, IndexSet};
@@ -287,7 +288,7 @@ impl<'p> Environment<'p> {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<rip::types::PackageName, Vec<PyPiRequirement>> {
+    ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
         self.features(true)
             .filter_map(|f| f.pypi_dependencies(platform))
             .fold(IndexMap::default(), |mut acc, deps| {
@@ -355,7 +356,7 @@ impl<'p> Hash for Environment<'p> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use insta::assert_display_snapshot;
+    use insta::assert_snapshot;
     use itertools::Itertools;
     use std::path::Path;
 
@@ -495,7 +496,7 @@ mod tests {
             .environment("foobar")
             .unwrap()
             .dependencies(None, None);
-        assert_display_snapshot!(format_dependencies(deps));
+        assert_snapshot!(format_dependencies(deps));
     }
 
     #[test]

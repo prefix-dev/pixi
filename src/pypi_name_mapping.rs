@@ -3,10 +3,9 @@ use async_once_cell::OnceCell;
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
-use rattler_networking::retry_policies::ExponentialBackoff;
 use reqwest::Client;
 use reqwest_middleware::ClientBuilder;
-use reqwest_retry::RetryTransientMiddleware;
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::Deserialize;
 use std::{collections::HashMap, str::FromStr};
 use url::Url;
@@ -52,11 +51,20 @@ pub async fn conda_pypi_name_mapping() -> miette::Result<&'static HashMap<String
     }).await
 }
 
+/// Amend the records with pypi purls if they are not present yet.
+pub async fn amend_pypi_purls(conda_packages: &mut [RepoDataRecord]) -> miette::Result<()> {
+    let conda_forge_mapping = conda_pypi_name_mapping().await?;
+    for record in conda_packages.iter_mut() {
+        amend_pypi_purls_for_record(record, conda_forge_mapping)?;
+    }
+    Ok(())
+}
+
 /// Updates the specified repodata record to include an optional PyPI package name if it is missing.
 ///
 /// This function guesses the PyPI package name from the conda package name if the record refers to
 /// a conda-forge package.
-pub fn amend_pypi_purls(
+fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
     conda_forge_mapping: &'static HashMap<String, String>,
 ) -> miette::Result<()> {
