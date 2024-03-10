@@ -96,7 +96,8 @@ name = "my-private-channel"
 url = "https://my.private.quetz/get/my-private-channel"
 ```
 
-This will result in the channels `bioconda` and `conda-forge` and `my-private-channel` being used when you run `pixi init`. These channels will also be used by `rattler-build` if you don't specify other channels with `-c`.
+This will result in the channels `bioconda` and `conda-forge` and `my-private-channel` being used when you run `pixi init` or `pixi global install`.
+These channels will also be used by `rattler-build` if you don't specify other channels with `-c`.
 
 ### Multiple mirrors
 
