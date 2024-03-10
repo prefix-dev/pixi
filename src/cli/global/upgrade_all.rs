@@ -30,15 +30,6 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    // Figure out what channels we are using
-    let channel_config = ChannelConfig::default();
-    let channels = args
-        .channel
-        .iter()
-        .map(|c| Channel::from_str(c, &channel_config))
-        .collect::<Result<Vec<Channel>, _>>()
-        .into_diagnostic()?;
-
     let packages = list_global_packages().await?;
 
     // Map packages to current prefix record
@@ -51,6 +42,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let prefix_package = find_designated_package(&prefix, package_name).await?;
         pkg_to_orig_record.insert(package_name.clone(), prefix_package);
     }
+
+    // Figure out what channels we are using
+    let channel_config = ChannelConfig::default();
+    let channels = args
+        .channel
+        .iter()
+        .map(|c| Channel::from_str(c, &channel_config))
+        .collect::<Result<Vec<Channel>, _>>()
+        .into_diagnostic()?;
 
     let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
         .with_arc(Arc::new(AuthenticationMiddleware::default()))

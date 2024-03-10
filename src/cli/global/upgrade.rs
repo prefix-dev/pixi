@@ -6,9 +6,11 @@ use rattler_conda_types::ParseStrictness::Strict;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
 use rattler_networking::AuthenticationMiddleware;
 
+use crate::prefix::Prefix;
 use crate::repodata::fetch_sparse_repodata;
 
-use super::{install::globally_install_package, list::list_global_packages};
+use super::install::{find_designated_package, globally_install_package, BinEnvDir};
+use super::list::list_global_packages;
 
 /// Upgrade specific package which is installed globally.
 #[derive(Parser, Debug)]
@@ -31,6 +33,22 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let package = args.package;
+    let all_packages = list_global_packages().await?;
+
+    // Return with error if this package is not globally installed.
+    let Some(package_name) = all_packages.iter().find(|p| p.as_source() == package) else {
+        miette::bail!(
+            "{} package is not globally installed",
+            console::style("!").yellow().bold()
+        );
+    };
+
+    // Find the current version of the package
+    let BinEnvDir(bin_env_prefix) = BinEnvDir::from_existing(package_name).await?;
+    let prefix = Prefix::new(bin_env_prefix);
+    let old_prefix_package = find_designated_package(&prefix, package_name).await?;
+    let old_package_record = old_prefix_package.repodata_record.package_record;
+
     // Figure out what channels we are using
     let channel_config = ChannelConfig::default();
     let channels = args
@@ -42,18 +60,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Find the MatchSpec we want to install
     let package_matchspec = MatchSpec::from_str(&package, Strict).into_diagnostic()?;
-
-    // Return with error if this package is not globally installed.
-    if !list_global_packages()
-        .await?
-        .iter()
-        .any(|global_package| global_package.as_source() == package)
-    {
-        miette::bail!(
-            "{} package is not globally installed",
-            console::style("!").yellow().bold()
-        );
-    }
 
     let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
         .with_arc(Arc::new(AuthenticationMiddleware::default()))
@@ -74,8 +80,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let package_record = package_record.repodata_record.package_record;
     if upgraded {
         eprintln!(
-            "Updated package {} to version {}",
+            "Updated package {} version from {} to {}",
             package_record.name.as_normalized(),
+            old_package_record.version,
             package_record.version
         );
     } else {
