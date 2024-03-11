@@ -31,6 +31,7 @@ use rattler_conda_types::{
 use serde::de::{DeserializeSeed, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_with::serde_as;
+use std::ffi::OsStr;
 use std::fmt;
 use std::hash::Hash;
 use std::marker::PhantomData;
@@ -51,6 +52,12 @@ pub enum GetFeatureError {
     FeatureDoesNotExist(FeatureName),
 }
 
+#[derive(Debug, Clone)]
+pub enum ManifestKind {
+    Pixi,
+    Pyproject,
+}
+
 /// Handles the project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the manifest.
 /// It encapsulates all logic related to the manifest's TOML format and structure.
@@ -59,6 +66,9 @@ pub enum GetFeatureError {
 ///
 #[derive(Debug, Clone)]
 pub struct Manifest {
+    /// The kind of the manifest file
+    pub kind: ManifestKind,
+
     /// The path to the manifest file
     pub path: PathBuf,
 
@@ -75,18 +85,38 @@ pub struct Manifest {
 impl Manifest {
     /// Create a new manifest from a path
     pub fn from_path(path: impl AsRef<Path>) -> miette::Result<Self> {
+        let kind = match path.as_ref().file_name().and_then(OsStr::to_str) {
+            Some(consts::PROJECT_MANIFEST) => ManifestKind::Pixi,
+            Some(consts::PYPROJECT_MANIFEST) => ManifestKind::Pyproject,
+            _ => miette::bail!(
+                "the manifest-path must point to a {} or {} file",
+                consts::PROJECT_MANIFEST,
+                consts::PYPROJECT_MANIFEST,
+            ),
+        };
         let contents = std::fs::read_to_string(path.as_ref()).into_diagnostic()?;
         let parent = path
             .as_ref()
             .parent()
             .expect("Path should always have a parent");
-        Self::from_str(parent, contents)
+        Self::from_str(parent, contents, kind)
     }
 
     /// Create a new manifest from a string
-    pub fn from_str(root: &Path, contents: impl Into<String>) -> miette::Result<Self> {
+    pub fn from_str(
+        root: &Path,
+        contents: impl Into<String>,
+        kind: ManifestKind,
+    ) -> miette::Result<Self> {
         let contents = contents.into();
-        let (manifest, document) = match ProjectManifest::from_toml_str(&contents)
+        let parsed = match kind {
+            ManifestKind::Pixi => ProjectManifest::from_toml_str(&contents),
+            ManifestKind::Pyproject => {
+                PyProjectManifest::from_toml_str(&contents).map(|x| x.into())
+            }
+        };
+
+        let (manifest, document) = match parsed
             .and_then(|manifest| contents.parse::<Document>().map(|doc| (manifest, doc)))
         {
             Ok(result) => result,
@@ -125,6 +155,7 @@ impl Manifest {
         }
 
         Ok(Self {
+            kind,
             path: root.join(consts::PROJECT_MANIFEST),
             contents,
             document,
@@ -862,6 +893,81 @@ impl SolveGroups {
     }
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct PyProjectManifest {
+    #[serde(flatten)]
+    inner: pyproject_toml::PyProjectToml,
+    tool: Tool,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct Tool {
+    pixi: ProjectManifest,
+}
+
+impl std::ops::Deref for PyProjectManifest {
+    type Target = pyproject_toml::PyProjectToml;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl PyProjectManifest {
+    /// Parses a toml string into a pyproject manifest.
+    pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
+        toml_edit::de::from_str(source).map_err(TomlError::from)
+    }
+}
+
+impl From<PyProjectManifest> for ProjectManifest {
+    fn from(item: PyProjectManifest) -> Self {
+        // Start by loading the data nested under "tool.pixi"
+        let mut manifest = item.tool.pixi;
+
+        // Get tool.pixi.project.name from project.name
+        // TODO: tool.pixi.project.name should be made optional
+        // TODO: could copy across / convert some other optional fields
+
+        // Add python as dependency based on the project.requires_python property
+        // TODO: handle the case where it is None
+        // TODO convert properly VersionSpecifiers into NamelessMatchSpec
+        let pythonspec = item
+            .inner
+            .project
+            .unwrap()
+            .requires_python
+            .unwrap()
+            .to_string();
+
+        manifest
+            .features
+            .entry(FeatureName::Default)
+            .or_default()
+            .targets
+            .for_opt_target_or_default_mut(None)
+            .dependencies
+            .entry(SpecType::Run)
+            .or_default()
+            .insert(
+                PackageName::from_str("python").unwrap(),
+                NamelessMatchSpec::from_str(&pythonspec).unwrap(),
+            );
+
+        // Add project.dependencies python dependencies as conda dependencies for the default feature
+        // unless they are specified in "tool.pixi.pypi-dependencies"
+        // Maybe we want to be able to exclude automatic processing like this via a dedicated "tool.pixi" section?
+
+        // For Each optional dependency, create a feature with the same name if it does not exist,
+        // and create corresponding environments if they do not exist
+        // TODO: add the solve groups as well?
+        // TODO: how to deal with self referencing extras, to be matched with feature composition
+
+        manifest
+    }
+}
+
 /// Describes the contents of a project manifest.
 #[derive(Debug, Clone)]
 pub struct ProjectManifest {
@@ -1416,7 +1522,7 @@ mod tests {
             scripts = [".pixi/install/setup.sh", "test"]
             "#;
 
-        let manifest = Manifest::from_str(Path::new(""), contents).unwrap();
+        let manifest = Manifest::from_str(Path::new(""), contents, ManifestKind::Pixi).unwrap();
         let default_activation_scripts = manifest
             .default_feature()
             .targets
@@ -1526,7 +1632,8 @@ mod tests {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) {
-        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
 
         // Initially the dependency should exist
         assert!(manifest
@@ -1577,7 +1684,8 @@ mod tests {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) {
-        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
 
         let package_name = PyPiPackageName::from_str(name).unwrap();
 
@@ -1722,7 +1830,8 @@ feature_target_dep = "*"
             fooz = "*"
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
 
         manifest
             .remove_dependency(
@@ -1771,7 +1880,8 @@ feature_target_dep = "*"
             platforms = ["linux-64", "win-64"]
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
 
         assert_eq!(
             manifest.parsed.project.version.as_ref().unwrap().clone(),
@@ -1798,7 +1908,8 @@ feature_target_dep = "*"
             platforms = ["linux-64", "win-64"]
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
 
         assert_eq!(
             manifest
@@ -1839,7 +1950,8 @@ feature_target_dep = "*"
             platforms = ["linux-64", "win-64"]
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
 
         assert_eq!(
             manifest.parsed.project.platforms.value,
@@ -1910,7 +2022,8 @@ feature_target_dep = "*"
             test = ["test"]
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
 
         assert_eq!(
             manifest.parsed.project.platforms.value,
@@ -1970,7 +2083,8 @@ platforms = ["linux-64", "win-64"]
 [feature.test.dependencies]
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
 
         assert_eq!(manifest.parsed.project.channels, vec![]);
 
@@ -2114,7 +2228,8 @@ platforms = ["linux-64", "win-64"]
             channels = ["test_channel"]
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
 
         assert_eq!(
             manifest.parsed.project.channels,
@@ -2184,7 +2299,8 @@ platforms = ["linux-64", "win-64"]
             test1 = {features = ["test", "py310"], solve-group = "test"}
             test2 = {features = ["py39"], solve-group = "test"}
         "#;
-        let manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
         let default_env = manifest.default_environment();
         assert_eq!(default_env.name, EnvironmentName::Default);
         assert_eq!(default_env.features, vec!["py39"]);
@@ -2243,7 +2359,8 @@ platforms = ["linux-64", "win-64"]
             target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 
         "#;
-        let manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
 
         let cuda_feature = manifest
             .parsed
@@ -2378,6 +2495,7 @@ platforms = ["linux-64", "win-64"]
         let manifest = Manifest::from_str(
             Path::new(""),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            ManifestKind::Pixi,
         )
         .unwrap();
         assert_eq!(
@@ -2401,7 +2519,8 @@ test = "test initial"
 
         "#;
 
-        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
 
         manifest
             .add_task(
@@ -2473,7 +2592,8 @@ test = "test initial"
 
     #[test]
     fn test_get_or_insert_toml_table() {
-        let mut manifest = Manifest::from_str(Path::new(""), PROJECT_BOILERPLATE).unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new(""), PROJECT_BOILERPLATE, ManifestKind::Pixi).unwrap();
         let _ =
             get_or_insert_toml_table(&mut manifest.document, None, &FeatureName::Default, "tasks");
         let _ = get_or_insert_toml_table(
@@ -2511,7 +2631,8 @@ foo = "*"
 [feature.test.dependencies]
 bar = "*"
             "#;
-        let mut manifest = Manifest::from_str(Path::new(""), file_contents).unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
         manifest
             .add_dependency(
                 &MatchSpec::from_str(" baz >=1.2.3", Strict).unwrap(),

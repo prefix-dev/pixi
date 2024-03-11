@@ -80,6 +80,7 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 platform-host = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
+pyproject-toml = "0.10.0"
 rattler = { version = "0.19.2", default-features = false, features = ["cli-tools"] }
 rattler_conda_types = { version = "0.20.1", default-features = false }
 rattler_digest = { version = "0.19.1", default-features = false }

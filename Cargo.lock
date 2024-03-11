@@ -3089,6 +3089,7 @@ dependencies = [
  "platform-host",
  "platform-tags",
  "pypi-types",
+ "pyproject-toml",
  "rattler",
  "rattler_conda_types",
  "rattler_digest",
