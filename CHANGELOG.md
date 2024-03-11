@@ -5,9 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.1] - 2024-03-11
+### 📃 Details
+#### Fixed
+- Parse lockfile matchspecs lenient, fixing bug introduced in `0.16.0` by @ruben-arts in [#951](https://github.com/prefix-dev/pixi/pull/951)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.16.0..v0.16.1)
+
 ## [0.16.0] - 2024-03-09
 ### ✨ Highlights
-- This release removes [`rip`]() and add [`uv`]() as the PyPI resolver and installer.
+- This release removes [`rip`](https://github.com/prefix-dev/rip) and add [`uv`](https://github.com/astral-sh/uv) as the PyPI resolver and installer.
 
 ### 📃 Details
 #### Added

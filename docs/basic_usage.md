@@ -88,3 +88,15 @@ pixi global install rattler-build
 # Install a linter you want to use in multiple projects.
 pixi global install ruff
 ```
+
+## Use pixi in GitHub Actions
+
+You can use pixi in GitHub Actions to install dependencies and run commands.
+It supports automatic caching of your environments.
+
+```yml
+- uses: prefix-dev/setup-pixi@v0.5.1
+- run: pixi run cowpy "Thanks for using pixi"
+```
+
+See the [GitHub Actions](./advanced/github_actions.md) for more details.

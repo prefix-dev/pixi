@@ -24,6 +24,7 @@
 //! ```
 
 use futures::FutureExt;
+use pixi::cli::remove;
 use pixi::task::TaskName;
 use pixi::{
     cli::{add, init, install, project, task},
@@ -143,6 +144,53 @@ impl IntoFuture for AddBuilder {
     }
 }
 
+/// Contains the arguments to pass to [`remove::execute()`]. Call `.await` to call the CLI execute method
+/// and await the result at the same time.
+pub struct RemoveBuilder {
+    pub args: remove::Args,
+}
+
+impl RemoveBuilder {
+    pub fn with_spec(mut self, spec: &str) -> Self {
+        self.args.deps.push(spec.to_string());
+        self
+    }
+
+    /// Set as a host
+    pub fn set_type(mut self, t: DependencyType) -> Self {
+        match t {
+            DependencyType::CondaDependency(spec_type) => match spec_type {
+                SpecType::Host => {
+                    self.args.host = true;
+                    self.args.build = false;
+                }
+                SpecType::Build => {
+                    self.args.host = false;
+                    self.args.build = true;
+                }
+                SpecType::Run => {
+                    self.args.host = false;
+                    self.args.build = false;
+                }
+            },
+            DependencyType::PypiDependency => {
+                self.args.host = false;
+                self.args.build = false;
+                self.args.pypi = true;
+            }
+        }
+        self
+    }
+}
+
+impl IntoFuture for RemoveBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        remove::execute(self.args).boxed_local()
+    }
+}
 pub struct TaskAddBuilder {
     pub manifest_path: Option<PathBuf>,
     pub args: task::AddArgs,
