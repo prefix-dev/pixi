@@ -1,29 +1,29 @@
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
 use crate::install::execute_transaction;
-use crate::repodata::friendly_channel_name;
-use crate::{config, prefix::Prefix, progress::await_in_progress, repodata::fetch_sparse_repodata};
+use crate::{config, prefix::Prefix, progress::await_in_progress};
 use clap::Parser;
-use dirs::home_dir;
-use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, PackageName, ParseStrictness, Platform, PrefixRecord,
+    RepoDataRecord,
 };
-use rattler_networking::AuthenticationMiddleware;
-use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::Shell,
     shell::ShellEnum,
 };
-use rattler_solve::{resolvo, SolverImpl};
 use reqwest_middleware::ClientWithMiddleware;
-use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use ParseStrictness::Strict;
+
+use super::common::{
+    channel_name_from_prefix, find_designated_package, get_client_and_sparse_repodata,
+    load_package_records, package_name, BinDir, BinEnvDir,
+};
 
 /// Installs the defined package in a global accessible location.
 #[derive(Parser, Debug)]
@@ -45,103 +45,8 @@ pub struct Args {
     channel: Vec<String>,
 }
 
-pub(crate) struct BinDir(pub PathBuf);
-
-impl BinDir {
-    /// Create the Binary Executable directory
-    pub async fn create() -> miette::Result<Self> {
-        let bin_dir = bin_dir()?;
-        tokio::fs::create_dir_all(&bin_dir)
-            .await
-            .into_diagnostic()?;
-        Ok(Self(bin_dir))
-    }
-
-    /// Get the Binary Executable directory, erroring if it doesn't already exist.
-    pub async fn from_existing() -> miette::Result<Self> {
-        let bin_dir = bin_dir()?;
-        if tokio::fs::try_exists(&bin_dir).await.into_diagnostic()? {
-            Ok(Self(bin_dir))
-        } else {
-            Err(miette::miette!(
-                "binary executable directory does not exist"
-            ))
-        }
-    }
-}
-
-/// Get pixi home directory, default to `$HOME/.pixi`
-pub fn home_path() -> miette::Result<PathBuf> {
-    if let Some(path) = std::env::var_os("PIXI_HOME") {
-        Ok(PathBuf::from(path))
-    } else {
-        home_dir()
-            .map(|path| path.join(".pixi"))
-            .ok_or_else(|| miette::miette!("could not find home directory"))
-    }
-}
-
-/// Global binaries directory, default to `$HOME/.pixi/bin`
-fn bin_dir() -> miette::Result<PathBuf> {
-    home_path().map(|path| path.join("bin"))
-}
-
-pub(crate) struct BinEnvDir(pub PathBuf);
-
-impl BinEnvDir {
-    /// Construct the path to the env directory for the binary package `package_name`.
-    fn package_bin_env_dir(package_name: &PackageName) -> miette::Result<PathBuf> {
-        Ok(bin_env_dir()?.join(package_name.as_normalized()))
-    }
-
-    /// Get the Binary Environment directory, erroring if it doesn't already exist.
-    pub async fn from_existing(package_name: &PackageName) -> miette::Result<Self> {
-        let bin_env_dir = Self::package_bin_env_dir(package_name)?;
-        if tokio::fs::try_exists(&bin_env_dir)
-            .await
-            .into_diagnostic()?
-        {
-            Ok(Self(bin_env_dir))
-        } else {
-            Err(miette::miette!(
-                "could not find environment for package {}",
-                package_name.as_source()
-            ))
-        }
-    }
-
-    /// Create the Binary Environment directory
-    pub async fn create(package_name: &PackageName) -> miette::Result<Self> {
-        let bin_env_dir = Self::package_bin_env_dir(package_name)?;
-        tokio::fs::create_dir_all(&bin_env_dir)
-            .await
-            .into_diagnostic()?;
-        Ok(Self(bin_env_dir))
-    }
-}
-
-/// GLobal binary environments directory, default to `$HOME/.pixi/envs`
-pub(crate) fn bin_env_dir() -> miette::Result<PathBuf> {
-    home_path().map(|path| path.join("envs"))
-}
-
-/// Find the designated package in the prefix
-pub(crate) async fn find_designated_package(
-    prefix: &Prefix,
-    package_name: &PackageName,
-) -> miette::Result<PrefixRecord> {
-    let prefix_records = prefix.find_installed_packages(None).await?;
-    prefix_records
-        .into_iter()
-        .find(|r| r.repodata_record.package_record.name == *package_name)
-        .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
-}
-
 /// Create the environment activation script
-pub(crate) fn create_activation_script(
-    prefix: &Prefix,
-    shell: ShellEnum,
-) -> miette::Result<String> {
+fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result<String> {
     let activator =
         Activator::from_path(prefix.root(), shell, Platform::Osx64).into_diagnostic()?;
     let result = activator
@@ -206,7 +111,7 @@ fn find_executables<'a>(prefix: &Prefix, prefix_package: &'a PrefixRecord) -> Ve
 
 /// Mapping from an executable in a package environment to its global binary script location.
 #[derive(Debug)]
-pub(crate) struct BinScriptMapping<'a> {
+pub struct BinScriptMapping<'a> {
     pub original_executable: &'a Path,
     pub global_binary_path: PathBuf,
 }
@@ -274,7 +179,7 @@ async fn map_executables_to_global_bin_scripts<'a>(
 ///
 /// (Convenience wrapper around `find_executables` and `map_executables_to_global_bin_scripts` which
 /// are generally used together.)
-pub(crate) async fn find_and_map_executable_scripts<'a>(
+pub(super) async fn find_and_map_executable_scripts<'a>(
     prefix: &Prefix,
     prefix_package: &'a PrefixRecord,
     bin_dir: &BinDir,
@@ -285,7 +190,7 @@ pub(crate) async fn find_and_map_executable_scripts<'a>(
 
 /// Create the executable scripts by modifying the activation script
 /// to activate the environment and run the executable.
-pub(crate) async fn create_executable_scripts(
+pub(super) async fn create_executable_scripts(
     mapped_executables: &[BinScriptMapping<'_>],
     prefix: &Prefix,
     shell: &ShellEnum,
@@ -333,55 +238,53 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|c| Channel::from_str(c, &channel_config))
         .collect::<Result<Vec<Channel>, _>>()
         .into_diagnostic()?;
-    let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-        .with_arc(Arc::new(AuthenticationMiddleware::default()))
-        .build();
 
     // Find the MatchSpec we want to install
     let specs = args
         .package
         .into_iter()
-        .map(|package_str| MatchSpec::from_str(&package_str, Strict))
+        .map(|package_str| MatchSpec::from_str(&package_str, ParseStrictness::Strict))
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
     // Fetch sparse repodata
-    let platform_sparse_repodata =
-        fetch_sparse_repodata(&channels, [Platform::current()], &authenticated_client).await?;
+    let (authenticated_client, sparse_repodata) = get_client_and_sparse_repodata(&channels).await?;
 
     // Install the package(s)
     let mut executables = vec![];
     for package_matchspec in specs {
-        let (prefix_package, scripts, _) = globally_install_package(
-            package_matchspec,
-            &platform_sparse_repodata,
-            &channel_config,
-            authenticated_client.clone(),
-        )
-        .await?;
+        let package_name = package_name(&package_matchspec)?;
+        let records = load_package_records(package_matchspec, &sparse_repodata)?;
 
+        let (prefix_package, scripts, _) =
+            globally_install_package(&package_name, records, authenticated_client.clone()).await?;
         let channel_name = channel_name_from_prefix(&prefix_package, &channel_config);
+        let record = &prefix_package.repodata_record.package_record;
+
+        // Warn if no executables were created for the package
+        if scripts.is_empty() {
+            eprintln!(
+                "{}No executable entrypoint found in package {}, are you sure it exists?",
+                console::style(console::Emoji("⚠️", "")).yellow().bold(),
+                console::style(record.name.as_source()).bold()
+            );
+        }
 
         eprintln!(
             "{}Installed package {} {} {} from {}",
             console::style(console::Emoji("✔ ", "")).green(),
-            console::style(
-                prefix_package
-                    .repodata_record
-                    .package_record
-                    .name
-                    .as_source()
-            )
-            .bold(),
-            console::style(prefix_package.repodata_record.package_record.version).bold(),
-            console::style(prefix_package.repodata_record.package_record.build).bold(),
+            console::style(record.name.as_source()).bold(),
+            console::style(record.version.version()).bold(),
+            console::style(record.build.as_str()).bold(),
             channel_name,
         );
 
         executables.extend(scripts);
     }
 
-    print_executables_available(executables).await?;
+    if !executables.is_empty() {
+        print_executables_available(executables).await?;
+    }
 
     Ok(())
 }
@@ -399,7 +302,7 @@ async fn print_executables_available(executables: Vec<PathBuf>) -> miette::Resul
         })
         .join(&format!("\n{whitespace} -  "));
 
-    if is_bin_folder_on_path() {
+    if is_bin_folder_on_path().await {
         eprintln!(
             "{whitespace}These executables are now globally available:\n{whitespace} -  {executable}",
         )
@@ -414,55 +317,21 @@ async fn print_executables_available(executables: Vec<PathBuf>) -> miette::Resul
     Ok(())
 }
 
+/// Install given package globally, with all its dependencies
 pub(super) async fn globally_install_package(
-    package_matchspec: MatchSpec,
-    sparse_repodata: &IndexMap<(Channel, Platform), SparseRepoData>,
-    channel_config: &ChannelConfig,
+    package_name: &PackageName,
+    records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
-    let package_name: PackageName = package_name(&package_matchspec)?;
-
-    let available_packages = SparseRepoData::load_records_recursive(
-        sparse_repodata.values(),
-        vec![package_name.clone()],
-        None,
-    )
-    .into_diagnostic()?;
-
-    // Solve for environment
-    // Construct a solver task that we can start solving.
-    let task = rattler_solve::SolverTask {
-        specs: vec![package_matchspec],
-        available_packages: &available_packages,
-
-        virtual_packages: rattler_virtual_packages::VirtualPackage::current()
-            .into_diagnostic()?
-            .iter()
-            .cloned()
-            .map(Into::into)
-            .collect(),
-
-        locked_packages: vec![],
-        pinned_packages: vec![],
-
-        timeout: None,
-    };
-
-    // Solve it
-    let records = resolvo::Solver.solve(task).into_diagnostic()?;
-
     // Create the binary environment prefix where we install or update the package
-    let BinEnvDir(bin_prefix) = BinEnvDir::create(&package_name).await?;
+    let BinEnvDir(bin_prefix) = BinEnvDir::create(package_name).await?;
     let prefix = Prefix::new(bin_prefix);
     let prefix_records = prefix.find_installed_packages(None).await?;
 
     // Create the transaction that we need
-    let transaction = Transaction::from_current_and_desired(
-        prefix_records.clone(),
-        records.iter().cloned(),
-        Platform::current(),
-    )
-    .into_diagnostic()?;
+    let transaction =
+        Transaction::from_current_and_desired(prefix_records.clone(), records, Platform::current())
+            .into_diagnostic()?;
 
     let has_transactions = !transaction.operations.is_empty();
 
@@ -485,7 +354,7 @@ pub(super) async fn globally_install_package(
     }
 
     // Find the installed package in the environment
-    let prefix_package = find_designated_package(&prefix, &package_name).await?;
+    let prefix_package = find_designated_package(&prefix, package_name).await?;
 
     // Determine the shell to use for the invocation script
     let shell: ShellEnum = if cfg!(windows) {
@@ -512,37 +381,7 @@ pub(super) async fn globally_install_package(
         )
         .collect();
 
-    // Check if the bin path is on the path
-    if scripts.is_empty() {
-        let channel = channel_name_from_prefix(&prefix_package, channel_config);
-        miette::bail!(
-            "could not find an executable entrypoint in package {} {} {} from {}, are you sure it exists?",
-            console::style(prefix_package.repodata_record.package_record.name.as_source()).bold(),
-            console::style(prefix_package.repodata_record.package_record.version).bold(),
-            console::style(prefix_package.repodata_record.package_record.build).bold(),
-            channel,
-        );
-    }
-
     Ok((prefix_package, scripts, has_transactions))
-}
-
-fn channel_name_from_prefix(
-    prefix_package: &PrefixRecord,
-    channel_config: &ChannelConfig,
-) -> String {
-    Channel::from_str(&prefix_package.repodata_record.channel, channel_config)
-        .map(|ch| friendly_channel_name(&ch))
-        .unwrap_or_else(|_| prefix_package.repodata_record.channel.clone())
-}
-
-pub(super) fn package_name(package_matchspec: &MatchSpec) -> miette::Result<PackageName> {
-    package_matchspec.name.clone().ok_or_else(|| {
-        miette::miette!(
-            "could not find package name in MatchSpec {}",
-            package_matchspec
-        )
-    })
 }
 
 /// Returns the string to add for all arguments passed to the script
@@ -555,10 +394,10 @@ fn get_catch_all_arg(shell: &ShellEnum) -> &str {
 }
 
 /// Returns true if the bin folder is available on the PATH.
-fn is_bin_folder_on_path() -> bool {
-    let bin_path = match bin_dir() {
-        Ok(path) => path,
-        Err(_) => return false,
+async fn is_bin_folder_on_path() -> bool {
+    let bin_path = match BinDir::from_existing().await.ok() {
+        Some(BinDir(bin_dir)) => bin_dir,
+        None => return false,
     };
 
     std::env::var_os("PATH")
