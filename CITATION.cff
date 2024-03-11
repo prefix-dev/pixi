@@ -1,0 +1,40 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: pixi
+message: >-
+  If pixi contributes to a project that leads to a
+  scientific publication, please acknowledge this fact by
+  citing according to this file.
+type: software
+# Based on recommendation we use the authors that are responsible for the tool from `prefix.dev` as authors.
+# Using personal email to possibly outlive the employment at `prefix.dev`.
+authors:
+  - given-names: Ruben
+    family-names: Arts
+    email: ruben.arts@hotmail.com
+  - given-names: Bas
+    family-names: Zalmstra
+    email: zalmstra.bas@gmail.com
+  - given-names: Wolf
+    family-names: Volprecht
+    email: w.vollprecht@gmail.com
+  - given-names: Tim
+    name-particle: de
+    family-names: Jager
+    email: tdejager89@gmail.com
+repository-code: 'https://github.com/prefix-dev/pixi/releases/tag/v0.16.1'
+url: 'https://pixi.sh/v0.16.1'
+abstract: >-
+  A cross-platform, language agnostic, package/project
+  management tool for development in virtual environments.
+keywords:
+  - package-management
+  - project-management
+  - virtual-environments
+  - conda
+  - pypi
+  - development-tools
+  - pixi
+license: BSD-3-Clause
