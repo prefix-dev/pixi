@@ -256,7 +256,7 @@ It supports automatic caching of your environments.
 - run: pixi run cowpy "Thanks for using pixi"
 ```
 
-See the [GitHub Action documentation](https://github.com/prefix-dev/setup-pixi) for more examples.
+See the [documentation](https://pixi.sh/latest/advanced/github_actions) for more details.
 
 <a name="contributing"></a>
 
