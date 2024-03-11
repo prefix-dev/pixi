@@ -173,8 +173,6 @@ mod test {
                 .await
                 .unwrap();
 
-        println!("{:#?}", hashes);
-
         assert!(
             hashes.files.get(Path::new("build.rs")).is_none(),
             "build.rs should not be included"
@@ -197,5 +195,13 @@ mod test {
                 .map(String::as_str),
             Some("2c806b6ebece677c")
         );
+
+        let hashes =
+            FileHashes::from_files(target_dir.path(), vec!["src/"])
+                .await
+                .unwrap();
+
+        println!("{:#?}", hashes);
+        assert!(hashes.files.contains_key(Path::new("src/main.rs")));
     }
 }
