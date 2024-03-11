@@ -4,7 +4,7 @@ title: GitHub Action
 description: Learn how to use pixi using GitHub Actions
 ---
 <!--
-Modifications to this file are related to the README.md in https://github.com/prefix-dev/setup-pixi, 
+Modifications to this file are related to the README.md in https://github.com/prefix-dev/setup-pixi,
 please keep these two in sync by making a PR in both
 -->
 
