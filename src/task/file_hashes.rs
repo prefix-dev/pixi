@@ -89,6 +89,10 @@ impl FileHashes {
         let collect_root = root.to_owned();
         WalkBuilder::new(root)
             .overrides(filter)
+            .hidden(false)
+            .git_ignore(false)
+            .git_global(false)
+            .git_exclude(false)
             .build_parallel()
             .run(|| {
                 let tx = tx.clone();
@@ -196,10 +200,9 @@ mod test {
             Some("2c806b6ebece677c")
         );
 
-        let hashes =
-            FileHashes::from_files(target_dir.path(), vec!["src/"])
-                .await
-                .unwrap();
+        let hashes = FileHashes::from_files(target_dir.path(), vec!["src/"])
+            .await
+            .unwrap();
 
         println!("{:#?}", hashes);
         assert!(hashes.files.contains_key(Path::new("src/main.rs")));
