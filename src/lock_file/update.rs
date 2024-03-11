@@ -107,35 +107,35 @@ impl<'p> LockFileDerivedData<'p> {
             .unwrap_or_default();
         let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
 
-        let uv_context = match &self.uv_context {
-            None => {
-                let context = UvResolutionContext::from_project(self.project)?;
-                self.uv_context = Some(context.clone());
-                context
-            }
-            Some(context) => context.clone(),
-        };
+        if environment.has_pypi_dependencies() {
+            let uv_context = match &self.uv_context {
+                None => {
+                    let context = UvResolutionContext::from_project(self.project)?;
+                    self.uv_context = Some(context.clone());
+                    context
+                }
+                Some(context) => context.clone(),
+            };
 
-        // TODO(tim): get support for this somehow with uv
-        let env_variables = environment.project().get_env_variables(environment).await?;
+            let env_variables = environment.project().get_env_variables(environment).await?;
+            // Update the prefix with Pypi records
+            environment::update_prefix_pypi(
+                environment.name(),
+                &prefix,
+                platform,
+                &repodata_records,
+                &pypi_records,
+                &python_status,
+                &environment.system_requirements(),
+                uv_context,
+                env_variables,
+            )
+            .await?;
 
-        // Update the prefix with Pypi records
-        environment::update_prefix_pypi(
-            environment.name(),
-            &prefix,
-            platform,
-            &repodata_records,
-            &pypi_records,
-            &python_status,
-            &environment.system_requirements(),
-            uv_context,
-            env_variables,
-        )
-        .await?;
-
-        // Store that we updated the environment, so we won't have to do it again.
-        self.updated_pypi_prefixes
-            .insert(environment.clone(), prefix.clone());
+            // Store that we updated the environment, so we won't have to do it again.
+            self.updated_pypi_prefixes
+                .insert(environment.clone(), prefix.clone());
+        }
 
         Ok(prefix)
     }
@@ -546,6 +546,14 @@ pub async fn ensure_up_to_date_lock_file(
     let locked_grouped_repodata_records = all_grouped_environments
         .iter()
         .filter_map(|group| {
+            // If any content of the environments in the group are outdated we need to disregard the locked content.
+            if group
+                .environments()
+                .any(|e| outdated.disregard_locked_content.contains(&e))
+            {
+                return None;
+            }
+
             let records = match group {
                 GroupedEnvironment::Environment(env) => locked_repodata_records.get(env)?.clone(),
                 GroupedEnvironment::Group(group) => {

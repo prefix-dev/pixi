@@ -17,7 +17,7 @@ use pixi::{
     consts, EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
     TaskGraphError,
 };
-use rattler_conda_types::{MatchSpec, Platform};
+use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::cli::run::get_task_env;
@@ -163,6 +163,14 @@ impl PixiControl {
         Ok(pixi)
     }
 
+    /// Updates the complete manifest
+    pub fn update_manifest(&self, manifest: &str) -> miette::Result<()> {
+        std::fs::write(&self.manifest_path(), manifest)
+            .into_diagnostic()
+            .context("failed to write pixi.toml")?;
+        Ok(())
+    }
+
     /// Loads the project manifest and returns it.
     pub fn project(&self) -> miette::Result<Project> {
         Project::load_or_else_discover(Some(&self.manifest_path()))
@@ -203,7 +211,7 @@ impl PixiControl {
         }
     }
 
-    /// Initialize pixi project inside a temporary directory. Returns a [`AddBuilder`]. To execute
+    /// Add dependencies to the project. Returns an [`AddBuilder`].
     /// the command and await the result call `.await` on the return value.
     pub fn add(&self, spec: &str) -> AddBuilder {
         AddBuilder {
@@ -397,13 +405,13 @@ pub trait IntoMatchSpec {
 
 impl IntoMatchSpec for &str {
     fn into(self) -> MatchSpec {
-        MatchSpec::from_str(self).unwrap()
+        MatchSpec::from_str(self, Lenient).unwrap()
     }
 }
 
 impl IntoMatchSpec for String {
     fn into(self) -> MatchSpec {
-        MatchSpec::from_str(&self).unwrap()
+        MatchSpec::from_str(&self, Lenient).unwrap()
     }
 }
 

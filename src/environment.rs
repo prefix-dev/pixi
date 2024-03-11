@@ -206,7 +206,7 @@ pub async fn update_prefix_pypi(
     .await
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum PythonStatus {
     /// The python interpreter changed from `old` to `new`.
     Changed { old: PythonInfo, new: PythonInfo },

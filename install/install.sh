@@ -31,7 +31,7 @@ else
   DOWNLOAD_URL=https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}.tar.gz
 fi
 
-printf "This script will automatically download and install Pixi (${VERSION}) for you.\nGetting it from this url: $DOWNLOAD_URL\nThe binary will be installed into '$BIN_DIR'\n"
+printf "This script will automatically download and install Pixi (${VERSION}) for you.\nGetting it from this url: $DOWNLOAD_URL\n"
 
 if ! hash curl 2> /dev/null && ! hash wget 2> /dev/null; then
   echo "error: you need either 'curl' or 'wget' installed for this script."
@@ -74,6 +74,8 @@ fi
 # Extract pixi from the downloaded tar file
 mkdir -p "$BIN_DIR"
 tar -xzf "$TEMP_FILE" -C "$BIN_DIR"
+chmod +x "$BIN_DIR/pixi"
+echo "The 'pixi' binary is installed into '${BIN_DIR}'"
 
 update_shell() {
     FILE=$1
@@ -92,8 +94,10 @@ update_shell() {
     then
         echo "Updating '${FILE}'"
         echo "$LINE" >> "$FILE"
+        echo "Please restart or source your shell."
     fi
 }
+
 case "$(basename "$SHELL")" in
     bash)
         if [ -f ~/.bash_profile ]; then
@@ -116,13 +120,15 @@ case "$(basename "$SHELL")" in
         update_shell ~/.zshrc "$LINE"
         ;;
 
+    tcsh)
+        LINE="set path = ( \$path ${BIN_DIR} )"
+        update_shell ~/.tcshrc "$LINE"
+        ;;
+
     *)
-        echo "Unsupported shell: $(basename "$0")"
+        echo "Could not update shell: $(basename "$SHELL")"
+        echo "Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command."
         ;;
 esac
-
-chmod +x "$BIN_DIR/pixi"
-
-echo "Please restart or source your shell."
 
 }; __wrap__

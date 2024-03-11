@@ -1,5 +1,7 @@
-import polars
 import sys
+
+import polars
+
 
 def test_versions():
     print("") # empty line

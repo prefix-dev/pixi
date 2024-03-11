@@ -356,7 +356,7 @@ impl<'p> Hash for Environment<'p> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use insta::assert_display_snapshot;
+    use insta::assert_snapshot;
     use itertools::Itertools;
     use std::path::Path;
 
@@ -496,7 +496,7 @@ mod tests {
             .environment("foobar")
             .unwrap()
             .dependencies(None, None);
-        assert_display_snapshot!(format_dependencies(deps));
+        assert_snapshot!(format_dependencies(deps));
     }
 
     #[test]
