@@ -1,15 +1,15 @@
+use std::collections::HashMap;
+
 use clap::Parser;
-use futures::{stream, StreamExt, TryStreamExt};
+use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, ChannelConfig, Platform};
-use rattler_networking::AuthenticationMiddleware;
-use std::sync::Arc;
+use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, ParseStrictness};
 
-use crate::repodata::fetch_sparse_repodata;
-
-use super::{install::globally_install_package, list::list_global_packages};
-
-const UPGRADE_ALL_CONCURRENCY: usize = 5;
+use super::{
+    common::{find_installed_package, get_client_and_sparse_repodata, load_package_records},
+    list::list_global_packages,
+    upgrade::upgrade_package,
+};
 
 /// Upgrade all globally installed packages
 #[derive(Parser, Debug)]
@@ -21,63 +21,84 @@ pub struct Args {
     /// depends on the `conda-forge` channel.
     /// For example: `pixi global upgrade-all --channel conda-forge --channel bioconda`.
     ///
-    /// By default, if no channel is provided, `conda-forge` is used.
+    /// By default, if no channel is provided, `conda-forge` is used, the channel
+    /// the package was installed from will always be used.
     #[clap(short, long, default_values = ["conda-forge"])]
     channel: Vec<String>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    // Figure out what channels we are using
+    let packages = list_global_packages().await?;
     let channel_config = ChannelConfig::default();
-    let channels = args
+    let mut channels = args
         .channel
         .iter()
         .map(|c| Channel::from_str(c, &channel_config))
         .collect::<Result<Vec<Channel>, _>>()
         .into_diagnostic()?;
 
-    let packages = list_global_packages().await?;
+    let mut installed_versions = HashMap::with_capacity(packages.len());
 
-    let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-        .with_arc(Arc::new(AuthenticationMiddleware::default()))
-        .build();
-    // Fetch sparse repodata
-    let platform_sparse_repodata =
-        fetch_sparse_repodata(&channels, [Platform::current()], &authenticated_client).await?;
-
-    let tasks = packages
-        .iter()
-        .map(|package| package.as_source().parse())
-        .collect::<Result<Vec<_>, _>>()
+    for package_name in packages.iter() {
+        let prefix_record = find_installed_package(package_name).await?;
+        let last_installed_channel = Channel::from_str(
+            prefix_record.repodata_record.channel.clone(),
+            &channel_config,
+        )
         .into_diagnostic()?;
 
-    let task_stream = stream::iter(tasks)
-        .map(|matchspec| {
-            globally_install_package(
-                matchspec,
-                &platform_sparse_repodata,
-                &channel_config,
+        channels.push(last_installed_channel);
+
+        let installed_version = prefix_record
+            .repodata_record
+            .package_record
+            .version
+            .into_version();
+        installed_versions.insert(package_name.as_normalized().to_owned(), installed_version);
+    }
+
+    // Remove possible duplicates
+    channels = channels.into_iter().unique().collect::<Vec<_>>();
+
+    // Fetch sparse repodata
+    let (authenticated_client, sparse_repodata) = get_client_and_sparse_repodata(&channels).await?;
+
+    let mut upgraded = false;
+    for package_name in packages.iter() {
+        let package_matchspec =
+            MatchSpec::from_str(package_name.as_source(), ParseStrictness::Strict)
+                .into_diagnostic()?;
+        let records = load_package_records(package_matchspec, &sparse_repodata)?;
+        let package_record = records
+            .iter()
+            .find(|r| r.package_record.name.as_normalized() == package_name.as_normalized())
+            .ok_or_else(|| {
+                miette::miette!(
+                    "Package {} not found in the specified channels",
+                    package_name.as_normalized()
+                )
+            })?;
+        let toinstall_version = package_record.package_record.version.version().to_owned();
+        let installed_version = installed_versions
+            .get(package_name.as_normalized())
+            .expect("should have the installed version")
+            .to_owned();
+
+        // Prvent downgrades
+        if toinstall_version.cmp(&installed_version) == std::cmp::Ordering::Greater {
+            upgrade_package(
+                package_name,
+                installed_version,
+                toinstall_version,
+                records,
                 authenticated_client.clone(),
             )
-        })
-        .buffered(UPGRADE_ALL_CONCURRENCY);
-
-    let res: Vec<_> = task_stream.try_collect().await?;
-
-    let mut packages_upgraded = 0;
-    for (prefix_record, _, upgraded) in res {
-        if upgraded {
-            packages_upgraded += 1;
-            let record = prefix_record.repodata_record.package_record;
-            eprintln!(
-                "Upgraded {} {}",
-                console::style(record.name.as_normalized()).bold(),
-                console::style(record.version).bold(),
-            );
+            .await?;
+            upgraded = true;
         }
     }
 
-    if packages_upgraded == 0 {
+    if !upgraded {
         eprintln!("Nothing to upgrade");
     }
 
