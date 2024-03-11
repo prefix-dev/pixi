@@ -132,7 +132,7 @@ pub(super) async fn upgrade_package(
         console::style("Updating").green(),
         message
     ));
-    globally_install_package(&package_name, records, authenticated_client).await?;
+    globally_install_package(package_name, records, authenticated_client).await?;
     pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));
     Ok(())
 }
