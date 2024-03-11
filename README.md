@@ -249,13 +249,14 @@ pixi global install cowpy
 ## Use in GitHub Actions
 
 You can use pixi in GitHub Actions to install dependencies and run commands.
+It supports automatic caching of your environments.
 
 ```yml
-- uses: prefix-dev/setup-pixi@v0.2.0
-  with:
-    cache: true
+- uses: prefix-dev/setup-pixi@v0.5.1
 - run: pixi run cowpy "Thanks for using pixi"
 ```
+
+See the [GitHub Action documentation](https://github.com/prefix-dev/setup-pixi) for more examples.
 
 <a name="contributing"></a>
 
