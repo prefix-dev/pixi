@@ -11,7 +11,7 @@ use pixi::{
     cli::{
         add, init,
         install::Args,
-        project, run,
+        project, remove, run,
         task::{self, AddArgs, AliasArgs},
     },
     consts, EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
@@ -34,6 +34,8 @@ use std::{
 };
 use tempfile::TempDir;
 use thiserror::Error;
+
+use self::builders::RemoveBuilder;
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -224,6 +226,21 @@ impl PixiControl {
                 no_lockfile_update: false,
                 platform: Default::default(),
                 pypi: false,
+                feature: None,
+            },
+        }
+    }
+
+    /// Remove dependencies from the project. Returns a [`RemoveBuilder`].
+    pub fn remove(&self, spec: &str) -> RemoveBuilder {
+        RemoveBuilder {
+            args: remove::Args {
+                deps: vec![spec.to_string()],
+                manifest_path: Some(self.manifest_path()),
+                host: false,
+                build: false,
+                pypi: false,
+                platform: Default::default(),
                 feature: None,
             },
         }

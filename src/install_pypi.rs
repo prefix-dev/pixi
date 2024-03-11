@@ -50,6 +50,7 @@ fn elapsed(duration: Duration) -> String {
 }
 
 /// Derived from uv [`uv_installer::Plan`]
+#[derive(Debug)]
 struct PixiInstallPlan {
     /// The distributions that are not already installed in the current environment, but are
     /// available in the local cache.
