@@ -5,6 +5,14 @@ description: Who is using pixi?
 ---
 # Community
 
+When you want to show your users and contributors that they can use pixi in your repo, you can use the following badge:
+
+[![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
+
+```
+[![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
+```
+
 ## Built using Pixi
 
 - Deltares:
