@@ -37,6 +37,21 @@ pub fn get_default_author() -> Option<(String, String)> {
     Some((name?, email.unwrap_or_else(|| "".into())))
 }
 
+/// Get pixi home directory, default to `$HOME/.pixi`
+///
+/// It may be overridden by the `PIXI_HOME` environment variable.
+///
+/// # Returns
+///
+/// The pixi home directory
+pub fn home_path() -> Option<PathBuf> {
+    if let Some(path) = std::env::var_os("PIXI_HOME") {
+        Some(PathBuf::from(path))
+    } else {
+        dirs::home_dir().map(|path| path.join(".pixi"))
+    }
+}
+
 /// Returns the default cache directory.
 /// Most important is the `PIXI_CACHE_DIR` environment variable.
 /// If that is not set, the `RATTLER_CACHE_DIR` environment variable is used.
@@ -118,25 +133,27 @@ impl Config {
 
     /// Load the global config file from the home directory (~/.pixi/config.toml)
     pub fn load_global() -> Config {
-        let Some(location) =
-            dirs::home_dir().map(|d| d.join(consts::PIXI_DIR).join(consts::CONFIG_FILE))
-        else {
-            return Config::default();
-        };
-
-        if location.exists() {
-            let global_config = fs::read_to_string(&location).unwrap_or_default();
-            if let Ok(config) = Config::from_toml(&global_config, &location) {
-                return config;
+        let global_locations = vec![
+            dirs::config_dir().map(|d| d.join(consts::PIXI_DIR).join(consts::CONFIG_FILE)),
+            home_path().map(|d| d.join(consts::PIXI_DIR).join(consts::CONFIG_FILE)),
+        ];
+        let mut merged_config = Config::default();
+        for location in global_locations {
+            if let Some(location) = location {
+                if location.exists() {
+                    let global_config = fs::read_to_string(&location).unwrap_or_default();
+                    if let Ok(config) = Config::from_toml(&global_config, &location) {
+                        merged_config.merge_config(&config);
+                    } else {
+                        eprintln!(
+                            "Could not load global config (invalid toml): {}",
+                            location.display()
+                        );
+                    }
+                }
             }
-            eprintln!(
-                "Could not load global config (invalid toml): ~/{}/{}",
-                consts::PIXI_DIR,
-                consts::CONFIG_FILE
-            );
         }
-
-        Config::default()
+        merged_config
     }
 
     /// Load the config from the given path pixi folder and merge it with the global config.
