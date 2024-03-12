@@ -144,14 +144,13 @@ libc = { version = "0.2.153", default-features = false }
 signal-hook = "0.3.17"
 
 [dev-dependencies]
+insta = { version = "1.36.1", features = ["yaml", "glob"] }
 rattler_digest = "0.19.1"
 rstest = "0.18.2"
 serde_json = "1.0.114"
 serial_test = "3.0.0"
 tokio = { version = "1.36.0", features = ["rt"] }
 toml = "0.8.10"
-insta = { version = "1.36.1", features = ["yaml", "glob"] }
-
 
 [patch.crates-io]
 # For pyproject-toml
