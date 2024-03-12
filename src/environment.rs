@@ -28,12 +28,25 @@ use std::{collections::HashMap, io::ErrorKind, path::Path, sync::Arc};
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
 /// Errors when there is a file system error or the path does not align with the defined prefix.
 /// Returns false when the file is not present.
-pub fn verify_prefix_location_unchanged(prefix_file: &Path) -> miette::Result<()> {
-    match std::fs::read_to_string(prefix_file) {
+pub fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette::Result<()> {
+    let prefix_file = environment_dir
+        // TODO: move it to conda-meta when that is possible, currently that breaks rattler
+        // .join("conda-meta")
+        .join(consts::PREFIX_FILE_NAME);
+
+    tracing::info!(
+        "verifying prefix location is unchanged, with prefix file: {}",
+        prefix_file.display()
+    );
+
+    match std::fs::read_to_string(prefix_file.clone()) {
         // Not found is fine as it can be new or backwards compatible.
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
         // Scream the error if we don't know it.
-        Err(e) => Err(e).into_diagnostic(),
+        Err(e) => {
+            tracing::error!("failed to read prefix file: {}", prefix_file.display());
+            Err(e).into_diagnostic()
+        }
         // Check if the path in the file aligns with the current path.
         Ok(p) if prefix_file.starts_with(&p) => Ok(()),
         Ok(p) => Err(miette::miette!(
@@ -50,11 +63,18 @@ pub fn verify_prefix_location_unchanged(prefix_file: &Path) -> miette::Result<()
 }
 
 /// Create the prefix location file.
-/// Give it the file path of the required location to place it.
-fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
-    let parent = prefix_file
+/// Give it the environment path to place it.
+fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
+    let prefix_file = environment_dir
+        // TODO: Move it conda-meta when that is possible, currently that breaks rattler
+        // .join("conda-meta")
+        .join(consts::PREFIX_FILE_NAME);
+
+    tracing::info!("create prefix file: {}", prefix_file.display());
+    let binding = prefix_file.clone();
+    let parent = binding
         .parent()
-        .ok_or_else(|| miette::miette!("cannot find parent of '{}'", prefix_file.display()))?;
+        .ok_or_else(|| miette::miette!("cannot find parent of '{}'", binding.display()))?;
 
     if parent.exists() {
         let contents = parent.to_str().ok_or_else(|| {
@@ -71,13 +91,7 @@ fn create_prefix_location_file(prefix_file: &Path) -> miette::Result<()> {
 ///     3. It verifies the absence of the `env` folder.
 pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(
-        project
-            .default_environment()
-            .dir()
-            .join(consts::PREFIX_FILE_NAME)
-            .as_path(),
-    )?;
+    verify_prefix_location_unchanged(project.default_environment().dir().as_path())?;
 
     // Make sure the system requirements are met
     verify_current_platform_has_required_virtual_packages(&project.default_environment())
@@ -303,7 +317,7 @@ pub async fn update_prefix_conda(
     }
 
     // Mark the location of the prefix
-    create_prefix_location_file(&prefix.root().join(consts::PREFIX_FILE_NAME))?;
+    create_prefix_location_file(prefix.root())?;
 
     // Determine if the python version changed.
     Ok(PythonStatus::from_transaction(&transaction))
