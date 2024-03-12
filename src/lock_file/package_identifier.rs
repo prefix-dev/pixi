@@ -5,6 +5,7 @@ use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use rattler_lock::CondaPackage;
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
+use url::Url;
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 /// Defines information about a Pypi package extracted from either a python package or from a
 /// conda package.
@@ -12,6 +13,7 @@ use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 pub struct PypiPackageIdentifier {
     pub name: PyPiPackageName,
     pub version: pep440_rs::Version,
+    pub url: Url,
     pub extras: HashSet<ExtraName>,
 }
 
@@ -31,6 +33,7 @@ impl PypiPackageIdentifier {
         Ok(Self {
             name: PyPiPackageName::from_normalized(package.data().package.name.clone()),
             version: package.data().package.version.clone(),
+            url: package.url().clone(),
             extras: package.extras().iter().cloned().collect(),
         })
     }
@@ -63,6 +66,7 @@ impl PypiPackageIdentifier {
                 result.push(PypiPackageIdentifier {
                     name: PyPiPackageName::from_normalized(name),
                     version,
+                    url: package.url().clone(),
                     // TODO: We can't really tell which python extras are enabled in a conda package.
                     extras: Default::default(),
                 });
@@ -100,6 +104,7 @@ impl PypiPackageIdentifier {
                 result.push(PypiPackageIdentifier {
                     name: PyPiPackageName::from_normalized(name),
                     version,
+                    url: record.url.clone(),
                     // TODO: We can't really tell which python extras are enabled in a conda package.
                     extras: Default::default(),
                 })
@@ -153,6 +158,7 @@ impl PypiPackageIdentifier {
 
         Ok(Self {
             name: PyPiPackageName::from_normalized(name),
+            url: Url::parse(&package_url.to_string()).expect("cannot parse purl -> url"),
             version,
             extras,
         })
@@ -167,8 +173,8 @@ impl PypiPackageIdentifier {
         // Check the version of the requirement
         match &requirement.version_or_url {
             None => {}
-            Some(VersionOrUrl::Url(_)) => {
-                return true;
+            Some(VersionOrUrl::Url(url)) => {
+                return &url.to_url() == &self.url;
             }
             Some(VersionOrUrl::VersionSpecifier(spec)) => {
                 if !spec.contains(&self.version) {

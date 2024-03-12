@@ -117,6 +117,8 @@ fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_ty
 }
 
 fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
+    dbg!(&pkg.url);
+
     // Extract last component from url
     let filename_raw = pkg.url.path_segments().unwrap().last().unwrap();
     let filename = DistFilename::try_from_normalized_filename(filename_raw)
@@ -125,11 +127,16 @@ fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
     // Bit of a hack to create the file type
     let file = locked_data_to_file(pkg, filename_raw);
 
-    Dist::from_registry(
-        filename,
-        file,
-        IndexUrl::Pypi(VerbatimUrl::from_url(pkg.url.clone())),
-    )
+    if pkg.hash.is_none() {
+        Dist::from_url(pkg.name.clone(), VerbatimUrl::from_url(pkg.url.clone()))
+            .expect("could not convert into uv dist")
+    } else {
+        Dist::from_registry(
+            filename,
+            file,
+            IndexUrl::Pypi(VerbatimUrl::from_url(pkg.url.clone())),
+        )
+    }
 }
 
 enum ValidateInstall {

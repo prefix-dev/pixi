@@ -247,16 +247,16 @@ impl From<PyPiRequirement> for Item {
                 rev: _,
                 subdirectory: _,
             } => {
-                unimplemented!("git")
+                todo!("git")
             }
             PyPiRequirementType::Path {
                 path: _,
                 editable: _,
             } => {
-                unimplemented!("path")
+                todo!("path")
             }
             PyPiRequirementType::Url { url: _ } => {
-                unimplemented!("url")
+                todo!("url")
             }
         };
 
@@ -287,6 +287,7 @@ impl FromStr for PyPiRequirement {
     type Err = ParsePyPiRequirementError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // TODO: add sources here
         // From string can only parse the version specifier.
         Ok(Self {
             requirement: PyPiRequirementType::Version(VersionOrStar::from_str(s)?),
@@ -329,20 +330,39 @@ impl PyPiRequirement {
                 .as_ref()
                 .map(|v| pep508_rs::VersionOrUrl::VersionSpecifier(v.clone())),
             PyPiRequirementType::Git {
-                git,
+                git: url,
+                // TODO: ignoring branch for now
                 branch: _,
-                tag: _,
-                rev: _,
-                subdirectory: _,
-            } => Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(
-                git.clone(),
-            ))),
-            PyPiRequirementType::Path {
-                path: _,
-                editable: _,
+                tag,
+                rev,
+                subdirectory: subdir,
             } => {
-                unimplemented!("No path to url conversion yet.")
+                // Choose revision over tag if it is specified
+                let tag_or_rev = rev.as_ref().or_else(|| tag.as_ref()).cloned();
+                // Create the url.
+                let url = format!("git+{url}");
+                // Add the tag or rev if it exists.
+                let url = tag_or_rev
+                    .as_ref()
+                    .map_or_else(|| url.clone(), |tag_or_rev| format!("{url}@{tag_or_rev}"));
+                // Add the subdirectory if it exists.
+                let url = subdir.as_ref().map_or_else(
+                    || url.clone(),
+                    |subdir| format!("{url}#subdirectory={subdir}"),
+                );
+                Some(pep508_rs::VersionOrUrl::Url(
+                    VerbatimUrl::parse(&url).expect("git url is invalid"),
+                ))
             }
+            PyPiRequirementType::Path { path, editable: _ } => Some(pep508_rs::VersionOrUrl::Url(
+                VerbatimUrl::parse(
+                    path.as_os_str()
+                        .to_str()
+                        .expect("could not parse path as str"),
+                )
+                .expect("path is invalid"),
+            )),
+
             PyPiRequirementType::Url { url } => Some(pep508_rs::VersionOrUrl::Url(
                 VerbatimUrl::from_url(url.clone()),
             )),
@@ -365,7 +385,7 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
             .string(|str| PyPiRequirement::from_str(str).map_err(Error::custom))
             .map(|map| {
                 // Just use normal deserializer
-                #[derive(Deserialize)]
+                #[derive(Deserialize, Debug)]
                 struct RawPyPiRequirement {
                     #[serde(flatten)]
                     requirement: Option<PyPiRequirementType>,
@@ -373,6 +393,7 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
                 }
                 let raw_pypi_requirement =
                     RawPyPiRequirement::deserialize(de::value::MapAccessDeserializer::new(map))?;
+
                 let mut extras = None;
                 if let Some(raw_extras) = raw_pypi_requirement.extras {
                     extras = Some(
@@ -686,6 +707,29 @@ mod tests {
                 requirement: PyPiRequirementType::Git {
                     git: Url::parse("https://test.url.git").unwrap(),
                     tag: Some("v.1.2.3".to_string()),
+                    branch: None,
+                    rev: None,
+                    subdirectory: None,
+                },
+                ..PyPiRequirement::default()
+            }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_pypi_from_flask() {
+        let requirement: IndexMap<PyPiPackageName, PyPiRequirement> = toml_edit::de::from_str(
+            r#"
+                flask = { git = "https://github.com/pallets/flask.git", tag = "3.0.0"}
+                "#,
+        )
+        .unwrap();
+        assert_eq!(
+            requirement.first().unwrap().1,
+            &PyPiRequirement {
+                requirement: PyPiRequirementType::Git {
+                    git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
+                    tag: Some("3.0.0".to_string()),
                     branch: None,
                     rev: None,
                     subdirectory: None,

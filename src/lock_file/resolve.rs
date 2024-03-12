@@ -224,7 +224,6 @@ pub async fn resolve_pypi(
     pb.set_message("resolving pypi dependencies");
 
     // Determine which pypi packages are already installed as conda package.
-    // Determine the python packages that are installed by the conda packages
     let conda_python_packages = locked_conda_records
         .iter()
         .flat_map(|record| {
@@ -341,6 +340,8 @@ pub async fn resolve_pypi(
         None,
         Vec::new(),
     );
+
+    dbg!(&manifest);
 
     let fallback_provider = DefaultResolverProvider::new(
         &context.registry_client,
