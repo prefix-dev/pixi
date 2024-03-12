@@ -26,7 +26,7 @@ pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientW
     let client = Client::builder()
         .pool_max_idle_per_host(20)
         .user_agent(APP_USER_AGENT)
-        .danger_accept_invalid_certs(config.tls_no_verify)
+        .danger_accept_invalid_certs(config.tls_no_verify())
         .timeout(Duration::from_secs(timeout))
         .build()
         .expect("failed to create reqwest Client");

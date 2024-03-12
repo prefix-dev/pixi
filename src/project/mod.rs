@@ -217,6 +217,14 @@ impl Project {
         Ok(project)
     }
 
+    pub fn with_cli_config<C>(mut self, config: C) -> Self
+    where
+        C: Into<Config>,
+    {
+        self.config.merge_config(&config.into());
+        self
+    }
+
     /// Returns the name of the project
     pub fn name(&self) -> &str {
         &self.manifest.parsed.project.name

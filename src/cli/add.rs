@@ -1,4 +1,5 @@
 use crate::{
+    config::ConfigCli,
     consts,
     environment::{get_up_to_date_prefix, verify_prefix_location_unchanged, LockFileUsage},
     project::{manifest::PyPiRequirement, DependencyType, Project, SpecType},
@@ -92,6 +93,9 @@ pub struct Args {
     /// The feature for which the dependency should be added
     #[arg(long, short)]
     pub feature: Option<String>,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
 }
 
 impl DependencyType {
@@ -109,7 +113,8 @@ impl DependencyType {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?
+        .with_cli_config(args.config.clone());
     let dependency_type = DependencyType::from_args(&args);
     let spec_platforms = &args.platform;
 

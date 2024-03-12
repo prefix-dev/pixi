@@ -1,3 +1,4 @@
+use clap::{ArgGroup, Parser};
 use miette::{Context, IntoDiagnostic};
 use serde::Deserialize;
 use std::fs;
@@ -48,9 +49,21 @@ pub fn get_cache_dir() -> miette::Result<PathBuf> {
                 .map_err(|_| miette::miette!("could not determine default cache directory"))
         })
 }
+#[derive(Parser, Debug, Default, Clone)]
+pub struct ConfigCli {
+    /// Do not verify the TLS certificate of the server.
+    #[arg(long)]
+    tls_no_verify: Option<bool>,
+}
 
-fn change_ps1_default() -> bool {
-    true
+#[derive(Parser, Debug, Default, Clone)]
+pub struct ConfigCliPrompt {
+    #[clap(flatten)]
+    config: ConfigCli,
+
+    /// Do not change the PS1 variable when starting a prompt.
+    #[arg(long)]
+    change_ps1: Option<bool>,
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]
@@ -59,29 +72,56 @@ pub struct Config {
     pub default_channels: Vec<String>,
 
     /// If set to true, pixi will set the PS1 environment variable to a custom value.
-    #[serde(default = "change_ps1_default")]
-    pub change_ps1: bool,
+    #[serde(default)]
+    change_ps1: Option<bool>,
 
     /// If set to true, pixi will not verify the TLS certificate of the server.
     #[serde(default)]
-    pub tls_no_verify: bool,
+    tls_no_verify: Option<bool>,
+
+    #[serde(skip)]
+    pub loaded_from: Vec<PathBuf>,
+}
+
+impl From<ConfigCli> for Config {
+    fn from(cli: ConfigCli) -> Self {
+        Self {
+            tls_no_verify: cli.tls_no_verify,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<ConfigCliPrompt> for Config {
+    fn from(cli: ConfigCliPrompt) -> Self {
+        let mut config: Config = cli.config.into();
+        config.change_ps1 = cli.change_ps1;
+        config
+    }
 }
 
 impl Config {
-    pub fn from_toml(toml: &str) -> miette::Result<Config> {
-        toml_edit::de::from_str(toml)
+    pub fn from_toml(toml: &str, location: &Path) -> miette::Result<Config> {
+        let mut config: Config = toml_edit::de::from_str(toml)
             .into_diagnostic()
-            .context("Failed to parse config.toml")
+            .context("Failed to parse config.toml")?;
+
+        config.loaded_from.push(location.to_path_buf());
+
+        Ok(config)
     }
 
     /// Load the global config file from the home directory (~/.pixi/config.toml)
     pub fn load_global() -> Config {
-        let global_config = dirs::home_dir()
-            .map(|d| d.join(consts::PIXI_DIR).join(consts::CONFIG_FILE))
-            .and_then(|p| fs::read_to_string(p).ok());
+        let Some(location) =
+            dirs::home_dir().map(|d| d.join(consts::PIXI_DIR).join(consts::CONFIG_FILE))
+        else {
+            return Config::default();
+        };
 
-        if let Some(global_config) = global_config {
-            if let Ok(config) = Config::from_toml(&global_config) {
+        if location.exists() {
+            let global_config = fs::read_to_string(&location).unwrap_or_default();
+            if let Ok(config) = Config::from_toml(&global_config, &location) {
                 return config;
             }
             eprintln!(
@@ -101,7 +141,7 @@ impl Config {
 
         if local_config.exists() {
             let s = fs::read_to_string(&local_config).into_diagnostic()?;
-            let local = Config::from_toml(&s);
+            let local = Config::from_toml(&s, &local_config);
             if let Ok(local) = local {
                 config.merge_config(&local);
             }
@@ -114,5 +154,34 @@ impl Config {
         if !other.default_channels.is_empty() {
             self.default_channels = other.default_channels.clone();
         }
+
+        if other.change_ps1.is_some() {
+            self.change_ps1 = other.change_ps1;
+        }
+
+        if other.tls_no_verify.is_some() {
+            self.tls_no_verify = other.tls_no_verify;
+        }
+    }
+
+    pub fn default_channels(&self) -> Vec<String> {
+        if self.default_channels.is_empty() {
+            consts::DEFAULT_CHANNELS
+                .iter()
+                .map(|s| s.to_string())
+                .collect()
+        } else {
+            self.default_channels.clone()
+        }
+    }
+
+    /// Retrieve the value for the tls_no_verify field (defaults to false).
+    pub fn tls_no_verify(&self) -> bool {
+        self.tls_no_verify.unwrap_or(false)
+    }
+
+    /// Retrieve the value for the change_ps1 field (defaults to true).
+    pub fn change_ps1(&self) -> bool {
+        self.change_ps1.unwrap_or(true)
     }
 }
