@@ -48,7 +48,7 @@ pub fn home_path() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("PIXI_HOME") {
         Some(PathBuf::from(path))
     } else {
-        dirs::home_dir().map(|path| path.join(".pixi"))
+        dirs::home_dir().map(|path| path.join(consts::PIXI_DIR))
     }
 }
 
@@ -135,7 +135,7 @@ impl Config {
     pub fn load_global() -> Config {
         let global_locations = vec![
             dirs::config_dir().map(|d| d.join(consts::PIXI_DIR).join(consts::CONFIG_FILE)),
-            home_path().map(|d| d.join(consts::PIXI_DIR).join(consts::CONFIG_FILE)),
+            home_path().map(|d| d.join(consts::CONFIG_FILE)),
         ];
         let mut merged_config = Config::default();
         for location in global_locations.into_iter().flatten() {
