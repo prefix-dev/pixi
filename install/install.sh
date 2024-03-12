@@ -34,7 +34,7 @@ fi
 if [[ $VERSION == "latest" ]]; then
   DOWNLOAD_URL=https://github.com/${REPO}/releases/latest/download/${BINARY}.${EXTENSION}
 else
-  DOWNLOAD_URL=https://github.com/${REPO}/releases/download/${VERSION}/.${EXTENSION}
+  DOWNLOAD_URL=https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}.${EXTENSION}
 fi
 
 printf "This script will automatically download and install Pixi (${VERSION}) for you.\nGetting it from this url: $DOWNLOAD_URL\n"
