@@ -332,7 +332,7 @@ jobs:
           path: target/wix/pixi-${{ matrix.target }}.msi
 
       - name: Publish packages
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         if: steps.is-release.outputs.IS_RELEASE
         with:
           draft: true
