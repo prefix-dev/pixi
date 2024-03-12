@@ -1,4 +1,4 @@
-use clap::{ArgGroup, Parser};
+use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 use serde::Deserialize;
 use std::fs;
@@ -101,6 +101,7 @@ impl From<ConfigCliPrompt> for Config {
 }
 
 impl Config {
+    /// Parse the given toml string and return a Config instance.
     pub fn from_toml(toml: &str, location: &Path) -> miette::Result<Config> {
         let mut config: Config = toml_edit::de::from_str(toml)
             .into_diagnostic()
@@ -150,6 +151,7 @@ impl Config {
         Ok(config)
     }
 
+    /// Merge the given config into the current one.
     pub fn merge_config(&mut self, other: &Config) {
         if !other.default_channels.is_empty() {
             self.default_channels = other.default_channels.clone();
@@ -162,8 +164,12 @@ impl Config {
         if other.tls_no_verify.is_some() {
             self.tls_no_verify = other.tls_no_verify;
         }
+        println!("{:?}", self.loaded_from);
+        println!("{:?}", other.loaded_from);
+        self.loaded_from.extend(other.loaded_from.iter().cloned());
     }
 
+    /// Retrieve the value for the default_channels field (defaults to the ["conda-forge"]).
     pub fn default_channels(&self) -> Vec<String> {
         if self.default_channels.is_empty() {
             consts::DEFAULT_CHANNELS

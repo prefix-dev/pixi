@@ -194,7 +194,7 @@ impl Project {
 
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
-        let config = Config::from_path(root).unwrap_or_default();
+        let config = Config::from_path(&root.join(consts::PIXI_DIR)).unwrap_or_default();
 
         let (client, authenticated_client) = build_reqwest_clients(Some(&config));
 
