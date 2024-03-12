@@ -501,5 +501,5 @@ test = ["test"]
 [environments]
 test = {features = ["test"], solve-group = "test"}
 prod = {features = ["prod"], solve-group = "test"}
-lint = "lint"
+lint = ["lint"]
 ```

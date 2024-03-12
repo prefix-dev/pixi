@@ -206,7 +206,7 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     let platform = platform_host::Platform::current().unwrap();
     // Current interpreter and venv
     let interpreter = uv_interpreter::Interpreter::query(&python, platform, &cache).unwrap();
-    uv_interpreter::PythonEnvironment::from_interpreter(interpreter, &prefix)
+    uv_interpreter::PythonEnvironment::from_interpreter(interpreter)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -248,6 +248,41 @@ async fn pypi_reinstall_python() {
         // This is because the site-packages is not prefixed with the python version
         assert!(installed_311.iter().count() > 0);
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[serial]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+// Check if we add and remove a pypi package that the site-packages is cleared
+async fn pypi_add_remove() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+    // Add and update lockfile with this version of python
+    pixi.add("python==3.11").with_install(true).await.unwrap();
+
+    // Add flask from pypi
+    pixi.add("flask")
+        .with_install(true)
+        .set_type(pixi::DependencyType::PypiDependency)
+        .await
+        .unwrap();
+
+    let prefix = pixi.project().unwrap().root().join(".pixi/envs/default");
+
+    let cache = uv_cache::Cache::temp().unwrap();
+
+    // Check if site-packages has entries
+    let env = create_uv_environment(&prefix, &cache);
+    let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
+    assert!(installed_311.iter().count() > 0);
+
+    pixi.remove("flask")
+        .set_type(pixi::DependencyType::PypiDependency)
+        .await
+        .unwrap();
+
+    let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
+    assert!(installed_311.iter().count() == 0);
 }
 
 #[tokio::test]

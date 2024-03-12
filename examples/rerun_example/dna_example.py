@@ -1,8 +1,9 @@
-import rerun as rr
+from math import tau
+
 import numpy as np
+import rerun as rr
 from rerun_demo.data import build_color_spiral
 from rerun_demo.util import bounce_lerp
-from math import tau
 
 NUM_POINTS = 100
 

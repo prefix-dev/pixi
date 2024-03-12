@@ -6,11 +6,10 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::PackageName;
 
-use crate::cli::global::install::{
-    bin_env_dir, find_and_map_executable_scripts, find_designated_package, home_path, BinDir,
-    BinEnvDir, BinScriptMapping,
-};
 use crate::prefix::Prefix;
+
+use super::common::{bin_env_dir, find_designated_package, home_path, BinDir, BinEnvDir};
+use super::install::{find_and_map_executable_scripts, BinScriptMapping};
 
 /// Lists all packages previously installed into a globally accessible location via `pixi global install`.
 #[derive(Parser, Debug)]
@@ -133,7 +132,12 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-pub(super) async fn list_global_packages() -> Result<Vec<PackageName>, miette::ErrReport> {
+/// List all globally installed packages
+///
+/// # Returns
+///
+/// A list of all globally installed packages represented as [`PackageName`]s
+pub(super) async fn list_global_packages() -> miette::Result<Vec<PackageName>> {
     let mut packages = vec![];
     let Ok(mut dir_contents) = tokio::fs::read_dir(bin_env_dir()?).await else {
         return Ok(vec![]);

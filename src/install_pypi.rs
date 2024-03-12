@@ -50,6 +50,7 @@ fn elapsed(duration: Duration) -> String {
 }
 
 /// Derived from uv [`uv_installer::Plan`]
+#[derive(Debug)]
 struct PixiInstallPlan {
     /// The distributions that are not already installed in the current environment, but are
     /// available in the local cache.
@@ -296,7 +297,7 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
     for dist_info in installed {
         let _summary = uv_installer::uninstall(&dist_info)
             .await
-            .expect("unistallation of old site-packages failed");
+            .expect("uninstallation of old site-packages failed");
     }
 
     Ok(())
@@ -360,7 +361,7 @@ pub async fn update_python_distributions(
 
     tracing::debug!("[Install] Using Python Interpreter: {:?}", interpreter);
     // Create a custom venv
-    let venv = PythonEnvironment::from_interpreter(interpreter, prefix.root());
+    let venv = PythonEnvironment::from_interpreter(interpreter);
     // Prep the build context.
     let build_dispatch = BuildDispatch::new(
         &uv_context.registry_client,
@@ -372,6 +373,7 @@ pub async fn update_python_distributions(
         &uv_context.in_flight,
         SetupPyStrategy::default(),
         &config_settings,
+        uv_traits::BuildIsolation::Isolated,
         &uv_context.no_build,
         &uv_context.no_binary,
     )

@@ -11,13 +11,13 @@ use pixi::{
     cli::{
         add, init,
         install::Args,
-        project, run,
+        project, remove, run,
         task::{self, AddArgs, AliasArgs},
     },
     consts, EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
     TaskGraphError,
 };
-use rattler_conda_types::{MatchSpec, Platform};
+use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::cli::run::get_task_env;
@@ -34,6 +34,8 @@ use std::{
 };
 use tempfile::TempDir;
 use thiserror::Error;
+
+use self::builders::RemoveBuilder;
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -229,6 +231,21 @@ impl PixiControl {
         }
     }
 
+    /// Remove dependencies from the project. Returns a [`RemoveBuilder`].
+    pub fn remove(&self, spec: &str) -> RemoveBuilder {
+        RemoveBuilder {
+            args: remove::Args {
+                deps: vec![spec.to_string()],
+                manifest_path: Some(self.manifest_path()),
+                host: false,
+                build: false,
+                pypi: false,
+                platform: Default::default(),
+                feature: None,
+            },
+        }
+    }
+
     /// Add a new channel to the project.
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
@@ -405,13 +422,13 @@ pub trait IntoMatchSpec {
 
 impl IntoMatchSpec for &str {
     fn into(self) -> MatchSpec {
-        MatchSpec::from_str(self).unwrap()
+        MatchSpec::from_str(self, Lenient).unwrap()
     }
 }
 
 impl IntoMatchSpec for String {
     fn into(self) -> MatchSpec {
-        MatchSpec::from_str(&self).unwrap()
+        MatchSpec::from_str(&self, Lenient).unwrap()
     }
 }
 

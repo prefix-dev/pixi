@@ -13,12 +13,16 @@
 ![License][license-badge]
 [![Build Status][build-badge]][build]
 [![Project Chat][chat-badge]][chat-url]
+[![Pixi Badge][pixi-badge]][pixi-url]
+
 
 [license-badge]: https://img.shields.io/badge/license-BSD--3--Clause-blue?style=flat-square
 [build-badge]: https://img.shields.io/github/actions/workflow/status/prefix-dev/pixi/rust.yml?style=flat-square&branch=main
 [build]: https://github.com/prefix-dev/pixi/actions/
 [chat-badge]: https://img.shields.io/discord/1082332781146800168.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2&style=flat-square
 [chat-url]: https://discord.gg/kKV8ZxyzY4
+[pixi-badge]:https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json
+[pixi-url]: https://pixi.sh
 
 </h1>
 
@@ -249,13 +253,14 @@ pixi global install cowpy
 ## Use in GitHub Actions
 
 You can use pixi in GitHub Actions to install dependencies and run commands.
+It supports automatic caching of your environments.
 
 ```yml
-- uses: prefix-dev/setup-pixi@v0.2.0
-  with:
-    cache: true
+- uses: prefix-dev/setup-pixi@v0.5.1
 - run: pixi run cowpy "Thanks for using pixi"
 ```
+
+See the [documentation](https://pixi.sh/latest/advanced/github_actions) for more details.
 
 <a name="contributing"></a>
 

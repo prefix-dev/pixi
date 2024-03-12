@@ -1,6 +1,8 @@
 import os
 import sys
+
 import pytest
+
 
 def test_imports():
     if os.environ["PIXI_ENVIRONMENT_NAME"] == "min-py38":

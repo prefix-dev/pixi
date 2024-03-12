@@ -1,16 +1,16 @@
-import pandas as pd
-from sklearn.model_selection import train_test_split
 import lightgbm as lgb
+import pandas as pd
 from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.model_selection import train_test_split
 
 # load data
 df = pd.read_csv("Breast_cancer_data.csv")
 
 # Declare feature vector and target variable
 X = df[[
-    'mean_radius','mean_texture','mean_perimeter',
-    'mean_area','mean_smoothness']]
-y = df['diagnosis']
+    "mean_radius","mean_texture","mean_perimeter",
+    "mean_area","mean_smoothness"]]
+y = df["diagnosis"]
 
 # split the dataset into the training set and test set
 X_train, X_test, y_train, y_test = train_test_split(

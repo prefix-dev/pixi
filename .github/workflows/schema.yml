@@ -1,0 +1,31 @@
+name: Test Schema
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "*.md"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "**/pixi.toml"
+      - "schema/**"
+      - "**/schema.yml"
+
+jobs:
+  test-schema:
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v4
+
+        - uses: prefix-dev/setup-pixi@v0.5.1
+          with:
+            pixi-version: v0.15.2
+            cache: true
+
+        - name: Test Schema
+          run: |
+            pixi run -e default test-schema
