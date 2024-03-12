@@ -37,20 +37,23 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let package = args.package;
     // Get the MatchSpec we need to upgrade
     let package_matchspec =
-        MatchSpec::from_str(&package, ParseStrictness::Strict).into_diagnostic()?;
+        MatchSpec::from_str(&args.package, ParseStrictness::Strict).into_diagnostic()?;
+    let package_name = package_name(&package_matchspec)?;
+
     // Return with error if this package is not globally installed.
     if !list_global_packages()
         .await?
         .iter()
-        .any(|global_package| global_package.as_source() == package)
+        .any(|global_package| global_package.as_normalized() == package_name.as_normalized())
     {
-        miette::bail!("Package {} is not globally installed", package.as_str());
+        miette::bail!(
+            "Package {} is not globally installed",
+            package_name.as_source()
+        );
     }
 
-    let package_name = package_name(&package_matchspec)?;
     let prefix_record = find_installed_package(&package_name).await?;
     let installed_version = prefix_record
         .repodata_record
