@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
 use serde::Deserialize;
@@ -68,8 +68,8 @@ pub fn get_cache_dir() -> miette::Result<PathBuf> {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCli {
     /// Do not verify the TLS certificate of the server.
-    #[arg(long)]
-    tls_no_verify: Option<bool>,
+    #[arg(long, action = ArgAction::SetTrue)]
+    tls_no_verify: bool,
 }
 
 #[derive(Parser, Debug, Default, Clone)]
@@ -105,7 +105,7 @@ pub struct Config {
 impl From<ConfigCli> for Config {
     fn from(cli: ConfigCli) -> Self {
         Self {
-            tls_no_verify: cli.tls_no_verify,
+            tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
             ..Default::default()
         }
     }
