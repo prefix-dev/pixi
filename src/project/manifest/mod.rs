@@ -1071,7 +1071,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             environments: IndexMap<EnvironmentName, TomlEnvironmentMapOrSeq>,
 
             /// The tool configuration which is unused by pixi
-            #[serde(alias = "tool")]
+            #[serde(rename = "tool")]
             _tool: Option<serde_json::Value>,
         }
 
