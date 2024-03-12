@@ -2077,65 +2077,74 @@ global(system) level.</p>
 by default, this can be changed by setting the <code>PIXI_HOME</code> environment
 variable.</p>
 <h3 id="global-install"><code>global install</code><a class="headerlink" href="#global-install" title="Permanent link">#</a></h3>
-<p>This command installs a package into its own environment and adds the binary to <code>PATH</code>, allowing you to access it anywhere on your system without activating the environment.</p>
+<p>This command installs package(s) into its own environment and adds the binary to <code>PATH</code>, allowing you to access it anywhere on your system without activating the environment.</p>
 <h5 id="arguments_11">Arguments<a class="headerlink" href="#arguments_11" title="Permanent link">#</a></h5>
-<p>1.<code>&lt;PACKAGE&gt;</code>: The package to install, this can also be a version constraint.</p>
+<p>1.<code>&lt;PACKAGE&gt;</code>: The package(s) to install, this can also be a version constraint.</p>
 <h5 id="options_17">Options<a class="headerlink" href="#options_17" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses. Defaults to <code>conda-forge</code>. (Allowed to be used more than once)</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ruff
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>starship
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>trackplot
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># Or in a more concise form</span>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
-</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>
-</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="c1"># Support full conda matchspec</span>
-</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9.*
-</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build_number=1]&quot;</span>
-</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build=he550d4f_1_cpython]&quot;</span>
-</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.11.0<span class="o">=</span>h10a6764_1_cpython
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># multiple packages can be installed at once</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>starship<span class="w"> </span>rattler-build
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># specify the channel(s)</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="c1"># Or in a more concise form</span>
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>
+</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="c1"># Support full conda matchspec</span>
+</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9.*
+</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build_number=1]&quot;</span>
+</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build=he550d4f_1_cpython]&quot;</span>
+</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.11.0<span class="o">=</span>h10a6764_1_cpython
 </span></code></pre></div>
 <p>After using global install, you can use the package you installed anywhere on your system.</p>
 <h3 id="global-list"><code>global list</code><a class="headerlink" href="#global-list" title="Permanent link">#</a></h3>
 <p>This command shows the current installed global environments including what binaries come with it.
-A global installed package/environment can possibly contain multiple binaries.
-Here is an example of a few installed packages:</p>
+A global installed package/environment can possibly contain multiple binaries and
+they will be listed out in the command output. Here is an example of a few installed packages:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>&gt; pixi global list
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>Globally installed binary packages:
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>  -  [package] starship
-</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>     -  [bin] starship
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>  -  [package] pre-commit
-</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>     -  [bin] pre-commit
-</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>  -  [package] grayskull
-</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>     -  [bin] grayskull
-</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>     -  [bin] greyskull
-</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>     -  [bin] conda-grayskull
-</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>     -  [bin] conda-greyskull
-</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a>  -  [package] zsh
-</span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a>     -  [bin] zsh
-</span><span id="__span-25-14"><a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a>     -  [bin] zsh-5
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>Global install location: /home/hanabi/.pixi
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>├── bat 0.24.0
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>|   └─ exec: bat
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>├── conda-smithy 3.31.1
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>|   └─ exec: feedstocks, conda-smithy
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>├── rattler-build 0.13.0
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>|   └─ exec: rattler-build
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>├── ripgrep 14.1.0
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>|   └─ exec: rg
+</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>└── uv 0.1.17
+</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a>    └─ exec: uv
 </span></code></pre></div>
 <h3 id="global-upgrade"><code>global upgrade</code><a class="headerlink" href="#global-upgrade" title="Permanent link">#</a></h3>
-<p>This command upgrades a globally installed package to the latest version.</p>
+<p>This command upgrades a globally installed package (to the latest version by default).</p>
 <h5 id="arguments_12">Arguments<a class="headerlink" href="#arguments_12" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PACKAGE&gt;</code>: The package to upgrade.</li>
 </ol>
 <h5 id="options_18">Options<a class="headerlink" href="#options_18" title="Permanent link">#</a></h5>
 <ul>
-<li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses. Defaults to <code>conda-forge</code>. (Allowed to be used more than once)</li>
+<li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses.
+  Defaults to <code>conda-forge</code>. Note the channel the package was installed from
+  will be always used for upgrade. (Allowed to be used more than once)</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>ruff
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>trackplot
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="c1"># Or in a more concise form</span>
 </span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>
+</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="c1"># Conda matchspec is supported</span>
+</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="c1"># You can specify the version to upgrade to when you don&#39;t want the latest version</span>
+</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="c1"># or you can even use it to downgrade a globally installed package</span>
+</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.10
 </span></code></pre></div>
 <h3 id="global-upgrade-all"><code>global upgrade-all</code><a class="headerlink" href="#global-upgrade-all" title="Permanent link">#</a></h3>
 <p>This command upgrades all globally installed packages to their latest version.</p>
 <h5 id="options_19">Options<a class="headerlink" href="#options_19" title="Permanent link">#</a></h5>
 <ul>
-<li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses. Defaults to <code>conda-forge</code>. (Allowed to be used more than once)</li>
+<li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses.
+  Defaults to <code>conda-forge</code>. Note the channel the package was installed from
+  will be always used for upgrade. (Allowed to be used more than once)</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda
@@ -2148,9 +2157,12 @@ Here is an example of a few installed packages:</p>
 <p>Use <code>pixi global info</code> to find out what the package name is that belongs to the tool you want to remove.</p>
 <h5 id="arguments_13">Arguments<a class="headerlink" href="#arguments_13" title="Permanent link">#</a></h5>
 <ol>
-<li><code>&lt;PACKAGE&gt;</code>: The package to remove.</li>
+<li><code>&lt;PACKAGE&gt;</code>: The package(s) to remove.</li>
 </ol>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>pre-commit
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="c1"># multiple packages can be removed at once</span>
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>pre-commit<span class="w"> </span>starship
 </span></code></pre></div>
 <h2 id="project"><code>project</code><a class="headerlink" href="#project" title="Permanent link">#</a></h2>
 <p>This subcommand allows you to modify the project configuration through the command line interface.</p>
