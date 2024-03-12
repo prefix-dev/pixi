@@ -138,18 +138,16 @@ impl Config {
             home_path().map(|d| d.join(consts::PIXI_DIR).join(consts::CONFIG_FILE)),
         ];
         let mut merged_config = Config::default();
-        for location in global_locations {
-            if let Some(location) = location {
-                if location.exists() {
-                    let global_config = fs::read_to_string(&location).unwrap_or_default();
-                    if let Ok(config) = Config::from_toml(&global_config, &location) {
-                        merged_config.merge_config(&config);
-                    } else {
-                        eprintln!(
-                            "Could not load global config (invalid toml): {}",
-                            location.display()
-                        );
-                    }
+        for location in global_locations.into_iter().flatten() {
+            if location.exists() {
+                let global_config = fs::read_to_string(&location).unwrap_or_default();
+                if let Ok(config) = Config::from_toml(&global_config, &location) {
+                    merged_config.merge_config(&config);
+                } else {
+                    eprintln!(
+                        "Could not load global config (invalid toml): {}",
+                        location.display()
+                    );
                 }
             }
         }
