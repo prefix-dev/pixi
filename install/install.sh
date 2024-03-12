@@ -15,6 +15,8 @@ if [[ $PLATFORM == "Darwin" ]]; then
   PLATFORM="apple-darwin"
 elif [[ $PLATFORM == "Linux" ]]; then
   PLATFORM="unknown-linux-musl"
+elif [[ $(uname -o) == "Msys" ]]; then
+  PLATFORM="unknown-linux-musl"
 fi
 
 if [[ $ARCH == "arm64" ]] || [[ $ARCH == "aarch64" ]]; then
