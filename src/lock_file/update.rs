@@ -1,15 +1,14 @@
-use crate::lock_file::UvResolutionContext;
+use crate::lock_file::{PypiRecord, UvResolutionContext};
 use crate::project::grouped_environment::GroupedEnvironmentName;
+use crate::pypi_marker_env::determine_marker_environment;
+use crate::pypi_tags::is_python_record;
 use crate::{
     config, consts,
     environment::{
         self, LockFileUsage, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
     },
     load_lock_file,
-    lock_file::{
-        self, update, OutdatedEnvironments, PypiPackageIdentifier, PypiRecordsByName,
-        RepoDataRecordsByName,
-    },
+    lock_file::{self, update, OutdatedEnvironments, PypiRecordsByName, RepoDataRecordsByName},
     prefix::Prefix,
     progress::global_multi_progress,
     project::{grouped_environment::GroupedEnvironment, Environment},
@@ -32,11 +31,13 @@ use std::{
     collections::{HashMap, HashSet},
     convert::identity,
     future::{ready, Future},
+    iter,
     sync::Arc,
     time::{Duration, Instant},
 };
 use tokio::sync::Semaphore;
 use tracing::Instrument;
+use uv_normalize::ExtraName;
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -253,30 +254,6 @@ struct UpdateContext<'p> {
 
 impl<'p> UpdateContext<'p> {
     /// Returns a future that will resolve to the solved repodata records for the given environment
-    /// or `None` if the records do not exist and are also not in the process of being updated.
-    pub fn get_latest_repodata_records(
-        &self,
-        environment: &Environment<'p>,
-        platform: Platform,
-    ) -> Option<impl Future<Output = Arc<RepoDataRecordsByName>>> {
-        self.solved_repodata_records
-            .get(environment)
-            .and_then(|records| records.get(&platform))
-            .map(|records| {
-                let records = records.clone();
-                Either::Left(async move { records.wait().await.clone() })
-            })
-            .or_else(|| {
-                self.locked_repodata_records
-                    .get(environment)
-                    .and_then(|records| records.get(&platform))
-                    .cloned()
-                    .map(ready)
-                    .map(Either::Right)
-            })
-    }
-
-    /// Returns a future that will resolve to the solved repodata records for the given environment
     /// group or `None` if the records do not exist and are also not in the process of being
     /// updated.
     pub fn get_latest_group_repodata_records(
@@ -302,6 +279,27 @@ impl<'p> UpdateContext<'p> {
             .clone();
 
         Some(ready(locked_records).right_future())
+    }
+
+    /// Returns a future that will resolve to the solved pypi records for the given environment
+    /// group or `None` if the records do not exist and are also not in the process of being
+    /// updated.
+    pub fn get_latest_group_pypi_records(
+        &self,
+        group: &GroupedEnvironment<'p>,
+        platform: Platform,
+    ) -> Option<impl Future<Output = Arc<PypiRecordsByName>>> {
+        // Check if there is a pending operation for this group and platform
+        if let Some(pending_records) = self
+            .grouped_solved_pypi_records
+            .get(group)
+            .and_then(|records| records.get(&platform))
+            .cloned()
+        {
+            return Some(async move { pending_records.wait().await.clone() });
+        }
+
+        None
     }
 
     /// Takes the latest repodata records for the given environment and platform. Returns `None` if
@@ -584,6 +582,18 @@ pub async fn ensure_up_to_date_lock_file(
         })
         .collect();
 
+    // Create a mapping that iterators over all outdated environments and their platforms for both
+    // and pypi.
+    let all_outdated_envs = itertools::chain(outdated.conda.iter(), outdated.pypi.iter()).fold(
+        HashMap::<Environment<'_>, HashSet<Platform>>::new(),
+        |mut acc, (env, platforms)| {
+            acc.entry(env.clone())
+                .or_default()
+                .extend(platforms.iter().cloned());
+            acc
+        },
+    );
+
     let mut context = UpdateContext {
         repo_data: Arc::new(repo_data),
 
@@ -618,61 +628,40 @@ pub async fn ensure_up_to_date_lock_file(
 
         for platform in ordered_platforms {
             // Is there an existing pending task to solve the group?
-            let group_solve_records = if let Some(cell) = context
+            if context
                 .grouped_solved_repodata_records
                 .get(&source)
                 .and_then(|platforms| platforms.get(&platform))
+                .is_some()
             {
                 // Yes, we can reuse the existing cell.
-                cell.clone()
-            } else {
-                // No, we need to spawn a task to update for the entire solve group.
-                let locked_group_records = context
-                    .locked_grouped_repodata_records
-                    .get(&source)
-                    .and_then(|records| records.get(&platform))
-                    .cloned()
-                    .unwrap_or_default();
+                continue;
+            }
+            // No, we need to spawn a task to update for the entire solve group.
+            let locked_group_records = context
+                .locked_grouped_repodata_records
+                .get(&source)
+                .and_then(|records| records.get(&platform))
+                .cloned()
+                .unwrap_or_default();
 
-                // Spawn a task to solve the group.
-                let group_solve_task = spawn_solve_conda_environment_task(
-                    source.clone(),
-                    locked_group_records,
-                    context.repo_data.clone(),
-                    platform,
-                    solve_semaphore.clone(),
-                )
-                .boxed_local();
+            // Spawn a task to solve the group.
+            let group_solve_task = spawn_solve_conda_environment_task(
+                source.clone(),
+                locked_group_records,
+                context.repo_data.clone(),
+                platform,
+                solve_semaphore.clone(),
+            )
+            .boxed_local();
 
-                // Store the task so we can poll it later.
-                pending_futures.push(group_solve_task);
+            // Store the task so we can poll it later.
+            pending_futures.push(group_solve_task);
 
-                // Create an entry that can be used by other tasks to wait for the result.
-                let cell = Arc::new(BarrierCell::new());
-                let previous_cell = context
-                    .grouped_solved_repodata_records
-                    .entry(source.clone())
-                    .or_default()
-                    .insert(platform, cell.clone());
-                assert!(
-                    previous_cell.is_none(),
-                    "a cell has already been added to update conda records"
-                );
-
-                cell
-            };
-
-            // Spawn a task to extract the records from the group solve task.
-            let records_future =
-                spawn_extract_conda_environment_task(environment.clone(), platform, async move {
-                    group_solve_records.wait().await.clone()
-                })
-                .boxed_local();
-
-            pending_futures.push(records_future);
+            // Create an entry that can be used by other tasks to wait for the result.
             let previous_cell = context
-                .solved_repodata_records
-                .entry(environment.clone())
+                .grouped_solved_repodata_records
+                .entry(source.clone())
                 .or_default()
                 .insert(platform, Arc::default());
             assert!(
@@ -747,100 +736,107 @@ pub async fn ensure_up_to_date_lock_file(
         .into_iter()
         .flat_map(|(env, platforms)| platforms.into_iter().map(move |p| (env.clone(), p)))
     {
-        let dependencies = environment.pypi_dependencies(Some(platform));
-        if dependencies.is_empty() {
-            pending_futures.push(
-                ready(Ok(TaskResult::PypiSolved(
-                    environment.name().clone(),
-                    platform,
-                    Arc::default(),
-                )))
-                .boxed_local(),
-            );
-        } else {
-            let group = GroupedEnvironment::from(environment.clone());
+        let group = GroupedEnvironment::from(environment.clone());
 
-            // Solve all the pypi records in the solve group together.
-            let grouped_pypi_records = if let Some(cell) = context
-                .grouped_solved_pypi_records
-                .get(&group)
-                .and_then(|records| records.get(&platform))
-            {
-                // There is already a task to solve the pypi records for the group.
-                cell.clone()
-            } else {
-                // Construct a future that will resolve when we have the repodata available
-                let repodata_future = context
-                    .get_latest_group_repodata_records(&group, platform)
-                    .expect("conda records should be available now or in the future");
-
-                // Construct a future that will resolve when we have the conda prefix available
-                let prefix_future = context
-                    .get_conda_prefix(&group)
-                    .expect("prefix should be available now or in the future");
-
-                // Get the uv context
-                let uv_context = match &uv_context {
-                    None => {
-                        let context = UvResolutionContext::from_project(project)?;
-                        uv_context = Some(context.clone());
-                        context
-                    }
-                    Some(context) => context.clone(),
-                };
-                // Get environment variables from the activation
-                let env_variables = project.get_env_variables(&environment).await?;
-
-                // Spawn a task to solve the pypi environment
-                let pypi_solve_future = spawn_solve_pypi_task(
-                    uv_context,
-                    group.clone(),
-                    platform,
-                    repodata_future,
-                    prefix_future,
-                    env_variables,
-                );
-
-                pending_futures.push(pypi_solve_future.boxed_local());
-
-                let cell = Arc::new(BarrierCell::new());
-                let previous_cell = context
-                    .grouped_solved_pypi_records
-                    .entry(group)
-                    .or_default()
-                    .insert(platform, cell.clone());
-                assert!(
-                    previous_cell.is_none(),
-                    "a cell has already been added to update pypi records"
-                );
-
-                cell
-            };
-
-            // Followed by spawning a task to extract exactly the pypi records that are needed for
-            // this environment.
-            let pypi_records_future = async move { grouped_pypi_records.wait().await.clone() };
-            let conda_records_future = context
-                .get_latest_repodata_records(&environment, platform)
-                .expect("must have conda records available");
-            let records_future = spawn_extract_pypi_environment_task(
-                environment.clone(),
-                platform,
-                conda_records_future,
-                pypi_records_future,
-            )
-            .boxed_local();
-            pending_futures.push(records_future);
+        // Solve all the pypi records in the solve group together.
+        if context
+            .grouped_solved_pypi_records
+            .get(&group)
+            .and_then(|records| records.get(&platform))
+            .is_some()
+        {
+            // There is already a task to solve the pypi records for the group.
+            continue;
         }
+        // Construct a future that will resolve when we have the repodata available
+        let repodata_future = context
+            .get_latest_group_repodata_records(&group, platform)
+            .expect("conda records should be available now or in the future");
+
+        // Construct a future that will resolve when we have the conda prefix available
+        let prefix_future = context
+            .get_conda_prefix(&group)
+            .expect("prefix should be available now or in the future");
+
+        // Get the uv context
+        let uv_context = match &uv_context {
+            None => {
+                let context = UvResolutionContext::from_project(project)?;
+                uv_context = Some(context.clone());
+                context
+            }
+            Some(context) => context.clone(),
+        };
+
+        // Get environment variables from the activation
+        let env_variables = project.get_env_variables(&environment).await?;
+
+        // Spawn a task to solve the pypi environment
+        let pypi_solve_future = spawn_solve_pypi_task(
+            uv_context,
+            group.clone(),
+            platform,
+            repodata_future,
+            prefix_future,
+            env_variables,
+        );
+
+        pending_futures.push(pypi_solve_future.boxed_local());
 
         let previous_cell = context
-            .solved_pypi_records
-            .entry(environment)
+            .grouped_solved_pypi_records
+            .entry(group)
             .or_default()
             .insert(platform, Arc::default());
         assert!(
             previous_cell.is_none(),
-            "a cell has already been added to extract pypi records"
+            "a cell has already been added to update pypi records"
+        );
+    }
+
+    // Iteratate over all outdated environments and their platforms and extract the corresponding records from them.
+    for (environment, platform) in all_outdated_envs.iter().flat_map(|(env, platforms)| {
+        iter::once(env.clone()).cartesian_product(platforms.iter().cloned())
+    }) {
+        let grouped_environment = GroupedEnvironment::from(environment.clone());
+
+        // Get futures that will resolve when the conda and pypi records become available.
+        let grouped_repodata_records = context
+            .get_latest_group_repodata_records(&grouped_environment, platform)
+            .expect("conda records should be available now or in the future");
+        let grouped_pypi_records = context
+            .get_latest_group_pypi_records(&grouped_environment, platform)
+            .map(Either::Left)
+            .unwrap_or_else(|| Either::Right(ready(Arc::default())));
+
+        // Spawn a task to extract a subset of the resolution.
+        let extract_resolution_task = spawn_extract_environment_task(
+            environment.clone(),
+            platform,
+            grouped_repodata_records,
+            grouped_pypi_records,
+        );
+        pending_futures.push(extract_resolution_task.boxed_local());
+
+        // Create a cell that will be used to store the result of the extraction.
+        let previous_cell = context
+            .solved_repodata_records
+            .entry(environment.clone())
+            .or_default()
+            .insert(platform, Arc::default());
+        assert!(
+            previous_cell.is_none(),
+            "a cell has already been added to update conda records"
+        );
+
+        let previous_cell = context
+            .solved_pypi_records
+            .entry(environment.clone())
+            .or_default()
+            .insert(platform, Arc::default());
+        assert!(
+            previous_cell.is_none(),
+            "a cell has already been added to update pypi records"
         );
     }
 
@@ -900,30 +896,6 @@ pub async fn ensure_up_to_date_lock_file(
                     }
                 }
             }
-            TaskResult::CondaSolved(environment, platform, records) => {
-                let environment = project
-                    .environment(&environment)
-                    .expect("environment should exist");
-
-                context
-                    .solved_repodata_records
-                    .get_mut(&environment)
-                    .expect("the entry for this environment should exist")
-                    .get_mut(&platform)
-                    .expect("the entry for this platform should exist")
-                    .set(records)
-                    .expect("records should not be solved twice");
-
-                let group = GroupedEnvironment::from(environment.clone());
-                if matches!(group, GroupedEnvironment::Group(_)) {
-                    tracing::info!(
-                        "extracted conda packages for '{}' '{}' from the '{}' group",
-                        environment.name().fancy_display(),
-                        consts::PLATFORM_STYLE.apply_to(platform),
-                        group.name().fancy_display(),
-                    );
-                }
-            }
             TaskResult::CondaPrefixUpdated(group_name, prefix, python_status, duration) => {
                 let group = GroupedEnvironment::from_name(project, &group_name)
                     .expect("grouped environment should exist");
@@ -973,7 +945,12 @@ pub async fn ensure_up_to_date_lock_file(
                     }
                 }
             }
-            TaskResult::PypiSolved(environment, platform, records) => {
+            TaskResult::ExtractedRecordsSubset(
+                environment,
+                platform,
+                repodata_records,
+                pypi_records,
+            ) => {
                 let environment = project
                     .environment(&environment)
                     .expect("environment should exist");
@@ -984,13 +961,22 @@ pub async fn ensure_up_to_date_lock_file(
                     .expect("the entry for this environment should exist")
                     .get_mut(&platform)
                     .expect("the entry for this platform should exist")
-                    .set(records)
+                    .set(pypi_records)
+                    .expect("records should not be solved twice");
+
+                context
+                    .solved_repodata_records
+                    .get_mut(&environment)
+                    .expect("the entry for this environment should exist")
+                    .get_mut(&platform)
+                    .expect("the entry for this platform should exist")
+                    .set(repodata_records)
                     .expect("records should not be solved twice");
 
                 let group = GroupedEnvironment::from(environment.clone());
                 if matches!(group, GroupedEnvironment::Group(_)) {
                     tracing::info!(
-                        "extracted pypi packages for '{}' '{}' from the '{}' group",
+                        "extracted subset of records for '{}' '{}' from the '{}' group",
                         environment.name().fancy_display(),
                         consts::PLATFORM_STYLE.apply_to(platform),
                         group.name().fancy_display(),
@@ -1056,21 +1042,32 @@ pub async fn ensure_up_to_date_lock_file(
 /// Represents data that is sent back from a task. This is used to communicate the result of a task
 /// back to the main task which will forward the information to other tasks waiting for results.
 enum TaskResult {
+    /// The conda dependencies for a grouped environment have been solved.
     CondaGroupSolved(
         GroupedEnvironmentName,
         Platform,
         RepoDataRecordsByName,
         Duration,
     ),
-    CondaSolved(EnvironmentName, Platform, Arc<RepoDataRecordsByName>),
+
+    /// A prefix was updated with the latest conda packages
     CondaPrefixUpdated(GroupedEnvironmentName, Prefix, Box<PythonStatus>, Duration),
+
+    /// The pypi dependencies for a grouped environment have been solved.
     PypiGroupSolved(
         GroupedEnvironmentName,
         Platform,
         PypiRecordsByName,
         Duration,
     ),
-    PypiSolved(EnvironmentName, Platform, Arc<PypiRecordsByName>),
+
+    /// The records for a specific environment have been extracted from a grouped solve.
+    ExtractedRecordsSubset(
+        EnvironmentName,
+        Platform,
+        Arc<RepoDataRecordsByName>,
+        Arc<PypiRecordsByName>,
+    ),
 }
 
 /// A task that solves the conda dependencies for a given environment.
@@ -1187,84 +1184,158 @@ async fn spawn_solve_conda_environment_task(
 }
 
 /// Distill the repodata that is applicable for the given `environment` from the repodata of an entire solve group.
-async fn spawn_extract_conda_environment_task(
+async fn spawn_extract_environment_task(
     environment: Environment<'_>,
     platform: Platform,
-    solve_group_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
+    grouped_repodata_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
+    grouped_pypi_records: impl Future<Output = Arc<PypiRecordsByName>>,
 ) -> miette::Result<TaskResult> {
     let group = GroupedEnvironment::from(environment.clone());
 
     // Await the records from the group
-    let group_records = solve_group_records.await;
+    let (grouped_repodata_records, grouped_pypi_records) =
+        tokio::join!(grouped_repodata_records, grouped_pypi_records);
 
     // If the group is just the environment on its own we can immediately return the records.
-    let records = match group {
-        GroupedEnvironment::Environment(_) => {
-            // For a single environment group we can just clone the Arc
-            group_records.clone()
-        }
-        GroupedEnvironment::Group(_) => {
-            let virtual_package_names = group
-                .virtual_packages(platform)
-                .into_iter()
-                .map(|vp| vp.name)
-                .collect::<HashSet<_>>();
+    if let GroupedEnvironment::Environment(_) = group {
+        return Ok(TaskResult::ExtractedRecordsSubset(
+            environment.name().clone(),
+            platform,
+            grouped_repodata_records,
+            grouped_pypi_records,
+        ));
+    }
 
-            let environment_dependencies = environment.dependencies(None, Some(platform));
-            Arc::new(group_records.subset(
-                environment_dependencies.into_iter().map(|(name, _)| name),
-                &virtual_package_names,
-            ))
+    // Convert all the conda records to package identifiers.
+    let conda_package_identifiers = grouped_repodata_records.by_pypi_name();
+
+    #[derive(Clone, Eq, PartialEq, Hash)]
+    enum PackageName {
+        Conda(rattler_conda_types::PackageName),
+        Pypi((uv_normalize::PackageName, Option<ExtraName>)),
+    }
+
+    enum PackageRecord<'a> {
+        Conda(&'a RepoDataRecord),
+        Pypi((&'a PypiRecord, Option<ExtraName>)),
+    }
+
+    // Determine the conda packages we need.
+    let conda_package_names = environment
+        .dependencies(None, Some(platform))
+        .names()
+        .cloned()
+        .map(PackageName::Conda)
+        .collect::<Vec<_>>();
+
+    // Determine the pypi packages we need.
+    let pypi_dependencies = environment.pypi_dependencies(Some(platform));
+    let has_pypi_dependencies = !pypi_dependencies.is_empty();
+    let mut pypi_package_names = HashSet::new();
+    for (name, reqs) in pypi_dependencies {
+        let name = name.as_normalized().clone();
+        for req in reqs {
+            for extra in req.extras.into_iter().flatten() {
+                pypi_package_names.insert(PackageName::Pypi((name.clone(), Some(extra))));
+            }
         }
+        pypi_package_names.insert(PackageName::Pypi((name, None)));
+    }
+
+    // Compute the Pypi marker environment. Only do this if we have pypi dependencies.
+    let marker_environment = if has_pypi_dependencies {
+        grouped_repodata_records
+            .records
+            .iter()
+            .find(|r| is_python_record(r))
+            .and_then(|record| determine_marker_environment(platform, &record.package_record).ok())
+    } else {
+        None
     };
 
-    Ok(TaskResult::CondaSolved(
+    // Construct a queue of packages that we need to check.
+    let mut queue = itertools::chain(conda_package_names, pypi_package_names).collect::<Vec<_>>();
+    let mut queued_names = queue.iter().cloned().collect::<HashSet<_>>();
+
+    let mut conda_records = Vec::new();
+    let mut pypi_records = HashMap::new();
+    while let Some(package) = queue.pop() {
+        let record = match package {
+            PackageName::Conda(name) => grouped_repodata_records
+                .by_name(&name)
+                .map(PackageRecord::Conda),
+            PackageName::Pypi((name, extra)) => {
+                if let Some(found_record) = grouped_pypi_records.by_name(&name) {
+                    Some(PackageRecord::Pypi((found_record, extra)))
+                } else if let Some((_, _, found_record)) = conda_package_identifiers.get(&name) {
+                    Some(PackageRecord::Conda(found_record))
+                } else {
+                    None
+                }
+            }
+        };
+
+        let Some(record) = record else {
+            // If this happens we are missing a dependency from the grouped environment. We
+            // currently just ignore this.
+            continue;
+        };
+
+        match record {
+            PackageRecord::Conda(record) => {
+                // Find all dependencies in the record and add them to the queue.
+                for dependency in record.package_record.depends.iter() {
+                    let dependency_name =
+                        PackageName::Conda(rattler_conda_types::PackageName::new_unchecked(
+                            dependency.split_once(' ').unwrap_or((&dependency, "")).0,
+                        ));
+                    if queued_names.insert(dependency_name.clone()) {
+                        queue.push(dependency_name);
+                    }
+                }
+
+                // Store the record itself as part of the subset
+                conda_records.push(record);
+            }
+            PackageRecord::Pypi((record, extra)) => {
+                // Evaluate all dependencies
+                let extras = extra.map(|extra| vec![extra]).unwrap_or_default();
+                for req in record.0.requires_dist.iter() {
+                    // Evaluate the marker environment with the given extras
+                    if let Some(marker_env) = &marker_environment {
+                        if !req.evaluate_markers(marker_env, &extras) {
+                            continue;
+                        }
+                    }
+
+                    // Add the package to the queue
+                    for extra in req.extras.iter() {
+                        if queued_names
+                            .insert(PackageName::Pypi((req.name.clone(), Some(extra.clone()))))
+                        {
+                            queue.push(PackageName::Pypi((req.name.clone(), Some(extra.clone()))));
+                        }
+                    }
+
+                    // Also add the dependency without any extras
+                    queue.push(PackageName::Pypi((req.name.clone(), None)));
+                }
+
+                // Insert the record if it is not already present
+                pypi_records.entry(record.0.name.clone()).or_insert(record);
+            }
+        }
+    }
+
+    Ok(TaskResult::ExtractedRecordsSubset(
         environment.name().clone(),
         platform,
-        records,
-    ))
-}
-
-async fn spawn_extract_pypi_environment_task(
-    environment: Environment<'_>,
-    platform: Platform,
-    conda_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
-    solve_group_records: impl Future<Output = Arc<PypiRecordsByName>>,
-) -> miette::Result<TaskResult> {
-    let group = GroupedEnvironment::from(environment.clone());
-    let dependencies = environment.pypi_dependencies(Some(platform));
-
-    let records = match group {
-        GroupedEnvironment::Environment(_) => {
-            // For a single environment group we can just clone the Arc.
-            solve_group_records.await.clone()
-        }
-        GroupedEnvironment::Group(_) => {
-            // Convert all the conda records to package identifiers.
-            let conda_package_identifiers = conda_records
-                .await
-                .records
-                .iter()
-                .filter_map(|record| PypiPackageIdentifier::from_record(record).ok())
-                .flatten()
-                .map(|identifier| (identifier.name.as_normalized().clone(), identifier))
-                .collect::<HashMap<_, _>>();
-
-            Arc::new(
-                solve_group_records.await.subset(
-                    dependencies
-                        .into_keys()
-                        .map(|name| name.as_normalized().clone()),
-                    &conda_package_identifiers,
-                ),
-            )
-        }
-    };
-
-    Ok(TaskResult::PypiSolved(
-        environment.name().clone(),
-        platform,
-        records,
+        Arc::new(RepoDataRecordsByName::from_iter(
+            conda_records.into_iter().cloned(),
+        )),
+        Arc::new(PypiRecordsByName::from_iter(
+            pypi_records.into_values().cloned(),
+        )),
     ))
 }
 

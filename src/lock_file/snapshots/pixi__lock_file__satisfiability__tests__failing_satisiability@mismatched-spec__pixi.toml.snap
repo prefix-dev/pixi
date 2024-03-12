@@ -1,0 +1,9 @@
+---
+source: src/lock_file/satisfiability.rs
+assertion_line: 532
+expression: "format!(\"{err:?}\")"
+input_file: tests/non-satisfiability/mismatched-spec/pixi.toml
+---
+environment 'default' does not satisfy the requirements of the project for platform 'win-64
+    Diagnostic severity: error
+    Caused by: the requirement 'pixi <0.15.2' could not be satisfied (required by '<environment>')

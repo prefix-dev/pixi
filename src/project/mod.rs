@@ -163,7 +163,7 @@ impl Project {
     }
 
     /// Loads a project from manifest file.
-    fn load(manifest_path: &Path) -> miette::Result<Self> {
+    pub fn load(manifest_path: &Path) -> miette::Result<Self> {
         // Determine the parent directory of the manifest file
         let full_path = dunce::canonicalize(manifest_path).into_diagnostic()?;
         if full_path.file_name().and_then(OsStr::to_str) != Some(PROJECT_MANIFEST) {
