@@ -9,10 +9,14 @@ use itertools::Itertools;
 use rattler_conda_types::Platform;
 use rattler_lock::Package;
 use serde::Serialize;
+use uv_distribution::RegistryWheelIndex;
 
-use crate::lock_file::UpdateLockFileOptions;
+use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::project::manifest::EnvironmentName;
+use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::Project;
+
+use crate::consts::PROJECT_MANIFEST;
 
 // an enum to sort by size or name
 #[derive(clap::ValueEnum, Clone, Debug, Serialize)]
@@ -73,6 +77,28 @@ struct PackageToOutput {
     is_explicit: bool,
 }
 
+/// Get directory size
+pub fn get_dir_size<P>(path: P) -> std::io::Result<u64>
+where
+    P: AsRef<std::path::Path>,
+{
+    let mut result = 0;
+
+    if path.as_ref().is_dir() {
+        for entry in std::fs::read_dir(&path)? {
+            let _path = entry?.path();
+            if _path.is_file() {
+                result += _path.metadata()?.len();
+            } else {
+                result += get_dir_size(_path)?;
+            }
+        }
+    } else {
+        result = path.as_ref().metadata()?.len();
+    }
+    Ok(result)
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let environment_name = args
@@ -100,6 +126,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .and_then(|env| env.packages(platform).map(Vec::from_iter))
         .unwrap_or_default();
 
+    // Get the uv structs for extra pypi info
+    let uv_context = UvResolutionContext::from_project(&project)?;
+    // Get the python record from the lock file
+    let mut conda_records = locked_deps.iter().filter_map(|d| d.as_conda());
+    // Determine the current environment markers.
+    let python_record = conda_records
+        .find(|r| is_python_record(r))
+        .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
+    let tags = get_pypi_tags(
+        Platform::current(),
+        &project.system_requirements(),
+        python_record.package_record(),
+    )?;
+    let mut registry_index =
+        RegistryWheelIndex::new(&uv_context.cache, &tags, &uv_context.index_locations);
+
     // Get the explicit project dependencies
     let mut project_dependency_names = environment
         .dependencies(None, Some(platform))
@@ -115,7 +157,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Convert the list of package record to specific output format
     let mut packages_to_output = locked_deps
         .iter()
-        .map(|p| create_package_to_output(p, &project_dependency_names))
+        .map(|p| create_package_to_output(p, &project_dependency_names, &mut registry_index))
         .collect::<Vec<PackageToOutput>>();
 
     // Filter packages by regex if needed
@@ -218,7 +260,11 @@ fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
     println!("{}", json_string);
 }
 
-fn create_package_to_output(p: &Package, project_dependency_names: &[String]) -> PackageToOutput {
+fn create_package_to_output<'a, 'b>(
+    p: &'b Package,
+    project_dependency_names: &'a [String],
+    registry_index: &'a mut RegistryWheelIndex<'b>,
+) -> PackageToOutput {
     let name = p.name().to_string();
     let version = p.version().into_owned();
 
@@ -233,12 +279,23 @@ fn create_package_to_output(p: &Package, project_dependency_names: &[String]) ->
 
     let size_bytes = match p {
         Package::Conda(pkg) => pkg.package_record().size,
-        Package::Pypi(_) => None,
+        Package::Pypi(p) => {
+            let package_data = p.data().package;
+            registry_index
+                .get_version(&package_data.name, &package_data.version)
+                .map(|c| c.path.clone())
+                .and_then(|p| get_dir_size(p).ok())
+        }
     };
 
     let source = match p {
         Package::Conda(pkg) => pkg.file_name().map(ToOwned::to_owned),
-        Package::Pypi(_) => None,
+        Package::Pypi(p) => {
+            let package_data = p.data().package;
+            registry_index
+                .get_version(&package_data.name, &package_data.version)
+                .map(|c| c.filename.to_string())
+        }
     };
 
     let is_explicit = project_dependency_names.contains(&name);
