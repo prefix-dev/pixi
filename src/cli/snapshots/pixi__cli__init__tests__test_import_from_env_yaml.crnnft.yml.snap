@@ -123,18 +123,22 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     ),
                 },
                 PyPiRequirement {
-                    version: Some(
-                        VersionSpecifiers(
-                            [
-                                VersionSpecifier {
-                                    operator: Equal,
-                                    version: "1.15.0",
-                                },
-                            ],
-                        ),
+                    requirement: Version(
+                        VersionOrStar {
+                            version: Some(
+                                VersionSpecifiers(
+                                    [
+                                        VersionSpecifier {
+                                            operator: Equal,
+                                            version: "1.15.0",
+                                        },
+                                    ],
+                                ),
+                            ),
+                            index: None,
+                        },
                     ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -145,9 +149,13 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     ),
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -158,9 +166,13 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     ),
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -171,9 +183,13 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     ),
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
             (
@@ -184,9 +200,13 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     ),
                 },
                 PyPiRequirement {
-                    version: None,
+                    requirement: Version(
+                        VersionOrStar {
+                            version: None,
+                            index: None,
+                        },
+                    ),
                     extras: None,
-                    index: None,
                 },
             ),
         ],
