@@ -2,6 +2,7 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::config::Config;
 use crate::install::execute_transaction;
 use crate::{config, prefix::Prefix, progress::await_in_progress};
 use clap::Parser;
@@ -10,8 +11,7 @@ use miette::IntoDiagnostic;
 use rattler::install::Transaction;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{
-    Channel, ChannelConfig, MatchSpec, PackageName, ParseStrictness, Platform, PrefixRecord,
-    RepoDataRecord,
+    MatchSpec, PackageName, ParseStrictness, Platform, PrefixRecord, RepoDataRecord,
 };
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -41,7 +41,7 @@ pub struct Args {
     /// For example: `pixi global install --channel conda-forge --channel bioconda`.
     ///
     /// By default, if no channel is provided, `conda-forge` is used.
-    #[clap(short, long, default_values = ["conda-forge"])]
+    #[clap(short, long)]
     channel: Vec<String>,
 }
 
@@ -231,13 +231,8 @@ pub(super) async fn create_executable_scripts(
 /// Install a global command
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Figure out what channels we are using
-    let channel_config = ChannelConfig::default();
-    let channels = args
-        .channel
-        .iter()
-        .map(|c| Channel::from_str(c, &channel_config))
-        .collect::<Result<Vec<Channel>, _>>()
-        .into_diagnostic()?;
+    let config = Config::load_global();
+    let channels = config.compute_channels(&args.channel).into_diagnostic()?;
 
     // Find the MatchSpec we want to install
     let specs = args
@@ -258,7 +253,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         let (prefix_package, scripts, _) =
             globally_install_package(&package_name, records, authenticated_client.clone()).await?;
-        let channel_name = channel_name_from_prefix(&prefix_package, &channel_config);
+        let channel_name = channel_name_from_prefix(&prefix_package, config.channel_config());
         let record = &prefix_package.repodata_record.package_record;
 
         // Warn if no executables were created for the package

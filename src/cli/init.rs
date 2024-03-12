@@ -11,7 +11,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use rattler_conda_types::ParseStrictness::{Lenient, Strict};
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
+use rattler_conda_types::{Channel, MatchSpec, Platform};
 use regex::Regex;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
@@ -278,11 +278,11 @@ fn conda_env_to_manifest(
     let channels = parse_channels(env_info.channels().clone());
     let (conda_deps, pip_deps, mut extra_channels) =
         parse_dependencies(env_info.dependencies().clone())?;
-    let channel_config = ChannelConfig::default();
+
     extra_channels.extend(
         channels
             .into_iter()
-            .map(|c| Arc::new(Channel::from_str(c, &channel_config).unwrap())),
+            .map(|c| Arc::new(Channel::from_str(c, config.channel_config()).unwrap())),
     );
     let mut channels: Vec<_> = extra_channels
         .into_iter()
@@ -290,7 +290,7 @@ fn conda_env_to_manifest(
         .map(|c| {
             if c.base_url()
                 .as_str()
-                .starts_with(channel_config.channel_alias.as_str())
+                .starts_with(config.channel_config().channel_alias.as_str())
             {
                 c.name().to_string()
             } else {

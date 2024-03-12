@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::io::{self, Write};
 use std::sync::Arc;
 use std::{cmp::Ordering, path::PathBuf};
@@ -7,7 +6,7 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, ChannelConfig, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
 use rattler_networking::AuthenticationMiddleware;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
@@ -15,6 +14,7 @@ use regex::Regex;
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
+use crate::config::Config;
 use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata, Project};
 
 /// Search a package, output will list the latest version of package
@@ -86,22 +86,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let stdout = io::stdout();
     let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
 
-    let channel_config = ChannelConfig::default();
-
     let channels = match (args.channel, project.as_ref()) {
         // if user passes channels through the channel flag
-        (Some(c), _) => c
-            .iter()
-            .map(|c| Channel::from_str(c, &channel_config))
-            .map_ok(Cow::Owned)
-            .collect::<Result<Vec<_>, _>>()
+        (Some(c), Some(p)) => p.config().compute_channels(&c).into_diagnostic()?,
+        // No project -> use the global config
+        (Some(c), None) => Config::load_global()
+            .compute_channels(&c)
             .into_diagnostic()?,
         // if user doesn't pass channels and we are in a project
-        (None, Some(p)) => p.channels().into_iter().map(Cow::Borrowed).collect(),
+        (None, Some(p)) => p.channels().into_iter().cloned().collect(),
         // if user doesn't pass channels and we are not in project
-        (None, None) => vec![Cow::Owned(
-            Channel::from_str("conda-forge", &channel_config).into_diagnostic()?,
-        )],
+        (None, None) => Config::load_global()
+            .compute_channels(&[])
+            .into_diagnostic()?,
     };
 
     let package_name_filter = args.package;
@@ -111,7 +108,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .build();
     let repo_data = Arc::new(
         fetch_sparse_repodata(
-            channels.iter().map(AsRef::as_ref),
+            channels.iter(),
             [Platform::current()],
             &authenticated_client,
         )

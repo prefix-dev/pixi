@@ -107,9 +107,10 @@ nav:
     - Authentication: advanced/authentication.md
     - Tasks: advanced/advanced_tasks.md
     - Multi Platform: advanced/multi_platform_configuration.md
-    - Info command: advanced/explain_info_command.md
+    - Info Command: advanced/explain_info_command.md
     - Channel Logic: advanced/channel_priority.md
     - GitHub Actions: advanced/github_actions.md
+    - Global Configuration: advanced/global_configuration.md
   - Examples:
       - C++/Cmake: examples/cpp-sdl.md
       - OpenCV: examples/opencv.md

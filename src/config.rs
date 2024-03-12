@@ -1,5 +1,6 @@
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
+use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -81,6 +82,9 @@ pub struct Config {
 
     #[serde(skip)]
     pub loaded_from: Vec<PathBuf>,
+
+    #[serde(skip)]
+    pub channel_config: ChannelConfig,
 }
 
 impl From<ConfigCli> for Config {
@@ -164,8 +168,7 @@ impl Config {
         if other.tls_no_verify.is_some() {
             self.tls_no_verify = other.tls_no_verify;
         }
-        println!("{:?}", self.loaded_from);
-        println!("{:?}", other.loaded_from);
+
         self.loaded_from.extend(other.loaded_from.iter().cloned());
     }
 
@@ -189,5 +192,25 @@ impl Config {
     /// Retrieve the value for the change_ps1 field (defaults to true).
     pub fn change_ps1(&self) -> bool {
         self.change_ps1.unwrap_or(true)
+    }
+
+    pub fn channel_config(&self) -> &ChannelConfig {
+        &self.channel_config
+    }
+
+    pub fn compute_channels(
+        &self,
+        cli_channels: &[String],
+    ) -> Result<Vec<Channel>, ParseChannelError> {
+        let channels = if cli_channels.is_empty() {
+            self.default_channels()
+        } else {
+            cli_channels.to_vec()
+        };
+
+        channels
+            .iter()
+            .map(|c| Channel::from_str(c, &self.channel_config))
+            .collect::<Result<Vec<Channel>, _>>()
     }
 }
