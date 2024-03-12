@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 pub const PROJECT_MANIFEST: &str = "pixi.toml";
 pub const PROJECT_LOCK_FILE: &str = "pixi.lock";
 pub const PIXI_DIR: &str = ".pixi";
+pub const CONFIG_FILE: &str = "config.toml";
 pub const PREFIX_FILE_NAME: &str = "prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
 pub const SOLVE_GROUP_ENVIRONMENTS_DIR: &str = "solve-group-envs";

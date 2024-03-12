@@ -12,8 +12,6 @@ use indexmap::{Equivalent, IndexMap, IndexSet};
 use miette::{IntoDiagnostic, NamedSource, WrapErr};
 
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
-use rattler_networking::AuthenticationMiddleware;
-use reqwest::Client;
 use reqwest_middleware::ClientWithMiddleware;
 use std::hash::Hash;
 
@@ -28,8 +26,10 @@ use std::{
 };
 
 use crate::activation::{get_environment_variables, run_activation};
+use crate::config::Config;
 use crate::project::grouped_environment::GroupedEnvironment;
 use crate::task::TaskName;
+use crate::utils::reqwest::build_reqwest_clients;
 use crate::{
     consts::{self, PROJECT_MANIFEST},
     task::Task,
@@ -102,6 +102,8 @@ pub struct Project {
     pub(crate) manifest: Manifest,
     /// The cache that contains environment variables
     env_vars: HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>>,
+    /// The global configuration as loaded from the config file(s)
+    config: Config,
 }
 
 impl Debug for Project {
@@ -116,16 +118,20 @@ impl Debug for Project {
 impl Project {
     /// Constructs a new instance from an internal manifest representation
     pub fn from_manifest(manifest: Manifest) -> Self {
-        let (client, authenticated_client) = build_reqwest_clients();
-
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
+        let root = manifest.path.parent().unwrap_or(Path::new("")).to_owned();
+
+        let config = Config::from_path(&root.join(consts::PIXI_DIR)).unwrap_or_default();
+
+        let (client, authenticated_client) = build_reqwest_clients(Some(&config));
         Self {
-            root: manifest.path.parent().unwrap_or(Path::new("")).to_owned(),
+            root,
             client,
             authenticated_client,
             manifest,
             env_vars,
+            config,
         }
     }
 
@@ -188,7 +194,9 @@ impl Project {
 
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
-        let (client, authenticated_client) = build_reqwest_clients();
+        let config = Config::from_path(root).unwrap_or_default();
+
+        let (client, authenticated_client) = build_reqwest_clients(Some(&config));
 
         Ok(Self {
             root: root.to_owned(),
@@ -196,6 +204,7 @@ impl Project {
             authenticated_client,
             manifest,
             env_vars,
+            config,
         })
     }
 
@@ -431,6 +440,10 @@ impl Project {
         &self.authenticated_client
     }
 
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
     /// Return a combination of static environment variables generated from the project and the environment
     /// and from running activation script
     pub async fn get_env_variables(
@@ -457,24 +470,6 @@ impl Project {
         })
         .await
     }
-}
-
-fn build_reqwest_clients() -> (Client, ClientWithMiddleware) {
-    static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
-
-    let timeout = 5 * 60;
-    let client = Client::builder()
-        .pool_max_idle_per_host(20)
-        .user_agent(APP_USER_AGENT)
-        .timeout(std::time::Duration::from_secs(timeout))
-        .build()
-        .expect("failed to create reqwest Client");
-
-    let authenticated_client = reqwest_middleware::ClientBuilder::new(client.clone())
-        .with_arc(Arc::new(AuthenticationMiddleware::default()))
-        .build();
-
-    (client, authenticated_client)
 }
 
 /// Iterates over the current directory and all its parent directories and returns the first
