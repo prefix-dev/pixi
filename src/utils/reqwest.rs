@@ -22,6 +22,10 @@ pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientW
         Config::load_global()
     };
 
+    if config.tls_no_verify() {
+        tracing::warn!("TLS verification is disabled. This is insecure and should only be used for testing or internal networks.");
+    }
+
     let timeout = 5 * 60;
     let client = Client::builder()
         .pool_max_idle_per_host(20)
