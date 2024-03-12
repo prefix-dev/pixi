@@ -527,11 +527,11 @@ variable.
 
 ### `global install`
 
-This command installs a package into its own environment and adds the binary to `PATH`, allowing you to access it anywhere on your system without activating the environment.
+This command installs package(s) into its own environment and adds the binary to `PATH`, allowing you to access it anywhere on your system without activating the environment.
 
 ##### Arguments
 
-1.`<PACKAGE>`: The package to install, this can also be a version constraint.
+1.`<PACKAGE>`: The package(s) to install, this can also be a version constraint.
 
 ##### Options
 
@@ -539,7 +539,9 @@ This command installs a package into its own environment and adds the binary to 
 
 ```shell
 pixi global install ruff
-pixi global install starship
+# multiple packages can be installed at once
+pixi global install starship rattler-build
+# specify the channel(s)
 pixi global install --channel conda-forge --channel bioconda trackplot
 # Or in a more concise form
 pixi global install -c conda-forge -c bioconda trackplot
@@ -556,29 +558,27 @@ After using global install, you can use the package you installed anywhere on yo
 ### `global list`
 
 This command shows the current installed global environments including what binaries come with it.
-A global installed package/environment can possibly contain multiple binaries.
-Here is an example of a few installed packages:
+A global installed package/environment can possibly contain multiple binaries and
+they will be listed out in the command output. Here is an example of a few installed packages:
 
 ```
 > pixi global list
-Globally installed binary packages:
-  -  [package] starship
-     -  [bin] starship
-  -  [package] pre-commit
-     -  [bin] pre-commit
-  -  [package] grayskull
-     -  [bin] grayskull
-     -  [bin] greyskull
-     -  [bin] conda-grayskull
-     -  [bin] conda-greyskull
-  -  [package] zsh
-     -  [bin] zsh
-     -  [bin] zsh-5
+Global install location: /home/hanabi/.pixi
+├── bat 0.24.0
+|   └─ exec: bat
+├── conda-smithy 3.31.1
+|   └─ exec: feedstocks, conda-smithy
+├── rattler-build 0.13.0
+|   └─ exec: rattler-build
+├── ripgrep 14.1.0
+|   └─ exec: rg
+└── uv 0.1.17
+    └─ exec: uv
 ```
 
 ### `global upgrade`
 
-This command upgrades a globally installed package to the latest version.
+This command upgrades a globally installed package (to the latest version by default).
 
 ##### Arguments
 
@@ -586,13 +586,20 @@ This command upgrades a globally installed package to the latest version.
 
 ##### Options
 
-- `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--channel <CHANNEL> (-c)`: specify a channel that the project uses.
+  Defaults to `conda-forge`. Note the channel the package was installed from
+  will be always used for upgrade. (Allowed to be used more than once)
 
 ```shell
 pixi global upgrade ruff
 pixi global upgrade --channel conda-forge --channel bioconda trackplot
 # Or in a more concise form
 pixi global upgrade -c conda-forge -c bioconda trackplot
+
+# Conda matchspec is supported
+# You can specify the version to upgrade to when you don't want the latest version
+# or you can even use it to downgrade a globally installed package
+pixi global upgrade python=3.10
 ```
 
 ### `global upgrade-all`
@@ -601,7 +608,9 @@ This command upgrades all globally installed packages to their latest version.
 
 ##### Options
 
-- `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
+- `--channel <CHANNEL> (-c)`: specify a channel that the project uses.
+  Defaults to `conda-forge`. Note the channel the package was installed from
+  will be always used for upgrade. (Allowed to be used more than once)
 
 ```shell
 pixi global upgrade-all
@@ -619,10 +628,13 @@ Use `pixi global info` to find out what the package name is that belongs to the 
 
 ##### Arguments
 
-1. `<PACKAGE>`: The package to remove.
+1. `<PACKAGE>`: The package(s) to remove.
 
 ```shell
 pixi global remove pre-commit
+
+# multiple packages can be removed at once
+pixi global remove pre-commit starship
 ```
 
 ## `project`
