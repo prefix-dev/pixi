@@ -456,7 +456,7 @@ impl MatchesMatchspec for GenericVirtualPackage {
 mod tests {
     use super::*;
     use crate::Project;
-    use miette::{DebugReportHandler, IntoDiagnostic, NarratableReportHandler};
+    use miette::{IntoDiagnostic, NarratableReportHandler};
     use rattler_lock::LockFile;
     use rstest::rstest;
     use std::path::PathBuf;
@@ -526,7 +526,7 @@ mod tests {
         insta::glob!("../../tests/non-satisfiability", "**/pixi.toml", |path| {
             let project = Project::load(&path).unwrap();
             let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-            let mut err = verify_lockfile_satisfiability(&project, &lock_file)
+            let err = verify_lockfile_satisfiability(&project, &lock_file)
                 .into_diagnostic()
                 .expect_err("expected failing satisfiability");
             insta::assert_snapshot!(format!("{err:?}"));

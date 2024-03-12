@@ -738,6 +738,11 @@ pub async fn ensure_up_to_date_lock_file(
     {
         let group = GroupedEnvironment::from(environment.clone());
 
+        // If the environment does not have any pypi dependencies we can skip it.
+        if environment.pypi_dependencies(Some(platform)).is_empty() {
+            continue;
+        }
+
         // Solve all the pypi records in the solve group together.
         if context
             .grouped_solved_pypi_records
