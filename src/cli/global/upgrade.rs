@@ -41,6 +41,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let package_matchspec =
         MatchSpec::from_str(&args.package, ParseStrictness::Strict).into_diagnostic()?;
     let package_name = package_name(&package_matchspec)?;
+    let matchspec_has_version = package_matchspec.version.is_some();
 
     // Return with error if this package is not globally installed.
     if !list_global_packages()
@@ -95,7 +96,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })?;
     let toinstall_version = package_record.package_record.version.version().to_owned();
 
-    if toinstall_version.cmp(&installed_version) != std::cmp::Ordering::Greater {
+    if !matchspec_has_version
+        && toinstall_version.cmp(&installed_version) != std::cmp::Ordering::Greater
+    {
         eprintln!(
             "Package {} is already up-to-date",
             package_name.as_normalized(),
