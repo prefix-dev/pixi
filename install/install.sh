@@ -16,7 +16,7 @@ if [[ $PLATFORM == "Darwin" ]]; then
 elif [[ $PLATFORM == "Linux" ]]; then
   PLATFORM="unknown-linux-musl"
 elif [[ $(uname -o) == "Msys" ]]; then
-  PLATFORM="unknown-linux-musl"
+  PLATFORM="pc-windows-msvc"
 fi
 
 if [[ $ARCH == "arm64" ]] || [[ $ARCH == "aarch64" ]]; then
@@ -26,11 +26,15 @@ fi
 
 
 BINARY="pixi-${ARCH}-${PLATFORM}"
+EXTENSION="tar.gz"
+if [[ $(uname -o) == "Msys" ]]; then
+  EXTENSION="zip"
+fi
 
 if [[ $VERSION == "latest" ]]; then
-  DOWNLOAD_URL=https://github.com/${REPO}/releases/latest/download/${BINARY}.tar.gz
+  DOWNLOAD_URL=https://github.com/${REPO}/releases/latest/download/${BINARY}.${EXTENSION}
 else
-  DOWNLOAD_URL=https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}.tar.gz
+  DOWNLOAD_URL=https://github.com/${REPO}/releases/download/${VERSION}/.${EXTENSION}
 fi
 
 printf "This script will automatically download and install Pixi (${VERSION}) for you.\nGetting it from this url: $DOWNLOAD_URL\n"
@@ -73,10 +77,15 @@ if [[ ! -s $TEMP_FILE ]]; then
   exit 1
 fi
 
-# Extract pixi from the downloaded tar file
+# Extract pixi from the downloaded file
 mkdir -p "$BIN_DIR"
-tar -xzf "$TEMP_FILE" -C "$BIN_DIR"
-chmod +x "$BIN_DIR/pixi"
+if [[ $(uname -o) == "Msys" ]]; then
+  unzip "$TEMP_FILE" -d "$BIN_DIR"
+else
+  tar -xzf "$TEMP_FILE" -C "$BIN_DIR"
+  chmod +x "$BIN_DIR/pixi"
+fi
+
 echo "The 'pixi' binary is installed into '${BIN_DIR}'"
 
 update_shell() {
