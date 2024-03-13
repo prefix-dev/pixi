@@ -124,6 +124,7 @@ impl From<AddArgs> for Task {
                 cmd: CmdArgs::Single(cmd_args),
                 depends_on,
                 cwd: value.cwd,
+                env: Default::default(),
             })
         }
     }

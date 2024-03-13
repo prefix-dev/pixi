@@ -101,9 +101,17 @@ impl<'p> ExecutableTask<'p> {
             return Ok(None);
         };
 
+        // Append the environment variables
+        let mut export = String::new();
+        if let Some(env) = self.task.env() {
+            for (key, value) in env {
+                export.push_str(&format!("export {}={};\n", key, value));
+            }
+        }
+
         // Append the command line arguments
         let cli_args = quote_arguments(self.additional_args.iter().map(|arg| arg.as_str()));
-        let full_script = format!("{task} {cli_args}");
+        let full_script = format!("{export}\n{task} {cli_args}");
 
         // Parse the shell command
         deno_task_shell::parser::parse(full_script.trim())

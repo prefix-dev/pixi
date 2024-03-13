@@ -2,6 +2,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_with::{formats::PreferMany, serde_as, OneOrMany};
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 
@@ -124,6 +125,16 @@ impl Task {
         }
     }
 
+    /// Returns the environment variables for the task to run in.
+    pub fn env(&self) -> Option<&HashMap<String, String>> {
+        match self {
+            Task::Plain(_) => None,
+            Task::Custom(_) => None,
+            Task::Execute(exe) => exe.env.as_ref(),
+            Task::Alias(_) => None,
+        }
+    }
+
     /// Returns the working directory for the task to run in.
     pub fn working_directory(&self) -> Option<&Path> {
         match self {
@@ -156,6 +167,9 @@ pub struct Execute {
 
     /// The working directory for the command relative to the root of the project.
     pub cwd: Option<PathBuf>,
+
+    /// A list of environment variables to set before running the command
+    pub env: Option<HashMap<String, String>>,
 }
 
 impl From<Execute> for Task {

@@ -20,7 +20,7 @@ ninja = "1.11.1.*"
 
 [feature.build.tasks]
 # Configures CMake
-configure = { cmd = [
+configure = { env = { "BLA" = "TEST", "XXX" = "asdsad"}, cmd = [
     "cmake",
     # Use the cross-platform Ninja generator
     "-G",
@@ -35,6 +35,8 @@ configure = { cmd = [
 
 # Build the executable but make sure CMake is configured first.
 build = { cmd = ["ninja", "-C", ".build"], depends_on = ["configure"] }
+
+xxx = { cmd = "echo $ABC", env = { "ABC" = "asdsad" }}
 
 [environments]
 build = ["build"]
