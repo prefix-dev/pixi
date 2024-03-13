@@ -20,24 +20,28 @@ If you want to use a different configuration location, you can override it with 
 It has the following structure:
 
 ```toml
-default_channels = ["bioconda", "conda-forge"]
+default_channels = ["bioconda", "conda-forge", "my-private-channel"]
 default_url = "https://my.custom.mirror/{channel}"
-
-[[channels]]
-name = "conda-forge"
-mirrors = [
-    "https://conda.anaconda.org/conda-forge",
-    "https://repo.prefix.dev/conda-forge"
-]
 
 [[channels]]
 name = "prefix-internal"
 server = "https://repo.prefix.dev"
 
-[[channels]]
-name = "bioconda"
-mirrors = ["https://repo.prefix.dev/bioconda"]
+[mirrors]
+"https://conda.anaconda.org" = [
+    "https://conda.anaconda.org",
+    "https://repo.prefix.dev",
+    "oci://ghcr.io/conda-channel-mirrors/conda-forge"
+]
+"https://conda.anaconda.org/conda-forge" = [ # (1)!
+   "https://internal-conda-forge.com/"
+]
+"https://repo.prefix.dev/prefix-internal" = [
+    "https://custom.artifactory.cloud/conda-mirror-prefix-internal"
+]
 ```
+
+1. Note that longer (more specific) urls are checked first if the prefix matches. All requests to `conda-forge` from anaconda would thus go to the mirror.
 
 !!!note "Configure in `pixi.toml`"
     All keys specified in `rattler.toml` can also be specified in `pixi.toml`.
