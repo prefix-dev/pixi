@@ -21,7 +21,7 @@ It has the following structure:
 
 ```toml
 default_channels = ["bioconda", "conda-forge", "my-private-channel"]
-default_url = "https://my.custom.mirror/{channel}"
+default_server = "https://my.custom.conda.server"
 
 [[channels]]
 name = "prefix-internal"
@@ -43,15 +43,11 @@ server = "https://repo.prefix.dev"
 
 1. Note that longer (more specific) urls are checked first if the prefix matches. All requests to `conda-forge` from anaconda would thus go to the mirror.
 
-!!!note "Configure in `pixi.toml`"
-    All keys specified in `rattler.toml` can also be specified in `pixi.toml`.
-    `rattler.toml` takes precedence over `pixi.toml`.
-
 ## Use cases
 
 ### Use the same mirror everywhere
 
-If you want to use the same mirror for all channels, you can set the `default_url` key in the configuration file.
+If you want to use the same mirror for all channels, you can set the `default_server` key in the configuration file.
 
 ```toml title="rattler.toml"
 default_server = "https://my.custom.mirror"
@@ -62,13 +58,6 @@ This results in all channels being redirected to this mirror.
 ```toml title="pixi.toml"
 server = "https://my.custom.mirror"
 ```
-
-!!!tip "Use `prefix.dev` mirrors"
-    If you want to use the mirrors hosted on [prefix.dev](https://prefix.dev), you can use the following configuration:
-
-    ```toml title="rattler.toml"
-    default_server = "https://repo.prefix.dev"
-    ```
 
 ### Default channels
 
@@ -123,7 +112,17 @@ Instead of providing a single mirror, you can also provide a list of mirrors.
 1. Need to re-add this to also use anaconda.org.
 
 This will result in `conda-forge` being redirected to all mirrors specified in `mirrors`.
-`pixi` and `rattler-build` will use the fastest (TODO: what is the real behavior?) mirror available.
+`pixi` and `rattler-build` will use all mirrors to download the packages.
+
+!!!tip "Use `prefix.dev` mirrors"
+    If you want to use the mirrors hosted on [prefix.dev](https://prefix.dev) instead of [anaconda.org](https://conda.anaconda.org), you can use the following configuration:
+
+    ```toml title="rattler.toml"
+    [mirrors]
+    "https://conda.anaconda.org" = [
+        "https://repo.prefix.dev"
+    ]
+    ```
 
 ### `use_zstd`, `use_bz2` and `use_jlap`
 
@@ -174,5 +173,12 @@ You can also use [OCI](https://opencontainers.org/) mirrors.
 ```toml title="rattler.toml"
 [[channels]]
 name = "conda-forge"
-url = "oci://ghcr.io/conda-channel-mirrors/conda-forge"
+mirrors = [
+    "oci://ghcr.io/conda-channel-mirrors/conda-forge"
+]
+```
+
+```toml title="pixi.toml"
+server = "oci://ghcr.io/conda-channel-mirrors"
+channels = ["conda-forge", "bioconda"]
 ```
