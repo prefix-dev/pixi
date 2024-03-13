@@ -1,4 +1,12 @@
-# PyCharm Integration
+---
+part: pixi/ide_integration
+title: PyCharm Integration
+description: Use PyCharm with pixi environments
+---
+<!--
+Modifications to this file are related to the README.md in https://github.com/pavelzw/pixi-pycharm,
+please keep these two in sync by making a PR in both
+-->
 
 You can use PyCharm with pixi environments by using the `conda` shim provided by the [pixi-pycharm](https://github.com/pavelzw/pixi-pycharm) package.
 
