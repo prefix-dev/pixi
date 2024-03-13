@@ -39,7 +39,7 @@ impl Prefix {
         {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
-            if path.ends_with(".json") {
+            if !path.is_file() || path.extension() != Some("json".as_ref()) {
                 continue;
             }
 
