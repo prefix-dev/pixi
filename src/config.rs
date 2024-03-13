@@ -290,9 +290,9 @@ mod tests {
         merged.merge_config(&config_2);
 
         let debug = format!("{:#?}", merged);
-
+        let debug = debug.replace("\\\\", "/");
         // replace the path with a placeholder
-        let debug = debug.replace(d.to_str().unwrap(), "path");
+        let debug = debug.replace(&d.to_str().unwrap().replace('\\', "/"), "path");
         insta::assert_snapshot!(debug);
     }
 }
