@@ -124,7 +124,7 @@ impl Config {
     pub fn from_toml(toml: &str, location: &Path) -> miette::Result<Config> {
         let mut config: Config = toml_edit::de::from_str(toml)
             .into_diagnostic()
-            .context("Failed to parse config.toml")?;
+            .context(format!("Failed to parse {}", consts::CONFIG_FILE))?;
 
         config.loaded_from.push(location.to_path_buf());
 
@@ -134,12 +134,13 @@ impl Config {
     /// Load the global config file from the home directory (~/.pixi/config.toml)
     pub fn load_global() -> Config {
         let global_locations = vec![
-            dirs::config_dir().map(|d| d.join(consts::PIXI_DIR).join(consts::CONFIG_FILE)),
+            dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
             home_path().map(|d| d.join(consts::CONFIG_FILE)),
         ];
         let mut merged_config = Config::default();
         for location in global_locations.into_iter().flatten() {
             if location.exists() {
+                tracing::info!("Loading global config from {}", location.display());
                 let global_config = fs::read_to_string(&location).unwrap_or_default();
                 if let Ok(config) = Config::from_toml(&global_config, &location) {
                     merged_config.merge_config(&config);
@@ -149,6 +150,8 @@ impl Config {
                         location.display()
                     );
                 }
+            } else {
+                tracing::info!("Global config not found at {}", location.display());
             }
         }
         merged_config
@@ -161,10 +164,8 @@ impl Config {
 
         if local_config.exists() {
             let s = fs::read_to_string(&local_config).into_diagnostic()?;
-            let local = Config::from_toml(&s, &local_config);
-            if let Ok(local) = local {
-                config.merge_config(&local);
-            }
+            let local = Config::from_toml(&s, &local_config)?;
+            config.merge_config(&local);
         }
 
         Ok(config)

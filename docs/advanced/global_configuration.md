@@ -8,6 +8,9 @@ The configuration is loaded in the following order:
 3. Project-local .pixi folder: `$PIXI_PROJECT/.pixi/config.toml`
 4. Command line arguments (`--tls-no-verify`, `--change-ps1=false` etc.)
 
+!!! note
+    To find the locations where `pixi` looks for configuration files, run `pixi` with `-v` or `--verbose`.
+
 ## Reference
 
 The following reference describes all available configuration options.
