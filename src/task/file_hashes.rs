@@ -76,7 +76,11 @@ impl FileHashes {
         // Construct the custom filter
         let mut ignore_builder = OverrideBuilder::new(root);
         for ignore_line in filters {
-            ignore_builder.add(ignore_line.as_ref())?;
+            if ignore_line.as_ref().ends_with('/') {
+                ignore_builder.add(&format!("{}**", ignore_line.as_ref()))?;
+            } else {
+                ignore_builder.add(ignore_line.as_ref())?;
+            }
         }
         let filter = ignore_builder.build()?;
 
@@ -166,9 +170,11 @@ mod test {
 
         // Create a directory structure with a few files.
         create_dir(target_dir.path().join("src")).unwrap();
+        create_dir(target_dir.path().join("src/bla")).unwrap();
         write(target_dir.path().join("build.rs"), "fn main() {}").unwrap();
         write(target_dir.path().join("src/main.rs"), "fn main() {}").unwrap();
         write(target_dir.path().join("src/lib.rs"), "fn main() {}").unwrap();
+        write(target_dir.path().join("src/bla/lib.rs"), "fn main() {}").unwrap();
         write(target_dir.path().join("Cargo.toml"), "[package]").unwrap();
 
         // Compute the hashes of all files in the directory that match a certain set of includes.
@@ -204,7 +210,9 @@ mod test {
             .await
             .unwrap();
 
-        println!("{:#?}", hashes);
         assert!(hashes.files.contains_key(Path::new("src/main.rs")));
+        assert!(hashes.files.contains_key(Path::new("src/lib.rs")));
+        assert!(hashes.files.contains_key(Path::new("src/bla/lib.rs")));
+        assert!(!hashes.files.contains_key(Path::new("Cargo.toml")));
     }
 }
