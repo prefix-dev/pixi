@@ -29,13 +29,11 @@ This will ensure that the conda shim is installed in your project's environment.
     If you still want to use it in your pixi project (and are on Linux/macOS), you can add the following to your `pixi.toml`:
 
     ```toml
-    [target.osx-arm64.dependencies] # (1)!
+    [target.unix.dependencies]
     pixi-pycharm = "*"
     ```
 
-    1. Or `[target.linux-64.dependencies]` depending on your platform.
-
-    This will tell pixi to only use this dependency on a specific platform.
+    This will tell pixi to only use this dependency on unix platforms.
 
 Having `pixi-pycharm` installed, you can now configure PyCharm to use your pixi environments.
 Go to the *Add Python Interpreter* dialog (bottom right corner of the PyCharm window) and select *Conda Environment*.
