@@ -135,6 +135,9 @@ use_jlap = false
 use_bz2 = false
 ```
 
+!!!tip "Environment variables"
+    This behavior can also be influenced with environment variables: `RATTLER_ZSTD`, `RATTLER_BZ2` and `RATTLER_JLAP`.
+
 ### Use private channels
 
 You can specify private channels in your `pixi.toml` and route them to a different URL.
