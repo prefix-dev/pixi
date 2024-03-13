@@ -21,8 +21,7 @@ use std::{
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
-use super::task_hash::TaskCache;
-use super::TaskHash;
+use super::task_hash::{InputHashesError, TaskCache, TaskHash};
 
 /// Runs task in project.
 #[derive(Default, Debug)]
@@ -51,6 +50,19 @@ pub enum TaskExecutionError {
     InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
     #[error(transparent)]
     FailedToParseShellScript(#[from] FailedToParseShellScript),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum CacheUpdateError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    TaskHashError(#[from] InputHashesError),
+}
+
+pub enum CanSkip {
+    Yes,
+    No(Option<TaskHash>),
 }
 
 /// A task that contains enough information to be able to execute it. The lifetime [`'p`] refers to
@@ -186,66 +198,71 @@ impl<'p> ExecutableTask<'p> {
         })
     }
 
+    /// We store the hashes of the inputs and the outputs of the task in a file in the cache.
+    /// The current name is something like `run_environment-task_name.json`.
+    pub(crate) fn cache_name(&self) -> String {
+        format!(
+            "{}-{}.json",
+            self.run_environment.name(),
+            self.name().unwrap_or("default")
+        )
+    }
+
+    /// Checks if the task can be skipped. If the task can be skipped, it returns `CanSkip::Yes`.
+    /// If the task cannot be skipped, it returns `CanSkip::No` and includes the hash of the task
+    /// that caused the task to not be skipped - we can use this later to update the cache file quickly.
     pub(crate) async fn can_skip(
         &self,
         lock_file: &LockFileDerivedData<'_>,
-    ) -> Result<bool, std::io::Error> {
+    ) -> Result<CanSkip, std::io::Error> {
         tracing::info!("Checking if task can be skipped");
-        let task_cache_folder = self.project().task_cache_folder();
-
-        let project_name = self.project().name();
-        let environment_name = self.run_environment.name();
-
-        let cache_name = format!(
-            "{}-{}-{}.json",
-            project_name,
-            environment_name,
-            self.name().unwrap_or("default")
-        );
-
-        let cache_file = task_cache_folder.join(cache_name);
+        let cache_name = self.cache_name();
+        let cache_file = self.project().task_cache_folder().join(cache_name);
         if cache_file.exists() {
             let cache = std::fs::read_to_string(&cache_file).unwrap();
             let cache: TaskCache = serde_json::from_str(&cache).unwrap();
             let hash = TaskHash::from_task(self, &lock_file.lock_file).await;
             if let Ok(Some(hash)) = hash {
-                return Ok(hash.computation_hash() == cache.hash);
+                if hash.computation_hash() != cache.hash {
+                    return Ok(CanSkip::No(Some(hash)));
+                } else {
+                    return Ok(CanSkip::Yes);
+                }
             }
         }
-        Ok(false)
+        Ok(CanSkip::No(None))
     }
 
+    /// Saves the cache of the task. This function will update the cache file with the new hash of
+    /// the task (inputs and outputs). If the task has no hash, it will not save the cache.
     pub(crate) async fn save_cache(
         &self,
         lock_file: &LockFileDerivedData<'_>,
-    ) -> Result<(), std::io::Error> {
+        previous_hash: Option<TaskHash>,
+    ) -> Result<(), CacheUpdateError> {
         let task_cache_folder = self.project().task_cache_folder();
-        if !task_cache_folder.exists() {
-            std::fs::create_dir_all(&task_cache_folder)?;
-        }
-        let project_name = self.project().name();
-        let environment_name = self.run_environment.name();
-
-        let cache_name = format!(
-            "{}-{}-{}.json",
-            project_name,
-            environment_name,
-            self.name().unwrap_or("default")
-        );
-
-        let cache_file = task_cache_folder.join(cache_name);
-        if let Some(hash) = TaskHash::from_task(self, &lock_file.lock_file)
+        let cache_file = task_cache_folder.join(self.cache_name());
+        let new_hash = if let Some(mut previous_hash) = previous_hash {
+            previous_hash.update_output(self).await?;
+            previous_hash
+        } else if let Some(hash) = TaskHash::from_task(self, &lock_file.lock_file)
             .await
             .unwrap()
         {
-            let cache = TaskCache {
-                hash: hash.computation_hash(),
-            };
-            let cache = serde_json::to_string(&cache).unwrap();
-            std::fs::write(&cache_file, cache)
+            hash
         } else {
-            Ok(())
+            return Ok(());
+        };
+
+        if !task_cache_folder.exists() {
+            std::fs::create_dir_all(&task_cache_folder)?;
         }
+
+        let cache = TaskCache {
+            hash: new_hash.computation_hash(),
+        };
+        let cache = serde_json::to_string(&cache).unwrap();
+        Ok(std::fs::write(&cache_file, cache)?)
     }
 }
 

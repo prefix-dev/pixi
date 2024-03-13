@@ -103,6 +103,14 @@ impl TaskHash {
         }))
     }
 
+    pub async fn update_output(
+        &mut self,
+        task: &ExecutableTask<'_>,
+    ) -> Result<(), InputHashesError> {
+        self.outputs = OutputHashes::from_task(task).await?;
+        Ok(())
+    }
+
     /// Computes a single hash for the task.
     pub fn computation_hash(&self) -> ComputationHash {
         let mut hasher = Xxh3::new();

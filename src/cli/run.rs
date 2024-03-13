@@ -15,7 +15,7 @@ use crate::activation::get_environment_variables;
 use crate::environment::verify_prefix_location_unchanged;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{
-    AmbiguousTask, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
+    AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
     SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskName,
 };
 use crate::Project;
@@ -143,15 +143,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // check task cache
-        if executable_task
+        let task_cache = match executable_task
             .can_skip(&lock_file)
             .await
             .into_diagnostic()?
         {
-            eprintln!("Task can be skipped (cache hit) 🚀");
-            task_idx += 1;
-            continue;
-        }
+            CanSkip::No(cache) => cache,
+            CanSkip::Yes => {
+                eprintln!("Task can be skipped (cache hit) 🚀");
+                task_idx += 1;
+                continue;
+            }
+        };
 
         // If we don't have a command environment yet, we need to compute it. We lazily compute the
         // task environment because we only need the environment if a task is actually executed.
@@ -181,7 +184,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Update the task cache with the new hash
         executable_task
-            .save_cache(&lock_file)
+            .save_cache(&lock_file, task_cache)
             .await
             .into_diagnostic()?;
     }

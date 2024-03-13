@@ -16,7 +16,7 @@ pub use file_hashes::{FileHashes, FileHashesError};
 pub use task_hash::{ComputationHash, InputHashes, TaskHash};
 
 pub use executable_task::{
-    ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, RunOutput,
+    CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, RunOutput,
     TaskExecutionError,
 };
 pub use task_environment::{
