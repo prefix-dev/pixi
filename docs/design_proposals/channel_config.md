@@ -115,7 +115,7 @@ Instead of providing a single mirror, you can also provide a list of mirrors.
 "https://conda.anaconda.org" = [
     "https://conda.anaconda.org", # (1)!
     "https://repo.prefix.dev",
-    {url = "https://repo.artifactory.com/conda-mirror-conda-forge", use_zstd = false},
+    "https://repo.artifactory.com/conda-mirror-conda-forge",
     "oci://ghcr.io/conda-channel-mirrors/conda-forge"
 ]
 ```
@@ -131,17 +131,10 @@ You can specify whether `pixi` and `rattler-build` should use the `repodata.json
 This is needed for some proxies like older versions of artifactory ([RTFACT-29886](https://jfrog.atlassian.net/jira/software/c/projects/RTFACT/issues/RTFACT-29886)).
 
 ```toml title="rattler.toml"
-[mirrors]
-"https://conda.anaconda.org" = [
-    { url = "https://mirrorme.com", no_zstd = false }
-]
-
-"https://repo.artifactory.cloud" = [ # (1)!
-    { url = "https://repo.artifactory.cloud", no_zstd = true, no_jlap = true }
-]
+use_zstd = false
+use_jlap = false
+use_bz2 = false
 ```
-
-1. If you want to specify the behavior of a specific server, you can add it as a mirror to itself with the desired behavior.
 
 ### Use private channels
 
