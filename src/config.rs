@@ -158,7 +158,7 @@ impl Config {
     }
 
     /// Load the config from the given path pixi folder and merge it with the global config.
-    pub fn from_path(p: &Path) -> miette::Result<Config> {
+    pub fn load(p: &Path) -> miette::Result<Config> {
         let local_config = p.join(consts::CONFIG_FILE);
         let mut config = Self::load_global();
 
@@ -169,6 +169,11 @@ impl Config {
         }
 
         Ok(config)
+    }
+
+    pub fn from_path(p: &Path) -> miette::Result<Config> {
+        let s = fs::read_to_string(p).into_diagnostic()?;
+        Config::from_toml(&s, p)
     }
 
     /// Merge the given config into the current one.
@@ -228,5 +233,66 @@ impl Config {
             .iter()
             .map(|c| Channel::from_str(c, &self.channel_config))
             .collect::<Result<Vec<Channel>, _>>()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_parse() {
+        let toml = r#"
+        default_channels = ["conda-forge"]
+        tls_no_verify = true
+        "#;
+        let config = Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        assert_eq!(config.default_channels, vec!["conda-forge"]);
+        assert_eq!(config.tls_no_verify, Some(true));
+    }
+
+    #[test]
+    fn test_config_from_cli() {
+        let cli = ConfigCli {
+            tls_no_verify: true,
+        };
+        let config = Config::from(cli);
+        assert_eq!(config.tls_no_verify, Some(true));
+
+        let cli = ConfigCli {
+            tls_no_verify: false,
+        };
+
+        let config = Config::from(cli);
+        assert_eq!(config.tls_no_verify, None);
+    }
+
+    #[test]
+    fn test_config_merge() {
+        let mut config = Config::default();
+        let other = Config {
+            default_channels: vec!["conda-forge".to_string()],
+            tls_no_verify: Some(true),
+            ..Default::default()
+        };
+        config.merge_config(&other);
+        assert_eq!(config.default_channels, vec!["conda-forge"]);
+        assert_eq!(config.tls_no_verify, Some(true));
+
+        let d = Path::new(&env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("config");
+
+        let config_1 = Config::from_path(&d.join("config_1.toml")).unwrap();
+        let config_2 = Config::from_path(&d.join("config_2.toml")).unwrap();
+
+        let mut merged = config_1.clone();
+        merged.merge_config(&config_2);
+
+        let debug = format!("{:#?}", merged);
+
+        // replace the path with a placeholder
+        let debug = debug.replace(d.to_str().unwrap(), "path");
+        insta::assert_snapshot!(debug);
     }
 }
