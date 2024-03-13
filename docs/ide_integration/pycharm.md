@@ -18,7 +18,7 @@ You can use PyCharm with pixi environments by using the `conda` shim provided by
 To get started, add `pixi-pycharm` to your pixi project.
 
 ```bash
-❯ pixi add pixi-pycharm
+pixi add pixi-pycharm
 ```
 
 This will ensure that the conda shim is installed in your project's environment.
@@ -43,7 +43,7 @@ Set *Conda Executable* to the full path of the `conda` file in your pixi environ
 You can get the path using the following command:
 
 ```bash
-❯ pixi run 'echo $CONDA_PREFIX/libexec/conda'
+pixi run 'echo $CONDA_PREFIX/libexec/conda'
 ```
 
 This is an executable that tricks PyCharm into thinking it's the proper `conda` executable.
