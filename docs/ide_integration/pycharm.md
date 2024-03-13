@@ -11,7 +11,7 @@ please keep these two in sync by making a PR in both
 You can use PyCharm with pixi environments by using the `conda` shim provided by the [pixi-pycharm](https://github.com/pavelzw/pixi-pycharm) package.
 
 !!!warning "Windows support"
-    Windows is currently not supported. Only Linux and macOS are supported.
+    Windows is currently not supported, see [pavelzw/pixi-pycharm #5](https://github.com/pavelzw/pixi-pycharm/issues/5). Only Linux and macOS are supported.
 
 ## How to use
 
