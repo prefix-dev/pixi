@@ -103,6 +103,8 @@ nav:
   - Configuration: configuration.md
   - Environment: environment.md
   - Vision: vision.md
+  - IDE Integration:
+    - PyCharm: ide_integration/pycharm.md
   - In-depth:
     - Authentication: advanced/authentication.md
     - Tasks: advanced/advanced_tasks.md
