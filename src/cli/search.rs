@@ -141,12 +141,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_arc(Arc::new(AuthenticationMiddleware::default()))
         .build();
     let repo_data = Arc::new(
-        fetch_sparse_repodata(
-            channels.iter(),
-            [args.platform],
-            &authenticated_client,
-        )
-        .await?,
+        fetch_sparse_repodata(channels.iter(), [args.platform], &authenticated_client).await?,
     );
 
     // When package name filter contains * (wildcard), it will search and display a list of packages matching this filter
