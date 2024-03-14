@@ -295,9 +295,15 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package10",
                     ),
                 },
-                RawVersion(
-                    Star,
-                ),
+                Version {
+                    version: Star,
+                    index: None,
+                    extras: [
+                        ExtraName(
+                            "extra",
+                        ),
+                    ],
+                },
             ),
             (
                 PyPiPackageName {
@@ -306,9 +312,18 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package11",
                     ),
                 },
-                RawVersion(
-                    Star,
-                ),
+                Version {
+                    version: Star,
+                    index: None,
+                    extras: [
+                        ExtraName(
+                            "extra1",
+                        ),
+                        ExtraName(
+                            "extra2",
+                        ),
+                    ],
+                },
             ),
             (
                 PyPiPackageName {

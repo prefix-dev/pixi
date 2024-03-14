@@ -327,6 +327,8 @@ impl PyPiRequirement {
 mod tests {
     use super::*;
     use indexmap::IndexMap;
+    use insta::assert_snapshot;
+    use pep508_rs::Requirement;
     use std::str::FromStr;
 
     #[test]
@@ -608,5 +610,18 @@ mod tests {
                 extras: vec![],
             }
         );
+    }
+
+    #[test]
+    fn test_from_args() {
+        let pypi : Requirement = "numpy".parse().unwrap();
+        let as_pypi_req : PyPiRequirement = pypi.into();
+        // convert to toml and snapshot
+        assert_snapshot!(as_pypi_req.to_string());
+
+        let pypi : Requirement = "numpy[test,extrastuff]".parse().unwrap();
+        let as_pypi_req : PyPiRequirement = pypi.into();
+        // convert to toml and snapshot
+        assert_snapshot!(as_pypi_req.to_string());
     }
 }
