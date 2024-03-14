@@ -1,6 +1,5 @@
 use crate::environment::PythonStatus;
 use crate::prefix::Prefix;
-
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
 
 use distribution_filename::DistFilename;
@@ -117,20 +116,22 @@ fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_ty
 }
 
 fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
-    dbg!(&pkg.url);
-
-    // Extract last component from url
-    let filename_raw = pkg.url.path_segments().unwrap().last().unwrap();
-    let filename = DistFilename::try_from_normalized_filename(filename_raw)
-        .unwrap_or_else(|| panic!("{} - could not convert to dist filename", pkg.name.as_ref()));
-
     // Bit of a hack to create the file type
-    let file = locked_data_to_file(pkg, filename_raw);
-
     if pkg.hash.is_none() {
         Dist::from_url(pkg.name.clone(), VerbatimUrl::from_url(pkg.url.clone()))
             .expect("could not convert into uv dist")
     } else {
+        // Extract last component from url
+        let filename_raw = pkg.url.path_segments().unwrap().last().unwrap();
+        let filename =
+            DistFilename::try_from_normalized_filename(filename_raw).unwrap_or_else(|| {
+                panic!(
+                    "package = {}, url = {} => could not convert to dist filename",
+                    pkg.name.as_ref(),
+                    pkg.url
+                )
+            });
+        let file = locked_data_to_file(pkg, filename_raw);
         Dist::from_registry(
             filename,
             file,
@@ -211,7 +212,6 @@ fn whats_the_plan<'a>(
 
     // TODO: Do something with editable packages
     // TODO: Check WheelTag correctness for installed packages
-    // TODO: Add source dependency support
 
     // Walk over all installed packages and check if they are required
     for dist in installed {

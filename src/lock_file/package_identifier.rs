@@ -6,6 +6,7 @@ use rattler_lock::CondaPackage;
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
 use url::Url;
+use uv_cache::ArchiveTarget;
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 /// Defines information about a Pypi package extracted from either a python package or from a
 /// conda package.
@@ -165,6 +166,7 @@ impl PypiPackageIdentifier {
     }
 
     pub fn satisfies(&self, requirement: &Requirement) -> bool {
+        dbg!(&requirement);
         // Verify the name of the package
         if self.name.as_normalized() != &requirement.name {
             return false;
@@ -172,14 +174,43 @@ impl PypiPackageIdentifier {
 
         // Check the version of the requirement
         match &requirement.version_or_url {
-            None => {}
+            None => true,
             Some(VersionOrUrl::Url(url)) => {
-                return &url.to_url() == &self.url;
-            }
-            Some(VersionOrUrl::VersionSpecifier(spec)) => {
-                if !spec.contains(&self.version) {
-                    return false;
+                // Check if the URL matches
+                tracing::warn!("url.to_url:{} == {}:self.url", &url.to_url(), &self.url);
+                if &url.to_url() == &self.url {
+                    // If the requirement came from a local path, check freshness.
+                    // TODO: this uses internals directly from uv, change this once we support direct_url for conda as well, currently it's only supported for pypi
+                    if let Ok(archive) = url.to_file_path() {
+                        // Convert into UV type
+                        let installed = distribution_types::InstalledDist::try_from_path(&archive)
+                            .ok()
+                            .flatten();
+                        if let Some(installed) = installed {
+                            // This checks the archive timestamp against the installed timestamp
+                            // by comparing a `setup.py`, `pyproject.toml` etc. to the cached version
+                            uv_cache::ArchiveTimestamp::up_to_date_with(
+                                &archive,
+                                uv_cache::ArchiveTarget::Install(&installed),
+                            )
+                            // In case of an error assume it is not satisfied
+                            .unwrap_or(false)
+                        } else {
+                            false
+                        }
+                    } else {
+                        // Otherwise the we assume that the requirement is satisfied.
+                        // because of the url comparison above.
+                        true
+                    }
+                } else {
+                    // The URL's do not match
+                    false
                 }
+            }
+            Some(VersionOrUrl::VersionSpecifier(required_spec)) => {
+                // Check if the locked version is contained in the required version specifier
+                required_spec.contains(&self.version)
             }
         }
 
@@ -190,8 +221,6 @@ impl PypiPackageIdentifier {
         //         return false;
         //     }
         // }
-
-        true
     }
 }
 

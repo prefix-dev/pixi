@@ -341,8 +341,6 @@ pub async fn resolve_pypi(
         Vec::new(),
     );
 
-    dbg!(&manifest);
-
     let fallback_provider = DefaultResolverProvider::new(
         &context.registry_client,
         DistributionDatabase::new(

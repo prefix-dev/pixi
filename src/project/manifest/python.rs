@@ -354,14 +354,15 @@ impl PyPiRequirement {
                     VerbatimUrl::parse(&url).expect("git url is invalid"),
                 ))
             }
-            PyPiRequirementType::Path { path, editable: _ } => Some(pep508_rs::VersionOrUrl::Url(
-                VerbatimUrl::parse(
-                    path.as_os_str()
-                        .to_str()
-                        .expect("could not parse path as str"),
-                )
-                .expect("path is invalid"),
-            )),
+            PyPiRequirementType::Path { path, editable: _ } => {
+                let canonicalized = dunce::canonicalize(path).expect("cannot conoicalize paths");
+                let given = path
+                    .to_str()
+                    .map(|s| s.to_owned())
+                    .unwrap_or_else(|| String::new());
+                let verbatim = VerbatimUrl::from_path(canonicalized).with_given(given);
+                Some(pep508_rs::VersionOrUrl::Url(verbatim))
+            }
 
             PyPiRequirementType::Url { url } => Some(pep508_rs::VersionOrUrl::Url(
                 VerbatimUrl::from_url(url.clone()),
