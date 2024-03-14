@@ -44,7 +44,7 @@ impl Project {
                 "PIXI_EXE".to_string(),
                 std::env::current_exe()
                     .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or("notfound".to_string()),
+                    .unwrap_or_else(|_| "notfound".to_string()),
             ),
         ])
     }
