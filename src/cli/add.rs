@@ -1,6 +1,5 @@
 use crate::{
     config::ConfigCli,
-    consts,
     environment::{get_up_to_date_prefix, verify_prefix_location_unchanged, LockFileUsage},
     project::{manifest::PyPiRequirement, DependencyType, Project, SpecType},
     FeatureName,
@@ -119,13 +118,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let spec_platforms = &args.platform;
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(
-        project
-            .default_environment()
-            .dir()
-            .join(consts::PREFIX_FILE_NAME)
-            .as_path(),
-    )?;
+    verify_prefix_location_unchanged(project.default_environment().dir().as_path())?;
 
     // Add the platform if it is not already present
     let platforms_to_add = spec_platforms
