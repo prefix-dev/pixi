@@ -31,10 +31,6 @@ pub enum FileHashesError {
 }
 
 /// A map of file paths to their hashes.
-///
-/// TODO: When computing the hash of the files, we should normalize the paths to ensure the hash
-///   does not change across platforms.
-/// TODO: When computing the hash of the files, we should use a consistent ordering.
 #[derive(Debug, Default)]
 pub struct FileHashes {
     pub files: HashMap<PathBuf, String>,
@@ -45,8 +41,10 @@ impl Hash for FileHashes {
         self.files
             .iter()
             .sorted_by_key(|(path, _)| *path)
-            .collect_vec()
-            .hash(state);
+            .for_each(|(path, hash)| {
+                path.hash(state);
+                hash.hash(state);
+            });
     }
 }
 
