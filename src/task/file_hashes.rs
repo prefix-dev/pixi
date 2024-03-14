@@ -205,6 +205,14 @@ mod test {
             Some("2c806b6ebece677c")
         );
 
+        #[cfg(unix)]
+        {
+            let mut hasher = Xxh3::new();
+            hashes.hash(&mut hasher);
+            let s = format!("{:x}", hasher.finish());
+            assert_eq!(s, "be05bb5d7c6e8e6");
+        }
+
         let hashes = FileHashes::from_files(target_dir.path(), vec!["src/"])
             .await
             .unwrap();
