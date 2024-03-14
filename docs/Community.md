@@ -13,6 +13,11 @@ When you want to show your users and contributors that they can use pixi in your
 [![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
 ```
 
+!!!tip "Customize your badge"
+    To further customize the look and feel of your badge,
+    you can add `&style=<custom-style>` at the end of the URL.
+    See [the documentation on shields.io](https://shields.io/badges/endpoint-badge) for more info.
+
 ## Built using Pixi
 
 - Deltares:
