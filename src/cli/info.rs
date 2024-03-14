@@ -39,6 +39,7 @@ pub struct ProjectInfo {
     last_updated: Option<String>,
     pixi_folder_size: Option<String>,
     version: Option<String>,
+    configuration: Vec<PathBuf>,
 }
 
 #[derive(Serialize)]
@@ -184,7 +185,6 @@ impl Display for Info {
         }
 
         writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Cache dir"), cache_dir)?;
-
         if let Some(cache_size) = &self.cache_size {
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Cache size"), cache_size)?;
         }
@@ -206,6 +206,19 @@ impl Display for Info {
                 "{:>WIDTH$}: {}",
                 bold.apply_to("Manifest file"),
                 pi.manifest_path.to_string_lossy()
+            )?;
+
+            let config_locations = pi
+                .configuration
+                .iter()
+                .map(|p| p.to_string_lossy())
+                .join(", ");
+
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Config locations"),
+                config_locations
             )?;
 
             if let Some(update_time) = &pi.last_updated {
@@ -282,6 +295,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         manifest_path: p.root().to_path_buf().join("pixi.toml"),
         last_updated: last_updated(p.lock_file_path()).ok(),
         pixi_folder_size,
+        configuration: p.config().loaded_from.clone(),
         version: p.version().clone().map(|v| v.to_string()),
     });
 

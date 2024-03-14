@@ -5,7 +5,7 @@ use crate::Project;
 use clap::Parser;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, ChannelConfig};
+use rattler_conda_types::Channel;
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     /// The channel name or URL
@@ -27,12 +27,12 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .map_or(FeatureName::Default, FeatureName::Named);
 
     // Determine which channels are missing
-    let channel_config = ChannelConfig::default();
     let channels = args
         .channel
         .into_iter()
         .map(|channel_str| {
-            Channel::from_str(&channel_str, &channel_config).map(|channel| (channel_str, channel))
+            Channel::from_str(&channel_str, project.config().channel_config())
+                .map(|channel| (channel_str, channel))
         })
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;

@@ -4,6 +4,7 @@ use std::convert::identity;
 use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
+use crate::config::ConfigCli;
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
@@ -44,13 +45,17 @@ pub struct Args {
 
     #[arg(long, short)]
     pub environment: Option<String>,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
 }
 
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Load the project
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?
+        .with_cli_config(args.config.clone());
 
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.default_environment().dir().as_path())?;

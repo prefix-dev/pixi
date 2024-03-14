@@ -6,9 +6,10 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::PackageName;
 
+use crate::config::home_path;
 use crate::prefix::Prefix;
 
-use super::common::{bin_env_dir, find_designated_package, home_path, BinDir, BinEnvDir};
+use super::common::{bin_env_dir, find_designated_package, BinDir, BinEnvDir};
 use super::install::{find_and_map_executable_scripts, BinScriptMapping};
 
 /// Lists all packages previously installed into a globally accessible location via `pixi global install`.
@@ -90,7 +91,7 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
     if package_info.is_empty() {
         print_no_packages_found_message();
     } else {
-        let path = home_path()?;
+        let path = home_path().ok_or(miette::miette!("Could not determine home directory"))?;
         let len = package_info.len();
         let mut message = String::new();
         for (idx, pkgi) in package_info.into_iter().enumerate() {
@@ -139,7 +140,9 @@ pub async fn execute(_args: Args) -> miette::Result<()> {
 /// A list of all globally installed packages represented as [`PackageName`]s
 pub(super) async fn list_global_packages() -> miette::Result<Vec<PackageName>> {
     let mut packages = vec![];
-    let Ok(mut dir_contents) = tokio::fs::read_dir(bin_env_dir()?).await else {
+    let bin_env_dir =
+        bin_env_dir().ok_or(miette::miette!("Could not determine global envs directory"))?;
+    let Ok(mut dir_contents) = tokio::fs::read_dir(bin_env_dir).await else {
         return Ok(vec![]);
     };
 
