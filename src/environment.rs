@@ -30,8 +30,7 @@ use std::{collections::HashMap, io::ErrorKind, path::Path, sync::Arc};
 /// Returns false when the file is not present.
 pub fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette::Result<()> {
     let prefix_file = environment_dir
-        // TODO: move it to conda-meta when that is possible, currently that breaks rattler
-        // .join("conda-meta")
+        .join("conda-meta")
         .join(consts::PREFIX_FILE_NAME);
 
     tracing::info!(
@@ -66,8 +65,7 @@ pub fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette::Resul
 /// Give it the environment path to place it.
 fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
     let prefix_file = environment_dir
-        // TODO: Move it conda-meta when that is possible, currently that breaks rattler
-        // .join("conda-meta")
+        .join("conda-meta")
         .join(consts::PREFIX_FILE_NAME);
 
     tracing::info!("create prefix file: {}", prefix_file.display());
