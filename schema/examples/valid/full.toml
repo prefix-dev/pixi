@@ -138,3 +138,15 @@ mlx = "x.y.z"
 [feature.cuda2]
 channels = ["nvidia"]
 platforms = ["linux-64", "osx-arm64"]
+
+
+[tool.poetry]
+test = "bla"
+test1 = ["bla", "bli"]
+test2= { version = "~=1.1", channel = "test" }
+
+[tool.poetry.dependencies]
+test = "bla"
+
+[tool.ruff]
+config = "ruff.yaml"
