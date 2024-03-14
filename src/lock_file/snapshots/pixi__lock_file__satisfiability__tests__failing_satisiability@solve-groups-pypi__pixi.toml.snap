@@ -1,7 +1,9 @@
 ---
 source: src/lock_file/satisfiability.rs
+assertion_line: 532
 expression: "format!(\"{err:?}\")"
 input_file: tests/non-satisfiability/solve-groups-pypi/pixi.toml
 ---
-  [31m×[0m environment 'default' does not satisfy the requirements of the project for platform 'win-64
-[31m  ╰─▶ [0mthe requirement 'packaging >=20.0' could not be satisfied (required by 'matplotlib')
+environment 'default' does not satisfy the requirements of the project for platform 'win-64
+    Diagnostic severity: error
+    Caused by: the requirement 'packaging >=20.0' could not be satisfied (required by 'matplotlib')

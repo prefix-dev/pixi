@@ -1,7 +1,9 @@
 ---
 source: src/lock_file/satisfiability.rs
+assertion_line: 532
 expression: "format!(\"{err:?}\")"
 input_file: tests/non-satisfiability/missing-dependency/pixi.toml
 ---
-  [31m×[0m environment 'default' does not satisfy the requirements of the project for platform 'win-64
-[31m  ╰─▶ [0mthe requirement 'vc14_runtime >=14.29.30139' could not be satisfied (required by 'pixi-0.15.2-h7ea99a0_0.conda')
+environment 'default' does not satisfy the requirements of the project for platform 'win-64
+    Diagnostic severity: error
+    Caused by: the requirement 'vc14_runtime >=14.29.30139' could not be satisfied (required by 'pixi-0.15.2-h7ea99a0_0.conda')
