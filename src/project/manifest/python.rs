@@ -259,7 +259,15 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
                 },
             }
         } else {
-            PyPiRequirement::default()
+            if !req.extras.is_empty() {
+                PyPiRequirement::Version {
+                    version: VersionOrStar::Star,
+                    index: None,
+                    extras: req.extras,
+                }
+            } else {
+                PyPiRequirement::RawVersion(VersionOrStar::Star)
+            }
         }
     }
 }
