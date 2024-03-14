@@ -4,7 +4,7 @@ mod environment;
 mod error;
 mod feature;
 mod metadata;
-pub(crate) mod python;
+pub mod python;
 mod system_requirements;
 mod target;
 mod validation;
@@ -1069,6 +1069,10 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             /// The environments the project can create.
             #[serde(default)]
             environments: IndexMap<EnvironmentName, TomlEnvironmentMapOrSeq>,
+
+            /// The tool configuration which is unused by pixi
+            #[serde(rename = "tool")]
+            _tool: Option<serde_json::Value>,
         }
 
         let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
@@ -2280,11 +2284,9 @@ platforms = ["linux-64", "win-64"]
                 .unwrap()
                 .get(&PyPiPackageName::from_str("torch").expect("torch should be a valid name"))
                 .expect("pypi requirement should be available")
-                .version
                 .clone()
-                .unwrap()
                 .to_string(),
-            "~=1.9.0"
+            "\"~=1.9.0\""
         );
         assert_eq!(
             cuda_feature
@@ -2646,5 +2648,26 @@ bar = "*"
             .unwrap_err()
             .to_string()
             .contains("duplicate dependency"));
+    }
+
+    #[test]
+    fn test_tool_deserialization() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+        [tool.ruff]
+        test = "test"
+        test1 = ["test"]
+        test2 = { test = "test" }
+
+        [tool.ruff.test3]
+        test = "test"
+
+        [tool.poetry]
+        test = "test"
+        "#;
+        let _manifest = ProjectManifest::from_toml_str(&contents).unwrap();
     }
 }

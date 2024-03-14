@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import (
     AnyHttpUrl,
@@ -278,6 +278,9 @@ class BaseManifest(StrictBaseModel):
         None,
         description="The targets of the project",
         examples=[{"linux": {"dependencies": {"python": "3.8"}}}],
+    )
+    tool: Any = Field(
+        None, description="A third-party tool configuration, ignored by pixi"
     )
 
 

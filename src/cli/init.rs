@@ -380,6 +380,7 @@ fn parse_channels(channels: Vec<String>) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::cli::init::get_dir;
+    use crate::project::manifest::python::{PyPiRequirementType, VersionOrStar};
     use std::io::Read;
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
@@ -448,27 +449,20 @@ mod tests {
             vec![
                 (
                     PyPiPackageName::from_str("requests").unwrap(),
-                    PyPiRequirement {
-                        version: None,
-                        extras: None,
-                        index: None,
-                    }
+                    PyPiRequirement::default()
                 ),
                 (
-                    // TODO: Fix that we can not have the source variant of the name.
                     PyPiPackageName::from_str("deepobs").unwrap(),
-                    PyPiRequirement {
-                        version: None,
-                        extras: None,
-                        index: None,
-                    },
+                    PyPiRequirement::default()
                 ),
                 (
                     PyPiPackageName::from_str("torch").unwrap(),
                     PyPiRequirement {
-                        version: pep440_rs::VersionSpecifiers::from_str("==1.8.1").ok(),
-                        extras: None,
-                        index: None,
+                        requirement: PyPiRequirementType::Version(VersionOrStar {
+                            version: pep440_rs::VersionSpecifiers::from_str("==1.8.1").ok(),
+                            index: None
+                        }),
+                        ..PyPiRequirement::default()
                     }
                 ),
             ]
@@ -600,9 +594,11 @@ mod tests {
             vec![(
                 PyPiPackageName::from_str("requests").unwrap(),
                 PyPiRequirement {
-                    version: None,
+                    requirement: PyPiRequirementType::Version(VersionOrStar {
+                        version: None,
+                        index: None
+                    }),
                     extras: None,
-                    index: None,
                 }
             ),]
         );

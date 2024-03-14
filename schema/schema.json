@@ -1174,6 +1174,11 @@
         }
       ],
       "title": "Target"
+    },
+    "tool": {
+      "default": null,
+      "description": "A third-party tool configuration, ignored by pixi",
+      "title": "Tool"
     }
   },
   "required": [
