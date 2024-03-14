@@ -76,8 +76,11 @@ impl FileHashes {
         // Construct the custom filter
         let mut ignore_builder = OverrideBuilder::new(root);
         for ignore_line in filters {
+            let path = root.join(ignore_line.as_ref());
             if ignore_line.as_ref().ends_with('/') {
                 ignore_builder.add(&format!("{}**", ignore_line.as_ref()))?;
+            } else if path.exists() && path.is_dir() {
+                ignore_builder.add(&format!("{}/**", ignore_line.as_ref()))?;
             } else {
                 ignore_builder.add(ignore_line.as_ref())?;
             }
@@ -207,6 +210,16 @@ mod test {
         );
 
         let hashes = FileHashes::from_files(target_dir.path(), vec!["src/"])
+            .await
+            .unwrap();
+
+        assert!(hashes.files.contains_key(Path::new("src/main.rs")));
+        assert!(hashes.files.contains_key(Path::new("src/lib.rs")));
+        assert!(hashes.files.contains_key(Path::new("src/bla/lib.rs")));
+        assert!(!hashes.files.contains_key(Path::new("Cargo.toml")));
+
+        // make sure that this also works without the trailing `/`
+        let hashes = FileHashes::from_files(target_dir.path(), vec!["src"])
             .await
             .unwrap();
 
