@@ -133,7 +133,6 @@ impl<'de> Deserialize<'de> for VersionOrStar {
     }
 }
 
-
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(untagged, rename_all = "snake_case")]
 pub enum PyPiRequirementType {
