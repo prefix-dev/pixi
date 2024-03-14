@@ -145,7 +145,7 @@ impl Config {
                 if let Ok(config) = Config::from_toml(&global_config, &location) {
                     merged_config.merge_config(&config);
                 } else {
-                    eprintln!(
+                    tracing::warn!(
                         "Could not load global config (invalid toml): {}",
                         location.display()
                     );

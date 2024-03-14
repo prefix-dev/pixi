@@ -88,17 +88,47 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let channels = match (args.channel, project.as_ref()) {
         // if user passes channels through the channel flag
-        (Some(c), Some(p)) => p.config().compute_channels(&c).into_diagnostic()?,
+        (Some(c), Some(p)) => {
+            let channels = p.config().compute_channels(&c).into_diagnostic()?;
+            eprintln!(
+                "Using channels from arguments ({}): {:?}",
+                p.name(),
+                channels.iter().map(|c| c.name()).join(", ")
+            );
+            channels
+        }
         // No project -> use the global config
-        (Some(c), None) => Config::load_global()
-            .compute_channels(&c)
-            .into_diagnostic()?,
+        (Some(c), None) => {
+            let channels = Config::load_global()
+                .compute_channels(&c)
+                .into_diagnostic()?;
+            eprintln!(
+                "Using channels from arguments: {}",
+                channels.iter().map(|c| c.name()).join(", ")
+            );
+            channels
+        }
         // if user doesn't pass channels and we are in a project
-        (None, Some(p)) => p.channels().into_iter().cloned().collect(),
+        (None, Some(p)) => {
+            let channels: Vec<_> = p.channels().into_iter().cloned().collect();
+            eprintln!(
+                "Using channels from project ({}): {}",
+                p.name(),
+                channels.iter().map(|c| c.name()).join(", ")
+            );
+            channels
+        }
         // if user doesn't pass channels and we are not in project
-        (None, None) => Config::load_global()
-            .compute_channels(&[])
-            .into_diagnostic()?,
+        (None, None) => {
+            let channels = Config::load_global()
+                .compute_channels(&[])
+                .into_diagnostic()?;
+            eprintln!(
+                "Using channels from global config: {}",
+                channels.iter().map(|c| c.name()).join(", ")
+            );
+            channels
+        }
     };
 
     let package_name_filter = args.package;
