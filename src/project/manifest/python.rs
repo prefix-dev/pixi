@@ -107,6 +107,7 @@ impl<'de> Deserialize<'de> for VersionOrStar {
             .string(|str| VersionOrStar::from_str(str).map_err(Error::custom))
             .map(|map| {
                 #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
                 pub struct RawVersionOrStar {
                     version: Option<String>,
                     index: Option<String>,
@@ -131,6 +132,7 @@ impl<'de> Deserialize<'de> for VersionOrStar {
             .deserialize(deserializer)
     }
 }
+
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(untagged, rename_all = "snake_case")]
@@ -366,6 +368,7 @@ impl<'de> Deserialize<'de> for PyPiRequirement {
             .map(|map| {
                 // Just use normal deserializer
                 #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
                 struct RawPyPiRequirement {
                     #[serde(flatten)]
                     requirement: Option<PyPiRequirementType>,
@@ -605,6 +608,14 @@ mod tests {
                 extras: None,
             }
         );
+    }
+
+    #[test]
+    fn test_deserialize_fail_on_unknown() {
+        let _ = toml_edit::de::from_str::<IndexMap<PyPiPackageName, PyPiRequirement>>(
+            r#"foo = { borked = "bork"}"#,
+        )
+        .unwrap_err();
     }
 
     #[test]
