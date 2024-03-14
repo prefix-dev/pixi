@@ -41,11 +41,11 @@ impl Project {
                     }),
             ),
             (
-                format!("PIXI_EXE"),
+                "PIXI_EXE".to_string(),
                 std::env::current_exe()
                     .map(|s| s.to_string_lossy().to_string())
                     .unwrap_or("notfound".to_string()),
-            )
+            ),
         ])
     }
 }
