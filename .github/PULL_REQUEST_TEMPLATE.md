@@ -6,7 +6,7 @@
 
 ## Pull Request Checklist:
 
-Before submitting your PR, ensure you have completed the following tasks:
+Before submitting your PR, ensure you have completed the following tasks, when applicable. Check the boxes that apply to this PR:
 
 ### New Feature:
 - [ ] **Example Added**: Added a new example under [`examples/`](https://github.com/prefix-dev/pixi/tree/main/examples) to showcase the new feature.
