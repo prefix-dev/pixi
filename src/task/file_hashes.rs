@@ -110,14 +110,12 @@ impl FileHashes {
                             return ignore::WalkState::Continue;
                         }
                         Ok(entry) => compute_file_hash(entry.path()).map(|hash| {
-                            (
-                                entry
-                                    .path()
-                                    .strip_prefix(&collect_root)
-                                    .expect("path is not prefixed by the root")
-                                    .to_owned(),
-                                hash,
-                            )
+                            let path = entry
+                                .path()
+                                .strip_prefix(&collect_root)
+                                .expect("path is not prefixed by the root");
+                            tracing::info!("Added hash for file: {:?}", path);
+                            (path.to_owned(), hash)
                         }),
                         Err(e) => Err(FileHashesError::from(e)),
                     };
