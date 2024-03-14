@@ -4,7 +4,6 @@ use std::convert::identity;
 use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
-use crate::consts;
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
@@ -54,13 +53,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(
-        project
-            .default_environment()
-            .dir()
-            .join(consts::PREFIX_FILE_NAME)
-            .as_path(),
-    )?;
+    verify_prefix_location_unchanged(project.default_environment().dir().as_path())?;
 
     // Extract the passed in environment name.
     let explicit_environment = args
