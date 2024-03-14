@@ -34,9 +34,13 @@ pub struct Args {
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
+    /// The platform to search for, defaults to current platform
+    #[arg(short, long, default_value_t = Platform::current())]
+    pub platform: Platform,
+
     /// Limit the number of search results
-    #[clap(short, long, default_value_t = 15)]
-    limit: usize,
+    #[clap(short, long)]
+    limit: Option<usize>,
 }
 
 /// fetch packages from `repo_data` based on `filter_func`
@@ -112,7 +116,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let repo_data = Arc::new(
         fetch_sparse_repodata(
             channels.iter().map(AsRef::as_ref),
-            [Platform::current()],
+            [args.platform],
             &authenticated_client,
         )
         .await?,
@@ -123,10 +127,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let package_name_without_filter = package_name_filter.replace('*', "");
         let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
 
-        let limit = args.limit;
-
-        search_package_by_wildcard(package_name, &package_name_filter, repo_data, limit, stdout)
-            .await?;
+        search_package_by_wildcard(
+            package_name,
+            &package_name_filter,
+            repo_data,
+            args.limit,
+            stdout,
+        )
+        .await?;
     }
     // If package name filter doesn't contain * (wildcard), it will search and display specific package info (if any package is found)
     else {
@@ -278,7 +286,7 @@ async fn search_package_by_wildcard<W: Write>(
     package_name: PackageName,
     package_name_filter: &str,
     repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
-    limit: usize,
+    limit: Option<usize>,
     out: W,
 ) -> miette::Result<()> {
     let wildcard_pattern = Regex::new(&format!("^{}$", &package_name_filter.replace('*', ".*")))
@@ -331,12 +339,7 @@ async fn search_package_by_wildcard<W: Write>(
         return Err(miette::miette!("Could not find {normalized_package_name}"));
     }
 
-    // split off at `limit`, discard the second half
-    if packages.len() > limit {
-        let _ = packages.split_off(limit);
-    }
-
-    if let Err(e) = print_matching_packages(packages, out) {
+    if let Err(e) = print_matching_packages(&packages, out, limit) {
         if e.kind() != std::io::ErrorKind::BrokenPipe {
             return Err(e).into_diagnostic();
         }
@@ -345,7 +348,11 @@ async fn search_package_by_wildcard<W: Write>(
     Ok(())
 }
 
-fn print_matching_packages<W: Write>(packages: Vec<RepoDataRecord>, mut out: W) -> io::Result<()> {
+fn print_matching_packages<W: Write>(
+    packages: &[RepoDataRecord],
+    mut out: W,
+    limit: Option<usize>,
+) -> io::Result<()> {
     writeln!(
         out,
         "{:40} {:19} {:19}",
@@ -354,14 +361,29 @@ fn print_matching_packages<W: Write>(packages: Vec<RepoDataRecord>, mut out: W) 
         console::style("Channel").bold(),
     )?;
 
+    // split off at `limit`, discard the second half
+    let limit = limit.unwrap_or(usize::MAX);
+
+    let (packages, remaining_packages) = if limit < packages.len() {
+        packages.split_at(limit)
+    } else {
+        (packages, &[][..])
+    };
+
     for package in packages {
         // TODO: change channel fetch logic to be more robust
         // currently it relies on channel field being a url with trailing slash
         // https://github.com/mamba-org/rattler/issues/146
-        let channel = package.channel.split('/').collect::<Vec<_>>();
-        let channel_name = channel[channel.len() - 2];
+        let channel_name =
+            if let Some(channel) = package.channel.strip_prefix("https://conda.anaconda.org/") {
+                channel.trim_end_matches('/')
+            } else {
+                package.channel.as_str()
+            };
 
-        let package_name = package.package_record.name;
+        let channel_name = format!("{}/{}", channel_name, package.package_record.subdir);
+
+        let package_name = &package.package_record.name;
         let version = package.package_record.version.as_str();
 
         writeln!(
@@ -371,6 +393,10 @@ fn print_matching_packages<W: Write>(packages: Vec<RepoDataRecord>, mut out: W) 
             console::style(version),
             console::style(channel_name),
         )?;
+    }
+
+    if !remaining_packages.is_empty() {
+        println!("... and {} more", remaining_packages.len());
     }
 
     Ok(())
