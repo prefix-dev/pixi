@@ -1229,9 +1229,11 @@ Thus, just adding the <code>bin</code> directory to the <code>PATH</code> is not
 <h3 id="using-pixi-with-direnv">Using <code>pixi</code> with <code>direnv</code><a class="headerlink" href="#using-pixi-with-direnv" title="Permanent link">#</a></h3>
 <p>This allows you to use <code>pixi</code> in combination with <code>direnv</code>.
 Enter the following into your <code>.envrc</code> file:</p>
-<div class="language-shell highlight"><span class="filename">.envrc</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="c1"># (1)!</span>
+<div class="language-shell highlight"><span class="filename">.envrc</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>watch_file<span class="w"> </span>pixi.lock<span class="w"> </span><span class="c1"># (1)!</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="c1"># (2)!</span>
 </span></code></pre></div>
 <ol>
+<li>This ensures that every time your <code>pixi.lock</code> changes, <code>direnv</code> invokes the shell-hook again.</li>
 <li>This installs if needed, and activates the environment. <code>direnv</code> ensures that the environment is deactivated when you leave the directory.</li>
 </ol>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>my-project
