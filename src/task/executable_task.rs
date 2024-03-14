@@ -56,8 +56,12 @@ pub enum TaskExecutionError {
 pub enum CacheUpdateError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
+
     #[error(transparent)]
     TaskHashError(#[from] InputHashesError),
+
+    #[error("failed to serialize cache")]
+    Serialization(#[from] serde_json::Error),
 }
 
 pub enum CanSkip {
@@ -219,8 +223,8 @@ impl<'p> ExecutableTask<'p> {
         let cache_name = self.cache_name();
         let cache_file = self.project().task_cache_folder().join(cache_name);
         if cache_file.exists() {
-            let cache = std::fs::read_to_string(&cache_file).unwrap();
-            let cache: TaskCache = serde_json::from_str(&cache).unwrap();
+            let cache = tokio::fs::read_to_string(&cache_file).await?;
+            let cache: TaskCache = serde_json::from_str(&cache)?;
             let hash = TaskHash::from_task(self, &lock_file.lock_file).await;
             if let Ok(Some(hash)) = hash {
                 if hash.computation_hash() != cache.hash {
@@ -245,24 +249,19 @@ impl<'p> ExecutableTask<'p> {
         let new_hash = if let Some(mut previous_hash) = previous_hash {
             previous_hash.update_output(self).await?;
             previous_hash
-        } else if let Some(hash) = TaskHash::from_task(self, &lock_file.lock_file)
-            .await
-            .unwrap()
-        {
+        } else if let Some(hash) = TaskHash::from_task(self, &lock_file.lock_file).await? {
             hash
         } else {
             return Ok(());
         };
 
-        if !task_cache_folder.exists() {
-            std::fs::create_dir_all(&task_cache_folder)?;
-        }
+        tokio::fs::create_dir_all(&task_cache_folder).await?;
 
         let cache = TaskCache {
             hash: new_hash.computation_hash(),
         };
-        let cache = serde_json::to_string(&cache).unwrap();
-        Ok(std::fs::write(&cache_file, cache)?)
+        let cache = serde_json::to_string(&cache)?;
+        Ok(tokio::fs::write(&cache_file, cache).await?)
     }
 }
 
