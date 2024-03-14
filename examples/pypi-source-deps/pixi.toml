@@ -1,0 +1,26 @@
+[project]
+name = "pypi-source-deps"
+version = "0.1.0"
+description = "Add a short description here"
+authors = ["Tim de Jager <tim@prefix.dev>"]
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[tasks]
+
+[dependencies]
+python = "*"
+
+[pypi-dependencies]
+# Lets start with some git dependencies
+# With ssh
+flask = { git = "ssh://git@github.com/pallets/flask", rev = "b90a4f1f4a370e92054b9cc9db0efcb864f87ebe" }
+# With https
+requests = { git = "https://github.com/psf/requests.git", tag = "v2.31.0" }
+# ...or use branch = '' to specify a branch or commit
+
+# You can also directly add a source dependency from file
+minimal_project = { path = "./minimal_project" }
+
+# You can also use a direct url, to either a `.tar.gz` or `.zip`, or a `.whl` file
+click = { url = "https://github.com/pallets/click/releases/download/8.1.7/click-8.1.7-py3-none-any.whl" }

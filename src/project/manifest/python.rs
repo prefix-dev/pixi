@@ -2,6 +2,7 @@ use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
 use serde::{de, de::Error, Deserialize, Deserializer, Serialize};
 use std::path::PathBuf;
+use std::process::ExitStatus;
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
@@ -322,6 +323,75 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+enum ResolveBranchError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Utf8(#[from] std::string::FromUtf8Error),
+    #[error("empty git hash for repo {repo} at {branch}")]
+    EmptyHash { repo: String, branch: String },
+    #[error(
+        "git command failed with status code {status} for repository {repo} at branch {branch}"
+    )]
+    StatusCodeErr {
+        status: std::process::ExitStatus,
+        repo: String,
+        branch: String,
+    },
+}
+
+/// TODO: cache this because it is pretty slow
+/// Retrieve the git hash of a repository at a specific branch
+fn get_git_branch_hash(
+    repo_url: impl AsRef<str>,
+    branch: impl AsRef<str>,
+) -> Result<String, ResolveBranchError> {
+    let repo_url = repo_url.as_ref().to_string();
+    let branch = branch.as_ref().to_string();
+
+    // Execute the git ls-remote command
+    let output = std::process::Command::new("git")
+        .arg("ls-remote")
+        .arg(&repo_url)
+        .arg(&branch)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::inherit())
+        .output()?;
+
+    if !output.status.success() {
+        return Err(ResolveBranchError::StatusCodeErr {
+            status: output.status,
+            repo: repo_url.clone(),
+            branch: branch.clone(),
+        });
+    }
+    // Convert the output bytes to a string
+    let output_str = String::from_utf8(output.stdout)?;
+
+    // Split the output string by whitespaces
+    let mut lines = output_str.lines();
+
+    // Take the first line which contains the hash
+    if let Some(first_line) = lines.next() {
+        // Split the line by whitespaces and take the hash
+        let hash = first_line
+            .split_whitespace()
+            .next()
+            .ok_or_else(|| ResolveBranchError::EmptyHash {
+                repo: repo_url.clone(),
+                branch: branch.clone(),
+            })?
+            .to_string();
+        return Ok(hash);
+    } else {
+        Err(ResolveBranchError::EmptyHash {
+            repo: repo_url.clone(),
+            branch: branch.clone(),
+        })
+    }
+}
+
 impl PyPiRequirement {
     /// Returns the requirements as [`pep508_rs::Requirement`]s.
     pub fn as_pep508(&self, name: &PackageName) -> pep508_rs::Requirement {
@@ -331,18 +401,29 @@ impl PyPiRequirement {
                 .map(|v| pep508_rs::VersionOrUrl::VersionSpecifier(v.clone())),
             PyPiRequirementType::Git {
                 git: url,
-                // TODO: ignoring branch for now
-                branch: _,
+                branch,
                 tag,
                 rev,
                 subdirectory: subdir,
             } => {
+                // Check if we need to get the git hash of the branch
+                let branch_hash = if let Some(branch) = branch {
+                    // Get the git hash of the branch
+                    Some(get_git_branch_hash(url, branch).expect("error getting git branch hash"))
+                } else {
+                    None
+                };
                 // Choose revision over tag if it is specified
-                let tag_or_rev = rev.as_ref().or_else(|| tag.as_ref()).cloned();
+                let tag_or_rev_or_branch = rev
+                    .as_ref()
+                    .or_else(|| tag.as_ref())
+                    .cloned()
+                    .or(branch_hash);
+
                 // Create the url.
                 let url = format!("git+{url}");
                 // Add the tag or rev if it exists.
-                let url = tag_or_rev
+                let url = tag_or_rev_or_branch
                     .as_ref()
                     .map_or_else(|| url.clone(), |tag_or_rev| format!("{url}@{tag_or_rev}"));
                 // Add the subdirectory if it exists.
@@ -355,7 +436,7 @@ impl PyPiRequirement {
                 ))
             }
             PyPiRequirementType::Path { path, editable: _ } => {
-                let canonicalized = dunce::canonicalize(path).expect("cannot conoicalize paths");
+                let canonicalized = dunce::canonicalize(path).expect("cannot canonicalize paths");
                 let given = path
                     .to_str()
                     .map(|s| s.to_owned())
