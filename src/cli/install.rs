@@ -1,3 +1,4 @@
+use crate::config::ConfigCli;
 use crate::environment::get_up_to_date_prefix;
 use crate::project::manifest::EnvironmentName;
 use crate::Project;
@@ -17,6 +18,9 @@ pub struct Args {
 
     #[arg(long, short)]
     pub environment: Option<String>,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {

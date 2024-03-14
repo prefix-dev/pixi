@@ -1,4 +1,5 @@
 use crate::activation::get_activation_env;
+use crate::config::ConfigCliPrompt;
 use crate::{prompt, Project};
 use clap::Parser;
 use miette::IntoDiagnostic;
@@ -29,6 +30,9 @@ pub struct Args {
 
     #[arg(long, short)]
     environment: Option<String>,
+
+    #[clap(flatten)]
+    config: ConfigCliPrompt,
 }
 
 fn start_powershell(
@@ -195,7 +199,8 @@ async fn start_nu_shell(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?
+        .with_cli_config(args.config.clone());
     let environment_name = args
         .environment
         .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
@@ -217,19 +222,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .or_else(ShellEnum::from_env)
         .unwrap_or_default();
 
+    let prompt = if project.config().change_ps1() {
+        match interactive_shell {
+            ShellEnum::NuShell(_) => prompt::get_nu_prompt(prompt_name.as_str()),
+            ShellEnum::PowerShell(_) => prompt::get_powershell_prompt(prompt_name.as_str()),
+            ShellEnum::Bash(_) => prompt::get_bash_prompt(prompt_name.as_str()),
+            ShellEnum::Zsh(_) => prompt::get_zsh_prompt(prompt_name.as_str()),
+            ShellEnum::Fish(_) => prompt::get_fish_prompt(prompt_name.as_str()),
+            ShellEnum::Xonsh(_) => prompt::get_xonsh_prompt(),
+            ShellEnum::CmdExe(_) => prompt::get_cmd_prompt(prompt_name.as_str()),
+        }
+    } else {
+        "".to_string()
+    };
+
     #[cfg(target_family = "windows")]
     let res = match interactive_shell {
-        ShellEnum::NuShell(nushell) => {
-            start_nu_shell(nushell, env, prompt::get_nu_prompt(prompt_name.as_str())).await
-        }
-        ShellEnum::PowerShell(pwsh) => start_powershell(
-            pwsh,
-            env,
-            prompt::get_powershell_prompt(prompt_name.as_str()),
-        ),
-        ShellEnum::CmdExe(cmdexe) => {
-            start_cmdexe(cmdexe, env, prompt::get_cmd_prompt(prompt_name.as_str()))
-        }
+        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt).await,
+        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt),
+        ShellEnum::CmdExe(cmdexe) => start_cmdexe(cmdexe, env, prompt),
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell);
         }
@@ -237,44 +248,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "unix")]
     let res = match interactive_shell {
-        ShellEnum::NuShell(nushell) => {
-            start_nu_shell(nushell, env, prompt::get_nu_prompt(prompt_name.as_str())).await
-        }
-        ShellEnum::PowerShell(pwsh) => start_powershell(
-            pwsh,
-            env,
-            prompt::get_powershell_prompt(prompt_name.as_str()),
-        ),
-        ShellEnum::Bash(bash) => {
-            start_unix_shell(
-                bash,
-                vec!["-l", "-i"],
-                env,
-                prompt::get_bash_prompt(prompt_name.as_str()),
-            )
-            .await
-        }
-        ShellEnum::Zsh(zsh) => {
-            start_unix_shell(
-                zsh,
-                vec!["-l", "-i"],
-                env,
-                prompt::get_zsh_prompt(prompt_name.as_str()),
-            )
-            .await
-        }
-        ShellEnum::Fish(fish) => {
-            start_unix_shell(
-                fish,
-                vec![],
-                env,
-                prompt::get_fish_prompt(prompt_name.as_str()),
-            )
-            .await
-        }
-        ShellEnum::Xonsh(xonsh) => {
-            start_unix_shell(xonsh, vec![], env, prompt::get_xonsh_prompt()).await
-        }
+        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt).await,
+        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt),
+        ShellEnum::Bash(bash) => start_unix_shell(bash, vec!["-l", "-i"], env, prompt).await,
+        ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], env, prompt).await,
+        ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], env, prompt).await,
+        ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], env, prompt).await,
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell)
         }

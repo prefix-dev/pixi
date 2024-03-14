@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
 use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::PyPiRequirement;
@@ -10,7 +11,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use rattler_conda_types::ParseStrictness::{Lenient, Strict};
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, Platform};
+use rattler_conda_types::{Channel, MatchSpec, Platform};
 use regex::Regex;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
@@ -37,9 +38,6 @@ pub struct Args {
     #[arg(short = 'i', long = "import")]
     pub env_file: Option<PathBuf>,
 }
-
-/// The default channels to use for a new project.
-const DEFAULT_CHANNELS: &[&str] = &["conda-forge"];
 
 /// The pixi.toml template
 ///
@@ -76,6 +74,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let manifest_path = dir.join(consts::PROJECT_MANIFEST);
     let gitignore_path = dir.join(".gitignore");
     let gitattributes_path = dir.join(".gitattributes");
+    let config = Config::load_global();
 
     // Check if the project file doesn't already exist. We don't want to overwrite it.
     if fs::metadata(&manifest_path).map_or(false, |x| x.is_file()) {
@@ -106,7 +105,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // TODO: Improve this:
         //  - Use .condarc as channel config
         //  - Implement it for `[crate::project::manifest::ProjectManifest]` to do this for other filetypes, e.g. (pyproject.toml, requirements.txt)
-        let (conda_deps, pypi_deps, channels) = conda_env_to_manifest(conda_env_file)?;
+        let (conda_deps, pypi_deps, channels) = conda_env_to_manifest(conda_env_file, &config)?;
 
         let rv = env
             .render_named_str(
@@ -176,11 +175,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let channels = if let Some(channels) = args.channels {
             channels
         } else {
-            DEFAULT_CHANNELS
-                .iter()
-                .copied()
-                .map(ToOwned::to_owned)
-                .collect()
+            config.default_channels().to_vec()
         };
 
         let rv = env
@@ -278,15 +273,16 @@ type ParsedDependencies = (Vec<MatchSpec>, Vec<PipReq>, Vec<Arc<Channel>>);
 
 fn conda_env_to_manifest(
     env_info: CondaEnvFile,
+    config: &Config,
 ) -> miette::Result<(Vec<MatchSpec>, Vec<PipReq>, Vec<String>)> {
     let channels = parse_channels(env_info.channels().clone());
     let (conda_deps, pip_deps, mut extra_channels) =
         parse_dependencies(env_info.dependencies().clone())?;
-    let channel_config = ChannelConfig::default();
+
     extra_channels.extend(
         channels
             .into_iter()
-            .map(|c| Arc::new(Channel::from_str(c, &channel_config).unwrap())),
+            .map(|c| Arc::new(Channel::from_str(c, config.channel_config()).unwrap())),
     );
     let mut channels: Vec<_> = extra_channels
         .into_iter()
@@ -294,7 +290,7 @@ fn conda_env_to_manifest(
         .map(|c| {
             if c.base_url()
                 .as_str()
-                .starts_with(channel_config.channel_alias.as_str())
+                .starts_with(config.channel_config().channel_alias.as_str())
             {
                 c.name().to_string()
             } else {
@@ -303,15 +299,12 @@ fn conda_env_to_manifest(
         })
         .collect();
     if channels.is_empty() {
-        channels = DEFAULT_CHANNELS
-            .iter()
-            .copied()
-            .map(ToOwned::to_owned)
-            .collect()
+        channels = config.default_channels();
     }
 
     Ok((conda_deps, pip_deps, channels))
 }
+
 fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependencies> {
     let mut conda_deps = vec![];
     let mut pip_deps = vec![];
@@ -420,7 +413,9 @@ mod tests {
             ]
         );
 
-        let (conda_deps, pip_deps, channels) = conda_env_to_manifest(conda_env_file_data).unwrap();
+        let config = Config::default();
+        let (conda_deps, pip_deps, channels) =
+            conda_env_to_manifest(conda_env_file_data, &config).unwrap();
 
         assert_eq!(
             channels,

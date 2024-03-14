@@ -4,12 +4,15 @@ use lazy_static::lazy_static;
 pub const PROJECT_MANIFEST: &str = "pixi.toml";
 pub const PROJECT_LOCK_FILE: &str = "pixi.lock";
 pub const PIXI_DIR: &str = ".pixi";
+pub const CONFIG_FILE: &str = "config.toml";
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
 pub const SOLVE_GROUP_ENVIRONMENTS_DIR: &str = "solve-group-envs";
 pub const PYPI_DEPENDENCIES: &str = "pypi-dependencies";
-
 pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
+
+/// The default channels to use for a new project.
+pub const DEFAULT_CHANNELS: &[&str] = &["conda-forge"];
 
 pub const DEFAULT_FEATURE_NAME: &str = DEFAULT_ENVIRONMENT_NAME;
 
