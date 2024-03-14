@@ -66,6 +66,11 @@
          <changefreq>daily</changefreq>
     </url>
     <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/advanced/global_configuration/</loc>
+         <lastmod>2024-03-14</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/advanced/multi_platform_configuration/</loc>
          <lastmod>2024-03-14</lastmod>
          <changefreq>daily</changefreq>
