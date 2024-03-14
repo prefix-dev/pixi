@@ -258,16 +258,14 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
                     extras: req.extras,
                 },
             }
-        } else {
-            if !req.extras.is_empty() {
-                PyPiRequirement::Version {
-                    version: VersionOrStar::Star,
-                    index: None,
-                    extras: req.extras,
-                }
-            } else {
-                PyPiRequirement::RawVersion(VersionOrStar::Star)
+        } else if !req.extras.is_empty() {
+            PyPiRequirement::Version {
+                version: VersionOrStar::Star,
+                index: None,
+                extras: req.extras,
             }
+        } else {
+            PyPiRequirement::RawVersion(VersionOrStar::Star)
         }
     }
 }
@@ -614,13 +612,13 @@ mod tests {
 
     #[test]
     fn test_from_args() {
-        let pypi : Requirement = "numpy".parse().unwrap();
-        let as_pypi_req : PyPiRequirement = pypi.into();
+        let pypi: Requirement = "numpy".parse().unwrap();
+        let as_pypi_req: PyPiRequirement = pypi.into();
         // convert to toml and snapshot
         assert_snapshot!(as_pypi_req.to_string());
 
-        let pypi : Requirement = "numpy[test,extrastuff]".parse().unwrap();
-        let as_pypi_req : PyPiRequirement = pypi.into();
+        let pypi: Requirement = "numpy[test,extrastuff]".parse().unwrap();
+        let as_pypi_req: PyPiRequirement = pypi.into();
         // convert to toml and snapshot
         assert_snapshot!(as_pypi_req.to_string());
     }
