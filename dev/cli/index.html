@@ -2062,11 +2062,13 @@ Example use-case, when you want to get rid of the <code>pixi</code> executable i
 <ul>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <code>pixi.toml</code>, by default it searches for one in the parent directories.</li>
 <li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses. Defaults to <code>conda-forge</code>. (Allowed to be used more than once)</li>
-<li><code>--limit &lt;LIMIT&gt; (-l)</code>: Limit the number of search results (default: 15)</li>
+<li><code>--limit &lt;LIMIT&gt; (-l)</code>: optionally limit the number of search results</li>
+<li><code>--platform &lt;PLATFORM&gt; (-p)</code>: specify a platform that you want to search for. (default: current platform)</li>
 </ul>
 <div class="language-zsh highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>search<span class="w"> </span>pixi
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>pixi<span class="w"> </span>search<span class="w"> </span>-l<span class="w"> </span><span class="m">30</span><span class="w"> </span>py*
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>pixi<span class="w"> </span>search<span class="w"> </span>-c<span class="w"> </span>robostack<span class="w"> </span>plotjuggler*
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>pixi<span class="w"> </span>search<span class="w"> </span>--limit<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="s2">&quot;py*&quot;</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># search in a different channel and for a specific platform</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>pixi<span class="w"> </span>search<span class="w"> </span>-c<span class="w"> </span>robostack<span class="w"> </span>--platform<span class="w"> </span>linux-64<span class="w"> </span><span class="s2">&quot;plotjuggler*&quot;</span>
 </span></code></pre></div>
 <h2 id="self-update"><code>self-update</code><a class="headerlink" href="#self-update" title="Permanent link">#</a></h2>
 <p>Update pixi to the latest version or a specific version. If the pixi binary is not found in the default location (e.g.
