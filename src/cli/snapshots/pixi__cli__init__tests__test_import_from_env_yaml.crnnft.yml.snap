@@ -122,23 +122,19 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "tensorflow-gpu",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: Some(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: Equal,
-                                            version: "1.15.0",
-                                        },
-                                    ],
-                                ),
-                            ),
-                            index: None,
-                        },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: Equal,
+                                    version: "1.15.0",
+                                },
+                            ],
+                        ),
                     ),
-                    extras: None,
+                    index: None,
+                    extras: [],
                 },
             ),
             (
@@ -148,15 +144,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "numpy",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: None,
-                },
+                RawVersion(
+                    Star,
+                ),
             ),
             (
                 PyPiPackageName {
@@ -165,15 +155,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "opencv-python",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: None,
-                },
+                RawVersion(
+                    Star,
+                ),
             ),
             (
                 PyPiPackageName {
@@ -182,15 +166,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "matplotlib",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: None,
-                },
+                RawVersion(
+                    Star,
+                ),
             ),
             (
                 PyPiPackageName {
@@ -199,15 +177,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "easydict",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: None,
-                },
+                RawVersion(
+                    Star,
+                ),
             ),
         ],
         [],

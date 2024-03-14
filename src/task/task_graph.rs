@@ -317,7 +317,7 @@ mod test {
         let graph = TaskGraph::from_cmd_args(
             &project,
             &search_envs,
-            run_args.into_iter().map(|arg| arg.to_string()).collect(),
+            run_args.iter().map(|arg| arg.to_string()).collect(),
         )
         .unwrap();
 
