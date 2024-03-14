@@ -226,8 +226,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         match interactive_shell {
             ShellEnum::NuShell(_) => prompt::get_nu_prompt(prompt_name.as_str()),
             ShellEnum::PowerShell(_) => prompt::get_powershell_prompt(prompt_name.as_str()),
-            ShellEnum::Bash(_) => prompt::get_bash_prompt(prompt_name.as_str()),
-            ShellEnum::Zsh(_) => prompt::get_zsh_prompt(prompt_name.as_str()),
+            ShellEnum::Bash(_) => prompt::get_bash_hook(prompt_name.as_str()),
+            ShellEnum::Zsh(_) => prompt::get_zsh_hook(prompt_name.as_str()),
             ShellEnum::Fish(_) => prompt::get_fish_prompt(prompt_name.as_str()),
             ShellEnum::Xonsh(_) => prompt::get_xonsh_prompt(),
             ShellEnum::CmdExe(_) => prompt::get_cmd_prompt(prompt_name.as_str()),

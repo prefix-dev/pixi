@@ -1,5 +1,5 @@
 /// Set default pixi prompt for the bash shell
-pub fn get_bash_prompt(env_name: &str) -> String {
+pub fn get_bash_hook(env_name: &str) -> String {
     format!(
         "export PS1=\"({}) $PS1\"\n{}",
         env_name,
@@ -8,7 +8,7 @@ pub fn get_bash_prompt(env_name: &str) -> String {
 }
 
 /// Set default pixi prompt for the zsh shell
-pub fn get_zsh_prompt(env_name: &str) -> String {
+pub fn get_zsh_hook(env_name: &str) -> String {
     format!(
         "export PS1=\"({}) $PS1\"\n{}",
         env_name,
