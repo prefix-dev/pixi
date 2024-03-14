@@ -1,11 +1,13 @@
 /// Set default pixi prompt for the bash shell
 pub fn get_bash_prompt(env_name: &str) -> String {
-    format!("export PS1=\"({}) $PS1\"", env_name)
+    format!("export PS1=\"({}) $PS1\"\n{}", env_name, include_str!("shell_snippets/pixi-bash.sh"))
+
 }
 
 /// Set default pixi prompt for the zsh shell
 pub fn get_zsh_prompt(env_name: &str) -> String {
-    format!("export PS1=\"({}) $PS1\"", env_name)
+    format!("export PS1=\"({}) $PS1\"\n{}", env_name, include_str!("shell_snippets/pixi-zsh.sh"))
+
 }
 
 /// Set default pixi prompt for the fish shell

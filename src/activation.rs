@@ -40,6 +40,12 @@ impl Project {
                         version.to_string()
                     }),
             ),
+            (
+                format!("PIXI_EXE"),
+                std::env::current_exe()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or("notfound".to_string()),
+            )
         ])
     }
 }
