@@ -419,12 +419,14 @@ Search a package, output will list the latest version of the package.
 
 - `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
-- `--limit <LIMIT> (-l)`: Limit the number of search results (default: 15)
+- `--limit <LIMIT> (-l)`: optionally limit the number of search results
+- `--platform <PLATFORM> (-p)`: specify a platform that you want to search for. (default: current platform)
 
 ```zsh
 pixi search pixi
-pixi search -l 30 py*
-pixi search -c robostack plotjuggler*
+pixi search --limit 30 "py*"
+# search in a different channel and for a specific platform
+pixi search -c robostack --platform linux-64 "plotjuggler*"
 ```
 
 ## `self-update`

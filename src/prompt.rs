@@ -13,7 +13,7 @@ pub fn get_fish_prompt(env_name: &str) -> String {
     format!(
         "functions -c fish_prompt old_fish_prompt; \
          function fish_prompt; \
-             echo \"({}) $(old_fish_prompt)\"; \
+             echo \"({})\" (old_fish_prompt); \
          end;",
         env_name
     )

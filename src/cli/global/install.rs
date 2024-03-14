@@ -48,7 +48,7 @@ pub struct Args {
 /// Create the environment activation script
 fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result<String> {
     let activator =
-        Activator::from_path(prefix.root(), shell, Platform::Osx64).into_diagnostic()?;
+        Activator::from_path(prefix.root(), shell, Platform::current()).into_diagnostic()?;
     let result = activator
         .activation(ActivationVariables {
             conda_prefix: None,
