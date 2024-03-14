@@ -31,7 +31,7 @@ configure = { cmd = [
     # We wanna build in the .build directory
     "-B",
     ".build",
-], inputs = ["CMakeLists.txt"] }
+], inputs = ["CMakeLists.txt"], outputs = [".build/CMakeFiles/"] }
 
 # Build the executable but make sure CMake is configured first.
 [feature.build.tasks.build]
