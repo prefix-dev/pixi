@@ -8,7 +8,7 @@ use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
 };
-use rattler_lock::{ConversionError, Package};
+use rattler_lock::{ConversionError, Package, PypiPackageData};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -145,6 +145,33 @@ pub fn verify_platform_satisfiability(
 enum Dependency {
     Conda(MatchSpec, Cow<'static, str>),
     PyPi(Requirement, Cow<'static, str>),
+}
+
+pub fn pypi_satifisfies(locked_data: &PypiPackageData, spec: &Requirement) -> bool {
+    // Check if the name matches
+    if spec.name != locked_data.name {
+        return false;
+    }
+
+    // Check if the version of the requirement matches
+    match &spec.version_or_url {
+        None => true,
+        Some(pep508_rs::VersionOrUrl::Url(spec_url)) => {
+            // Compare the given url with the locked url
+            // by removing the fragment from the locked url
+            // which should essentially remove the `#sha` part
+            let spec_given = spec_url
+                .given()
+                .map(|given| given.to_owned())
+                .unwrap_or_else(|| spec_url.to_url().to_string());
+            let mut locked_given = locked_data.url.clone();
+            locked_given.set_fragment(None);
+            spec_given == locked_given.as_str()
+        }
+        Some(pep508_rs::VersionOrUrl::VersionSpecifier(spec)) => {
+            spec.contains(&locked_data.version)
+        }
+    }
 }
 
 pub fn verify_package_platform_satisfiability(
@@ -299,7 +326,7 @@ pub fn verify_package_platform_satisfiability(
                     }
                 } else if let Some(idx) = locked_pypi_environment.index_by_name(&requirement.name) {
                     let record = &locked_pypi_environment.records[idx];
-                    if record.0.satisfies(&requirement) {
+                    if pypi_satifisfies(&record.0, &requirement) {
                         FoundPackage::PyPi(idx, requirement.extras)
                     } else {
                         // The record does not match the spec, the lock-file is inconsistent.

@@ -115,7 +115,6 @@ impl PypiPackageIdentifier {
     }
 
     pub fn satisfies(&self, requirement: &Requirement) -> bool {
-        dbg!(&requirement);
         // Verify the name of the package
         if self.name.as_normalized() != &requirement.name {
             return false;

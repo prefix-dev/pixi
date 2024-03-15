@@ -1,8 +1,8 @@
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
 use serde::{de, de::Error, Deserialize, Deserializer, Serialize};
+use std::fmt::Write;
 use std::path::PathBuf;
-use std::process::ExitStatus;
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
@@ -392,6 +392,64 @@ fn get_git_branch_hash(
     }
 }
 
+fn create_given_url(
+    url: &Url,
+    branch: Option<&str>,
+    tag: Option<&str>,
+    rev: Option<&str>,
+    subdir: Option<&str>,
+) -> String {
+    // Create the given
+    let mut given = format!("git+{url}");
+    if let Some(branch) = branch {
+        given = format!("{given}?branch={branch}");
+    } else if let Some(tag) = tag {
+        given = format!("{given}?tag={tag}");
+    } else if let Some(rev) = rev {
+        given = format!("{given}?rev={rev}");
+    }
+    if let Some(subdir) = subdir {
+        given = format!("{given}&subdirectory={subdir}");
+    }
+    given
+}
+
+fn create_uv_url(
+    url: &Url,
+    branch: Option<&str>,
+    tag: Option<&str>,
+    rev: Option<&str>,
+    subdir: Option<&str>,
+) -> String {
+    // Check if we need to get the git hash of the branch
+    let branch_hash = if let Some(branch) = branch {
+        // Get the git hash of the branch
+        Some(get_git_branch_hash(url, branch).expect("error getting git branch hash"))
+    } else {
+        None
+    };
+
+    // Choose revision over tag if it is specified
+    let tag_or_rev_or_branch = rev
+        .as_ref()
+        .or_else(|| tag.as_ref())
+        .cloned()
+        .or(branch_hash.as_deref());
+
+    // Create the url.
+    let url = format!("git+{url}");
+    // Add the subdirectory if it exists.
+    let url = subdir.as_ref().map_or_else(
+        || url.clone(),
+        |subdir| format!("{url}#subdirectory={subdir}"),
+    );
+    // Add the tag or rev if it exists.
+    let url = tag_or_rev_or_branch
+        .as_ref()
+        .map_or_else(|| url.clone(), |tag_or_rev| format!("{url}@{tag_or_rev}"));
+    url
+}
+
 impl PyPiRequirement {
     /// Returns the requirements as [`pep508_rs::Requirement`]s.
     pub fn as_pep508(&self, name: &PackageName) -> pep508_rs::Requirement {
@@ -406,33 +464,24 @@ impl PyPiRequirement {
                 rev,
                 subdirectory: subdir,
             } => {
-                // Check if we need to get the git hash of the branch
-                let branch_hash = if let Some(branch) = branch {
-                    // Get the git hash of the branch
-                    Some(get_git_branch_hash(url, branch).expect("error getting git branch hash"))
-                } else {
-                    None
-                };
-                // Choose revision over tag if it is specified
-                let tag_or_rev_or_branch = rev
-                    .as_ref()
-                    .or_else(|| tag.as_ref())
-                    .cloned()
-                    .or(branch_hash);
-
-                // Create the url.
-                let url = format!("git+{url}");
-                // Add the tag or rev if it exists.
-                let url = tag_or_rev_or_branch
-                    .as_ref()
-                    .map_or_else(|| url.clone(), |tag_or_rev| format!("{url}@{tag_or_rev}"));
-                // Add the subdirectory if it exists.
-                let url = subdir.as_ref().map_or_else(
-                    || url.clone(),
-                    |subdir| format!("{url}#subdirectory={subdir}"),
+                let given = create_given_url(
+                    url,
+                    branch.as_deref(),
+                    tag.as_deref(),
+                    rev.as_deref(),
+                    subdir.as_deref(),
+                );
+                let uv_url = create_uv_url(
+                    url,
+                    branch.as_deref(),
+                    tag.as_deref(),
+                    rev.as_deref(),
+                    subdir.as_deref(),
                 );
                 Some(pep508_rs::VersionOrUrl::Url(
-                    VerbatimUrl::parse(&url).expect("git url is invalid"),
+                    VerbatimUrl::parse(uv_url)
+                        .expect("git url is invalid")
+                        .with_given(given),
                 ))
             }
             PyPiRequirementType::Path { path, editable: _ } => {

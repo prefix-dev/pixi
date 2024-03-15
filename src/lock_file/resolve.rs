@@ -18,11 +18,11 @@ use crate::{
     Project,
 };
 
-use distribution_types::FileLocation;
 use distribution_types::{
     BuiltDist, DirectUrlSourceDist, Dist, IndexLocations, Name, PrioritizedDist, Resolution,
     SourceDist,
 };
+use distribution_types::{DirectUrl, FileLocation};
 use futures::FutureExt;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
@@ -425,8 +425,36 @@ pub async fn resolve_pypi(
 
                         (url, hash)
                     }
-                    BuiltDist::DirectUrl(dist) => (dist.url.to_url(), None),
-                    BuiltDist::Path(dist) => (dist.url.to_url(), None),
+                    BuiltDist::DirectUrl(dist) => {
+                        // Create the url for the lock file
+                        // if it is a git vcs use the revision hash and
+                        // append this to our given url
+                        let mut url = dist
+                            .url
+                            .given()
+                            .map(|url| Url::parse(url).expect("could not parse given url to path"))
+                            // When using a direct url reference like https://foo/bla.whl we do not have a given
+                            .unwrap_or_else(|| dist.url.to_url());
+                        match DirectUrl::try_from(&dist.url.to_url()) {
+                            Ok(DirectUrl::Git(git_url)) => {
+                                if let Some(sha) = git_url.url.precise() {
+                                    url.set_fragment(Some(&sha.to_string()))
+                                }
+                            }
+                            _ => {}
+                        };
+
+                        (url, None)
+                    }
+                    BuiltDist::Path(dist) => (
+                        dist.url
+                            .given()
+                            .map(|url| {
+                                Url::from_file_path(url).expect("could not parse given url to path")
+                            })
+                            .unwrap_or_else(|| dist.url.to_url()),
+                        None,
+                    ),
                 };
 
                 let metadata = context
@@ -444,6 +472,7 @@ pub async fn resolve_pypi(
                 }
             }
             Dist::Source(source) => {
+                tracing::warn!("{source:?}");
                 let hash = source
                     .file()
                     .and_then(|file| parse_hashes_from_hex(&file.hashes.sha256, &file.hashes.md5));
