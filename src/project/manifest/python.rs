@@ -11,6 +11,7 @@ use url::Url;
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+/// A package name for PyPI that also stores the source version of the name.
 pub struct PyPiPackageName {
     source: String,
     normalized: PackageName,
@@ -28,16 +29,21 @@ impl<'de> Deserialize<'de> for PyPiPackageName {
     }
 }
 
-impl PyPiPackageName {
-    pub fn from_str(name: &str) -> Result<Self, InvalidNameError> {
+impl FromStr for PyPiPackageName {
+    type Err = InvalidNameError;
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
         Ok(Self {
             source: name.to_string(),
             normalized: uv_normalize::PackageName::from_str(name)?,
         })
     }
+}
+
+impl PyPiPackageName {
     pub fn from_normalized(normalized: PackageName) -> Self {
         Self {
-            source: normalized.as_ref().to_string(),
+            source: normalized.to_string(),
             normalized,
         }
     }
@@ -48,14 +54,6 @@ impl PyPiPackageName {
 
     pub fn as_source(&self) -> &str {
         &self.source
-    }
-}
-
-impl FromStr for PyPiPackageName {
-    type Err = InvalidNameError;
-
-    fn from_str(name: &str) -> Result<Self, Self::Err> {
-        Self::from_str(name)
     }
 }
 
@@ -97,21 +95,23 @@ impl From<VersionOrStar> for Option<pep508_rs::VersionOrUrl> {
     }
 }
 
-// Custom serialization function
-fn serialize_version_or_star<S>(value: &VersionOrStar, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    serializer.serialize_str(&value.to_string())
+impl Serialize for VersionOrStar {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
 }
 
-// Custom deserialization function
-fn deserialize_version_or_star<'de, D>(deserializer: D) -> Result<VersionOrStar, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    VersionOrStar::from_str(&s).map_err(serde::de::Error::custom)
+impl<'de> Deserialize<'de> for VersionOrStar {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        VersionOrStar::from_str(&s).map_err(serde::de::Error::custom)
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
@@ -138,22 +138,12 @@ pub enum PyPiRequirement {
         extras: Vec<ExtraName>,
     },
     Version {
-        #[serde(
-            serialize_with = "serialize_version_or_star",
-            deserialize_with = "deserialize_version_or_star"
-        )]
         version: VersionOrStar,
         index: Option<String>,
         #[serde(default)]
         extras: Vec<ExtraName>,
     },
-    RawVersion(
-        #[serde(
-            serialize_with = "serialize_version_or_star",
-            deserialize_with = "deserialize_version_or_star"
-        )]
-        VersionOrStar,
-    ),
+    RawVersion(VersionOrStar),
 }
 
 impl Default for PyPiRequirement {
