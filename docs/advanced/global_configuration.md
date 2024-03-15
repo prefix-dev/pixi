@@ -80,7 +80,7 @@ You can also specify mirrors for an entire "host", e.g.
 ```
 
 This will forward all request to channels on anaconda.org to prefix.dev.
-Channels that are not currently mirrored on prefix.dev will fail.
+Channels that are not currently mirrored on prefix.dev will fail in the above example.
 
 ### OCI Mirrors
 
