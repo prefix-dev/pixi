@@ -1,5 +1,5 @@
 use crate::project;
-use crate::task::{InvalidWorkingDirectory, ExecutableTask, FileHashes, FileHashesError};
+use crate::task::{ExecutableTask, FileHashes, FileHashesError, InvalidWorkingDirectory};
 use miette::Diagnostic;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, Package};
