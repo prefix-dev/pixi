@@ -60,7 +60,6 @@ humantime = "2.1.0"
 ignore = "0.4.22"
 indexmap = { version = "2.2.5", features = ["serde"] }
 indicatif = "0.17.8"
-insta = { version = "1.36.1", features = ["yaml"] }
 
 install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 is_executable = "1.0.1"
@@ -81,7 +80,7 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 platform-host = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
-rattler = { version = "0.19.2", default-features = false }
+rattler = { version = "0.19.2", default-features = false, features = ["cli-tools"] }
 rattler_conda_types = { version = "0.20.1", default-features = false }
 rattler_digest = { version = "0.19.1", default-features = false }
 rattler_lock = { version = "0.20.1", default-features = false }
@@ -150,6 +149,7 @@ libc = { version = "0.2.153", default-features = false }
 signal-hook = "0.3.17"
 
 [dev-dependencies]
+insta = { version = "1.36.1", features = ["yaml", "glob"] }
 rattler_digest = "0.19.1"
 rstest = "0.18.2"
 serde_json = "1.0.114"
