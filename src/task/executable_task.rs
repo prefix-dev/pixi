@@ -48,6 +48,7 @@ pub struct InvalidWorkingDirectory {
 pub enum TaskExecutionError {
     #[error(transparent)]
     InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
+
     #[error(transparent)]
     FailedToParseShellScript(#[from] FailedToParseShellScript),
 }

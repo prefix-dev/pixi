@@ -1,5 +1,5 @@
 use crate::project;
-use crate::task::{ExecutableTask, FileHashes, FileHashesError};
+use crate::task::{InvalidWorkingDirectory, ExecutableTask, FileHashes, FileHashesError};
 use miette::Diagnostic;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, Package};
@@ -135,8 +135,7 @@ impl InputHashes {
             return Ok(None);
         };
 
-        let files =
-            FileHashes::from_files(&task.working_directory().unwrap(), inputs.iter()).await?;
+        let files = FileHashes::from_files(&task.working_directory()?, inputs.iter()).await?;
         Ok(Some(Self { files }))
     }
 }
@@ -154,8 +153,7 @@ impl OutputHashes {
             return Ok(None);
         };
 
-        let files =
-            FileHashes::from_files(&task.working_directory().unwrap(), outputs.iter()).await?;
+        let files = FileHashes::from_files(&task.working_directory()?, outputs.iter()).await?;
         Ok(Some(Self { files }))
     }
 }
@@ -165,4 +163,7 @@ impl OutputHashes {
 pub enum InputHashesError {
     #[error(transparent)]
     FileHashes(#[from] FileHashesError),
+
+    #[error(transparent)]
+    InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
 }
