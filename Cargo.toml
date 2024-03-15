@@ -162,17 +162,19 @@ toml = "0.8.10"
 # If you change this also change the versions in the the patch section for astral
 pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
+#deno_task_shell = { path = "../deno_task_shell" }
 
-#rattler = { git = "https://github.com/mamba-org/rattler", rev = "7e0a130f0603fc2ff204649df9adba78422de2c8" }
-#rattler_conda_types = { git = "https://github.com/mamba-org/rattler", rev = "7e0a130f0603fc2ff204649df9adba78422de2c8" }
-#rattler_digest = { git = "https://github.com/mamba-org/rattler", rev = "7e0a130f0603fc2ff204649df9adba78422de2c8" }
-#rattler_lock = { git = "https://github.com/mamba-org/rattler", rev = "7e0a130f0603fc2ff204649df9adba78422de2c8" }
-#rattler_networking = { git = "https://github.com/mamba-org/rattler", rev = "7e0a130f0603fc2ff204649df9adba78422de2c8" }
-#rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", rev = "7e0a130f0603fc2ff204649df9adba78422de2c8" }
-#rattler_shell = { git = "https://github.com/mamba-org/rattler", rev = "7e0a130f0603fc2ff204649df9adba78422de2c8" }
-#rattler_solve = { git = "https://github.com/mamba-org/rattler", rev = "7e0a130f0603fc2ff204649df9adba78422de2c8" }
-#rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", rev = "7e0a130f0603fc2ff204649df9adba78422de2c8" }
-#deno_task_shell = { path = "../deno_task_shell" }#rattler = { path = "../rattler/crates/rattler" }
+rattler = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+rattler_conda_types = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+rattler_digest = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+rattler_lock = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+rattler_networking = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+rattler_shell = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+rattler_solve = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+
+#rattler = { path = "../rattler/crates/rattler" }
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 #rattler_digest = { path = "../rattler/crates/rattler_digest" }
 #rattler_networking = { path = "../rattler/crates/rattler_networking" }
@@ -181,7 +183,6 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 #rattler_solve = { path = "../rattler/crates/rattler_solve" }
 #rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
 #rattler_lock = { path = "../rattler/crates/rattler_lock" }
-
 
 # Change these lines if you want a patched version of astral
 # [patch.'https://github.com/astral-sh/uv']

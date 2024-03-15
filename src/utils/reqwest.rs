@@ -1,11 +1,18 @@
+<<<<<<< HEAD
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use rattler_networking::{
     authentication_storage, retry_policies::ExponentialBackoff, AuthenticationMiddleware,
     AuthenticationStorage,
+=======
+use rattler_networking::{
+    mirror_middleware::Mirror, retry_policies::ExponentialBackoff, AuthenticationMiddleware,
+    MirrorMiddleware, OciMiddleware,
+>>>>>>> c740f5a (implement mirror and oci settings)
 };
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::config::Config;
 
@@ -34,6 +41,30 @@ fn auth_middleware(config: &Config) -> AuthenticationMiddleware {
     AuthenticationMiddleware::default()
 }
 
+fn mirror_middleware(config: &Config) -> MirrorMiddleware {
+    let mut internal_map = HashMap::new();
+
+    for (key, value) in config.mirror_map() {
+        let mut mirrors = Vec::new();
+        for v in value {
+            mirrors.push(Mirror {
+                url: v.clone(),
+                no_jlap: false,
+                no_bz2: false,
+                no_zstd: false,
+                max_failures: None,
+            });
+        }
+        internal_map.insert(key.clone(), mirrors);
+    }
+
+    MirrorMiddleware::from_map(internal_map)
+}
+
+fn oci_middleware() -> OciMiddleware {
+    OciMiddleware
+}
+
 pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMiddleware) {
     static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
@@ -57,9 +88,16 @@ pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientW
         .build()
         .expect("failed to create reqwest Client");
 
-    let authenticated_client = ClientBuilder::new(client.clone())
-        .with_arc(Arc::new(auth_middleware(&config)))
-        .build();
+    let mut client_builder =
+        ClientBuilder::new(client.clone()).with_arc(Arc::new(auth_middleware(&config)));
+
+    if config.mirror_map().len() > 0 {
+        client_builder = client_builder
+            .with(mirror_middleware(&config))
+            .with(oci_middleware());
+    }
+
+    let authenticated_client = client_builder.build();
 
     (client, authenticated_client)
 }
