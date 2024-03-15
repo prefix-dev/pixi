@@ -774,6 +774,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "clap_lex",
+ "strsim 0.11.0",
  "terminal_size",
 ]
 
@@ -3389,6 +3390,7 @@ dependencies = [
  "async-compression",
  "bytes",
  "chrono",
+ "clap",
  "digest",
  "dirs",
  "drop_bomb",
