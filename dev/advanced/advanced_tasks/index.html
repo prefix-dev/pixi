@@ -606,6 +606,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      Caching
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#our-task-runner-deno_task_shell" class="md-nav__link">
     <span class="md-ellipsis">
       Our task runner: deno_task_shell
@@ -1020,6 +1029,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      Caching
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#our-task-runner-deno_task_shell" class="md-nav__link">
     <span class="md-ellipsis">
       Our task runner: deno_task_shell
@@ -1166,6 +1184,32 @@ The directory is relative to the pixi package root, where the <code>pixi.toml</c
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[tasks]</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">bar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python bar.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cwd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;scripts&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div></p>
+<h2 id="caching">Caching<a class="headerlink" href="#caching" title="Permanent link">#</a></h2>
+<p>When you specify <code>inputs</code> and/or <code>outputs</code> to a task, pixi will reuse the result of the task.</p>
+<p>For the cache, pixi checks that the following are true:</p>
+<ul>
+<li>No package in the environment has changed.</li>
+<li>The selected inputs and outputs are the same as the last time the task was
+  run. We compute fingerprints of all the files selected by the globs and
+  compare them to the last time the task was run.</li>
+<li>The command is the same as the last time the task was run.</li>
+</ul>
+<p>If all of these conditions are met, pixi will not run the task again and instead use the existing result.</p>
+<p>Inputs and outputs can be specified as globs, which will be expanded to all matching files.</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># This task will only run if the `main.py` file has changed.</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">run</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python main.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;main.py&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># This task will remember the result of the `curl` command and not run it again if the file `data.csv` already exists.</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">download_data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;curl -o data.csv https://example.com/data.csv&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">outputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;data.csv&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># This task will only run if the `src` directory has changed and will remember the result of the `make` command.</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;make&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;src/*.cpp&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;include/*.hpp&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">outputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;build/app.exe&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p>Note: if you want to debug the globs you can use the <code>--verbose</code> flag to see which files are selected.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># shows info logs of all files that were selected by the globs</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>-v<span class="w"> </span>start
+</span></code></pre></div>
 <h2 id="our-task-runner-deno_task_shell">Our task runner: deno_task_shell<a class="headerlink" href="#our-task-runner-deno_task_shell" title="Permanent link">#</a></h2>
 <p>To support the different OS's (Windows, OSX and Linux), pixi integrates a shell that can run on all of them.
 This is <a href="https://deno.land/manual@v1.35.0/tools/task_runner#built-in-commands"><code>deno_task_shell</code></a>.
