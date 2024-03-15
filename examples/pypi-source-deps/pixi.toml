@@ -14,9 +14,9 @@ python = "*"
 [pypi-dependencies]
 # Lets start with some git dependencies
 # With ssh
-flask = { git = "ssh://git@github.com/pallets/flask", rev = "b90a4f1f4a370e92054b9cc9db0efcb864f87ebe" }
+flask = { git = "ssh://git@github.com/pallets/flask" }
 # With https
-requests = { git = "https://github.com/psf/requests.git", tag = "v2.31.0" }
+requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
 # ...or use branch = '' to specify a branch or commit
 
 # You can also directly add a source dependency from file

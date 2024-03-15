@@ -425,27 +425,15 @@ pub async fn resolve_pypi(
 
                         (url, hash)
                     }
-                    BuiltDist::DirectUrl(dist) => {
-                        // Create the url for the lock file
-                        // if it is a git vcs use the revision hash and
-                        // append this to our given url
-                        let mut url = dist
-                            .url
+                    BuiltDist::DirectUrl(dist) => (
+                        dist.url
                             .given()
-                            .map(|url| Url::parse(url).expect("could not parse given url to path"))
-                            // When using a direct url reference like https://foo/bla.whl we do not have a given
-                            .unwrap_or_else(|| dist.url.to_url());
-                        match DirectUrl::try_from(&dist.url.to_url()) {
-                            Ok(DirectUrl::Git(git_url)) => {
-                                if let Some(sha) = git_url.url.precise() {
-                                    url.set_fragment(Some(&sha.to_string()))
-                                }
-                            }
-                            _ => {}
-                        };
-
-                        (url, None)
-                    }
+                            .map(|url| {
+                                Url::from_file_path(url).expect("could not parse given url to path")
+                            })
+                            .unwrap_or_else(|| dist.url.to_url()),
+                        None,
+                    ),
                     BuiltDist::Path(dist) => (
                         dist.url
                             .given()
@@ -472,7 +460,6 @@ pub async fn resolve_pypi(
                 }
             }
             Dist::Source(source) => {
-                tracing::warn!("{source:?}");
                 let hash = source
                     .file()
                     .and_then(|file| parse_hashes_from_hex(&file.hashes.sha256, &file.hashes.md5));
@@ -484,22 +471,37 @@ pub async fn resolve_pypi(
 
                 // Use the precise url if we got it back
                 // otherwise try to construct it from the source
-                let url = if let Some(url) = url {
-                    url
-                } else {
-                    match source {
-                        SourceDist::Registry(reg) => match &reg.file.url {
-                            FileLocation::AbsoluteUrl(url) => {
-                                Url::from_str(url).expect("invalid absolute url")
+                let url = match source {
+                    SourceDist::Registry(reg) => {
+                        if let Some(url) = url {
+                            url
+                        } else {
+                            match &reg.file.url {
+                                FileLocation::AbsoluteUrl(url) => {
+                                    Url::from_str(url).expect("invalid absolute url")
+                                }
+                                FileLocation::Path(path) => {
+                                    Url::from_file_path(path).expect("invalid path")
+                                }
+                                _ => todo!("unsupported URL"),
                             }
-                            FileLocation::Path(path) => {
-                                Url::from_file_path(path).expect("invalid path")
-                            }
-                            _ => todo!("unsupported URL"),
-                        },
-                        SourceDist::DirectUrl(direct) => direct.url.to_url(),
-                        SourceDist::Git(git) => git.url.to_url(),
-                        SourceDist::Path(path) => path.url.to_url(),
+                        }
+                    }
+                    SourceDist::DirectUrl(direct) => direct.url.to_url(),
+                    SourceDist::Git(git) => git.url.to_url(),
+                    SourceDist::Path(path) => {
+                        // tracing::error!("{path:?}");
+                        // Create the url for the lock file
+                        path.url
+                            .given()
+                            .map(|url| {
+                                // TODO(Bas): file path fix, PathBuf in lock file to save relative paths
+                                // Url::from_file_path(url).expect("could not parse given url to path")
+                                Url::from_file_path(url).ok()
+                            })
+                            .flatten()
+                            // When using a direct url reference like https://foo/bla.whl we do not have a given
+                            .unwrap_or_else(|| path.url.to_url())
                     }
                 };
 

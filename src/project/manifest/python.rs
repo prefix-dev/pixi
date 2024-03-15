@@ -341,112 +341,25 @@ enum ResolveBranchError {
     },
 }
 
-/// TODO: cache this because it is pretty slow
-/// Retrieve the git hash of a repository at a specific branch
-fn get_git_branch_hash(
-    repo_url: impl AsRef<str>,
-    branch: impl AsRef<str>,
-) -> Result<String, ResolveBranchError> {
-    let repo_url = repo_url.as_ref().to_string();
-    let branch = branch.as_ref().to_string();
-
-    // Execute the git ls-remote command
-    let output = std::process::Command::new("git")
-        .arg("ls-remote")
-        .arg(&repo_url)
-        .arg(&branch)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::inherit())
-        .output()?;
-
-    if !output.status.success() {
-        return Err(ResolveBranchError::StatusCodeErr {
-            status: output.status,
-            repo: repo_url.clone(),
-            branch: branch.clone(),
-        });
-    }
-    // Convert the output bytes to a string
-    let output_str = String::from_utf8(output.stdout)?;
-
-    // Split the output string by whitespaces
-    let mut lines = output_str.lines();
-
-    // Take the first line which contains the hash
-    if let Some(first_line) = lines.next() {
-        // Split the line by whitespaces and take the hash
-        let hash = first_line
-            .split_whitespace()
-            .next()
-            .ok_or_else(|| ResolveBranchError::EmptyHash {
-                repo: repo_url.clone(),
-                branch: branch.clone(),
-            })?
-            .to_string();
-        return Ok(hash);
-    } else {
-        Err(ResolveBranchError::EmptyHash {
-            repo: repo_url.clone(),
-            branch: branch.clone(),
-        })
-    }
-}
-
-fn create_given_url(
-    url: &Url,
-    branch: Option<&str>,
-    tag: Option<&str>,
-    rev: Option<&str>,
-    subdir: Option<&str>,
-) -> String {
-    // Create the given
-    let mut given = format!("git+{url}");
-    if let Some(branch) = branch {
-        given = format!("{given}?branch={branch}");
-    } else if let Some(tag) = tag {
-        given = format!("{given}?tag={tag}");
-    } else if let Some(rev) = rev {
-        given = format!("{given}?rev={rev}");
-    }
-    if let Some(subdir) = subdir {
-        given = format!("{given}&subdirectory={subdir}");
-    }
-    given
-}
-
 fn create_uv_url(
     url: &Url,
-    branch: Option<&str>,
-    tag: Option<&str>,
+    // branch: Option<&str>,
+    // tag: Option<&str>,
     rev: Option<&str>,
     subdir: Option<&str>,
 ) -> String {
-    // Check if we need to get the git hash of the branch
-    let branch_hash = if let Some(branch) = branch {
-        // Get the git hash of the branch
-        Some(get_git_branch_hash(url, branch).expect("error getting git branch hash"))
-    } else {
-        None
-    };
-
-    // Choose revision over tag if it is specified
-    let tag_or_rev_or_branch = rev
-        .as_ref()
-        .or_else(|| tag.as_ref())
-        .cloned()
-        .or(branch_hash.as_deref());
-
     // Create the url.
     let url = format!("git+{url}");
+    // Add the tag or rev if it exists.
+    let url = rev
+        .as_ref()
+        .map_or_else(|| url.clone(), |tag_or_rev| format!("{url}@{tag_or_rev}"));
+
     // Add the subdirectory if it exists.
     let url = subdir.as_ref().map_or_else(
         || url.clone(),
         |subdir| format!("{url}#subdirectory={subdir}"),
     );
-    // Add the tag or rev if it exists.
-    let url = tag_or_rev_or_branch
-        .as_ref()
-        .map_or_else(|| url.clone(), |tag_or_rev| format!("{url}@{tag_or_rev}"));
     url
 }
 
@@ -459,29 +372,16 @@ impl PyPiRequirement {
                 .map(|v| pep508_rs::VersionOrUrl::VersionSpecifier(v.clone())),
             PyPiRequirementType::Git {
                 git: url,
-                branch,
-                tag,
+                // Ignore branch and tag for now
+                branch: _branch,
+                tag: _tag,
                 rev,
                 subdirectory: subdir,
             } => {
-                let given = create_given_url(
-                    url,
-                    branch.as_deref(),
-                    tag.as_deref(),
-                    rev.as_deref(),
-                    subdir.as_deref(),
-                );
-                let uv_url = create_uv_url(
-                    url,
-                    branch.as_deref(),
-                    tag.as_deref(),
-                    rev.as_deref(),
-                    subdir.as_deref(),
-                );
+                let uv_url = create_uv_url(url, rev.as_deref(), subdir.as_deref());
+                tracing::error!("url: {uv_url}");
                 Some(pep508_rs::VersionOrUrl::Url(
-                    VerbatimUrl::parse(uv_url)
-                        .expect("git url is invalid")
-                        .with_given(given),
+                    VerbatimUrl::parse(uv_url.clone()).expect("git url is invalid"),
                 ))
             }
             PyPiRequirementType::Path { path, editable: _ } => {
