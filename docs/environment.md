@@ -107,10 +107,12 @@ This allows you to use `pixi` in combination with `direnv`.
 Enter the following into your `.envrc` file:
 
 ```shell title=".envrc"
-eval "$(pixi shell-hook)" # (1)!
+watch_file pixi.lock # (1)!
+eval "$(pixi shell-hook)" # (2)!
 ```
 
-1. This installs if needed, and activates the environment. `direnv` ensures that the environment is deactivated when you leave the directory.
+1. This ensures that every time your `pixi.lock` changes, `direnv` invokes the shell-hook again.
+2. This installs if needed, and activates the environment. `direnv` ensures that the environment is deactivated when you leave the directory.
 
 ```shell
 $ cd my-project

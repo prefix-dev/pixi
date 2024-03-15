@@ -1954,10 +1954,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a7c22c4d34ef4788c351e971c52bfdfe7ea2766f8c5466bc175dd46e52ac22e"
 dependencies = [
  "console",
+ "globset",
  "lazy_static",
  "linked-hash-map",
  "serde",
  "similar",
+ "walkdir",
  "yaml-rust",
 ]
 

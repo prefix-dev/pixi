@@ -11,7 +11,7 @@ use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl, SolverTask};
 use reqwest_middleware::ClientWithMiddleware;
 
-use crate::{prefix::Prefix, repodata};
+use crate::{config::home_path, prefix::Prefix, repodata};
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 pub struct BinDir(pub PathBuf);
@@ -19,7 +19,9 @@ pub struct BinDir(pub PathBuf);
 impl BinDir {
     /// Create the Binary Executable directory
     pub async fn create() -> miette::Result<Self> {
-        let bin_dir = bin_dir()?;
+        let bin_dir = bin_dir().ok_or(miette::miette!(
+            "could not determine global binary executable directory"
+        ))?;
         tokio::fs::create_dir_all(&bin_dir)
             .await
             .into_diagnostic()?;
@@ -28,7 +30,9 @@ impl BinDir {
 
     /// Get the Binary Executable directory, erroring if it doesn't already exist.
     pub async fn from_existing() -> miette::Result<Self> {
-        let bin_dir = bin_dir()?;
+        let bin_dir = bin_dir().ok_or(miette::miette!(
+            "could not find global binary executable directory"
+        ))?;
         if tokio::fs::try_exists(&bin_dir).await.into_diagnostic()? {
             Ok(Self(bin_dir))
         } else {
@@ -39,39 +43,17 @@ impl BinDir {
     }
 }
 
-/// Get pixi home directory, default to `$HOME/.pixi`
-///
-/// It may be overridden by the `PIXI_HOME` environment variable.
-///
-/// # Returns
-///
-/// The pixi home directory
-pub fn home_path() -> miette::Result<PathBuf> {
-    if let Some(path) = std::env::var_os("PIXI_HOME") {
-        Ok(PathBuf::from(path))
-    } else {
-        dirs::home_dir()
-            .map(|path| path.join(".pixi"))
-            .ok_or_else(|| miette::miette!("could not find home directory"))
-    }
-}
-
-/// Global binaries directory, default to `$HOME/.pixi/bin`
-///
-/// # Returns
-///
-/// The global binaries directory
-pub fn bin_dir() -> miette::Result<PathBuf> {
-    home_path().map(|path| path.join("bin"))
-}
-
 /// Global binary environments directory, default to `$HOME/.pixi/envs`
 pub struct BinEnvDir(pub PathBuf);
 
 impl BinEnvDir {
     /// Construct the path to the env directory for the binary package `package_name`.
     fn package_bin_env_dir(package_name: &PackageName) -> miette::Result<PathBuf> {
-        Ok(bin_env_dir()?.join(package_name.as_normalized()))
+        Ok(bin_env_dir()
+            .ok_or(miette::miette!(
+                "could not find global binary environment directory"
+            ))?
+            .join(package_name.as_normalized()))
     }
 
     /// Get the Binary Environment directory, erroring if it doesn't already exist.
@@ -100,12 +82,21 @@ impl BinEnvDir {
     }
 }
 
+/// Global binaries directory, default to `$HOME/.pixi/bin`
+///
+/// # Returns
+///
+/// The global binaries directory
+pub fn bin_dir() -> Option<PathBuf> {
+    home_path().map(|path| path.join("bin"))
+}
+
 /// Global binary environments directory, default to `$HOME/.pixi/envs`
 ///
 /// # Returns
 ///
 /// The global binary environments directory
-pub fn bin_env_dir() -> miette::Result<PathBuf> {
+pub fn bin_env_dir() -> Option<PathBuf> {
     home_path().map(|path| path.join("envs"))
 }
 

@@ -6,6 +6,7 @@ use indexmap::IndexMap;
 use miette::miette;
 use rattler_conda_types::Platform;
 
+use crate::config::ConfigCli;
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
 use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::FeatureName;
@@ -41,6 +42,9 @@ pub struct Args {
     /// The feature for which the dependency should be removed
     #[arg(long, short)]
     pub feature: Option<String>,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
 }
 
 fn convert_pkg_name<T>(deps: &[String]) -> miette::Result<Vec<T>>
@@ -56,7 +60,8 @@ where
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?
+        .with_cli_config(args.config.clone());
     let deps = args.deps;
     let spec_type = if args.host {
         SpecType::Host

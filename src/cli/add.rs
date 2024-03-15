@@ -1,5 +1,5 @@
 use crate::{
-    consts,
+    config::ConfigCli,
     environment::{get_up_to_date_prefix, verify_prefix_location_unchanged, LockFileUsage},
     project::{manifest::PyPiRequirement, DependencyType, Project, SpecType},
     FeatureName,
@@ -92,6 +92,9 @@ pub struct Args {
     /// The feature for which the dependency should be added
     #[arg(long, short)]
     pub feature: Option<String>,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
 }
 
 impl DependencyType {
@@ -109,18 +112,13 @@ impl DependencyType {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?
+        .with_cli_config(args.config.clone());
     let dependency_type = DependencyType::from_args(&args);
     let spec_platforms = &args.platform;
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(
-        project
-            .default_environment()
-            .dir()
-            .join(consts::PREFIX_FILE_NAME)
-            .as_path(),
-    )?;
+    verify_prefix_location_unchanged(project.default_environment().dir().as_path())?;
 
     // Add the platform if it is not already present
     let platforms_to_add = spec_platforms

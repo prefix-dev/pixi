@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::io::{self, Write};
 use std::sync::Arc;
 use std::{cmp::Ordering, path::PathBuf};
@@ -7,7 +6,7 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, ChannelConfig, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
 use rattler_networking::AuthenticationMiddleware;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
@@ -15,6 +14,7 @@ use regex::Regex;
 use strsim::jaro;
 use tokio::task::spawn_blocking;
 
+use crate::config::Config;
 use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata, Project};
 
 /// Search a package, output will list the latest version of package
@@ -34,9 +34,13 @@ pub struct Args {
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
+    /// The platform to search for, defaults to current platform
+    #[arg(short, long, default_value_t = Platform::current())]
+    pub platform: Platform,
+
     /// Limit the number of search results
-    #[clap(short, long, default_value_t = 15)]
-    limit: usize,
+    #[clap(short, long)]
+    limit: Option<usize>,
 }
 
 /// fetch packages from `repo_data` based on `filter_func`
@@ -86,22 +90,49 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let stdout = io::stdout();
     let project = Project::load_or_else_discover(args.manifest_path.as_deref()).ok();
 
-    let channel_config = ChannelConfig::default();
-
     let channels = match (args.channel, project.as_ref()) {
         // if user passes channels through the channel flag
-        (Some(c), _) => c
-            .iter()
-            .map(|c| Channel::from_str(c, &channel_config))
-            .map_ok(Cow::Owned)
-            .collect::<Result<Vec<_>, _>>()
-            .into_diagnostic()?,
+        (Some(c), Some(p)) => {
+            let channels = p.config().compute_channels(&c).into_diagnostic()?;
+            eprintln!(
+                "Using channels from arguments ({}): {:?}",
+                p.name(),
+                channels.iter().map(|c| c.name()).join(", ")
+            );
+            channels
+        }
+        // No project -> use the global config
+        (Some(c), None) => {
+            let channels = Config::load_global()
+                .compute_channels(&c)
+                .into_diagnostic()?;
+            eprintln!(
+                "Using channels from arguments: {}",
+                channels.iter().map(|c| c.name()).join(", ")
+            );
+            channels
+        }
         // if user doesn't pass channels and we are in a project
-        (None, Some(p)) => p.channels().into_iter().map(Cow::Borrowed).collect(),
+        (None, Some(p)) => {
+            let channels: Vec<_> = p.channels().into_iter().cloned().collect();
+            eprintln!(
+                "Using channels from project ({}): {}",
+                p.name(),
+                channels.iter().map(|c| c.name()).join(", ")
+            );
+            channels
+        }
         // if user doesn't pass channels and we are not in project
-        (None, None) => vec![Cow::Owned(
-            Channel::from_str("conda-forge", &channel_config).into_diagnostic()?,
-        )],
+        (None, None) => {
+            let channels = Config::load_global()
+                .compute_channels(&[])
+                .into_diagnostic()?;
+            eprintln!(
+                "Using channels from global config: {}",
+                channels.iter().map(|c| c.name()).join(", ")
+            );
+            channels
+        }
     };
 
     let package_name_filter = args.package;
@@ -110,12 +141,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_arc(Arc::new(AuthenticationMiddleware::default()))
         .build();
     let repo_data = Arc::new(
-        fetch_sparse_repodata(
-            channels.iter().map(AsRef::as_ref),
-            [Platform::current()],
-            &authenticated_client,
-        )
-        .await?,
+        fetch_sparse_repodata(channels.iter(), [args.platform], &authenticated_client).await?,
     );
 
     // When package name filter contains * (wildcard), it will search and display a list of packages matching this filter
@@ -123,10 +149,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let package_name_without_filter = package_name_filter.replace('*', "");
         let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
 
-        let limit = args.limit;
-
-        search_package_by_wildcard(package_name, &package_name_filter, repo_data, limit, stdout)
-            .await?;
+        search_package_by_wildcard(
+            package_name,
+            &package_name_filter,
+            repo_data,
+            args.limit,
+            stdout,
+        )
+        .await?;
     }
     // If package name filter doesn't contain * (wildcard), it will search and display specific package info (if any package is found)
     else {
@@ -278,7 +308,7 @@ async fn search_package_by_wildcard<W: Write>(
     package_name: PackageName,
     package_name_filter: &str,
     repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
-    limit: usize,
+    limit: Option<usize>,
     out: W,
 ) -> miette::Result<()> {
     let wildcard_pattern = Regex::new(&format!("^{}$", &package_name_filter.replace('*', ".*")))
@@ -331,12 +361,7 @@ async fn search_package_by_wildcard<W: Write>(
         return Err(miette::miette!("Could not find {normalized_package_name}"));
     }
 
-    // split off at `limit`, discard the second half
-    if packages.len() > limit {
-        let _ = packages.split_off(limit);
-    }
-
-    if let Err(e) = print_matching_packages(packages, out) {
+    if let Err(e) = print_matching_packages(&packages, out, limit) {
         if e.kind() != std::io::ErrorKind::BrokenPipe {
             return Err(e).into_diagnostic();
         }
@@ -345,7 +370,11 @@ async fn search_package_by_wildcard<W: Write>(
     Ok(())
 }
 
-fn print_matching_packages<W: Write>(packages: Vec<RepoDataRecord>, mut out: W) -> io::Result<()> {
+fn print_matching_packages<W: Write>(
+    packages: &[RepoDataRecord],
+    mut out: W,
+    limit: Option<usize>,
+) -> io::Result<()> {
     writeln!(
         out,
         "{:40} {:19} {:19}",
@@ -354,14 +383,29 @@ fn print_matching_packages<W: Write>(packages: Vec<RepoDataRecord>, mut out: W) 
         console::style("Channel").bold(),
     )?;
 
+    // split off at `limit`, discard the second half
+    let limit = limit.unwrap_or(usize::MAX);
+
+    let (packages, remaining_packages) = if limit < packages.len() {
+        packages.split_at(limit)
+    } else {
+        (packages, &[][..])
+    };
+
     for package in packages {
         // TODO: change channel fetch logic to be more robust
         // currently it relies on channel field being a url with trailing slash
         // https://github.com/mamba-org/rattler/issues/146
-        let channel = package.channel.split('/').collect::<Vec<_>>();
-        let channel_name = channel[channel.len() - 2];
+        let channel_name =
+            if let Some(channel) = package.channel.strip_prefix("https://conda.anaconda.org/") {
+                channel.trim_end_matches('/')
+            } else {
+                package.channel.as_str()
+            };
 
-        let package_name = package.package_record.name;
+        let channel_name = format!("{}/{}", channel_name, package.package_record.subdir);
+
+        let package_name = &package.package_record.name;
         let version = package.package_record.version.as_str();
 
         writeln!(
@@ -371,6 +415,10 @@ fn print_matching_packages<W: Write>(packages: Vec<RepoDataRecord>, mut out: W) 
             console::style(version),
             console::style(channel_name),
         )?;
+    }
+
+    if !remaining_packages.is_empty() {
+        println!("... and {} more", remaining_packages.len());
     }
 
     Ok(())

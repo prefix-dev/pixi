@@ -227,6 +227,7 @@ impl PixiControl {
                 platform: Default::default(),
                 pypi: false,
                 feature: None,
+                config: Default::default(),
             },
         }
     }
@@ -242,6 +243,7 @@ impl PixiControl {
                 pypi: false,
                 platform: Default::default(),
                 feature: None,
+                config: Default::default(),
             },
         }
     }
@@ -331,6 +333,7 @@ impl PixiControl {
                     frozen: false,
                     locked: false,
                 },
+                config: Default::default(),
             },
         }
     }

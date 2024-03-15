@@ -4,10 +4,11 @@ use clap::Parser;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Version};
+use rattler_conda_types::{Channel, MatchSpec, PackageName, Version};
 use rattler_conda_types::{ParseStrictness, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
 
+use crate::config::Config;
 use crate::progress::{global_multi_progress, long_running_progress_style};
 
 use super::common::{
@@ -32,25 +33,29 @@ pub struct Args {
     ///
     /// By default, if no channel is provided, `conda-forge` is used, the channel
     /// the package was installed from will always be used.
-    #[clap(short, long, default_values = ["conda-forge"])]
+    #[clap(short, long)]
     channel: Vec<String>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let package = args.package;
     // Get the MatchSpec we need to upgrade
     let package_matchspec =
-        MatchSpec::from_str(&package, ParseStrictness::Strict).into_diagnostic()?;
+        MatchSpec::from_str(&args.package, ParseStrictness::Strict).into_diagnostic()?;
+    let package_name = package_name(&package_matchspec)?;
+    let matchspec_has_version = package_matchspec.version.is_some();
+
     // Return with error if this package is not globally installed.
     if !list_global_packages()
         .await?
         .iter()
-        .any(|global_package| global_package.as_source() == package)
+        .any(|global_package| global_package.as_normalized() == package_name.as_normalized())
     {
-        miette::bail!("Package {} is not globally installed", package.as_str());
+        miette::bail!(
+            "Package {} is not globally installed",
+            package_name.as_source()
+        );
     }
 
-    let package_name = package_name(&package_matchspec)?;
     let prefix_record = find_installed_package(&package_name).await?;
     let installed_version = prefix_record
         .repodata_record
@@ -58,11 +63,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .version
         .into_version();
 
+    let config = Config::load_global();
+
     // Figure out what channels we are using
-    let channel_config = ChannelConfig::default();
     let last_installed_channel = Channel::from_str(
         prefix_record.repodata_record.channel.clone(),
-        &channel_config,
+        config.channel_config(),
     )
     .into_diagnostic()?;
 
@@ -70,7 +76,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let input_channels = args
         .channel
         .iter()
-        .map(|c| Channel::from_str(c, &channel_config))
+        .map(|c| Channel::from_str(c, config.channel_config()))
         .collect::<Result<Vec<Channel>, _>>()
         .into_diagnostic()?;
     channels.extend(input_channels);
@@ -92,7 +98,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })?;
     let toinstall_version = package_record.package_record.version.version().to_owned();
 
-    if toinstall_version.cmp(&installed_version) != std::cmp::Ordering::Greater {
+    if !matchspec_has_version
+        && toinstall_version.cmp(&installed_version) != std::cmp::Ordering::Greater
+    {
         eprintln!(
             "Package {} is already up-to-date",
             package_name.as_normalized(),

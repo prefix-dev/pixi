@@ -503,3 +503,7 @@ test = {features = ["test"], solve-group = "test"}
 prod = {features = ["prod"], solve-group = "test"}
 lint = ["lint"]
 ```
+
+## Global configuration
+
+The global configuration options are documented in the [global configuration](advanced/global_configuration.md) section.
