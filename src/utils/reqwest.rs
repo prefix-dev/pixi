@@ -1,6 +1,9 @@
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use rattler_networking::{retry_policies::ExponentialBackoff, AuthenticationMiddleware};
+use rattler_networking::{
+    authentication_storage, retry_policies::ExponentialBackoff, AuthenticationMiddleware,
+    AuthenticationStorage,
+};
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 
@@ -10,6 +13,21 @@ use crate::config::Config;
 /// TODO: At some point we might want to make this configurable.
 pub fn default_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff::builder().build_with_max_retries(3)
+}
+
+fn auth_middleware() -> AuthenticationMiddleware {
+    if let Ok(auth_file) = std::env::var("RATTLER_AUTH_FILE") {
+        tracing::info!("Loading authentication from file: {:?}", auth_file);
+
+        let mut store = AuthenticationStorage::new();
+        store.add_backend(Arc::from(
+            authentication_storage::backends::file::FileStorage::new(PathBuf::from(&auth_file)),
+        ));
+
+        return AuthenticationMiddleware::new(store);
+    }
+
+    AuthenticationMiddleware::default()
 }
 
 pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMiddleware) {
@@ -36,7 +54,7 @@ pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientW
         .expect("failed to create reqwest Client");
 
     let authenticated_client = ClientBuilder::new(client.clone())
-        .with_arc(Arc::new(AuthenticationMiddleware::default()))
+        .with_arc(Arc::new(auth_middleware()))
         .build();
 
     (client, authenticated_client)
