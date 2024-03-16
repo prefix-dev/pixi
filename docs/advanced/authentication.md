@@ -67,3 +67,34 @@ On Linux, one can use `GNOME Keyring` (or just Keyring) to access credentials th
 
 If you run on a server with none of the aforementioned keychains available, then pixi falls back to store the credentials in an _insecure_ JSON file.
 This JSON file is located at `~/.rattler/credentials.json` and contains the credentials.
+
+## Override the authentication storage
+
+You can use the `RATTLER_AUTH_FILE` environment variable to override the default location of the credentials file. When this environment variable is set, it provides the only source of authentication data that is used by pixi.
+
+E.g.
+
+```bash
+export RATTLER_AUTH_FILE=$HOME/credentials.json
+```
+
+The JSON should follow the following format:
+
+```json
+{
+    "*.prefix.dev": {
+        "BearerToken": "your_token"
+    },
+    "otherhost.com": {
+        "BasicHttp": {
+            "username": "your_username",
+            "password": "your_password"
+        }
+    },
+    "conda.anaconda.org": {
+        "CondaToken": "your_token"
+    }
+}
+```
+
+Note: if you use a wildcard in the host, any subdomain will match (e.g. `*.prefix.dev` also matches `repo.prefix.dev`).
