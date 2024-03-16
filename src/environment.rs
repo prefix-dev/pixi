@@ -62,7 +62,7 @@ pub fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette::Resul
 }
 
 /// Create the prefix location file.
-/// Give it the environment path to place it.
+/// This file is needed for `conda run -p .pixi/envs/<env>` to work.
 fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
     let prefix_file = environment_dir
         .join("conda-meta")
@@ -79,6 +79,32 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
             miette::miette!("failed to convert path to str: '{}'", parent.display())
         })?;
         std::fs::write(prefix_file, contents).into_diagnostic()?;
+    }
+    Ok(())
+}
+
+/// Create the conda-meta/history.
+/// Give it the environment path to place it.
+fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
+    let history_file = environment_dir.join("conda-meta").join("history");
+
+    tracing::info!(
+        "Checking if history file exists: {}",
+        history_file.display()
+    );
+
+    let binding = history_file.clone();
+    let parent = binding
+        .parent()
+        .ok_or_else(|| miette::miette!("cannot find parent of '{}'", binding.display()))?;
+
+    if parent.exists() && !history_file.exists() {
+        tracing::info!("Creating history file: {}", history_file.display());
+        std::fs::write(
+            history_file,
+            "# not relevant for pixi but for `conda run -p`",
+        )
+        .into_diagnostic()?;
     }
     Ok(())
 }
@@ -316,6 +342,7 @@ pub async fn update_prefix_conda(
 
     // Mark the location of the prefix
     create_prefix_location_file(prefix.root())?;
+    create_history_file(prefix.root())?;
 
     // Determine if the python version changed.
     Ok(PythonStatus::from_transaction(&transaction))
