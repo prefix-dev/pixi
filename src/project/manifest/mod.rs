@@ -933,14 +933,11 @@ fn req_to_conda_name(requirement: &Requirement) -> Result<PackageName, Requireme
     let _guard = handle.enter();
     let map = futures::executor::block_on(conda_pypi_name_mapping())
         .map_err(|_| RequirementConversionError::MappingError)?;
-    let pypi_to_conda: HashMap<String, String> = map
-        .into_iter()
-        .map(|(k, v)| (v.clone(), k.clone()))
-        .collect();
+    let pypi_to_conda: HashMap<String, String> =
+        map.iter().map(|(k, v)| (v.clone(), k.clone())).collect();
     let name: PackageName = pypi_to_conda
         .get(&pypi_name)
-        .or(Some(&pypi_name))
-        .unwrap()
+        .unwrap_or(&pypi_name)
         .try_into()?;
     Ok(name)
 }
@@ -997,7 +994,7 @@ impl From<PyProjectManifest> for ProjectManifest {
             .project
             .as_ref()
             .and_then(|p| p.requires_python.as_ref())
-            .and_then(|v| Some(VersionOrUrl::VersionSpecifier(v.clone())));
+            .map(|v| VersionOrUrl::VersionSpecifier(v.clone()));
         let python_req = Requirement {
             name: pep508_rs::PackageName::from_str("python").unwrap(),
             version_or_url: pythonspec,
@@ -1015,7 +1012,7 @@ impl From<PyProjectManifest> for ProjectManifest {
             .for_opt_target_or_default_mut(None);
         for requirement in requirements {
             // Skip requirement if it is already a Pypi Dependency of the default feature of the default target
-            match PyPiPackageName::from_str(&requirement.name.to_string().as_str()) {
+            match PyPiPackageName::from_str(requirement.name.to_string().as_str()) {
                 Ok(pypi_name) => {
                     if target
                         .pypi_dependencies
