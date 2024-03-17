@@ -9,9 +9,7 @@ use toml_edit::TomlError;
 
 use crate::pypi_name_mapping::conda_pypi_name_mapping;
 
-use super::{
-    error::RequirementConversionError, python::PyPiPackageName, ProjectManifest, SpecType,
-};
+use super::{error::RequirementConversionError, ProjectManifest, SpecType};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct PyProjectManifest {
@@ -73,52 +71,35 @@ impl From<PyProjectManifest> for ProjectManifest {
 
         // Add project.dependencies python dependencies as conda dependencies for the default feature
         // unless they are specified in "tool.pixi.pypi-dependencies" or "tool.pixi.dependencies"
-        // TODO: Skip processing if in a dedicated "tool.pixi" section to allow manual overrides?
-        let target = manifest
-            .default_feature_mut()
-            .targets
-            .for_opt_target_or_default_mut(None);
+        let target = manifest.default_feature_mut().targets.default_mut();
         for requirement in requirements {
-            // Skip requirement if it is already a Pypi Dependency of the default feature of the default target
-            match PyPiPackageName::from_str(requirement.name.to_string().as_str()) {
-                Ok(pypi_name) => {
-                    if target
-                        .pypi_dependencies
-                        .as_ref()
-                        .map(|d| d.contains_key(&pypi_name))
-                        .unwrap_or(false)
-                    {
-                        continue;
-                    }
-                }
-                _ => {
-                    // When the conversion from Requirement.name to PyPiPackageName fails
-                    tracing::debug!("Unable to interpret {:?}", requirement);
-                }
+            // Skip requirement if it is already a Pypi Dependency of the default target
+            if target.has_pypi_dependency(requirement.name.to_string().as_str()) {
+                continue;
             }
-            match req_to_conda_name(&requirement) {
-                Ok(name) => {
-                    let rundeps = target.dependencies.entry(SpecType::Run).or_default();
-                    // Skip requirement if it is already a Run Dependency of the default feature of the default target
-                    if rundeps.contains_key(&name) {
-                        continue;
-                    }
-                    // Otherwise add it as a Run Dependency of the default feature of the default target
-                    match req_to_nmspec(&requirement) {
-                        Ok(spec) => {
-                            rundeps.insert(name, spec);
-                        }
-                        _ => {
-                            // When the conversion from VersionSpecifiers to NamelessMatchSpec fails
-                            tracing::debug!("Unable to interpret {:?}", requirement);
-                        }
-                    }
-                }
-                _ => {
-                    // When the name conversion fails
-                    tracing::debug!("Unable to interpret {:?}", requirement);
-                }
+
+            // Convert the pypi name to a conda package name
+            // TODO: create a dedicated "tool.pixi" section to allow manual overrides?
+            let conda_dep = req_to_conda_name(&requirement);
+            if conda_dep.is_err() {
+                tracing::warn!("Unable to get conda package name for {:?}", requirement);
+                continue;
             }
+
+            // Skip requirement if it is already a Dependency of the default target
+            if target.has_dependency(conda_dep.as_ref().unwrap().as_normalized(), None) {
+                continue;
+            }
+
+            // Convert requirement to a Spec.
+            let spec = req_to_nmspec(&requirement);
+            if spec.is_err() {
+                tracing::warn!("Unable to build conda spec for {:?}", requirement);
+                continue;
+            }
+
+            // Add conda dependency
+            target.add_dependency(conda_dep.unwrap(), spec.unwrap(), SpecType::Run);
         }
 
         // For each extra group, create a feature of the same name if it does not exist,
@@ -130,6 +111,9 @@ impl From<PyProjectManifest> for ProjectManifest {
     }
 }
 
+/// Return the conda rattler_conda_types::PackageName corresponding to a pep508_rs::Requirement
+/// If the pep508_rs::Requirement name is not present in the conda to pypi mapping
+/// then returns PackageName from the pypi name
 fn req_to_conda_name(requirement: &Requirement) -> Result<PackageName, RequirementConversionError> {
     let pypi_name = requirement.name.to_string();
     let handle = Handle::current();
@@ -145,6 +129,9 @@ fn req_to_conda_name(requirement: &Requirement) -> Result<PackageName, Requireme
     Ok(name)
 }
 
+/// Try to return a NamelessMatchSpec from a pep508_rs::VersionOrUrl
+/// This will only work if it is not URL and the VersionSpecifier can successfully
+/// be interpreted as a NamelessMatchSpec.version
 fn version_or_url_to_nmspec(
     version: &Option<VersionOrUrl>,
 ) -> Result<NamelessMatchSpec, RequirementConversionError> {
@@ -162,6 +149,9 @@ fn version_or_url_to_nmspec(
     }
 }
 
+/// Try to return a NamelessMatchSpec from a pep508_rs::Requirement
+/// This will only work if the Requirement has no extra not marker
+/// and does not point to a URL
 fn req_to_nmspec(
     requirement: &Requirement,
 ) -> Result<NamelessMatchSpec, RequirementConversionError> {
