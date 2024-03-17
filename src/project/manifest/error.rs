@@ -1,6 +1,7 @@
 use crate::project::manifest::{FeatureName, TargetSelector};
 use crate::project::SpecType;
 use miette::Diagnostic;
+use rattler_conda_types::{InvalidPackageNameError, ParseMatchSpecError};
 use thiserror::Error;
 
 /// An error that is returned when a certain spec is missing.
@@ -59,4 +60,16 @@ impl SpecIsMissing {
         self.feature = Some(feature);
         self
     }
+}
+
+#[derive(Error, Debug)]
+pub enum RequirementConversionError {
+    #[error("Invalid package name error")]
+    InvalidPackageNameError(#[from] InvalidPackageNameError),
+    #[error("Failed to parse specification")]
+    ParseError(#[from] ParseMatchSpecError),
+    #[error("Failed to load mapping")]
+    MappingError,
+    #[error("Error converting requirement from pypi to conda")]
+    Unimplemented,
 }
