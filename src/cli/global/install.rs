@@ -243,7 +243,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
 
     // Fetch sparse repodata
-    let (authenticated_client, sparse_repodata) = get_client_and_sparse_repodata(&channels).await?;
+    let (authenticated_client, sparse_repodata) =
+        get_client_and_sparse_repodata(&channels, &config).await?;
 
     // Install the package(s)
     let mut executables = vec![];

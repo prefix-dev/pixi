@@ -58,7 +58,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     channels = channels.into_iter().unique().collect::<Vec<_>>();
 
     // Fetch sparse repodata
-    let (authenticated_client, sparse_repodata) = get_client_and_sparse_repodata(&channels).await?;
+    let (authenticated_client, sparse_repodata) =
+        get_client_and_sparse_repodata(&channels, &config).await?;
 
     let mut upgraded = false;
     for package_name in packages.iter() {
