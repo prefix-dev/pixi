@@ -41,7 +41,7 @@ As an environment goes beyond just `dependencies` the `features` should be descr
 - `tasks`: Feature specific tasks, tasks in one environment are selected as default tasks for the environment.
 
 
-```toml title="Default features" linenums="1"
+```toml title="Default features"
 [dependencies] # short for [feature.default.dependencies]
 python = "*"
 numpy = "==2.3"
@@ -56,7 +56,7 @@ libc = "2.33"
 scripts = ["activate.sh"]
 ```
 
-```toml title="Different dependencies per feature" linenums="1"
+```toml title="Different dependencies per feature"
 [feature.py39.dependencies]
 python = "~=3.9.0"
 [feature.py310.dependencies]
@@ -65,7 +65,7 @@ python = "~=3.10.0"
 pytest = "*"
 ```
 
-```toml title="Full set of environment modification in one feature" linenums="1"
+```toml title="Full set of environment modification in one feature"
 [feature.cuda]
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
 pypi-dependencies = {torch = "1.9.0"}
@@ -80,7 +80,7 @@ tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
 
-```toml title="Define tasks as defaults of an environment" linenums="1"
+```toml title="Define tasks as defaults of an environment"
 [feature.test.tasks]
 test = "pytest"
 
@@ -97,7 +97,7 @@ The environment definition should contain the following fields:
 This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
 For instance when testing a production environment with additional test dependencies.
 
-```toml title="Creating environments from features" linenums="1"
+```toml title="Creating environments from features"
 [environments]
 # implicit: default = ["default"]
 default = ["py39"] # implicit: default = ["py39", "default"]
@@ -106,7 +106,7 @@ test = ["test"] # implicit: test = ["test", "default"]
 test39 = ["test", "py39"] # implicit: test39 = ["test", "py39", "default"]
 ```
 
-```toml title="Testing a production environment with additional dependencies" linenums="1"
+```toml title="Testing a production environment with additional dependencies"
 [environments]
 # Creating a `prod` environment which is the minimal set of dependencies used for production.
 prod = {features = ["py39"], solve-group = "prod"}
@@ -116,7 +116,7 @@ test_prod = {features = ["py39", "test"], solve-group = "prod"}
 # Which makes sure the tested environment has the same version of the dependencies as the production environment.
 ```
 
-```toml title="Creating environments without a default environment" linenums="1"
+```toml title="Creating environments without a default environment"
 [dependencies]
 # Keep empty or undefined to create an empty environment.
 
