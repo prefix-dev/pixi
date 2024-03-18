@@ -337,7 +337,9 @@ async fn test_channels_changed() {
     assert!(lock_file.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, platform, "bar ==1"));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[serial]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_conda_meta_history() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
