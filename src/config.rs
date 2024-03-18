@@ -280,16 +280,19 @@ mod tests {
     fn test_config_from_cli() {
         let cli = ConfigCli {
             tls_no_verify: true,
+            auth_file: None,
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
 
         let cli = ConfigCli {
             tls_no_verify: false,
+            auth_file: Some(PathBuf::from("path.json")),
         };
 
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, None);
+        assert_eq!(config.auth_file, Some(PathBuf::from("path.json")));
     }
 
     #[test]
