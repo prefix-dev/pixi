@@ -18,11 +18,11 @@ use crate::{
     Project,
 };
 
+use distribution_types::FileLocation;
 use distribution_types::{
     BuiltDist, DirectUrlSourceDist, Dist, IndexLocations, Name, PrioritizedDist, Resolution,
     SourceDist,
 };
-use distribution_types::{DirectUrl, FileLocation};
 use futures::FutureExt;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
@@ -425,21 +425,21 @@ pub async fn resolve_pypi(
 
                         (url, hash)
                     }
-                    BuiltDist::DirectUrl(dist) => (
-                        dist.url
-                            .given()
-                            .map(|url| {
-                                Url::from_file_path(url).expect("could not parse given url to path")
-                            })
-                            .unwrap_or_else(|| dist.url.to_url()),
-                        None,
-                    ),
+                    BuiltDist::DirectUrl(dist) => {
+                        let url = dist.url.to_url();
+                        let direct_url = Url::parse(&format!("direct+{url}"))
+                            .expect("could not create direct-url");
+                        (direct_url, None)
+                    }
                     BuiltDist::Path(dist) => (
                         dist.url
                             .given()
-                            .map(|url| {
-                                Url::from_file_path(url).expect("could not parse given url to path")
+                            .and_then(|url| {
+                                // TODO(Bas): file path fix, PathBuf in lock file to save relative paths
+                                // Url::from_file_path(url).expect("could not parse given url to path")
+                                Url::from_file_path(url).ok()
                             })
+                            // When using a direct url reference like https://foo/bla.whl we do not have a given
                             .unwrap_or_else(|| dist.url.to_url()),
                         None,
                     ),
@@ -487,19 +487,20 @@ pub async fn resolve_pypi(
                             }
                         }
                     }
-                    SourceDist::DirectUrl(direct) => direct.url.to_url(),
+                    SourceDist::DirectUrl(direct) => {
+                        let url = direct.url.to_url();
+                        Url::parse(&format!("direct+{url}")).expect("could not create direct-url")
+                    }
                     SourceDist::Git(git) => git.url.to_url(),
                     SourceDist::Path(path) => {
-                        // tracing::error!("{path:?}");
                         // Create the url for the lock file
                         path.url
                             .given()
-                            .map(|url| {
+                            .and_then(|url| {
                                 // TODO(Bas): file path fix, PathBuf in lock file to save relative paths
                                 // Url::from_file_path(url).expect("could not parse given url to path")
                                 Url::from_file_path(url).ok()
                             })
-                            .flatten()
                             // When using a direct url reference like https://foo/bla.whl we do not have a given
                             .unwrap_or_else(|| path.url.to_url())
                     }

@@ -12,6 +12,8 @@ platforms = ["osx-arm64"]
 python = "*"
 
 [pypi-dependencies]
+
+rich = "~=13.7"
 # Lets start with some git dependencies
 # With ssh
 flask = { git = "ssh://git@github.com/pallets/flask" }

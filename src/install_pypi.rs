@@ -7,6 +7,7 @@ use distribution_filename::DistFilename;
 use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
 use pep508_rs::VerbatimUrl;
+use url::Url;
 use uv_cache::Cache;
 use uv_resolver::InMemoryIndex;
 
@@ -15,7 +16,7 @@ use crate::lock_file::UvResolutionContext;
 use crate::project::manifest::SystemRequirements;
 
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
-use distribution_types::{CachedDist, Dist, IndexUrl, InstalledDist, Name};
+use distribution_types::{CachedDist, DirectGitUrl, Dist, IndexUrl, InstalledDist, Name};
 use install_wheel_rs::linker::LinkMode;
 
 use rattler_conda_types::{Platform, RepoDataRecord};
@@ -115,14 +116,42 @@ fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_ty
     }
 }
 
-fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
-    // Bit of a hack to create the file type
-    if pkg.hash.is_none() {
-        Dist::from_url(pkg.name.clone(), VerbatimUrl::from_url(pkg.url.clone()))
-            .expect("could not convert into uv dist")
+/// Check if the url is a direct url
+/// Files, git, are direct urls
+/// Direct urls to wheels or sdists are prefixed with a `direct` scheme
+/// by us when resolving the lock file
+fn is_direct_url(url_scheme: &str) -> bool {
+    url_scheme == "file"
+        || url_scheme == "git+http"
+        || url_scheme == "git+https"
+        || url_scheme == "git+ssh"
+        || url_scheme.starts_with("direct")
+}
+
+/// Strip of the `direct` scheme from the url if it is there
+fn strip_direct_scheme(url: &Url) -> Url {
+    if url.scheme().starts_with("direct+") {
+        url.to_string()[7..].parse().expect("could not parse url")
     } else {
-        // Extract last component from url
+        url.clone()
+    }
+}
+
+/// Convert from a PypiPackageData to a uv [`distribution_types::Dist`]
+fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
+    // Figure out if it is a url from the registry or a direct url
+    if is_direct_url(pkg.url.scheme()) {
+        Dist::from_url(
+            pkg.name.clone(),
+            VerbatimUrl::from_url(strip_direct_scheme(&pkg.url)),
+        )
+        .expect("could not convert into uv dist")
+    } else {
+        // We consider it to be a registry url
+        // Extract last component from registry url
+        // should be something like `package-0.1.0-py3-none-any.whl`
         let filename_raw = pkg.url.path_segments().unwrap().last().unwrap();
+        // Recreate the filename from the extracted last component
         let filename =
             DistFilename::try_from_normalized_filename(filename_raw).unwrap_or_else(|| {
                 panic!(
@@ -131,6 +160,8 @@ fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
                     pkg.url
                 )
             });
+        // Now we can convert the locked data to a [`distribution_types::File`]
+        // which is essentially the file information for a wheel or sdist
         let file = locked_data_to_file(pkg, filename_raw);
         Dist::from_registry(
             filename,
@@ -147,21 +178,102 @@ enum ValidateInstall {
     Reinstall,
 }
 
+//TODO(tim): Vendored this function from uv there is a PR #2510 that exposes this function
+/// Read the `direct_url.json` file from a `.dist-info` directory.
+fn direct_url_json(path: &Path) -> miette::Result<Option<pypi_types::DirectUrl>> {
+    let path = path.join("direct_url.json");
+    let Ok(file) = std::fs::File::open(path) else {
+        return Ok(None);
+    };
+    let direct_url = serde_json::from_reader(file).into_diagnostic()?;
+    Ok(Some(direct_url))
+}
+
 /// Check if a package needs to be reinstalled
 fn need_reinstall(
     installed: &InstalledDist,
     required: &PypiPackageData,
     python_version: &Version,
-) -> ValidateInstall {
+) -> miette::Result<ValidateInstall> {
     // Check if the installed version is the same as the required version
-    let same_version = match installed {
+    let keep = match installed {
         InstalledDist::Registry(reg) => reg.version == required.version,
-        InstalledDist::Url(direct_url) => direct_url.url == required.url,
+
+        // For installed distributions check the direct_url.json to check if a re-install is needed
+        InstalledDist::Url(direct_url) => {
+            let direct_url_json = match direct_url_json(&direct_url.path) {
+                Ok(Some(direct_url)) => direct_url,
+                Ok(None) => {
+                    tracing::warn!(
+                        "could not find direct_url.json in {}",
+                        direct_url.path.display()
+                    );
+                    return Ok(ValidateInstall::Reinstall);
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        "could not read direct_url.json in {}: {}",
+                        direct_url.path.display(),
+                        err
+                    );
+                    return Ok(ValidateInstall::Reinstall);
+                }
+            };
+
+            match direct_url_json {
+                pypi_types::DirectUrl::LocalDirectory { url, dir_info: _ } => {
+                    // Recreate file url
+                    let result = Url::parse(&url);
+                    match result {
+                        Ok(url) => {
+                            // Check if the urls are different
+                            url == required.url
+                        }
+                        Err(_) => {
+                            tracing::warn!("could not parse file url: {}", url);
+                            false
+                        }
+                    }
+                }
+                pypi_types::DirectUrl::ArchiveUrl {
+                    url,
+                    // Don't think anything ever fills this?
+                    archive_info: _,
+                    // Subdirectory is either in the url or not supported
+                    subdirectory: _,
+                } => {
+                    // Parse archive url, add `direct+` back onto it, so we can compare with the required url
+                    let url = Url::parse(&format!("direct+{url}")).into_diagnostic()?;
+                    url == required.url
+                }
+                pypi_types::DirectUrl::VcsUrl {
+                    url,
+                    vcs_info,
+                    subdirectory: _,
+                } => {
+                    let url = Url::parse(&url).into_diagnostic()?;
+                    let git_url = DirectGitUrl::try_from(&required.url);
+                    match git_url {
+                        Ok(git) => {
+                            // Check the repository base url
+                            git.url.repository() == &url
+                            // Check the sha from the direct_url.json and the required sha
+                            // Use the uv git url to get the sha
+                                && vcs_info.commit_id == git.url.precise().map(|p| p.to_string())
+                        }
+                        Err(err) => {
+                            tracing::error!("could not parse git url: {}", err);
+                            false
+                        }
+                    }
+                }
+            }
+        }
     };
 
     // Reinstall if the version is the not same
-    if !same_version {
-        return ValidateInstall::Reinstall;
+    if !keep {
+        return Ok(ValidateInstall::Reinstall);
     }
 
     // Do some extra checks if the version is the same
@@ -170,17 +282,17 @@ fn need_reinstall(
     } else {
         tracing::warn!("could not get metadata for {}", installed.name());
         // Can't be sure lets reinstall
-        return ValidateInstall::Reinstall;
+        return Ok(ValidateInstall::Reinstall);
     };
 
     if let Some(requires_python) = metadata.requires_python {
         // If the installed package requires a different python version
         if !requires_python.contains(python_version) {
-            return ValidateInstall::Reinstall;
+            return Ok(ValidateInstall::Reinstall);
         }
     }
 
-    ValidateInstall::Keep
+    Ok(ValidateInstall::Keep)
 }
 
 /// Figure out what we can link from the cache locally
@@ -217,7 +329,7 @@ fn whats_the_plan<'a>(
     for dist in installed {
         if let Some(pkg) = required_map.remove(&dist.name()) {
             // Check if we need to reinstall
-            match need_reinstall(dist, pkg, python_version) {
+            match need_reinstall(dist, pkg, python_version)? {
                 ValidateInstall::Keep => {
                     // Continue with the loop
                     continue;
@@ -243,8 +355,6 @@ fn whats_the_plan<'a>(
             } else {
                 remote.push(convert_to_dist(pkg));
             }
-
-            // TODO(tim): we need to have special handling for DirectUrl dists
         } else {
             // We can uninstall
             extraneous.push(dist.clone());
@@ -406,23 +516,16 @@ pub async fn update_python_distributions(
         &uv_context.cache,
         venv.interpreter().python_version(),
     )?;
-    tracing::debug!(
-        "Resolved install plan: local={}, remote={}, reinstalls={}, extraneous={}",
-        local.len(),
-        remote.len(),
-        reinstalls.len(),
-        extraneous.len()
-    );
 
     // Nothing to do.
     if remote.is_empty() && local.is_empty() && reinstalls.is_empty() && extraneous.is_empty() {
         let s = if python_packages.len() == 1 { "" } else { "s" };
-        tracing::debug!(
+        tracing::info!(
             "{}",
             format!(
-                "Audited {} in {}",
+                "nothing to do - Audited {} in {}",
                 format!(
-                    "{num_requirements} package{s}",
+                    "{num_requirements} distribution{s}",
                     num_requirements = python_packages.len()
                 ),
                 elapsed(start.elapsed())
@@ -430,6 +533,35 @@ pub async fn update_python_distributions(
         );
         return Ok(());
     }
+
+    // Some info logging
+    // List all package names that are going to be installed, re-installed and removed
+    tracing::info!(
+        "resolved install plan: local={}, remote={}, reinstalls={}, extraneous={}",
+        local.len(),
+        remote.len(),
+        reinstalls.len(),
+        extraneous.len()
+    );
+    let to_install = local
+        .iter()
+        .map(|d| d.name().to_string())
+        .chain(remote.iter().map(|d| d.name().to_string()))
+        .collect::<Vec<String>>();
+
+    let reinstall = reinstalls
+        .iter()
+        .map(|d| d.name().to_string())
+        .collect::<Vec<String>>();
+
+    let remove = extraneous
+        .iter()
+        .map(|d| d.name().to_string())
+        .collect::<Vec<String>>();
+
+    tracing::info!("install: {to_install:?}");
+    tracing::info!("re-install: {reinstall:?}");
+    tracing::info!("remove: {remove:?}");
 
     // Download, build, and unzip any missing distributions.
     let wheels = if remote.is_empty() {

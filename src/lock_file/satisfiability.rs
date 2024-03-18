@@ -1,5 +1,6 @@
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
 use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
+use distribution_types::DirectGitUrl;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
@@ -147,6 +148,8 @@ enum Dependency {
     PyPi(Requirement, Cow<'static, str>),
 }
 
+/// Check satatisfiability of a pypi requirement against a locked pypi package
+/// This also does an additional check for git urls when using direct url references
 pub fn pypi_satifisfies(locked_data: &PypiPackageData, spec: &Requirement) -> bool {
     // Check if the name matches
     if spec.name != locked_data.name {
@@ -157,16 +160,36 @@ pub fn pypi_satifisfies(locked_data: &PypiPackageData, spec: &Requirement) -> bo
     match &spec.version_or_url {
         None => true,
         Some(pep508_rs::VersionOrUrl::Url(spec_url)) => {
-            // Compare the given url with the locked url
-            // by removing the fragment from the locked url
-            // which should essentially remove the `#sha` part
-            let spec_given = spec_url
-                .given()
-                .map(|given| given.to_owned())
-                .unwrap_or_else(|| spec_url.to_url().to_string());
-            let mut locked_given = locked_data.url.clone();
-            locked_given.set_fragment(None);
-            spec_given == locked_given.as_str()
+            // In the case that both the spec and the locked data are direct git urls
+            // we need to compare the urls to see if they are the same
+            let spec_git_url = DirectGitUrl::try_from(&spec_url.to_url()).ok();
+            let locked_data_url = DirectGitUrl::try_from(&locked_data.url).ok();
+
+            // Both are git url's
+            if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_data_url) {
+                let base_is_same =
+                    spec_git_url.url.repository() == locked_data_url.url.repository();
+
+                // If the spec does not specify a revision than any will do
+                // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
+                if spec_git_url.url.reference().is_none() {
+                    base_is_same
+                } else {
+                    // If the spec does specify a revision than the revision must match
+                    base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
+                }
+            } else {
+                // Strip the direct+ prefix if it exists for the direct url
+                // because this is not part of the `Requirement` spec
+                // we use this to record that it is a direct url
+                let non_direct_url = if locked_data.url.scheme().starts_with("direct+") {
+                    url::Url::parse(&locked_data.url.to_string().replace("direct+", ""))
+                        .expect("Failed to parse sanitized url")
+                } else {
+                    locked_data.url.clone()
+                };
+                spec_url.to_url() == non_direct_url
+            }
         }
         Some(pep508_rs::VersionOrUrl::VersionSpecifier(spec)) => {
             spec.contains(&locked_data.version)
@@ -484,9 +507,10 @@ mod tests {
     use super::*;
     use crate::Project;
     use miette::{IntoDiagnostic, NarratableReportHandler};
+    use pep440_rs::Version;
     use rattler_lock::LockFile;
     use rstest::rstest;
-    use std::path::PathBuf;
+    use std::{path::PathBuf, str::FromStr};
 
     #[derive(Error, Debug)]
     enum LockfileUnsat {
@@ -558,5 +582,30 @@ mod tests {
                 .expect_err("expected failing satisfiability");
             insta::assert_snapshot!(format!("{err:?}"));
         });
+    }
+
+    #[test]
+    fn test_pypi_git_check_with_rev() {
+        // Mock locked datga
+        let locked_data = PypiPackageData {
+            name: "mypkg".parse().unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            url: "git+https://github.com/mypkg@abcd"
+                .parse()
+                .expect("failed to parse url"),
+            hash: None,
+            requires_dist: vec![],
+            requires_python: None,
+        };
+        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@abcd").unwrap();
+        // This should satisfy:
+        assert!(pypi_satifisfies(&locked_data, &spec));
+        let non_matching_spec =
+            Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd").unwrap();
+        // This should not
+        assert!(!pypi_satifisfies(&locked_data, &non_matching_spec));
+        // Removing the rev from the Requirement should satisfy any revision
+        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap();
+        assert!(pypi_satifisfies(&locked_data, &spec));
     }
 }

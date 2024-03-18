@@ -1,7 +1,6 @@
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
 use serde::{de, de::Error, Deserialize, Deserializer, Serialize};
-use std::fmt::Write;
 use std::path::PathBuf;
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
@@ -323,31 +322,8 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
-enum ResolveBranchError {
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-    #[error(transparent)]
-    Utf8(#[from] std::string::FromUtf8Error),
-    #[error("empty git hash for repo {repo} at {branch}")]
-    EmptyHash { repo: String, branch: String },
-    #[error(
-        "git command failed with status code {status} for repository {repo} at branch {branch}"
-    )]
-    StatusCodeErr {
-        status: std::process::ExitStatus,
-        repo: String,
-        branch: String,
-    },
-}
-
-fn create_uv_url(
-    url: &Url,
-    // branch: Option<&str>,
-    // tag: Option<&str>,
-    rev: Option<&str>,
-    subdir: Option<&str>,
-) -> String {
+/// Create a url that uv can use to install a version
+fn create_uv_url(url: &Url, rev: Option<&str>, subdir: Option<&str>) -> String {
     // Create the url.
     let url = format!("git+{url}");
     // Add the tag or rev if it exists.
@@ -373,13 +349,15 @@ impl PyPiRequirement {
             PyPiRequirementType::Git {
                 git: url,
                 // Ignore branch and tag for now
-                branch: _branch,
-                tag: _tag,
+                branch,
+                tag,
                 rev,
                 subdirectory: subdir,
             } => {
+                if branch.is_some() && tag.is_some() {
+                    tracing::warn!("branch/tag are not supported yet, will use the `main`/`master` branch, please specify a revision using `rev` = `sha`");
+                }
                 let uv_url = create_uv_url(url, rev.as_deref(), subdir.as_deref());
-                tracing::error!("url: {uv_url}");
                 Some(pep508_rs::VersionOrUrl::Url(
                     VerbatimUrl::parse(uv_url.clone()).expect("git url is invalid"),
                 ))
@@ -389,7 +367,7 @@ impl PyPiRequirement {
                 let given = path
                     .to_str()
                     .map(|s| s.to_owned())
-                    .unwrap_or_else(|| String::new());
+                    .unwrap_or_else(String::new);
                 let verbatim = VerbatimUrl::from_path(canonicalized).with_given(given);
                 Some(pep508_rs::VersionOrUrl::Url(verbatim))
             }
