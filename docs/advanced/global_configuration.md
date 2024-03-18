@@ -11,7 +11,8 @@ loaded in the following order:
 3. Project-local .pixi folder: `$PIXI_PROJECT/.pixi/config.toml`
 4. Command line arguments (`--tls-no-verify`, `--change-ps1=false` etc.)
 
-!!! note To find the locations where `pixi` looks for configuration files, run
+!!! note
+    To find the locations where `pixi` looks for configuration files, run
     `pixi` with `-v` or `--verbose`.
 
 ## Reference
@@ -42,13 +43,13 @@ authentication_override_file = "/path/to/your/override.json"
 # configuration for conda channel-mirrors
 [mirrors]
 # redirect all requests for conda-forge to the prefix.dev mirror
-"https://conda.anaconda.org/conda-forge": [
+"https://conda.anaconda.org/conda-forge" = [
     "https://prefix.dev/conda-forge"
 ]
 
 # redirect all requests for bioconda to one of the three listed mirrors
 # Note: for repodata we try the first mirror first.
-"https://conda.anaconda.org/bioconda": [
+"https://conda.anaconda.org/bioconda" = [
     "https://conda.anaconda.org/bioconda",
     # OCI registries are also supported
     "oci://ghcr.io/channel-mirrors/bioconda",
