@@ -74,7 +74,7 @@ You can also specify mirrors for an entire "host", e.g.
 
 ```toml
 [mirrors]
-"https://conda.anaconda.org": [
+"https://conda.anaconda.org" = [
     "https://prefix.dev/"
 ]
 ```
@@ -90,7 +90,7 @@ team. You can use it like this:
 
 ```toml
 [mirrors]
-"https://conda.anaconda.org/conda-forge": [
+"https://conda.anaconda.org/conda-forge" = [
     "oci://ghcr.io/channel-mirrors/conda-forge"
 ]
 ```

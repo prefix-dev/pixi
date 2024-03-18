@@ -43,7 +43,7 @@ fn auth_middleware(config: &Config) -> AuthenticationMiddleware {
 
 fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     let mut internal_map = HashMap::new();
-
+    tracing::info!("Using mirrors: {:?}", config.mirror_map());
     for (key, value) in config.mirror_map() {
         let mut mirrors = Vec::new();
         for v in value {

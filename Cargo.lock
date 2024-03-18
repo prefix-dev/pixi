@@ -208,7 +208,7 @@ dependencies = [
  "async-task",
  "concurrent-queue",
  "fastrand 2.0.1",
- "futures-lite 2.2.0",
+ "futures-lite 2.3.0",
  "slab",
 ]
 
@@ -254,7 +254,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "concurrent-queue",
  "futures-io",
- "futures-lite 2.2.0",
+ "futures-lite 2.3.0",
  "parking",
  "polling 3.5.0",
  "rustix 0.38.31",
@@ -308,13 +308,13 @@ dependencies = [
 
 [[package]]
 name = "async-recursion"
-version = "1.0.5"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fd55a5ba1179988837d24ab4c7cc8ed6efdeff578ede0416b4225a5fca35bd0"
+checksum = "30c5ef0ede93efbf733c1a727f3b6b5a1060bbedd5600183e66f6e4be4af0ec5"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -354,13 +354,13 @@ checksum = "fbb36e985947064623dbd357f727af08ffd077f93d696782f3c56365fa2e2799"
 
 [[package]]
 name = "async-trait"
-version = "0.1.77"
+version = "0.1.78"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c980ee35e870bd1a4d2c8294d4c04d0499e67bca1e4b5cefcc693c2fa00caea9"
+checksum = "461abc97219de0eaaf81fe3ef974a540158f3d079c2ab200f891f1a2ef201e85"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -390,7 +390,7 @@ source = "git+https://github.com/charliermarsh/rs-async-zip?rev=d76801da0943de98
 dependencies = [
  "async-compression",
  "crc32fast",
- "futures-lite 2.2.0",
+ "futures-lite 2.3.0",
  "pin-project",
  "thiserror",
  "tokio",
@@ -495,9 +495,9 @@ dependencies = [
 
 [[package]]
 name = "blake3"
-version = "1.5.0"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0231f06152bf547e9c2b5194f247cd97aacf6dcd8b15d8e5ec0663f64580da87"
+checksum = "30cca6d3674597c30ddf2c587bf8d9d65c9a84d2326d941cc79c9842dfe0ef52"
 dependencies = [
  "arrayref",
  "arrayvec",
@@ -542,16 +542,16 @@ dependencies = [
  "async-task",
  "fastrand 2.0.1",
  "futures-io",
- "futures-lite 2.2.0",
+ "futures-lite 2.3.0",
  "piper",
  "tracing",
 ]
 
 [[package]]
 name = "brotli"
-version = "3.4.0"
+version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "516074a47ef4bce09577a3b379392300159ce5b1ba2e501ff1c819950066100f"
+checksum = "d640d25bc63c50fb1f0b545ffd80207d2e10a4c965530809b40ba3386825c391"
 dependencies = [
  "alloc-no-stdlib",
  "alloc-stdlib",
@@ -778,9 +778,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.2"
+version = "4.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b230ab84b0ffdf890d5a10abdbc8b83ae1c4918275daea1ab8801f71536b2651"
+checksum = "949626d00e063efc93b6dca932419ceb5432f99769911c0b995f7e884c778813"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -820,14 +820,14 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.5.0"
+version = "4.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "307bc0538d5f0f83b8248db3087aa92fe504e4691294d0c96c0eabc33f47ba47"
+checksum = "90239a040c80f5e14809ca132ddc4176ab33d5e17e49691793296e3fcb34d72f"
 dependencies = [
- "heck",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -996,7 +996,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim 0.10.0",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -1007,7 +1007,7 @@ checksum = "a668eda54683121533a393014d8692171709ff57a7d61f187b6e782719f8933f"
 dependencies = [
  "darling_core",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -1216,7 +1216,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -1237,7 +1237,7 @@ checksum = "5c785274071b1b420972453b306eeca06acf4633829db4223b58a2a8c5953bc4"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -1498,9 +1498,9 @@ dependencies = [
 
 [[package]]
 name = "futures-lite"
-version = "2.2.0"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "445ba825b27408685aaecefd65178908c36c6e96aaf6d8599419d46e624192ba"
+checksum = "52527eb5074e35e9339c6b4e8d12600c7128b68fb25dcb9fa9dec18f7c25f3a5"
 dependencies = [
  "fastrand 2.0.1",
  "futures-core",
@@ -1517,7 +1517,7 @@ checksum = "87750cf4b7a4c0625b1529e4c543c2182106e4dedc60a2a6455e00d212c489ac"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -1641,9 +1641,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.3.24"
+version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb2c4422095b67ee78da96fbb51a4cc413b3b25883c7717ff7ca1ab31022c9c9"
+checksum = "4fbd2820c5e49886948654ab546d0688ff24530286bdcf8fca3cefb16d4618eb"
 dependencies = [
  "bytes",
  "fnv",
@@ -1678,6 +1678,12 @@ name = "heck"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
+
+[[package]]
+name = "heck"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hermit-abi"
@@ -2177,7 +2183,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -2424,7 +2430,7 @@ checksum = "49e7bc1560b95a3c4a25d03de42fe76ca718ab92d1a22a55b9b4cf67b3ae635c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -2435,7 +2441,7 @@ checksum = "dcf09caffaac8068c346b6df2a7fc27a177fd20b39421a39ce0a211bde679a6c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -2456,9 +2462,9 @@ dependencies = [
 
 [[package]]
 name = "minijinja"
-version = "1.0.12"
+version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fe0ff215195a22884d867b547c70a0c4815cbbcc70991f281dca604b20d10ce"
+checksum = "562e7acc6adf9a8359061ea3e0634560a3f636dc0539d36cd300c82fd703f528"
 dependencies = [
  "serde",
 ]
@@ -2740,7 +2746,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -2814,12 +2820,12 @@ version = "0.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b645dcde5f119c2c454a92d0dfa271a2a3b205da92e4292a68ead4bdbfde1f33"
 dependencies = [
- "heck",
+ "heck 0.4.1",
  "itertools",
  "proc-macro2",
  "proc-macro2-diagnostics",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -2986,7 +2992,7 @@ dependencies = [
  "phf_shared",
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
  "unicase",
 ]
 
@@ -3017,7 +3023,7 @@ checksum = "2f38a4412a78282e09a2cf38d195ea5420d15ba0602cb375210efbc877243965"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -3287,7 +3293,7 @@ checksum = "af066a9c399a26e020ada66a034357a868728e72cd426f3adcd35f80d88d88c8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
  "version_check",
  "yansi",
 ]
@@ -3433,8 +3439,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.19.2"
-source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+version = "0.19.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b8d374ac4c218b5265fbfe69775ef3d3ffef2ca2f5e30951f3b9e3a33a3ef85"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3479,8 +3486,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.20.1"
-source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+version = "0.20.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33f37815d9f04d8a286cfb4147cae9fcd1db9711f0d34bba7c610e1704da125f"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3508,8 +3516,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_digest"
-version = "0.19.1"
-source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+version = "0.19.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a15f14fa0e0fdf3fbacabd21d66a3d6b15af5c7c0cda2e0e29bd6605dec4569"
 dependencies = [
  "blake2",
  "digest",
@@ -3523,8 +3532,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.20.1"
-source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+version = "0.20.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c8c0a1ed2bef78da6df4625193b93940d172565c99cfe2647d795db136c5b8b"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3546,17 +3556,19 @@ dependencies = [
 
 [[package]]
 name = "rattler_macros"
-version = "0.19.1"
-source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+version = "0.19.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7f6c3aedd4fa6a50b41be9537c8abc7190ae24f1b0add0ab722275fa0ec8d6d"
 dependencies = [
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
 name = "rattler_networking"
-version = "0.19.1"
-source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+version = "0.19.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92f944900e1008d0760ccbd8a4989e32207728826fc1e2f7c2f639f917739bce"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3585,8 +3597,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.19.2"
-source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78d226a0aa9317c35d244fc991e77552331007801a6b1a6d63a22325f870c709"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3611,8 +3624,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.19.2"
-source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+version = "0.19.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b89b63a9fa257cefed44e3de10e95987bf29bfaeb376abd0b40ee33ff0d4a391"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3650,8 +3664,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.19.2"
-source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+version = "0.19.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b7c92c8397fe02a27cb7cbbbc39a95246e2dd479e13455f0e402e290a475792"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.5",
@@ -3667,8 +3682,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "0.20.1"
-source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+version = "0.20.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8eecfc2cc975fd3eb54753e3e894ee69a92d1cdb8ef73e99a4526704e72aa368"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3687,8 +3703,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "0.19.2"
-source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+version = "0.19.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b916c2861f98dc500d1c0120e6db60560f4b5a8a5afe1b972d613b6ca24e103a"
 dependencies = [
  "cfg-if 1.0.0",
  "libloading",
@@ -3903,9 +3920,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest-middleware"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88a3e86aa6053e59030e7ce2d2a3b258dd08fc2d337d52f73f6cb480f5858690"
+checksum = "5a735987236a8e238bf0296c7e351b999c188ccc11477f311b82b55c93984216"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4100,7 +4117,7 @@ dependencies = [
  "regex",
  "relative-path",
  "rustc_version",
- "syn 2.0.52",
+ "syn 2.0.53",
  "unicode-ident",
 ]
 
@@ -4263,7 +4280,7 @@ checksum = "7f81c2fde025af7e69b1d1420531c8a8811ca898919db177141a85313b1cb932"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -4377,7 +4394,7 @@ checksum = "7eb0b34b42edc17f6b7cac84a52a1c5f0e1bb2227e997ca9011ea3dd34e8610b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -4400,7 +4417,7 @@ checksum = "0b2e6b945e9d3df726b65d6ee24060aff8e3533d431f677a9695db04eff9dfdb"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -4451,14 +4468,14 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
 name = "serde_yaml"
-version = "0.9.32"
+version = "0.9.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fd075d994154d4a774f95b51fb96bdc2832b0ea48425c92546073816cda1f2f"
+checksum = "a0623d197252096520c6f2a5e1171ee436e5af99a5d7caa2891e55e61950e6d9"
 dependencies = [
  "indexmap 2.2.5",
  "itoa",
@@ -4489,7 +4506,7 @@ checksum = "b93fb4adc70021ac1b47f7d45e8cc4169baaa7ea58483bc5b721d19a26202212"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -4715,11 +4732,11 @@ version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6cf59daf282c0a494ba14fd21610a0325f9f90ec9d1231dea26bcb1d696c946"
 dependencies = [
- "heck",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -4768,9 +4785,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.52"
+version = "2.0.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b699d15b36d1f02c3e7c69f8ffef53de37aefae075d8488d4ba1a7788d574a07"
+checksum = "7383cd0e49fff4b6b90ca5670bfd3e9d6a733b3f90c686605aa7eec8c4996032"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4910,7 +4927,7 @@ checksum = "c61f3ba182994efc43764a46c018c347bc492c79f024e705f46567b418f6d4f7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -5001,7 +5018,7 @@ checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -5136,7 +5153,7 @@ checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
 ]
 
 [[package]]
@@ -5254,9 +5271,9 @@ checksum = "e51733f11c9c4f72aa0c160008246859e340b00807569a0da0e7a1079b27ba85"
 
 [[package]]
 name = "unsafe-libyaml"
-version = "0.2.10"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab4c90930b95a82d00dc9e9ac071b4991924390d46cbd0dfe566148667605e4b"
+checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
 name = "unscanny"
@@ -5804,7 +5821,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
  "wasm-bindgen-shared",
 ]
 
@@ -5838,7 +5855,7 @@ checksum = "e94f17b526d0a461a191c78ea52bbce64071ed5c04c9ffe424dcb38f74171bb7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.53",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -6346,3 +6363,48 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
+
+[[patch.unused]]
+name = "rattler"
+version = "0.19.2"
+source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+
+[[patch.unused]]
+name = "rattler_conda_types"
+version = "0.20.1"
+source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+
+[[patch.unused]]
+name = "rattler_digest"
+version = "0.19.1"
+source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+
+[[patch.unused]]
+name = "rattler_lock"
+version = "0.20.1"
+source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+
+[[patch.unused]]
+name = "rattler_networking"
+version = "0.19.1"
+source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+
+[[patch.unused]]
+name = "rattler_repodata_gateway"
+version = "0.19.2"
+source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+
+[[patch.unused]]
+name = "rattler_shell"
+version = "0.19.2"
+source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+
+[[patch.unused]]
+name = "rattler_solve"
+version = "0.20.1"
+source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
+
+[[patch.unused]]
+name = "rattler_virtual_packages"
+version = "0.19.2"
+source = "git+https://github.com/mamba-org/rattler?rev=e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463#e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463"
