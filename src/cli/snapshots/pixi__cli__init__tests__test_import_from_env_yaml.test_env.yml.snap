@@ -108,23 +108,19 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package1",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: Some(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: Equal,
-                                            version: "1.0.0",
-                                        },
-                                    ],
-                                ),
-                            ),
-                            index: None,
-                        },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: Equal,
+                                    version: "1.0.0",
+                                },
+                            ],
+                        ),
                     ),
-                    extras: None,
+                    index: None,
+                    extras: [],
                 },
             ),
             (
@@ -134,23 +130,19 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package2",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: Some(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: Equal,
-                                            version: "2.0",
-                                        },
-                                    ],
-                                ),
-                            ),
-                            index: None,
-                        },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: Equal,
+                                    version: "2.0",
+                                },
+                            ],
+                        ),
                     ),
-                    extras: None,
+                    index: None,
+                    extras: [],
                 },
             ),
             (
@@ -160,23 +152,19 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package3",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: Some(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: Equal,
-                                            version: "3",
-                                        },
-                                    ],
-                                ),
-                            ),
-                            index: None,
-                        },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: Equal,
+                                    version: "3",
+                                },
+                            ],
+                        ),
                     ),
-                    extras: None,
+                    index: None,
+                    extras: [],
                 },
             ),
             (
@@ -186,23 +174,19 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package4",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: Some(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: LessThanEqual,
-                                            version: "4.0.0",
-                                        },
-                                    ],
-                                ),
-                            ),
-                            index: None,
-                        },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: LessThanEqual,
+                                    version: "4.0.0",
+                                },
+                            ],
+                        ),
                     ),
-                    extras: None,
+                    index: None,
+                    extras: [],
                 },
             ),
             (
@@ -212,23 +196,19 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package5",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: Some(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: GreaterThanEqual,
-                                            version: "5.0.0",
-                                        },
-                                    ],
-                                ),
-                            ),
-                            index: None,
-                        },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: GreaterThanEqual,
+                                    version: "5.0.0",
+                                },
+                            ],
+                        ),
                     ),
-                    extras: None,
+                    index: None,
+                    extras: [],
                 },
             ),
             (
@@ -238,23 +218,19 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package6",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: Some(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: GreaterThan,
-                                            version: "6.0.0",
-                                        },
-                                    ],
-                                ),
-                            ),
-                            index: None,
-                        },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: GreaterThan,
+                                    version: "6.0.0",
+                                },
+                            ],
+                        ),
                     ),
-                    extras: None,
+                    index: None,
+                    extras: [],
                 },
             ),
             (
@@ -264,23 +240,19 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package7",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: Some(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: LessThan,
-                                            version: "7.0.0",
-                                        },
-                                    ],
-                                ),
-                            ),
-                            index: None,
-                        },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: LessThan,
+                                    version: "7.0.0",
+                                },
+                            ],
+                        ),
                     ),
-                    extras: None,
+                    index: None,
+                    extras: [],
                 },
             ),
             (
@@ -290,23 +262,19 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package8",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: Some(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: NotEqual,
-                                            version: "8.0.0",
-                                        },
-                                    ],
-                                ),
-                            ),
-                            index: None,
-                        },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: NotEqual,
+                                    version: "8.0.0",
+                                },
+                            ],
+                        ),
                     ),
-                    extras: None,
+                    index: None,
+                    extras: [],
                 },
             ),
             (
@@ -316,15 +284,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package9",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: None,
-                },
+                RawVersion(
+                    Star,
+                ),
             ),
             (
                 PyPiPackageName {
@@ -333,20 +295,14 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package10",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: Some(
-                        [
-                            ExtraName(
-                                "extra",
-                            ),
-                        ],
-                    ),
+                Version {
+                    version: Star,
+                    index: None,
+                    extras: [
+                        ExtraName(
+                            "extra",
+                        ),
+                    ],
                 },
             ),
             (
@@ -356,23 +312,17 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package11",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: Some(
-                        [
-                            ExtraName(
-                                "extra1",
-                            ),
-                            ExtraName(
-                                "extra2",
-                            ),
-                        ],
-                    ),
+                Version {
+                    version: Star,
+                    index: None,
+                    extras: [
+                        ExtraName(
+                            "extra1",
+                        ),
+                        ExtraName(
+                            "extra2",
+                        ),
+                    ],
                 },
             ),
             (
@@ -382,32 +332,26 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package12",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: Some(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: Equal,
-                                            version: "12.0.0",
-                                        },
-                                    ],
-                                ),
-                            ),
-                            index: None,
-                        },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: Equal,
+                                    version: "12.0.0",
+                                },
+                            ],
+                        ),
                     ),
-                    extras: Some(
-                        [
-                            ExtraName(
-                                "extra1",
-                            ),
-                            ExtraName(
-                                "extra2",
-                            ),
-                        ],
-                    ),
+                    index: None,
+                    extras: [
+                        ExtraName(
+                            "extra1",
+                        ),
+                        ExtraName(
+                            "extra2",
+                        ),
+                    ],
                 },
             ),
             (
@@ -417,32 +361,26 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package13",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: Some(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: GreaterThanEqual,
-                                            version: "13.0.0",
-                                        },
-                                    ],
-                                ),
-                            ),
-                            index: None,
-                        },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: GreaterThanEqual,
+                                    version: "13.0.0",
+                                },
+                            ],
+                        ),
                     ),
-                    extras: Some(
-                        [
-                            ExtraName(
-                                "extra1",
-                            ),
-                            ExtraName(
-                                "extra2",
-                            ),
-                        ],
-                    ),
+                    index: None,
+                    extras: [
+                        ExtraName(
+                            "extra1",
+                        ),
+                        ExtraName(
+                            "extra2",
+                        ),
+                    ],
                 },
             ),
             (
@@ -452,32 +390,26 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "package14",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: Some(
-                                VersionSpecifiers(
-                                    [
-                                        VersionSpecifier {
-                                            operator: LessThanEqual,
-                                            version: "14.0.0",
-                                        },
-                                    ],
-                                ),
-                            ),
-                            index: None,
-                        },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: LessThanEqual,
+                                    version: "14.0.0",
+                                },
+                            ],
+                        ),
                     ),
-                    extras: Some(
-                        [
-                            ExtraName(
-                                "extra1",
-                            ),
-                            ExtraName(
-                                "extra2",
-                            ),
-                        ],
-                    ),
+                    index: None,
+                    extras: [
+                        ExtraName(
+                            "extra1",
+                        ),
+                        ExtraName(
+                            "extra2",
+                        ),
+                    ],
                 },
             ),
         ],
