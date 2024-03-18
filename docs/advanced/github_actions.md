@@ -35,12 +35,14 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
       - package-ecosystem: github-actions
         directory: /
         schedule:
-          interval: monthly # or daily, weekly
+          interval: monthly # (1)!
         groups:
           dependencies:
             patterns:
               - "*"
     ```
+
+    1.  or `daily`, `weekly`
 
 ## Features
 
@@ -121,11 +123,16 @@ The following example will install both the `py311` and the `py312` environment 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.5.1
   with:
-    # separated by spaces
-    environments: >-
+    environments: >- # (1)!
       py311
       py312
 ```
+
+1. separated by spaces, equivalent to
+
+   ```yaml
+   environments: py311 py312
+   ```
 
 !!!warning "Caching behavior if you don't specify environments"
     If you don't specify any environment, the `default` environment will be installed and cached, even if you use other environments.
@@ -178,9 +185,11 @@ This form of authentication (token is encoded in URL: `https://my-quetz-instance
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.5.1
   with:
-    auth-host: anaconda.org # or my-quetz-instance.com
+    auth-host: anaconda.org # (1)!
     conda-token: ${{ secrets.CONDA_TOKEN }}
 ```
+
+1. or my-quetz-instance.com
 
 ### Custom shell wrapper
 
@@ -188,28 +197,34 @@ This form of authentication (token is encoded in URL: `https://my-quetz-instance
 This can be useful if you want to run commands inside of the pixi environment, but don't want to use the `pixi run` command for each command.
 
 ```yaml
-- run: | # everything here will be run inside of the pixi environment
+- run: | # (1)!
     python --version
     pip install -e --no-deps .
   shell: pixi run bash -e {0}
 ```
 
+1. everything here will be run inside of the pixi environment
+
 You can even run Python scripts like this:
 
 ```yaml
-- run: | # everything here will be run inside of the pixi environment
+- run: | # (1)!
     import my_package
     print("Hello world!")
   shell: pixi run python {0}
 ```
 
+1. everything here will be run inside of the pixi environment
+
 If you want to use PowerShell, you need to specify `-Command` as well.
 
 ```yaml
-- run: | # everything here will be run inside of the pixi environment
+- run: | # (1)!
     python --version | Select-String "3.11"
   shell: pixi run pwsh -Command {0} # pwsh works on all platforms
 ```
+
+1. everything here will be run inside of the pixi environment
 
 !!!note "How does it work under the hood?"
     Under the hood, the `shell: xyz {0}` option is implemented by creating a temporary script file and calling `xyz` with that script file as an argument.
@@ -255,9 +270,10 @@ This can be specified by setting the `log-level` input.
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.5.1
   with:
-    # one of `q`, `default`, `v`, `vv`, or `vvv`.
-    log-level: vvv
+    log-level: vvv # (1)!
 ```
+
+1. One of `q`, `default`, `v`, `vv`, or `vvv`.
 
 If nothing is specified, `log-level` will default to `default` or `vv` depending on if [debug logging is enabled for the action](#debug-logging-of-the-action).
 
