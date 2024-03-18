@@ -70,6 +70,10 @@ pub struct ConfigCli {
     /// Do not verify the TLS certificate of the server.
     #[arg(long, action = ArgAction::SetTrue)]
     tls_no_verify: bool,
+
+    /// Path to the file containing the authentication token.
+    #[arg(long, env = "RATTLER_AUTH_FILE")]
+    auth_file: Option<PathBuf>,
 }
 
 #[derive(Parser, Debug, Default, Clone)]
@@ -91,6 +95,10 @@ pub struct Config {
     #[serde(default)]
     change_ps1: Option<bool>,
 
+    /// Path to the file containing the authentication token.
+    #[serde(default)]
+    auth_file: Option<PathBuf>,
+
     /// If set to true, pixi will not verify the TLS certificate of the server.
     #[serde(default)]
     tls_no_verify: Option<bool>,
@@ -106,6 +114,7 @@ impl From<ConfigCli> for Config {
     fn from(cli: ConfigCli) -> Self {
         Self {
             tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
+            auth_file: cli.auth_file,
             ..Default::default()
         }
     }
@@ -157,6 +166,13 @@ impl Config {
         merged_config
     }
 
+    /// Load the global config and layer the given cli config on top of it.
+    pub fn with_cli_config(cli: &ConfigCli) -> Config {
+        let mut config = Config::load_global();
+        config.merge_config(&cli.clone().into());
+        config
+    }
+
     /// Load the config from the given path pixi folder and merge it with the global config.
     pub fn load(p: &Path) -> miette::Result<Config> {
         let local_config = p.join(consts::CONFIG_FILE);
@@ -190,6 +206,10 @@ impl Config {
             self.tls_no_verify = other.tls_no_verify;
         }
 
+        if other.auth_file.is_some() {
+            self.auth_file = other.auth_file.clone();
+        }
+
         self.loaded_from.extend(other.loaded_from.iter().cloned());
     }
 
@@ -213,6 +233,11 @@ impl Config {
     /// Retrieve the value for the change_ps1 field (defaults to true).
     pub fn change_ps1(&self) -> bool {
         self.change_ps1.unwrap_or(true)
+    }
+
+    /// Retrieve the value for the auth_file field.
+    pub fn auth_file(&self) -> Option<&PathBuf> {
+        self.auth_file.as_ref()
     }
 
     pub fn channel_config(&self) -> &ChannelConfig {

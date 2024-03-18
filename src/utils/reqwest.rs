@@ -15,9 +15,13 @@ pub fn default_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff::builder().build_with_max_retries(3)
 }
 
-fn auth_middleware() -> AuthenticationMiddleware {
-    if let Ok(auth_file) = std::env::var("RATTLER_AUTH_FILE") {
+fn auth_middleware(config: &Config) -> AuthenticationMiddleware {
+    if let Some(auth_file) = config.auth_file() {
         tracing::info!("Loading authentication from file: {:?}", auth_file);
+
+        if !auth_file.exists() {
+            tracing::info!("Authentication file does not exist: {:?}", auth_file);
+        }
 
         let mut store = AuthenticationStorage::new();
         store.add_backend(Arc::from(
@@ -54,7 +58,7 @@ pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientW
         .expect("failed to create reqwest Client");
 
     let authenticated_client = ClientBuilder::new(client.clone())
-        .with_arc(Arc::new(auth_middleware()))
+        .with_arc(Arc::new(auth_middleware(&config)))
         .build();
 
     (client, authenticated_client)
