@@ -1,18 +1,13 @@
-<<<<<<< HEAD
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use rattler_networking::{
-    authentication_storage, retry_policies::ExponentialBackoff, AuthenticationMiddleware,
-    AuthenticationStorage,
-=======
-use rattler_networking::{
-    mirror_middleware::Mirror, retry_policies::ExponentialBackoff, AuthenticationMiddleware,
-    MirrorMiddleware, OciMiddleware,
->>>>>>> c740f5a (implement mirror and oci settings)
+    authentication_storage, mirror_middleware::Mirror, retry_policies::ExponentialBackoff,
+    AuthenticationMiddleware, AuthenticationStorage, MirrorMiddleware, OciMiddleware,
 };
+
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::collections::HashMap;
 
 use crate::config::Config;
 
@@ -44,18 +39,30 @@ fn auth_middleware(config: &Config) -> AuthenticationMiddleware {
 fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     let mut internal_map = HashMap::new();
     tracing::info!("Using mirrors: {:?}", config.mirror_map());
+
+    fn ensure_trailing_slash(url: &url::Url) -> url::Url {
+        if url.path().ends_with('/') {
+            url.clone()
+        } else {
+            // Do not use `join` because it removes the last element
+            format!("{}/", url)
+                .parse()
+                .expect("Failed to add trailing slash to URL")
+        }
+    }
+
     for (key, value) in config.mirror_map() {
         let mut mirrors = Vec::new();
         for v in value {
             mirrors.push(Mirror {
-                url: v.clone(),
+                url: ensure_trailing_slash(v),
                 no_jlap: false,
                 no_bz2: false,
                 no_zstd: false,
                 max_failures: None,
             });
         }
-        internal_map.insert(key.clone(), mirrors);
+        internal_map.insert(ensure_trailing_slash(key), mirrors);
     }
 
     MirrorMiddleware::from_map(internal_map)

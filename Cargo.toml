@@ -164,15 +164,15 @@ pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 #deno_task_shell = { path = "../deno_task_shell" }
 
-rattler = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
-rattler_conda_types = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
-rattler_digest = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
-rattler_lock = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
-rattler_networking = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
-rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
-rattler_shell = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
-rattler_solve = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
-rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+# rattler = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+# rattler_conda_types = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+# rattler_digest = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+# rattler_lock = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+# rattler_networking = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+# rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+# rattler_shell = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+# rattler_solve = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
+# rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", rev = "e3784e0bc65b98f3cf3dcb7e2b8924113f3ec463" }
 
 #rattler = { path = "../rattler/crates/rattler" }
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
