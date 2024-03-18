@@ -373,7 +373,6 @@ fn parse_channels(channels: Vec<String>) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::cli::init::get_dir;
-    use crate::project::manifest::python::{PyPiRequirementType, VersionOrStar};
     use std::io::Read;
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
@@ -452,12 +451,10 @@ mod tests {
                 ),
                 (
                     PyPiPackageName::from_str("torch").unwrap(),
-                    PyPiRequirement {
-                        requirement: PyPiRequirementType::Version(VersionOrStar {
-                            version: pep440_rs::VersionSpecifiers::from_str("==1.8.1").ok(),
-                            index: None
-                        }),
-                        ..PyPiRequirement::default()
+                    PyPiRequirement::Version {
+                        version: "==1.8.1".parse().unwrap(),
+                        index: None,
+                        extras: vec![],
                     }
                 ),
             ]
@@ -588,13 +585,7 @@ mod tests {
             pip_deps,
             vec![(
                 PyPiPackageName::from_str("requests").unwrap(),
-                PyPiRequirement {
-                    requirement: PyPiRequirementType::Version(VersionOrStar {
-                        version: None,
-                        index: None
-                    }),
-                    extras: None,
-                }
+                PyPiRequirement::default()
             ),]
         );
     }

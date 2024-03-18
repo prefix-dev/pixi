@@ -123,6 +123,8 @@ impl From<AddArgs> for Task {
             Self::Execute(Execute {
                 cmd: CmdArgs::Single(cmd_args),
                 depends_on,
+                inputs: None,
+                outputs: None,
                 cwd: value.cwd,
             })
         }

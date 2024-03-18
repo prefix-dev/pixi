@@ -205,7 +205,7 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     };
     let platform = platform_host::Platform::current().unwrap();
     // Current interpreter and venv
-    let interpreter = uv_interpreter::Interpreter::query(&python, platform, &cache).unwrap();
+    let interpreter = uv_interpreter::Interpreter::query(&python, platform, cache).unwrap();
     uv_interpreter::PythonEnvironment::from_interpreter(interpreter)
 }
 
@@ -335,4 +335,19 @@ async fn test_channels_changed() {
     // Get an up-to-date lockfile and verify that bar version 1 was now selected from channel `b`.
     let lock_file = pixi.up_to_date_lock_file().await.unwrap();
     assert!(lock_file.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, platform, "bar ==1"));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[serial]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn install_conda_meta_history() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+    // Add and update lockfile with this version of python
+    pixi.add("python==3.11").with_install(true).await.unwrap();
+
+    let prefix = pixi.project().unwrap().root().join(".pixi/envs/default");
+    let conda_meta_history_file = prefix.join("conda-meta/history");
+
+    assert!(conda_meta_history_file.exists());
 }

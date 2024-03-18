@@ -9,7 +9,6 @@ use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter};
 
 pub mod add;
-pub mod auth;
 pub mod completion;
 pub mod global;
 pub mod info;
@@ -64,7 +63,7 @@ pub enum Command {
     ShellHook(shell_hook::Args),
     #[clap(alias = "g")]
     Global(global::Args),
-    Auth(auth::Args),
+    Auth(rattler::cli::auth::Args),
     #[clap(alias = "i")]
     Install(install::Args),
     Task(task::Args),
@@ -219,7 +218,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Add(cmd) => add::execute(cmd).await,
         Command::Run(cmd) => run::execute(cmd).await,
         Command::Global(cmd) => global::execute(cmd).await,
-        Command::Auth(cmd) => auth::execute(cmd).await,
+        Command::Auth(cmd) => rattler::cli::auth::execute(cmd).await.into_diagnostic(),
         Command::Install(cmd) => install::execute(cmd).await,
         Command::Shell(cmd) => shell::execute(cmd).await,
         Command::ShellHook(cmd) => shell_hook::execute(cmd).await,

@@ -83,6 +83,32 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
     Ok(())
 }
 
+/// Create the conda-meta/history.
+/// This file is needed for `conda run -p .pixi/envs/<env>` to work.
+fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
+    let history_file = environment_dir.join("conda-meta").join("history");
+
+    tracing::info!(
+        "Checking if history file exists: {}",
+        history_file.display()
+    );
+
+    let binding = history_file.clone();
+    let parent = binding
+        .parent()
+        .ok_or_else(|| miette::miette!("cannot find parent of '{}'", binding.display()))?;
+
+    if parent.exists() && !history_file.exists() {
+        tracing::info!("Creating history file: {}", history_file.display());
+        std::fs::write(
+            history_file,
+            "# not relevant for pixi but for `conda run -p`",
+        )
+        .into_diagnostic()?;
+    }
+    Ok(())
+}
+
 /// Runs the following checks to make sure the project is in a sane state:
 ///     1. It verifies that the prefix location is unchanged.
 ///     2. It verifies that the system requirements are met.
@@ -316,6 +342,7 @@ pub async fn update_prefix_conda(
 
     // Mark the location of the prefix
     create_prefix_location_file(prefix.root())?;
+    create_history_file(prefix.root())?;
 
     // Determine if the python version changed.
     Ok(PythonStatus::from_transaction(&transaction))

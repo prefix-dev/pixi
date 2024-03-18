@@ -512,7 +512,7 @@ mod tests {
     use rstest::rstest;
     use std::{path::PathBuf, str::FromStr};
 
-    #[derive(Error, Debug)]
+    #[derive(Error, Debug, Diagnostic)]
     enum LockfileUnsat {
         #[error("environment '{0}' is missing")]
         EnvironmentMissing(String),
@@ -548,7 +548,7 @@ mod tests {
 
     #[rstest]
     fn test_good_satisfiability(
-        #[files("tests/satisfiability/**/pixi.toml")] manifest_path: PathBuf,
+        #[files("tests/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
         let project = Project::load(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
@@ -559,7 +559,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_example_satisfiability(#[files("examples/**/pixi.toml")] manifest_path: PathBuf) {
+    fn test_example_satisfiability(#[files("examples/*/pixi.toml")] manifest_path: PathBuf) {
         let project = Project::load(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file).into_diagnostic() {
@@ -570,17 +570,17 @@ mod tests {
 
     #[test]
     fn test_failing_satisiability() {
-        let _handler = miette::set_hook(Box::new(|_| {
-            Box::new(NarratableReportHandler::new().with_cause_chain())
-        }));
+        let report_handler = NarratableReportHandler::new().with_cause_chain();
 
-        insta::glob!("../../tests/non-satisfiability", "**/pixi.toml", |path| {
+        insta::glob!("../../tests/non-satisfiability", "*/pixi.toml", |path| {
             let project = Project::load(&path).unwrap();
             let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
             let err = verify_lockfile_satisfiability(&project, &lock_file)
-                .into_diagnostic()
                 .expect_err("expected failing satisfiability");
-            insta::assert_snapshot!(format!("{err:?}"));
+
+            let mut s = String::new();
+            report_handler.render_report(&mut s, &err).unwrap();
+            insta::assert_snapshot!(s);
         });
     }
 

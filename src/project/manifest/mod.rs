@@ -1531,7 +1531,7 @@ mod tests {
         // Initially the dependency should exist
         assert!(manifest
             .feature_mut(feature_name)
-            .expect(&format!("feature `{}` should exist", feature_name.as_str()))
+            .unwrap_or_else(|| panic!("feature `{}` should exist", feature_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1554,7 +1554,7 @@ mod tests {
         // The dependency should no longer exist
         assert!(manifest
             .feature_mut(feature_name)
-            .expect(&format!("feature `{}` should exist", feature_name.as_str()))
+            .unwrap_or_else(|| panic!("feature `{}` should exist", feature_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1584,7 +1584,7 @@ mod tests {
         // Initially the dependency should exist
         assert!(manifest
             .feature_mut(feature_name)
-            .expect(&format!("feature `{}` should exist", feature_name.as_str()))
+            .unwrap_or_else(|| panic!("feature `{}` should exist", feature_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1602,7 +1602,7 @@ mod tests {
         // The dependency should no longer exist
         assert!(manifest
             .feature_mut(feature_name)
-            .expect(&format!("feature `{}` should exist", feature_name.as_str()))
+            .unwrap_or_else(|| panic!("feature `{}` should exist", feature_name.as_str()))
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1978,7 +1978,7 @@ platforms = ["linux-64", "win-64"]
             Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
         );
         manifest
-            .add_channels([conda_forge.clone()].into_iter(), &FeatureName::Default)
+            .add_channels([conda_forge.clone()], &FeatureName::Default)
             .unwrap();
 
         let cuda_feature = FeatureName::Named("cuda".to_string());
@@ -1986,7 +1986,7 @@ platforms = ["linux-64", "win-64"]
             Channel::from_str("nvidia", &ChannelConfig::default()).unwrap(),
         );
         manifest
-            .add_channels([nvidia.clone()].into_iter(), &cuda_feature)
+            .add_channels([nvidia.clone()], &cuda_feature)
             .unwrap();
 
         let test_feature = FeatureName::Named("test".to_string());
@@ -1999,8 +1999,7 @@ platforms = ["linux-64", "win-64"]
                     PrioritizedChannel::from_channel(
                         Channel::from_str("test2", &ChannelConfig::default()).unwrap(),
                     ),
-                ]
-                .into_iter(),
+                ],
                 &test_feature,
             )
             .unwrap();
@@ -2015,7 +2014,7 @@ platforms = ["linux-64", "win-64"]
 
         // Try to add again, should not add more channels
         manifest
-            .add_channels([conda_forge.clone()].into_iter(), &FeatureName::Default)
+            .add_channels([conda_forge.clone()], &FeatureName::Default)
             .unwrap();
 
         assert_eq!(
@@ -2042,7 +2041,7 @@ platforms = ["linux-64", "win-64"]
         );
         // Try to add again, should not add more channels
         manifest
-            .add_channels([nvidia.clone()].into_iter(), &cuda_feature)
+            .add_channels([nvidia.clone()], &cuda_feature)
             .unwrap();
         assert_eq!(
             manifest
@@ -2087,7 +2086,7 @@ platforms = ["linux-64", "win-64"]
             priority: None,
         };
         manifest
-            .add_channels([custom_channel.clone()].into_iter(), &FeatureName::Default)
+            .add_channels([custom_channel.clone()], &FeatureName::Default)
             .unwrap();
         assert!(manifest
             .parsed
@@ -2128,8 +2127,7 @@ platforms = ["linux-64", "win-64"]
                 [PrioritizedChannel {
                     channel: Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
                     priority: None,
-                }]
-                .into_iter(),
+                }],
                 &FeatureName::Default,
             )
             .unwrap();
@@ -2141,8 +2139,7 @@ platforms = ["linux-64", "win-64"]
                 [PrioritizedChannel {
                     channel: Channel::from_str("test_channel", &ChannelConfig::default()).unwrap(),
                     priority: None,
-                }]
-                .into_iter(),
+                }],
                 &FeatureName::Named("test".to_string()),
             )
             .unwrap();
@@ -2668,6 +2665,6 @@ bar = "*"
         [tool.poetry]
         test = "test"
         "#;
-        let _manifest = ProjectManifest::from_toml_str(&contents).unwrap();
+        let _manifest = ProjectManifest::from_toml_str(contents).unwrap();
     }
 }
