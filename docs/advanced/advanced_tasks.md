@@ -128,6 +128,41 @@ This will add the following line to `pixi.toml`:
 bar = { cmd = "python bar.py", cwd = "scripts" }
 ```
 
+## Caching
+
+When you specify `inputs` and/or `outputs` to a task, pixi will reuse the result of the task.
+
+For the cache, pixi checks that the following are true:
+
+- No package in the environment has changed.
+- The selected inputs and outputs are the same as the last time the task was
+  run. We compute fingerprints of all the files selected by the globs and
+  compare them to the last time the task was run.
+- The command is the same as the last time the task was run.
+
+If all of these conditions are met, pixi will not run the task again and instead use the existing result.
+
+Inputs and outputs can be specified as globs, which will be expanded to all matching files.
+
+```toml title="pixi.toml"
+[tasks]
+# This task will only run if the `main.py` file has changed.
+run = { cmd = "python main.py", inputs = ["main.py"] }
+
+# This task will remember the result of the `curl` command and not run it again if the file `data.csv` already exists.
+download_data = { cmd = "curl -o data.csv https://example.com/data.csv", outputs = ["data.csv"] }
+
+# This task will only run if the `src` directory has changed and will remember the result of the `make` command.
+build = { cmd = "make", inputs = ["src/*.cpp", "include/*.hpp"], outputs = ["build/app.exe"] }
+```
+
+Note: if you want to debug the globs you can use the `--verbose` flag to see which files are selected.
+
+```shell
+# shows info logs of all files that were selected by the globs
+pixi run -v start
+```
+
 ## Our task runner: deno_task_shell
 
 To support the different OS's (Windows, OSX and Linux), pixi integrates a shell that can run on all of them.
