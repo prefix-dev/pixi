@@ -126,6 +126,9 @@ The following example will install both the `py311` and the `py312` environment 
     environments: >- # (1)!
       py311
       py312
+- run: |
+  pixi run -e py311 test
+  pixi run -e py312 test
 ```
 
 1. separated by spaces, equivalent to
