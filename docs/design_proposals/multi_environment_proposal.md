@@ -263,31 +263,31 @@ pixi run test
 
     ```yaml title=".github/workflows/test.yml"
     jobs:
-      tests:
-      name: Test ${{ matrix.environment }}
-      runs-on: ubuntu-latest
-      strategy:
-        matrix:
-          environment:
-            - pl017
-            - pl018
-            - pl019
-            - pl020
-            - py39
-            - py310
-            - py311
-            - py312
-      steps:
+      tests-per-env:
+        runs-on: ubuntu-latest
+        strategy:
+          matrix:
+            environment: [py311, py312]
+        steps:
         - uses: actions/checkout@v4
-        - uses: prefix-dev/setup-pixi@v0.5.0
+          - uses: prefix-dev/setup-pixi@v0.5.1
+            with:
+              environments: ${{ matrix.environment }}
+          - name: Run tasks
+            run: |
+              pixi run --environment ${{ matrix.environment }} test
+      tests-with-multiple-envs:
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v4
+        - uses: prefix-dev/setup-pixi@v0.5.1
           with:
-            # already installs the corresponding environment and caches it
-            environments: ${{ matrix.environment }}
-        - name: Install dependencies
-          run: |
-            pixi run --env ${{ matrix.environment }} postinstall
-            pixi run --env ${{ matrix.environment }} test
+           environments: pl017 pl018
+        - run: |
+            pixi run -e pl017 test
+            pixi run -e pl018 test
     ```
+
 ??? tip "Test vs Production example"
     This is an example of a project that has a `test` feature and `prod` environment.
     The `prod` environment is a production environment that contains the run dependencies.
@@ -342,9 +342,9 @@ pixi run test
     FROM ghcr.io/prefix-dev/pixi:latest # this doesn't exist yet
     WORKDIR /app
     COPY . .
-    RUN pixi run --env prod postinstall
+    RUN pixi run --environment prod postinstall
     EXPOSE 8080
-    CMD ["/usr/local/bin/pixi", "run", "--env", "prod", "serve"]
+    CMD ["/usr/local/bin/pixi", "run", "--environment", "prod", "serve"]
     ```
 
 ??? tip "Multiple machines from one project"
@@ -402,13 +402,13 @@ pixi run test
     ```
 
     ```shell title="Running the project on a cuda machine"
-    pixi run train-model --env cuda
+    pixi run train-model --environment cuda
     # will execute `python train.py --cuda`
     # fails if not on linux-64 or win-64 with cuda 12.1
     ```
 
     ```shell title="Running the project with mlx"
-    pixi run train-model --env mlx
+    pixi run train-model --environment mlx
     # will execute `python train.py --mlx`
     # fails if not on osx-arm64
     ```
