@@ -62,7 +62,7 @@ pub fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette::Resul
 }
 
 /// Create the prefix location file.
-/// This file is needed for `conda run -p .pixi/envs/<env>` to work.
+/// Give it the environment path to place it.
 fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
     let prefix_file = environment_dir
         .join("conda-meta")
@@ -84,7 +84,7 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
 }
 
 /// Create the conda-meta/history.
-/// Give it the environment path to place it.
+/// This file is needed for `conda run -p .pixi/envs/<env>` to work.
 fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
     let history_file = environment_dir.join("conda-meta").join("history");
 
