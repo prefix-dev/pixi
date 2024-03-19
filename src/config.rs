@@ -10,6 +10,17 @@ use url::Url;
 
 use crate::consts;
 
+/// If other is None, keep the value, otherwise assign the value of other to self.
+macro_rules! assign_if_some {
+    ($self:expr, $other:expr, $($field:ident),+) => {
+        $(
+            if $other.$field.is_some() {
+                $self.$field = $other.$field.clone();
+            }
+        )+
+    }
+}
+
 /// Determines the default author based on the default git author. Both the name and the email
 /// address of the author are returned.
 pub fn get_default_author() -> Option<(String, String)> {
@@ -89,6 +100,16 @@ pub struct ConfigCliPrompt {
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]
+pub struct RepodataConfig {
+    /// Disable JLAP compression for repodata.
+    pub disable_jlap: Option<bool>,
+    /// Disable bzip2 compression for repodata.
+    pub disable_bzip2: Option<bool>,
+    /// Disable zstd compression for repodata.
+    pub disable_zstd: Option<bool>,
+}
+
+#[derive(Clone, Default, Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub default_channels: Vec<String>,
@@ -113,6 +134,9 @@ pub struct Config {
 
     #[serde(skip)]
     pub channel_config: ChannelConfig,
+
+    /// Configuration for repodata fetching.
+    pub repodata_config: Option<RepodataConfig>,
 }
 
 impl From<ConfigCli> for Config {
@@ -210,17 +234,14 @@ impl Config {
             self.default_channels = other.default_channels.clone();
         }
 
-        if other.change_ps1.is_some() {
-            self.change_ps1 = other.change_ps1;
-        }
-
-        if other.tls_no_verify.is_some() {
-            self.tls_no_verify = other.tls_no_verify;
-        }
-
-        if other.authentication_override_file.is_some() {
-            self.authentication_override_file = other.authentication_override_file.clone();
-        }
+        assign_if_some!(
+            self,
+            other,
+            change_ps1,
+            tls_no_verify,
+            authentication_override_file,
+            repodata_config
+        );
 
         self.mirrors.extend(other.mirrors.clone());
 

@@ -143,8 +143,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         build_reqwest_clients(None).1
     };
 
-    let repo_data =
-        Arc::new(fetch_sparse_repodata(channels.iter(), [args.platform], &client).await?);
+    let repo_data = Arc::new(
+        fetch_sparse_repodata(
+            channels.iter(),
+            [args.platform],
+            &client,
+            project.as_ref().map(|p| p.config()),
+        )
+        .await?,
+    );
 
     // When package name filter contains * (wildcard), it will search and display a list of packages matching this filter
     if package_name_filter.contains('*') {

@@ -182,9 +182,13 @@ pub(super) async fn get_client_and_sparse_repodata(
     IndexMap<(Channel, Platform), SparseRepoData>,
 )> {
     let authenticated_client = build_reqwest_clients(Some(config)).1;
-    let platform_sparse_repodata =
-        repodata::fetch_sparse_repodata(channels, [Platform::current()], &authenticated_client)
-            .await?;
+    let platform_sparse_repodata = repodata::fetch_sparse_repodata(
+        channels,
+        [Platform::current()],
+        &authenticated_client,
+        Some(config),
+    )
+    .await?;
     Ok((authenticated_client, platform_sparse_repodata))
 }
 
