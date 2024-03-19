@@ -1,5 +1,6 @@
 mod activation;
 pub(crate) mod channel;
+mod document;
 mod environment;
 mod error;
 mod feature;
@@ -16,6 +17,7 @@ use crate::project::manifest::python::PyPiPackageName;
 use crate::task::TaskName;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 pub use activation::Activation;
+use document::ManifestSource;
 pub use environment::{Environment, EnvironmentName};
 pub use feature::{Feature, FeatureName};
 use indexmap::map::Entry;
@@ -45,7 +47,7 @@ use std::{
 pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector, Targets};
 use thiserror::Error;
-use toml_edit::{value, Array, Document, Item, Table, TomlError, Value};
+use toml_edit::{value, Document, Item, TomlError};
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -68,9 +70,6 @@ pub enum ManifestKind {
 ///
 #[derive(Debug, Clone)]
 pub struct Manifest {
-    /// The kind of the manifest file
-    pub kind: ManifestKind,
-
     /// The path to the manifest file
     pub path: PathBuf,
 
@@ -78,7 +77,7 @@ pub struct Manifest {
     pub contents: String,
 
     /// Editable toml document
-    pub document: toml_edit::Document,
+    pub document: ManifestSource,
 
     /// The parsed manifest
     pub parsed: ProjectManifest,
@@ -156,11 +155,21 @@ impl Manifest {
             }
         }
 
+        let (source, path) = match kind {
+            ManifestKind::Pixi => (
+                ManifestSource::PixiToml(document),
+                root.join(consts::PROJECT_MANIFEST),
+            ),
+            ManifestKind::Pyproject => (
+                ManifestSource::PyProjectToml(document),
+                root.join(consts::PYPROJECT_MANIFEST),
+            ),
+        };
+
         Ok(Self {
-            kind,
-            path: root.join(consts::PROJECT_MANIFEST),
+            path,
             contents,
-            document,
+            document: source,
             parsed: manifest,
         })
     }
@@ -209,7 +218,9 @@ impl Manifest {
         }
 
         // Get the table that contains the tasks.
-        let table = get_or_insert_toml_table(&mut self.document, platform, feature_name, "tasks")?;
+        let table = self
+            .document
+            .get_or_insert_toml_table(platform, feature_name, "tasks")?;
 
         // Add the task to the table
         table.insert(name.as_str(), task.clone().into());
@@ -237,7 +248,8 @@ impl Manifest {
 
         // Get the task table either from the target platform or the default tasks.
         let tasks_table =
-            get_or_insert_toml_table(&mut self.document, platform, feature_name, "tasks")?;
+            self.document
+                .get_or_insert_toml_table(platform, feature_name, "tasks")?;
 
         // If it does not exist in toml, consider this ok as we want to remove it anyways
         tasks_table.remove(name.as_str());
@@ -311,7 +323,9 @@ impl Manifest {
             }
         }
         // Then add the platforms to the toml document
-        let platforms_array = self.specific_array_mut("platforms", feature_name)?;
+        let platforms_array = self
+            .document
+            .specific_array_mut("platforms", feature_name)?;
         for platform in stored_platforms {
             platforms_array.push(platform.to_string());
         }
@@ -367,7 +381,9 @@ impl Manifest {
         }
 
         // remove the channels from the toml
-        let platforms_array = self.specific_array_mut("platforms", feature_name)?;
+        let platforms_array = self
+            .document
+            .specific_array_mut("platforms", feature_name)?;
         platforms_array.retain(|x| !removed_platforms.contains(&x.as_str().unwrap().to_string()));
 
         Ok(())
@@ -383,7 +399,8 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Find the table toml table to add the dependency to.
         let dependency_table =
-            get_or_insert_toml_table(&mut self.document, platform, feature_name, spec_type.name())?;
+            self.document
+                .get_or_insert_toml_table(platform, feature_name, spec_type.name())?;
 
         // Determine the name of the package to add
         let (Some(name), spec) = spec.clone().into_nameless() else {
@@ -425,8 +442,7 @@ impl Manifest {
         platform: Option<Platform>,
     ) -> miette::Result<()> {
         // Find the table toml table to add the dependency to.
-        let dependency_table = get_or_insert_toml_table(
-            &mut self.document,
+        let dependency_table = self.document.get_or_insert_toml_table(
             platform,
             &FeatureName::Default,
             consts::PYPI_DEPENDENCIES,
@@ -464,11 +480,15 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
-        get_or_insert_toml_table(&mut self.document, platform, feature_name, spec_type.name())?
+        self.document
+            .get_or_insert_toml_table(platform, feature_name, spec_type.name())?
             .remove(dep.as_source())
             .ok_or_else(|| {
-                let table_name =
-                    get_nested_toml_table_name(feature_name, platform, spec_type.name());
+                let table_name = self.document.get_nested_toml_table_name(
+                    feature_name,
+                    platform,
+                    spec_type.name(),
+                );
                 miette::miette!(
                     "Couldn't find {} in [{}]",
                     console::style(dep.as_source()).bold(),
@@ -495,23 +515,22 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(PyPiPackageName, PyPiRequirement)> {
-        get_or_insert_toml_table(
-            &mut self.document,
-            platform,
-            feature_name,
-            consts::PYPI_DEPENDENCIES,
-        )?
-        .remove(dep.as_source())
-        .ok_or_else(|| {
-            let table_name =
-                get_nested_toml_table_name(feature_name, platform, consts::PYPI_DEPENDENCIES);
+        self.document
+            .get_or_insert_toml_table(platform, feature_name, consts::PYPI_DEPENDENCIES)?
+            .remove(dep.as_source())
+            .ok_or_else(|| {
+                let table_name = self.document.get_nested_toml_table_name(
+                    feature_name,
+                    platform,
+                    consts::PYPI_DEPENDENCIES,
+                );
 
-            miette::miette!(
-                "Couldn't find {} in [{}]",
-                console::style(dep.as_source()).bold(),
-                console::style(table_name).bold(),
-            )
-        })?;
+                miette::miette!(
+                    "Couldn't find {} in [{}]",
+                    console::style(dep.as_source()).bold(),
+                    console::style(table_name).bold(),
+                )
+            })?;
 
         Ok(self
             .parsed
@@ -537,53 +556,6 @@ impl Manifest {
             .values()
             .flat_map(|f| f.targets.targets())
             .any(|f| f.pypi_dependencies.is_some())
-    }
-
-    /// Returns a mutable reference to the specified array either in project or feature.
-    fn specific_array_mut(
-        &mut self,
-        array_name: &str,
-        feature_name: &FeatureName,
-    ) -> miette::Result<&mut Array> {
-        match feature_name {
-            FeatureName::Default => {
-                let project = &mut self.document["project"];
-                if project.is_none() {
-                    *project = Item::Table(Table::new());
-                }
-
-                let channels = &mut project[array_name];
-                if channels.is_none() {
-                    *channels = Item::Value(Value::Array(Array::new()))
-                }
-
-                channels
-                    .as_array_mut()
-                    .ok_or_else(|| miette::miette!("malformed {array_name} array"))
-            }
-            FeatureName::Named(_) => {
-                let feature = &mut self.document["feature"];
-                if feature.is_none() {
-                    *feature = Item::Table(Table::new());
-                }
-                let table = feature.as_table_mut().expect("feature should be a table");
-                table.set_dotted(true);
-
-                let feature = &mut table[feature_name.as_str()];
-                if feature.is_none() {
-                    *feature = Item::Table(Table::new());
-                }
-
-                let channels = &mut feature[array_name];
-                if channels.is_none() {
-                    *channels = Item::Value(Value::Array(Array::new()))
-                }
-
-                channels
-                    .as_array_mut()
-                    .ok_or_else(|| miette::miette!("malformed {array_name} array"))
-            }
-        }
     }
 
     /// Adds the specified channels to the manifest.
@@ -648,7 +620,7 @@ impl Manifest {
             }
         }
         // Then add the channels to the toml document
-        let channels_array = self.specific_array_mut("channels", feature_name)?;
+        let channels_array = self.document.specific_array_mut("channels", feature_name)?;
         for channel in stored_channels {
             channels_array.push(channel);
         }
@@ -705,7 +677,7 @@ impl Manifest {
         }
 
         // remove the channels from the toml
-        let channels_array = self.specific_array_mut("channels", feature_name)?;
+        let channels_array = self.document.specific_array_mut("channels", feature_name)?;
         channels_array.retain(|x| !removed_channels.contains(&x.as_str().unwrap().to_string()));
 
         Ok(())
@@ -715,7 +687,11 @@ impl Manifest {
     pub fn set_description(&mut self, description: &String) -> miette::Result<()> {
         // Update in both the manifest and the toml
         self.parsed.project.description = Some(description.to_string());
-        self.document["project"]["description"] = value(description);
+        let document = match &mut self.document {
+            ManifestSource::PyProjectToml(document) => document,
+            ManifestSource::PixiToml(document) => document,
+        };
+        document["project"]["description"] = value(description);
 
         Ok(())
     }
@@ -724,7 +700,11 @@ impl Manifest {
     pub fn set_version(&mut self, version: &String) -> miette::Result<()> {
         // Update in both the manifest and the toml
         self.parsed.project.version = Some(Version::from_str(version).unwrap());
-        self.document["project"]["version"] = value(version);
+        let document = match &mut self.document {
+            ManifestSource::PyProjectToml(document) => document,
+            ManifestSource::PixiToml(document) => document,
+        };
+        document["project"]["version"] = value(version);
 
         Ok(())
     }
@@ -781,63 +761,6 @@ impl Manifest {
     {
         self.parsed.solve_groups.find(name)
     }
-}
-
-/// Returns the name of a nested TOML table.
-/// If `platform` and `feature_name` are `None`, the table name is returned as-is.
-/// Otherwise, the table name is prefixed with the feature, platform, or both.
-fn get_nested_toml_table_name(
-    feature_name: &FeatureName,
-    platform: Option<Platform>,
-    table: &str,
-) -> String {
-    match (platform, feature_name) {
-        (Some(platform), FeatureName::Named(_)) => format!(
-            "feature.{}.target.{}.{}",
-            feature_name.as_str(),
-            platform.as_str(),
-            table
-        ),
-        (Some(platform), FeatureName::Default) => {
-            format!("target.{}.{}", platform.as_str(), table)
-        }
-        (None, FeatureName::Named(_)) => {
-            format!("feature.{}.{}", feature_name.as_str(), table)
-        }
-        (None, FeatureName::Default) => table.to_string(),
-    }
-}
-
-/// Retrieve a mutable reference to a target table `table_name`
-/// for a specific platform.
-/// If table not found, its inserted into the document.
-fn get_or_insert_toml_table<'a>(
-    doc: &'a mut Document,
-    platform: Option<Platform>,
-    feature: &FeatureName,
-    table_name: &str,
-) -> miette::Result<&'a mut Table> {
-    let table_name = get_nested_toml_table_name(feature, platform, table_name);
-    let parts: Vec<&str> = table_name.split('.').collect();
-
-    let mut current_table = doc.as_table_mut();
-    for (i, part) in parts.iter().enumerate() {
-        current_table = current_table
-            .entry(part)
-            .or_insert(Item::Table(Table::new()))
-            .as_table_mut()
-            .ok_or_else(|| {
-                miette!(
-                    "Could not find or access the part '{}' in the path '[{}]'",
-                    part,
-                    table_name
-                )
-            })?;
-        if i < parts.len() - 1 {
-            current_table.set_dotted(true);
-        }
-    }
-    Ok(current_table)
 }
 
 /// The environments in the project.
@@ -2486,14 +2409,30 @@ test = "test initial"
 
     #[test]
     fn test_get_nested_toml_table_name() {
+        let file_contents = r#"
+[project]
+name = "foo"
+version = "0.1.0"
+description = "foo description"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+        "#;
+
+        let manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
         // Test all different options for the feature name and platform
         assert_eq!(
             "dependencies".to_string(),
-            get_nested_toml_table_name(&FeatureName::Default, None, "dependencies")
+            manifest.document.get_nested_toml_table_name(
+                &FeatureName::Default,
+                None,
+                "dependencies"
+            )
         );
         assert_eq!(
             "target.linux-64.dependencies".to_string(),
-            get_nested_toml_table_name(
+            manifest.document.get_nested_toml_table_name(
                 &FeatureName::Default,
                 Some(Platform::Linux64),
                 "dependencies"
@@ -2501,7 +2440,7 @@ test = "test initial"
         );
         assert_eq!(
             "feature.test.dependencies".to_string(),
-            get_nested_toml_table_name(
+            manifest.document.get_nested_toml_table_name(
                 &FeatureName::Named("test".to_string()),
                 None,
                 "dependencies"
@@ -2509,7 +2448,7 @@ test = "test initial"
         );
         assert_eq!(
             "feature.test.target.linux-64.dependencies".to_string(),
-            get_nested_toml_table_name(
+            manifest.document.get_nested_toml_table_name(
                 &FeatureName::Named("test".to_string()),
                 Some(Platform::Linux64),
                 "dependencies"
@@ -2521,22 +2460,20 @@ test = "test initial"
     fn test_get_or_insert_toml_table() {
         let mut manifest =
             Manifest::from_str(Path::new(""), PROJECT_BOILERPLATE, ManifestKind::Pixi).unwrap();
-        let _ =
-            get_or_insert_toml_table(&mut manifest.document, None, &FeatureName::Default, "tasks");
-        let _ = get_or_insert_toml_table(
-            &mut manifest.document,
+        let _ = manifest
+            .document
+            .get_or_insert_toml_table(None, &FeatureName::Default, "tasks");
+        let _ = manifest.document.get_or_insert_toml_table(
             Some(Platform::Linux64),
             &FeatureName::Default,
             "tasks",
         );
-        let _ = get_or_insert_toml_table(
-            &mut manifest.document,
+        let _ = manifest.document.get_or_insert_toml_table(
             None,
             &FeatureName::Named("test".to_string()),
             "tasks",
         );
-        let _ = get_or_insert_toml_table(
-            &mut manifest.document,
+        let _ = manifest.document.get_or_insert_toml_table(
             Some(Platform::Linux64),
             &FeatureName::Named("test".to_string()),
             "tasks",
