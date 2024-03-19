@@ -292,8 +292,11 @@ impl PixiControl {
         // Create a task graph from the command line arguments.
         let search_env = SearchEnvironments::from_opt_env(
             &project,
-            explicit_environment,
-            Some(Platform::current()),
+            explicit_environment.clone(),
+            explicit_environment
+                .as_ref()
+                .map(|e| e.best_platform())
+                .or(Some(Platform::current())),
         );
         let task_graph = TaskGraph::from_cmd_args(&project, &search_env, args.task)
             .map_err(RunError::TaskGraphError)?;

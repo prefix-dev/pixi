@@ -209,7 +209,7 @@ pub async fn get_up_to_date_prefix(
     mut no_install: bool,
     existing_repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
 ) -> miette::Result<Prefix> {
-    let current_platform = Platform::current();
+    let current_platform = environment.best_platform();
     let project = environment.project();
 
     // Do not install if the platform is not supported
