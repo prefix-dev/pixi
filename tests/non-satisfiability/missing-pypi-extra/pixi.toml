@@ -1,0 +1,10 @@
+[project]
+name = "missing-pypi-extra"
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+[dependencies]
+python = "*"
+
+[pypi-dependencies]
+black = { version = "*", extras = ["jupyter"] }

@@ -19,6 +19,7 @@ pub struct Args {
     /// Specifies the package(s) that is to be removed.
     #[arg(num_args = 1..)]
     package: Vec<String>,
+
     #[command(flatten)]
     verbose: Verbosity,
 }

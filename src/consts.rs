@@ -9,6 +9,8 @@ pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
 pub const SOLVE_GROUP_ENVIRONMENTS_DIR: &str = "solve-group-envs";
 pub const PYPI_DEPENDENCIES: &str = "pypi-dependencies";
+pub const TASK_CACHE_DIR: &str = "task-cache-v0";
+
 pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
 
 /// The default channels to use for a new project.

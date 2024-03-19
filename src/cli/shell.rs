@@ -199,8 +199,8 @@ async fn start_nu_shell(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?
-        .with_cli_config(args.config.clone());
+    let project =
+        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
     let environment_name = args
         .environment
         .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);

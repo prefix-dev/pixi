@@ -15,7 +15,7 @@ use crate::activation::get_environment_variables;
 use crate::environment::verify_prefix_location_unchanged;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{
-    AmbiguousTask, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
+    AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
     SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskName,
 };
 use crate::Project;
@@ -54,8 +54,8 @@ pub struct Args {
 /// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Load the project
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?
-        .with_cli_config(args.config.clone());
+    let project =
+        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
 
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.default_environment().dir().as_path())?;
@@ -142,6 +142,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             );
         }
 
+        // check task cache
+        let task_cache = match executable_task
+            .can_skip(&lock_file)
+            .await
+            .into_diagnostic()?
+        {
+            CanSkip::No(cache) => cache,
+            CanSkip::Yes => {
+                eprintln!("Task can be skipped (cache hit) 🚀");
+                task_idx += 1;
+                continue;
+            }
+        };
+
         // If we don't have a command environment yet, we need to compute it. We lazily compute the
         // task environment because we only need the environment if a task is actually executed.
         let task_env: &_ = match task_envs.entry(executable_task.run_environment.clone()) {
@@ -167,6 +181,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(err) => return Err(err.into()),
         }
+
+        // Update the task cache with the new hash
+        executable_task
+            .save_cache(&lock_file, task_cache)
+            .await
+            .into_diagnostic()?;
     }
 
     Ok(())

@@ -2,7 +2,7 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::config::Config;
+use crate::config::{Config, ConfigCli};
 use crate::install::execute_transaction;
 use crate::{config, prefix::Prefix, progress::await_in_progress};
 use clap::Parser;
@@ -43,6 +43,9 @@ pub struct Args {
     /// By default, if no channel is provided, `conda-forge` is used.
     #[clap(short, long)]
     channel: Vec<String>,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 }
 
 /// Create the environment activation script
@@ -231,7 +234,7 @@ pub(super) async fn create_executable_scripts(
 /// Install a global command
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Figure out what channels we are using
-    let config = Config::load_global();
+    let config = Config::with_cli_config(&args.config);
     let channels = config.compute_channels(&args.channel).into_diagnostic()?;
 
     // Find the MatchSpec we want to install
@@ -243,7 +246,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
 
     // Fetch sparse repodata
-    let (authenticated_client, sparse_repodata) = get_client_and_sparse_repodata(&channels).await?;
+    let (authenticated_client, sparse_repodata) =
+        get_client_and_sparse_repodata(&channels, &config).await?;
 
     // Install the package(s)
     let mut executables = vec![];

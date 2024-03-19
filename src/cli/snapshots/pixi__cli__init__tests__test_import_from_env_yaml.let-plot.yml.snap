@@ -210,15 +210,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "pypng",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: None,
-                },
+                RawVersion(
+                    Star,
+                ),
             ),
             (
                 PyPiPackageName {
@@ -227,15 +221,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "palettable",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: None,
-                },
+                RawVersion(
+                    Star,
+                ),
             ),
         ],
         [],
