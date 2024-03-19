@@ -16,11 +16,11 @@ pub fn default_retry_policy() -> ExponentialBackoff {
 }
 
 fn auth_middleware(config: &Config) -> AuthenticationMiddleware {
-    if let Some(auth_file) = config.auth_file() {
+    if let Some(auth_file) = config.authentication_override_file() {
         tracing::info!("Loading authentication from file: {:?}", auth_file);
 
         if !auth_file.exists() {
-            tracing::info!("Authentication file does not exist: {:?}", auth_file);
+            tracing::warn!("Authentication file does not exist: {:?}", auth_file);
         }
 
         let mut store = AuthenticationStorage::new();

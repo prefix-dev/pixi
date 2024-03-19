@@ -29,4 +29,10 @@ change_ps1 = true
 # security risk and should only be used for testing purposes or internal networks.
 # You can override this from the CLI with `--tls-no-verify`.
 tls_no_verify = false
+
+# Override from where the authentication information is loaded.
+# Usually we try to use the keyring to load authentication data from, and only use a JSON
+# file as fallback. This option allows you to force the use of a JSON file.
+# Read more in the authentication section.
+authentication_override_file = "/path/to/your/override.json"
 ```

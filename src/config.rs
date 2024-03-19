@@ -97,7 +97,7 @@ pub struct Config {
 
     /// Path to the file containing the authentication token.
     #[serde(default)]
-    auth_file: Option<PathBuf>,
+    authentication_override_file: Option<PathBuf>,
 
     /// If set to true, pixi will not verify the TLS certificate of the server.
     #[serde(default)]
@@ -114,7 +114,7 @@ impl From<ConfigCli> for Config {
     fn from(cli: ConfigCli) -> Self {
         Self {
             tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
-            auth_file: cli.auth_file,
+            authentication_override_file: cli.auth_file,
             ..Default::default()
         }
     }
@@ -206,8 +206,8 @@ impl Config {
             self.tls_no_verify = other.tls_no_verify;
         }
 
-        if other.auth_file.is_some() {
-            self.auth_file = other.auth_file.clone();
+        if other.authentication_override_file.is_some() {
+            self.authentication_override_file = other.authentication_override_file.clone();
         }
 
         self.loaded_from.extend(other.loaded_from.iter().cloned());
@@ -236,8 +236,8 @@ impl Config {
     }
 
     /// Retrieve the value for the auth_file field.
-    pub fn auth_file(&self) -> Option<&PathBuf> {
-        self.auth_file.as_ref()
+    pub fn authentication_override_file(&self) -> Option<&PathBuf> {
+        self.authentication_override_file.as_ref()
     }
 
     pub fn channel_config(&self) -> &ChannelConfig {
@@ -292,7 +292,10 @@ mod tests {
 
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, None);
-        assert_eq!(config.auth_file, Some(PathBuf::from("path.json")));
+        assert_eq!(
+            config.authentication_override_file,
+            Some(PathBuf::from("path.json"))
+        );
     }
 
     #[test]

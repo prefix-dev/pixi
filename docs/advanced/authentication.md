@@ -70,12 +70,15 @@ This JSON file is located at `~/.rattler/credentials.json` and contains the cred
 
 ## Override the authentication storage
 
-You can use the `RATTLER_AUTH_FILE` environment variable to override the default location of the credentials file. When this environment variable is set, it provides the only source of authentication data that is used by pixi.
+You can use the `RATTLER_AUTH_FILE` environment variable to override the default location of the credentials file.
+When this environment variable is set, it provides the only source of authentication data that is used by pixi.
 
 E.g.
 
 ```bash
 export RATTLER_AUTH_FILE=$HOME/credentials.json
+# You can also specify the file in the command line
+pixi global install --auth-file $HOME/credentials.json ...
 ```
 
 The JSON should follow the following format:
@@ -98,3 +101,5 @@ The JSON should follow the following format:
 ```
 
 Note: if you use a wildcard in the host, any subdomain will match (e.g. `*.prefix.dev` also matches `repo.prefix.dev`).
+
+Lastly you can set the authentication override file in the [global configuration file](./global_configuration.md).
