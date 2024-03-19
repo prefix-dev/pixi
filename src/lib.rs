@@ -34,11 +34,3 @@ pub use task::{
     CmdArgs, ExecutableTask, FindTaskError, FindTaskSource, RunOutput, SearchEnvironments, Task,
     TaskDisambiguation, TaskExecutionError, TaskGraph, TaskGraphError,
 };
-
-use rattler_networking::retry_policies::ExponentialBackoff;
-
-/// The default retry policy employed by pixi.
-/// TODO: At some point we might want to make this configurable.
-pub fn default_retry_policy() -> ExponentialBackoff {
-    ExponentialBackoff::builder().build_with_max_retries(3)
-}

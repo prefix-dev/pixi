@@ -95,14 +95,15 @@ pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientW
         .build()
         .expect("failed to create reqwest Client");
 
-    let mut client_builder =
-        ClientBuilder::new(client.clone()).with_arc(Arc::new(auth_middleware(&config)));
+    let mut client_builder = ClientBuilder::new(client.clone());
 
     if !config.mirror_map().is_empty() {
         client_builder = client_builder
             .with(mirror_middleware(&config))
             .with(oci_middleware());
     }
+
+    client_builder = client_builder.with_arc(Arc::new(auth_middleware(&config)));
 
     let authenticated_client = client_builder.build();
 
