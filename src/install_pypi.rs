@@ -8,7 +8,7 @@ use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
 use pep508_rs::VerbatimUrl;
 use url::Url;
-use uv_cache::Cache;
+use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
 use uv_resolver::InMemoryIndex;
 
 use crate::consts::PROJECT_MANIFEST;
@@ -189,15 +189,45 @@ fn direct_url_json(path: &Path) -> miette::Result<Option<pypi_types::DirectUrl>>
     Ok(Some(direct_url))
 }
 
+/// Check freshness of a locked url against an installed dist
+fn check_url_freshness(locked_url: &Url, installed_dist: &InstalledDist) -> miette::Result<bool> {
+    if let Ok(archive) = locked_url.to_file_path() {
+        // This checks the entrypoints like `pyproject.toml`, `setup.cfg`, and `setup.py`
+        // against the METADATA of the installed distribution
+        if ArchiveTimestamp::up_to_date_with(&archive, ArchiveTarget::Install(installed_dist))
+            .into_diagnostic()?
+        {
+            tracing::debug!("Requirement already satisfied (and up-to-date): {installed_dist}");
+            Ok(true)
+        } else {
+            tracing::debug!("Requirement already satisfied (but not up-to-date): {installed_dist}");
+            Ok(false)
+        }
+    } else {
+        // Otherwise, assume the requirement is up-to-date.
+        tracing::debug!("Requirement already satisfied (assumed up-to-date): {installed_dist}");
+        Ok(true)
+    }
+}
+
 /// Check if a package needs to be reinstalled
 fn need_reinstall(
     installed: &InstalledDist,
-    required: &PypiPackageData,
+    locked: &PypiPackageData,
     python_version: &Version,
 ) -> miette::Result<ValidateInstall> {
     // Check if the installed version is the same as the required version
-    let keep = match installed {
-        InstalledDist::Registry(reg) => reg.version == required.version,
+    match installed {
+        InstalledDist::Registry(reg) => {
+            if reg.version != locked.version {
+                tracing::debug!(
+                    "Installed version {} does not match locked version {}",
+                    reg.version,
+                    locked.version
+                );
+                return Ok(ValidateInstall::Reinstall);
+            }
+        }
 
         // For installed distributions check the direct_url.json to check if a re-install is needed
         InstalledDist::Url(direct_url) => {
@@ -227,11 +257,16 @@ fn need_reinstall(
                     match result {
                         Ok(url) => {
                             // Check if the urls are different
-                            url == required.url
+                            if url == locked.url {
+                                // Check cache freshness
+                                if !check_url_freshness(&url, installed)? {
+                                    return Ok(ValidateInstall::Reinstall);
+                                }
+                            }
                         }
                         Err(_) => {
                             tracing::warn!("could not parse file url: {}", url);
-                            false
+                            return Ok(ValidateInstall::Reinstall);
                         }
                     }
                 }
@@ -242,9 +277,41 @@ fn need_reinstall(
                     // Subdirectory is either in the url or not supported
                     subdirectory: _,
                 } => {
-                    // Parse archive url, add `direct+` back onto it, so we can compare with the required url
-                    let url = Url::parse(&format!("direct+{url}")).into_diagnostic()?;
-                    url == required.url
+                    // Remove `direct+` scheme if it is there so we can compare the required to the installed url
+                    let locked_url = locked.url.to_string();
+                    let locked_url = locked_url
+                        .strip_prefix("direct+")
+                        .map(|s| s.to_string())
+                        .unwrap_or(locked_url)
+                        .parse::<Url>();
+
+                    // Try to parse both urls
+                    let installed_url = url.parse::<Url>();
+
+                    // Early out if we can't parse the urls
+                    let locked_url = if let Ok(locked_url) = locked_url {
+                        locked_url
+                    } else {
+                        tracing::warn!("could not parse locked url: {}", locked_url.unwrap_err());
+                        return Ok(ValidateInstall::Reinstall);
+                    };
+                    // Same here
+                    let installed_url = if let Ok(installed_url) = installed_url {
+                        installed_url
+                    } else {
+                        tracing::warn!(
+                            "could not parse installed url: {}",
+                            installed_url.unwrap_err()
+                        );
+                        return Ok(ValidateInstall::Reinstall);
+                    };
+
+                    if locked_url == installed_url {
+                        // Check cache freshness
+                        if !check_url_freshness(&locked_url, installed)? {
+                            return Ok(ValidateInstall::Reinstall);
+                        }
+                    }
                 }
                 pypi_types::DirectUrl::VcsUrl {
                     url,
@@ -252,29 +319,27 @@ fn need_reinstall(
                     subdirectory: _,
                 } => {
                     let url = Url::parse(&url).into_diagnostic()?;
-                    let git_url = DirectGitUrl::try_from(&required.url);
+                    let git_url = DirectGitUrl::try_from(&locked.url);
                     match git_url {
                         Ok(git) => {
                             // Check the repository base url
-                            git.url.repository() == &url
+                            if git.url.repository() != &url
                             // Check the sha from the direct_url.json and the required sha
                             // Use the uv git url to get the sha
-                                && vcs_info.commit_id == git.url.precise().map(|p| p.to_string())
+                                || vcs_info.commit_id != git.url.precise().map(|p| p.to_string())
+                            {
+                                return Ok(ValidateInstall::Reinstall);
+                            }
                         }
                         Err(err) => {
                             tracing::error!("could not parse git url: {}", err);
-                            false
+                            return Ok(ValidateInstall::Reinstall);
                         }
                     }
                 }
             }
         }
     };
-
-    // Reinstall if the version is the not same
-    if !keep {
-        return Ok(ValidateInstall::Reinstall);
-    }
 
     // Do some extra checks if the version is the same
     let metadata = if let Ok(metadata) = installed.metadata() {
@@ -298,7 +363,6 @@ fn need_reinstall(
 /// Figure out what we can link from the cache locally
 /// and what we need to download from the registry.
 /// Also determine what we need to remove.
-/// Ignores re-installs for now.
 fn whats_the_plan<'a>(
     required: &'a [CombinedPypiPackageData],
     installed: &SitePackages<'_>,
@@ -323,7 +387,6 @@ fn whats_the_plan<'a>(
     let mut reinstalls = vec![];
 
     // TODO: Do something with editable packages
-    // TODO: Check WheelTag correctness for installed packages
 
     // Walk over all installed packages and check if they are required
     for dist in installed {
@@ -364,7 +427,7 @@ fn whats_the_plan<'a>(
     // Now we need to check if we have any packages left in the required_map
     for pkg in required_map.values() {
         // Check if we need to revalidate
-        // In that case
+        // In that case we need to download from the registry
         if uv_cache.must_revalidate(&pkg.name) {
             remote.push(convert_to_dist(pkg));
             continue;
@@ -375,8 +438,10 @@ fn whats_the_plan<'a>(
             .get(&pkg.name)
             .find(|(version, _)| **version == pkg.version);
         if let Some((_, cached)) = wheel {
+            // Sure we have it in the cache, lets use that
             local.push(CachedDist::Registry(cached.clone()));
         } else {
+            // We need to download from the registry or any url
             remote.push(convert_to_dist(pkg));
         }
     }
@@ -410,7 +475,7 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
         }
     }
 
-    // Uninstall all packages in old site-packages
+    // Uninstall all packages in old site-packages directory
     for dist_info in installed {
         let _summary = uv_installer::uninstall(&dist_info)
             .await
