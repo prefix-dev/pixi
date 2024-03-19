@@ -84,7 +84,7 @@ brew install pixi
 
 ### Windows installer
 
-We provide an `msi` installer on [our Github releases page](https://github.com/prefix-dev/pixi/releases/latest).
+We provide an `msi` installer on [our GitHub releases page](https://github.com/prefix-dev/pixi/releases/latest).
 The installer will download pixi and add it to the path.
 
 ### Install from source
@@ -104,9 +104,10 @@ cargo test
 ```
 
 If you have any issues building because of the dependency on `rattler` checkout
-it's [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try)
+its [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try).
 
 ## Update
+
 Updating is as simple as installing, rerunning the installation script gets you the latest version.
 
 === "Linux & macOS"
@@ -129,7 +130,7 @@ Updating is as simple as installing, rerunning the installation script gets you 
     ```
 !!! note
     If you used a package manager like `brew`, `mamba`, `conda`, `paru` to install `pixi`.
-    Then use their builtin update mechanism. e.g. `brew update && brew upgrade pixi`
+    Then use their builtin update mechanism. e.g. `brew upgrade pixi`.
 
 ## Uninstall
 

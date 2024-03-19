@@ -29,7 +29,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 
     Put the following in your `.github/dependabot.yml` file to enable Dependabot for your GitHub Actions:
 
-    ```yaml
+    ```yaml title=".github/dependabot.yml"
     version: 2
     updates:
       - package-ecosystem: github-actions
@@ -67,7 +67,7 @@ You can specify the behavior by setting the `cache` input argument.
 
     ```yaml
     - uses: prefix-dev/setup-pixi@v0.5.1
-    with:
+      with:
         cache: true
         cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
     ```
