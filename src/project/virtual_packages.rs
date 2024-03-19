@@ -69,11 +69,11 @@ pub fn get_minimal_virtual_packages(
         virtual_packages.push(VirtualPackage::Win);
     }
 
-    if let Some(archspec) = system_requirements.archspec.clone() {
-        virtual_packages.push(VirtualPackage::Archspec(Archspec { spec: archspec }))
-    } else if let Some(archspec) = Archspec::from_platform(platform) {
-        virtual_packages.push(archspec.into())
-    }
+    // if let Some(archspec) = system_requirements.archspec.clone() {
+    //     virtual_packages.push(VirtualPackage::Archspec(Archspec { spec: archspec }))
+    // } else if let Some(archspec) = Archspec::from_platform(platform) {
+    //     virtual_packages.push(archspec.into())
+    // }
 
     // Add platform specific packages
     if platform.is_osx() {
@@ -139,7 +139,7 @@ pub enum VerifyCurrentPlatformError {
 pub fn verify_current_platform_has_required_virtual_packages(
     environment: &Environment<'_>,
 ) -> Result<(), VerifyCurrentPlatformError> {
-    let current_platform = Platform::current();
+    let current_platform = environment.best_platform();
 
     // Is the current platform in the list of supported platforms?
     if !environment.platforms().contains(&current_platform) {
