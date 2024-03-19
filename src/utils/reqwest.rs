@@ -7,6 +7,7 @@ use rattler_networking::{
 
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::RetryTransientMiddleware;
 use std::collections::HashMap;
 
 use crate::config::Config;
@@ -95,7 +96,9 @@ pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientW
         .build()
         .expect("failed to create reqwest Client");
 
-    let mut client_builder = ClientBuilder::new(client.clone());
+    let mut client_builder = ClientBuilder::new(client.clone()).with(
+        RetryTransientMiddleware::new_with_policy(default_retry_policy()),
+    );
 
     if !config.mirror_map().is_empty() {
         client_builder = client_builder
