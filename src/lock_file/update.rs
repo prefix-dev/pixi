@@ -390,6 +390,25 @@ fn default_max_concurrent_solves() -> usize {
     (available_parallelism.saturating_sub(2)).min(4).max(1)
 }
 
+/// If the project has any source dependencies, like `git` or `path` dependencies.
+/// for pypi dependencies, we need to limit the solve to 1,
+/// because of uv internals
+fn determine_pypi_solve_permits(project: &Project) -> usize {
+    // Get all environments
+    let environments = project.environments();
+    for environment in environments {
+        for (_, req) in environment.pypi_dependencies(None).iter() {
+            for dep in req {
+                if dep.is_direct_dependency() {
+                    return 1;
+                }
+            }
+        }
+    }
+
+    default_max_concurrent_solves()
+}
+
 /// Ensures that the lock-file is up-to-date with the project.
 ///
 /// This function will return a [`LockFileDerivedData`] struct that contains the lock-file and any
@@ -410,10 +429,11 @@ pub async fn ensure_up_to_date_lock_file(
     let max_concurrent_solves = options
         .max_concurrent_solves
         .unwrap_or_else(default_max_concurrent_solves);
+
     let solve_semaphore = Arc::new(Semaphore::new(max_concurrent_solves));
 
     // TODO(tim): we need this semaphore, to limit the number of concurrent solves. This is a problem when using source dependencies
-    let pypi_solve_semaphore = Arc::new(Semaphore::new(1));
+    let pypi_solve_semaphore = Arc::new(Semaphore::new(determine_pypi_solve_permits(project)));
 
     // should we check the lock-file in the first place?
     if !options.lock_file_usage.should_check_if_out_of_date() {

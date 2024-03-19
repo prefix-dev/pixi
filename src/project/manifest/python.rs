@@ -146,6 +146,19 @@ pub enum PyPiRequirement {
     RawVersion(VersionOrStar),
 }
 
+impl PyPiRequirement {
+    /// Returns true if the requirement is a direct dependency.
+    /// I.e. a url, path or git requirement.
+    pub fn is_direct_dependency(&self) -> bool {
+        matches!(
+            self,
+            PyPiRequirement::Git { .. }
+                | PyPiRequirement::Path { .. }
+                | PyPiRequirement::Url { .. }
+        )
+    }
+}
+
 impl Default for PyPiRequirement {
     fn default() -> Self {
         PyPiRequirement::RawVersion(VersionOrStar::Star)
