@@ -168,6 +168,13 @@ impl Config {
                 tracing::info!("Global config not found at {}", location.display());
             }
         }
+
+        // Load the default CLI config and layer it on top of the global config
+        // This will add any environment variables defined in the `clap` attributes to the config
+        let mut default_cli = ConfigCli::default();
+        default_cli.update_from(std::env::args().take(0));
+        merged_config.merge_config(&default_cli.into());
+
         merged_config
     }
 
