@@ -8,15 +8,14 @@ from pydantic import (
     BaseModel,
     Field,
     PositiveFloat,
-    conint,
-    constr,
+    StringConstraints,
 )
 
-NonEmptyStr = constr(min_length=1)
-PathNoBackslash = constr(pattern=r"^[^\\]+$")
+NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
+PathNoBackslash = Annotated[str, StringConstraints(pattern=r"^[^\\]+$")]
 Glob = NonEmptyStr
-UnsignedInt = conint(ge=0)
-GitUrl = constr(pattern=r"((git|ssh|http(s)?)|(git@[\w\.]+))(:(\/\/)?)([\w\.@:\/\\-~]+)")
+UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
+GitUrl = Annotated[str, StringConstraints(pattern=r"((git|ssh|http(s)?)|(git@[\w\.]+))(:(\/\/)?)([\w\.@:\/\\-~]+)")]
 
 
 class StrictBaseModel(BaseModel):
@@ -89,6 +88,24 @@ class MatchspecTable(StrictBaseModel):
 MatchSpec = NonEmptyStr | MatchspecTable
 CondaPackageName = NonEmptyStr
 
+
+# { version = "sdfds" extras = ["sdf"] }
+# { git = "sfds", rev = "fssd" }
+# { path = "asfdsf" }
+# { url = "asdfs" }
+
+class PyPIVersionRequirement(StrictBaseModel):
+    version: NonEmptyStr = Field(
+        None,
+        description="The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
+    )
+
+class PyPIGitRequirement(StrictBaseModel):
+    git: NonEmptyStr = Field(
+        None,
+        description="The git url to the repo e.g https://github.com/prefix-dev/pixi",
+    )
+    rev: NonEmptyStr | None = Field(None, description="The git sha revision")
 
 class PyPIRequirementTable(StrictBaseModel):
     version: NonEmptyStr | None = Field(
@@ -286,4 +303,4 @@ class BaseManifest(StrictBaseModel):
 
 
 if __name__ == "__main__":
-    print(json.dumps(BaseManifest.schema(), indent=2))
+    print(json.dumps(BaseManifest.model_json_schema(), indent=2))

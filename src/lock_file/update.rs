@@ -412,6 +412,9 @@ pub async fn ensure_up_to_date_lock_file(
         .unwrap_or_else(default_max_concurrent_solves);
     let solve_semaphore = Arc::new(Semaphore::new(max_concurrent_solves));
 
+    // TODO(tim): we need this semaphore, to limit the number of concurrent solves. This is a problem when using source dependencies
+    let pypi_solve_semaphore = Arc::new(Semaphore::new(1));
+
     // should we check the lock-file in the first place?
     if !options.lock_file_usage.should_check_if_out_of_date() {
         tracing::info!("skipping check if lock-file is up-to-date");
@@ -784,6 +787,7 @@ pub async fn ensure_up_to_date_lock_file(
             repodata_future,
             prefix_future,
             env_variables,
+            pypi_solve_semaphore.clone(),
         );
 
         pending_futures.push(pypi_solve_future.boxed_local());
@@ -1352,6 +1356,7 @@ async fn spawn_solve_pypi_task(
     repodata_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
     prefix: impl Future<Output = (Prefix, PythonStatus)>,
     env_variables: &HashMap<String, String>,
+    semaphore: Arc<Semaphore>,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1368,7 +1373,8 @@ async fn spawn_solve_pypi_task(
     let system_requirements = environment.system_requirements();
 
     // Wait until the conda records and prefix are available.
-    let (repodata_records, (prefix, python_status)) = tokio::join!(repodata_records, prefix);
+    let (repodata_records, (prefix, python_status), _guard) =
+        tokio::join!(repodata_records, prefix, semaphore.acquire_owned());
 
     let environment_name = environment.name().clone();
     // let (pypi_packages, duration) = tokio::spawn(
