@@ -11,7 +11,7 @@ Config {
     change_ps1: Some(
         true,
     ),
-    auth_file: None,
+    authentication_override_file: None,
     tls_no_verify: Some(
         false,
     ),
