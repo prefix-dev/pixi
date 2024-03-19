@@ -51,7 +51,7 @@ jobs:
 
   docs-release:
     # Don't run on forks
-    if: startsWith(github.event.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.tag, 'v')
+    if: github.repository == 'prefix-dev/pixi' && (startsWith(github.event.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' && startsWith(github.event.inputs.tag, 'v'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -92,7 +92,7 @@ jobs:
 
   docs-dev:
     # Don't run on forks
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && !startsWith(github.event.inputs.tag, 'v')
+    if: github.repository == 'prefix-dev/pixi' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && !startsWith(github.event.inputs.tag, 'v'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
