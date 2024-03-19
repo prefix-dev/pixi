@@ -593,6 +593,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#override-the-authentication-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Override the authentication storage
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1004,6 +1013,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#override-the-authentication-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Override the authentication storage
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1069,6 +1087,32 @@ A Bearer Token is sent with every request as an additional header of the form <c
 <h2 id="fallback-storage">Fallback storage<a class="headerlink" href="#fallback-storage" title="Permanent link">#</a></h2>
 <p>If you run on a server with none of the aforementioned keychains available, then pixi falls back to store the credentials in an <em>insecure</em> JSON file.
 This JSON file is located at <code>~/.rattler/credentials.json</code> and contains the credentials.</p>
+<h2 id="override-the-authentication-storage">Override the authentication storage<a class="headerlink" href="#override-the-authentication-storage" title="Permanent link">#</a></h2>
+<p>You can use the <code>RATTLER_AUTH_FILE</code> environment variable to override the default location of the credentials file.
+When this environment variable is set, it provides the only source of authentication data that is used by pixi.</p>
+<p>E.g.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">RATTLER_AUTH_FILE</span><span class="o">=</span><span class="nv">$HOME</span>/credentials.json
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># You can also specify the file in the command line</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--auth-file<span class="w"> </span><span class="nv">$HOME</span>/credentials.json<span class="w"> </span>...
+</span></code></pre></div>
+<p>The JSON should follow the following format:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="nt">&quot;*.prefix.dev&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">        </span><span class="nt">&quot;BearerToken&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_token&quot;</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nt">&quot;otherhost.com&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">        </span><span class="nt">&quot;BasicHttp&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">            </span><span class="nt">&quot;username&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_username&quot;</span><span class="p">,</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">            </span><span class="nt">&quot;password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_password&quot;</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">        </span><span class="p">}</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span><span class="nt">&quot;conda.anaconda.org&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">        </span><span class="nt">&quot;CondaToken&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_token&quot;</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>Note: if you use a wildcard in the host, any subdomain will match (e.g. <code>*.prefix.dev</code> also matches <code>repo.prefix.dev</code>).</p>
+<p>Lastly you can set the authentication override file in the <a href="../global_configuration/">global configuration file</a>.</p>
 
 
 
