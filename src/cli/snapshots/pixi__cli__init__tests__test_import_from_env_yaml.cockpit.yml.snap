@@ -837,15 +837,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "memory-profiler",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: None,
-                },
+                RawVersion(
+                    Star,
+                ),
             ),
             (
                 PyPiPackageName {
@@ -854,15 +848,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "pre-commit",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: None,
-                },
+                RawVersion(
+                    Star,
+                ),
             ),
             (
                 PyPiPackageName {
@@ -871,15 +859,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "graphviz",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: None,
-                },
+                RawVersion(
+                    Star,
+                ),
             ),
             (
                 PyPiPackageName {
@@ -888,15 +870,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "sphinx-notfound-page",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: None,
-                },
+                RawVersion(
+                    Star,
+                ),
             ),
             (
                 PyPiPackageName {
@@ -905,15 +881,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                         "deepobs",
                     ),
                 },
-                PyPiRequirement {
-                    requirement: Version(
-                        VersionOrStar {
-                            version: None,
-                            index: None,
-                        },
-                    ),
-                    extras: None,
-                },
+                RawVersion(
+                    Star,
+                ),
             ),
         ],
         [

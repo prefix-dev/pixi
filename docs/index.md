@@ -57,11 +57,16 @@ To get autocompletion run:
     echo 'eval (pixi completion --shell elvish | slurp)' >> ~/.elvish/rc.elv
     ```
 === "Windows"
+
     PowerShell:
     ```powershell
     Add-Content -Path $PROFILE -Value '(& pixi completion --shell powershell) | Out-String | Invoke-Expression'
     ```
-
+    !!! tip "Failure because no profile file exists"
+        Make sure your profile file exists, otherwise create it with:
+        ```PowerShell
+        New-Item -Path $PROFILE -ItemType File -Force
+        ```
 
 And then restart the shell or source the shell config file.
 

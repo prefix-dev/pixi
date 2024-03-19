@@ -1240,8 +1240,8 @@ async fn spawn_extract_environment_task(
     for (name, reqs) in pypi_dependencies {
         let name = name.as_normalized().clone();
         for req in reqs {
-            for extra in req.extras.into_iter().flatten() {
-                pypi_package_names.insert(PackageName::Pypi((name.clone(), Some(extra))));
+            for extra in req.extras().iter() {
+                pypi_package_names.insert(PackageName::Pypi((name.clone(), Some(extra.clone()))));
             }
         }
         pypi_package_names.insert(PackageName::Pypi((name, None)));
