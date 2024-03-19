@@ -54,8 +54,8 @@ pub struct Args {
 /// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Load the project
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?
-        .with_cli_config(args.config.clone());
+    let project =
+        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
 
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.default_environment().dir().as_path())?;

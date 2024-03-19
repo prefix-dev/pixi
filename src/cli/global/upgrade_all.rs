@@ -5,7 +5,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, MatchSpec, ParseStrictness};
 
-use crate::config::Config;
+use crate::config::{Config, ConfigCli};
 
 use super::{
     common::{find_installed_package, get_client_and_sparse_repodata, load_package_records},
@@ -27,11 +27,14 @@ pub struct Args {
     /// the package was installed from will always be used.
     #[clap(short, long)]
     channel: Vec<String>,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let packages = list_global_packages().await?;
-    let config = Config::load_global();
+    let config = Config::with_cli_config(&args.config);
     let mut channels = config.compute_channels(&args.channel).into_diagnostic()?;
 
     let mut installed_versions = HashMap::with_capacity(packages.len());
@@ -58,7 +61,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     channels = channels.into_iter().unique().collect::<Vec<_>>();
 
     // Fetch sparse repodata
-    let (authenticated_client, sparse_repodata) = get_client_and_sparse_repodata(&channels).await?;
+    let (authenticated_client, sparse_repodata) =
+        get_client_and_sparse_repodata(&channels, &config).await?;
 
     let mut upgraded = false;
     for package_name in packages.iter() {

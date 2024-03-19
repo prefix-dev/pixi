@@ -5,6 +5,7 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_networking::authentication_storage;
 use rattler_virtual_packages::VirtualPackage;
 use serde::Serialize;
 use serde_with::serde_as;
@@ -352,15 +353,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(GenericVirtualPackage::from)
         .collect::<Vec<_>>();
 
+    let config = project
+        .map(|p| p.config().clone())
+        .unwrap_or_else(config::Config::load_global);
+
+    let auth_file = config
+        .authentication_override_file()
+        .map(|x| x.to_owned())
+        .unwrap_or_else(|| {
+            authentication_storage::backends::file::FileStorage::default()
+                .path
+                .clone()
+        });
+
     let info = Info {
         platform: Platform::current().to_string(),
         virtual_packages,
         version: env!("CARGO_PKG_VERSION").to_string(),
         cache_dir: Some(config::get_cache_dir()?),
         cache_size,
-        auth_dir: rattler_networking::authentication_storage::backends::file::FileStorage::default(
-        )
-        .path,
+        auth_dir: auth_file,
         project_info,
         environments_info,
     };
