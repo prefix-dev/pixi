@@ -129,12 +129,12 @@ fn is_direct_url(url_scheme: &str) -> bool {
 }
 
 /// Strip of the `direct` scheme from the url if it is there
-fn strip_direct_scheme(url: &Url) -> Url {
-    if url.scheme().starts_with("direct+") {
-        url.to_string()[7..].parse().expect("could not parse url")
-    } else {
-        url.clone()
-    }
+fn strip_direct_scheme(url: impl AsRef<str>) -> Result<Url, url::ParseError> {
+    url.as_ref()
+        .strip_prefix("direct+")
+        .map(|s| s.to_string())
+        .unwrap_or(url.as_ref().to_owned())
+        .parse::<Url>()
 }
 
 /// Convert from a PypiPackageData to a uv [`distribution_types::Dist`]
@@ -143,7 +143,9 @@ fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
     if is_direct_url(pkg.url.scheme()) {
         Dist::from_url(
             pkg.name.clone(),
-            VerbatimUrl::from_url(strip_direct_scheme(&pkg.url)),
+            VerbatimUrl::from_url(
+                strip_direct_scheme(pkg.url.as_str()).expect("could not parse direct url"),
+            ),
         )
         .expect("could not convert into uv dist")
     } else {
@@ -278,13 +280,7 @@ fn need_reinstall(
                     subdirectory: _,
                 } => {
                     // Remove `direct+` scheme if it is there so we can compare the required to the installed url
-                    let locked_url = locked.url.to_string();
-                    let locked_url = locked_url
-                        .strip_prefix("direct+")
-                        .map(|s| s.to_string())
-                        .unwrap_or(locked_url)
-                        .parse::<Url>();
-
+                    let locked_url = strip_direct_scheme(locked.url.as_str());
                     // Try to parse both urls
                     let installed_url = url.parse::<Url>();
 
