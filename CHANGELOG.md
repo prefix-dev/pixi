@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2024-03-19
+### ✨ Highlights
+
+- This release greatly improves `pixi global` commands, thanks to @chawyehsu!
+- @pavelzw added a lot of documentation, including GitHub Actions and PyCharm!
+- We now support a first version of global(or local) configuration for pixi's behavior.
+
+### 📃 Details
+
+#### Added
+
+- Add citation file by @ruben-arts in [#908](https://github.com/prefix-dev/pixi/pull/908)
+- Add a pixi badge by @ruben-arts in [#961](https://github.com/prefix-dev/pixi/pull/961)
+- Add `tool` to strict json schema by @ruben-arts in [#969](https://github.com/prefix-dev/pixi/pull/969)
+
+#### Changed
+
+- Refined global upgrade commands by @chawyehsu in [#948](https://github.com/prefix-dev/pixi/pull/948)
+- Global upgrade supports matchspec by @chawyehsu in [#962](https://github.com/prefix-dev/pixi/pull/962)
+- Improve `pixi search` with platform selection and making limit optional by @wolfv in [#979](https://github.com/prefix-dev/pixi/pull/979)
+- Implement global config options by @wolfv in [#960](https://github.com/prefix-dev/pixi/pull/960)
+- Update auth to use rattler cli by @kassoulait by @ruben-arts in [#986](https://github.com/prefix-dev/pixi/pull/986)
+- Implement `inputs` and `outputs` hash based task skipping by @wolfv in [#933](https://github.com/prefix-dev/pixi/pull/933)
+- Use `RATTLER_AUTH_FILE` and use proper reqwest clients in search by @wolfv in [#994](https://github.com/prefix-dev/pixi/pull/994)
+
+#### Documentation
+
+- Remove cache: true from setup-pixi by @pavelzw in [#950](https://github.com/prefix-dev/pixi/pull/950)
+- Add GitHub Actions documentation by @pavelzw in [#955](https://github.com/prefix-dev/pixi/pull/955)
+- Add PyCharm documentation by @pavelzw in [#974](https://github.com/prefix-dev/pixi/pull/974)
+- Mention watch_file in direnv usage by @pavelzw in [#983](https://github.com/prefix-dev/pixi/pull/983)
+- Add tip to help users when no PROFILE file exists by @ruben-arts in [#991](https://github.com/prefix-dev/pixi/pull/991)
+- Move yaml comments into mkdocs annotations by @pavelzw in [#1003](https://github.com/prefix-dev/pixi/pull/1003)
+- Fix --env and extend actions examples by @ruben-arts in [#1005](https://github.com/prefix-dev/pixi/pull/1005)
+- Add Wflow to projects built with pixi by @Hofer-Julian in [#1006](https://github.com/prefix-dev/pixi/pull/1006)
+- Removed linenums to avoid buggy visualization by @ruben-arts in [#1002](https://github.com/prefix-dev/pixi/pull/1002)
+
+#### Fixed
+
+- Pypi dependencies not being removed by @tdejager in [#952](https://github.com/prefix-dev/pixi/pull/952)
+- Permissions for lint pr by @ruben-arts in [#852](https://github.com/prefix-dev/pixi/pull/852)
+- Install Windows executable with `install.sh` in Git Bash by @jdblischak in [#966](https://github.com/prefix-dev/pixi/pull/966)
+- Proper scanning of the conda-meta folder for `json` entries by @wolfv in [#971](https://github.com/prefix-dev/pixi/pull/971)
+- Global shim scripts for Windows by @wolfv in [#975](https://github.com/prefix-dev/pixi/pull/975)
+- Correct fish prompt by @wolfv in [#981](https://github.com/prefix-dev/pixi/pull/981)
+- Prefix_file rename by @ruben-arts in [#959](https://github.com/prefix-dev/pixi/pull/959)
+- Conda transitive dependencies of pypi packages are properly extracted by @baszalmstra in [#967](https://github.com/prefix-dev/pixi/pull/967)
+- Make tests more deterministic and use single * for glob expansion by @wolfv in [#987](https://github.com/prefix-dev/pixi/pull/987)
+- Create conda-meta/history file by @pavelzw in [#995](https://github.com/prefix-dev/pixi/pull/995)
+- Pypi dependency parsing was too lenient by @wolfv in [#984](https://github.com/prefix-dev/pixi/pull/984)
+
+
+## New Contributors
+* @jdblischak made their first contribution in [#966](https://github.com/prefix-dev/pixi/pull/966)
+* @kassoulait made their first contribution in [#986](https://github.com/prefix-dev/pixi/pull/986)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.16.1..v0.17.0)
+
 ## [0.16.1] - 2024-03-11
 ### 📃 Details
 #### Fixed
