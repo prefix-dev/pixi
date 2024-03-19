@@ -2,9 +2,11 @@ use clap::{ArgAction, Parser};
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use url::Url;
 
 use crate::consts;
 
@@ -102,6 +104,9 @@ pub struct Config {
     /// If set to true, pixi will not verify the TLS certificate of the server.
     #[serde(default)]
     tls_no_verify: Option<bool>,
+
+    #[serde(default)]
+    mirrors: HashMap<Url, Vec<Url>>,
 
     #[serde(skip)]
     pub loaded_from: Vec<PathBuf>,
@@ -210,6 +215,8 @@ impl Config {
             self.authentication_override_file = other.authentication_override_file.clone();
         }
 
+        self.mirrors.extend(other.mirrors.clone());
+
         self.loaded_from.extend(other.loaded_from.iter().cloned());
     }
 
@@ -258,6 +265,10 @@ impl Config {
             .iter()
             .map(|c| Channel::from_str(c, &self.channel_config))
             .collect::<Result<Vec<Channel>, _>>()
+    }
+
+    pub fn mirror_map(&self) -> &std::collections::HashMap<Url, Vec<Url>> {
+        &self.mirrors
     }
 }
 
