@@ -355,7 +355,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let config = project
         .map(|p| p.config().clone())
-        .unwrap_or_else(|| config::Config::load_global());
+        .unwrap_or_else(config::Config::load_global);
 
     let auth_file = config
         .authentication_override_file()
