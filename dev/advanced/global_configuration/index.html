@@ -703,6 +703,30 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#mirror-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mirror configuration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mirror configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#oci-mirrors" class="md-nav__link">
+    <span class="md-ellipsis">
+      OCI Mirrors
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -972,6 +996,30 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#mirror-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mirror configuration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mirror configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#oci-mirrors" class="md-nav__link">
+    <span class="md-ellipsis">
+      OCI Mirrors
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -996,17 +1044,21 @@
 
 
 <h1 id="global-configuration-in-pixi">Global configuration in pixi<a class="headerlink" href="#global-configuration-in-pixi" title="Permanent link">#</a></h1>
-<p>Pixi supports some global configuration options, as well as project-scoped configuration (that does not belong into the project file).
-The configuration is loaded in the following order:</p>
+<p>Pixi supports some global configuration options, as well as project-scoped
+configuration (that does not belong into the project file). The configuration is
+loaded in the following order:</p>
 <ol>
-<li>Global configuration folder (e.g. <code>~/.config/pixi/config.toml</code> on Linux, dependent on XDG_CONFIG_HOME)</li>
-<li>Global .pixi folder: <code>~/.pixi/config.toml</code> (or <code>$PIXI_HOME/config.toml</code> if the <code>PIXI_HOME</code> environment variable is set)</li>
+<li>Global configuration folder (e.g. <code>~/.config/pixi/config.toml</code> on Linux,
+   dependent on XDG_CONFIG_HOME)</li>
+<li>Global .pixi folder: <code>~/.pixi/config.toml</code> (or <code>$PIXI_HOME/config.toml</code> if
+   the <code>PIXI_HOME</code> environment variable is set)</li>
 <li>Project-local .pixi folder: <code>$PIXI_PROJECT/.pixi/config.toml</code></li>
 <li>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code> etc.)</li>
 </ol>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>To find the locations where <code>pixi</code> looks for configuration files, run <code>pixi</code> with <code>-v</code> or <code>--verbose</code>.</p>
+<p>To find the locations where <code>pixi</code> looks for configuration files, run
+<code>pixi</code> with <code>-v</code> or <code>--verbose</code>.</p>
 </div>
 <h2 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">#</a></h2>
 <p>The following reference describes all available configuration options.</p>
@@ -1029,7 +1081,52 @@ The configuration is loaded in the following order:</p>
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="c1"># file as fallback. This option allows you to force the use of a JSON file.</span>
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="c1"># Read more in the authentication section.</span>
 </span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="n">authentication_override_file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/path/to/your/override.json&quot;</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1"># configuration for conda channel-mirrors</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="k">[mirrors]</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="c1"># redirect all requests for conda-forge to the prefix.dev mirror</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">    </span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="p">]</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="c1"># redirect all requests for bioconda to one of the three listed mirrors</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="c1"># Note: for repodata we try the first mirror first.</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="s2">&quot;https://conda.anaconda.org/bioconda&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">    </span><span class="s2">&quot;https://conda.anaconda.org/bioconda&quot;</span><span class="p">,</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">    </span><span class="c1"># OCI registries are also supported</span>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">    </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/bioconda&quot;</span><span class="p">,</span>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">    </span><span class="s2">&quot;https://prefix.dev/bioconda&quot;</span><span class="p">,</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="p">]</span>
 </span></code></pre></div>
+<h2 id="mirror-configuration">Mirror configuration<a class="headerlink" href="#mirror-configuration" title="Permanent link">#</a></h2>
+<p>You can configure mirrors for conda channels. We expect that mirrors are exact
+copies of the original channel. The implementation will look for the mirror key
+(a URL) in the <code>mirrors</code> section of the configuration file and replace the
+original URL with the mirror URL.</p>
+<p>To also include the original URL, you have to repeat it in the list of mirrors.</p>
+<p>The mirrors are prioritized based on the order of the list. We attempt to fetch
+the repodata (the most important file) from the first mirror in the list. The
+repodata contains all the SHA256 hashes of the individual packages, so it is
+important to get this file from a trusted source.</p>
+<p>You can also specify mirrors for an entire "host", e.g.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="s2">&quot;https://prefix.dev/&quot;</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="p">]</span>
+</span></code></pre></div>
+<p>This will forward all request to channels on anaconda.org to prefix.dev.
+Channels that are not currently mirrored on prefix.dev will fail in the above example.</p>
+<h3 id="oci-mirrors">OCI Mirrors<a class="headerlink" href="#oci-mirrors" title="Permanent link">#</a></h3>
+<p>You can also specify mirrors on the OCI registry. There is a public mirror on
+the Github container registry (ghcr.io) that is maintained by the conda-forge
+team. You can use it like this:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">]</span>
+</span></code></pre></div>
+<p>The GHCR mirror also contains <code>bioconda</code> packages. You can search the <a href="https://github.com/orgs/channel-mirrors/packages">available
+packages on Github</a>.</p>
 
 
 
