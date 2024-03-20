@@ -120,8 +120,6 @@ jobs:
       - if: ${{ matrix.os != 'windows-latest' }}
         uses: rui314/setup-mold@v1
 
-      - uses: Swatinem/rust-cache@v2
-
       - name: "Cargo nextest"
         run: |
           cargo nextest run --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow --features slow_integration_tests
