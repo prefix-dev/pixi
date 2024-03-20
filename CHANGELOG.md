@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Highlights
 
 - This release greatly improves `pixi global` commands, thanks to @chawyehsu!
+- We now support global(or local) configuration for pixi's own behavior, including mirrors, and OCI registries.
+- Support for `task` caching, which can skip tasks based on the hash of the `inputs` and `outputs`.
 - @pavelzw added a lot of documentation, including GitHub Actions and PyCharm!
-- We now support a first version of global(or local) configuration for pixi's behavior.
 
 ### 📃 Details
 
@@ -18,29 +19,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add citation file by @ruben-arts in [#908](https://github.com/prefix-dev/pixi/pull/908)
 - Add a pixi badge by @ruben-arts in [#961](https://github.com/prefix-dev/pixi/pull/961)
-- Add `tool` to strict json schema by @ruben-arts in [#969](https://github.com/prefix-dev/pixi/pull/969)
+- Add deserialization of pypi source dependencies from toml by @ruben-arts and @wolf in [#895](https://github.com/prefix-dev/pixi/pull/895) [#984](https://github.com/prefix-dev/pixi/pull/984)
+- Implement mirror and OCI settings by @wolfv in [#988](https://github.com/prefix-dev/pixi/pull/988)
+- Implement `inputs` and `outputs` hash based task skipping by @wolfv in [#933](https://github.com/prefix-dev/pixi/pull/933)
 
 #### Changed
 
 - Refined global upgrade commands by @chawyehsu in [#948](https://github.com/prefix-dev/pixi/pull/948)
 - Global upgrade supports matchspec by @chawyehsu in [#962](https://github.com/prefix-dev/pixi/pull/962)
 - Improve `pixi search` with platform selection and making limit optional by @wolfv in [#979](https://github.com/prefix-dev/pixi/pull/979)
-- Implement global config options by @wolfv in [#960](https://github.com/prefix-dev/pixi/pull/960)
+- Implement global config options by @wolfv in [#960](https://github.com/prefix-dev/pixi/pull/960) [#1015](https://github.com/prefix-dev/pixi/pull/1015) [#1019](https://github.com/prefix-dev/pixi/pull/1019)
 - Update auth to use rattler cli by @kassoulait by @ruben-arts in [#986](https://github.com/prefix-dev/pixi/pull/986)
-- Implement `inputs` and `outputs` hash based task skipping by @wolfv in [#933](https://github.com/prefix-dev/pixi/pull/933)
-- Use `RATTLER_AUTH_FILE` and use proper reqwest clients in search by @wolfv in [#994](https://github.com/prefix-dev/pixi/pull/994)
 
 #### Documentation
 
 - Remove cache: true from setup-pixi by @pavelzw in [#950](https://github.com/prefix-dev/pixi/pull/950)
 - Add GitHub Actions documentation by @pavelzw in [#955](https://github.com/prefix-dev/pixi/pull/955)
 - Add PyCharm documentation by @pavelzw in [#974](https://github.com/prefix-dev/pixi/pull/974)
-- Mention watch_file in direnv usage by @pavelzw in [#983](https://github.com/prefix-dev/pixi/pull/983)
+- Mention `watch_file` in direnv usage by @pavelzw in [#983](https://github.com/prefix-dev/pixi/pull/983)
 - Add tip to help users when no PROFILE file exists by @ruben-arts in [#991](https://github.com/prefix-dev/pixi/pull/991)
 - Move yaml comments into mkdocs annotations by @pavelzw in [#1003](https://github.com/prefix-dev/pixi/pull/1003)
 - Fix --env and extend actions examples by @ruben-arts in [#1005](https://github.com/prefix-dev/pixi/pull/1005)
 - Add Wflow to projects built with pixi by @Hofer-Julian in [#1006](https://github.com/prefix-dev/pixi/pull/1006)
-- Removed linenums to avoid buggy visualization by @ruben-arts in [#1002](https://github.com/prefix-dev/pixi/pull/1002)
+- Removed `linenums` to avoid buggy visualization by @ruben-arts in [#1002](https://github.com/prefix-dev/pixi/pull/1002)
+- Fix typos by @pavelzw in [#1016](https://github.com/prefix-dev/pixi/pull/1016)
 
 #### Fixed
 
@@ -55,7 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make tests more deterministic and use single * for glob expansion by @wolfv in [#987](https://github.com/prefix-dev/pixi/pull/987)
 - Create conda-meta/history file by @pavelzw in [#995](https://github.com/prefix-dev/pixi/pull/995)
 - Pypi dependency parsing was too lenient by @wolfv in [#984](https://github.com/prefix-dev/pixi/pull/984)
-
+- Add reactivation of the environment in pixi shell by @wolfv in [#982](https://github.com/prefix-dev/pixi/pull/982)
+- Add `tool` to strict json schema by @ruben-arts in [#969](https://github.com/prefix-dev/pixi/pull/969)
 
 ## New Contributors
 * @jdblischak made their first contribution in [#966](https://github.com/prefix-dev/pixi/pull/966)
