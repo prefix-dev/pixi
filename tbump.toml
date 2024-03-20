@@ -47,4 +47,4 @@ search = '^version = "{current_version}"'
 
 [[file]]
 src = "docs/advanced/github_actions.md"
-search = "pixi-version: v{current_version}"[[field]]
+search = "pixi-version: v{current_version}"
