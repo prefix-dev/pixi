@@ -397,28 +397,19 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        // Find the table toml table to add the dependency to.
-        let dependency_table =
-            self.document
-                .get_or_insert_toml_table(platform, feature_name, spec_type.name())?;
-
         // Determine the name of the package to add
         let (Some(name), spec) = spec.clone().into_nameless() else {
             miette::bail!("pixi does not support wildcard dependencies")
         };
 
-        // Check for duplicates.
-        if let Some(table_spec) = dependency_table.get(name.as_normalized()) {
-            if table_spec.as_value().and_then(|v| v.as_str()) == Some(spec.to_string().as_str()) {
-                return Err(miette::miette!(
-                    "{} is already added.",
-                    console::style(name.as_normalized()).bold(),
-                ));
-            }
-        }
-
-        // Store (or replace) in the document
-        dependency_table.insert(name.as_normalized(), Item::Value(spec.to_string().into()));
+        // Add the dependency to the TOML document
+        self.document.add_dependency(
+            name.as_normalized(),
+            Item::Value(spec.to_string().into()),
+            spec_type.name(),
+            platform,
+            feature_name,
+        )?;
 
         // Add the dependency to the manifest as well
         self.parsed
@@ -435,31 +426,21 @@ impl Manifest {
         Ok(())
     }
 
+    /// Add a pypi requirement to the manifest
     pub fn add_pypi_dependency(
         &mut self,
         name: &PyPiPackageName,
         requirement: &PyPiRequirement,
         platform: Option<Platform>,
     ) -> miette::Result<()> {
-        // Find the table toml table to add the dependency to.
-        let dependency_table = self.document.get_or_insert_toml_table(
+        // Add the pypi dependency to the TOML document
+        self.document.add_dependency(
+            name.as_source(),
+            (*requirement).clone().into(),
+            consts::PYPI_DEPENDENCIES,
             platform,
             &FeatureName::Default,
-            consts::PYPI_DEPENDENCIES,
         )?;
-
-        // Check for duplicates.
-        if let Some(table_spec) = dependency_table.get(name.as_source()) {
-            if table_spec.to_string().trim() == requirement.to_string() {
-                return Err(miette::miette!(
-                    "{} is already added.",
-                    console::style(name.as_source()).bold(),
-                ));
-            }
-        }
-
-        // Add the pypi dependency to the table
-        dependency_table.insert(name.as_source(), (*requirement).clone().into());
 
         // Add the dependency to the manifest as well
         self.default_feature_mut()
@@ -472,7 +453,7 @@ impl Manifest {
         Ok(())
     }
 
-    /// Removes a dependency from `pixi.toml` based on `SpecType`.
+    /// Removes a dependency based on `SpecType`.
     pub fn remove_dependency(
         &mut self,
         dep: &PackageName,
@@ -480,6 +461,7 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
+        // Remove the dependency from the TOML document
         self.document.remove_dependency(
             dep.as_source(),
             spec_type.name(),
@@ -488,9 +470,7 @@ impl Manifest {
         )?;
 
         Ok(self
-            .parsed
-            .features
-            .get_mut(feature_name)
+            .feature_mut(feature_name)
             .expect("feature should exist")
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
@@ -499,13 +479,14 @@ impl Manifest {
             .expect("dependency should exist"))
     }
 
-    /// Removes a pypi dependency from `pixi.toml`.
+    /// Removes a pypi dependency.
     pub fn remove_pypi_dependency(
         &mut self,
         dep: &PyPiPackageName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(PyPiPackageName, PyPiRequirement)> {
+        // Remove the dependency from the TOML document
         self.document.remove_dependency(
             dep.as_source(),
             consts::PYPI_DEPENDENCIES,
@@ -514,9 +495,7 @@ impl Manifest {
         )?;
 
         Ok(self
-            .parsed
-            .features
-            .get_mut(feature_name)
+            .feature_mut(feature_name)
             .expect("feature should exist")
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())

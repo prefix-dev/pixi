@@ -146,7 +146,7 @@ impl ManifestSource {
         }
     }
 
-    /// Removes a conda or pypi depdendency from the Toml manifest
+    /// Removes a conda or pypi dependency from the Toml manifest
     pub fn remove_dependency(
         &mut self,
         dep: &str,
@@ -164,5 +164,33 @@ impl ManifestSource {
                     console::style(table_name).bold(),
                 )
             })
+    }
+
+    /// Adds a conda or pypi dependency from the Toml manifest
+    pub fn add_dependency(
+        &mut self,
+        name: &str,
+        dep: Item,
+        table: &str,
+        platform: Option<Platform>,
+        feature_name: &FeatureName,
+    ) -> Result<(), Report> {
+        // Find the table toml table to add the dependency to.
+        let dependency_table = self.get_or_insert_toml_table(platform, feature_name, table)?;
+
+        // Check for duplicates.
+        if let Some(table_spec) = dependency_table.get(name) {
+            if table_spec.to_string().trim() == dep.to_string() {
+                return Err(miette::miette!(
+                    "{} is already added.",
+                    console::style(name).bold(),
+                ));
+            }
+        }
+
+        // Add the pypi dependency to the table
+        dependency_table.insert(name, dep);
+
+        Ok(())
     }
 }
