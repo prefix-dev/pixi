@@ -42,7 +42,7 @@ use std::{
 pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector, Targets};
 use thiserror::Error;
-use toml_edit::{value, Array, Document, Item, Table, TomlError, Value};
+use toml_edit::{value, Array, DocumentMut, Item, Table, TomlError, Value};
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -66,7 +66,7 @@ pub struct Manifest {
     pub contents: String,
 
     /// Editable toml document
-    pub document: toml_edit::Document,
+    pub document: toml_edit::DocumentMut,
 
     /// The parsed manifest
     pub parsed: ProjectManifest,
@@ -87,7 +87,7 @@ impl Manifest {
     pub fn from_str(root: &Path, contents: impl Into<String>) -> miette::Result<Self> {
         let contents = contents.into();
         let (manifest, document) = match ProjectManifest::from_toml_str(&contents)
-            .and_then(|manifest| contents.parse::<Document>().map(|doc| (manifest, doc)))
+            .and_then(|manifest| contents.parse::<DocumentMut>().map(|doc| (manifest, doc)))
         {
             Ok(result) => result,
             Err(e) => {
@@ -779,7 +779,7 @@ fn get_nested_toml_table_name(
 /// for a specific platform.
 /// If table not found, its inserted into the document.
 fn get_or_insert_toml_table<'a>(
-    doc: &'a mut Document,
+    doc: &'a mut DocumentMut,
     platform: Option<Platform>,
     feature: &FeatureName,
     table_name: &str,

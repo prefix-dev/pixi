@@ -1,11 +1,13 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use rattler_networking::{
-    authentication_storage, retry_policies::ExponentialBackoff, AuthenticationMiddleware,
-    AuthenticationStorage,
+    authentication_storage, mirror_middleware::Mirror, retry_policies::ExponentialBackoff,
+    AuthenticationMiddleware, AuthenticationStorage, MirrorMiddleware, OciMiddleware,
 };
+
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use std::collections::HashMap;
 
 use crate::config::Config;
 
@@ -34,6 +36,42 @@ fn auth_middleware(config: &Config) -> AuthenticationMiddleware {
     AuthenticationMiddleware::default()
 }
 
+fn mirror_middleware(config: &Config) -> MirrorMiddleware {
+    let mut internal_map = HashMap::new();
+    tracing::info!("Using mirrors: {:?}", config.mirror_map());
+
+    fn ensure_trailing_slash(url: &url::Url) -> url::Url {
+        if url.path().ends_with('/') {
+            url.clone()
+        } else {
+            // Do not use `join` because it removes the last element
+            format!("{}/", url)
+                .parse()
+                .expect("Failed to add trailing slash to URL")
+        }
+    }
+
+    for (key, value) in config.mirror_map() {
+        let mut mirrors = Vec::new();
+        for v in value {
+            mirrors.push(Mirror {
+                url: ensure_trailing_slash(v),
+                no_jlap: false,
+                no_bz2: false,
+                no_zstd: false,
+                max_failures: None,
+            });
+        }
+        internal_map.insert(ensure_trailing_slash(key), mirrors);
+    }
+
+    MirrorMiddleware::from_map(internal_map)
+}
+
+fn oci_middleware() -> OciMiddleware {
+    OciMiddleware
+}
+
 pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMiddleware) {
     static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
@@ -57,9 +95,17 @@ pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientW
         .build()
         .expect("failed to create reqwest Client");
 
-    let authenticated_client = ClientBuilder::new(client.clone())
-        .with_arc(Arc::new(auth_middleware(&config)))
-        .build();
+    let mut client_builder = ClientBuilder::new(client.clone());
+
+    if !config.mirror_map().is_empty() {
+        client_builder = client_builder
+            .with(mirror_middleware(&config))
+            .with(oci_middleware());
+    }
+
+    client_builder = client_builder.with_arc(Arc::new(auth_middleware(&config)));
+
+    let authenticated_client = client_builder.build();
 
     (client, authenticated_client)
 }

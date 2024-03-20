@@ -2,9 +2,11 @@ use clap::{ArgAction, Parser};
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use url::Url;
 
 use crate::consts;
 
@@ -87,6 +89,16 @@ pub struct ConfigCliPrompt {
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]
+pub struct RepodataConfig {
+    /// Disable JLAP compression for repodata.
+    pub disable_jlap: Option<bool>,
+    /// Disable bzip2 compression for repodata.
+    pub disable_bzip2: Option<bool>,
+    /// Disable zstd compression for repodata.
+    pub disable_zstd: Option<bool>,
+}
+
+#[derive(Clone, Default, Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub default_channels: Vec<String>,
@@ -103,11 +115,17 @@ pub struct Config {
     #[serde(default)]
     tls_no_verify: Option<bool>,
 
+    #[serde(default)]
+    mirrors: HashMap<Url, Vec<Url>>,
+
     #[serde(skip)]
     pub loaded_from: Vec<PathBuf>,
 
     #[serde(skip)]
     pub channel_config: ChannelConfig,
+
+    /// Configuration for repodata fetching.
+    pub repodata_config: Option<RepodataConfig>,
 }
 
 impl From<ConfigCli> for Config {
@@ -152,7 +170,7 @@ impl Config {
                 tracing::info!("Loading global config from {}", location.display());
                 let global_config = fs::read_to_string(&location).unwrap_or_default();
                 if let Ok(config) = Config::from_toml(&global_config, &location) {
-                    merged_config.merge_config(&config);
+                    merged_config = merged_config.merge_config(config);
                 } else {
                     tracing::warn!(
                         "Could not load global config (invalid toml): {}",
@@ -163,14 +181,18 @@ impl Config {
                 tracing::info!("Global config not found at {}", location.display());
             }
         }
-        merged_config
+
+        // Load the default CLI config and layer it on top of the global config
+        // This will add any environment variables defined in the `clap` attributes to the config
+        let mut default_cli = ConfigCli::default();
+        default_cli.update_from(std::env::args().take(0));
+        merged_config.merge_config(default_cli.into())
     }
 
     /// Load the global config and layer the given cli config on top of it.
     pub fn with_cli_config(cli: &ConfigCli) -> Config {
-        let mut config = Config::load_global();
-        config.merge_config(&cli.clone().into());
-        config
+        let config = Config::load_global();
+        config.merge_config(cli.clone().into())
     }
 
     /// Load the config from the given path pixi folder and merge it with the global config.
@@ -181,7 +203,7 @@ impl Config {
         if local_config.exists() {
             let s = fs::read_to_string(&local_config).into_diagnostic()?;
             let local = Config::from_toml(&s, &local_config)?;
-            config.merge_config(&local);
+            config = config.merge_config(local);
         }
 
         Ok(config)
@@ -193,24 +215,28 @@ impl Config {
     }
 
     /// Merge the given config into the current one.
-    pub fn merge_config(&mut self, other: &Config) {
-        if !other.default_channels.is_empty() {
-            self.default_channels = other.default_channels.clone();
-        }
+    #[must_use]
+    pub fn merge_config(mut self, other: Config) -> Self {
+        self.mirrors.extend(other.mirrors);
+        self.loaded_from.extend(other.loaded_from);
 
-        if other.change_ps1.is_some() {
-            self.change_ps1 = other.change_ps1;
+        Self {
+            default_channels: if other.default_channels.is_empty() {
+                self.default_channels
+            } else {
+                other.default_channels
+            },
+            tls_no_verify: other.tls_no_verify.or(self.tls_no_verify),
+            change_ps1: other.change_ps1.or(self.change_ps1),
+            authentication_override_file: other
+                .authentication_override_file
+                .or(self.authentication_override_file),
+            mirrors: self.mirrors,
+            loaded_from: self.loaded_from,
+            // currently this is always the default so just use the current value
+            channel_config: self.channel_config,
+            repodata_config: other.repodata_config.or(self.repodata_config),
         }
-
-        if other.tls_no_verify.is_some() {
-            self.tls_no_verify = other.tls_no_verify;
-        }
-
-        if other.authentication_override_file.is_some() {
-            self.authentication_override_file = other.authentication_override_file.clone();
-        }
-
-        self.loaded_from.extend(other.loaded_from.iter().cloned());
     }
 
     /// Retrieve the value for the default_channels field (defaults to the ["conda-forge"]).
@@ -259,6 +285,10 @@ impl Config {
             .map(|c| Channel::from_str(c, &self.channel_config))
             .collect::<Result<Vec<Channel>, _>>()
     }
+
+    pub fn mirror_map(&self) -> &std::collections::HashMap<Url, Vec<Url>> {
+        &self.mirrors
+    }
 }
 
 #[cfg(test)]
@@ -306,7 +336,7 @@ mod tests {
             tls_no_verify: Some(true),
             ..Default::default()
         };
-        config.merge_config(&other);
+        config = config.merge_config(other);
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(true));
 
@@ -318,7 +348,7 @@ mod tests {
         let config_2 = Config::from_path(&d.join("config_2.toml")).unwrap();
 
         let mut merged = config_1.clone();
-        merged.merge_config(&config_2);
+        merged = merged.merge_config(config_2);
 
         let debug = format!("{:#?}", merged);
         let debug = debug.replace("\\\\", "/");

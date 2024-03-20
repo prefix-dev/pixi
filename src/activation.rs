@@ -22,7 +22,7 @@ const PROJECT_PREFIX: &str = "PIXI_PROJECT_";
 impl Project {
     /// Returns environment variables and their values that should be injected when running a command.
     pub fn get_metadata_env(&self) -> HashMap<String, String> {
-        HashMap::from_iter([
+        let mut map = HashMap::from_iter([
             (
                 format!("{PROJECT_PREFIX}ROOT"),
                 self.root().to_string_lossy().into_owned(),
@@ -40,7 +40,16 @@ impl Project {
                         version.to_string()
                     }),
             ),
-        ])
+        ]);
+
+        if let Ok(exe_path) = std::env::current_exe() {
+            map.insert(
+                "PIXI_EXE".to_string(),
+                exe_path.to_string_lossy().to_string(),
+            );
+        }
+
+        map
     }
 }
 
