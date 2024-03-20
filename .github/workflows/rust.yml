@@ -86,6 +86,53 @@ jobs:
       maintainer: ${{ steps.crate_metadata.outputs.maintainer }}
       homepage: ${{ steps.crate_metadata.outputs.homepage }}
 
+  cargo-test:
+    name: Cargo Test | ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "Linux",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
+          - { name: "macOS",       target: x86_64-apple-darwin,        os: macOS-latest }
+          - { name: "Windows",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Show version information (Rust, cargo, GCC)
+        shell: bash
+        run: |
+          gcc --version || true
+          rustup -V
+          rustup toolchain list
+          cargo -V
+          rustc -V
+
+      - name: "Install cargo nextest"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - if: ${{ matrix.os != 'windows-latest' }}
+        uses: rui314/setup-mold@v1
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: "Cargo test"
+        run: |
+          cargo nextest run --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow --features slow_integration_tests
+
+      - name: Run tests
+        run: >
+          cargo test
+          --locked
+          --release
+          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
+          ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
+
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
