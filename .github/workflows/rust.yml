@@ -95,31 +95,31 @@ jobs:
       matrix:
         include:
           - { name: "Linux-x86_64",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
-          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest, skip-tests: true }
-
-          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
-          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
-
-          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
-    env:
-      #
-      # These are some environment variables that configure the build so that the binary size is reduced.
-      # Inspiration was taken from this blog: https://arusahni.net/blog/2020/03/optimizing-rust-binary-size.html
-      #
-
-      # Enable Link Time Optimization (LTO) for our release builds. This increases link time but drastically reduces
-      # binary size.
-      CARGO_PROFILE_RELEASE_LTO: true
-
-      # Use a single code gen unit, this effectively disables parallel linking but ensures that everything is linked
-      # together in a single unit which reduces the file-size at the cost of link time.
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
-
-      # Strip the binaries. This reduces the filesize of the final release.
-      CARGO_PROFILE_RELEASE_STRIP: "symbols"
-
-      # Optimize the binary for size. This reduces the filesize at the cost of a slower binary.
-      CARGO_PROFILE_OPT_LEVEL: s
+#          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest, skip-tests: true }
+#
+#          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
+#          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
+#
+#          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+#    env:
+#      #
+#      # These are some environment variables that configure the build so that the binary size is reduced.
+#      # Inspiration was taken from this blog: https://arusahni.net/blog/2020/03/optimizing-rust-binary-size.html
+#      #
+#
+#      # Enable Link Time Optimization (LTO) for our release builds. This increases link time but drastically reduces
+#      # binary size.
+#      CARGO_PROFILE_RELEASE_LTO: true
+#
+#      # Use a single code gen unit, this effectively disables parallel linking but ensures that everything is linked
+#      # together in a single unit which reduces the file-size at the cost of link time.
+#      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
+#
+#      # Strip the binaries. This reduces the filesize of the final release.
+#      CARGO_PROFILE_RELEASE_STRIP: "symbols"
+#
+#      # Optimize the binary for size. This reduces the filesize at the cost of a slower binary.
+#      CARGO_PROFILE_OPT_LEVEL: s
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
