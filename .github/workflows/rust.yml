@@ -95,8 +95,7 @@ jobs:
         include:
           - { name: "Linux",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
           - { name: "macOS",       target: x86_64-apple-darwin,        os: macOS-latest }
-          # TODO: enable aarch64-apple-darwin when macOS-14 is available
-#          - { name: "macOS-arm",      target: aarch64-apple-darwin,       os: macOS-14 }
+          - { name: "macOS-arm",      target: aarch64-apple-darwin,       os: macOS-14 }
           - { name: "Windows",     target: x86_64-pc-windows-msvc,     os: windows-latest }
     steps:
       - uses: actions/checkout@v4
