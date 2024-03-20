@@ -480,21 +480,12 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
-        self.document
-            .get_or_insert_toml_table(platform, feature_name, spec_type.name())?
-            .remove(dep.as_source())
-            .ok_or_else(|| {
-                let table_name = self.document.get_nested_toml_table_name(
-                    feature_name,
-                    platform,
-                    spec_type.name(),
-                );
-                miette::miette!(
-                    "Couldn't find {} in [{}]",
-                    console::style(dep.as_source()).bold(),
-                    console::style(table_name).bold(),
-                )
-            })?;
+        self.document.remove_dependency(
+            dep.as_source(),
+            spec_type.name(),
+            platform,
+            feature_name,
+        )?;
 
         Ok(self
             .parsed
@@ -515,22 +506,12 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(PyPiPackageName, PyPiRequirement)> {
-        self.document
-            .get_or_insert_toml_table(platform, feature_name, consts::PYPI_DEPENDENCIES)?
-            .remove(dep.as_source())
-            .ok_or_else(|| {
-                let table_name = self.document.get_nested_toml_table_name(
-                    feature_name,
-                    platform,
-                    consts::PYPI_DEPENDENCIES,
-                );
-
-                miette::miette!(
-                    "Couldn't find {} in [{}]",
-                    console::style(dep.as_source()).bold(),
-                    console::style(table_name).bold(),
-                )
-            })?;
+        self.document.remove_dependency(
+            dep.as_source(),
+            consts::PYPI_DEPENDENCIES,
+            platform,
+            feature_name,
+        )?;
 
         Ok(self
             .parsed

@@ -1,4 +1,4 @@
-use miette::miette;
+use miette::{miette, Report};
 use rattler_conda_types::Platform;
 use std::fmt;
 use toml_edit::{Array, Item, Table, Value};
@@ -144,5 +144,25 @@ impl ManifestSource {
                     .ok_or_else(|| miette::miette!("malformed {array_name} array"))
             }
         }
+    }
+
+    /// Removes a conda or pypi depdendency from the Toml manifest
+    pub fn remove_dependency(
+        &mut self,
+        dep: &str,
+        table: &str,
+        platform: Option<Platform>,
+        feature_name: &FeatureName,
+    ) -> Result<toml_edit::Item, Report> {
+        self.get_or_insert_toml_table(platform, feature_name, table)?
+            .remove(dep)
+            .ok_or_else(|| {
+                let table_name = self.get_nested_toml_table_name(feature_name, platform, table);
+                miette::miette!(
+                    "Couldn't find {} in [{}]",
+                    console::style(dep).bold(),
+                    console::style(table_name).bold(),
+                )
+            })
     }
 }

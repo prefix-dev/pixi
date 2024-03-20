@@ -92,7 +92,7 @@ impl From<PyProjectManifest> for ProjectManifest {
             }
 
             // Convert requirement to a Spec.
-            let spec = req_to_nmspec(&requirement);
+            let spec = requirement_to_nameless_matchspec(&requirement);
             if spec.is_err() {
                 tracing::warn!("Unable to build conda spec for {:?}", requirement);
                 continue;
@@ -132,7 +132,7 @@ fn req_to_conda_name(requirement: &Requirement) -> Result<PackageName, Requireme
 /// Try to return a NamelessMatchSpec from a pep508_rs::VersionOrUrl
 /// This will only work if it is not URL and the VersionSpecifier can successfully
 /// be interpreted as a NamelessMatchSpec.version
-fn version_or_url_to_nmspec(
+fn version_or_url_to_nameless_matchspec(
     version: &Option<VersionOrUrl>,
 ) -> Result<NamelessMatchSpec, RequirementConversionError> {
     match version {
@@ -152,7 +152,7 @@ fn version_or_url_to_nmspec(
 /// Try to return a NamelessMatchSpec from a pep508_rs::Requirement
 /// This will only work if the Requirement has no extra not marker
 /// and does not point to a URL
-fn req_to_nmspec(
+fn requirement_to_nameless_matchspec(
     requirement: &Requirement,
 ) -> Result<NamelessMatchSpec, RequirementConversionError> {
     match requirement {
@@ -161,7 +161,7 @@ fn req_to_nmspec(
             version_or_url,
             marker: None,
             ..
-        } if extras.is_empty() => version_or_url_to_nmspec(version_or_url),
+        } if extras.is_empty() => version_or_url_to_nameless_matchspec(version_or_url),
         _ => Err(RequirementConversionError::Unimplemented),
     }
 }
