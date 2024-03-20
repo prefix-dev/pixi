@@ -1,2 +1,6 @@
 tls_no_verify = false
 change_ps1 = true
+
+[repodata_config]
+disable_jlap = true
+disable_zstd = true
