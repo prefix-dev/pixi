@@ -37,4 +37,15 @@ Config {
             fragment: None,
         },
     },
+    repodata_config: Some(
+        RepodataConfig {
+            disable_jlap: Some(
+                true,
+            ),
+            disable_bzip2: None,
+            disable_zstd: Some(
+                true,
+            ),
+        },
+    ),
 }
