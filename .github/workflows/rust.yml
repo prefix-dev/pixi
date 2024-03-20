@@ -95,6 +95,8 @@ jobs:
         include:
           - { name: "Linux",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
           - { name: "macOS",       target: x86_64-apple-darwin,        os: macOS-latest }
+          # TODO: enable aarch64-apple-darwin when macOS-14 is available
+#          - { name: "macOS-arm",      target: aarch64-apple-darwin,       os: macOS-14 }
           - { name: "Windows",     target: x86_64-pc-windows-msvc,     os: windows-latest }
     steps:
       - uses: actions/checkout@v4
@@ -121,33 +123,25 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: "Cargo test"
+      - name: "Cargo nextest"
         run: |
           cargo nextest run --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow --features slow_integration_tests
 
-      - name: Run tests
-        run: >
-          cargo test
-          --locked
-          --release
-          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
-          ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
-
   build:
-    name: ${{ matrix.name }}
+    name: Build Bin | ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     needs: [ crate_metadata ]
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: "Linux-x86_64",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
-          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest }
+          - { name: "Linux-x86_64",   target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
+          - { name: "Linux-aarch64",  target: aarch64-unknown-linux-musl, os: ubuntu-latest }
 
-          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
-          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest }
+          - { name: "macOS-x86",      target: x86_64-apple-darwin,        os: macOS-latest }
+          - { name: "macOS-arm",      target: aarch64-apple-darwin,       os: macOS-14 }  # macOS-14 is the ARM chipset
 
-          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+          - { name: "Windows",        target: x86_64-pc-windows-msvc,     os: windows-latest }
 #    env:
 #      #
 #      # These are some environment variables that configure the build so that the binary size is reduced.
