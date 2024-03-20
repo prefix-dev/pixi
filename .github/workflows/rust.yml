@@ -142,12 +142,12 @@ jobs:
       matrix:
         include:
           - { name: "Linux-x86_64",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
-#          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest, skip-tests: true }
-#
-#          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
-#          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
-#
-#          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest }
+
+          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
+          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest }
+
+          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
 #    env:
 #      #
 #      # These are some environment variables that configure the build so that the binary size is reduced.
@@ -250,26 +250,6 @@ jobs:
           echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
           echo "BIN_NAME=${BIN_NAME}" >> $GITHUB_OUTPUT
           echo "EXE_SUFFIX=${EXE_SUFFIX}" >> $GITHUB_OUTPUT
-
-      - name: Set testing options
-        id: test-options
-        if: ${{ !matrix.skip-tests }}
-        shell: bash
-        run: |
-          # test only library unit tests and binary for arm-type targets
-          unset CARGO_TEST_OPTIONS
-          unset CARGO_TEST_OPTIONS ; case ${{ matrix.target }} in arm-* | aarch64-*) CARGO_TEST_OPTIONS="--bin ${{ needs.crate_metadata.outputs.name }}" ;; esac;
-          CARGO_TEST_OPTIONS="${CARGO_TEST_OPTIONS} --features ${{ env.TEST_FEATURES }}"
-          echo "CARGO_TEST_OPTIONS=${CARGO_TEST_OPTIONS}" >> $GITHUB_OUTPUT
-
-#      - name: Run tests
-#        if: ${{ !matrix.skip-tests }}
-#        run: >
-#          cargo test
-#          --locked
-#          --release
-#          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
-#          ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
 
       - name: Build Installer
         continue-on-error: true
@@ -405,6 +385,7 @@ jobs:
     needs:
         - build
     strategy:
+      fail-fast: false
       matrix:
         include:
           - { target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
