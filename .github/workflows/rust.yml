@@ -89,7 +89,7 @@ jobs:
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    needs: [ crate_metadata, format_and_lint ]
+    needs: [ crate_metadata ]
     strategy:
       fail-fast: false
       matrix:
