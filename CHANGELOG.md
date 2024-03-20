@@ -9,9 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Highlights
 
 - This release greatly improves `pixi global` commands, thanks to @chawyehsu!
-- We now support global(or local) configuration for pixi's own behavior, including mirrors, and OCI registries.
-- Support for `task` caching, which can skip tasks based on the hash of the `inputs` and `outputs`.
-- @pavelzw added a lot of documentation, including GitHub Actions and PyCharm!
+- We now support global (or local) configuration for pixi's own behavior, including mirrors, and OCI registries.
+- We support channel mirrors for corporate environments!
+- Faster `task` execution thanks to caching 🚀 Tasks that already executed successfully can be skipped based on the hash of the `inputs` and `outputs`.
+- PyCharm and GitHub Actions integration thanks to @pavelzw – read more about it in the docs!
 
 ### 📃 Details
 
