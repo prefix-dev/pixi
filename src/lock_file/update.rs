@@ -652,6 +652,7 @@ pub async fn ensure_up_to_date_lock_file(
                 context.repo_data.clone(),
                 platform,
                 solve_semaphore.clone(),
+                project.client().clone(),
             )
             .boxed_local();
 
@@ -1082,6 +1083,7 @@ async fn spawn_solve_conda_environment_task(
     sparse_repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
     platform: Platform,
     concurrency_semaphore: Arc<Semaphore>,
+    client: reqwest::Client,
 ) -> miette::Result<TaskResult> {
     // Get the dependencies for this platform
     let dependencies = group.dependencies(None, Some(platform));
@@ -1157,7 +1159,7 @@ async fn spawn_solve_conda_environment_task(
 
             // Add purl's for the conda packages that are also available as pypi packages if we need them.
             if has_pypi_dependencies {
-                pypi_name_mapping::amend_pypi_purls(&mut records).await?;
+                pypi_name_mapping::amend_pypi_purls(client, &mut records).await?;
             }
 
             // Turn the records into a map by name
