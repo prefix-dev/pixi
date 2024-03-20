@@ -412,6 +412,8 @@ jobs:
         run: bash tests/test_examples.sh
 
   downstream_tests:
+    needs:
+        - build
     strategy:
       matrix:
         include:
