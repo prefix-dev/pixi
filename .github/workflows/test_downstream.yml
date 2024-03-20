@@ -19,7 +19,6 @@ jobs:
   test-downstream:
     name: Downstream test ${{ matrix.repository }} on ${{ matrix.os }}
     runs-on: ${{ inputs.os }}
-    needs: build
     strategy:
       fail-fast: false
       matrix:
