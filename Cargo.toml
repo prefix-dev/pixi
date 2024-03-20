@@ -30,7 +30,7 @@ async-once-cell = "0.5.3"
 async-recursion = "1.1.0"
 async-scoped = { version = "0.9.0", features = ["use-tokio"] }
 blake3 = "1.5.1"
-cfg-if = "0.1"
+cfg-if = "1.0"
 chrono = "0.4.35"
 clap = { version = "4.5.3", default-features = false, features = [
     "derive",
@@ -73,14 +73,14 @@ miette = { version = "7.2.0", features = [
     "terminal_size",
     "textwrap",
 ] }
-minijinja = { version = "1.0.13", features = ["builtins"] }
+minijinja = { version = "1.0.14", features = ["builtins"] }
 once_cell = "1.19.0"
 pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 platform-host = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
 pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.16" }
-rattler = { version = "0.19.3", default-features = false, features = ["cli-tools"] }
+rattler = { version = "0.19.4", default-features = false, features = ["cli-tools"] }
 rattler_conda_types = { version = "0.20.2", default-features = false }
 rattler_digest = { version = "0.19.2", default-features = false }
 rattler_lock = { version = "0.20.2", default-features = false }
@@ -96,7 +96,7 @@ rattler_solve = { version = "0.20.2", default-features = false, features = [
 ] }
 rattler_virtual_packages = { version = "0.19.3", default-features = false }
 regex = "1.10.3"
-reqwest = { version = "0.11.26", default-features = false }
+reqwest = { version = "0.11.27", default-features = false }
 reqwest-middleware = "0.2.5"
 reqwest-retry = "0.4.0"
 self-replace = "1.3.7"
@@ -119,7 +119,7 @@ tokio = { version = "1.36.0", features = [
     "signal",
 ] }
 tokio-util = "0.7.10"
-toml_edit = { version = "0.22.7", features = ["serde"] }
+toml_edit = { version = "0.22.8", features = ["serde"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
@@ -155,7 +155,7 @@ rstest = "0.18.2"
 serde_json = "1.0.114"
 serial_test = "3.0.0"
 tokio = { version = "1.36.0", features = ["rt"] }
-toml = "0.8.11"
+toml = "0.8.12"
 
 [patch.crates-io]
 # For pyproject-toml
