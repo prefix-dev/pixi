@@ -87,7 +87,7 @@ test = "pytest"
 [environments]
 test = ["test"]
 
-# `pixi run test` == `pixi run --environments test test`
+# `pixi run test` == `pixi run --environment test test`
 ```
 
 The environment definition should contain the following fields:
