@@ -139,25 +139,25 @@ jobs:
           - { name: "macOS-arm",      target: aarch64-apple-darwin,       os: macOS-14 }  # macOS-14 is the ARM chipset
 
           - { name: "Windows",        target: x86_64-pc-windows-msvc,     os: windows-latest }
-#    env:
-#      #
-#      # These are some environment variables that configure the build so that the binary size is reduced.
-#      # Inspiration was taken from this blog: https://arusahni.net/blog/2020/03/optimizing-rust-binary-size.html
-#      #
-#
-#      # Enable Link Time Optimization (LTO) for our release builds. This increases link time but drastically reduces
-#      # binary size.
-#      CARGO_PROFILE_RELEASE_LTO: true
-#
-#      # Use a single code gen unit, this effectively disables parallel linking but ensures that everything is linked
-#      # together in a single unit which reduces the file-size at the cost of link time.
-#      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
-#
-#      # Strip the binaries. This reduces the filesize of the final release.
-#      CARGO_PROFILE_RELEASE_STRIP: "symbols"
-#
-#      # Optimize the binary for size. This reduces the filesize at the cost of a slower binary.
-#      CARGO_PROFILE_OPT_LEVEL: s
+    env:
+      #
+      # These are some environment variables that configure the build so that the binary size is reduced.
+      # Inspiration was taken from this blog: https://arusahni.net/blog/2020/03/optimizing-rust-binary-size.html
+      #
+
+      # Enable Link Time Optimization (LTO) for our release builds. This increases link time but drastically reduces
+      # binary size.
+      CARGO_PROFILE_RELEASE_LTO: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
+
+      # Use a single code gen unit, this effectively disables parallel linking but ensures that everything is linked
+      # together in a single unit which reduces the file-size at the cost of link time.
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && '1' || 'false' }}
+
+      # Strip the binaries. This reduces the filesize of the final release.
+      CARGO_PROFILE_RELEASE_STRIP: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && 'symbols' || 'false' }}
+
+      # Optimize the binary for size. This reduces the filesize at the cost of a slower binary.
+      CARGO_PROFILE_OPT_LEVEL: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && 's' || 'false' }}
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
