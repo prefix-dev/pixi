@@ -66,6 +66,10 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: clippy
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
       - name: Run clippy
         run: cargo clippy
 
@@ -103,7 +107,11 @@ jobs:
       - uses: taiki-e/setup-cross-toolchain-action@v1
         with:
           target: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
+#      - uses: Swatinem/rust-cache@v2
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
       - name: Show version information (Rust, cargo, GCC)
         shell: bash
         run: |
