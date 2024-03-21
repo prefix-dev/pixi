@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.1] - 2024-03-21
+### ✨ Highlights
+
+A quick bug-fix release for `pixi list`.
+
+### 📃 Details
+
+#### Documentation
+
+- Fix typo by @pavelzw in [#1028](https://github.com/prefix-dev/pixi/pull/1028)
+
+#### Fixed
+
+- Remove the need for a python interpreter in `pixi list` by @baszalmstra in [#1033](https://github.com/prefix-dev/pixi/pull/1033)
+
+
 ## [0.17.0] - 2024-03-19
 ### ✨ Highlights
 
