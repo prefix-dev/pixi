@@ -26,6 +26,7 @@ use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -1110,11 +1111,11 @@ async fn spawn_solve_conda_environment_task(
                 .await
                 .expect("the semaphore is never closed");
 
-            let pb = SolveProgressBar::new(
+            let pb = Arc::new(SolveProgressBar::new(
                 global_multi_progress().add(ProgressBar::hidden()),
                 platform,
                 group_name.clone(),
-            );
+            ));
             pb.start();
 
             let start = Instant::now();
@@ -1159,7 +1160,13 @@ async fn spawn_solve_conda_environment_task(
 
             // Add purl's for the conda packages that are also available as pypi packages if we need them.
             if has_pypi_dependencies {
-                pypi_name_mapping::amend_pypi_purls(client, &mut records).await?;
+                pb.set_message("extracting pypi packages");
+                pypi_name_mapping::amend_pypi_purls(
+                    client,
+                    &mut records,
+                    Some(pb.purl_amend_reporter()),
+                )
+                .await?;
             }
 
             // Turn the records into a map by name
@@ -1529,8 +1536,6 @@ pub async fn load_sparse_repo_data_async(
 #[derive(Clone)]
 pub(crate) struct SolveProgressBar {
     pb: ProgressBar,
-    platform: Platform,
-    environment_name: GroupedEnvironmentName,
 }
 
 impl SolveProgressBar {
@@ -1539,48 +1544,90 @@ impl SolveProgressBar {
         platform: Platform,
         environment_name: GroupedEnvironmentName,
     ) -> Self {
+        let name_and_platform = format!(
+            "{}:{}",
+            environment_name.fancy_display(),
+            consts::PLATFORM_STYLE.apply_to(platform)
+        );
+
         pb.set_style(
-            indicatif::ProgressStyle::with_template(&format!(
-                "   ({:>12}) {:<9} ..",
-                environment_name.fancy_display(),
-                consts::PLATFORM_STYLE.apply_to(platform),
-            ))
-            .unwrap(),
+            indicatif::ProgressStyle::with_template(&format!("    {{prefix:20!}} ..",)).unwrap(),
         );
         pb.enable_steady_tick(Duration::from_millis(100));
-        Self {
-            pb,
-            platform,
-            environment_name,
-        }
+        pb.set_prefix(name_and_platform);
+        Self { pb }
     }
 
     pub fn start(&self) {
         self.pb.reset_elapsed();
-        self.pb.set_style(
-            indicatif::ProgressStyle::with_template(&format!(
-                "  {{spinner:.dim}} {:>12}: {:<9} [{{elapsed_precise}}] {{msg:.dim}}",
-                self.environment_name.fancy_display(),
-                consts::PLATFORM_STYLE.apply_to(self.platform),
-            ))
-            .unwrap(),
-        );
+        self.reset_style()
     }
 
     pub fn set_message(&self, msg: impl Into<Cow<'static, str>>) {
         self.pb.set_message(msg);
     }
 
+    pub fn inc(&self, n: u64) {
+        self.pb.inc(n);
+    }
+
+    pub fn set_update_style(&self, total: usize) {
+        self.pb.set_length(total as u64);
+        self.pb.set_position(0);
+        self.pb.set_style(
+            indicatif::ProgressStyle::with_template(&format!(
+                "  {{spinner:.dim}} {{prefix:20!}} [{{elapsed_precise}}] [{{bar:20!.bright.yellow/dim.white}}] {{pos:>4}}/{{len:4}} {{msg:.dim}}",
+            ))
+                .unwrap()
+                .progress_chars("━━╾─"),
+        );
+    }
+
+    pub fn reset_style(&self) {
+        self.pb.set_style(
+            indicatif::ProgressStyle::with_template(&format!(
+                "  {{spinner:.dim}} {{prefix:20!}} [{{elapsed_precise}}] {{msg:.dim}}",
+            ))
+            .unwrap(),
+        );
+    }
+
     pub fn finish(&self) {
         self.pb.set_style(
             indicatif::ProgressStyle::with_template(&format!(
-                "  {} ({:>12}) {:<9} [{{elapsed_precise}}]",
+                "  {} {{prefix:20!}} [{{elapsed_precise}}]",
                 console::style(console::Emoji("✔", "↳")).green(),
-                self.environment_name.fancy_display(),
-                consts::PLATFORM_STYLE.apply_to(self.platform),
             ))
             .unwrap(),
         );
         self.pb.finish_and_clear();
+    }
+
+    fn purl_amend_reporter(self: &Arc<Self>) -> Arc<dyn pypi_name_mapping::Reporter> {
+        Arc::new(PurlAmendReporter {
+            pb: self.clone(),
+            style_set: AtomicBool::new(false),
+        })
+    }
+}
+
+struct PurlAmendReporter {
+    pb: Arc<SolveProgressBar>,
+    style_set: AtomicBool,
+}
+
+impl pypi_name_mapping::Reporter for PurlAmendReporter {
+    fn download_started(&self, _package: &RepoDataRecord, total: usize) {
+        if !self.style_set.swap(true, Ordering::Relaxed) {
+            self.pb.set_update_style(total);
+        }
+    }
+
+    fn download_finished(&self, _package: &RepoDataRecord, _total: usize) {
+        self.pb.inc(1);
+    }
+
+    fn download_failed(&self, package: &RepoDataRecord, total: usize) {
+        self.download_finished(package, total);
     }
 }
