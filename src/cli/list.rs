@@ -16,8 +16,6 @@ use crate::project::manifest::EnvironmentName;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::Project;
 
-use crate::consts::PROJECT_MANIFEST;
-
 // an enum to sort by size or name
 #[derive(clap::ValueEnum, Clone, Debug, Serialize)]
 pub enum SortBy {
@@ -126,21 +124,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .and_then(|env| env.packages(platform).map(Vec::from_iter))
         .unwrap_or_default();
 
-    // Get the uv structs for extra pypi info
-    let uv_context = UvResolutionContext::from_project(&project)?;
     // Get the python record from the lock file
     let mut conda_records = locked_deps.iter().filter_map(|d| d.as_conda());
-    // Determine the current environment markers.
-    let python_record = conda_records
-        .find(|r| is_python_record(r))
-        .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
-    let tags = get_pypi_tags(
-        Platform::current(),
-        &project.system_requirements(),
-        python_record.package_record(),
-    )?;
-    let mut registry_index =
-        RegistryWheelIndex::new(&uv_context.cache, &tags, &uv_context.index_locations);
+
+    // Construct the registry index if we have a python record
+    let python_record = conda_records.find(|r| is_python_record(r));
+    let tags;
+    let uv_context;
+    let mut registry_index = if let Some(python_record) = python_record {
+        uv_context = UvResolutionContext::from_project(&project)?;
+        tags = get_pypi_tags(
+            Platform::current(),
+            &project.system_requirements(),
+            python_record.package_record(),
+        )?;
+        Some(RegistryWheelIndex::new(
+            &uv_context.cache,
+            &tags,
+            &uv_context.index_locations,
+        ))
+    } else {
+        None
+    };
 
     // Get the explicit project dependencies
     let mut project_dependency_names = environment
@@ -263,7 +268,7 @@ fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
 fn create_package_to_output<'a, 'b>(
     p: &'b Package,
     project_dependency_names: &'a [String],
-    registry_index: &'a mut RegistryWheelIndex<'b>,
+    registry_index: &'a mut Option<RegistryWheelIndex<'b>>,
 ) -> PackageToOutput {
     let name = p.name().to_string();
     let version = p.version().into_owned();
@@ -281,10 +286,10 @@ fn create_package_to_output<'a, 'b>(
         Package::Conda(pkg) => pkg.package_record().size,
         Package::Pypi(p) => {
             let package_data = p.data().package;
-            registry_index
-                .get_version(&package_data.name, &package_data.version)
-                .map(|c| c.path.clone())
-                .and_then(|p| get_dir_size(p).ok())
+            registry_index.as_mut().and_then(|registry| {
+                let version = registry.get_version(&package_data.name, &package_data.version)?;
+                get_dir_size(&version.path).ok()
+            })
         }
     };
 
@@ -292,9 +297,10 @@ fn create_package_to_output<'a, 'b>(
         Package::Conda(pkg) => pkg.file_name().map(ToOwned::to_owned),
         Package::Pypi(p) => {
             let package_data = p.data().package;
-            registry_index
-                .get_version(&package_data.name, &package_data.version)
-                .map(|c| c.filename.to_string())
+            registry_index.as_mut().and_then(|registry| {
+                let version = registry.get_version(&package_data.name, &package_data.version)?;
+                Some(version.filename.to_string())
+            })
         }
     };
 

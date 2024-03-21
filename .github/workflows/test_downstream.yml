@@ -1,0 +1,114 @@
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: "Operating system to test"
+        required: true
+        type: string
+      target:
+        description: "Target to test"
+        required: true
+        type: string
+      extension:
+        description: "Extension of the binary"
+        required: false
+        type: string
+
+
+jobs:
+  test-downstream:
+    name: Downstream test ${{ matrix.repository }} on ${{ matrix.os }}
+    if: ${{ startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' }}
+    runs-on: ${{ inputs.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        repository: [ "Deltares/Ribasim", "quantco/polarify" ]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repository }}
+      # Setup pixi binary
+      - name: Download binary from build
+        uses: actions/download-artifact@v4
+        with:
+          name: pixi-${{ inputs.target }}${{ inputs.extension }}
+          path: pixi_bin
+      - name: Setup unix binary, add to github path
+        if: inputs.os != 'windows-latest'
+        run: |
+          mv pixi_bin/pixi-${{ inputs.target }} pixi_bin/pixi
+          chmod a+x pixi_bin/pixi
+          echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
+      - name: Create Directory and Move Executable
+        if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
+        run: |
+          New-Item -ItemType Directory -Force -Path "D:\.pixi"
+          Move-Item -Path "pixi_bin/pixi-${{ inputs.target }}${{ inputs.extension }}" -Destination "D:\.pixi\pixi.exe"
+        shell: pwsh
+      - name: Add to PATH
+        if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
+        run: echo "D:\.pixi" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
+        shell: pwsh
+      - name: Verify and Use Executable
+        if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
+        run: |
+          echo "Current PATH: $env:PATH"
+          pixi --version
+        shell: pwsh
+      - name: Help
+        run: pixi --help
+      - name: Info
+        run: pixi info
+
+      - name: Install repository
+        run: pixi install -v
+      - name: Check lockfile didn't change
+        run: git diff --exit-code pixi.lock
+
+  test-examples:
+    name: Integration test on ${{ inputs.os }}
+    runs-on: ${{ inputs.os }}
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v4
+      - name: Download binary from build
+        uses: actions/download-artifact@v4
+        with:
+          name: pixi-${{ inputs.target }}${{ inputs.extension }}
+          path: pixi_bin
+      - name: Debug
+        run: |
+          pwd
+      - name: Setup unix binary, add to github path
+        if: inputs.os != 'windows-latest'
+        run: |
+          mv pixi_bin/pixi-${{ inputs.target }} pixi_bin/pixi
+          chmod a+x pixi_bin/pixi
+          echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
+      - name: Create Directory and Move Executable
+        if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
+        run: |
+          New-Item -ItemType Directory -Force -Path "D:\.pixi"
+          Move-Item -Path "pixi_bin/pixi-${{ inputs.target }}${{ inputs.extension }}" -Destination "D:\.pixi\pixi.exe"
+        shell: pwsh
+      - name: Add to PATH
+        if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
+        run: echo "D:\.pixi" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
+        shell: pwsh
+      - name: Verify and Use Executable
+        if: inputs.os == 'windows-latest' && inputs.target == 'x86_64-pc-windows-msvc'
+        run: |
+          echo "Current PATH: $env:PATH"
+          pixi --version
+        shell: pwsh
+      - name: Help
+        run: pixi --help
+      - name: Info
+        run: pixi info
+      - name: Install pixi
+        run: pixi install -v
+      - name: Test examples
+        shell: bash
+        run: bash tests/test_examples.sh
