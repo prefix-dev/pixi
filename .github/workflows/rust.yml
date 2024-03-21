@@ -27,8 +27,9 @@ env:
   RUSTFLAGS: "-D warnings"
   CARGO_TERM_COLOR: always
   CICD_INTERMEDIATES_DIR: "_cicd-intermediates"
-  TEST_FEATURES: "slow_integration_tests"
   XDG_CACHE_HOME: ${{ github.workspace }}/.cache
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
 
 jobs:
   check-rustdoc-links:
@@ -36,14 +37,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - run: |
           for package in $(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | .name'); do
             cargo rustdoc -p "$package" --all-features -- -D warnings -W unreachable-pub
           done
 
-  format_and_lint:
-    name: Format and Lint
+  format:
+    name: Cargo Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,9 +56,24 @@ jobs:
           submodules: recursive
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          components: clippy, rustfmt
+          components: rustfmt
       - name: Run rustfmt
         uses: actions-rust-lang/rustfmt@v1
+
+  lint:
+    name: Cargo Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: clippy
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
       - name: Run clippy
         run: cargo clippy
 
@@ -75,40 +95,84 @@ jobs:
       maintainer: ${{ steps.crate_metadata.outputs.maintainer }}
       homepage: ${{ steps.crate_metadata.outputs.homepage }}
 
-  build:
-    name: ${{ matrix.name }}
+  cargo-test:
+    name: Cargo Test | ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    needs: [ crate_metadata, format_and_lint ]
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: "Linux-x86_64",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
-          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest, skip-tests: true }
+          - { name: "Linux",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
+          - { name: "macOS",       target: x86_64-apple-darwin,        os: macOS-latest }
+          - { name: "macOS-arm",      target: aarch64-apple-darwin,       os: macOS-14 }
+          - { name: "Windows",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
+#      - uses: Swatinem/rust-cache@v2
 
-          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
-          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-latest, skip-tests: true }
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
 
-          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest }
+      - name: Show version information (Rust, cargo, GCC)
+        shell: bash
+        run: |
+          gcc --version || true
+          rustup -V
+          rustup toolchain list
+          cargo -V
+          rustc -V
+
+      - name: "Install cargo nextest"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - if: ${{ matrix.os != 'windows-latest' }}
+        uses: rui314/setup-mold@v1
+
+      - name: "Cargo nextest"
+        run: |
+          cargo nextest run --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow --features slow_integration_tests
+
+  build:
+    name: Build Binary | ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    needs: [ crate_metadata ]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "Linux-x86_64",   target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
+          - { name: "Linux-aarch64",  target: aarch64-unknown-linux-musl, os: ubuntu-latest }
+
+          - { name: "macOS-x86",      target: x86_64-apple-darwin,        os: macOS-latest }
+          - { name: "macOS-arm",      target: aarch64-apple-darwin,       os: macOS-14 }  # macOS-14 is the ARM chipset
+
+          - { name: "Windows",        target: x86_64-pc-windows-msvc,     os: windows-latest }
     env:
       #
       # These are some environment variables that configure the build so that the binary size is reduced.
       # Inspiration was taken from this blog: https://arusahni.net/blog/2020/03/optimizing-rust-binary-size.html
+      # They're only enable it on main and releases.
       #
 
       # Enable Link Time Optimization (LTO) for our release builds. This increases link time but drastically reduces
       # binary size.
-      CARGO_PROFILE_RELEASE_LTO: true
+      CARGO_PROFILE_RELEASE_LTO: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
 
       # Use a single code gen unit, this effectively disables parallel linking but ensures that everything is linked
       # together in a single unit which reduces the file-size at the cost of link time.
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
+      # Default for a release build is 16
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && 1 || 16 }}
 
       # Strip the binaries. This reduces the filesize of the final release.
-      CARGO_PROFILE_RELEASE_STRIP: "symbols"
+      CARGO_PROFILE_RELEASE_STRIP: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && 'symbols' || 'false' }}
 
       # Optimize the binary for size. This reduces the filesize at the cost of a slower binary.
-      CARGO_PROFILE_OPT_LEVEL: s
+      CARGO_PROFILE_OPT_LEVEL: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && 's' || '0' }}
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -128,7 +192,9 @@ jobs:
         run: echo "RUSTFLAGS=${RUSTFLAGS} -C target-feature=+crt-static" >> "${GITHUB_ENV}"
         if: endsWith(matrix.target, 'windows-msvc')
 
-      - uses: Swatinem/rust-cache@v2
+#      - uses: Swatinem/rust-cache@v2
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
 
       - name: Setup | Install cargo-wix [Windows]
         continue-on-error: true
@@ -192,26 +258,6 @@ jobs:
           echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
           echo "BIN_NAME=${BIN_NAME}" >> $GITHUB_OUTPUT
           echo "EXE_SUFFIX=${EXE_SUFFIX}" >> $GITHUB_OUTPUT
-
-      - name: Set testing options
-        id: test-options
-        if: ${{ !matrix.skip-tests }}
-        shell: bash
-        run: |
-          # test only library unit tests and binary for arm-type targets
-          unset CARGO_TEST_OPTIONS
-          unset CARGO_TEST_OPTIONS ; case ${{ matrix.target }} in arm-* | aarch64-*) CARGO_TEST_OPTIONS="--bin ${{ needs.crate_metadata.outputs.name }}" ;; esac;
-          CARGO_TEST_OPTIONS="${CARGO_TEST_OPTIONS} --features ${{ env.TEST_FEATURES }}"
-          echo "CARGO_TEST_OPTIONS=${CARGO_TEST_OPTIONS}" >> $GITHUB_OUTPUT
-
-      - name: Run tests
-        if: ${{ !matrix.skip-tests }}
-        run: >
-          cargo test
-          --locked
-          --release
-          ${{ steps.build-options.outputs.CARGO_BUILD_OPTIONS}}
-          ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
 
       - name: Build Installer
         continue-on-error: true
@@ -342,60 +388,22 @@ jobs:
             target/wix/pixi-${{ matrix.target }}.msi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  test-examples:
-    name: Integration test ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    needs: build
+
+  downstream_tests:
+    needs:
+        - build
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: "Linux-x86_64",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
-#          - { name: "Linux-aarch64",      target: aarch64-unknown-linux-musl, os: ubuntu-latest } Doesn't work yet
+          - { target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
 
-          - { name: "macOS-x86_64",       target: x86_64-apple-darwin,        os: macOS-latest }
-          - { name: "macOS-aarch64",      target: aarch64-apple-darwin,       os: macOS-14 } # macOS-14 is the ARM chipset
+          - { target: x86_64-apple-darwin,        os: macOS-latest }
+          - { target: aarch64-apple-darwin,       os: macOS-14 } # macOS-14 is the ARM chipset
 
-          - { name: "Windows-x86_64",     target: x86_64-pc-windows-msvc,     os: windows-latest , extension: .exe}
-    steps:
-      - name: checkout repo
-        uses: actions/checkout@v4
-      - name: Download binary from build
-        uses: actions/download-artifact@v4
-        with:
-          name: pixi-${{ matrix.target }}${{ matrix.extension }}
-          path: pixi_bin
-      - name: Debug
-        run: |
-          pwd
-      - name: Setup unix binary, add to github path
-        if: matrix.os != 'windows-latest'
-        run: |
-          mv pixi_bin/pixi-${{ matrix.target }} pixi_bin/pixi
-          chmod a+x pixi_bin/pixi
-          echo "$(pwd)/pixi_bin" >> $GITHUB_PATH
-      - name: Create Directory and Move Executable
-        if: matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-msvc'
-        run: |
-          New-Item -ItemType Directory -Force -Path "D:\.pixi"
-          Move-Item -Path "pixi_bin/pixi-${{ matrix.target }}${{ matrix.extension }}" -Destination "D:\.pixi\pixi.exe"
-        shell: pwsh
-      - name: Add to PATH
-        if: matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-msvc'
-        run: echo "D:\.pixi" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
-        shell: pwsh
-      - name: Verify and Use Executable
-        if: matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-msvc'
-        run: |
-          echo "Current PATH: $env:PATH"
-          pixi --version
-        shell: pwsh
-      - name: Help
-        run: pixi --help
-      - name: Info
-        run: pixi info
-      - name: Install pixi
-        run: pixi install -v
-      - name: Test examples
-        shell: bash
-        run: bash tests/test_examples.sh
+          - { target: x86_64-pc-windows-msvc,     os: windows-latest , extension: .exe }
+    uses: ./.github/workflows/test_downstream.yml
+    with:
+      os: ${{ matrix.os }}
+      target: ${{ matrix.target }}
+      extension: ${{ matrix.extension }}
