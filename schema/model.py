@@ -116,6 +116,18 @@ class PyPIGitRequirement(StrictBaseModel):
     )
     rev_tag_branch: GitTag | GitRev | GitBranch
 
+class PyPIPathRequirement(StrictBaseModel):
+    path: NonEmptyStr = Field(
+        None,
+        description="A path to a local source or wheel",
+    )
+
+class PyPIUrlRequirement(StrictBaseModel):
+    url: NonEmptyStr = Field(
+        None,
+        description="A url to a remote source or wheel",
+    )
+
 class PyPIVersion(StrictBaseModel):
     version: NonEmptyStr = Field(
         None,
@@ -123,7 +135,7 @@ class PyPIVersion(StrictBaseModel):
     )
 
 class PyPIRequirementTable(StrictBaseModel):
-    version_or_git: PyPIVersion | PyPIGitRequirement
+    requirement: PyPIVersion | PyPIGitRequirement | PyPIPathRequirement | PyPIUrlRequirement
     extras: list[NonEmptyStr] | None = Field(None, description="The extras of the package")
 
 

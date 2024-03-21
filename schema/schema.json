@@ -321,6 +321,48 @@
       "title": "Feature",
       "type": "object"
     },
+    "GitBranch": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "default": null,
+          "description": "A git branch to use",
+          "minLength": 1,
+          "title": "Branch",
+          "type": "string"
+        }
+      },
+      "title": "GitBranch",
+      "type": "object"
+    },
+    "GitRev": {
+      "additionalProperties": false,
+      "properties": {
+        "rev": {
+          "default": null,
+          "description": "A git sha revision to sue",
+          "minLength": 1,
+          "title": "Rev",
+          "type": "string"
+        }
+      },
+      "title": "GitRev",
+      "type": "object"
+    },
+    "GitTag": {
+      "additionalProperties": false,
+      "properties": {
+        "tag": {
+          "default": null,
+          "description": "A git tag to use",
+          "minLength": 1,
+          "title": "Tag",
+          "type": "string"
+        }
+      },
+      "title": "GitTag",
+      "type": "object"
+    },
     "LibcFamily": {
       "additionalProperties": false,
       "properties": {
@@ -598,22 +640,70 @@
       "title": "Project",
       "type": "object"
     },
+    "PyPIGitRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "git": {
+          "default": null,
+          "description": "The git url to the repo e.g https://github.com/prefix-dev/pixi",
+          "minLength": 1,
+          "title": "Git",
+          "type": "string"
+        },
+        "rev_tag_branch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GitTag"
+            },
+            {
+              "$ref": "#/$defs/GitRev"
+            },
+            {
+              "$ref": "#/$defs/GitBranch"
+            }
+          ],
+          "title": "Rev Tag Branch"
+        }
+      },
+      "required": [
+        "rev_tag_branch"
+      ],
+      "title": "PyPIGitRequirement",
+      "type": "object"
+    },
+    "PyPIPathRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "default": null,
+          "description": "A path to a local source or wheel",
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "title": "PyPIPathRequirement",
+      "type": "object"
+    },
     "PyPIRequirementTable": {
       "additionalProperties": false,
       "properties": {
-        "version": {
+        "requirement": {
           "anyOf": [
             {
-              "minLength": 1,
-              "type": "string"
+              "$ref": "#/$defs/PyPIVersion"
             },
             {
-              "type": "null"
+              "$ref": "#/$defs/PyPIGitRequirement"
+            },
+            {
+              "$ref": "#/$defs/PyPIPathRequirement"
+            },
+            {
+              "$ref": "#/$defs/PyPIUrlRequirement"
             }
           ],
-          "default": null,
-          "description": "The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
-          "title": "Version"
+          "title": "Requirement"
         },
         "extras": {
           "anyOf": [
@@ -633,7 +723,38 @@
           "title": "Extras"
         }
       },
+      "required": [
+        "requirement"
+      ],
       "title": "PyPIRequirementTable",
+      "type": "object"
+    },
+    "PyPIUrlRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "default": null,
+          "description": "A url to a remote source or wheel",
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "title": "PyPIUrlRequirement",
+      "type": "object"
+    },
+    "PyPIVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": null,
+          "description": "The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "title": "PyPIVersion",
       "type": "object"
     },
     "SystemRequirements": {
