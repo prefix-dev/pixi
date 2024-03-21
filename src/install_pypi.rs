@@ -1,6 +1,7 @@
 use crate::environment::PythonStatus;
 use crate::prefix::Prefix;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
+use std::borrow::Cow;
 
 use distribution_filename::DistFilename;
 
@@ -20,10 +21,11 @@ use distribution_types::{CachedDist, DirectGitUrl, Dist, IndexUrl, InstalledDist
 use install_wheel_rs::linker::LinkMode;
 
 use rattler_conda_types::{Platform, RepoDataRecord};
-use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::str::FromStr;
 use std::time::Duration;
 
 use uv_client::{FlatIndex, FlatIndexClient};
@@ -72,13 +74,12 @@ struct PixiInstallPlan {
 
 /// Converts our locked data to a file
 fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_types::File {
-    // Convert our url to a FileLocation
-    let url = if pkg.url.scheme() == "file" {
-        distribution_types::FileLocation::Path(
-            pkg.url.to_file_path().expect("cannot convert to file path"),
-        )
-    } else {
-        distribution_types::FileLocation::AbsoluteUrl(pkg.url.to_string())
+    let url = match &pkg.url_or_path {
+        UrlOrPath::Url(url) if url.scheme() == "file" => distribution_types::FileLocation::Path(
+            url.to_file_path().expect("cannot convert to file path"),
+        ),
+        UrlOrPath::Url(url) => distribution_types::FileLocation::AbsoluteUrl(url.to_string()),
+        UrlOrPath::Path(path) => distribution_types::FileLocation::Path(path.clone()),
     };
 
     // Convert PackageHashes to uv hashes
@@ -129,47 +130,60 @@ fn is_direct_url(url_scheme: &str) -> bool {
 }
 
 /// Strip of the `direct` scheme from the url if it is there
-fn strip_direct_scheme(url: impl AsRef<str>) -> Result<Url, url::ParseError> {
+fn strip_direct_scheme(url: &Url) -> Cow<'_, Url> {
     url.as_ref()
         .strip_prefix("direct+")
-        .map(|s| s.to_string())
-        .unwrap_or(url.as_ref().to_owned())
-        .parse::<Url>()
+        .and_then(|str| Url::from_str(str).ok())
+        .map(Cow::Owned)
+        .unwrap_or(Cow::Borrowed(url))
 }
 
 /// Convert from a PypiPackageData to a uv [`distribution_types::Dist`]
-fn convert_to_dist(pkg: &PypiPackageData) -> Dist {
+fn convert_to_dist(pkg: &PypiPackageData, lock_file_dir: &Path) -> Dist {
     // Figure out if it is a url from the registry or a direct url
-    if is_direct_url(pkg.url.scheme()) {
-        Dist::from_url(
+    match &pkg.url_or_path {
+        UrlOrPath::Url(url) if is_direct_url(url.scheme()) => Dist::from_url(
             pkg.name.clone(),
-            VerbatimUrl::from_url(
-                strip_direct_scheme(pkg.url.as_str()).expect("could not parse direct url"),
-            ),
+            VerbatimUrl::from_url(strip_direct_scheme(url).into_owned()),
         )
-        .expect("could not convert into uv dist")
-    } else {
-        // We consider it to be a registry url
-        // Extract last component from registry url
-        // should be something like `package-0.1.0-py3-none-any.whl`
-        let filename_raw = pkg.url.path_segments().unwrap().last().unwrap();
-        // Recreate the filename from the extracted last component
-        let filename =
-            DistFilename::try_from_normalized_filename(filename_raw).unwrap_or_else(|| {
-                panic!(
-                    "package = {}, url = {} => could not convert to dist filename",
-                    pkg.name.as_ref(),
-                    pkg.url
-                )
-            });
-        // Now we can convert the locked data to a [`distribution_types::File`]
-        // which is essentially the file information for a wheel or sdist
-        let file = locked_data_to_file(pkg, filename_raw);
-        Dist::from_registry(
-            filename,
-            file,
-            IndexUrl::Pypi(VerbatimUrl::from_url(pkg.url.clone())),
-        )
+        .expect("could not convert into uv dist"),
+        UrlOrPath::Url(url) => {
+            // We consider it to be a registry url
+            // Extract last component from registry url
+            // should be something like `package-0.1.0-py3-none-any.whl`
+            let filename_raw = url.path_segments().unwrap().last().unwrap();
+            // Recreate the filename from the extracted last component
+            let filename =
+                DistFilename::try_from_normalized_filename(filename_raw).unwrap_or_else(|| {
+                    panic!(
+                        "package = {}, url = {} => could not convert to dist filename",
+                        pkg.name.as_ref(),
+                        url
+                    )
+                });
+            // Now we can convert the locked data to a [`distribution_types::File`]
+            // which is essentially the file information for a wheel or sdist
+            let file = locked_data_to_file(pkg, filename_raw);
+            Dist::from_registry(
+                filename,
+                file,
+                IndexUrl::Pypi(VerbatimUrl::from_url(url.clone())),
+            )
+        }
+        UrlOrPath::Path(path) => {
+            // uv always expects an absolute path.
+            let path = if path.is_absolute() {
+                path.clone()
+            } else {
+                lock_file_dir.join(path)
+            };
+
+            Dist::from_url(
+                pkg.name.clone(),
+                VerbatimUrl::from_path(&path).with_given(path.display().to_string()),
+            )
+            .expect("could not convert path into uv dist")
+        }
     }
 }
 
@@ -259,7 +273,7 @@ fn need_reinstall(
                     match result {
                         Ok(url) => {
                             // Check if the urls are different
-                            if url == locked.url {
+                            if Some(&url) == locked.url_or_path.as_url() {
                                 // Check cache freshness
                                 if !check_url_freshness(&url, installed)? {
                                     return Ok(ValidateInstall::Reinstall);
@@ -279,18 +293,15 @@ fn need_reinstall(
                     // Subdirectory is either in the url or not supported
                     subdirectory: _,
                 } => {
-                    // Remove `direct+` scheme if it is there so we can compare the required to the installed url
-                    let locked_url = strip_direct_scheme(locked.url.as_str());
+                    let locked_url = match &locked.url_or_path {
+                        // Remove `direct+` scheme if it is there so we can compare the required to the installed url
+                        UrlOrPath::Url(url) => strip_direct_scheme(url),
+                        UrlOrPath::Path(_path) => return Ok(ValidateInstall::Reinstall),
+                    };
+
                     // Try to parse both urls
                     let installed_url = url.parse::<Url>();
 
-                    // Early out if we can't parse the urls
-                    let locked_url = if let Ok(locked_url) = locked_url {
-                        locked_url
-                    } else {
-                        tracing::warn!("could not parse locked url: {}", locked_url.unwrap_err());
-                        return Ok(ValidateInstall::Reinstall);
-                    };
                     // Same here
                     let installed_url = if let Ok(installed_url) = installed_url {
                         installed_url
@@ -302,7 +313,7 @@ fn need_reinstall(
                         return Ok(ValidateInstall::Reinstall);
                     };
 
-                    if locked_url == installed_url {
+                    if locked_url.as_ref() == &installed_url {
                         // Check cache freshness
                         if !check_url_freshness(&locked_url, installed)? {
                             return Ok(ValidateInstall::Reinstall);
@@ -315,7 +326,13 @@ fn need_reinstall(
                     subdirectory: _,
                 } => {
                     let url = Url::parse(&url).into_diagnostic()?;
-                    let git_url = DirectGitUrl::try_from(&locked.url);
+                    let git_url = match &locked.url_or_path {
+                        UrlOrPath::Url(url) => DirectGitUrl::try_from(url),
+                        UrlOrPath::Path(_path) => {
+                            // Previously
+                            return Ok(ValidateInstall::Reinstall);
+                        }
+                    };
                     match git_url {
                         Ok(git) => {
                             // Check the repository base url
@@ -365,6 +382,7 @@ fn whats_the_plan<'a>(
     registry_index: &'a mut RegistryWheelIndex<'a>,
     uv_cache: &Cache,
     python_version: &Version,
+    lock_file_dir: &Path,
 ) -> miette::Result<PixiInstallPlan> {
     // Create a HashSet of PackageName and Version
     let mut required_map: std::collections::HashMap<&PackageName, &PypiPackageData> =
@@ -401,7 +419,7 @@ fn whats_the_plan<'a>(
             // Check if we need to revalidate
             // In that case
             if uv_cache.must_revalidate(&pkg.name) {
-                remote.push(convert_to_dist(pkg));
+                remote.push(convert_to_dist(pkg, lock_file_dir));
                 continue;
             }
 
@@ -412,7 +430,7 @@ fn whats_the_plan<'a>(
             if let Some((_, cached)) = wheel {
                 local.push(CachedDist::Registry(cached.clone()));
             } else {
-                remote.push(convert_to_dist(pkg));
+                remote.push(convert_to_dist(pkg, lock_file_dir));
             }
         } else {
             // We can uninstall
@@ -425,7 +443,7 @@ fn whats_the_plan<'a>(
         // Check if we need to revalidate
         // In that case we need to download from the registry
         if uv_cache.must_revalidate(&pkg.name) {
-            remote.push(convert_to_dist(pkg));
+            remote.push(convert_to_dist(pkg, lock_file_dir));
             continue;
         }
 
@@ -438,7 +456,7 @@ fn whats_the_plan<'a>(
             local.push(CachedDist::Registry(cached.clone()));
         } else {
             // We need to download from the registry or any url
-            remote.push(convert_to_dist(pkg));
+            remote.push(convert_to_dist(pkg, lock_file_dir));
         }
     }
 
@@ -485,6 +503,7 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
 // TODO: refactor arguments in struct
 #[allow(clippy::too_many_arguments)]
 pub async fn update_python_distributions(
+    lock_file_dir: &Path,
     prefix: &Prefix,
     conda_package: &[RepoDataRecord],
     python_packages: &[CombinedPypiPackageData],
@@ -576,6 +595,7 @@ pub async fn update_python_distributions(
         &mut registry_index,
         &uv_context.cache,
         venv.interpreter().python_version(),
+        lock_file_dir,
     )?;
 
     // Nothing to do.

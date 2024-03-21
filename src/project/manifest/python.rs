@@ -631,16 +631,14 @@ mod tests {
         .unwrap();
         assert_eq!(
             requirement.first().unwrap().1,
-            &PyPiRequirement {
-                requirement: PyPiRequirementType::Git {
-                    git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
-                    tag: Some("3.0.0".to_string()),
-                    branch: None,
-                    rev: None,
-                    subdirectory: None,
-                },
-                ..PyPiRequirement::default()
-            }
+            &PyPiRequirement::Git {
+                git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
+                tag: Some("3.0.0".to_string()),
+                branch: None,
+                rev: None,
+                subdirectory: None,
+                extras: vec![],
+            },
         );
     }
 

@@ -34,9 +34,9 @@ use platform_host::Platform;
 use pypi_types::Metadata21;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
-use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
 use rattler_solve::{resolvo, SolverImpl};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
@@ -408,15 +408,13 @@ pub async fn resolve_pypi(
 
         let pypi_package_data = match dist {
             Dist::Built(dist) => {
-                let (url, hash) = match &dist {
+                let (url_or_path, hash) = match &dist {
                     BuiltDist::Registry(dist) => {
                         let url = match &dist.file.url {
                             FileLocation::AbsoluteUrl(url) => {
-                                Url::from_str(url).expect("invalid absolute url")
+                                UrlOrPath::Url(Url::from_str(url).expect("invalid absolute url"))
                             }
-                            FileLocation::Path(path) => {
-                                Url::from_file_path(path).expect("invalid path")
-                            }
+                            FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
                             _ => todo!("unsupported URL"),
                         };
 
@@ -429,18 +427,14 @@ pub async fn resolve_pypi(
                         let url = dist.url.to_url();
                         let direct_url = Url::parse(&format!("direct+{url}"))
                             .expect("could not create direct-url");
-                        (direct_url, None)
+                        (UrlOrPath::Url(direct_url), None)
                     }
                     BuiltDist::Path(dist) => (
                         dist.url
                             .given()
-                            .and_then(|url| {
-                                // TODO(Bas): file path fix, PathBuf in lock file to save relative paths
-                                // Url::from_file_path(url).expect("could not parse given url to path")
-                                Url::from_file_path(url).ok()
-                            })
+                            .map(|path| UrlOrPath::Path(PathBuf::from(path)))
                             // When using a direct url reference like https://foo/bla.whl we do not have a given
-                            .unwrap_or_else(|| dist.url.to_url()),
+                            .unwrap_or_else(|| UrlOrPath::Url(dist.url.to_url())),
                         None,
                     ),
                 };
@@ -455,7 +449,7 @@ pub async fn resolve_pypi(
                     version: metadata.version,
                     requires_dist: metadata.requires_dist,
                     requires_python: metadata.requires_python,
-                    url,
+                    url_or_path,
                     hash,
                 }
             }
@@ -471,38 +465,34 @@ pub async fn resolve_pypi(
 
                 // Use the precise url if we got it back
                 // otherwise try to construct it from the source
-                let url = match source {
+                let url_or_path = match source {
                     SourceDist::Registry(reg) => {
                         if let Some(url) = url {
-                            url
+                            UrlOrPath::Url(url)
                         } else {
                             match &reg.file.url {
-                                FileLocation::AbsoluteUrl(url) => {
-                                    Url::from_str(url).expect("invalid absolute url")
-                                }
-                                FileLocation::Path(path) => {
-                                    Url::from_file_path(path).expect("invalid path")
-                                }
+                                FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
+                                    Url::from_str(url).expect("invalid absolute url"),
+                                ),
+                                FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
                                 _ => todo!("unsupported URL"),
                             }
                         }
                     }
                     SourceDist::DirectUrl(direct) => {
                         let url = direct.url.to_url();
-                        Url::parse(&format!("direct+{url}")).expect("could not create direct-url")
+                        Url::parse(&format!("direct+{url}"))
+                            .expect("could not create direct-url")
+                            .into()
                     }
-                    SourceDist::Git(git) => git.url.to_url(),
+                    SourceDist::Git(git) => git.url.to_url().into(),
                     SourceDist::Path(path) => {
                         // Create the url for the lock file
                         path.url
                             .given()
-                            .and_then(|url| {
-                                // TODO(Bas): file path fix, PathBuf in lock file to save relative paths
-                                // Url::from_file_path(url).expect("could not parse given url to path")
-                                Url::from_file_path(url).ok()
-                            })
+                            .map(|path| UrlOrPath::Path(PathBuf::from(path)))
                             // When using a direct url reference like https://foo/bla.whl we do not have a given
-                            .unwrap_or_else(|| path.url.to_url())
+                            .unwrap_or_else(|| path.url.to_url().into())
                     }
                 };
 
@@ -511,7 +501,7 @@ pub async fn resolve_pypi(
                     version: metadata.version,
                     requires_dist: metadata.requires_dist,
                     requires_python: metadata.requires_python,
-                    url,
+                    url_or_path,
                     hash,
                 }
             }

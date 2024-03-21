@@ -9,12 +9,14 @@ use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
 };
-use rattler_lock::{ConversionError, Package, PypiPackageData};
+use rattler_lock::{ConversionError, Package, PypiPackageData, UrlOrPath};
+use std::str::FromStr;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
 };
 use thiserror::Error;
+use url::Url;
 use uv_normalize::{ExtraName, PackageName};
 
 #[derive(Debug, Error, Diagnostic)]
@@ -163,10 +165,13 @@ pub fn pypi_satifisfies(locked_data: &PypiPackageData, spec: &Requirement) -> bo
             // In the case that both the spec and the locked data are direct git urls
             // we need to compare the urls to see if they are the same
             let spec_git_url = DirectGitUrl::try_from(&spec_url.to_url()).ok();
-            let locked_data_url = DirectGitUrl::try_from(&locked_data.url).ok();
+            let locked_git_url = locked_data
+                .url_or_path
+                .as_url()
+                .and_then(|url| DirectGitUrl::try_from(url).ok());
 
             // Both are git url's
-            if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_data_url) {
+            if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
                 let base_is_same =
                     spec_git_url.url.repository() == locked_data_url.url.repository();
 
@@ -179,16 +184,24 @@ pub fn pypi_satifisfies(locked_data: &PypiPackageData, spec: &Requirement) -> bo
                     base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
                 }
             } else {
+                let spec_path_or_url = spec_url
+                    .given()
+                    .and_then(|url| UrlOrPath::from_str(url).ok())
+                    .unwrap_or(UrlOrPath::Url(spec_url.to_url()));
+
                 // Strip the direct+ prefix if it exists for the direct url
                 // because this is not part of the `Requirement` spec
                 // we use this to record that it is a direct url
-                let non_direct_url = if locked_data.url.scheme().starts_with("direct+") {
-                    url::Url::parse(&locked_data.url.to_string().replace("direct+", ""))
-                        .expect("Failed to parse sanitized url")
-                } else {
-                    locked_data.url.clone()
+                let locked_path_or_url = match locked_data.url_or_path.clone() {
+                    UrlOrPath::Url(url) => UrlOrPath::Url(
+                        url.as_ref()
+                            .strip_prefix("direct+")
+                            .and_then(|str| Url::parse(str).ok())
+                            .unwrap_or(url),
+                    ),
+                    UrlOrPath::Path(path) => UrlOrPath::Path(path),
                 };
-                spec_url.to_url() == non_direct_url
+                spec_path_or_url == locked_path_or_url
             }
         }
         Some(pep508_rs::VersionOrUrl::VersionSpecifier(spec)) => {
@@ -590,7 +603,7 @@ mod tests {
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
             version: Version::from_str("0.1.0").unwrap(),
-            url: "git+https://github.com/mypkg@abcd"
+            url_or_path: "git+https://github.com/mypkg@abcd"
                 .parse()
                 .expect("failed to parse url"),
             hash: None,

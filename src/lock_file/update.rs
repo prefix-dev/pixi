@@ -129,6 +129,7 @@ impl<'p> LockFileDerivedData<'p> {
             &environment.system_requirements(),
             uv_context,
             env_variables,
+            self.project.root(),
         )
         .await?;
 
