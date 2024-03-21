@@ -10,8 +10,8 @@ const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";
 /// Discriminates between a pixi.toml and a pyproject.toml manifest
 #[derive(Debug, Clone)]
 pub enum ManifestSource {
-    PyProjectToml(toml_edit::Document),
-    PixiToml(toml_edit::Document),
+    PyProjectToml(toml_edit::DocumentMut),
+    PixiToml(toml_edit::DocumentMut),
 }
 
 impl fmt::Display for ManifestSource {

@@ -60,8 +60,8 @@ where
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?
-        .with_cli_config(args.config.clone());
+    let mut project =
+        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
     let deps = args.deps;
     let spec_type = if args.host {
         SpecType::Host

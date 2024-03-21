@@ -213,7 +213,7 @@ impl Project {
     where
         C: Into<Config>,
     {
-        self.config.merge_config(&config.into());
+        self.config = self.config.merge_config(config.into());
         self
     }
 

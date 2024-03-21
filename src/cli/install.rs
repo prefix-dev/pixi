@@ -24,7 +24,8 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let project =
+        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
     let environment_name = args
         .environment
         .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);

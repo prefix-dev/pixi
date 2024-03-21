@@ -7,7 +7,6 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
-use rattler_networking::AuthenticationMiddleware;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
 
@@ -15,6 +14,7 @@ use strsim::jaro;
 use tokio::task::spawn_blocking;
 
 use crate::config::Config;
+use crate::utils::reqwest::build_reqwest_clients;
 use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata, Project};
 
 /// Search a package, output will list the latest version of package
@@ -137,11 +137,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let package_name_filter = args.package;
 
-    let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-        .with_arc(Arc::new(AuthenticationMiddleware::default()))
-        .build();
+    let client = if let Some(project) = project.as_ref() {
+        project.authenticated_client().clone()
+    } else {
+        build_reqwest_clients(None).1
+    };
+
     let repo_data = Arc::new(
-        fetch_sparse_repodata(channels.iter(), [args.platform], &authenticated_client).await?,
+        fetch_sparse_repodata(
+            channels.iter(),
+            [args.platform],
+            &client,
+            project.as_ref().map(|p| p.config()),
+        )
+        .await?,
     );
 
     // When package name filter contains * (wildcard), it will search and display a list of packages matching this filter

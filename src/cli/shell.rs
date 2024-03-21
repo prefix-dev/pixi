@@ -199,8 +199,8 @@ async fn start_nu_shell(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?
-        .with_cli_config(args.config.clone());
+    let project =
+        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
     let environment_name = args
         .environment
         .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
@@ -226,8 +226,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         match interactive_shell {
             ShellEnum::NuShell(_) => prompt::get_nu_prompt(prompt_name.as_str()),
             ShellEnum::PowerShell(_) => prompt::get_powershell_prompt(prompt_name.as_str()),
-            ShellEnum::Bash(_) => prompt::get_bash_prompt(prompt_name.as_str()),
-            ShellEnum::Zsh(_) => prompt::get_zsh_prompt(prompt_name.as_str()),
+            ShellEnum::Bash(_) => prompt::get_bash_hook(prompt_name.as_str()),
+            ShellEnum::Zsh(_) => prompt::get_zsh_hook(prompt_name.as_str()),
             ShellEnum::Fish(_) => prompt::get_fish_prompt(prompt_name.as_str()),
             ShellEnum::Xonsh(_) => prompt::get_xonsh_prompt(),
             ShellEnum::CmdExe(_) => prompt::get_cmd_prompt(prompt_name.as_str()),
