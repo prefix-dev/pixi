@@ -151,13 +151,14 @@ jobs:
 
       # Use a single code gen unit, this effectively disables parallel linking but ensures that everything is linked
       # together in a single unit which reduces the file-size at the cost of link time.
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && '1' || 'false' }}
+      # Default for a release build is 16
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && 1 || 16 }}
 
       # Strip the binaries. This reduces the filesize of the final release.
       CARGO_PROFILE_RELEASE_STRIP: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && 'symbols' || 'false' }}
 
       # Optimize the binary for size. This reduces the filesize at the cost of a slower binary.
-      CARGO_PROFILE_OPT_LEVEL: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && 's' || 'false' }}
+      CARGO_PROFILE_OPT_LEVEL: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') && 's' || '0' }}
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
