@@ -1,61 +1,172 @@
-use crate::config::get_cache_dir;
-use async_once_cell::OnceCell;
+use futures::stream::FuturesUnordered;
+use futures::{StreamExt};
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
+use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
-use reqwest::Client;
-use reqwest_middleware::ClientBuilder;
+use rattler_digest::Sha256Hash;
+use reqwest::StatusCode;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use std::{collections::HashMap, str::FromStr};
+use std::time::Duration;
+use tokio::sync::Semaphore;
 use url::Url;
 
-#[derive(Deserialize)]
-struct CondaPyPiNameMapping {
+use crate::config::get_cache_dir;
+
+const STORAGE_URL: &str = "https://conda-mapping.prefix.dev";
+const HASH_DIR: &str = "hash-v0";
+
+pub trait Reporter: Send + Sync {
+    fn download_started(&self, package: &RepoDataRecord, total: usize);
+    fn download_finished(&self, package: &RepoDataRecord, total: usize);
+    fn download_failed(&self, package: &RepoDataRecord, total: usize);
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Package {
+    pypi_normalized_names: Option<Vec<String>>,
+    versions: Option<HashMap<String, pep440_rs::Version>>,
     conda_name: String,
-    pypi_name: String,
+    package_name: String,
+    direct_url: Option<Vec<String>>,
+}
+
+async fn try_fetch_single_mapping(
+    client: &ClientWithMiddleware,
+    sha256: &Sha256Hash,
+) -> miette::Result<Option<Package>> {
+    let hash_str = format!("{:x}", sha256);
+
+    // Fetch the mapping from the server
+    let response = client
+        .get(format!("{STORAGE_URL}/{HASH_DIR}/{}", hash_str))
+        .send()
+        .await
+        .into_diagnostic()
+        .context("failed to download pypi name mapping")?;
+
+    // If no mapping was found for the hash, return None.
+    if response.status() == StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+
+    // Otherwise convert the response to a Package struct
+    let package: Package = response
+        .json()
+        .await
+        .into_diagnostic()
+        .context("failed to parse pypi name mapping")?;
+
+    Ok(Some(package))
 }
 
 /// Downloads and caches the conda-forge conda-to-pypi name mapping.
-pub async fn conda_pypi_name_mapping() -> miette::Result<&'static HashMap<String, String>> {
-    static MAPPING: OnceCell<HashMap<String, String>> = OnceCell::new();
-    MAPPING.get_or_try_init(async {
+pub async fn conda_pypi_name_mapping(
+    client: reqwest::Client,
+    conda_packages: &[RepoDataRecord],
+    reporter: Option<Arc<dyn Reporter>>,
+) -> miette::Result<HashMap<Sha256Hash, Package>> {
+    // Construct a client with a retry policy and local caching
+    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
+    let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
+    let cache_strategy = Cache(HttpCache {
+        mode: CacheMode::Default,
+        manager: CACacheManager {
+            path: get_cache_dir()
+                .expect("missing cache directory")
+                .join("http-cache"),
+        },
+        options: HttpCacheOptions::default(),
+    });
 
-        // Construct a client with a retry policy and local caching
-        let retry_policy =
-            ExponentialBackoff::builder().build_with_max_retries(3);
-        let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
-        let cache_strategy = Cache(HttpCache {
-            mode: CacheMode::Default,
-            manager: CACacheManager { path: get_cache_dir().expect("missing cache directory").join("http-cache") },
-            options: HttpCacheOptions::default(),
+    let client = ClientBuilder::new(client)
+        .with(cache_strategy)
+        .with(retry_strategy)
+        .build();
+
+    let filtered_packages = conda_packages
+        .iter()
+        .filter_map(|package| {
+            package
+                .package_record
+                .sha256
+                .as_ref()
+                .map(|hash| (package, *hash))
+        })
+        .collect_vec();
+
+    let total_records = filtered_packages.len();
+    let mut pending_futures = FuturesUnordered::new();
+    let concurrency_limit = Arc::new(Semaphore::new(100));
+    for (record, hash) in filtered_packages {
+        if let Some(reporter) = &reporter {
+            reporter.download_started(&record, total_records);
+        }
+
+        let client = client.clone();
+        let reporter = reporter.clone();
+        let concurrency_limit = concurrency_limit.clone();
+
+        // Create a future that fetches the mapping for the record's hash concurrently with the rest of the requests.
+        pending_futures.push(async move {
+            // Acquire a permit to limit the number of concurrent requests
+            let _permit = concurrency_limit
+                .acquire_owned()
+                .await
+                .expect("semaphore error");
+
+            // Fetch the mapping by the hash of the record.
+            let result = try_fetch_single_mapping(&client, &hash).await;
+
+            // Report the result to the reporter
+            if let Some(reporter) = reporter {
+                match &result {
+                    Ok(_) => reporter.download_finished(&record, total_records),
+                    Err(_) => reporter.download_failed(&record, total_records),
+                }
+            }
+
+            match result {
+                Ok(Some(package)) => Ok(Some((hash, package))),
+                Ok(None) => Ok(None),
+                Err(e) => Err(e),
+            }
         });
-        let client = ClientBuilder::new(Client::new())
-            .with(cache_strategy)
-            .with(retry_strategy)
-            .build();
+    }
 
-        let response = client.get("https://raw.githubusercontent.com/regro/cf-graph-countyfair/master/mappings/pypi/name_mapping.json").send().await
-            .into_diagnostic()
-            .context("failed to download pypi name mapping")?;
-        let mapping: Vec<CondaPyPiNameMapping> = response
-            .json()
-            .await
-            .into_diagnostic()
-            .context("failed to parse pypi name mapping")?;
-        let mapping_by_name: HashMap<_, _> = mapping
-            .into_iter()
-            .map(|m| (m.conda_name, m.pypi_name))
-            .collect();
-        Ok(mapping_by_name)
-    }).await
+    let mut result_map = HashMap::with_capacity(total_records);
+    while let Some(result) = pending_futures.next().await {
+        match result {
+            Ok(Some((hash, package))) => {
+                // Add the mapping to the result hashmap
+                result_map.insert(hash, package);
+            }
+            Ok(None) => {
+                // If no mapping was found, do nothing.
+            }
+            Err(e) => {
+                // If an error occurred, bail out,.
+                return Err(e);
+            }
+        }
+    }
+
+    Ok(result_map)
 }
 
 /// Amend the records with pypi purls if they are not present yet.
-pub async fn amend_pypi_purls(conda_packages: &mut [RepoDataRecord]) -> miette::Result<()> {
-    let conda_forge_mapping = conda_pypi_name_mapping().await?;
+pub async fn amend_pypi_purls(
+    client: reqwest::Client,
+    conda_packages: &mut [RepoDataRecord],
+    reporter: Option<Arc<dyn Reporter>>,
+) -> miette::Result<()> {
+    let conda_mapping = conda_pypi_name_mapping(client, conda_packages, reporter).await?;
     for record in conda_packages.iter_mut() {
-        amend_pypi_purls_for_record(record, conda_forge_mapping)?;
+        amend_pypi_purls_for_record(record, &conda_mapping)?;
     }
     Ok(())
 }
@@ -66,7 +177,7 @@ pub async fn amend_pypi_purls(conda_packages: &mut [RepoDataRecord]) -> miette::
 /// a conda-forge package.
 fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
-    conda_forge_mapping: &'static HashMap<String, String>,
+    conda_forge_mapping: &HashMap<Sha256Hash, Package>,
 ) -> miette::Result<()> {
     // If the package already has a pypi name we can stop here.
     if record
@@ -78,15 +189,23 @@ fn amend_pypi_purls_for_record(
         return Ok(());
     }
 
-    // If this package is a conda-forge package we can try to guess the pypi name from the conda
-    // name.
-    if is_conda_forge_record(record) {
-        if let Some(mapped_name) =
-            conda_forge_mapping.get(record.package_record.name.as_normalized())
-        {
-            record.package_record.purls.push(
-                PackageUrl::new(String::from("pypi"), mapped_name).expect("valid pypi package url"),
-            );
+    if let Some(sha256) = record.package_record.sha256 {
+        if let Some(mapped_name) = conda_forge_mapping.get(&sha256) {
+            if let Some(pypi_names_with_versions) = &mapped_name.versions {
+                for (pypi_name, pypi_version) in pypi_names_with_versions {
+                    let mut purl = PackageUrl::builder(String::from("pypi"), pypi_name);
+                    // sometimes packages are mapped to 0.0.0
+                    // we don't want this version because we can't prove if it's actual or not
+                    let pypi_version_str = pypi_version.to_string();
+                    if pypi_version_str != "0.0.0" {
+                        purl = purl.with_version(pypi_version_str);
+                    };
+
+                    let built_purl = purl.build().expect("valid pypi package url and version");
+
+                    record.package_record.purls.push(built_purl);
+                }
+            }
         }
     }
 
