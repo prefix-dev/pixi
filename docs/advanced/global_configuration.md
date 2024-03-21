@@ -55,6 +55,14 @@ authentication_override_file = "/path/to/your/override.json"
     "oci://ghcr.io/channel-mirrors/bioconda",
     "https://prefix.dev/bioconda",
 ]
+
+[repodata_options]
+# disable fetching of jlap, bz2 or zstd repodata files.
+# This should only be used for specific old versions of artifactory and other non-compliant
+# servers.
+disable_jlap = true  # don't try to download repodata.jlap
+disable_bzip2 = true # don't try to download repodata.json.bz2
+disable_zstd = true  # don't try to download repodata.json.zst
 ```
 
 ## Mirror configuration
