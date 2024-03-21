@@ -11,9 +11,11 @@ Config {
     change_ps1: Some(
         true,
     ),
+    authentication_override_file: None,
     tls_no_verify: Some(
         false,
     ),
+    mirrors: {},
     loaded_from: [
         "path/config_1.toml",
         "path/config_2.toml",
@@ -35,4 +37,15 @@ Config {
             fragment: None,
         },
     },
+    repodata_config: Some(
+        RepodataConfig {
+            disable_jlap: Some(
+                true,
+            ),
+            disable_bzip2: None,
+            disable_zstd: Some(
+                true,
+            ),
+        },
+    ),
 }

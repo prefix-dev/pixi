@@ -1,8 +1,8 @@
-use crate::default_retry_policy;
 use crate::progress::{
     default_progress_style, finished_progress_style, global_multi_progress,
     ProgressBarMessageFormatter,
 };
+use crate::utils::reqwest::default_retry_policy;
 use futures::future::ready;
 use futures::{stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use indicatif::ProgressBar;

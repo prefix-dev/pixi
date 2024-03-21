@@ -494,6 +494,7 @@ pub async fn ensure_up_to_date_lock_file(
             .into_iter()
             .filter(|target| !options.existing_repo_data.contains_key(target)),
         project.authenticated_client(),
+        Some(project.config()),
     )
     .await?;
 

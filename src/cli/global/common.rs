@@ -1,17 +1,20 @@
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
 };
-use rattler_networking::AuthenticationMiddleware;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, SolverImpl, SolverTask};
 use reqwest_middleware::ClientWithMiddleware;
 
-use crate::{config::home_path, prefix::Prefix, repodata};
+use crate::{
+    config::{home_path, Config},
+    prefix::Prefix,
+    repodata,
+    utils::reqwest::build_reqwest_clients,
+};
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 pub struct BinDir(pub PathBuf);
@@ -173,16 +176,19 @@ pub fn load_package_records(
 /// The network client and the fetched sparse repodata
 pub(super) async fn get_client_and_sparse_repodata(
     channels: impl IntoIterator<Item = &'_ Channel>,
+    config: &Config,
 ) -> miette::Result<(
     ClientWithMiddleware,
     IndexMap<(Channel, Platform), SparseRepoData>,
 )> {
-    let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-        .with_arc(Arc::new(AuthenticationMiddleware::default()))
-        .build();
-    let platform_sparse_repodata =
-        repodata::fetch_sparse_repodata(channels, [Platform::current()], &authenticated_client)
-            .await?;
+    let authenticated_client = build_reqwest_clients(Some(config)).1;
+    let platform_sparse_repodata = repodata::fetch_sparse_repodata(
+        channels,
+        [Platform::current()],
+        &authenticated_client,
+        Some(config),
+    )
+    .await?;
     Ok((authenticated_client, platform_sparse_repodata))
 }
 
