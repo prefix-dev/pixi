@@ -13,6 +13,7 @@ use miette::{IntoDiagnostic, NamedSource};
 
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
 use reqwest_middleware::ClientWithMiddleware;
+use std::fs;
 use std::hash::Hash;
 
 use std::{
@@ -486,6 +487,13 @@ pub fn find_project_manifest() -> Option<PathBuf> {
             .find_map(|manifest| {
                 let path = dir.join(manifest);
                 if path.is_file() {
+                    // Only match pyproject.toml files that contain "[tool.pixi.project]"
+                    if *manifest == PYPROJECT_MANIFEST {
+                        let contents = fs::read_to_string(&path).ok()?;
+                        if !contents.contains("[tool.pixi.project]") {
+                            return None;
+                        }
+                    }
                     Some(path.to_path_buf())
                 } else {
                     None
