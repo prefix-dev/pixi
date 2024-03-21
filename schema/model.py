@@ -100,18 +100,30 @@ class PyPIVersionRequirement(StrictBaseModel):
         description="The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
     )
 
+class GitTag(StrictBaseModel):
+    tag: NonEmptyStr = Field(None, description="A git tag to use")
+
+class GitRev(StrictBaseModel):
+    rev: NonEmptyStr = Field(None, description="A git sha revision to sue")
+
+class GitBranch(StrictBaseModel):
+    branch: NonEmptyStr = Field(None, description="A git branch to use")
+
 class PyPIGitRequirement(StrictBaseModel):
     git: NonEmptyStr = Field(
         None,
         description="The git url to the repo e.g https://github.com/prefix-dev/pixi",
     )
-    rev: NonEmptyStr | None = Field(None, description="The git sha revision")
+    rev_tag_branch: GitTag | GitRev | GitBranch
 
-class PyPIRequirementTable(StrictBaseModel):
-    version: NonEmptyStr | None = Field(
+class PyPIVersion(StrictBaseModel):
+    version: NonEmptyStr = Field(
         None,
         description="The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
     )
+
+class PyPIRequirementTable(StrictBaseModel):
+    version_or_git: PyPIVersion | PyPIGitRequirement
     extras: list[NonEmptyStr] | None = Field(None, description="The extras of the package")
 
 
