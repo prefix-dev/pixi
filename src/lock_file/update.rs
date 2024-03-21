@@ -1,5 +1,6 @@
 use crate::lock_file::{PypiRecord, UvResolutionContext};
 use crate::project::grouped_environment::GroupedEnvironmentName;
+
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::is_python_record;
 use crate::{
@@ -26,6 +27,7 @@ use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
+use std::path::PathBuf;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -810,6 +812,7 @@ pub async fn ensure_up_to_date_lock_file(
             prefix_future,
             env_variables,
             pypi_solve_semaphore.clone(),
+            project.root().to_path_buf(),
         );
 
         pending_futures.push(pypi_solve_future.boxed_local());
@@ -1371,6 +1374,7 @@ async fn spawn_extract_environment_task(
 }
 
 /// A task that solves the pypi dependencies for a given environment.
+#[allow(clippy::too_many_arguments)]
 async fn spawn_solve_pypi_task(
     resolution_context: UvResolutionContext,
     environment: GroupedEnvironment<'_>,
@@ -1379,6 +1383,7 @@ async fn spawn_solve_pypi_task(
     prefix: impl Future<Output = (Prefix, PythonStatus)>,
     env_variables: &HashMap<String, String>,
     semaphore: Arc<Semaphore>,
+    project_root: PathBuf,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1428,6 +1433,7 @@ async fn spawn_solve_pypi_task(
             &pb.pb,
             &python_path,
             env_variables,
+            &project_root,
         )
         .await
         .with_context(|| {

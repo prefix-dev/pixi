@@ -2,7 +2,7 @@ use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
 use serde::Serializer;
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
@@ -290,6 +290,20 @@ fn create_uv_url(url: &Url, rev: Option<&str>, subdir: Option<&str>) -> String {
     url
 }
 
+#[derive(Error, Debug)]
+pub enum AsPep508Error {
+    #[error("error while canonicalizing {path}")]
+    CanonicalizeError {
+        source: std::io::Error,
+        path: PathBuf,
+    },
+    #[error("parsing url {url}")]
+    UrlParseError {
+        source: url::ParseError,
+        url: String,
+    },
+}
+
 impl PyPiRequirement {
     pub fn extras(&self) -> &[ExtraName] {
         match self {
@@ -302,7 +316,11 @@ impl PyPiRequirement {
     }
 
     /// Returns the requirements as [`pep508_rs::Requirement`]s.
-    pub fn as_pep508(&self, name: &PackageName) -> pep508_rs::Requirement {
+    pub fn as_pep508(
+        &self,
+        name: &PackageName,
+        project_root: &Path,
+    ) -> Result<pep508_rs::Requirement, AsPep508Error> {
         let version_or_url = match self {
             PyPiRequirement::Version {
                 version,
@@ -314,7 +332,12 @@ impl PyPiRequirement {
                 editable: _,
                 extras: _,
             } => {
-                let canonicalized = dunce::canonicalize(path).expect("cannot canonicalize paths");
+                let joined = project_root.join(path);
+                let canonicalized =
+                    dunce::canonicalize(&joined).map_err(|e| AsPep508Error::CanonicalizeError {
+                        source: e,
+                        path: joined.clone(),
+                    })?;
                 let given = path
                     .to_str()
                     .map(|s| s.to_owned())
@@ -331,11 +354,16 @@ impl PyPiRequirement {
                 extras: _,
             } => {
                 if branch.is_some() && tag.is_some() {
-                    tracing::warn!("branch/tag are not supported yet, will use the `main`/`master` branch, please specify a revision using `rev` = `sha`");
+                    tracing::warn!("branch/tag are not supported *yet*, will use the `main`/`master` branch, please specify a revision using `rev` = `sha`");
                 }
                 let uv_url = create_uv_url(git, rev.as_deref(), subdir.as_deref());
                 Some(pep508_rs::VersionOrUrl::Url(
-                    VerbatimUrl::parse(uv_url.clone()).expect("git url is invalid"),
+                    VerbatimUrl::parse(uv_url.clone()).map_err(|e| {
+                        AsPep508Error::UrlParseError {
+                            source: e,
+                            url: uv_url,
+                        }
+                    })?,
                 ))
             }
             PyPiRequirement::Url { url, extras: _ } => Some(pep508_rs::VersionOrUrl::Url(
@@ -344,12 +372,12 @@ impl PyPiRequirement {
             PyPiRequirement::RawVersion(version) => version.clone().into(),
         };
 
-        pep508_rs::Requirement {
+        Ok(pep508_rs::Requirement {
             name: name.clone(),
             extras: self.extras().to_vec(),
             version_or_url,
             marker: None,
-        }
+        })
     }
 }
 

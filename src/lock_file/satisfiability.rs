@@ -1,4 +1,5 @@
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
+use crate::project::manifest::python::AsPep508Error;
 use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
 use distribution_types::DirectGitUrl;
 use itertools::Itertools;
@@ -10,6 +11,7 @@ use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
 };
 use rattler_lock::{ConversionError, Package, PypiPackageData, UrlOrPath};
+use std::path::Path;
 use std::str::FromStr;
 use std::{
     borrow::Cow,
@@ -58,6 +60,9 @@ pub enum PlatformUnsat {
 
     #[error("{0} requires python version {1} but the python interpreter in the lock-file has version {2}")]
     PythonVersionMismatch(PackageName, VersionSpecifiers, Box<pep440_rs::Version>),
+
+    #[error("when converting {0} into a pep508 requirement")]
+    AsPep508Error(PackageName, #[source] AsPep508Error),
 }
 
 /// Verifies that all the requirements of the specified `environment` can be satisfied with the
@@ -99,6 +104,7 @@ pub fn verify_platform_satisfiability(
     environment: &Environment<'_>,
     locked_environment: &rattler_lock::Environment,
     platform: Platform,
+    project_root: &Path,
 ) -> Result<(), PlatformUnsat> {
     // Convert the lock file into a list of conda and pypi packages
     let mut conda_packages: Vec<RepoDataRecord> = Vec::new();
@@ -142,6 +148,7 @@ pub fn verify_platform_satisfiability(
         &repodata_records_by_name,
         &pypi_records_by_name,
         platform,
+        project_root,
     )
 }
 
@@ -215,6 +222,7 @@ pub fn verify_package_platform_satisfiability(
     locked_conda_packages: &RepoDataRecordsByName,
     locked_pypi_environment: &PypiRecordsByName,
     platform: Platform,
+    project_root: &Path,
 ) -> Result<(), PlatformUnsat> {
     // Determine the dependencies requested by the environment
     let conda_specs = environment
@@ -232,10 +240,16 @@ pub fn verify_package_platform_satisfiability(
         .iter()
         .flat_map(|(name, reqs)| {
             reqs.iter().map(move |req| {
-                Dependency::PyPi(req.as_pep508(name.as_normalized()), "<environment>".into())
+                Ok::<Dependency, PlatformUnsat>(Dependency::PyPi(
+                    req.as_pep508(name.as_normalized(), project_root)
+                        .map_err(|e| {
+                            PlatformUnsat::AsPep508Error(name.as_normalized().clone(), e)
+                        })?,
+                    "<environment>".into(),
+                ))
             })
         })
-        .collect_vec();
+        .collect::<Result<Vec<_>, _>>()?;
 
     if pypi_requirements.is_empty() && !locked_pypi_environment.is_empty() {
         return Err(PlatformUnsat::TooManyPypiPackages(
@@ -551,9 +565,10 @@ mod tests {
                 .map_err(|e| LockfileUnsat::Environment(env.name().to_string(), e))?;
 
             for platform in env.platforms() {
-                verify_platform_satisfiability(&env, &locked_env, platform).map_err(|e| {
-                    LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, e)
-                })?;
+                verify_platform_satisfiability(&env, &locked_env, platform, &project.root())
+                    .map_err(|e| {
+                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, e)
+                    })?;
             }
         }
         Ok(())

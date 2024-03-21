@@ -219,6 +219,7 @@ pub async fn resolve_pypi(
     pb: &ProgressBar,
     python_location: &Path,
     env_variables: &HashMap<String, String>,
+    project_root: &Path,
 ) -> miette::Result<LockedPypiPackages> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -259,8 +260,15 @@ pub async fn resolve_pypi(
     let requirements = dependencies
         .iter()
         .flat_map(|(name, req)| req.iter().map(move |req| (name, req)))
-        .map(|(name, req)| req.as_pep508(name))
-        .collect::<Vec<pep508_rs::Requirement>>();
+        .map(|(name, req)| {
+            req.as_pep508(name, project_root)
+                .into_diagnostic()
+                .wrap_err(format!(
+                    "error while converting {} to pep508 requirement",
+                    name
+                ))
+        })
+        .collect::<miette::Result<Vec<pep508_rs::Requirement>>>()?;
 
     // Determine the python interpreter that is installed as part of the conda packages.
     let python_record = locked_conda_records
