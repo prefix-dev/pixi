@@ -3,7 +3,9 @@ use rattler_conda_types::Platform;
 use std::fmt;
 use toml_edit::{Array, Item, Table, Value};
 
-use crate::FeatureName;
+use crate::{FeatureName, Task};
+
+const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";
 
 /// Discriminates between a pixi.toml and a pyproject.toml manifest
 #[derive(Debug, Clone)]
@@ -48,7 +50,7 @@ impl ManifestSource {
         };
 
         match self {
-            ManifestSource::PyProjectToml(_) => format!("tool.pixi.{}", table_name),
+            ManifestSource::PyProjectToml(_) => format!("{}.{}", PYPROJECT_PIXI_PREFIX, table_name),
             ManifestSource::PixiToml(_) => table_name,
         }
     }
@@ -56,7 +58,7 @@ impl ManifestSource {
     /// Retrieve a mutable reference to a target table `table_name`
     /// for a specific platform.
     /// If table not found, its inserted into the document.
-    pub fn get_or_insert_toml_table<'a>(
+    fn get_or_insert_toml_table<'a>(
         &'a mut self,
         platform: Option<Platform>,
         feature: &FeatureName,
@@ -65,10 +67,7 @@ impl ManifestSource {
         let table_name = self.get_nested_toml_table_name(feature, platform, table_name);
         let parts: Vec<&str> = table_name.split('.').collect();
 
-        let mut current_table = match self {
-            ManifestSource::PyProjectToml(document) => document.as_table_mut(),
-            ManifestSource::PixiToml(document) => document.as_table_mut(),
-        };
+        let mut current_table = self.as_table_mut();
 
         for (i, part) in parts.iter().enumerate() {
             current_table = current_table
@@ -97,12 +96,7 @@ impl ManifestSource {
     ) -> miette::Result<&mut Array> {
         match feature_name {
             FeatureName::Default => {
-                let project = match self {
-                    ManifestSource::PyProjectToml(document) => {
-                        &mut document["tool"]["pixi"]["project"]
-                    }
-                    ManifestSource::PixiToml(document) => &mut document["project"],
-                };
+                let project = self.get_root_table_mut("project");
                 if project.is_none() {
                     *project = Item::Table(Table::new());
                 }
@@ -117,12 +111,7 @@ impl ManifestSource {
                     .ok_or_else(|| miette::miette!("malformed {array_name} array"))
             }
             FeatureName::Named(_) => {
-                let feature = match self {
-                    ManifestSource::PyProjectToml(document) => {
-                        &mut document["tool"]["pixi"]["feature"]
-                    }
-                    ManifestSource::PixiToml(document) => &mut document["feature"],
-                };
+                let feature = self.get_root_table_mut("feature");
                 if feature.is_none() {
                     *feature = Item::Table(Table::new());
                 }
@@ -146,6 +135,20 @@ impl ManifestSource {
         }
     }
 
+    fn get_root_table_mut(&mut self, table: &str) -> &mut Item {
+        match self {
+            ManifestSource::PyProjectToml(document) => &mut document["tool"]["pixi"][table],
+            ManifestSource::PixiToml(document) => &mut document[table],
+        }
+    }
+
+    fn as_table_mut(&mut self) -> &mut Table {
+        match self {
+            ManifestSource::PyProjectToml(document) => document.as_table_mut(),
+            ManifestSource::PixiToml(document) => document.as_table_mut(),
+        }
+    }
+
     /// Removes a conda or pypi dependency from the Toml manifest
     pub fn remove_dependency(
         &mut self,
@@ -166,7 +169,7 @@ impl ManifestSource {
             })
     }
 
-    /// Adds a conda or pypi dependency from the Toml manifest
+    /// Adds a conda or pypi dependency to the Toml manifest
     pub fn add_dependency(
         &mut self,
         name: &str,
@@ -190,6 +193,36 @@ impl ManifestSource {
 
         // Add the pypi dependency to the table
         dependency_table.insert(name, dep);
+
+        Ok(())
+    }
+
+    /// Removes a task from the Toml manifest
+    pub fn remove_task(
+        &mut self,
+        name: &str,
+        platform: Option<Platform>,
+        feature_name: &FeatureName,
+    ) -> Result<(), Report> {
+        // Get the task table either from the target platform or the default tasks.
+        // If it does not exist in toml, consider this ok as we want to remove it anyways
+        self.get_or_insert_toml_table(platform, feature_name, "tasks")?
+            .remove(name);
+
+        Ok(())
+    }
+
+    /// Adds a task to the Toml manifest
+    pub fn add_task(
+        &mut self,
+        name: &str,
+        task: Task,
+        platform: Option<Platform>,
+        feature_name: &FeatureName,
+    ) -> Result<(), Report> {
+        // Get the task table either from the target platform or the default tasks.
+        self.get_or_insert_toml_table(platform, feature_name, "tasks")?
+            .insert(name, task.into());
 
         Ok(())
     }

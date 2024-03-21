@@ -217,13 +217,9 @@ impl Manifest {
             }
         }
 
-        // Get the table that contains the tasks.
-        let table = self
-            .document
-            .get_or_insert_toml_table(platform, feature_name, "tasks")?;
-
-        // Add the task to the table
-        table.insert(name.as_str(), task.clone().into());
+        // Add the task to the Toml manifest
+        self.document
+            .add_task(name.as_str(), task.clone(), platform, feature_name)?;
 
         // Add the task to the manifest
         self.default_feature_mut()
@@ -242,17 +238,14 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
+        // Check if the task already exists
         self.tasks(platform, feature_name)?
             .get(&name)
             .ok_or_else(|| miette::miette!("task {} does not exist", name.fancy_display()))?;
 
-        // Get the task table either from the target platform or the default tasks.
-        let tasks_table =
-            self.document
-                .get_or_insert_toml_table(platform, feature_name, "tasks")?;
-
-        // If it does not exist in toml, consider this ok as we want to remove it anyways
-        tasks_table.remove(name.as_str());
+        // Remove the task from the Toml manifest
+        self.document
+            .remove_task(name.as_str(), platform, feature_name)?;
 
         // Remove the task from the internal manifest
         self.feature_mut(feature_name)
