@@ -117,8 +117,8 @@ impl From<PyProjectManifest> for ProjectManifest {
 fn req_to_conda_name(requirement: &Requirement) -> Result<PackageName, RequirementConversionError> {
     let pypi_name = requirement.name.to_string();
     let handle = Handle::current();
-    let _guard = handle.enter();
-    let map = futures::executor::block_on(conda_pypi_name_mapping())
+    let map = handle
+        .block_on(conda_pypi_name_mapping())
         .map_err(|_| RequirementConversionError::MappingError)?;
     let pypi_to_conda: HashMap<String, String> =
         map.iter().map(|(k, v)| (v.clone(), k.clone())).collect();
