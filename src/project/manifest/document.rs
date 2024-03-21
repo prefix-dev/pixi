@@ -27,7 +27,7 @@ impl ManifestSource {
     /// Returns the name of a nested TOML table.
     /// If `platform` and `feature_name` are `None`, the table name is returned as-is.
     /// Otherwise, the table name is prefixed with the feature, platform, or both.
-    pub fn get_nested_toml_table_name(
+    fn get_nested_toml_table_name(
         &self,
         feature_name: &FeatureName,
         platform: Option<Platform>,
@@ -225,5 +225,95 @@ impl ManifestSource {
             .insert(name, task.into());
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::project::manifest::{Manifest, ManifestKind};
+    use insta::assert_snapshot;
+    use std::path::Path;
+
+    const PROJECT_BOILERPLATE: &str = r#"
+        [project]
+        name = "foo"
+        version = "0.1.0"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64"]
+        "#;
+
+    #[test]
+    fn test_get_or_insert_toml_table() {
+        let mut manifest =
+            Manifest::from_str(Path::new(""), PROJECT_BOILERPLATE, ManifestKind::Pixi).unwrap();
+        let _ = manifest
+            .document
+            .get_or_insert_toml_table(None, &FeatureName::Default, "tasks");
+        let _ = manifest.document.get_or_insert_toml_table(
+            Some(Platform::Linux64),
+            &FeatureName::Default,
+            "tasks",
+        );
+        let _ = manifest.document.get_or_insert_toml_table(
+            None,
+            &FeatureName::Named("test".to_string()),
+            "tasks",
+        );
+        let _ = manifest.document.get_or_insert_toml_table(
+            Some(Platform::Linux64),
+            &FeatureName::Named("test".to_string()),
+            "tasks",
+        );
+        assert_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_get_nested_toml_table_name() {
+        let file_contents = r#"
+[project]
+name = "foo"
+version = "0.1.0"
+description = "foo description"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+        "#;
+
+        let manifest =
+            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        // Test all different options for the feature name and platform
+        assert_eq!(
+            "dependencies".to_string(),
+            manifest.document.get_nested_toml_table_name(
+                &FeatureName::Default,
+                None,
+                "dependencies"
+            )
+        );
+        assert_eq!(
+            "target.linux-64.dependencies".to_string(),
+            manifest.document.get_nested_toml_table_name(
+                &FeatureName::Default,
+                Some(Platform::Linux64),
+                "dependencies"
+            )
+        );
+        assert_eq!(
+            "feature.test.dependencies".to_string(),
+            manifest.document.get_nested_toml_table_name(
+                &FeatureName::Named("test".to_string()),
+                None,
+                "dependencies"
+            )
+        );
+        assert_eq!(
+            "feature.test.target.linux-64.dependencies".to_string(),
+            manifest.document.get_nested_toml_table_name(
+                &FeatureName::Named("test".to_string()),
+                Some(Platform::Linux64),
+                "dependencies"
+            )
+        );
     }
 }
