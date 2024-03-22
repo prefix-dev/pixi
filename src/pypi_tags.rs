@@ -1,7 +1,7 @@
 use crate::project::manifest::{LibCSystemRequirement, SystemRequirements};
 use crate::project::virtual_packages::{default_glibc_version, default_mac_os_version};
 use miette::{Context, IntoDiagnostic};
-use platform_host::Os;
+use platform_tags::Os;
 use platform_tags::Tags;
 use rattler_conda_types::{Arch, PackageRecord, Platform};
 
@@ -24,13 +24,13 @@ pub fn get_pypi_tags(
     let platform = if platform.is_linux() {
         let arch = match platform.arch() {
             None => unreachable!("every platform we support has an arch"),
-            Some(Arch::X86) => platform_host::Arch::X86,
-            Some(Arch::X86_64) => platform_host::Arch::X86_64,
-            Some(Arch::Aarch64 | Arch::Arm64) => platform_host::Arch::Aarch64,
-            Some(Arch::ArmV7l) => platform_host::Arch::Armv7L,
-            Some(Arch::Ppc64le) => platform_host::Arch::Powerpc64Le,
-            Some(Arch::Ppc64) => platform_host::Arch::Powerpc64,
-            Some(Arch::S390X) => platform_host::Arch::S390X,
+            Some(Arch::X86) => platform_tags::Arch::X86,
+            Some(Arch::X86_64) => platform_tags::Arch::X86_64,
+            Some(Arch::Aarch64 | Arch::Arm64) => platform_tags::Arch::Aarch64,
+            Some(Arch::ArmV7l) => platform_tags::Arch::Armv7L,
+            Some(Arch::Ppc64le) => platform_tags::Arch::Powerpc64Le,
+            Some(Arch::Ppc64) => platform_tags::Arch::Powerpc64,
+            Some(Arch::S390X) => platform_tags::Arch::S390X,
             Some(unsupported_arch) => {
                 miette::bail!("unsupported arch for pypi packages '{unsupported_arch}'")
             }
@@ -46,7 +46,7 @@ pub fn get_pypi_tags(
                 let (major, minor) = default_glibc_version()
                     .as_major_minor()
                     .expect("expected default glibc version to be a major.minor version");
-                platform_host::Platform::new(
+                platform_tags::Platform::new(
                     Os::Manylinux {
                         major: major as _,
                         minor: minor as _,
@@ -60,7 +60,7 @@ pub fn get_pypi_tags(
                         "expected glibc version to be a major.minor version, but got '{version}'"
                     )
                 };
-                platform_host::Platform::new(
+                platform_tags::Platform::new(
                     Os::Manylinux {
                         major: major as _,
                         minor: minor as _,
@@ -75,15 +75,15 @@ pub fn get_pypi_tags(
     } else if platform.is_windows() {
         let arch = match platform.arch() {
             None => unreachable!("every platform we support has an arch"),
-            Some(Arch::X86) => platform_host::Arch::X86,
-            Some(Arch::X86_64) => platform_host::Arch::X86_64,
-            Some(Arch::Aarch64 | Arch::Arm64) => platform_host::Arch::Aarch64,
+            Some(Arch::X86) => platform_tags::Arch::X86,
+            Some(Arch::X86_64) => platform_tags::Arch::X86_64,
+            Some(Arch::Aarch64 | Arch::Arm64) => platform_tags::Arch::Aarch64,
             Some(unsupported_arch) => {
                 miette::bail!("unsupported arch for pypi packages '{unsupported_arch}'")
             }
         };
 
-        platform_host::Platform::new(Os::Windows, arch)
+        platform_tags::Platform::new(Os::Windows, arch)
     } else if platform.is_osx() {
         let osx_version = system_requirements
             .macos
@@ -97,15 +97,15 @@ pub fn get_pypi_tags(
 
         let arch = match platform.arch() {
             None => unreachable!("every platform we support has an arch"),
-            Some(Arch::X86) => platform_host::Arch::X86,
-            Some(Arch::X86_64) => platform_host::Arch::X86_64,
-            Some(Arch::Aarch64 | Arch::Arm64) => platform_host::Arch::Aarch64,
+            Some(Arch::X86) => platform_tags::Arch::X86,
+            Some(Arch::X86_64) => platform_tags::Arch::X86_64,
+            Some(Arch::Aarch64 | Arch::Arm64) => platform_tags::Arch::Aarch64,
             Some(unsupported_arch) => {
                 miette::bail!("unsupported arch for pypi packages '{unsupported_arch}'")
             }
         };
 
-        platform_host::Platform::new(
+        platform_tags::Platform::new(
             Os::Macos {
                 major: major as _,
                 minor: minor as _,

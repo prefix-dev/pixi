@@ -85,22 +85,30 @@ fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_ty
     let hashes = if let Some(ref hash) = pkg.hash {
         match hash {
             rattler_lock::PackageHashes::Md5(md5) => pypi_types::Hashes {
-                md5: Some(format!("{:x}", md5)),
+                md5: Some(format!("{:x}", md5).into()),
                 sha256: None,
+                sha384: None,
+                sha512: None,
             },
             rattler_lock::PackageHashes::Sha256(sha256) => pypi_types::Hashes {
                 md5: None,
-                sha256: Some(format!("{:x}", sha256)),
+                sha256: Some(format!("{:x}", sha256).into()),
+                sha384: None,
+                sha512: None,
             },
             rattler_lock::PackageHashes::Md5Sha256(md5, sha256) => pypi_types::Hashes {
-                md5: Some(format!("{:x}", md5)),
-                sha256: Some(format!("{:x}", sha256)),
+                md5: Some(format!("{:x}", md5).into()),
+                sha256: Some(format!("{:x}", sha256).into()),
+                sha384: None,
+                sha512: None,
             },
         }
     } else {
         pypi_types::Hashes {
             md5: None,
             sha256: None,
+            sha384: None,
+            sha512: None,
         }
     };
 
@@ -321,8 +329,6 @@ pub async fn update_python_distributions(
         return Ok(());
     };
 
-    let platform = platform_host::Platform::current().expect("unsupported platform");
-
     // If we have changed interpreter, we need to uninstall all site-packages from the old interpreter
     if let PythonStatus::Changed { old, new: _ } = status {
         let site_packages_path = prefix.root().join(&old.site_packages_path);
@@ -356,8 +362,7 @@ pub async fn update_python_distributions(
     let config_settings = ConfigSettings::default();
 
     let python_location = prefix.root().join(&python_info.path);
-    let interpreter =
-        Interpreter::query(&python_location, platform, &uv_context.cache).into_diagnostic()?;
+    let interpreter = Interpreter::query(&python_location, &uv_context.cache).into_diagnostic()?;
 
     tracing::debug!("[Install] Using Python Interpreter: {:?}", interpreter);
     // Create a custom venv
