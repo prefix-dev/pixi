@@ -387,10 +387,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
-name = "backtrace"
-version = "0.3.69"
+name = "backoff"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2089b7e3f35b9dd2d0ed921ead4f6d318c27680d4a5bd167b3ee120edb105837"
+checksum = "b62ddb9cb1ec0a098ad4bbf9344d0713fa193ae1a80af55febcff2627b6a00c1"
+dependencies = [
+ "futures-core",
+ "getrandom",
+ "instant",
+ "pin-project-lite",
+ "rand",
+ "tokio",
+]
+
+[[package]]
+name = "backtrace"
+version = "0.3.70"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95d8e92cac0961e91dbd517496b00f7e9b92363dbe6d42c3198268323798860c"
 dependencies = [
  "addr2line",
  "cc",
@@ -633,7 +647,7 @@ dependencies = [
 [[package]]
 name = "cache-key"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "hex",
  "seahash",
@@ -657,9 +671,9 @@ dependencies = [
 
 [[package]]
 name = "cargo-util"
-version = "0.2.9"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74862c3c6e53a1c1f8f0178f9d38ab41e49746cd3a7cafc239b3d0248fd4e342"
+checksum = "9f2d9a9a8d3e0b61b1110c49ab8f6ed7a76ce4f2b1d53ae48a83152d3d5e8f5b"
 dependencies = [
  "anyhow",
  "core-foundation",
@@ -1075,7 +1089,7 @@ dependencies = [
 [[package]]
 name = "distribution-filename"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "pep440_rs",
  "platform-tags",
@@ -1089,11 +1103,10 @@ dependencies = [
 [[package]]
 name = "distribution-types"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "anyhow",
  "cache-key",
- "data-encoding",
  "distribution-filename",
  "fs-err",
  "itertools",
@@ -1106,12 +1119,10 @@ dependencies = [
  "rustc-hash",
  "serde",
  "serde_json",
- "sha2",
  "thiserror",
  "tracing",
  "url",
  "urlencoding",
- "uv-auth",
  "uv-fs",
  "uv-git",
  "uv-normalize",
@@ -1157,6 +1168,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7268b386296a025e474d5140678f75d6de9493ae55a5d709eeb9dd08149945e1"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "encoding_rs_io"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cc3c5651fb62ab8aa3103998dade57efdd028544bd300516baa31840c252a83"
+dependencies = [
+ "encoding_rs",
 ]
 
 [[package]]
@@ -1581,17 +1601,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "goblin"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb07a4ffed2093b118a525b1d8f5204ae274faed5604537caf7135d0f18d9887"
-dependencies = [
- "log",
- "plain",
- "scroll",
-]
-
-[[package]]
 name = "h2"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1971,7 +1980,7 @@ dependencies = [
 [[package]]
 name = "install-wheel-rs"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "configparser",
  "csv",
@@ -1982,9 +1991,8 @@ dependencies = [
  "once_cell",
  "pathdiff",
  "pep440_rs",
- "platform-host",
  "platform-info",
- "plist",
+ "platform-tags",
  "pypi-types",
  "reflink-copy",
  "regex",
@@ -1995,7 +2003,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
- "url",
  "uv-fs",
  "uv-normalize",
  "walkdir",
@@ -2207,9 +2214,9 @@ dependencies = [
 
 [[package]]
 name = "libz-sys"
-version = "1.1.15"
+version = "1.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "037731f5d3aaa87a5675e895b63ddff1a87624bc29f77004ea829809654e48f6"
+checksum = "5e143b5e666b2695d28f6bca6497720813f699c9602dd7f5cac91008b8ada7f9"
 dependencies = [
  "cc",
  "libc",
@@ -2657,7 +2664,7 @@ dependencies = [
 [[package]]
 name = "once-map"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2870,7 +2877,7 @@ checksum = "8835116a5c179084a830efb3adc117ab007512b535bc1a21c991d3b32a6b44dd"
 [[package]]
 name = "pep440_rs"
 version = "0.5.0"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "once_cell",
  "pubgrub",
@@ -2883,7 +2890,7 @@ dependencies = [
 [[package]]
 name = "pep508_rs"
 version = "0.4.2"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "derivative",
  "once_cell",
@@ -3040,7 +3047,6 @@ dependencies = [
  "once_cell",
  "pep440_rs",
  "pep508_rs",
- "platform-host",
  "platform-tags",
  "pypi-types",
  "rattler",
@@ -3053,6 +3059,7 @@ dependencies = [
  "rattler_solve",
  "rattler_virtual_packages",
  "regex",
+ "requirements-txt",
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry 0.4.0",
@@ -3099,29 +3106,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 
 [[package]]
-name = "plain"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
-
-[[package]]
-name = "platform-host"
-version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
-dependencies = [
- "fs-err",
- "goblin",
- "once_cell",
- "platform-info",
- "plist",
- "regex",
- "serde",
- "target-lexicon",
- "thiserror",
- "tracing",
-]
-
-[[package]]
 name = "platform-info"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3134,10 +3118,10 @@ dependencies = [
 [[package]]
 name = "platform-tags"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
- "platform-host",
  "rustc-hash",
+ "serde",
  "thiserror",
 ]
 
@@ -3268,7 +3252,7 @@ dependencies = [
 [[package]]
 name = "pubgrub"
 version = "0.2.1"
-source = "git+https://github.com/zanieb/pubgrub?rev=332f02b0e436ca8449c7ef5e15b992dd5f35908b#332f02b0e436ca8449c7ef5e15b992dd5f35908b"
+source = "git+https://github.com/astral-sh/pubgrub?rev=addbaf184891d66a2dfd93d241a66d13bfe5de86#addbaf184891d66a2dfd93d241a66d13bfe5de86"
 dependencies = [
  "indexmap 2.2.5",
  "log",
@@ -3295,7 +3279,7 @@ dependencies = [
 [[package]]
 name = "pypi-types"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "chrono",
  "mailparse",
@@ -3797,16 +3781,13 @@ dependencies = [
 [[package]]
 name = "requirements-txt"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "async-recursion",
  "fs-err",
- "once_cell",
- "pep440_rs",
  "pep508_rs",
  "regex",
  "serde",
- "thiserror",
  "tracing",
  "unscanny",
  "url",
@@ -3878,16 +3859,6 @@ dependencies = [
  "serde",
  "task-local-extensions",
  "thiserror",
-]
-
-[[package]]
-name = "reqwest-netrc"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eca0c58cd4b2978f9697dea94302e772399f559cd175356eb631cb6daaa0b6db"
-dependencies = [
- "reqwest-middleware",
- "rust-netrc",
 ]
 
 [[package]]
@@ -4209,26 +4180,6 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
-
-[[package]]
-name = "scroll"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ab8598aa408498679922eff7fa985c25d58a90771bd6be794434c5277eab1a6"
-dependencies = [
- "scroll_derive",
-]
-
-[[package]]
-name = "scroll_derive"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f81c2fde025af7e69b1d1420531c8a8811ca898919db177141a85313b1cb932"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.53",
-]
 
 [[package]]
 name = "sct"
@@ -4748,6 +4699,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2047c6ded9c721764247e62cd3b03c09ffc529b2ba5b10ec482ae507a4a70160"
 
 [[package]]
+name = "sys-info"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b3a0d0aba8bf96a0e1ddfdc352fc53b3df7f39318c71854910c3c4b024ae52c"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "sysinfo"
 version = "0.30.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4808,12 +4769,6 @@ dependencies = [
  "libc",
  "xattr",
 ]
-
-[[package]]
-name = "target-lexicon"
-version = "0.12.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1fc403891a21bcfb7c37834ba66a547a8f402146eba7265b5a6d88059c9ff2f"
 
 [[package]]
 name = "task-local-extensions"
@@ -5277,16 +5232,25 @@ dependencies = [
 [[package]]
 name = "uv-auth"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
+ "async-trait",
+ "base64 0.21.7",
+ "once_cell",
+ "reqwest",
+ "reqwest-middleware",
+ "rust-netrc",
+ "task-local-extensions",
+ "thiserror",
  "tracing",
  "url",
+ "urlencoding",
 ]
 
 [[package]]
 name = "uv-build"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5294,10 +5258,8 @@ dependencies = [
  "indoc",
  "itertools",
  "once_cell",
+ "pep440_rs",
  "pep508_rs",
- "platform-host",
- "pypi-types",
- "pyproject-toml",
  "regex",
  "rustc-hash",
  "serde",
@@ -5307,7 +5269,6 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "uv-extract",
  "uv-fs",
  "uv-interpreter",
  "uv-traits",
@@ -5317,7 +5278,7 @@ dependencies = [
 [[package]]
 name = "uv-cache"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "cache-key",
  "cachedir",
@@ -5326,6 +5287,8 @@ dependencies = [
  "fs-err",
  "nanoid",
  "pypi-types",
+ "rmp-serde",
+ "rustc-hash",
  "serde",
  "tempfile",
  "tracing",
@@ -5338,7 +5301,7 @@ dependencies = [
 [[package]]
 name = "uv-client"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5359,14 +5322,15 @@ dependencies = [
  "pypi-types",
  "reqwest",
  "reqwest-middleware",
- "reqwest-netrc",
  "reqwest-retry 0.3.0",
  "rkyv",
  "rmp-serde",
  "rustc-hash",
+ "rustls",
+ "rustls-native-certs",
  "serde",
  "serde_json",
- "sha2",
+ "sys-info",
  "task-local-extensions",
  "tempfile",
  "thiserror",
@@ -5382,41 +5346,34 @@ dependencies = [
  "uv-normalize",
  "uv-version",
  "uv-warnings",
+ "webpki-roots",
 ]
 
 [[package]]
 name = "uv-dispatch"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "anyhow",
  "distribution-types",
- "fs-err",
  "futures",
  "itertools",
  "pep508_rs",
- "platform-host",
- "platform-tags",
- "pypi-types",
  "rustc-hash",
- "tempfile",
- "tokio",
  "tracing",
  "uv-build",
  "uv-cache",
  "uv-client",
- "uv-distribution",
  "uv-installer",
  "uv-interpreter",
  "uv-resolver",
  "uv-traits",
- "uv-virtualenv",
 ]
 
 [[package]]
 name = "uv-distribution"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "anyhow",
  "cache-key",
@@ -5431,6 +5388,7 @@ dependencies = [
  "platform-tags",
  "pypi-types",
  "reqwest",
+ "reqwest-middleware",
  "rmp-serde",
  "rustc-hash",
  "serde",
@@ -5453,11 +5411,10 @@ dependencies = [
 [[package]]
 name = "uv-extract"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "async-compression",
  "async_zip",
- "flate2",
  "fs-err",
  "futures",
  "rayon",
@@ -5473,13 +5430,17 @@ dependencies = [
 [[package]]
 name = "uv-fs"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
+ "backoff",
  "dunce",
+ "encoding_rs_io",
  "fs-err",
  "fs2",
  "junction",
+ "once_cell",
  "tempfile",
+ "tokio",
  "tracing",
  "urlencoding",
  "uv-warnings",
@@ -5488,7 +5449,7 @@ dependencies = [
 [[package]]
 name = "uv-git"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -5497,13 +5458,10 @@ dependencies = [
  "fs-err",
  "git2",
  "glob",
- "hex",
  "hmac",
  "home",
- "once_cell",
  "rand",
  "reqwest",
- "serde",
  "sha1",
  "tokio",
  "tracing",
@@ -5514,16 +5472,14 @@ dependencies = [
 [[package]]
 name = "uv-installer"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "anyhow",
  "async-channel",
- "distribution-filename",
  "distribution-types",
  "fs-err",
  "futures",
  "install-wheel-rs",
- "once-map",
  "pep440_rs",
  "pep508_rs",
  "platform-tags",
@@ -5544,7 +5500,6 @@ dependencies = [
  "uv-distribution",
  "uv-extract",
  "uv-fs",
- "uv-git",
  "uv-interpreter",
  "uv-normalize",
  "uv-traits",
@@ -5555,7 +5510,7 @@ dependencies = [
 [[package]]
 name = "uv-interpreter"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "cache-key",
  "configparser",
@@ -5564,7 +5519,6 @@ dependencies = [
  "once_cell",
  "pep440_rs",
  "pep508_rs",
- "platform-host",
  "platform-tags",
  "pypi-types",
  "regex",
@@ -5572,8 +5526,8 @@ dependencies = [
  "same-file",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
- "tokio",
  "tracing",
  "uv-cache",
  "uv-fs",
@@ -5584,7 +5538,7 @@ dependencies = [
 [[package]]
 name = "uv-normalize"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "rkyv",
  "serde",
@@ -5593,7 +5547,7 @@ dependencies = [
 [[package]]
 name = "uv-resolver"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "anstream",
  "anyhow",
@@ -5604,10 +5558,8 @@ dependencies = [
  "distribution-filename",
  "distribution-types",
  "either",
- "fs-err",
  "futures",
  "indexmap 2.2.5",
- "install-wheel-rs",
  "itertools",
  "once-map",
  "once_cell",
@@ -5615,37 +5567,30 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "petgraph",
- "platform-host",
  "platform-tags",
  "pubgrub",
  "pypi-types",
- "reqwest",
+ "requirements-txt",
  "rkyv",
  "rustc-hash",
- "serde_json",
- "sha2",
- "tempfile",
  "thiserror",
  "tokio",
  "tokio-stream",
- "tokio-util",
  "tracing",
  "url",
  "uv-cache",
  "uv-client",
  "uv-distribution",
- "uv-git",
  "uv-interpreter",
  "uv-normalize",
  "uv-traits",
  "uv-warnings",
- "zip",
 ]
 
 [[package]]
 name = "uv-traits"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5653,7 +5598,6 @@ dependencies = [
  "pep508_rs",
  "serde",
  "serde_json",
- "tokio",
  "uv-cache",
  "uv-interpreter",
  "uv-normalize",
@@ -5661,36 +5605,32 @@ dependencies = [
 
 [[package]]
 name = "uv-version"
-version = "0.1.16"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+version = "0.1.23"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 
 [[package]]
 name = "uv-virtualenv"
 version = "0.0.4"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "anstream",
  "cachedir",
  "directories",
  "fs-err",
  "pathdiff",
- "platform-host",
+ "platform-tags",
  "pypi-types",
- "serde",
- "serde_json",
- "tempfile",
  "thiserror",
  "tracing",
  "uv-cache",
  "uv-fs",
  "uv-interpreter",
- "which",
 ]
 
 [[package]]
 name = "uv-warnings"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.1.16#9f1452cb72e1da912f0653e398ac4ecb81244a82"
+source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
 dependencies = [
  "anstream",
  "once_cell",

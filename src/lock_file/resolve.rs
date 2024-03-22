@@ -18,11 +18,11 @@ use crate::{
     Project,
 };
 
-use distribution_types::FileLocation;
 use distribution_types::{
     BuiltDist, DirectUrlSourceDist, Dist, IndexLocations, Name, PrioritizedDist, Resolution,
     SourceDist,
 };
+use distribution_types::{FileLocation, SourceDistCompatibility};
 use futures::FutureExt;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
@@ -30,13 +30,13 @@ use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, Version, VersionPattern, VersionSpecifier};
 use pep508_rs::{Requirement, VerbatimUrl};
-use platform_host::Platform;
-use pypi_types::Metadata21;
+use pypi_types::Metadata23;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
 use rattler_solve::{resolvo, SolverImpl};
 use std::path::{Path, PathBuf};
+use requirements_txt::RequirementEntry;
 use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
@@ -47,8 +47,8 @@ use uv_distribution::{DistributionDatabase, Reporter};
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
-    DefaultResolverProvider, DistFinder, InMemoryIndex, Manifest, Options, PythonRequirement,
-    Resolver, ResolverProvider, VersionMap, VersionsResponse,
+    AllowedYanks, DefaultResolverProvider, DistFinder, InMemoryIndex, Manifest, Options,
+    Preference, PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
 };
 use uv_traits::{BuildContext, ConfigSettings, InFlight, NoBinary, NoBuild, SetupPyStrategy};
 
@@ -94,7 +94,10 @@ impl UvResolutionContext {
 /// This function takes as input a set of dependencies and system requirements and returns a set of
 /// locked packages.
 
-fn parse_hashes_from_hex(sha256: &Option<String>, md5: &Option<String>) -> Option<PackageHashes> {
+fn parse_hashes_from_hex(
+    sha256: &Option<Box<str>>,
+    md5: &Option<Box<str>>,
+) -> Option<PackageHashes> {
     match (sha256, md5) {
         (Some(sha256), None) => Some(PackageHashes::Sha256(
             parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),
@@ -135,7 +138,7 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
             }));
 
             let prioritized_dist =
-                PrioritizedDist::from_source(dist, None, Default::default(), None);
+                PrioritizedDist::from_source(dist, None, SourceDistCompatibility::Compatible);
 
             return ready(Ok(VersionsResponse::Found(VersionMap::from(
                 BTreeMap::from_iter([(identifier.version.clone(), prioritized_dist)]),
@@ -159,7 +162,7 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
                 // create fake metadata with no dependencies. We assume that all conda installed
                 // packages are properly installed including its dependencies.
                 return ready(Ok((
-                    Metadata21 {
+                    Metadata23 {
                         metadata_version: "1.0".to_string(),
                         name: name.clone(),
                         version: iden.version.clone(),
@@ -192,12 +195,27 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
     }
 }
 
-fn single_version_requirement(name: PackageName, version: Version) -> Requirement {
-    Requirement {
-        name,
+fn hashes_to_vec(hashes: Option<&PackageHashes>) -> Vec<String> {
+    match hashes {
+        Some(PackageHashes::Md5(md5)) => vec![format!("{md5:x}")],
+        Some(PackageHashes::Sha256(sha256)) => vec![format!("{sha256:x}")],
+        Some(PackageHashes::Md5Sha256(md5, sha256)) => {
+            vec![format!("{md5:x}"), format!("{sha256:x}")]
+        }
+        None => vec![],
+    }
+}
+
+fn single_version_preference(
+    name: PackageName,
+    version: Version,
+    hashes: Option<&PackageHashes>,
+) -> Preference {
+    let requirement = Requirement {
+        name: name.clone(),
         version_or_url: Some(pep508_rs::VersionOrUrl::VersionSpecifier(
             [
-                VersionSpecifier::new(Operator::Equal, VersionPattern::verbatim(version))
+                VersionSpecifier::from_pattern(Operator::Equal, VersionPattern::verbatim(version))
                     .expect("this should always work"),
             ]
             .into_iter()
@@ -205,7 +223,16 @@ fn single_version_requirement(name: PackageName, version: Version) -> Requiremen
         )),
         extras: Vec::default(),
         marker: None,
-    }
+    };
+
+    let requirement_entry = RequirementEntry {
+        requirement: pep508_rs::RequirementsTxtRequirement::Pep508(requirement),
+        hashes: hashes_to_vec(hashes),
+        editable: false,
+    };
+
+    // TODO remove unwrap
+    Preference::from_entry(requirement_entry).unwrap()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -282,11 +309,8 @@ pub async fn resolve_pypi(
     // Determine the tags for this particular solve.
     let tags = get_pypi_tags(platform, &system_requirements, python_record.as_ref())?;
 
-    // Construct a fake interpreter from the conda environment.
-    // TODO: Should we look into using the actual interpreter here?
-    let platform = Platform::current().expect("unsupported platform");
-    let interpreter =
-        Interpreter::query(python_location, platform, &context.cache).into_diagnostic()?;
+    // Construct an interpreter from the conda environment.
+    let interpreter = Interpreter::query(python_location, &context.cache).into_diagnostic()?;
 
     tracing::debug!("[Resolve] Using Python Interpreter: {:?}", interpreter);
 
@@ -336,7 +360,9 @@ pub async fn resolve_pypi(
 
     let preferences = locked_pypi_records
         .iter()
-        .map(|p| single_version_requirement(p.0.name.clone(), p.0.version.clone()))
+        .map(|p| {
+            single_version_preference(p.0.name.clone(), p.0.version.clone(), p.0.hash.as_ref())
+        })
         .collect();
 
     let manifest = Manifest::new(
@@ -360,8 +386,10 @@ pub async fn resolve_pypi(
         &flat_index,
         &tags,
         PythonRequirement::new(&interpreter, &marker_environment),
+        AllowedYanks::default(),
         options.exclude_newer,
         build_dispatch.no_binary(),
+        &NoBuild::None,
     );
     let provider = CondaResolverProvider {
         fallback: fallback_provider,
@@ -401,6 +429,7 @@ pub async fn resolve_pypi(
         &interpreter,
         &flat_index,
         build_dispatch.no_binary(),
+        &NoBuild::None,
     )
     .resolve(&resolution.requirements())
     .await
