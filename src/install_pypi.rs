@@ -39,6 +39,8 @@ use uv_traits::{ConfigSettings, SetupPyStrategy};
 
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
 
+const PIXI_UV_INSTALLER: &str = "pixi-uv";
+
 fn elapsed(duration: Duration) -> String {
     let secs = duration.as_secs();
 
@@ -400,7 +402,7 @@ fn whats_the_plan<'a>(
     let installed = installed.iter().filter(|dist| {
         dist.installer()
             .unwrap_or_default()
-            .is_some_and(|installer| installer == "uv")
+            .is_some_and(|installer| installer == PIXI_UV_INSTALLER)
     });
 
     let mut extraneous = vec![];
@@ -492,7 +494,27 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
             };
 
             if let Some(installed_dist) = installed_dist {
-                installed.push(installed_dist);
+                // Get the installer
+                let installer = installed_dist.installer();
+
+                // If we can't get the installer, we can't be certain that we have installed it
+                let installer = match installer {
+                    Ok(installer) => installer,
+                    Err(e) => {
+                        tracing::warn!(
+                            "could not get installer for {}: {}, will not remove distribution",
+                            installed_dist.name(),
+                            e
+                        );
+                        continue;
+                    }
+                };
+
+                // Only remove if have actually installed it
+                // by checking the installer
+                if installer.unwrap_or_default() == PIXI_UV_INSTALLER {
+                    installed.push(installed_dist);
+                }
             }
         }
     }
@@ -732,6 +754,7 @@ pub async fn update_python_distributions(
         let start = std::time::Instant::now();
         uv_installer::Installer::new(&venv)
             .with_link_mode(LinkMode::default())
+            .with_installer_name(Some(PIXI_UV_INSTALLER.to_string()))
             .with_reporter(UvReporter::new(options))
             .install(&wheels)
             .unwrap();
