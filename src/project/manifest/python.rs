@@ -308,6 +308,29 @@ pub enum AsPep508Error {
     },
 }
 
+pub enum RequirementOrEditable {
+    Editable(requirements_txt::EditableRequirement),
+    Pep508Requirement(pep508_rs::Requirement),
+}
+
+impl RequirementOrEditable {
+    /// Returns an editable requirement if it is an editable requirement.
+    pub fn editable(&self) -> Option<&requirements_txt::EditableRequirement> {
+        match self {
+            RequirementOrEditable::Editable(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    /// Returns a pep508 requirement if it is a pep508 requirement.
+    pub fn requirement(&self) -> Option<&pep508_rs::Requirement> {
+        match self {
+            RequirementOrEditable::Pep508Requirement(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
 impl PyPiRequirement {
     pub fn extras(&self) -> &[ExtraName] {
         match self {
@@ -324,16 +347,16 @@ impl PyPiRequirement {
         &self,
         name: &PackageName,
         project_root: &Path,
-    ) -> Result<pep508_rs::Requirement, AsPep508Error> {
-        let version_or_url = match self {
+    ) -> Result<RequirementOrEditable, AsPep508Error> {
+        let (version_or_url, editable) = match self {
             PyPiRequirement::Version {
                 version,
                 index: _,
                 extras: _,
-            } => version.clone().into(),
+            } => (version.clone().into(), false),
             PyPiRequirement::Path {
                 path,
-                editable: _,
+                editable,
                 extras: _,
             } => {
                 let joined = project_root.join(path);
@@ -347,7 +370,10 @@ impl PyPiRequirement {
                     .map(|s| s.to_owned())
                     .unwrap_or_else(String::new);
                 let verbatim = VerbatimUrl::from_path(canonicalized).with_given(given);
-                Some(pep508_rs::VersionOrUrl::Url(verbatim))
+                (
+                    Some(pep508_rs::VersionOrUrl::Url(verbatim)),
+                    editable.unwrap_or_default(),
+                )
             }
             PyPiRequirement::Git {
                 git,
@@ -367,20 +393,28 @@ impl PyPiRequirement {
                             url: git.to_string(),
                         }
                     })?;
-                Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(uv_url)))
+                (
+                    Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(uv_url))),
+                    false,
+                )
             }
-            PyPiRequirement::Url { url, extras: _ } => Some(pep508_rs::VersionOrUrl::Url(
-                VerbatimUrl::from_url(url.clone()),
-            )),
-            PyPiRequirement::RawVersion(version) => version.clone().into(),
+            PyPiRequirement::Url { url, extras: _ } => (
+                Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(
+                    url.clone(),
+                ))),
+                false,
+            ),
+            PyPiRequirement::RawVersion(version) => (version.clone().into(), false),
         };
 
-        Ok(pep508_rs::Requirement {
-            name: name.clone(),
-            extras: self.extras().to_vec(),
-            version_or_url,
-            marker: None,
-        })
+        Ok(RequirementOrEditable::Pep508Requirement(
+            pep508_rs::Requirement {
+                name: name.clone(),
+                extras: self.extras().to_vec(),
+                version_or_url,
+                marker: None,
+            },
+        ))
     }
 }
 

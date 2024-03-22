@@ -3059,6 +3059,7 @@ dependencies = [
  "rattler_solve",
  "rattler_virtual_packages",
  "regex",
+ "requirements-txt",
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry 0.4.0",
