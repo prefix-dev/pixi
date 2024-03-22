@@ -299,6 +299,7 @@ async fn install_package_to_environment(
 
     // Create the conda-meta directory if it doesn't exist yet.
     let target_prefix = target_prefix.to_path_buf();
+    #[allow(clippy::blocks_in_conditions)]
     match tokio::task::spawn_blocking(move || {
         let conda_meta_path = target_prefix.join("conda-meta");
         std::fs::create_dir_all(&conda_meta_path)?;

@@ -1,5 +1,7 @@
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
+use crate::project::manifest::python::AsPep508Error;
 use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
+use distribution_types::DirectGitUrl;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
@@ -8,12 +10,15 @@ use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
 };
-use rattler_lock::{ConversionError, Package};
+use rattler_lock::{ConversionError, Package, PypiPackageData, UrlOrPath};
+use std::path::Path;
+use std::str::FromStr;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
 };
 use thiserror::Error;
+use url::Url;
 use uv_normalize::{ExtraName, PackageName};
 
 #[derive(Debug, Error, Diagnostic)]
@@ -55,6 +60,9 @@ pub enum PlatformUnsat {
 
     #[error("{0} requires python version {1} but the python interpreter in the lock-file has version {2}")]
     PythonVersionMismatch(PackageName, VersionSpecifiers, Box<pep440_rs::Version>),
+
+    #[error("when converting {0} into a pep508 requirement")]
+    AsPep508Error(PackageName, #[source] AsPep508Error),
 }
 
 /// Verifies that all the requirements of the specified `environment` can be satisfied with the
@@ -96,6 +104,7 @@ pub fn verify_platform_satisfiability(
     environment: &Environment<'_>,
     locked_environment: &rattler_lock::Environment,
     platform: Platform,
+    project_root: &Path,
 ) -> Result<(), PlatformUnsat> {
     // Convert the lock file into a list of conda and pypi packages
     let mut conda_packages: Vec<RepoDataRecord> = Vec::new();
@@ -139,6 +148,7 @@ pub fn verify_platform_satisfiability(
         &repodata_records_by_name,
         &pypi_records_by_name,
         platform,
+        project_root,
     )
 }
 
@@ -147,11 +157,72 @@ enum Dependency {
     PyPi(Requirement, Cow<'static, str>),
 }
 
+/// Check satatisfiability of a pypi requirement against a locked pypi package
+/// This also does an additional check for git urls when using direct url references
+pub fn pypi_satifisfies(locked_data: &PypiPackageData, spec: &Requirement) -> bool {
+    // Check if the name matches
+    if spec.name != locked_data.name {
+        return false;
+    }
+
+    // Check if the version of the requirement matches
+    match &spec.version_or_url {
+        None => true,
+        Some(pep508_rs::VersionOrUrl::Url(spec_url)) => {
+            // In the case that both the spec and the locked data are direct git urls
+            // we need to compare the urls to see if they are the same
+            let spec_git_url = DirectGitUrl::try_from(&spec_url.to_url()).ok();
+            let locked_git_url = locked_data
+                .url_or_path
+                .as_url()
+                .and_then(|url| DirectGitUrl::try_from(url).ok());
+
+            // Both are git url's
+            if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
+                let base_is_same =
+                    spec_git_url.url.repository() == locked_data_url.url.repository();
+
+                // If the spec does not specify a revision than any will do
+                // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
+                if spec_git_url.url.reference().is_none() {
+                    base_is_same
+                } else {
+                    // If the spec does specify a revision than the revision must match
+                    base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
+                }
+            } else {
+                let spec_path_or_url = spec_url
+                    .given()
+                    .and_then(|url| UrlOrPath::from_str(url).ok())
+                    .unwrap_or(UrlOrPath::Url(spec_url.to_url()));
+
+                // Strip the direct+ prefix if it exists for the direct url
+                // because this is not part of the `Requirement` spec
+                // we use this to record that it is a direct url
+                let locked_path_or_url = match locked_data.url_or_path.clone() {
+                    UrlOrPath::Url(url) => UrlOrPath::Url(
+                        url.as_ref()
+                            .strip_prefix("direct+")
+                            .and_then(|str| Url::parse(str).ok())
+                            .unwrap_or(url),
+                    ),
+                    UrlOrPath::Path(path) => UrlOrPath::Path(path),
+                };
+                spec_path_or_url == locked_path_or_url
+            }
+        }
+        Some(pep508_rs::VersionOrUrl::VersionSpecifier(spec)) => {
+            spec.contains(&locked_data.version)
+        }
+    }
+}
+
 pub fn verify_package_platform_satisfiability(
     environment: &Environment<'_>,
     locked_conda_packages: &RepoDataRecordsByName,
     locked_pypi_environment: &PypiRecordsByName,
     platform: Platform,
+    project_root: &Path,
 ) -> Result<(), PlatformUnsat> {
     // Determine the dependencies requested by the environment
     let conda_specs = environment
@@ -169,10 +240,16 @@ pub fn verify_package_platform_satisfiability(
         .iter()
         .flat_map(|(name, reqs)| {
             reqs.iter().map(move |req| {
-                Dependency::PyPi(req.as_pep508(name.as_normalized()), "<environment>".into())
+                Ok::<Dependency, PlatformUnsat>(Dependency::PyPi(
+                    req.as_pep508(name.as_normalized(), project_root)
+                        .map_err(|e| {
+                            PlatformUnsat::AsPep508Error(name.as_normalized().clone(), e)
+                        })?,
+                    "<environment>".into(),
+                ))
             })
         })
-        .collect_vec();
+        .collect::<Result<Vec<_>, _>>()?;
 
     if pypi_requirements.is_empty() && !locked_pypi_environment.is_empty() {
         return Err(PlatformUnsat::TooManyPypiPackages(
@@ -299,7 +376,7 @@ pub fn verify_package_platform_satisfiability(
                     }
                 } else if let Some(idx) = locked_pypi_environment.index_by_name(&requirement.name) {
                     let record = &locked_pypi_environment.records[idx];
-                    if record.0.satisfies(&requirement) {
+                    if pypi_satifisfies(&record.0, &requirement) {
                         FoundPackage::PyPi(idx, requirement.extras)
                     } else {
                         // The record does not match the spec, the lock-file is inconsistent.
@@ -457,9 +534,10 @@ mod tests {
     use super::*;
     use crate::Project;
     use miette::{IntoDiagnostic, NarratableReportHandler};
+    use pep440_rs::Version;
     use rattler_lock::LockFile;
     use rstest::rstest;
-    use std::path::PathBuf;
+    use std::{path::PathBuf, str::FromStr};
 
     #[derive(Error, Debug, Diagnostic)]
     enum LockfileUnsat {
@@ -487,9 +565,10 @@ mod tests {
                 .map_err(|e| LockfileUnsat::Environment(env.name().to_string(), e))?;
 
             for platform in env.platforms() {
-                verify_platform_satisfiability(&env, &locked_env, platform).map_err(|e| {
-                    LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, e)
-                })?;
+                verify_platform_satisfiability(&env, &locked_env, platform, project.root())
+                    .map_err(|e| {
+                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, e)
+                    })?;
             }
         }
         Ok(())
@@ -522,7 +601,7 @@ mod tests {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
         insta::glob!("../../tests/non-satisfiability", "*/pixi.toml", |path| {
-            let project = Project::load(&path).unwrap();
+            let project = Project::load(path).unwrap();
             let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
             let err = verify_lockfile_satisfiability(&project, &lock_file)
                 .expect_err("expected failing satisfiability");
@@ -531,5 +610,30 @@ mod tests {
             report_handler.render_report(&mut s, &err).unwrap();
             insta::assert_snapshot!(s);
         });
+    }
+
+    #[test]
+    fn test_pypi_git_check_with_rev() {
+        // Mock locked datga
+        let locked_data = PypiPackageData {
+            name: "mypkg".parse().unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            url_or_path: "git+https://github.com/mypkg@abcd"
+                .parse()
+                .expect("failed to parse url"),
+            hash: None,
+            requires_dist: vec![],
+            requires_python: None,
+        };
+        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@abcd").unwrap();
+        // This should satisfy:
+        assert!(pypi_satifisfies(&locked_data, &spec));
+        let non_matching_spec =
+            Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd").unwrap();
+        // This should not
+        assert!(!pypi_satifisfies(&locked_data, &non_matching_spec));
+        // Removing the rev from the Requirement should satisfy any revision
+        let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap();
+        assert!(pypi_satifisfies(&locked_data, &spec));
     }
 }

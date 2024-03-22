@@ -4,6 +4,8 @@ use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
+use url::Url;
+
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 /// Defines information about a Pypi package extracted from either a python package or from a
 /// conda package.
@@ -11,6 +13,7 @@ use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 pub struct PypiPackageIdentifier {
     pub name: PyPiPackageName,
     pub version: pep440_rs::Version,
+    pub url: Url,
     pub extras: HashSet<ExtraName>,
 }
 
@@ -51,6 +54,7 @@ impl PypiPackageIdentifier {
                 result.push(PypiPackageIdentifier {
                     name: PyPiPackageName::from_normalized(name),
                     version,
+                    url: record.url.clone(),
                     // TODO: We can't really tell which python extras are enabled in a conda package.
                     extras: Default::default(),
                 })
@@ -104,6 +108,7 @@ impl PypiPackageIdentifier {
 
         Ok(Self {
             name: PyPiPackageName::from_normalized(name),
+            url: Url::parse(&package_url.to_string()).expect("cannot parse purl -> url"),
             version,
             extras,
         })
@@ -117,26 +122,16 @@ impl PypiPackageIdentifier {
 
         // Check the version of the requirement
         match &requirement.version_or_url {
-            None => {}
-            Some(VersionOrUrl::Url(_)) => {
-                return true;
+            None => true,
+            Some(VersionOrUrl::Url(url)) => {
+                // Check if the URL matches
+                url.to_url() == self.url
             }
-            Some(VersionOrUrl::VersionSpecifier(spec)) => {
-                if !spec.contains(&self.version) {
-                    return false;
-                }
+            Some(VersionOrUrl::VersionSpecifier(required_spec)) => {
+                // Check if the locked version is contained in the required version specifier
+                required_spec.contains(&self.version)
             }
         }
-
-        // TODO: uv doesn't properly support this yet.
-        // // Check if the required extras exist
-        // for extra in requirement.extras.iter() {
-        //     if !self.extras.contains(extra) {
-        //         return false;
-        //     }
-        // }
-
-        true
     }
 }
 

@@ -13,30 +13,28 @@ use crate::lock_file::{package_identifier, PypiPackageIdentifier};
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::{
-    lock_file::{LockedCondaPackages, LockedPypiPackages, PypiRecord},
+    lock_file::{LockedCondaPackages, LockedPypiPackages},
     project::manifest::{PyPiRequirement, SystemRequirements},
     Project,
 };
 
-use distribution_types::FileLocation;
 use distribution_types::{
     BuiltDist, DirectUrlSourceDist, Dist, IndexLocations, Name, PrioritizedDist, Resolution,
     SourceDist,
 };
+use distribution_types::{FileLocation, SourceDistCompatibility};
 use futures::FutureExt;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
-use pep440_rs::{Operator, Version, VersionPattern, VersionSpecifier};
 use pep508_rs::{Requirement, VerbatimUrl};
-use platform_host::Platform;
-use pypi_types::Metadata21;
+use pypi_types::Metadata23;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
-use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
 use rattler_solve::{resolvo, SolverImpl};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
@@ -47,8 +45,8 @@ use uv_distribution::{DistributionDatabase, Reporter};
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
-    DefaultResolverProvider, DistFinder, InMemoryIndex, Manifest, Options, PythonRequirement,
-    Resolver, ResolverProvider, VersionMap, VersionsResponse,
+    AllowedYanks, DefaultResolverProvider, DistFinder, InMemoryIndex, Manifest, Options,
+    PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
 };
 use uv_traits::{BuildContext, ConfigSettings, InFlight, NoBinary, NoBuild, SetupPyStrategy};
 
@@ -94,7 +92,10 @@ impl UvResolutionContext {
 /// This function takes as input a set of dependencies and system requirements and returns a set of
 /// locked packages.
 
-fn parse_hashes_from_hex(sha256: &Option<String>, md5: &Option<String>) -> Option<PackageHashes> {
+fn parse_hashes_from_hex(
+    sha256: &Option<Box<str>>,
+    md5: &Option<Box<str>>,
+) -> Option<PackageHashes> {
     match (sha256, md5) {
         (Some(sha256), None) => Some(PackageHashes::Sha256(
             parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),
@@ -135,7 +136,7 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
             }));
 
             let prioritized_dist =
-                PrioritizedDist::from_source(dist, None, Default::default(), None);
+                PrioritizedDist::from_source(dist, None, SourceDistCompatibility::Compatible);
 
             return ready(Ok(VersionsResponse::Found(VersionMap::from(
                 BTreeMap::from_iter([(identifier.version.clone(), prioritized_dist)]),
@@ -159,7 +160,7 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
                 // create fake metadata with no dependencies. We assume that all conda installed
                 // packages are properly installed including its dependencies.
                 return ready(Ok((
-                    Metadata21 {
+                    Metadata23 {
                         metadata_version: "1.0".to_string(),
                         name: name.clone(),
                         version: iden.version.clone(),
@@ -192,39 +193,22 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
     }
 }
 
-fn single_version_requirement(name: PackageName, version: Version) -> Requirement {
-    Requirement {
-        name,
-        version_or_url: Some(pep508_rs::VersionOrUrl::VersionSpecifier(
-            [
-                VersionSpecifier::new(Operator::Equal, VersionPattern::verbatim(version))
-                    .expect("this should always work"),
-            ]
-            .into_iter()
-            .collect(),
-        )),
-        extras: Vec::default(),
-        marker: None,
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
     context: UvResolutionContext,
     dependencies: IndexMap<PackageName, Vec<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
-    locked_pypi_records: &[PypiRecord],
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
     python_location: &Path,
     env_variables: &HashMap<String, String>,
+    project_root: &Path,
 ) -> miette::Result<LockedPypiPackages> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
 
     // Determine which pypi packages are already installed as conda package.
-    // Determine the python packages that are installed by the conda packages
     let conda_python_packages = locked_conda_records
         .iter()
         .flat_map(|record| {
@@ -260,8 +244,15 @@ pub async fn resolve_pypi(
     let requirements = dependencies
         .iter()
         .flat_map(|(name, req)| req.iter().map(move |req| (name, req)))
-        .map(|(name, req)| req.as_pep508(name))
-        .collect::<Vec<pep508_rs::Requirement>>();
+        .map(|(name, req)| {
+            req.as_pep508(name, project_root)
+                .into_diagnostic()
+                .wrap_err(format!(
+                    "error while converting {} to pep508 requirement",
+                    name
+                ))
+        })
+        .collect::<miette::Result<Vec<pep508_rs::Requirement>>>()?;
 
     // Determine the python interpreter that is installed as part of the conda packages.
     let python_record = locked_conda_records
@@ -275,11 +266,8 @@ pub async fn resolve_pypi(
     // Determine the tags for this particular solve.
     let tags = get_pypi_tags(platform, &system_requirements, python_record.as_ref())?;
 
-    // Construct a fake interpreter from the conda environment.
-    // TODO: Should we look into using the actual interpreter here?
-    let platform = Platform::current().expect("unsupported platform");
-    let interpreter =
-        Interpreter::query(python_location, platform, &context.cache).into_diagnostic()?;
+    // Construct an interpreter from the conda environment.
+    let interpreter = Interpreter::query(python_location, &context.cache).into_diagnostic()?;
 
     tracing::debug!("[Resolve] Using Python Interpreter: {:?}", interpreter);
 
@@ -327,17 +315,12 @@ pub async fn resolve_pypi(
         })
         .collect();
 
-    let preferences = locked_pypi_records
-        .iter()
-        .map(|p| single_version_requirement(p.0.name.clone(), p.0.version.clone()))
-        .collect();
-
     let manifest = Manifest::new(
         requirements,
         // Vec::new(),
         constraints,
         Vec::new(),
-        preferences,
+        Vec::new(),
         None,
         Vec::new(),
     );
@@ -353,8 +336,10 @@ pub async fn resolve_pypi(
         &flat_index,
         &tags,
         PythonRequirement::new(&interpreter, &marker_environment),
+        AllowedYanks::default(),
         options.exclude_newer,
         build_dispatch.no_binary(),
+        &NoBuild::None,
     );
     let provider = CondaResolverProvider {
         fallback: fallback_provider,
@@ -394,6 +379,7 @@ pub async fn resolve_pypi(
         &interpreter,
         &flat_index,
         build_dispatch.no_binary(),
+        &NoBuild::None,
     )
     .resolve(&resolution.requirements())
     .await
@@ -409,15 +395,13 @@ pub async fn resolve_pypi(
 
         let pypi_package_data = match dist {
             Dist::Built(dist) => {
-                let (url, hash) = match &dist {
+                let (url_or_path, hash) = match &dist {
                     BuiltDist::Registry(dist) => {
                         let url = match &dist.file.url {
                             FileLocation::AbsoluteUrl(url) => {
-                                Url::from_str(url).expect("invalid absolute url")
+                                UrlOrPath::Url(Url::from_str(url).expect("invalid absolute url"))
                             }
-                            FileLocation::Path(path) => {
-                                Url::from_file_path(path).expect("invalid path")
-                            }
+                            FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
                             _ => todo!("unsupported URL"),
                         };
 
@@ -426,8 +410,20 @@ pub async fn resolve_pypi(
 
                         (url, hash)
                     }
-                    BuiltDist::DirectUrl(dist) => (dist.url.to_url(), None),
-                    BuiltDist::Path(dist) => (dist.url.to_url(), None),
+                    BuiltDist::DirectUrl(dist) => {
+                        let url = dist.url.to_url();
+                        let direct_url = Url::parse(&format!("direct+{url}"))
+                            .expect("could not create direct-url");
+                        (UrlOrPath::Url(direct_url), None)
+                    }
+                    BuiltDist::Path(dist) => (
+                        dist.url
+                            .given()
+                            .map(|path| UrlOrPath::Path(PathBuf::from(path)))
+                            // When using a direct url reference like https://foo/bla.whl we do not have a given
+                            .unwrap_or_else(|| UrlOrPath::Url(dist.url.to_url())),
+                        None,
+                    ),
                 };
 
                 let metadata = context
@@ -440,7 +436,7 @@ pub async fn resolve_pypi(
                     version: metadata.version,
                     requires_dist: metadata.requires_dist,
                     requires_python: metadata.requires_python,
-                    url,
+                    url_or_path,
                     hash,
                 }
             }
@@ -456,22 +452,34 @@ pub async fn resolve_pypi(
 
                 // Use the precise url if we got it back
                 // otherwise try to construct it from the source
-                let url = if let Some(url) = url {
-                    url
-                } else {
-                    match source {
-                        SourceDist::Registry(reg) => match &reg.file.url {
-                            FileLocation::AbsoluteUrl(url) => {
-                                Url::from_str(url).expect("invalid absolute url")
+                let url_or_path = match source {
+                    SourceDist::Registry(reg) => {
+                        if let Some(url) = url {
+                            UrlOrPath::Url(url)
+                        } else {
+                            match &reg.file.url {
+                                FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
+                                    Url::from_str(url).expect("invalid absolute url"),
+                                ),
+                                FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
+                                _ => todo!("unsupported URL"),
                             }
-                            FileLocation::Path(path) => {
-                                Url::from_file_path(path).expect("invalid path")
-                            }
-                            _ => todo!("unsupported URL"),
-                        },
-                        SourceDist::DirectUrl(direct) => direct.url.to_url(),
-                        SourceDist::Git(git) => git.url.to_url(),
-                        SourceDist::Path(path) => path.url.to_url(),
+                        }
+                    }
+                    SourceDist::DirectUrl(direct) => {
+                        let url = direct.url.to_url();
+                        Url::parse(&format!("direct+{url}"))
+                            .expect("could not create direct-url")
+                            .into()
+                    }
+                    SourceDist::Git(git) => git.url.to_url().into(),
+                    SourceDist::Path(path) => {
+                        // Create the url for the lock file
+                        path.url
+                            .given()
+                            .map(|path| UrlOrPath::Path(PathBuf::from(path)))
+                            // When using a direct url reference like https://foo/bla.whl we do not have a given
+                            .unwrap_or_else(|| path.url.to_url().into())
                     }
                 };
 
@@ -480,7 +488,7 @@ pub async fn resolve_pypi(
                     version: metadata.version,
                     requires_dist: metadata.requires_dist,
                     requires_python: metadata.requires_python,
-                    url,
+                    url_or_path,
                     hash,
                 }
             }

@@ -2,7 +2,7 @@ use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
 use serde::Serializer;
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
@@ -146,6 +146,19 @@ pub enum PyPiRequirement {
     RawVersion(VersionOrStar),
 }
 
+impl PyPiRequirement {
+    /// Returns true if the requirement is a direct dependency.
+    /// I.e. a url, path or git requirement.
+    pub fn is_direct_dependency(&self) -> bool {
+        matches!(
+            self,
+            PyPiRequirement::Git { .. }
+                | PyPiRequirement::Path { .. }
+                | PyPiRequirement::Url { .. }
+        )
+    }
+}
+
 impl Default for PyPiRequirement {
     fn default() -> Self {
         PyPiRequirement::RawVersion(VersionOrStar::Star)
@@ -214,14 +227,14 @@ impl From<PyPiRequirement> for Item {
                 subdirectory: _,
                 extras: _,
             } => {
-                unimplemented!("git")
+                todo!("git")
             }
             PyPiRequirement::Path {
                 path: _,
                 editable: _,
                 extras: _,
             } => {
-                unimplemented!("path")
+                todo!("path")
             }
             PyPiRequirement::Url { url: _, extras: _ } => {
                 unimplemented!("url")
@@ -260,6 +273,41 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
     }
 }
 
+/// Create a url that uv can use to install a version
+fn create_uv_url(
+    url: &Url,
+    rev: Option<&str>,
+    subdir: Option<&str>,
+) -> Result<Url, url::ParseError> {
+    // Create the url.
+    let url = format!("git+{url}");
+    // Add the tag or rev if it exists.
+    let url = rev
+        .as_ref()
+        .map_or_else(|| url.clone(), |tag_or_rev| format!("{url}@{tag_or_rev}"));
+
+    // Add the subdirectory if it exists.
+    let url = subdir.as_ref().map_or_else(
+        || url.clone(),
+        |subdir| format!("{url}#subdirectory={subdir}"),
+    );
+    url.parse()
+}
+
+#[derive(Error, Debug)]
+pub enum AsPep508Error {
+    #[error("error while canonicalizing {path}")]
+    CanonicalizeError {
+        source: std::io::Error,
+        path: PathBuf,
+    },
+    #[error("parsing url {url}")]
+    UrlParseError {
+        source: url::ParseError,
+        url: String,
+    },
+}
+
 impl PyPiRequirement {
     pub fn extras(&self) -> &[ExtraName] {
         match self {
@@ -272,29 +320,54 @@ impl PyPiRequirement {
     }
 
     /// Returns the requirements as [`pep508_rs::Requirement`]s.
-    pub fn as_pep508(&self, name: &PackageName) -> pep508_rs::Requirement {
+    pub fn as_pep508(
+        &self,
+        name: &PackageName,
+        project_root: &Path,
+    ) -> Result<pep508_rs::Requirement, AsPep508Error> {
         let version_or_url = match self {
             PyPiRequirement::Version {
                 version,
                 index: _,
                 extras: _,
             } => version.clone().into(),
-            PyPiRequirement::Git {
-                git,
-                branch: _,
-                tag: _,
-                rev: _,
-                subdirectory: _,
-                extras: _,
-            } => Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(
-                git.clone(),
-            ))),
             PyPiRequirement::Path {
-                path: _,
+                path,
                 editable: _,
                 extras: _,
             } => {
-                unimplemented!("No path to url conversion yet.")
+                let joined = project_root.join(path);
+                let canonicalized =
+                    dunce::canonicalize(&joined).map_err(|e| AsPep508Error::CanonicalizeError {
+                        source: e,
+                        path: joined.clone(),
+                    })?;
+                let given = path
+                    .to_str()
+                    .map(|s| s.to_owned())
+                    .unwrap_or_else(String::new);
+                let verbatim = VerbatimUrl::from_path(canonicalized).with_given(given);
+                Some(pep508_rs::VersionOrUrl::Url(verbatim))
+            }
+            PyPiRequirement::Git {
+                git,
+                branch,
+                tag,
+                rev,
+                subdirectory: subdir,
+                extras: _,
+            } => {
+                if branch.is_some() && tag.is_some() {
+                    tracing::warn!("branch/tag are not supported *yet*, will use the `main`/`master` branch, please specify a revision using `rev` = `sha`");
+                }
+                let uv_url =
+                    create_uv_url(git, rev.as_deref(), subdir.as_deref()).map_err(|e| {
+                        AsPep508Error::UrlParseError {
+                            source: e,
+                            url: git.to_string(),
+                        }
+                    })?;
+                Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(uv_url)))
             }
             PyPiRequirement::Url { url, extras: _ } => Some(pep508_rs::VersionOrUrl::Url(
                 VerbatimUrl::from_url(url.clone()),
@@ -302,12 +375,12 @@ impl PyPiRequirement {
             PyPiRequirement::RawVersion(version) => version.clone().into(),
         };
 
-        pep508_rs::Requirement {
+        Ok(pep508_rs::Requirement {
             name: name.clone(),
             extras: self.extras().to_vec(),
             version_or_url,
             marker: None,
-        }
+        })
     }
 }
 
@@ -576,6 +649,27 @@ mod tests {
                 subdirectory: None,
                 extras: vec![],
             }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_pypi_from_flask() {
+        let requirement: IndexMap<PyPiPackageName, PyPiRequirement> = toml_edit::de::from_str(
+            r#"
+                flask = { git = "https://github.com/pallets/flask.git", tag = "3.0.0"}
+                "#,
+        )
+        .unwrap();
+        assert_eq!(
+            requirement.first().unwrap().1,
+            &PyPiRequirement::Git {
+                git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
+                tag: Some("3.0.0".to_string()),
+                branch: None,
+                rev: None,
+                subdirectory: None,
+                extras: vec![],
+            },
         );
     }
 
