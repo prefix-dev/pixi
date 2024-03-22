@@ -494,11 +494,8 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
             };
 
             if let Some(installed_dist) = installed_dist {
-                // Get the installer
-                let installer = installed_dist.installer();
-
                 // If we can't get the installer, we can't be certain that we have installed it
-                let installer = match installer {
+                let installer = match installed_dist.installer() {
                     Ok(installer) => installer,
                     Err(e) => {
                         tracing::warn!(
