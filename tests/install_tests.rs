@@ -203,9 +203,9 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     } else {
         prefix.join("bin/python")
     };
-    let platform = platform_host::Platform::current().unwrap();
+
     // Current interpreter and venv
-    let interpreter = uv_interpreter::Interpreter::query(&python, platform, cache).unwrap();
+    let interpreter = uv_interpreter::Interpreter::query(&python, cache).unwrap();
     uv_interpreter::PythonEnvironment::from_interpreter(interpreter)
 }
 
