@@ -20,7 +20,7 @@ rich = "~=13.7"
 flask = { git = "ssh://git@github.com/pallets/flask" }
 # With https
 requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
-# ...or use branch = '' to specify a branch or commit
+# TODO: will support later -> or use branch = '' or tag = '' to specify a branch or tag
 
 # You can also directly add a source dependency from file
 minimal-project = { path = "./minimal-project" }
