@@ -329,7 +329,7 @@ impl Targets {
     pub fn resolve(
         &self,
         platform: Option<Platform>,
-    ) -> impl Iterator<Item = &'_ Target> + DoubleEndedIterator + '_ {
+    ) -> impl DoubleEndedIterator<Item = &'_ Target> + '_ {
         if let Some(platform) = platform {
             Either::Left(self.resolve_for_platform(platform))
         } else {
@@ -348,7 +348,7 @@ impl Targets {
     fn resolve_for_platform(
         &self,
         platform: Platform,
-    ) -> impl Iterator<Item = &'_ Target> + DoubleEndedIterator + '_ {
+    ) -> impl DoubleEndedIterator<Item = &'_ Target> + '_ {
         std::iter::once(&self.default_target)
             .chain(self.targets.iter().filter_map(move |(selector, target)| {
                 if selector.matches(platform) {

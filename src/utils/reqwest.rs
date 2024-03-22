@@ -1,7 +1,9 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use rattler_networking::{
-    authentication_storage, mirror_middleware::Mirror, retry_policies::ExponentialBackoff,
+    authentication_storage::{self, backends::file::FileStorageError},
+    mirror_middleware::Mirror,
+    retry_policies::ExponentialBackoff,
     AuthenticationMiddleware, AuthenticationStorage, MirrorMiddleware, OciMiddleware,
 };
 
@@ -17,7 +19,7 @@ pub fn default_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff::builder().build_with_max_retries(3)
 }
 
-fn auth_middleware(config: &Config) -> AuthenticationMiddleware {
+fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStorageError> {
     if let Some(auth_file) = config.authentication_override_file() {
         tracing::info!("Loading authentication from file: {:?}", auth_file);
 
@@ -27,13 +29,13 @@ fn auth_middleware(config: &Config) -> AuthenticationMiddleware {
 
         let mut store = AuthenticationStorage::new();
         store.add_backend(Arc::from(
-            authentication_storage::backends::file::FileStorage::new(PathBuf::from(&auth_file)),
+            authentication_storage::backends::file::FileStorage::new(PathBuf::from(&auth_file))?,
         ));
 
-        return AuthenticationMiddleware::new(store);
+        return Ok(AuthenticationMiddleware::new(store));
     }
 
-    AuthenticationMiddleware::default()
+    Ok(AuthenticationMiddleware::default())
 }
 
 fn mirror_middleware(config: &Config) -> MirrorMiddleware {
@@ -103,7 +105,9 @@ pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientW
             .with(oci_middleware());
     }
 
-    client_builder = client_builder.with_arc(Arc::new(auth_middleware(&config)));
+    client_builder = client_builder.with_arc(Arc::new(
+        auth_middleware(&config).expect("could not create auth middleware"),
+    ));
 
     let authenticated_client = client_builder.build();
 

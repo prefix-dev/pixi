@@ -1,5 +1,6 @@
 use crate::lock_file::{PypiRecord, UvResolutionContext};
 use crate::project::grouped_environment::GroupedEnvironmentName;
+
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::is_python_record;
 use crate::{
@@ -26,6 +27,7 @@ use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
+use std::path::PathBuf;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -129,6 +131,7 @@ impl<'p> LockFileDerivedData<'p> {
             &environment.system_requirements(),
             uv_context,
             env_variables,
+            self.project.root(),
         )
         .await?;
 
@@ -390,6 +393,25 @@ fn default_max_concurrent_solves() -> usize {
     (available_parallelism.saturating_sub(2)).min(4).max(1)
 }
 
+/// If the project has any source dependencies, like `git` or `path` dependencies.
+/// for pypi dependencies, we need to limit the solve to 1,
+/// because of uv internals
+fn determine_pypi_solve_permits(project: &Project) -> usize {
+    // Get all environments
+    let environments = project.environments();
+    for environment in environments {
+        for (_, req) in environment.pypi_dependencies(None).iter() {
+            for dep in req {
+                if dep.is_direct_dependency() {
+                    return 1;
+                }
+            }
+        }
+    }
+
+    default_max_concurrent_solves()
+}
+
 /// Ensures that the lock-file is up-to-date with the project.
 ///
 /// This function will return a [`LockFileDerivedData`] struct that contains the lock-file and any
@@ -410,7 +432,11 @@ pub async fn ensure_up_to_date_lock_file(
     let max_concurrent_solves = options
         .max_concurrent_solves
         .unwrap_or_else(default_max_concurrent_solves);
+
     let solve_semaphore = Arc::new(Semaphore::new(max_concurrent_solves));
+
+    // TODO(tim): we need this semaphore, to limit the number of concurrent solves. This is a problem when using source dependencies
+    let pypi_solve_semaphore = Arc::new(Semaphore::new(determine_pypi_solve_permits(project)));
 
     // should we check the lock-file in the first place?
     if !options.lock_file_usage.should_check_if_out_of_date() {
@@ -785,6 +811,8 @@ pub async fn ensure_up_to_date_lock_file(
             repodata_future,
             prefix_future,
             env_variables,
+            pypi_solve_semaphore.clone(),
+            project.root().to_path_buf(),
         );
 
         pending_futures.push(pypi_solve_future.boxed_local());
@@ -1346,6 +1374,7 @@ async fn spawn_extract_environment_task(
 }
 
 /// A task that solves the pypi dependencies for a given environment.
+#[allow(clippy::too_many_arguments)]
 async fn spawn_solve_pypi_task(
     resolution_context: UvResolutionContext,
     environment: GroupedEnvironment<'_>,
@@ -1353,6 +1382,8 @@ async fn spawn_solve_pypi_task(
     repodata_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
     prefix: impl Future<Output = (Prefix, PythonStatus)>,
     env_variables: &HashMap<String, String>,
+    semaphore: Arc<Semaphore>,
+    project_root: PathBuf,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1369,7 +1400,8 @@ async fn spawn_solve_pypi_task(
     let system_requirements = environment.system_requirements();
 
     // Wait until the conda records and prefix are available.
-    let (repodata_records, (prefix, python_status)) = tokio::join!(repodata_records, prefix);
+    let (repodata_records, (prefix, python_status), _guard) =
+        tokio::join!(repodata_records, prefix, semaphore.acquire_owned());
 
     let environment_name = environment.name().clone();
     // let (pypi_packages, duration) = tokio::spawn(
@@ -1396,11 +1428,11 @@ async fn spawn_solve_pypi_task(
                 .collect(),
             system_requirements,
             &repodata_records.records,
-            &[],
             platform,
             &pb.pb,
             &python_path,
             env_variables,
+            &project_root,
         )
         .await
         .with_context(|| {

@@ -81,38 +81,33 @@ impl Dependencies {
     /// Returns an iterator over the package names and their corresponding requirements.
     pub fn iter(
         &self,
-    ) -> impl Iterator<Item = (&PackageName, &Vec<NamelessMatchSpec>)> + DoubleEndedIterator + '_
-    {
+    ) -> impl DoubleEndedIterator<Item = (&PackageName, &Vec<NamelessMatchSpec>)> + '_ {
         self.map.iter()
     }
 
     /// Returns an iterator over all the requirements.
     pub fn iter_specs(
         &self,
-    ) -> impl Iterator<Item = (&PackageName, &NamelessMatchSpec)> + DoubleEndedIterator + '_ {
+    ) -> impl DoubleEndedIterator<Item = (&PackageName, &NamelessMatchSpec)> + '_ {
         self.map
             .iter()
             .flat_map(|(name, specs)| specs.iter().map(move |spec| (name, spec)))
     }
 
     /// Returns the names of all the packages that have requirements.
-    pub fn names(
-        &self,
-    ) -> impl Iterator<Item = &PackageName> + DoubleEndedIterator + ExactSizeIterator + '_ {
+    pub fn names(&self) -> impl DoubleEndedIterator<Item = &PackageName> + ExactSizeIterator + '_ {
         self.map.keys()
     }
 
     /// Convert this instance into an iterator over the package names and their corresponding
-    pub fn into_specs(
-        self,
-    ) -> impl Iterator<Item = (PackageName, NamelessMatchSpec)> + DoubleEndedIterator {
+    pub fn into_specs(self) -> impl DoubleEndedIterator<Item = (PackageName, NamelessMatchSpec)> {
         self.map
             .into_iter()
             .flat_map(|(name, specs)| specs.into_iter().map(move |spec| (name.clone(), spec)))
     }
 
     /// Converts this instance into an iterator of [`MatchSpec`]s.
-    pub fn into_match_specs(self) -> impl Iterator<Item = MatchSpec> + DoubleEndedIterator {
+    pub fn into_match_specs(self) -> impl DoubleEndedIterator<Item = MatchSpec> {
         self.map.into_iter().flat_map(|(name, specs)| {
             specs
                 .into_iter()

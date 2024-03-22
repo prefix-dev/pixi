@@ -111,7 +111,7 @@ impl<'p> Environment<'p> {
     pub fn features(
         &self,
         include_default: bool,
-    ) -> impl Iterator<Item = &'p Feature> + DoubleEndedIterator + 'p {
+    ) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         let environment_features = self.environment.features.iter().map(|feature_name| {
             self.project
                 .manifest

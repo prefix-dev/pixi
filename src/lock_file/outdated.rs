@@ -144,7 +144,12 @@ fn find_unsatisfiable_targets<'p>(
 
         // Verify each individual platform
         for platform in platforms {
-            match verify_platform_satisfiability(&environment, &locked_environment, platform) {
+            match verify_platform_satisfiability(
+                &environment,
+                &locked_environment,
+                platform,
+                project.root(),
+            ) {
                 Ok(_) => {}
                 Err(unsat @ PlatformUnsat::UnsatisfiableRequirement(_, _)) => {
                     tracing::info!(

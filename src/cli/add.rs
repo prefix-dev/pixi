@@ -218,7 +218,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 pub async fn add_pypi_specs_to_project(
     project: &mut Project,
     specs: Vec<(PyPiPackageName, PyPiRequirement)>,
-    specs_platforms: &Vec<Platform>,
+    specs_platforms: &[Platform],
     no_update_lockfile: bool,
     no_install: bool,
 ) -> miette::Result<()> {
@@ -261,7 +261,7 @@ pub async fn add_conda_specs_to_project(
     spec_type: SpecType,
     no_install: bool,
     no_update_lockfile: bool,
-    specs_platforms: &Vec<Platform>,
+    specs_platforms: &[Platform],
 ) -> miette::Result<()> {
     // Split the specs into package name and version specifier
     let new_specs = specs
@@ -381,7 +381,7 @@ pub async fn add_conda_specs_to_project(
 /// Get all the latest versions found in the platforms repodata.
 fn determine_latest_versions(
     project: &Project,
-    platforms: &Vec<Platform>,
+    platforms: &[Platform],
     sparse_repo_data: &IndexMap<(Channel, Platform), SparseRepoData>,
     name: &PackageName,
 ) -> miette::Result<Vec<Version>> {
@@ -394,7 +394,7 @@ fn determine_latest_versions(
         temp.push(Platform::NoArch);
         temp
     } else {
-        let mut temp = platforms.clone();
+        let mut temp = platforms.to_vec();
         temp.push(Platform::NoArch);
         temp
     };
