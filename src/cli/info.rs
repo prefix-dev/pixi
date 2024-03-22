@@ -30,7 +30,7 @@ pub struct Args {
     json: bool,
 
     /// The path to 'pixi.toml'
-    #[arg(long)]
+    #[arg(long, env = "PIXI_MANIFEST_PATH")]
     pub manifest_path: Option<PathBuf>,
 }
 

@@ -49,7 +49,7 @@ pub struct Args {
     pub sort_by: SortBy,
 
     /// The path to 'pixi.toml'
-    #[arg(long)]
+    #[arg(long, env = "PIXI_MANIFEST_PATH")]
     pub manifest_path: Option<PathBuf>,
 
     /// The environment to list packages for. Defaults to the default environment.
