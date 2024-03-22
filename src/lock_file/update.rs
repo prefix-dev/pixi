@@ -1428,7 +1428,6 @@ async fn spawn_solve_pypi_task(
                 .collect(),
             system_requirements,
             &repodata_records.records,
-            &[],
             platform,
             &pb.pb,
             &python_path,

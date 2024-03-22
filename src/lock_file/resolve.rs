@@ -13,7 +13,7 @@ use crate::lock_file::{package_identifier, PypiPackageIdentifier};
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::{
-    lock_file::{LockedCondaPackages, LockedPypiPackages, PypiRecord},
+    lock_file::{LockedCondaPackages, LockedPypiPackages},
     project::manifest::{PyPiRequirement, SystemRequirements},
     Project,
 };
@@ -28,14 +28,12 @@ use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
-use pep440_rs::{Operator, Version, VersionPattern, VersionSpecifier};
 use pep508_rs::{Requirement, VerbatimUrl};
 use pypi_types::Metadata23;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
 use rattler_solve::{resolvo, SolverImpl};
-use requirements_txt::RequirementEntry;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -48,7 +46,7 @@ use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, DistFinder, InMemoryIndex, Manifest, Options,
-    Preference, PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
+    PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
 };
 use uv_traits::{BuildContext, ConfigSettings, InFlight, NoBinary, NoBuild, SetupPyStrategy};
 
@@ -195,53 +193,12 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
     }
 }
 
-fn hashes_to_vec(hashes: Option<&PackageHashes>) -> Vec<String> {
-    match hashes {
-        Some(PackageHashes::Md5(md5)) => vec![format!("{md5:x}")],
-        Some(PackageHashes::Sha256(sha256)) => vec![format!("{sha256:x}")],
-        Some(PackageHashes::Md5Sha256(md5, sha256)) => {
-            vec![format!("{md5:x}"), format!("{sha256:x}")]
-        }
-        None => vec![],
-    }
-}
-
-fn single_version_preference(
-    name: PackageName,
-    version: Version,
-    hashes: Option<&PackageHashes>,
-) -> Preference {
-    let requirement = Requirement {
-        name: name.clone(),
-        version_or_url: Some(pep508_rs::VersionOrUrl::VersionSpecifier(
-            [
-                VersionSpecifier::from_pattern(Operator::Equal, VersionPattern::verbatim(version))
-                    .expect("this should always work"),
-            ]
-            .into_iter()
-            .collect(),
-        )),
-        extras: Vec::default(),
-        marker: None,
-    };
-
-    let requirement_entry = RequirementEntry {
-        requirement: pep508_rs::RequirementsTxtRequirement::Pep508(requirement),
-        hashes: hashes_to_vec(hashes),
-        editable: false,
-    };
-
-    // TODO remove unwrap
-    Preference::from_entry(requirement_entry).unwrap()
-}
-
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
     context: UvResolutionContext,
     dependencies: IndexMap<PackageName, Vec<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
-    locked_pypi_records: &[PypiRecord],
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
     python_location: &Path,
@@ -358,19 +315,12 @@ pub async fn resolve_pypi(
         })
         .collect();
 
-    let preferences = locked_pypi_records
-        .iter()
-        .map(|p| {
-            single_version_preference(p.0.name.clone(), p.0.version.clone(), p.0.hash.as_ref())
-        })
-        .collect();
-
     let manifest = Manifest::new(
         requirements,
         // Vec::new(),
         constraints,
         Vec::new(),
-        preferences,
+        Vec::new(),
         None,
         Vec::new(),
     );
