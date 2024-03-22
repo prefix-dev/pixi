@@ -274,7 +274,11 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
 }
 
 /// Create a url that uv can use to install a version
-fn create_uv_url(url: &Url, rev: Option<&str>, subdir: Option<&str>) -> String {
+fn create_uv_url(
+    url: &Url,
+    rev: Option<&str>,
+    subdir: Option<&str>,
+) -> Result<Url, url::ParseError> {
     // Create the url.
     let url = format!("git+{url}");
     // Add the tag or rev if it exists.
@@ -287,7 +291,7 @@ fn create_uv_url(url: &Url, rev: Option<&str>, subdir: Option<&str>) -> String {
         || url.clone(),
         |subdir| format!("{url}#subdirectory={subdir}"),
     );
-    url
+    url.parse()
 }
 
 #[derive(Error, Debug)]
@@ -356,15 +360,14 @@ impl PyPiRequirement {
                 if branch.is_some() && tag.is_some() {
                     tracing::warn!("branch/tag are not supported *yet*, will use the `main`/`master` branch, please specify a revision using `rev` = `sha`");
                 }
-                let uv_url = create_uv_url(git, rev.as_deref(), subdir.as_deref());
-                Some(pep508_rs::VersionOrUrl::Url(
-                    VerbatimUrl::parse(uv_url.clone()).map_err(|e| {
+                let uv_url =
+                    create_uv_url(git, rev.as_deref(), subdir.as_deref()).map_err(|e| {
                         AsPep508Error::UrlParseError {
                             source: e,
-                            url: uv_url,
+                            url: git.to_string(),
                         }
-                    })?,
-                ))
+                    })?;
+                Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(uv_url)))
             }
             PyPiRequirement::Url { url, extras: _ } => Some(pep508_rs::VersionOrUrl::Url(
                 VerbatimUrl::from_url(url.clone()),
