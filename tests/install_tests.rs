@@ -205,7 +205,7 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     };
 
     // Current interpreter and venv
-    let interpreter = uv_interpreter::Interpreter::query(&python, cache).unwrap();
+    let interpreter = uv_interpreter::Interpreter::query(python, cache).unwrap();
     uv_interpreter::PythonEnvironment::from_interpreter(interpreter)
 }
 

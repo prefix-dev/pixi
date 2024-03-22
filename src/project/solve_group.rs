@@ -56,7 +56,7 @@ impl<'p> SolveGroup<'p> {
     /// Returns an iterator over all the environments that are part of the group.
     pub fn environments(
         &self,
-    ) -> impl Iterator<Item = Environment<'p>> + DoubleEndedIterator + ExactSizeIterator + 'p {
+    ) -> impl DoubleEndedIterator<Item = Environment<'p>> + ExactSizeIterator + 'p {
         self.solve_group.environments.iter().map(|env_idx| {
             Environment::new(
                 self.project,
@@ -73,7 +73,7 @@ impl<'p> SolveGroup<'p> {
     pub fn features(
         &self,
         include_default: bool,
-    ) -> impl Iterator<Item = &'p manifest::Feature> + DoubleEndedIterator + 'p {
+    ) -> impl DoubleEndedIterator<Item = &'p manifest::Feature> + 'p {
         self.environments()
             .flat_map(move |env| env.features(include_default))
             .unique_by(|feat| &feat.name)

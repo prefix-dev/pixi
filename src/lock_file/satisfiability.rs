@@ -565,7 +565,7 @@ mod tests {
                 .map_err(|e| LockfileUnsat::Environment(env.name().to_string(), e))?;
 
             for platform in env.platforms() {
-                verify_platform_satisfiability(&env, &locked_env, platform, &project.root())
+                verify_platform_satisfiability(&env, &locked_env, platform, project.root())
                     .map_err(|e| {
                         LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, e)
                     })?;
@@ -601,7 +601,7 @@ mod tests {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
         insta::glob!("../../tests/non-satisfiability", "*/pixi.toml", |path| {
-            let project = Project::load(&path).unwrap();
+            let project = Project::load(path).unwrap();
             let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
             let err = verify_lockfile_satisfiability(&project, &lock_file)
                 .expect_err("expected failing satisfiability");
