@@ -56,12 +56,27 @@ pub fn home_path() -> Option<PathBuf> {
 
 /// Returns the default cache directory.
 /// Most important is the `PIXI_CACHE_DIR` environment variable.
-/// If that is not set, the `RATTLER_CACHE_DIR` environment variable is used.
-/// If that is not set, the default cache directory of [`rattler::default_cache_dir`] is used.
+/// - If that is not set, the `RATTLER_CACHE_DIR` environment variable is used.
+/// - If that is not set, `XDG_CACHE_HOME/pixi` is used when the directory exists.
+/// - If that is not set, the default cache directory of [`rattler::default_cache_dir`] is used.
 pub fn get_cache_dir() -> miette::Result<PathBuf> {
     std::env::var("PIXI_CACHE_DIR")
         .map(PathBuf::from)
         .or_else(|_| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from))
+        .or_else(|_| {
+            let xdg_cache_pixi_dir = std::env::var_os("XDG_CACHE_HOME")
+                .map_or_else(
+                    || dirs::home_dir().map(|d| d.join(".cache")),
+                    |p| Some(PathBuf::from(p)),
+                )
+                .map(|d| d.join("pixi"));
+
+            // Only use the xdg cache pixi directory when it exists
+            xdg_cache_pixi_dir
+                .map(|d| d.exists().then_some(d))
+                .flatten()
+                .ok_or_else(|| miette::miette!("could not determine xdg cache directory"))
+        })
         .or_else(|_| {
             rattler::default_cache_dir()
                 .map_err(|_| miette::miette!("could not determine default cache directory"))
