@@ -160,7 +160,13 @@ impl Config {
 
     /// Load the global config file from the home directory (~/.pixi/config.toml)
     pub fn load_global() -> Config {
+        let xdg_config_home = std::env::var_os("XDG_CONFIG_HOME").map_or_else(
+            || dirs::home_dir().map(|d| d.join(".config")),
+            |p| Some(PathBuf::from(p)),
+        );
+
         let global_locations = vec![
+            xdg_config_home.map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
             dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
             home_path().map(|d| d.join(consts::CONFIG_FILE)),
         ];
