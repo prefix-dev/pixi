@@ -9,7 +9,10 @@ use toml_edit::TomlError;
 
 use crate::pypi_name_mapping::conda_pypi_name_mapping;
 
-use super::{error::RequirementConversionError, ProjectManifest, SpecType};
+use super::{
+    error::RequirementConversionError, python::PyPiPackageName, ProjectManifest, PyPiRequirement,
+    SpecType, Target,
+};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct PyProjectManifest {
@@ -47,14 +50,6 @@ impl From<PyProjectManifest> for ProjectManifest {
         // TODO: tool.pixi.project.name should be made optional or read from project.name
         // TODO: could copy across / convert some other optional fields if relevant
 
-        // Gather pyproject dependencies
-        let mut requirements = item
-            .project
-            .as_ref()
-            .and_then(|p| p.dependencies.as_ref())
-            .cloned()
-            .unwrap_or_else(Vec::new);
-
         // Add python as dependency based on the project.requires_python property (if any)
         let pythonspec = item
             .project
@@ -67,39 +62,22 @@ impl From<PyProjectManifest> for ProjectManifest {
             extras: Vec::new(),
             marker: None,
         };
-        requirements.push(python_req);
-
-        // Add project.dependencies python dependencies as conda dependencies for the default feature
-        // unless they are specified in "tool.pixi.pypi-dependencies" or "tool.pixi.dependencies"
         let target = manifest.default_feature_mut().targets.default_mut();
-        for requirement in requirements {
-            // Skip requirement if it is already a Pypi Dependency of the default target
-            if target.has_pypi_dependency(requirement.name.to_string().as_str()) {
-                continue;
-            }
+        target.try_install_requirements_as_conda(vec![python_req]);
 
-            // Convert the pypi name to a conda package name
-            // TODO: create a dedicated "tool.pixi" section to allow manual overrides?
-            let conda_dep = req_to_conda_name(&requirement);
-            if conda_dep.is_err() {
-                tracing::warn!("Unable to get conda package name for {:?}", requirement);
-                continue;
+        // add pyproject dependencies as pypi dependencies
+        if let Some(deps) = item
+            .project
+            .as_ref()
+            .and_then(|p| p.dependencies.as_ref())
+            .cloned()
+        {
+            for d in deps.into_iter() {
+                target.add_pypi_dependency(
+                    PyPiPackageName::from_normalized(d.name.clone()),
+                    PyPiRequirement::from(d),
+                )
             }
-
-            // Skip requirement if it is already a Dependency of the default target
-            if target.has_dependency(conda_dep.as_ref().unwrap().as_normalized(), None) {
-                continue;
-            }
-
-            // Convert requirement to a Spec.
-            let spec = requirement_to_nameless_matchspec(&requirement);
-            if spec.is_err() {
-                tracing::warn!("Unable to build conda spec for {:?}", requirement);
-                continue;
-            }
-
-            // Add conda dependency
-            target.add_dependency(conda_dep.unwrap(), spec.unwrap(), SpecType::Run);
         }
 
         // For each extra group, create a feature of the same name if it does not exist,
@@ -111,14 +89,50 @@ impl From<PyProjectManifest> for ProjectManifest {
     }
 }
 
+impl Target {
+    /// Install a vec of Pypi requirements as conda dependencies
+    /// unless they are specified in "tool.pixi.pypi-dependencies" or "tool.pixi.dependencies"
+    fn try_install_requirements_as_conda(&mut self, requirements: Vec<Requirement>) {
+        for requirement in requirements {
+            // Skip requirement if it is already a Pypi Dependency of the target
+            if self.has_pypi_dependency(requirement.name.to_string().as_str()) {
+                continue;
+            }
+
+            // Convert the pypi name to a conda package name
+            // TODO: create a dedicated "tool.pixi" section to allow manual overrides?
+            let conda_dep = req_to_conda_name(&requirement);
+            if conda_dep.is_err() {
+                tracing::warn!("Unable to get conda package name for {:?}", requirement);
+                continue;
+            }
+
+            // Skip requirement if it is already a Dependency of the target
+            if self.has_dependency(conda_dep.as_ref().unwrap().as_normalized(), None) {
+                continue;
+            }
+
+            // Convert requirement to a Spec.
+            let spec = requirement_to_nameless_matchspec(&requirement);
+            if spec.is_err() {
+                tracing::warn!("Unable to build conda spec for {:?}", requirement);
+                continue;
+            }
+
+            // Add conda dependency
+            self.add_dependency(conda_dep.unwrap(), spec.unwrap(), SpecType::Run);
+        }
+    }
+}
+
 /// Return the conda rattler_conda_types::PackageName corresponding to a pep508_rs::Requirement
 /// If the pep508_rs::Requirement name is not present in the conda to pypi mapping
 /// then returns PackageName from the pypi name
 fn req_to_conda_name(requirement: &Requirement) -> Result<PackageName, RequirementConversionError> {
     let pypi_name = requirement.name.to_string();
     let handle = Handle::current();
-    let map = handle
-        .block_on(conda_pypi_name_mapping())
+    let _guard = handle.enter();
+    let map = futures::executor::block_on(conda_pypi_name_mapping())
         .map_err(|_| RequirementConversionError::MappingError)?;
     let pypi_to_conda: HashMap<String, String> =
         map.iter().map(|(k, v)| (v.clone(), k.clone())).collect();

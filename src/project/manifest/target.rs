@@ -158,6 +158,13 @@ impl Target {
             Err(_) => false, // an invalid package name cannot be a dependency
         }
     }
+
+    /// Adds a pypi dependency to a target
+    pub fn add_pypi_dependency(&mut self, name: PyPiPackageName, requirement: PyPiRequirement) {
+        self.pypi_dependencies
+            .get_or_insert_with(Default::default)
+            .insert(name, requirement);
+    }
 }
 
 /// Represents a target selector. Currently we only support explicit platform selection.

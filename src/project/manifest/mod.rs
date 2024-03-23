@@ -47,7 +47,7 @@ use std::{
 pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector, Targets};
 use thiserror::Error;
-use toml_edit::{value, DocumentMut, Item, TomlError};
+use toml_edit::{value, DocumentMut, TomlError};
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -390,31 +390,37 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
+        let target = self
+            .parsed
+            .features
+            .entry(feature_name.clone())
+            .or_default()
+            .targets
+            .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref());
+
         // Determine the name of the package to add
         let (Some(name), spec) = spec.clone().into_nameless() else {
             miette::bail!("pixi does not support wildcard dependencies")
         };
 
-        // Add the dependency to the TOML document
-        self.document.add_dependency(
-            name.as_normalized(),
-            Item::Value(spec.to_string().into()),
-            spec_type.name(),
-            platform,
-            feature_name,
-        )?;
+        // Check for duplicates
+        if target.has_dependency(name.as_normalized(), Some(spec_type)) {
+            return Err(miette!(
+                "{} is already added.",
+                console::style(name.as_normalized()).bold(),
+            ));
+        }
 
-        // Add the dependency to the manifest as well
-        self.parsed
-            .features
-            .entry(feature_name.clone())
-            .or_default()
-            .targets
-            .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
+        // Add the dependency to the manifest
+        target
             .dependencies
             .entry(spec_type)
             .or_default()
-            .insert(name, spec);
+            .insert(name.clone(), spec.clone());
+
+        // Add the dependency to the TOML document as well
+        self.document
+            .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
 
         Ok(())
     }
@@ -426,22 +432,28 @@ impl Manifest {
         requirement: &PyPiRequirement,
         platform: Option<Platform>,
     ) -> miette::Result<()> {
-        // Add the pypi dependency to the TOML document
-        self.document.add_dependency(
-            name.as_source(),
-            (*requirement).clone().into(),
-            consts::PYPI_DEPENDENCIES,
-            platform,
-            &FeatureName::Default,
-        )?;
-
-        // Add the dependency to the manifest as well
-        self.default_feature_mut()
+        let target = self
+            .default_feature_mut()
             .targets
-            .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
-            .pypi_dependencies
-            .get_or_insert_with(Default::default)
-            .insert(name.clone(), requirement.clone());
+            .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref());
+
+        // Check for duplicates
+        if target.has_pypi_dependency(name.as_normalized().to_string().as_str()) {
+            return Err(miette!(
+                "{} is already added.",
+                console::style(name.as_normalized()).bold(),
+            ));
+        }
+        // Add the dependency to the manifest
+        target.add_pypi_dependency(name.clone(), requirement.clone());
+
+        // Add the pypi dependency to the TOML document as well
+        let parent = self
+            .path
+            .parent()
+            .expect("Path should always have a parent");
+        self.document
+            .add_pypi_dependency(name, requirement, platform, parent)?;
 
         Ok(())
     }
@@ -455,7 +467,7 @@ impl Manifest {
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
         // Remove the dependency from the TOML document
-        self.document.remove_dependency(
+        self.document.remove_dependency_helper(
             dep.as_source(),
             spec_type.name(),
             platform,
@@ -480,12 +492,8 @@ impl Manifest {
         feature_name: &FeatureName,
     ) -> miette::Result<(PyPiPackageName, PyPiRequirement)> {
         // Remove the dependency from the TOML document
-        self.document.remove_dependency(
-            dep.as_source(),
-            consts::PYPI_DEPENDENCIES,
-            platform,
-            feature_name,
-        )?;
+        self.document
+            .remove_pypi_dependency(dep, platform, feature_name)?;
 
         Ok(self
             .feature_mut(feature_name)
@@ -1108,6 +1116,7 @@ mod tests {
     use rstest::*;
     use std::str::FromStr;
     use tempfile::tempdir;
+    use toml_edit::Item;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
