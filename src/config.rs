@@ -73,8 +73,7 @@ pub fn get_cache_dir() -> miette::Result<PathBuf> {
 
             // Only use the xdg cache pixi directory when it exists
             xdg_cache_pixi_dir
-                .map(|d| d.exists().then_some(d))
-                .flatten()
+                .and_then(|d| d.exists().then_some(d))
                 .ok_or_else(|| miette::miette!("could not determine xdg cache directory"))
         })
         .or_else(|_| {
