@@ -6,7 +6,7 @@ version = "0.1.0"
 description = "A project"
 authors = ["Author <author@bla.com>"]
 channels = ["stable"]
-platforms = ["linux-64", "win-64", "osx-64"]
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 license = "MIT"
 license_file = "LICENSE"
 readme = "README.md"
@@ -22,8 +22,8 @@ package1 = { version = ">=1.2.3", build="py34_0" }
 
 
 [pypi-dependencies]
-testpypi = "bla"
-testpypi1 = "bli"
+testpypi = "*"
+testpypi1 = "*"
 requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]} # Using the map allows the user to add `extras`
 
 [host-dependencies]
@@ -33,8 +33,8 @@ pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 
 [build-dependencies]
-test = "bla"
-test1 = "bli"
+test = "*"
+test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 
@@ -43,14 +43,13 @@ build = "conda build ."
 test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
 test2 = { cmd = "pytest", cwd = "tests"}
 test3 = { cmd = "pytest", depends_on = ["test2"] }
-test4 = { cwd = "tests", depends_on = ["test2"] }
 test5 = { cmd = "pytest" }
 test6 = { depends_on = ["test5"] }
 
 [system-requirements]
 linux = "5.10"
 libc = { family="glibc", version="2.17" }
-cuda = 10.1
+cuda = "10.1"
 
 [feature.test.dependencies]
 test = "bla"
@@ -60,8 +59,7 @@ test = "bla"
 
 [environments]
 test = {features = ["test"], solve-group = "test"}
-prod = {features = ["prod"], solve-group = "test"}
-lint = ["lint"]
+prod = {features = ["test2"], solve-group = "test"}
 
 [activation]
 scripts = ["activate.sh", "deactivate.sh"]
@@ -77,8 +75,8 @@ package1 = { version = ">=1.2.3", build="py34_0" }
 
 
 [target.osx-arm64.pypi-dependencies]
-testpypi = "bla"
-testpypi1 = "bli"
+testpypi = "*"
+testpypi1 = "*"
 requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]} # Using the map allows the user to add `extras`
 
 [target.osx-64.host-dependencies]
@@ -98,7 +96,6 @@ build = "conda build ."
 test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
 test2 = { cmd = "pytest", cwd = "tests"}
 test3 = { cmd = "pytest", depends_on = ["test2"] }
-test4 = { cwd = "tests", depends_on = ["test2"] }
 test5 = { cmd = "pytest" }
 test6 = { depends_on = ["test5"] }
 

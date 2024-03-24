@@ -22,7 +22,6 @@ pub struct PyProjectManifest {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-#[serde(rename_all = "kebab-case")]
 struct Tool {
     pixi: ProjectManifest,
 }
@@ -131,9 +130,13 @@ impl Target {
 fn req_to_conda_name(requirement: &Requirement) -> Result<PackageName, RequirementConversionError> {
     let pypi_name = requirement.name.to_string();
     let handle = Handle::current();
-    let _guard = handle.enter();
-    let map = futures::executor::block_on(conda_pypi_name_mapping())
-        .map_err(|_| RequirementConversionError::MappingError)?;
+    let map = futures::executor::block_on(async move {
+        handle
+            .spawn(async move { conda_pypi_name_mapping().await })
+            .await
+            .unwrap()
+    })
+    .map_err(|_| RequirementConversionError::MappingError)?;
     let pypi_to_conda: HashMap<String, String> =
         map.iter().map(|(k, v)| (v.clone(), k.clone())).collect();
     let name: PackageName = pypi_to_conda
@@ -177,5 +180,156 @@ fn requirement_to_nameless_matchspec(
             ..
         } if extras.is_empty() => version_or_url_to_nameless_matchspec(version_or_url),
         _ => Err(RequirementConversionError::Unimplemented),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use crate::project::manifest::{Manifest, ManifestKind};
+
+    const PYPROJECT_FULL: &str = r#"
+        [tool.pixi.project]
+        name = "project"
+        version = "0.1.0"
+        description = "A project"
+        authors = ["Author <author@bla.com>"]
+        channels = ["stable"]
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+        license = "MIT"
+        license-file = "LICENSE"
+        readme = "README.md"
+        homepage = "https://project.com"
+        repository = "https://github.com/author/project"
+        documentation = "https://docs.project.com"
+
+        [tool.pixi.dependencies]
+        test = "bla"
+        test1 = "bli"
+        pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
+        package1 = { version = ">=1.2.3", build="py34_0" }
+
+
+        [tool.pixi.pypi-dependencies]
+        testpypi = "*"
+        testpypi1 = "*"
+        requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]} # Using the map allows the user to add `extras`
+
+        [tool.pixi.host-dependencies]
+        test = "bla"
+        test1 = "bli"
+        pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
+        package1 = { version = ">=1.2.3", build="py34_0" }
+
+        [tool.pixi.build-dependencies]
+        test = "*"
+        test1 = "*"
+        pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
+        package1 = { version = ">=1.2.3", build="py34_0" }
+
+        [tool.pixi.tasks]
+        build = "conda build ."
+        test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
+        test2 = { cmd = "pytest", cwd = "tests"}
+        test3 = { cmd = "pytest", depends_on = ["test2"] }
+        test5 = { cmd = "pytest" }
+        test6 = { depends_on = ["test5"] }
+
+        [tool.pixi.system-requirements]
+        linux = "5.10"
+        libc = { family="glibc", version="2.17" }
+        cuda = "10.1"
+
+        [tool.pixi.feature.test.dependencies]
+        test = "bla"
+
+        [tool.pixi.feature.test2.dependencies]
+        test = "bla"
+
+        [tool.pixi.environments]
+        test = {features = ["test"], solve-group = "test"}
+        prod = {features = ["test2"], solve-group = "test"}
+
+        [tool.pixi.activation]
+        scripts = ["activate.sh", "deactivate.sh"]
+
+        [tool.pixi.target.win-64.activation]
+        scripts = ["env_setup.bat"]
+
+        [tool.pixi.target.linux-64.dependencies]
+        test = "bla"
+        test1 = "bli"
+        pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
+        package1 = { version = ">=1.2.3", build="py34_0" }
+
+
+        [tool.pixi.target.osx-arm64.pypi-dependencies]
+        testpypi = "*"
+        testpypi1 = "*"
+        requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]} # Using the map allows the user to add `extras`
+
+        [tool.pixi.target.osx-64.host-dependencies]
+        test = "bla"
+        test1 = "bli"
+        pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
+        package1 = { version = ">=1.2.3", build="py34_0" }
+
+        [tool.pixi.target.linux-64.build-dependencies]
+        test = "bla"
+        test1 = "bli"
+        pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
+        package1 = { version = ">=1.2.3", build="py34_0" }
+
+        [tool.pixi.target.linux-64.tasks]
+        build = "conda build ."
+        test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
+        test2 = { cmd = "pytest", cwd = "tests"}
+        test3 = { cmd = "pytest", depends_on = ["test2"] }
+        test5 = { cmd = "pytest" }
+        test6 = { depends_on = ["test5"] }
+
+        [tool.pixi.feature.test.target.linux-64.dependencies]
+        test = "bla"
+
+        [tool.pixi.feature.cuda]
+        activation = {scripts = ["cuda_activation.sh"]}
+        channels = ["nvidia"] # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
+        dependencies = {cuda = "x.y.z", cudnn = "12.0"}
+        pypi-dependencies = {torch = "==1.9.0"}
+        platforms = ["linux-64", "osx-arm64"]
+        system-requirements = {cuda = "12"}
+        tasks = { warmup = "python warmup.py" }
+        target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
+
+        [tool.pixi.feature.cuda2.activation]
+        scripts = ["cuda_activation.sh"]
+
+        [tool.pixi.feature.cuda2.dependencies]
+        cuda = "x.y.z"
+        cudnn = "12.0"
+
+        [tool.pixi.feature.cuda2.pypi-dependencies]
+        torch = "==1.9.0"
+
+        [tool.pixi.feature.cuda2.system-requirements]
+        cuda = "12"
+
+        [tool.pixi.feature.cuda2.tasks]
+        warmup = "python warmup.py"
+
+        [tool.pixi.feature.cuda2.target.osx-arm64.dependencies]
+        mlx = "x.y.z"
+
+        # Channels and Platforms are not available as separate tables as they are implemented as lists
+        [tool.pixi.feature.cuda2]
+        channels = ["nvidia"]
+        platforms = ["linux-64", "osx-arm64"]
+        "#;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_build_manifest() {
+        let _manifest =
+            Manifest::from_str(Path::new(""), PYPROJECT_FULL, ManifestKind::Pyproject).unwrap();
     }
 }
