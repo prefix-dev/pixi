@@ -222,9 +222,7 @@ impl Manifest {
             .add_task(name.as_str(), task.clone(), platform, feature_name)?;
 
         // Add the task to the manifest
-        self.default_feature_mut()
-            .targets
-            .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
+        self.target_mut(platform, Some(feature_name))
             .tasks
             .insert(name, task);
 
@@ -238,7 +236,7 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        // Check if the task already exists
+        // Check if the task exists
         self.tasks(platform, feature_name)?
             .get(&name)
             .ok_or_else(|| miette::miette!("task {} does not exist", name.fancy_display()))?;
@@ -390,37 +388,18 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        let target = self
-            .parsed
-            .features
-            .entry(feature_name.clone())
-            .or_default()
-            .targets
-            .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref());
-
         // Determine the name of the package to add
         let (Some(name), spec) = spec.clone().into_nameless() else {
             miette::bail!("pixi does not support wildcard dependencies")
         };
 
-        // Check for duplicates
-        if target.has_dependency(name.as_normalized(), Some(spec_type)) {
-            return Err(miette!(
-                "{} is already added.",
-                console::style(name.as_normalized()).bold(),
-            ));
-        }
-
-        // Add the dependency to the manifest
-        target
-            .dependencies
-            .entry(spec_type)
-            .or_default()
-            .insert(name.clone(), spec.clone());
-
-        // Add the dependency to the TOML document as well
+        // Add the dependency to the TOML document
         self.document
             .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
+
+        // Add the dependency to the manifest  as well
+        self.target_mut(platform, Some(feature_name))
+            .add_dependency(name, spec, spec_type);
 
         Ok(())
     }
@@ -432,28 +411,17 @@ impl Manifest {
         requirement: &PyPiRequirement,
         platform: Option<Platform>,
     ) -> miette::Result<()> {
-        let target = self
-            .default_feature_mut()
-            .targets
-            .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref());
-
-        // Check for duplicates
-        if target.has_pypi_dependency(name.as_normalized().to_string().as_str()) {
-            return Err(miette!(
-                "{} is already added.",
-                console::style(name.as_normalized()).bold(),
-            ));
-        }
-        // Add the dependency to the manifest
-        target.add_pypi_dependency(name.clone(), requirement.clone());
-
-        // Add the pypi dependency to the TOML document as well
-        let parent = self
+        // Add the pypi dependency to the TOML document
+        let project_root = self
             .path
             .parent()
             .expect("Path should always have a parent");
         self.document
-            .add_pypi_dependency(name, requirement, platform, parent)?;
+            .add_pypi_dependency(name, requirement, platform, project_root)?;
+
+        // Add the dependency to the manifest as well
+        self.target_mut(platform, None)
+            .add_pypi_dependency(name.clone(), requirement.clone());
 
         Ok(())
     }
@@ -668,6 +636,21 @@ impl Manifest {
         document["project"]["version"] = value(version);
 
         Ok(())
+    }
+
+    /// Returns a mutable reference to a target, creating it if needed
+    pub fn target_mut(
+        &mut self,
+        platform: Option<Platform>,
+        name: Option<&FeatureName>,
+    ) -> &mut Target {
+        let feature = match name {
+            Some(feature) => self.parsed.features.entry(feature.clone()).or_default(),
+            None => self.default_feature_mut(),
+        };
+        feature
+            .targets
+            .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
     }
 
     /// Returns the default feature.
