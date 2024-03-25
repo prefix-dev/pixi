@@ -408,7 +408,7 @@ mod test {
         [project]
         name = "pixi"
         channels = ["conda-forge"]
-        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
     "#,
                 &["echo bla"],
                 None,
@@ -538,7 +538,7 @@ mod test {
         [project]
         name = "pixi"
         channels = ["conda-forge"]
-        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
 
         [tasks]
         foo = "echo foo"

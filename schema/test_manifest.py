@@ -36,6 +36,7 @@ def invalid_manifest(request) -> str:
     manifest_toml = tomllib.loads(manifest)
     return manifest_toml
 
+
 # @pytest.fixture()
 def _real_manifest_path():
     # Get all `pixi.toml` files from the project
@@ -45,6 +46,7 @@ def _real_manifest_path():
         yield manifest
     #     manifest_paths += [manifest]
     # return manifest_paths
+
 
 @pytest.fixture(params=_real_manifest_path())
 def real_manifest_path(request):
@@ -65,6 +67,7 @@ def test_manifest_schema_valid(manifest_schema, valid_manifest):
 def test_manifest_schema_invalid(manifest_schema, invalid_manifest):
     with pytest.raises(ValidationError):
         validate(instance=invalid_manifest, schema=manifest_schema)
+
 
 def test_real_manifests(real_manifest_path, manifest_schema):
     print(real_manifest_path)
