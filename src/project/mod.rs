@@ -171,6 +171,15 @@ impl Project {
 
     /// Loads a project from manifest file.
     pub fn load(manifest_path: &Path) -> miette::Result<Self> {
+        // Warn if using manifest defined by environment variable
+        if let Ok(env_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
+            if env_path.as_str() == manifest_path.to_str().unwrap() {
+                tracing::warn!(
+                    "Using manifest `{env_path}` from `PIXI_PROJECT_MANIFEST` environment variable"
+                );
+            }
+        }
+
         // Determine the parent directory of the manifest file
         let full_path = dunce::canonicalize(manifest_path).into_diagnostic()?;
         if full_path.file_name().and_then(OsStr::to_str) != Some(PROJECT_MANIFEST) {

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The path to 'pixi.toml'
-    #[clap(long, global = true)]
+    #[clap(long, global = true, env = "PIXI_PROJECT_MANIFEST")]
     pub manifest_path: Option<PathBuf>,
 
     /// The subcommand to execute

@@ -37,7 +37,7 @@ pub struct Args {
     pub task: Vec<String>,
 
     /// The path to 'pixi.toml'
-    #[arg(long)]
+    #[arg(long, env = "PIXI_PROJECT_MANIFEST")]
     pub manifest_path: Option<PathBuf>,
 
     #[clap(flatten)]

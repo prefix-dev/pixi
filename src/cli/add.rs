@@ -62,7 +62,7 @@ pub struct Args {
     pub specs: Vec<String>,
 
     /// The path to 'pixi.toml'
-    #[arg(long)]
+    #[arg(long, env = "PIXI_PROJECT_MANIFEST")]
     pub manifest_path: Option<PathBuf>,
 
     /// The specified dependencies are host dependencies. Conflicts with `build` and `pypi`

@@ -31,7 +31,7 @@ pub struct Args {
     channel: Option<Vec<String>>,
 
     /// The path to 'pixi.toml'
-    #[arg(long)]
+    #[arg(long, env = "PIXI_PROJECT_MANIFEST")]
     pub manifest_path: Option<PathBuf>,
 
     /// The platform to search for, defaults to current platform

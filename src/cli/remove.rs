@@ -20,7 +20,7 @@ pub struct Args {
     pub deps: Vec<String>,
 
     /// The path to 'pixi.toml'
-    #[arg(long)]
+    #[arg(long, env = "PIXI_PROJECT_MANIFEST")]
     pub manifest_path: Option<PathBuf>,
 
     /// Whether dependency is a host dependency
