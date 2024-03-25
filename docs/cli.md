@@ -55,7 +55,7 @@ It will only add if the package with its version constraint is able to work with
 
 ##### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories. It can also be controlled by the `PIXI_PROJECT_MANIFEST` environment variable which allows the default to be overridden by `pixi shell`.
 - `--host`: Specifies a host dependency, important for building a package.
 - `--build`: Specifies a build dependency, important for building a package.
 - `--pypi`: Specifies a PyPI dependency, not a conda package.
@@ -86,7 +86,7 @@ Installs all dependencies specified in the lockfile `pixi.lock`.
 Which gets generated on `pixi add` or when you manually change the `pixi.toml` file and run `pixi install`.
 
 ##### Options
-- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories. It can also be controlled by the `PIXI_PROJECT_MANIFEST` environment variable which allows the default to be overridden by `pixi shell`.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 
@@ -111,7 +111,7 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 
 ##### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories. It can also be controlled by the `PIXI_PROJECT_MANIFEST` environment variable which allows the default to be overridden by `pixi shell`.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.
@@ -169,7 +169,7 @@ Removes dependencies from the `pixi.toml`.
 
 ##### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories. It can also be controlled by the `PIXI_PROJECT_MANIFEST` environment variable which allows the default to be overridden by `pixi shell`.
 - `--host`: Specifies a host dependency, important for building a package.
 - `--build`: Specifies a build dependency, important for building a package.
 - `--pypi`: Specifies a PyPI dependency, not a conda package.
@@ -195,7 +195,7 @@ If you want to make a shorthand for a specific command you can add a task for it
 
 ##### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories. It can also be controlled by the `PIXI_PROJECT_MANIFEST` environment variable which allows the default to be overridden by `pixi shell`.
 
 ### `task add`
 
@@ -308,7 +308,7 @@ List project's packages. Highlighted packages are explicit dependencies.
 - `--json`: Whether to output in json format.
 - `--json-pretty`: Whether to output in pretty json format
 - `--sort-by <SORT_BY>`: Sorting strategy [default: name] [possible values: size, name, type]
-- `--manifest-path <MANIFEST_PATH>`: The path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: The path to `pixi.toml`, by default it searches for one in the parent directories. It can also be controlled by the `PIXI_PROJECT_MANIFEST` environment variable which allows the default to be overridden by `pixi shell`.
 - `--environment`(`-e`): The environment's packages to list, if non is provided the default environment's packages will be listed.
 - `--frozen`: Install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: Only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
@@ -359,6 +359,8 @@ Output will look like this, where `python` will be green as it is the package th
 This command starts a new shell in the project's environment.
 To exit the pixi shell, simply run `exit`.
 
+The command sets the `PIXI_PROJECT_MANIFEST` environment variable which most of the other commands use as a default for `--manifest-path` so that they work with the shell's manifest.
+
 ##### Options
 
 - `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
@@ -386,7 +388,7 @@ This command prints the activation script of an environment.
 ##### Options
 - `--shell <SHELL> (-s)`: The shell for which the activation script should be printed. Defaults to the current shell.
     Currently supported variants: [`bash`,  `zsh`,  `xonsh`,  `cmd`,  `powershell`,  `fish`,  `nushell`]
-- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path`: the path to `pixi.toml`, by default it searches for one in the parent directories. It can also be controlled by the `PIXI_PROJECT_MANIFEST` environment variable which allows the default to be overridden by `pixi shell`.
 - `--frozen`: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the `pixi.toml`[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.
@@ -417,7 +419,7 @@ Search a package, output will list the latest version of the package.
 
 ###### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories. It can also be controlled by the `PIXI_PROJECT_MANIFEST` environment variable which allows the default to be overridden by `pixi shell`.
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--limit <LIMIT> (-l)`: optionally limit the number of search results
 - `--platform <PLATFORM> (-p)`: specify a platform that you want to search for. (default: current platform)
@@ -453,7 +455,7 @@ More information [here](advanced/explain_info_command.md).
 
 ##### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories. It can also be controlled by the `PIXI_PROJECT_MANIFEST` environment variable which allows the default to be overridden by `pixi shell`.
 - `--extended`: extend the information with more slow queries to the system, like directory sizes.
 - `--json`: Get a machine-readable version of the information as output.
 
@@ -645,7 +647,7 @@ This subcommand allows you to modify the project configuration through the comma
 
 ##### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to `pixi.toml`, by default it searches for one in the parent directories. It can also be controlled by the `PIXI_PROJECT_MANIFEST` environment variable which allows the default to be overridden by `pixi shell`.
 
 ### `project channel add`
 
