@@ -105,8 +105,14 @@ fn version_or_url_to_nameless_matchspec(
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+    use std::str::FromStr;
 
-    use crate::project::manifest::{Manifest, ManifestKind};
+    use insta::assert_snapshot;
+
+    use crate::{
+        project::manifest::{python::PyPiPackageName, Manifest, ManifestKind, PyPiRequirement},
+        FeatureName,
+    };
 
     const PYPROJECT_FULL: &str = r#"
         [tool.pixi.project]
@@ -246,9 +252,88 @@ mod tests {
         platforms = ["linux-64", "osx-arm64"]
         "#;
 
+    const PYPROJECT_BOILERPLATE: &str = r#"
+        [project]
+        name = "flask-hello-world-pyproject"
+        version = "0.1.0"
+        description = "Example how to get started with flask in a pixi environment."
+        license = "MIT OR Apache-2.0"
+        homepage = "https://github.com/prefix/pixi"
+        readme = "README.md"
+        requires-python = ">=3.11"
+        dependencies = ["flask==2.*"]
+
+        [tool.pixi.project]
+        name = "flask-hello-world-pyproject"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [tool.pixi.tasks]
+        start = "python -m flask run --port=5050"
+        "#;
+
     #[test]
     fn test_build_manifest() {
         let _manifest =
             Manifest::from_str(Path::new(""), PYPROJECT_FULL, ManifestKind::Pyproject).unwrap();
+    }
+
+    #[test]
+    fn test_add_pypi_dependency() {
+        let mut manifest = Manifest::from_str(
+            Path::new(""),
+            PYPROJECT_BOILERPLATE,
+            ManifestKind::Pyproject,
+        )
+        .unwrap();
+
+        // Add numpy to pyproject
+        let name = PyPiPackageName::from_str("numpy").unwrap();
+        let requirement = PyPiRequirement::RawVersion(">=3.12".parse().unwrap());
+        manifest
+            .add_pypi_dependency(&name, &requirement, None)
+            .unwrap();
+
+        assert!(manifest
+            .default_feature_mut()
+            .targets
+            .for_opt_target(None)
+            .unwrap()
+            .pypi_dependencies
+            .as_ref()
+            .unwrap()
+            .get(&name)
+            .is_some());
+
+        assert_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_remove_pypi_dependency() {
+        let mut manifest = Manifest::from_str(
+            Path::new(""),
+            PYPROJECT_BOILERPLATE,
+            ManifestKind::Pyproject,
+        )
+        .unwrap();
+
+        // Remove flask from pyproject
+        let name = PyPiPackageName::from_str("flask").unwrap();
+        manifest
+            .remove_pypi_dependency(&name, None, &FeatureName::Default)
+            .unwrap();
+
+        assert!(manifest
+            .default_feature_mut()
+            .targets
+            .for_opt_target(None)
+            .unwrap()
+            .pypi_dependencies
+            .as_ref()
+            .unwrap()
+            .get(&name)
+            .is_none());
+
+        assert_snapshot!(manifest.document.to_string());
     }
 }
