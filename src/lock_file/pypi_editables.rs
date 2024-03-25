@@ -14,7 +14,9 @@ use crate::uv_reporter::{UvReporter, UvReporterOptions};
 #[derive(thiserror::Error, Debug)]
 pub enum BuildEditablesError {
     #[error("Failed to build editables: {source}")]
-    DownloadError { source: Box<dyn std::error::Error> },
+    DownloadError {
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
 }
 
 /// Build a set of editable distributions.

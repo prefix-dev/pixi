@@ -4,6 +4,7 @@
 
 use crate::config::get_cache_dir;
 use crate::consts::PROJECT_MANIFEST;
+use crate::lock_file::pypi_editables::build_editables;
 use crate::project::manifest::python::RequirementOrEditable;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::collections::{BTreeMap, HashMap};
@@ -38,6 +39,7 @@ use rattler_solve::{resolvo, SolverImpl};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use tempfile::tempdir;
 use url::Url;
 use uv_cache::Cache;
 use uv_client::{Connectivity, FlatIndex, FlatIndexClient, RegistryClient, RegistryClientBuilder};
@@ -258,7 +260,7 @@ pub async fn resolve_pypi(
         .into_iter()
         .partition(|req| matches!(req, RequirementOrEditable::Editable(_)));
 
-    let _editables = editables
+    let editables = editables
         .into_iter()
         .map(|req| {
             req.into_editable()
@@ -335,6 +337,22 @@ pub async fn resolve_pypi(
         })
         .collect();
 
+    // Build any editables
+    let built_wheel_dir = tempdir().into_diagnostic()?;
+    let built_editables = build_editables(
+        &editables,
+        built_wheel_dir.path(),
+        &context.cache,
+        &tags,
+        &context.registry_client,
+        &build_dispatch,
+    )
+    .await
+    .into_diagnostic()?
+    .into_iter()
+    .map(|built| (built.editable, built.metadata))
+    .collect_vec();
+
     let manifest = Manifest::new(
         requirements,
         // Vec::new(),
@@ -342,7 +360,7 @@ pub async fn resolve_pypi(
         Vec::new(),
         Vec::new(),
         None,
-        Vec::new(),
+        built_editables,
     );
 
     let fallback_provider = DefaultResolverProvider::new(
