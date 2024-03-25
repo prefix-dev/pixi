@@ -340,24 +340,14 @@ pub async fn resolve_pypi(
         .collect();
 
     // Build any editables
-    let built_wheel_dir = tempdir().into_diagnostic()?;
-    let built_editables = build_editables(
-        &editables,
-        built_wheel_dir.path(),
-        &context.cache,
-        &tags,
-        &context.registry_client,
-        &build_dispatch,
-    )
-    .await
-    .into_diagnostic()?
-    .into_iter()
-    .map(|built| (built.editable, built.metadata))
-    .collect_vec();
+    let built_editables = build_editables(&editables, &context.cache, &build_dispatch)
+        .await
+        .into_diagnostic()?
+        .into_iter()
+        .collect_vec();
 
     let manifest = Manifest::new(
         requirements,
-        // Vec::new(),
         constraints,
         Vec::new(),
         Vec::new(),

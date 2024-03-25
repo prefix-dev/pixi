@@ -647,7 +647,7 @@ dependencies = [
 [[package]]
 name = "cache-key"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "hex",
  "seahash",
@@ -1089,7 +1089,7 @@ dependencies = [
 [[package]]
 name = "distribution-filename"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "pep440_rs",
  "platform-tags",
@@ -1103,7 +1103,7 @@ dependencies = [
 [[package]]
 name = "distribution-types"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "anyhow",
  "cache-key",
@@ -1980,7 +1980,7 @@ dependencies = [
 [[package]]
 name = "install-wheel-rs"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "configparser",
  "csv",
@@ -2664,7 +2664,7 @@ dependencies = [
 [[package]]
 name = "once-map"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2877,10 +2877,9 @@ checksum = "8835116a5c179084a830efb3adc117ab007512b535bc1a21c991d3b32a6b44dd"
 [[package]]
 name = "pep440_rs"
 version = "0.5.0"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "once_cell",
- "pubgrub",
  "rkyv",
  "serde",
  "unicode-width",
@@ -2890,13 +2889,12 @@ dependencies = [
 [[package]]
 name = "pep508_rs"
 version = "0.4.2"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "derivative",
  "once_cell",
  "pep440_rs",
  "regex",
- "rkyv",
  "serde",
  "thiserror",
  "unicode-width",
@@ -3086,6 +3084,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "uv-build",
  "uv-cache",
  "uv-client",
  "uv-dispatch",
@@ -3118,7 +3117,7 @@ dependencies = [
 [[package]]
 name = "platform-tags"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "rustc-hash",
  "serde",
@@ -3189,12 +3188,13 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
 name = "priority-queue"
-version = "1.4.0"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0bda9164fe05bc9225752d54aae413343c36f684380005398a6a8fde95fe785"
+checksum = "509354d8a769e8d0b567d6821b84495c60213162761a732d68ce87c964bd347f"
 dependencies = [
  "autocfg",
- "indexmap 1.9.3",
+ "equivalent",
+ "indexmap 2.2.5",
 ]
 
 [[package]]
@@ -3252,7 +3252,7 @@ dependencies = [
 [[package]]
 name = "pubgrub"
 version = "0.2.1"
-source = "git+https://github.com/astral-sh/pubgrub?rev=addbaf184891d66a2dfd93d241a66d13bfe5de86#addbaf184891d66a2dfd93d241a66d13bfe5de86"
+source = "git+https://github.com/astral-sh/pubgrub?rev=c26e485213e39582c6f2e4d45c0328422670e7a7#c26e485213e39582c6f2e4d45c0328422670e7a7"
 dependencies = [
  "indexmap 2.2.5",
  "log",
@@ -3279,7 +3279,7 @@ dependencies = [
 [[package]]
 name = "pypi-types"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "chrono",
  "mailparse",
@@ -3770,7 +3770,7 @@ dependencies = [
 [[package]]
 name = "requirements-txt"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "async-recursion",
  "fs-err",
@@ -5221,7 +5221,7 @@ dependencies = [
 [[package]]
 name = "uv-auth"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "async-trait",
  "base64 0.21.7",
@@ -5239,7 +5239,7 @@ dependencies = [
 [[package]]
 name = "uv-build"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5267,7 +5267,7 @@ dependencies = [
 [[package]]
 name = "uv-cache"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "cache-key",
  "cachedir",
@@ -5290,7 +5290,7 @@ dependencies = [
 [[package]]
 name = "uv-client"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5341,7 +5341,7 @@ dependencies = [
 [[package]]
 name = "uv-dispatch"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5362,7 +5362,7 @@ dependencies = [
 [[package]]
 name = "uv-distribution"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "anyhow",
  "cache-key",
@@ -5400,7 +5400,7 @@ dependencies = [
 [[package]]
 name = "uv-extract"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "async-compression",
  "async_zip",
@@ -5419,7 +5419,7 @@ dependencies = [
 [[package]]
 name = "uv-fs"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "backoff",
  "dunce",
@@ -5438,7 +5438,7 @@ dependencies = [
 [[package]]
 name = "uv-git"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -5461,7 +5461,7 @@ dependencies = [
 [[package]]
 name = "uv-installer"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -5499,7 +5499,7 @@ dependencies = [
 [[package]]
 name = "uv-interpreter"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "cache-key",
  "configparser",
@@ -5527,7 +5527,7 @@ dependencies = [
 [[package]]
 name = "uv-normalize"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "rkyv",
  "serde",
@@ -5536,7 +5536,7 @@ dependencies = [
 [[package]]
 name = "uv-resolver"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "anstream",
  "anyhow",
@@ -5579,7 +5579,7 @@ dependencies = [
 [[package]]
 name = "uv-traits"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5594,13 +5594,13 @@ dependencies = [
 
 [[package]]
 name = "uv-version"
-version = "0.1.23"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+version = "0.1.24"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 
 [[package]]
 name = "uv-virtualenv"
 version = "0.0.4"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "anstream",
  "cachedir",
@@ -5619,7 +5619,7 @@ dependencies = [
 [[package]]
 name = "uv-warnings"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=expose-yanks#9684ef863b725b6bc76aa87f834f8d8904176d6f"
+source = "git+https://github.com/astral-sh/uv?rev=7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2#7a5571fa5c4fa72a26b0754f3273f1d75f3fa7d2"
 dependencies = [
  "anstream",
  "once_cell",
