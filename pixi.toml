@@ -46,8 +46,9 @@ deploy-dev = "mike deploy --push dev devel"
 
 [feature.schema.tasks]
 generate-schema = { cmd="python model.py > schema.json" , cwd = "schema"}
-test-schema = {cmd = "pytest -s", depends_on = "generate-schema", cwd = "schema"}
 fmt-schema = "ruff format schema --target-version py311"
+test-schema = {cmd = "pytest -s", depends_on = "generate-schema", cwd = "schema"}
+lint-schema = "ruff check schema --target-version py311"
 
 [feature.schema.dependencies]
 python = ">=3.11"

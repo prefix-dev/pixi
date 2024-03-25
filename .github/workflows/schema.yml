@@ -25,7 +25,20 @@ jobs:
           with:
             pixi-version: v0.15.2
             cache: true
+            environments: schema
+
+        - name: Ensure schema is up-to-date
+          run: |
+            pixi run -e schema generate-schema
+            git diff --exit-code
 
         - name: Test Schema
           run: |
+            pixi run -e schema lint-schema
             pixi run -e schema test-schema
+
+        - name: Check formatting
+          run: |
+            pixi run -e schema test-schema
+            git diff --exit-code
+            
