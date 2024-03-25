@@ -34,7 +34,9 @@ use pep508_rs::{Requirement, VerbatimUrl};
 use pypi_types::Metadata23;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
-use rattler_lock::{PackageHashes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
+use rattler_lock::{
+    PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
+};
 use rattler_solve::{resolvo, SolverImpl};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -258,7 +260,7 @@ pub async fn resolve_pypi(
         })
         .collect::<miette::Result<Vec<_>>>()?
         .into_iter()
-        .partition(|req| matches!(req, RequirementOrEditable::Editable(_)));
+        .partition(|req| matches!(req, RequirementOrEditable::Editable(_, _)));
 
     let editables = editables
         .into_iter()
@@ -360,7 +362,7 @@ pub async fn resolve_pypi(
         Vec::new(),
         Vec::new(),
         None,
-        built_editables,
+        built_editables.clone(),
     );
 
     let fallback_provider = DefaultResolverProvider::new(
@@ -474,6 +476,7 @@ pub async fn resolve_pypi(
                     version: metadata.version,
                     requires_dist: metadata.requires_dist,
                     requires_python: metadata.requires_python,
+                    editable: false,
                     url_or_path,
                     hash,
                 }
@@ -490,9 +493,9 @@ pub async fn resolve_pypi(
 
                 // Use the precise url if we got it back
                 // otherwise try to construct it from the source
-                let url_or_path = match source {
+                let (url_or_path, hash, editable) = match source {
                     SourceDist::Registry(reg) => {
-                        if let Some(url) = url {
+                        let url_or_path = if let Some(url) = url {
                             UrlOrPath::Url(url)
                         } else {
                             match &reg.file.url {
@@ -502,22 +505,34 @@ pub async fn resolve_pypi(
                                 FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
                                 _ => todo!("unsupported URL"),
                             }
-                        }
+                        };
+                        (url_or_path, hash, false)
                     }
                     SourceDist::DirectUrl(direct) => {
                         let url = direct.url.to_url();
-                        Url::parse(&format!("direct+{url}"))
-                            .expect("could not create direct-url")
-                            .into()
+                        let direct_url = Url::parse(&format!("direct+{url}"))
+                            .expect("could not create direct-url");
+                        (direct_url.into(), hash, false)
                     }
-                    SourceDist::Git(git) => git.url.to_url().into(),
+                    SourceDist::Git(git) => (git.url.to_url().into(), hash, false),
                     SourceDist::Path(path) => {
-                        // Create the url for the lock file
-                        path.url
+                        // Compute the hash of the package based on the source tree.
+                        let hash = PypiSourceTreeHashable::from_directory(&path.path)
+                            .into_diagnostic()
+                            .context("failed to compute hash of pypi source tree")?
+                            .hash();
+
+                        // Create the url for the lock file. This is based on the passed in URL
+                        // instead of from the source path to copy the path that was passed in from
+                        // the requirement.
+                        let url_or_path = path
+                            .url
                             .given()
                             .map(|path| UrlOrPath::Path(PathBuf::from(path)))
                             // When using a direct url reference like https://foo/bla.whl we do not have a given
-                            .unwrap_or_else(|| path.url.to_url().into())
+                            .unwrap_or_else(|| path.url.to_url().into());
+
+                        (url_or_path, Some(hash), path.editable)
                     }
                 };
 
@@ -528,11 +543,43 @@ pub async fn resolve_pypi(
                     requires_python: metadata.requires_python,
                     url_or_path,
                     hash,
+                    editable,
                 }
             }
         };
 
         // TODO: Store extras in the lock-file
+        locked_packages.push((pypi_package_data, PypiPackageEnvironmentData::default()));
+    }
+
+    // Add the editables to the locked packages as well.
+    for (editable, metadata) in built_editables {
+        // Compute the hash of the package based on the source tree.
+        let hash = PypiSourceTreeHashable::from_directory(&editable.path)
+            .into_diagnostic()
+            .context("failed to compute hash of pypi source tree")?
+            .hash();
+
+        // Create the url for the lock file. This is based on the passed in URL
+        // instead of from the source path to copy the path that was passed in from
+        // the requirement.
+        let url_or_path = editable
+            .url
+            .given()
+            .map(|path| UrlOrPath::Path(PathBuf::from(path)))
+            // When using a direct url reference like https://foo/bla.whl we do not have a given
+            .unwrap_or_else(|| editable.url.to_url().into());
+
+        let pypi_package_data = PypiPackageData {
+            name: metadata.name,
+            version: metadata.version,
+            requires_dist: metadata.requires_dist,
+            requires_python: metadata.requires_python,
+            url_or_path,
+            hash: Some(hash),
+            editable: true,
+        };
+
         locked_packages.push((pypi_package_data, PypiPackageEnvironmentData::default()));
     }
 

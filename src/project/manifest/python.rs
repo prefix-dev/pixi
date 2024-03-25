@@ -2,6 +2,7 @@ use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
 use serde::Serializer;
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
@@ -308,16 +309,46 @@ pub enum AsPep508Error {
     },
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum RequirementOrEditable {
-    Editable(requirements_txt::EditableRequirement),
+    Editable(PackageName, requirements_txt::EditableRequirement),
     Pep508Requirement(pep508_rs::Requirement),
 }
 
+impl Display for RequirementOrEditable {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            RequirementOrEditable::Editable(name, req) => {
+                write!(f, "{} = {:?}", name, req)
+            }
+            RequirementOrEditable::Pep508Requirement(req) => {
+                write!(f, "{}", req)
+            }
+        }
+    }
+}
+
 impl RequirementOrEditable {
+    /// Returns the name of the package that this requirement is for.
+    pub fn name(&self) -> &PackageName {
+        match self {
+            RequirementOrEditable::Editable(name, _) => name,
+            RequirementOrEditable::Pep508Requirement(req) => &req.name,
+        }
+    }
+
+    /// Returns any extras that this requirement has.
+    pub fn extras(&self) -> &[ExtraName] {
+        match self {
+            RequirementOrEditable::Editable(_, req) => &req.extras,
+            RequirementOrEditable::Pep508Requirement(req) => &req.extras,
+        }
+    }
+
     /// Returns an editable requirement if it is an editable requirement.
     pub fn into_editable(self) -> Option<requirements_txt::EditableRequirement> {
         match self {
-            RequirementOrEditable::Editable(e) => Some(e),
+            RequirementOrEditable::Editable(_, editable) => Some(editable),
             _ => None,
         }
     }
@@ -331,15 +362,15 @@ impl RequirementOrEditable {
     }
 
     /// Returns an editable requirement if it is an editable requirement.
-    pub fn editable(&self) -> Option<&requirements_txt::EditableRequirement> {
+    pub fn as_editable(&self) -> Option<&requirements_txt::EditableRequirement> {
         match self {
-            RequirementOrEditable::Editable(e) => Some(e),
+            RequirementOrEditable::Editable(_name, editable) => Some(editable),
             _ => None,
         }
     }
 
     /// Returns a pep508 requirement if it is a pep508 requirement.
-    pub fn requirement(&self) -> Option<&pep508_rs::Requirement> {
+    pub fn as_requirement(&self) -> Option<&pep508_rs::Requirement> {
         match self {
             RequirementOrEditable::Pep508Requirement(e) => Some(e),
             _ => None,
@@ -364,16 +395,16 @@ impl PyPiRequirement {
         name: &PackageName,
         project_root: &Path,
     ) -> Result<RequirementOrEditable, AsPep508Error> {
-        let (version_or_url, editable) = match self {
+        let version_or_url = match self {
             PyPiRequirement::Version {
                 version,
                 index: _,
                 extras: _,
-            } => (version.clone().into(), false),
+            } => version.clone().into(),
             PyPiRequirement::Path {
                 path,
                 editable,
-                extras: _,
+                extras,
             } => {
                 let joined = project_root.join(path);
                 let canonicalized =
@@ -385,11 +416,20 @@ impl PyPiRequirement {
                     .to_str()
                     .map(|s| s.to_owned())
                     .unwrap_or_else(String::new);
-                let verbatim = VerbatimUrl::from_path(canonicalized).with_given(given);
-                (
-                    Some(pep508_rs::VersionOrUrl::Url(verbatim)),
-                    editable.unwrap_or_default(),
-                )
+                let verbatim = VerbatimUrl::from_path(canonicalized.clone()).with_given(given);
+
+                if *editable == Some(true) {
+                    return Ok(RequirementOrEditable::Editable(
+                        name.clone(),
+                        requirements_txt::EditableRequirement {
+                            url: verbatim,
+                            extras: extras.clone(),
+                            path: canonicalized,
+                        },
+                    ));
+                }
+
+                Some(pep508_rs::VersionOrUrl::Url(verbatim))
             }
             PyPiRequirement::Git {
                 git,
@@ -409,18 +449,12 @@ impl PyPiRequirement {
                             url: git.to_string(),
                         }
                     })?;
-                (
-                    Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(uv_url))),
-                    false,
-                )
+                Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(uv_url)))
             }
-            PyPiRequirement::Url { url, extras: _ } => (
-                Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(
-                    url.clone(),
-                ))),
-                false,
-            ),
-            PyPiRequirement::RawVersion(version) => (version.clone().into(), false),
+            PyPiRequirement::Url { url, extras: _ } => Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(
+                url.clone(),
+            ))),
+            PyPiRequirement::RawVersion(version) => version.clone().into(),
         };
 
         Ok(RequirementOrEditable::Pep508Requirement(
