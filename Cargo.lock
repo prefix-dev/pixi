@@ -3371,8 +3371,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.19.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f81a68a73dd7a079ec559061d0d24343f9c7840c2226af3822a238b61a3bbf93"
+source = "git+https://github.com/baszalmstra/rattler?rev=e5aaed3e2551399985e3c11a87c2c0aedb31b0d3#e5aaed3e2551399985e3c11a87c2c0aedb31b0d3"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3418,6 +3417,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.20.3"
+source = "git+https://github.com/baszalmstra/rattler?rev=e5aaed3e2551399985e3c11a87c2c0aedb31b0d3#e5aaed3e2551399985e3c11a87c2c0aedb31b0d3"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3446,6 +3446,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.19.2"
+source = "git+https://github.com/baszalmstra/rattler?rev=e5aaed3e2551399985e3c11a87c2c0aedb31b0d3#e5aaed3e2551399985e3c11a87c2c0aedb31b0d3"
 dependencies = [
  "blake2",
  "digest",
@@ -3460,6 +3461,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.21.0"
+source = "git+https://github.com/baszalmstra/rattler?rev=e5aaed3e2551399985e3c11a87c2c0aedb31b0d3#e5aaed3e2551399985e3c11a87c2c0aedb31b0d3"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3482,6 +3484,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.19.2"
+source = "git+https://github.com/baszalmstra/rattler?rev=e5aaed3e2551399985e3c11a87c2c0aedb31b0d3#e5aaed3e2551399985e3c11a87c2c0aedb31b0d3"
 dependencies = [
  "quote",
  "syn 2.0.53",
@@ -3490,6 +3493,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.20.0"
+source = "git+https://github.com/baszalmstra/rattler?rev=e5aaed3e2551399985e3c11a87c2c0aedb31b0d3#e5aaed3e2551399985e3c11a87c2c0aedb31b0d3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3519,8 +3523,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3181493677f925cb1a5a7ba2122fa2ce263a427f597029af59e75e13a8bc78e2"
+source = "git+https://github.com/baszalmstra/rattler?rev=e5aaed3e2551399985e3c11a87c2c0aedb31b0d3#e5aaed3e2551399985e3c11a87c2c0aedb31b0d3"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3546,6 +3549,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.19.4"
+source = "git+https://github.com/baszalmstra/rattler?rev=e5aaed3e2551399985e3c11a87c2c0aedb31b0d3#e5aaed3e2551399985e3c11a87c2c0aedb31b0d3"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3584,6 +3588,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.19.4"
+source = "git+https://github.com/baszalmstra/rattler?rev=e5aaed3e2551399985e3c11a87c2c0aedb31b0d3#e5aaed3e2551399985e3c11a87c2c0aedb31b0d3"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.5",
@@ -3600,6 +3605,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.20.3"
+source = "git+https://github.com/baszalmstra/rattler?rev=e5aaed3e2551399985e3c11a87c2c0aedb31b0d3#e5aaed3e2551399985e3c11a87c2c0aedb31b0d3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3619,6 +3625,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.19.4"
+source = "git+https://github.com/baszalmstra/rattler?rev=e5aaed3e2551399985e3c11a87c2c0aedb31b0d3#e5aaed3e2551399985e3c11a87c2c0aedb31b0d3"
 dependencies = [
  "cfg-if",
  "libloading",
