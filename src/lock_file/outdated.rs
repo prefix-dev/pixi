@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 ///
 /// Use the [`OutdatedEnvironments::from_project_and_lock_file`] to create an instance of this
 /// struct by examining the project and lock-file and finding any mismatches.
+#[derive(Debug)]
 pub struct OutdatedEnvironments<'p> {
     /// The conda environments that are considered out of date with the lock-file.
     pub conda: HashMap<Environment<'p>, HashSet<Platform>>,

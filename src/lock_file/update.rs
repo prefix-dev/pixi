@@ -22,7 +22,7 @@ use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, Tr
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, WrapErr};
+use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
@@ -732,7 +732,7 @@ pub async fn ensure_up_to_date_lock_file(
         // platform for this group.
         let records_future = context
             .get_latest_group_repodata_records(&group, current_platform)
-            .expect("conda records should be available now or in the future");
+            .ok_or_else(|| make_unsupported_pypi_platform_error(environment, current_platform))?;
 
         // Spawn a task to instantiate the environment
         let environment_name = environment.name().clone();
@@ -1071,6 +1071,60 @@ pub async fn ensure_up_to_date_lock_file(
             .expect("repo data should not be shared anymore"),
         uv_context,
     })
+}
+
+/// Constructs an error that indicates that the current platform cannot solve pypi dependencies because there is no python interpreter available for the current platform.
+fn make_unsupported_pypi_platform_error(
+    environment: &Environment<'_>,
+    current_platform: Platform,
+) -> miette::Report {
+    let grouped_environment = GroupedEnvironment::from(environment.clone());
+
+    // Construct a diagnostic that explains that the current platform is not supported.
+    let mut diag = MietteDiagnostic::new(format!("Unable to solve pypi dependencies for the {} {} because no compatible python interpreter can be installed for the current platform", grouped_environment.name().fancy_display(), match &grouped_environment {
+        GroupedEnvironment::Group(_) => "solve group",
+        GroupedEnvironment::Environment(_) => "environment"
+    }));
+
+    let mut labels = Vec::new();
+
+    // Add a reference to the set of platforms that are supported by the project.
+    let project_platforms = &environment.project().manifest.parsed.project.platforms;
+    if let Some(span) = project_platforms.span.clone() {
+        labels.push(LabeledSpan::at(
+            span,
+            format!("even though the projects does include support for '{current_platform}'"),
+        ));
+    }
+
+    // Find all the features that are excluding the current platform.
+    let features_without_platform = grouped_environment.features().filter_map(|feature| {
+        let platforms = feature.platforms.as_ref()?;
+        if !platforms.value.contains(&current_platform) {
+            Some((feature, platforms))
+        } else {
+            None
+        }
+    });
+
+    for (feature, platforms) in features_without_platform {
+        let Some(span) = platforms.span.as_ref() else {
+            continue;
+        };
+
+        labels.push(LabeledSpan::at(
+            span.clone(),
+            format!(
+                "feature '{}' does not support '{current_platform}'",
+                feature.name
+            ),
+        ));
+    }
+
+    diag.labels = Some(labels);
+    diag.help = Some("Try converting your [pypi-dependencies] to conda [dependencies]".to_string());
+
+    miette::Report::new(diag).with_source_code(environment.project().manifest.contents.clone())
 }
 
 /// Represents data that is sent back from a task. This is used to communicate the result of a task
