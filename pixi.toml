@@ -18,7 +18,7 @@ bump = "tbump --only-patch"
 pre-commit = "~=3.3.0"
 
 # Needed for building rattler
-rust = "~=1.75.0"
+rust = "~=1.76.0"
 openssl = "3.*"
 pkg-config = "0.29.*"
 git = "2.42.0.*"
@@ -46,9 +46,7 @@ deploy-dev = "mike deploy --push dev devel"
 
 [feature.schema.tasks]
 generate-schema = { cmd="python model.py > schema.json" , cwd = "schema"}
-fmt-schema = "ruff format schema --target-version py311"
 test-schema = {cmd = "pytest -s", depends_on = "generate-schema", cwd = "schema"}
-lint-schema = "ruff check schema --target-version py311"
 
 [feature.schema.dependencies]
 python = ">=3.11"
@@ -56,7 +54,6 @@ pytest = ">=8.0.2,<8.1"
 jsonschema = "*"
 pydantic = ">=2.6.3,<2.7"
 pyyaml = ">=6.0.1,<6.1"
-ruff = ">=0.3.4,<0.4"
 
 [environments]
 docs = ["docs"]

@@ -35,4 +35,3 @@ jobs:
           run: |
             pixi run -e schema test-schema
             git diff --exit-code
-
