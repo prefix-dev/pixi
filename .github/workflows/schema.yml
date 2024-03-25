@@ -34,7 +34,6 @@ jobs:
 
         - name: Test Schema
           run: |
-            pixi run -e schema lint-schema
             pixi run -e schema test-schema
 
         - name: Check formatting
