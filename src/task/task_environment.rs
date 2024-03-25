@@ -229,7 +229,7 @@ mod tests {
             [project]
             name = "foo"
             channels = ["foo"]
-            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64"]
+            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64", "linux-riscv64"]
 
             [tasks]
             test = "cargo test"
@@ -252,7 +252,7 @@ mod tests {
             [project]
             name = "foo"
             channels = ["foo"]
-            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64"]
+            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64", "linux-riscv64"]
 
             [tasks]
             test = "pytest"
@@ -319,7 +319,7 @@ mod tests {
             [project]
             name = "foo"
             channels = ["foo"]
-            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64"]
+            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64", "linux-riscv64"]
 
             [tasks]
             bla = "echo foo"
