@@ -7,7 +7,6 @@ use uv_cache::Cache;
 use uv_client::RegistryClient;
 use uv_dispatch::BuildDispatch;
 use uv_installer::{BuiltEditable, Downloader};
-use uv_interpreter::Interpreter;
 
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
 
@@ -24,7 +23,6 @@ pub async fn build_editables(
     editables: &[EditableRequirement],
     editable_wheel_dir: &Path,
     cache: &Cache,
-    interpreter: &Interpreter,
     tags: &Tags,
     client: &RegistryClient,
     build_dispatch: &BuildDispatch<'_>,
@@ -33,7 +31,7 @@ pub async fn build_editables(
         .with_length(editables.len() as u64)
         .with_capacity(editables.len() + 30)
         .with_starting_tasks(editables.iter().map(|d| format!("{}", d.path.display())))
-        .with_top_level_message("Resolving editables");
+        .with_top_level_message("Building editables");
 
     let downloader = Downloader::new(cache, tags, client, build_dispatch)
         .with_reporter(UvReporter::new(options));

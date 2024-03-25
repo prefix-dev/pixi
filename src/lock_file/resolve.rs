@@ -4,6 +4,7 @@
 
 use crate::config::get_cache_dir;
 use crate::consts::PROJECT_MANIFEST;
+use crate::project::manifest::python::RequirementOrEditable;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::collections::{BTreeMap, HashMap};
 use std::future::{ready, Future};
@@ -241,7 +242,8 @@ pub async fn resolve_pypi(
     }
 
     // Get the Pypi requirements
-    let requirements = dependencies
+    // partion the requirements into editable and non-editable requirements
+    let (editables, requirements): (Vec<_>, Vec<_>) = dependencies
         .iter()
         .flat_map(|(name, req)| req.iter().map(move |req| (name, req)))
         .map(|(name, req)| {
@@ -252,7 +254,25 @@ pub async fn resolve_pypi(
                     name
                 ))
         })
-        .collect::<miette::Result<Vec<pep508_rs::Requirement>>>()?;
+        .collect::<miette::Result<Vec<_>>>()?
+        .into_iter()
+        .partition(|req| matches!(req, RequirementOrEditable::Editable(_)));
+
+    let _editables = editables
+        .into_iter()
+        .map(|req| {
+            req.into_editable()
+                .expect("wrong partitioning of editable and non-editable requirements")
+        })
+        .collect::<Vec<_>>();
+
+    let requirements = requirements
+        .into_iter()
+        .map(|req| {
+            req.into_requirement()
+                .expect("wrong partitioning of editable and non-editable requirements")
+        })
+        .collect::<Vec<_>>();
 
     // Determine the python interpreter that is installed as part of the conda packages.
     let python_record = locked_conda_records

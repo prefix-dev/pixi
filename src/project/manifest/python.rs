@@ -315,6 +315,22 @@ pub enum RequirementOrEditable {
 
 impl RequirementOrEditable {
     /// Returns an editable requirement if it is an editable requirement.
+    pub fn into_editable(self) -> Option<requirements_txt::EditableRequirement> {
+        match self {
+            RequirementOrEditable::Editable(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    /// Returns a pep508 requirement if it is a pep508 requirement.
+    pub fn into_requirement(self) -> Option<pep508_rs::Requirement> {
+        match self {
+            RequirementOrEditable::Pep508Requirement(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    /// Returns an editable requirement if it is an editable requirement.
     pub fn editable(&self) -> Option<&requirements_txt::EditableRequirement> {
         match self {
             RequirementOrEditable::Editable(e) => Some(e),

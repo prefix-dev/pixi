@@ -1,5 +1,5 @@
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
-use crate::project::manifest::python::AsPep508Error;
+use crate::project::manifest::python::{AsPep508Error, RequirementOrEditable};
 use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
 use distribution_types::DirectGitUrl;
 use itertools::Itertools;
@@ -154,7 +154,7 @@ pub fn verify_platform_satisfiability(
 
 enum Dependency {
     Conda(MatchSpec, Cow<'static, str>),
-    PyPi(Requirement, Cow<'static, str>),
+    PyPi(RequirementOrEditable, Cow<'static, str>),
 }
 
 /// Check satatisfiability of a pypi requirement against a locked pypi package
