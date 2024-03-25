@@ -532,7 +532,7 @@
           "description": "The license of the project",
           "title": "License"
         },
-        "license_file": {
+        "license-file": {
           "anyOf": [
             {
               "pattern": "^[^\\\\]+$",
@@ -544,7 +544,7 @@
           ],
           "default": null,
           "description": "The path to the license file of the project",
-          "title": "License File"
+          "title": "License-File"
         },
         "readme": {
           "anyOf": [

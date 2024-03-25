@@ -55,7 +55,7 @@ class Project(StrictBaseModel):
     platforms: list[NonEmptyStr] = Field(description="The platforms that the project supports")
     license: NonEmptyStr | None = Field(None, description="The license of the project")
     license_file: PathNoBackslash | None = Field(
-        None, description="The path to the license file of the project"
+        None, alias="license-file", description="The path to the license file of the project"
     )
     readme: PathNoBackslash | None = Field(
         None, description="The path to the readme file of the project"
