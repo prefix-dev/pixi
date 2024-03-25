@@ -34,9 +34,5 @@ jobs:
         - name: Test Schema
           run: |
             pixi run -e schema test-schema
-
-        - name: Check formatting
-          run: |
-            pixi run -e schema test-schema
             git diff --exit-code
 
