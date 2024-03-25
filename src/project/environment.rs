@@ -187,6 +187,22 @@ impl<'p> Environment<'p> {
             .unwrap_or_default()
     }
 
+    /// Returns the best platform for the current platform & environment.
+    pub fn best_platform(&self) -> Platform {
+        let current = Platform::current();
+
+        // If the current platform is supported, return it.
+        if self.platforms().contains(&current) {
+            return current;
+        }
+
+        if current.is_osx() && self.platforms().contains(&Platform::Osx64) {
+            return Platform::Osx64;
+        }
+
+        current
+    }
+
     /// Returns the tasks defined for this environment.
     ///
     /// Tasks are defined on a per-target per-feature per-environment basis.
