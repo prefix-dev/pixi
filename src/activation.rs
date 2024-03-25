@@ -201,11 +201,6 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
     };
     let mut shell_env = HashMap::new();
     shell_env.insert("CONDA_DEFAULT_ENV".to_string(), env_name);
-    let manifest_path = environment.project().manifest_path();
-    shell_env.insert(
-        "PIXI_PROJECT_MANIFEST".to_string(),
-        manifest_path.into_os_string().into_string().unwrap(),
-    );
 
     // Combine the environments
     project_env

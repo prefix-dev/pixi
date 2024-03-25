@@ -23,7 +23,7 @@ pub struct Args {
     shell: Option<ShellEnum>,
 
     /// The path to 'pixi.toml'
-    #[arg(long)]
+    #[arg(long, env = "PIXI_PROJECT_MANIFEST")]
     manifest_path: Option<PathBuf>,
 
     #[clap(flatten)]
