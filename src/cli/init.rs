@@ -57,6 +57,13 @@ platforms = ["{{ platforms|join("\", \"") }}"]
 [dependencies]
 
 "#;
+const PYROJECT_TEMPLATE: &str = r#"
+[tool.pixi.project]
+name = "{{ name }}"
+channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
+platforms = ["{{ platforms|join("\", \"") }}"]
+
+"#;
 
 const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
 .pixi
@@ -147,9 +154,42 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             config.default_channels().to_vec()
         };
 
-        let rv = render_project(&env, name, version, &author, channels, &platforms);
-        fs::write(&manifest_path, rv).into_diagnostic()?;
-    };
+        // Inject a tool.pixi.project section into an existing pyproject.toml file if there is one without
+        if dir.join(consts::PYPROJECT_MANIFEST).is_file() {
+            let path = dir.join(consts::PYPROJECT_MANIFEST);
+            let file = fs::read_to_string(path.clone()).unwrap();
+            if !file.contains("[tool.pixi.project]") {
+                let rv = env
+                    .render_named_str(
+                        consts::PYPROJECT_MANIFEST,
+                        PYROJECT_TEMPLATE,
+                        context! {
+                            name,
+                            channels,
+                            platforms
+                        },
+                    )
+                    .unwrap();
+                if let Err(e) = {
+                    fs::OpenOptions::new()
+                        .append(true)
+                        .open(path.clone())
+                        .and_then(|mut p| p.write_all(rv.as_bytes()))
+                } {
+                    tracing::warn!(
+                        "Warning, couldn't update '{}' because of: {}",
+                        path.to_string_lossy(),
+                        e
+                    );
+                }
+            }
+
+        // Create a pixi.toml
+        } else {
+            let rv = render_project(&env, name, version, &author, channels, &platforms);
+            fs::write(&manifest_path, rv).into_diagnostic()?;
+        };
+    }
 
     // create a .gitignore if one is missing
     if let Err(e) = create_or_append_file(&gitignore_path, GITIGNORE_TEMPLATE) {
