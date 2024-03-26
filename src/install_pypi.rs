@@ -392,8 +392,9 @@ fn need_reinstall(
 /// and what we need to download from the registry.
 /// Also determine what we need to remove.
 fn whats_the_plan<'a>(
-    required: &'a [&'a CombinedPypiPackageData],
-    installed: &SitePackages<'_>,
+    required: &Vec<&'a CombinedPypiPackageData>,
+    editables: &Vec<ResolvedEditable>,
+    mut site_packages: &mut SitePackages<'_>,
     registry_index: &'a mut RegistryWheelIndex<'a>,
     uv_cache: &Cache,
     python_version: &Version,
@@ -413,10 +414,40 @@ fn whats_the_plan<'a>(
     // i.e. need to be removed before being installed
     let mut reinstalls = vec![];
 
-    // TODO: Do something with editable packages
+    for resolved_editable in editables {
+        match resolved_editable {
+            ResolvedEditable::Installed(dist) => {
+                tracing::debug!("Treating editable requirement as immutable: {dist}");
+
+                // Remove from the site-packages index, to avoid marking as extraneous.
+                let Some(editable) = dist.as_editable() else {
+                    tracing::warn!("Editable requirement is not editable: {dist}");
+                    continue;
+                };
+                let existing = site_packages.remove_editables(editable);
+                if existing.is_empty() {
+                    tracing::error!("Editable requirement is not installed: {dist}");
+                    continue;
+                }
+            }
+            ResolvedEditable::Built(built) => {
+                tracing::debug!("Treating editable requirement as mutable: {built}");
+
+                // Remove any editable installs.
+                let existing = site_packages.remove_editables(built.editable.raw());
+                reinstalls.extend(existing);
+
+                // Remove any non-editable installs of the same package.
+                let existing = site_packages.remove_packages(built.name());
+                reinstalls.extend(existing);
+
+                local.push(built.wheel.clone());
+            }
+        }
+    }
 
     // Filter out packages not installed by uv
-    let installed = installed.iter().filter(|dist| {
+    let installed = site_packages.iter().filter(|dist| {
         dist.installer()
             .unwrap_or_default()
             .is_some_and(|installer| installer == "uv")
@@ -519,18 +550,10 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
     Ok(())
 }
 
-/// Wrapper around ResolvedEditable
-/// but also contains a boolean to indicate if the editable is present in the prefix
-/// this makes the subsequent code a bit easier
-struct ResolvedEditableExt {
-    resolved_editable: ResolvedEditable,
-    present_in_prefix: bool,
-}
-
 /// Result of resolving editables
 /// we need to store the temp_dir until the install is finished
-struct ResolvedEditableExts {
-    resolved_editables: Vec<ResolvedEditableExt>,
+struct EditablesWithTemp {
+    resolved_editables: Vec<ResolvedEditable>,
     // In the uv code they are also keeping track of the temp_dir
     // which I do not completely understand because the wheels
     // should already be in the cache
@@ -551,13 +574,12 @@ struct ResolvedEditableExts {
 ///
 async fn resolve_editables(
     lock_file_dir: &Path,
-    editables: &[&CombinedPypiPackageData],
+    editables: Vec<&CombinedPypiPackageData>,
     site_packages: &SitePackages<'_>,
     uv_context: &UvResolutionContext,
     tags: &Tags,
     build_dispatch: &BuildDispatch<'_>,
-) -> miette::Result<ResolvedEditableExts> {
-    let mut editable_present_in_prefix = HashSet::new();
+) -> miette::Result<EditablesWithTemp> {
     let mut to_build = vec![];
     let mut installed = vec![];
 
@@ -607,14 +629,12 @@ async fn resolve_editables(
                 } else {
                     // The editable is not up to date
                     // but present
-                    editable_present_in_prefix.insert(editable.path.clone());
                     to_build.push(editable);
                 }
             }
+            // Somehow gives us multiple editables
+            // let's just build it
             _ => {
-                editable_present_in_prefix.insert(editable.path.clone());
-                // Somehow gives us multiple editables
-                // let's just build it
                 to_build.push(editable);
             }
         }
@@ -622,18 +642,21 @@ async fn resolve_editables(
 
     // Now we need to build the editables
     let (built_dists, temp_dir) = if !to_build.is_empty() {
+        // Set-up the reporter
         let options = UvReporterOptions::new()
-            .with_length(editables.len() as u64)
-            .with_capacity(editables.len() + 30)
+            .with_length(to_build.len() as u64)
+            .with_capacity(to_build.len() + 30)
             .with_starting_tasks(
-                editables
+                to_build
                     .iter()
-                    .map(|(pkg, _)| format!("building: {}", pkg.name)),
+                    .map(|local| format!("building: {}", local.path.display())),
             )
             .with_top_level_message("Resolving editables");
 
         // Create a tempdir to store the built editables
         let temp = tempdir().into_diagnostic()?;
+
+        // Build the editables
         let built_editables = Downloader::new(
             &uv_context.cache,
             &tags,
@@ -649,8 +672,18 @@ async fn resolve_editables(
         (vec![], None)
     };
 
-    Ok(ResolvedEditableExts {
-        resolved_editables: vec![],
+    // Map into the ResolvedEditableExt struct
+    // Contains InstalledDist or BuiltDist
+    // for previously installed and currently built distributions respectively
+    let built_editables = built_dists
+        .into_iter()
+        .map(|dist| ResolvedEditable::Built(dist));
+    let installed_editables = installed
+        .into_iter()
+        .map(|dist| ResolvedEditable::Installed(dist));
+
+    Ok(EditablesWithTemp {
+        resolved_editables: built_editables.chain(installed_editables).collect(),
         temp_dir,
     })
 }
@@ -732,16 +765,29 @@ pub async fn update_python_distributions(
     let _lock = venv.lock().into_diagnostic()?;
 
     // Partition into editables and non-editables
-
     let (editables, python_packages) = python_packages
         .into_iter()
         .partition::<Vec<_>, _>(|(pkg, _)| pkg.editable);
 
-    // Build the editable packages
+    // Find out what packages are already installed
+    let mut site_packages =
+        SitePackages::from_executable(&venv).expect("could not create site-packages");
 
-    let installed = SitePackages::from_executable(&venv).expect("could not create site-packages");
+    // Resolve the editable packages first, as they need to be built beforehand
+    let editables_with_temp = resolve_editables(
+        lock_file_dir,
+        editables,
+        &site_packages,
+        &uv_context,
+        &tags,
+        &build_dispatch,
+    )
+    .await?;
+
+    // This is used to find wheels that are available from the registry
     let mut registry_index =
         RegistryWheelIndex::new(&uv_context.cache, &tags, &uv_context.index_locations);
+
     // Partition into those that should be linked from the cache (`local`), those that need to be
     // downloaded (`remote`), and those that should be removed (`extraneous`).
     let PixiInstallPlan {
@@ -750,8 +796,9 @@ pub async fn update_python_distributions(
         reinstalls,
         extraneous,
     } = whats_the_plan(
-        python_packages.as_slice(),
-        &installed,
+        &python_packages,
+        &editables_with_temp.resolved_editables,
+        &mut site_packages,
         &mut registry_index,
         &uv_context.cache,
         venv.interpreter().python_version(),
