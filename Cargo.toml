@@ -171,7 +171,6 @@ rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev
 rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "e5aaed3e2551399985e3c11a87c2c0aedb31b0d3" }
 rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "e5aaed3e2551399985e3c11a87c2c0aedb31b0d3" }
 rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "e5aaed3e2551399985e3c11a87c2c0aedb31b0d3" }
-
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 #rattler_digest = { path = "../rattler/crates/rattler_digest" }
 #rattler_networking = { path = "../rattler/crates/rattler_networking" }
