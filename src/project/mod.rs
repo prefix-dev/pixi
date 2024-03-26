@@ -159,7 +159,7 @@ impl Project {
         let project_toml = match find_project_manifest() {
             Some(file) => file,
             None => miette::bail!(
-                "could not find {} or {}",
+                "could not find {} or {} which is configured to use pixi",
                 PROJECT_MANIFEST,
                 PYPROJECT_MANIFEST
             ),
