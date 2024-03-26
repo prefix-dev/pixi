@@ -534,6 +534,7 @@ pub fn verify_package_platform_satisfiability(
                     // If this is path based package we need to check if the source tree hash still matches.
                     // and if it is a directory
                     if let UrlOrPath::Path(path) = &record.0.url_or_path {
+                        let path = project_root.join(path);
                         if path.is_dir() {
                             let hashable = PypiSourceTreeHashable::from_directory(path)
                                 .map_err(|e| {

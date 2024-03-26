@@ -421,7 +421,7 @@ impl PyPiRequirement {
                 let verbatim = VerbatimUrl::from_path(canonicalized.clone()).with_given(given);
 
                 if *editable == Some(true) {
-                    if !path.is_dir() {
+                    if !canonicalized.is_dir() {
                         return Err(AsPep508Error::EditableIsNotDir { path: path.clone() });
                     }
 

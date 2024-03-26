@@ -582,7 +582,7 @@ packages:
   name: package-with-extras
   version: 0.0.2
   path: ./package_with_extras
-  sha256: 19df16358ffb05b4c85aa41db2d677c133f4a37decb265a5050d13ebefa7bf49
+  sha256: c2160511f4d81f291503314dccd8ef5c739ec3f57e0e4e570b2e08da77ba36fc
   requires_dist:
   - boltons
   - click ; extra == 'cli'
