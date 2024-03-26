@@ -106,57 +106,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         //  - Use .condarc as channel config
         //  - Implement it for `[crate::project::manifest::ProjectManifest]` to do this for other filetypes, e.g. (pyproject.toml, requirements.txt)
         let (conda_deps, pypi_deps, channels) = conda_env_to_manifest(conda_env_file, &config)?;
-
-        let rv = env
-            .render_named_str(
-                consts::PROJECT_MANIFEST,
-                PROJECT_TEMPLATE,
-                context! {
-                    name,
-                    version,
-                    author,
-                    channels,
-                    platforms
-                },
-            )
-            .unwrap();
-
+        let rv = render_project(&env, name, version, &author, channels, &platforms);
         let mut project = Project::from_str(&dir, &rv)?;
         for spec in conda_deps {
-            match &args.platforms.is_empty() {
-                true => project.manifest.add_dependency(
+            for platform in platforms.iter() {
+                // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
+                project.manifest.add_dependency(
                     &spec,
                     crate::SpecType::Run,
-                    None,
+                    Some(platform.parse().into_diagnostic()?),
                     &FeatureName::default(),
-                )?,
-                false => {
-                    for platform in args.platforms.iter() {
-                        // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
-                        project.manifest.add_dependency(
-                            &spec,
-                            crate::SpecType::Run,
-                            Some(platform.parse().into_diagnostic()?),
-                            &FeatureName::default(),
-                        )?;
-                    }
-                }
+                )?;
             }
         }
         for spec in pypi_deps {
-            match &args.platforms.is_empty() {
-                true => project
-                    .manifest
-                    .add_pypi_dependency(&spec.0, &spec.1, None)?,
-                false => {
-                    for platform in args.platforms.iter() {
-                        project.manifest.add_pypi_dependency(
-                            &spec.0,
-                            &spec.1,
-                            Some(platform.parse().into_diagnostic()?),
-                        )?;
-                    }
-                }
+            for platform in platforms.iter() {
+                project.manifest.add_pypi_dependency(
+                    &spec.0,
+                    &spec.1,
+                    Some(platform.parse().into_diagnostic()?),
+                )?;
             }
         }
         project.save()?;
@@ -178,19 +147,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             config.default_channels().to_vec()
         };
 
-        let rv = env
-            .render_named_str(
-                consts::PROJECT_MANIFEST,
-                PROJECT_TEMPLATE,
-                context! {
-                    name,
-                    version,
-                    author,
-                    channels,
-                    platforms
-                },
-            )
-            .unwrap();
+        let rv = render_project(&env, name, version, &author, channels, &platforms);
         fs::write(&manifest_path, rv).into_diagnostic()?;
     };
 
@@ -220,6 +177,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     );
 
     Ok(())
+}
+
+fn render_project(
+    env: &Environment<'_>,
+    name: String,
+    version: &str,
+    author: &Option<(String, String)>,
+    channels: Vec<String>,
+    platforms: &Vec<String>,
+) -> String {
+    env.render_named_str(
+        consts::PROJECT_MANIFEST,
+        PROJECT_TEMPLATE,
+        context! {
+            name,
+            version,
+            author,
+            channels,
+            platforms
+        },
+    )
+    .unwrap()
 }
 
 fn get_name_from_dir(path: &Path) -> miette::Result<String> {
