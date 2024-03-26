@@ -246,7 +246,7 @@ pub async fn resolve_pypi(
     }
 
     // Get the Pypi requirements
-    // partion the requirements into editable and non-editable requirements
+    // partition the requirements into editable and non-editable requirements
     let (editables, requirements): (Vec<_>, Vec<_>) = dependencies
         .iter()
         .flat_map(|(name, req)| req.iter().map(move |req| (name, req)))
