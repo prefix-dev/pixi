@@ -11,8 +11,6 @@ install = "cargo install --path . --locked"
 test = "cargo test"
 test-all = "cargo test --all-features"
 lint = "pre-commit run --all"
-generate-schema = { cmd="python model.py > schema.json" , cwd = "schema"}
-test-schema = {cmd = "pytest -s", depends_on = "generate-schema", cwd = "schema"}
 bump = "tbump --only-patch"
 
 [dependencies]
@@ -20,16 +18,10 @@ bump = "tbump --only-patch"
 pre-commit = "~=3.3.0"
 
 # Needed for building rattler
-rust = "~=1.75.0"
+rust = "~=1.76.0"
 openssl = "3.*"
 pkg-config = "0.29.*"
 git = "2.42.0.*"
-
-# Needed for the schema
-pytest = ">=8.0.2,<8.1"
-jsonschema = "*"
-pydantic = ">=2.6.3,<2.7"
-pyyaml = ">=6.0.1,<6.1"
 
 # Needed for the citation
 cffconvert = ">=2.0.0,<2.1"
@@ -52,5 +44,17 @@ docs = "mkdocs serve"
 deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
 deploy-dev = "mike deploy --push dev devel"
 
+[feature.schema.tasks]
+generate-schema = { cmd="python model.py > schema.json" , cwd = "schema"}
+test-schema = {cmd = "pytest -s", depends_on = "generate-schema", cwd = "schema"}
+
+[feature.schema.dependencies]
+python = ">=3.11"
+pytest = ">=8.0.2,<8.1"
+jsonschema = "*"
+pydantic = ">=2.6.3,<2.7"
+pyyaml = ">=6.0.1,<6.1"
+
 [environments]
 docs = ["docs"]
+schema = ["schema"]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Optional, Literal
 
 from pydantic import (
     AnyHttpUrl,
@@ -18,6 +18,23 @@ UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
 GitUrl = Annotated[
     str, StringConstraints(pattern=r"((git|ssh|http(s)?)|(git@[\w\.]+))(:(\/\/)?)([\w\.@:\/\\-~]+)")
 ]
+Platform = (
+    Literal["linux-32"]
+    | Literal["linux-64"]
+    | Literal["linux-aarch64"]
+    | Literal["linux-armv6l"]
+    | Literal["linux-armv7l"]
+    | Literal["linux-ppc64le"]
+    | Literal["linux-ppc64"]
+    | Literal["linux-s390x"]
+    | Literal["linux-riscv32"]
+    | Literal["linux-riscv64"]
+    | Literal["osx-64"]
+    | Literal["osx-arm64"]
+    | Literal["win-32"]
+    | Literal["win-64"]
+    | Literal["win-arm64"]
+)
 
 
 class StrictBaseModel(BaseModel):
@@ -52,10 +69,10 @@ class Project(StrictBaseModel):
     channels: list[Channel] = Field(
         None, description="The conda channels that can be used in the project"
     )
-    platforms: list[NonEmptyStr] = Field(description="The platforms that the project supports")
+    platforms: list[Platform] = Field(description="The platforms that the project supports")
     license: NonEmptyStr | None = Field(None, description="The license of the project")
     license_file: PathNoBackslash | None = Field(
-        None, description="The path to the license file of the project"
+        None, alias="license-file", description="The path to the license file of the project"
     )
     readme: PathNoBackslash | None = Field(
         None, description="The path to the readme file of the project"

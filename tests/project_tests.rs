@@ -66,3 +66,17 @@ async fn parse_project() {
     assert_debug_snapshot!(dependency_names(&project, Platform::OsxArm64));
     assert_debug_snapshot!(dependency_names(&project, Platform::Win64));
 }
+
+#[tokio::test]
+async fn parse_valid_schema_projects() {
+    // Test all files in the schema/examples/valid directory
+    let schema_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema/examples/valid");
+    for entry in std::fs::read_dir(schema_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
+            let pixi_toml = std::fs::read_to_string(&path).unwrap();
+            let _project = Project::from_str(&PathBuf::from(""), &pixi_toml).unwrap();
+        }
+    }
+}
