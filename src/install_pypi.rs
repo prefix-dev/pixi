@@ -5,7 +5,6 @@ use std::borrow::Cow;
 
 use distribution_filename::DistFilename;
 
-use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
 use pep508_rs::VerbatimUrl;
@@ -13,7 +12,7 @@ use platform_tags::Tags;
 use requirements_txt::EditableRequirement;
 use tempfile::{tempdir, TempDir};
 use url::Url;
-use uv_build::PyProjectToml;
+
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
 use uv_resolver::InMemoryIndex;
 
@@ -30,7 +29,7 @@ use install_wheel_rs::linker::LinkMode;
 use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
@@ -282,7 +281,7 @@ fn need_reinstall(
             };
 
             match direct_url_json {
-                pypi_types::DirectUrl::LocalDirectory { url, dir_info: _ } => {
+                pypi_types::DirectUrl::LocalDirectory { url, dir_info } => {
                     // Recreate file url
                     let result = Url::parse(&url);
                     match result {
@@ -299,6 +298,10 @@ fn need_reinstall(
                             tracing::warn!("could not parse file url: {}", url);
                             return Ok(ValidateInstall::Reinstall);
                         }
+                    }
+                    // If editable status changed also re-install
+                    if dir_info.editable.unwrap_or_default() != locked.editable {
+                        return Ok(ValidateInstall::Reinstall);
                     }
                 }
                 pypi_types::DirectUrl::ArchiveUrl {
@@ -394,7 +397,7 @@ fn need_reinstall(
 fn whats_the_plan<'a>(
     required: &Vec<&'a CombinedPypiPackageData>,
     editables: &Vec<ResolvedEditable>,
-    mut site_packages: &mut SitePackages<'_>,
+    site_packages: &mut SitePackages<'_>,
     registry_index: &'a mut RegistryWheelIndex<'a>,
     uv_cache: &Cache,
     python_version: &Version,
@@ -414,14 +417,15 @@ fn whats_the_plan<'a>(
     // i.e. need to be removed before being installed
     let mut reinstalls = vec![];
 
+    // First decide what we need to do with any editables
     for resolved_editable in editables {
         match resolved_editable {
             ResolvedEditable::Installed(dist) => {
-                tracing::debug!("Treating editable requirement as immutable: {dist}");
+                tracing::debug!("Treating editable install as non-mutated: {dist}");
 
                 // Remove from the site-packages index, to avoid marking as extraneous.
                 let Some(editable) = dist.as_editable() else {
-                    tracing::warn!("Editable requirement is not editable: {dist}");
+                    tracing::warn!("Requested editable is actually not editable");
                     continue;
                 };
                 let existing = site_packages.remove_editables(editable);
@@ -498,7 +502,7 @@ fn whats_the_plan<'a>(
             continue;
         }
 
-        // Do we have in the cache?
+        // Do we have in the registry cache?
         let wheel = registry_index
             .get(&pkg.name)
             .find(|(version, _)| **version == pkg.version);
@@ -558,18 +562,17 @@ struct EditablesWithTemp {
     // which I do not completely understand because the wheels
     // should already be in the cache
     // But lets follow their lead for now
+    #[allow(dead_code)]
     temp_dir: Option<TempDir>,
 }
 
-/// Function to figure out what we should do with any editables
-///
-/// # Description
+/// Function to figure out what we should do with any editables:
 ///
 /// So we need to figure out if the editables still need to be built, or if they are *ready* to be installed
-/// Because an editable install is metadata and a .pth file containt the path the building of it is a bit different when compared to
-/// regular wheels.
+/// Because an editable install is metadata and a .pth file containing the path the building of it is a bit different when compared to
+/// regular wheels. They are kind of stripped wheels essentially.
 ///
-/// UV has the concept of a `ResolvedEditable`, which is an editable that has just been built or is already installed.
+/// UV has the concept of a `ResolvedEditable`, which is an editable that has either jsut been built or is already installed.
 /// We can use this to figure out what we need to do with an editable in the prefix.
 ///
 async fn resolve_editables(
@@ -617,23 +620,26 @@ async fn resolve_editables(
                 // with the installed distribution
                 if ArchiveTimestamp::up_to_date_with(&editable.path, ArchiveTarget::Install(dist))
                     .into_diagnostic()?
-                // If the editable is dynamic, we need to rebuild it
+                    // If the editable is dynamic, we need to rebuild it
                     && !uv_installer::is_dynamic(&EditableRequirement {
                         url: VerbatimUrl::from_url(url.clone()),
                         extras: vec![],
                         // Only this field is actually used in the `is_dynamic` function
                         path: editable.path.clone(),
                     })
+                    // And the dist is already editable
+                    && dist.is_editable()
                 {
+                    // Keep it as is
                     installed.push((*dist).clone());
                 } else {
-                    // The editable is not up to date
-                    // but present
+                    // The editable is not up to date but present
+                    // rebuild it
                     to_build.push(editable);
                 }
             }
-            // Somehow gives us multiple editables
-            // let's just build it
+            // Somehow `existing` gives us multiple editables
+            // let's just build it and re-install all
             _ => {
                 to_build.push(editable);
             }
@@ -773,7 +779,7 @@ pub async fn update_python_distributions(
     let mut site_packages =
         SitePackages::from_executable(&venv).expect("could not create site-packages");
 
-    // Resolve the editable packages first, as they need to be built beforehand
+    // Resolve the editable packages first, as they need to be built before-hand
     let editables_with_temp = resolve_editables(
         lock_file_dir,
         editables,

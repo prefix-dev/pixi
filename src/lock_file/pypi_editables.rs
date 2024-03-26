@@ -9,7 +9,7 @@ use pypi_types::Metadata23;
 use requirements_txt::EditableRequirement;
 use uv_cache::Cache;
 use uv_dispatch::BuildDispatch;
-use uv_installer::{BuiltEditable, DownloadReporter, Downloader};
+use uv_installer::{DownloadReporter};
 use uv_traits::{BuildContext, BuildKind, SourceBuildTrait};
 use zip::ZipArchive;
 
