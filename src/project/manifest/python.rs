@@ -451,9 +451,9 @@ impl PyPiRequirement {
                     })?;
                 Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(uv_url)))
             }
-            PyPiRequirement::Url { url, extras: _ } => Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(
-                url.clone(),
-            ))),
+            PyPiRequirement::Url { url, extras: _ } => Some(pep508_rs::VersionOrUrl::Url(
+                VerbatimUrl::from_url(url.clone()),
+            )),
             PyPiRequirement::RawVersion(version) => version.clone().into(),
         };
 

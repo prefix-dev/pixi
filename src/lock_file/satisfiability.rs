@@ -749,6 +749,7 @@ mod tests {
             hash: None,
             requires_dist: vec![],
             requires_python: None,
+            editable: false,
         };
         let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@abcd").unwrap();
         // This should satisfy:
