@@ -753,13 +753,13 @@ mod tests {
         };
         let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg@abcd").unwrap();
         // This should satisfy:
-        assert!(pypi_satifisfies(&locked_data, &spec));
+        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
         let non_matching_spec =
             Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd").unwrap();
         // This should not
-        assert!(!pypi_satifisfies(&locked_data, &non_matching_spec));
+        assert!(!pypi_satifisfies_requirement(&locked_data, &non_matching_spec));
         // Removing the rev from the Requirement should satisfy any revision
         let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap();
-        assert!(pypi_satifisfies(&locked_data, &spec));
+        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
     }
 }
