@@ -9,7 +9,7 @@ use pypi_types::Metadata23;
 use requirements_txt::EditableRequirement;
 use uv_cache::Cache;
 use uv_dispatch::BuildDispatch;
-use uv_installer::{DownloadReporter};
+use uv_installer::DownloadReporter;
 use uv_traits::{BuildContext, BuildKind, SourceBuildTrait};
 use zip::ZipArchive;
 
@@ -18,48 +18,48 @@ use crate::uv_reporter::{UvReporter, UvReporterOptions};
 #[derive(thiserror::Error, Debug)]
 pub enum BuildEditablesError {
     #[error("error during setting up of editable build environment")]
-    BuildSetupError {
+    BuildSetup {
         // Because of anyhow error
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     #[error("error during editable metadata extraction")]
-    MetadataError {
+    Metadata {
         // Because of anyhow error
         source: Box<dyn std::error::Error + Send + Sync>,
     },
 
     #[error("error during editable build")]
-    BuildError {
+    Build {
         #[from]
         source: uv_build::Error,
     },
 
     #[error("error during parsing of editable metadata")]
-    MetadataParseError {
+    MetadataParse {
         #[from]
         source: pypi_types::Error,
     },
 
-    #[error("error creating tempory dir for editable wheel build")]
-    IoError {
+    #[error("error creating temporary dir for editable wheel build")]
+    Io {
         #[from]
         source: std::io::Error,
     },
 
     #[error("error reading wheel metadata for editable")]
-    WheelMetadataError {
+    WheelMetadata {
         #[from]
         source: install_wheel_rs::Error,
     },
 
     #[error("error open wheel archive for editable built wheel")]
-    ZipError {
+    Zip {
         #[from]
         source: zip::result::ZipError,
     },
 
     #[error("error parsing wheel filename for editable")]
-    WheelFilenameError {
+    WheelFilename {
         #[from]
         source: distribution_filename::WheelFilenameError,
     },
@@ -91,25 +91,25 @@ async fn build_editable(
             BuildKind::Editable,
         )
         .await
-        .map_err(|err| BuildEditablesError::BuildSetupError { source: err.into() })?;
+        .map_err(|err| BuildEditablesError::BuildSetup { source: err.into() })?;
 
     let disk_filename = source_build
         .metadata()
         .await
-        .map_err(|err| BuildEditablesError::MetadataError { source: err.into() })?;
+        .map_err(|err| BuildEditablesError::Metadata { source: err.into() })?;
 
     // Check if we have the metadata director
     // if this is None we have no option to build the wheel
     if let Some(metadata_directory) = disk_filename {
         let content = std::fs::read(metadata_directory.join("METADATA"))
-            .map_err(|e| BuildEditablesError::MetadataError { source: e.into() })?;
+            .map_err(|e| BuildEditablesError::Metadata { source: e.into() })?;
         Ok(Metadata23::parse_metadata(&content)?)
     } else {
         let temp_dir = tempfile::tempdir_in(cache.root())?;
         let wheel = source_build
             .build(temp_dir.path())
             .await
-            .map_err(|e| BuildEditablesError::BuildError { source: e })?;
+            .map_err(|e| BuildEditablesError::Build { source: e })?;
         Ok(read_wheel_metadata(
             &WheelFilename::from_str(&wheel)?,
             &temp_dir.path().join(wheel),

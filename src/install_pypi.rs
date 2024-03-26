@@ -395,7 +395,7 @@ fn need_reinstall(
 /// and what we need to download from the registry.
 /// Also determine what we need to remove.
 fn whats_the_plan<'a>(
-    required: &Vec<&'a CombinedPypiPackageData>,
+    required: &[&'a CombinedPypiPackageData],
     editables: &Vec<ResolvedEditable>,
     site_packages: &mut SitePackages<'_>,
     registry_index: &'a mut RegistryWheelIndex<'a>,
@@ -572,7 +572,7 @@ struct EditablesWithTemp {
 /// Because an editable install is metadata and a .pth file containing the path the building of it is a bit different when compared to
 /// regular wheels. They are kind of stripped wheels essentially.
 ///
-/// UV has the concept of a `ResolvedEditable`, which is an editable that has either jsut been built or is already installed.
+/// UV has the concept of a `ResolvedEditable`, which is an editable that has either just been built or is already installed.
 /// We can use this to figure out what we need to do with an editable in the prefix.
 ///
 async fn resolve_editables(
@@ -665,7 +665,7 @@ async fn resolve_editables(
         // Build the editables
         let built_editables = Downloader::new(
             &uv_context.cache,
-            &tags,
+            tags,
             &uv_context.registry_client,
             build_dispatch,
         )
@@ -679,14 +679,10 @@ async fn resolve_editables(
     };
 
     // Map into the ResolvedEditableExt struct
-    // Contains InstalledDist or BuiltDist
+    // contains InstalledDist or BuiltDist
     // for previously installed and currently built distributions respectively
-    let built_editables = built_dists
-        .into_iter()
-        .map(|dist| ResolvedEditable::Built(dist));
-    let installed_editables = installed
-        .into_iter()
-        .map(|dist| ResolvedEditable::Installed(dist));
+    let built_editables = built_dists.into_iter().map(ResolvedEditable::Built);
+    let installed_editables = installed.into_iter().map(ResolvedEditable::Installed);
 
     Ok(EditablesWithTemp {
         resolved_editables: built_editables.chain(installed_editables).collect(),
@@ -772,7 +768,7 @@ pub async fn update_python_distributions(
 
     // Partition into editables and non-editables
     let (editables, python_packages) = python_packages
-        .into_iter()
+        .iter()
         .partition::<Vec<_>, _>(|(pkg, _)| pkg.editable);
 
     // Find out what packages are already installed

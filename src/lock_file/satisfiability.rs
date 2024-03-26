@@ -65,10 +65,10 @@ pub enum PlatformUnsat {
     #[error("when converting {0} into a pep508 requirement")]
     AsPep508Error(PackageName, #[source] AsPep508Error),
 
-    #[error("editable pypi dependency on conda installed package '{0}' is not supported")]
-    EditableDependencyOnCondaInstalledPackage(PackageName, EditableRequirement),
+    #[error("editable pypi dependency on conda resolved package '{0}' is not supported")]
+    EditableDependencyOnCondaInstalledPackage(PackageName, Box<EditableRequirement>),
 
-    #[error("direct url reference to a conda installed package '{0}' is not supported")]
+    #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
     DirectUrlDependencyOnCondaInstalledPackage(PackageName),
 
     #[error("locked package {0} should be editable")]
@@ -435,7 +435,8 @@ pub fn verify_package_platform_satisfiability(
                     match requirement {
                         RequirementOrEditable::Editable(name, req) => {
                             return Err(PlatformUnsat::EditableDependencyOnCondaInstalledPackage(
-                                name, req,
+                                name,
+                                Box::new(req),
                             ));
                         }
                         RequirementOrEditable::Pep508Requirement(req)
@@ -757,7 +758,10 @@ mod tests {
         let non_matching_spec =
             Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd").unwrap();
         // This should not
-        assert!(!pypi_satifisfies_requirement(&locked_data, &non_matching_spec));
+        assert!(!pypi_satifisfies_requirement(
+            &locked_data,
+            &non_matching_spec
+        ));
         // Removing the rev from the Requirement should satisfy any revision
         let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap();
         assert!(pypi_satifisfies_requirement(&locked_data, &spec));
