@@ -450,8 +450,7 @@ pub async fn resolve_pypi(
                         dist.url
                             .given()
                             .map(|path| UrlOrPath::Path(PathBuf::from(path)))
-                            // When using a direct url reference like https://foo/bla.whl we do not have a given
-                            .unwrap_or_else(|| UrlOrPath::Url(dist.url.to_url())),
+                            .expect("path should be given"),
                         None,
                     ),
                 };
@@ -507,10 +506,16 @@ pub async fn resolve_pypi(
                     SourceDist::Git(git) => (git.url.to_url().into(), hash, false),
                     SourceDist::Path(path) => {
                         // Compute the hash of the package based on the source tree.
-                        let hash = PypiSourceTreeHashable::from_directory(&path.path)
-                            .into_diagnostic()
-                            .context("failed to compute hash of pypi source tree")?
-                            .hash();
+                        let hash = if path.path.is_dir() {
+                            Some(
+                                PypiSourceTreeHashable::from_directory(&path.path)
+                                    .into_diagnostic()
+                                    .context("failed to compute hash of pypi source tree")?
+                                    .hash(),
+                            )
+                        } else {
+                            None
+                        };
 
                         // Create the url for the lock file. This is based on the passed in URL
                         // instead of from the source path to copy the path that was passed in from
@@ -519,10 +524,9 @@ pub async fn resolve_pypi(
                             .url
                             .given()
                             .map(|path| UrlOrPath::Path(PathBuf::from(path)))
-                            // When using a direct url reference like https://foo/bla.whl we do not have a given
-                            .unwrap_or_else(|| path.url.to_url().into());
+                            .expect("path should be given");
 
-                        (url_or_path, Some(hash), path.editable)
+                        (url_or_path, hash, path.editable)
                     }
                 };
 

@@ -307,6 +307,8 @@ pub enum AsPep508Error {
         source: url::ParseError,
         url: String,
     },
+    #[error("using an editable flag for a path that is not a directory: {path}")]
+    EditableIsNotDir { path: PathBuf },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -419,6 +421,10 @@ impl PyPiRequirement {
                 let verbatim = VerbatimUrl::from_path(canonicalized.clone()).with_given(given);
 
                 if *editable == Some(true) {
+                    if !path.is_dir() {
+                        return Err(AsPep508Error::EditableIsNotDir { path: path.clone() });
+                    }
+
                     return Ok(RequirementOrEditable::Editable(
                         name.clone(),
                         requirements_txt::EditableRequirement {

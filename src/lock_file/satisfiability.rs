@@ -532,19 +532,22 @@ pub fn verify_package_platform_satisfiability(
 
                 if pypi_packages_visited.insert(idx) {
                     // If this is path based package we need to check if the source tree hash still matches.
+                    // and if it is a directory
                     if let UrlOrPath::Path(path) = &record.0.url_or_path {
-                        let hashable = PypiSourceTreeHashable::from_directory(path)
-                            .map_err(|e| {
-                                PlatformUnsat::FailedToDetermineSourceTreeHash(
+                        if path.is_dir() {
+                            let hashable = PypiSourceTreeHashable::from_directory(path)
+                                .map_err(|e| {
+                                    PlatformUnsat::FailedToDetermineSourceTreeHash(
+                                        record.0.name.clone(),
+                                        e,
+                                    )
+                                })?
+                                .hash();
+                            if Some(hashable) != record.0.hash {
+                                return Err(PlatformUnsat::SourceTreeHashMismatch(
                                     record.0.name.clone(),
-                                    e,
-                                )
-                            })?
-                            .hash();
-                        if Some(hashable) != record.0.hash {
-                            return Err(PlatformUnsat::SourceTreeHashMismatch(
-                                record.0.name.clone(),
-                            ));
+                                ));
+                            }
                         }
                     }
 
