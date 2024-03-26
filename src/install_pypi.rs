@@ -208,17 +208,6 @@ enum ValidateInstall {
     Reinstall,
 }
 
-//TODO(tim): Vendored this function from uv there is a PR #2510 that exposes this function
-/// Read the `direct_url.json` file from a `.dist-info` directory.
-fn direct_url_json(path: &Path) -> miette::Result<Option<pypi_types::DirectUrl>> {
-    let path = path.join("direct_url.json");
-    let Ok(file) = std::fs::File::open(path) else {
-        return Ok(None);
-    };
-    let direct_url = serde_json::from_reader(file).into_diagnostic()?;
-    Ok(Some(direct_url))
-}
-
 /// Check freshness of a locked url against an installed dist
 fn check_url_freshness(locked_url: &Url, installed_dist: &InstalledDist) -> miette::Result<bool> {
     if let Ok(archive) = locked_url.to_file_path() {
@@ -261,7 +250,7 @@ fn need_reinstall(
 
         // For installed distributions check the direct_url.json to check if a re-install is needed
         InstalledDist::Url(direct_url) => {
-            let direct_url_json = match direct_url_json(&direct_url.path) {
+            let direct_url_json = match InstalledDist::direct_url(&direct_url.path) {
                 Ok(Some(direct_url)) => direct_url,
                 Ok(None) => {
                     tracing::warn!(
