@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: mozilla-actions/sccache-action@v0.0.4
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - run: |
@@ -72,7 +72,7 @@ jobs:
           components: clippy
 
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: mozilla-actions/sccache-action@v0.0.4
 
       - name: Run clippy
         run: cargo clippy
@@ -104,7 +104,7 @@ jobs:
         include:
           - { name: "Linux",       target: x86_64-unknown-linux-musl,  os: ubuntu-20.04 }
           - { name: "macOS",       target: x86_64-apple-darwin,        os: macOS-latest }
-          - { name: "macOS-arm",      target: aarch64-apple-darwin,       os: macOS-14 }
+          - { name: "macOS-arm",   target: aarch64-apple-darwin,       os: macOS-14 }
           - { name: "Windows",     target: x86_64-pc-windows-msvc,     os: windows-latest }
     steps:
       - uses: actions/checkout@v4
@@ -114,7 +114,7 @@ jobs:
 #      - uses: Swatinem/rust-cache@v2
 
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: mozilla-actions/sccache-action@v0.0.4
 
       - name: Show version information (Rust, cargo, GCC)
         shell: bash
@@ -152,6 +152,7 @@ jobs:
           - { name: "macOS-arm",      target: aarch64-apple-darwin,       os: macOS-14 }  # macOS-14 is the ARM chipset
 
           - { name: "Windows",        target: x86_64-pc-windows-msvc,     os: windows-latest }
+          - { name: "Windows-arm",    target: aarch64-pc-windows-msvc,    os: windows-latest }
     env:
       #
       # These are some environment variables that configure the build so that the binary size is reduced.
@@ -194,7 +195,7 @@ jobs:
 
 #      - uses: Swatinem/rust-cache@v2
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: mozilla-actions/sccache-action@v0.0.4
 
       - name: Setup | Install cargo-wix [Windows]
         continue-on-error: true

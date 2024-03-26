@@ -15,8 +15,8 @@ repository = "https://github.com/author/project"
 documentation = "https://docs.project.com"
 
 [dependencies]
-test = "bla"
-test1 = "bli"
+test = "*"
+test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 
@@ -27,8 +27,8 @@ testpypi1 = "*"
 requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]} # Using the map allows the user to add `extras`
 
 [host-dependencies]
-test = "bla"
-test1 = "bli"
+test = "*"
+test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 
@@ -43,6 +43,7 @@ build = "conda build ."
 test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
 test2 = { cmd = "pytest", cwd = "tests"}
 test3 = { cmd = "pytest", depends_on = ["test2"] }
+test4 = { cmd = "pytest", cwd = "tests", depends_on = ["test2"] }
 test5 = { cmd = "pytest" }
 test6 = { depends_on = ["test5"] }
 
@@ -52,10 +53,16 @@ libc = { family="glibc", version="2.17" }
 cuda = "10.1"
 
 [feature.test.dependencies]
-test = "bla"
+test = "*"
 
 [feature.test2.dependencies]
-test = "bla"
+test = "*"
+
+[feature.prod]
+activation = {scripts = ["activate.sh", "deactivate.sh"]}
+
+[feature.lint]
+dependencies = {flake8 = "3.7.9", black = "19.10b0"}
 
 [environments]
 test = {features = ["test"], solve-group = "test"}
@@ -68,8 +75,8 @@ scripts = ["activate.sh", "deactivate.sh"]
 scripts = ["env_setup.bat"]
 
 [target.linux-64.dependencies]
-test = "bla"
-test1 = "bli"
+test = "*"
+test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 
@@ -80,14 +87,14 @@ testpypi1 = "*"
 requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]} # Using the map allows the user to add `extras`
 
 [target.osx-64.host-dependencies]
-test = "bla"
-test1 = "bli"
+test = "*"
+test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 
 [target.linux-64.build-dependencies]
-test = "bla"
-test1 = "bli"
+test = "*"
+test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 
@@ -96,11 +103,12 @@ build = "conda build ."
 test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
 test2 = { cmd = "pytest", cwd = "tests"}
 test3 = { cmd = "pytest", depends_on = ["test2"] }
+test4 = { cmd = "pytest", cwd = "tests", depends_on = ["test2"] }
 test5 = { cmd = "pytest" }
 test6 = { depends_on = ["test5"] }
 
 [feature.test.target.linux-64.dependencies]
-test = "bla"
+test = "*"
 
 [feature.cuda]
 activation = {scripts = ["cuda_activation.sh"]}
