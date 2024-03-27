@@ -84,12 +84,11 @@ The size of the previously mentioned "Cache dir" in Mebibytes.
 ## Project info
 
 Everything below `Project` is info about the project you're currently in.
-This info is only available if your path has a manifest file (`pixi.toml`).
+This info is only available if your path has a [manifest file](../configuration.md).
 
 ### Manifest file
 
-The path to the manifest file that describes the project.
-For now, this can only be `pixi.toml`.
+The path to the [manifest file](../configuration.md) that describes the project.
 
 ### Last updated
 
