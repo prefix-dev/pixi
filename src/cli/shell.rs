@@ -22,7 +22,7 @@ use rattler_shell::shell::CmdExe;
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The path to 'pixi.toml'
-    #[arg(long)]
+    #[arg(long, env = "PIXI_PROJECT_MANIFEST")]
     manifest_path: Option<PathBuf>,
 
     #[clap(flatten)]
