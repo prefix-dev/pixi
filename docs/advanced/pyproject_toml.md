@@ -2,7 +2,7 @@
 We support the use of the `pyproject.toml` as our manifest file in pixi.
 This allows the user to keep one file with all configuration.
 The `pyproject.toml` file is a standard for Python projects.
-We don't advice to use the `pyproject.toml` file for anything else than python projects, the `pixi.toml` is better suited for other types of projects.
+We don't advise to use the `pyproject.toml` file for anything else than python projects, the `pixi.toml` is better suited for other types of projects.
 
 ## Initial setup of the `pyproject.toml` file
 When you already have a `pyproject.toml` file in your project, you can add the following section to it:
