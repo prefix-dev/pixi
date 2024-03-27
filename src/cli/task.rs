@@ -126,6 +126,7 @@ impl From<AddArgs> for Task {
                 inputs: None,
                 outputs: None,
                 cwd: value.cwd,
+                env: Default::default(),
             })
         }
     }
