@@ -173,6 +173,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         search_exact_package(package_name, repo_data, stdout).await?;
     }
 
+    Project::manifest_env_warning(args.manifest_path.as_deref(), true);
     Ok(())
 }
 

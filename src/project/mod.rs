@@ -169,16 +169,29 @@ impl Project {
         NamedSource::new(PROJECT_MANIFEST, self.manifest.contents.clone())
     }
 
-    /// Loads a project from manifest file.
-    pub fn load(manifest_path: &Path) -> miette::Result<Self> {
-        // Warn if using manifest defined by environment variable
-        if let Ok(env_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
-            if env_path.as_str() == manifest_path.to_str().unwrap() {
-                tracing::warn!(
-                    "Using manifest `{env_path}` from `PIXI_PROJECT_MANIFEST` environment variable"
-                );
+    /// Warn if using a manifest defined by an environment variable
+    pub fn manifest_env_warning(manifest_path: Option<&Path>, after_command: bool) {
+        if let Some(manifest_path) = manifest_path {
+            // Warn if using manifest defined by environment variable
+            if let Ok(env_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
+                if env_path.as_str() == manifest_path.to_str().unwrap() {
+                    if after_command {
+                        tracing::warn!(
+                        "Used manifest `{env_path}` from `PIXI_PROJECT_MANIFEST` environment variable. May have been set by `pixi shell`."
+                    )
+                    } else {
+                        tracing::warn!(
+                        "Using manifest `{env_path}` from `PIXI_PROJECT_MANIFEST` environment variable. May have been set by `pixi shell`."
+                    );
+                    }
+                }
             }
         }
+    }
+
+    /// Loads a project from manifest file.
+    pub fn load(manifest_path: &Path) -> miette::Result<Self> {
+        Self::manifest_env_warning(Some(manifest_path), false);
 
         // Determine the parent directory of the manifest file
         let full_path = dunce::canonicalize(manifest_path).into_diagnostic()?;

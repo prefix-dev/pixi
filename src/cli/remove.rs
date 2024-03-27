@@ -134,5 +134,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await?;
 
+    Project::manifest_env_warning(args.manifest_path.as_deref(), true);
     Ok(())
 }

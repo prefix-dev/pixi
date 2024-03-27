@@ -193,6 +193,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             "{}No packages found.",
             console::style(console::Emoji("✘ ", "")).red(),
         );
+
+        Project::manifest_env_warning(args.manifest_path.as_deref(), true);
         return Ok(());
     }
 
@@ -205,6 +207,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         print_packages_as_table(&packages_to_output).expect("an io error occurred");
     }
 
+    Project::manifest_env_warning(args.manifest_path.as_deref(), true);
     Ok(())
 }
 

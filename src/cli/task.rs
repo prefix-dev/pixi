@@ -280,6 +280,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
+    Project::manifest_env_warning(args.manifest_path.as_deref(), true);
     Ok(())
 }
 

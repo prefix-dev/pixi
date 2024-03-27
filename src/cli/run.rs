@@ -189,6 +189,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_diagnostic()?;
     }
 
+    Project::manifest_env_warning(args.manifest_path.as_deref(), true);
     Ok(())
 }
 
