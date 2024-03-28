@@ -6,17 +6,15 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Authenticate pixi to access private channels">
       
       
-      
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/authentication/">
-      
-      
-        <link rel="prev" href="../../ide_integration/pycharm/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/pyproject_toml/">
       
       
-        <link rel="next" href="../advanced_tasks/">
+        <link rel="prev" href="../global_configuration/">
+      
+      
+        <link rel="next" href="../../examples/cpp-sdl/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -24,7 +22,7 @@
     
     
       
-        <title>Authenticate pixi with a server - Pixi by prefix.dev</title>
+        <title>Pyproject.toml - Pixi by prefix.dev</title>
       
     
     
@@ -61,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Authenticate pixi with a server - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Pyproject.toml - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="Authenticate pixi to access private channels" >
+        <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/authentication.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/pyproject_toml.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -73,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/authentication/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/pyproject_toml/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Authenticate pixi with a server - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Pyproject.toml - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="Authenticate pixi to access private channels" >
+        <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/authentication.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/pyproject_toml.png" >
       
     
     
@@ -104,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#examples" class="md-skip">
+        <a href="#pyprojecttoml-in-pixi" class="md-skip">
           Skip to content
         </a>
       
@@ -143,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Authenticate pixi with a server
+              Pyproject.toml
             
           </span>
         </div>
@@ -522,28 +520,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Authentication
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../authentication/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -552,60 +532,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      Examples
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#where-does-pixi-store-the-authentication-information" class="md-nav__link">
-    <span class="md-ellipsis">
-      Where does pixi store the authentication information?
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fallback-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Fallback storage
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#override-the-authentication-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Override the authentication storage
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -741,10 +667,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../pyproject_toml/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Pyproject.toml
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -753,6 +699,71 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#initial-setup-of-the-pyprojecttoml-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      Initial setup of the pyproject.toml file
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python-dependency" class="md-nav__link">
+    <span class="md-ellipsis">
+      Python dependency
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependency-section" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dependency section
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-system-section" class="md-nav__link">
+    <span class="md-ellipsis">
+      Build-system section
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1000,6 +1011,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1008,36 +1021,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
+  <a href="#initial-setup-of-the-pyprojecttoml-file" class="md-nav__link">
     <span class="md-ellipsis">
-      Examples
+      Initial setup of the pyproject.toml file
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#where-does-pixi-store-the-authentication-information" class="md-nav__link">
+  <a href="#python-dependency" class="md-nav__link">
     <span class="md-ellipsis">
-      Where does pixi store the authentication information?
+      Python dependency
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#fallback-storage" class="md-nav__link">
+  <a href="#dependency-section" class="md-nav__link">
     <span class="md-ellipsis">
-      Fallback storage
+      Dependency section
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#override-the-authentication-storage" class="md-nav__link">
+  <a href="#example" class="md-nav__link">
     <span class="md-ellipsis">
-      Override the authentication storage
+      Example
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-system-section" class="md-nav__link">
+    <span class="md-ellipsis">
+      Build-system section
     </span>
   </a>
   
@@ -1058,7 +1080,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/authentication.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/pyproject_toml.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1066,74 +1088,141 @@
   
 
 
-  <h1>Authentication</h1>
-
-<p>You can authenticate pixi with a server like prefix.dev, a private quetz instance or anaconda.org.
-Different servers use different authentication methods.
-In this documentation page, we detail how you can authenticate against the different servers and where the authentication information is stored.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Usage:<span class="w"> </span>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span><span class="w"> </span>&lt;HOST&gt;
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>Arguments:
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>&lt;HOST&gt;<span class="w">  </span>The<span class="w"> </span>host<span class="w"> </span>to<span class="w"> </span>authenticate<span class="w"> </span>with<span class="w"> </span><span class="o">(</span>e.g.<span class="w"> </span>repo.prefix.dev<span class="o">)</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>Options:
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span>--token<span class="w"> </span>&lt;TOKEN&gt;<span class="w">              </span>The<span class="w"> </span>token<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>authentication<span class="w"> </span>with<span class="w"> </span>prefix.dev<span class="o">)</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span>--username<span class="w"> </span>&lt;USERNAME&gt;<span class="w">        </span>The<span class="w"> </span>username<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>basic<span class="w"> </span>HTTP<span class="w"> </span>authentication<span class="o">)</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">      </span>--password<span class="w"> </span>&lt;PASSWORD&gt;<span class="w">        </span>The<span class="w"> </span>password<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>basic<span class="w"> </span>HTTP<span class="w"> </span>authentication<span class="o">)</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">      </span>--conda-token<span class="w"> </span>&lt;CONDA_TOKEN&gt;<span class="w">  </span>The<span class="w"> </span>token<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span>on<span class="w"> </span>anaconda.org<span class="w"> </span>/<span class="w"> </span>quetz<span class="w"> </span>authentication
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span>-v,<span class="w"> </span>--verbose...<span class="w">                 </span>More<span class="w"> </span>output<span class="w"> </span>per<span class="w"> </span>occurrence
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>-q,<span class="w"> </span>--quiet...<span class="w">                   </span>Less<span class="w"> </span>output<span class="w"> </span>per<span class="w"> </span>occurrence
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span>-h,<span class="w"> </span>--help<span class="w">                       </span>Print<span class="w"> </span><span class="nb">help</span>
+<h1 id="pyprojecttoml-in-pixi"><code>pyproject.toml</code> in pixi<a class="headerlink" href="#pyprojecttoml-in-pixi" title="Permanent link">#</a></h1>
+<p>We support the use of the <code>pyproject.toml</code> as our manifest file in pixi.
+This allows the user to keep one file with all configuration.
+The <code>pyproject.toml</code> file is a standard for Python projects.
+We don't advise to use the <code>pyproject.toml</code> file for anything else than python projects, the <code>pixi.toml</code> is better suited for other types of projects.</p>
+<h2 id="initial-setup-of-the-pyprojecttoml-file">Initial setup of the <code>pyproject.toml</code> file<a class="headerlink" href="#initial-setup-of-the-pyprojecttoml-file" title="Permanent link">#</a></h2>
+<p>When you already have a <code>pyproject.toml</code> file in your project, you can add the following section to it:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[tool.pixi.project]</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-<p>The different options are "token", "conda-token" and "username + password".</p>
-<p>The token variant implements a standard "Bearer Token" authentication as is used on the prefix.dev platform.
-A Bearer Token is sent with every request as an additional header of the form <code>Authentication: Bearer &lt;TOKEN&gt;</code>.</p>
-<p>The conda-token option is used on anaconda.org and can be used with a quetz server. With this option, the token is sent as part of the URL following this scheme: <code>conda.anaconda.org/t/&lt;TOKEN&gt;/conda-forge/linux-64/...</code>.</p>
-<p>The last option, username &amp; password, are used for "Basic HTTP Authentication". This is the equivalent of adding <code>http://user:password@myserver.com/...</code>. This authentication method can be configured quite easily with a reverse NGinx or Apache server and is thus commonly used in self-hosted systems.</p>
-<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">#</a></h2>
-<p>Login to prefix.dev:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>prefix.dev<span class="w"> </span>--token<span class="w"> </span>pfx_jj8WDzvnuTEHGdAhwRZMC1Ag8gSto8
+This is the minimum requirement for pixi to understand and parse the project.</p>
+<p>If you use <code>pixi init</code> in a folder that has a <code>pyproject.toml</code> file, pixi will automatically add the <code>[tool.pixi.project]</code> section to the file.
+And will also add some defaults to the <code>.gitignore</code> and <code>.gitattributes</code> file.</p>
+<h2 id="python-dependency">Python dependency<a class="headerlink" href="#python-dependency" title="Permanent link">#</a></h2>
+<p>The <code>pyproject.toml</code> file supports the <code>requires_python</code> field.
+Pixi understands that field and automatically adds the version to the dependencies.</p>
+<p>This is an example of a <code>pyproject.toml</code> file with the <code>requires_python</code> field, which will be used as the python dependency:
+<div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[project]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.9&quot;</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">[tool.pixi.project]</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-<p>Login to anaconda.org:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>anaconda.org<span class="w"> </span>--conda-token<span class="w"> </span>xy-72b914cc-c105-4ec7-a969-ab21d23480ed
+Which is equivalent to:
+<div class="language-toml highlight"><span class="filename">equivalent pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="k">[dependencies]</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.9&quot;</span>
+</span></code></pre></div></p>
+<h2 id="dependency-section">Dependency section<a class="headerlink" href="#dependency-section" title="Permanent link">#</a></h2>
+<p>The <code>pyproject.toml</code> file supports the <code>dependencies</code> field.
+Pixi understands that field and automatically adds the dependencies to the project as <code>[pypi-dependencies]</code>.</p>
+<p>This is an example of a <code>pyproject.toml</code> file with the <code>dependencies</code> field:
+<div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[project]</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.9&quot;</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="s2">&quot;numpy&quot;</span><span class="p">,</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="s2">&quot;pandas&quot;</span><span class="p">,</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="s2">&quot;matplotlib&quot;</span><span class="p">,</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">]</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="k">[tool.pixi.project]</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
+</span></code></pre></div></p>
+<p>Which is equivalent to:
+<div class="language-toml highlight"><span class="filename">equivalent pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[project]</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="k">[pypi-dependencies]</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">pandas</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">matplotlib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="k">[dependencies]</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.9&quot;</span>
+</span></code></pre></div></p>
+<p>You can overwrite these with conda dependencies by adding them to the <code>dependencies</code> field:
+<div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[project]</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.9&quot;</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="s2">&quot;numpy&quot;</span><span class="p">,</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="s2">&quot;pandas&quot;</span><span class="p">,</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="s2">&quot;matplotlib&quot;</span><span class="p">,</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="p">]</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="k">[tool.pixi.project]</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="k">[tool.pixi.dependencies]</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="n">pandas</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="n">matplotlib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span></code></pre></div>
-<p>Login to a basic HTTP secured server:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>myserver.com<span class="w"> </span>--username<span class="w"> </span>user<span class="w"> </span>--password<span class="w"> </span>password
+This would result in the conda dependencies being installed and the pypi dependencies being ignored.
+As pixi takes the conda dependencies over the pypi dependencies.</p>
+<h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">#</a></h2>
+<p>As the <code>pyproject.toml</code> file supports the full pixi spec with <code>[tool.pixi]</code> prepended an example would look like this:
+<div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[project]</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.9&quot;</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="s2">&quot;numpy&quot;</span><span class="p">,</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="s2">&quot;pandas&quot;</span><span class="p">,</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="s2">&quot;matplotlib&quot;</span><span class="p">,</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="s2">&quot;ruff&quot;</span><span class="p">,</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="p">]</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="k">[tool.pixi.project]</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="k">[tool.pixi.dependencies]</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="n">compilers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="n">cmake</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="k">[tool.pixi.tasks]</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python my_project/main.py&quot;</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="n">lint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ruff lint&quot;</span>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="k">[tool.pixi.system-requirements]</span>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="n">cuda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;11.0&quot;</span>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>
+</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="k">[tool.pixi.feature.test.dependencies]</span>
+</span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="n">pytest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a>
+</span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="k">[tool.pixi.feature.test.tasks]</span>
+</span><span id="__span-6-31"><a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span>
+</span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a>
+</span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a><span class="k">[tool.pixi.environments]</span>
+</span><span id="__span-6-34"><a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">]</span>
+</span></code></pre></div></p>
+<h2 id="build-system-section">Build-system section<a class="headerlink" href="#build-system-section" title="Permanent link">#</a></h2>
+<p>The <code>pyproject.toml</code> file normally contains a <code>[build-system]</code> section.
+Currently, pixi does not use this section, but it is recommended to keep it in the file for compatibility with other tools.</p>
+<div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[build-system]</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setuptools&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;wheel&quot;</span><span class="p">]</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;setuptools.build_meta&quot;</span>
 </span></code></pre></div>
-<h2 id="where-does-pixi-store-the-authentication-information">Where does pixi store the authentication information?<a class="headerlink" href="#where-does-pixi-store-the-authentication-information" title="Permanent link">#</a></h2>
-<p>The storage location for the authentication information is system-dependent. By default, pixi tries to use the keychain to store this sensitive information securely on your machine.</p>
-<p>On Windows, the credentials are stored in the "credentials manager". Searching for <code>rattler</code> (the underlying library pixi uses) you should find any credentials stored by pixi (or other rattler-based programs).</p>
-<p>On macOS, the passwords are stored in the keychain. To access the password, you can use the <code>Keychain Access</code> program that comes pre-installed on macOS. Searching for <code>rattler</code> (the underlying library pixi uses) you should find any credentials stored by pixi (or other rattler-based programs).</p>
-<p>On Linux, one can use <code>GNOME Keyring</code> (or just Keyring) to access credentials that are securely stored by <code>libsecret</code>. Searching for <code>rattler</code> should list all the credentials stored by pixi and other rattler-based programs.</p>
-<h2 id="fallback-storage">Fallback storage<a class="headerlink" href="#fallback-storage" title="Permanent link">#</a></h2>
-<p>If you run on a server with none of the aforementioned keychains available, then pixi falls back to store the credentials in an <em>insecure</em> JSON file.
-This JSON file is located at <code>~/.rattler/credentials.json</code> and contains the credentials.</p>
-<h2 id="override-the-authentication-storage">Override the authentication storage<a class="headerlink" href="#override-the-authentication-storage" title="Permanent link">#</a></h2>
-<p>You can use the <code>RATTLER_AUTH_FILE</code> environment variable to override the default location of the credentials file.
-When this environment variable is set, it provides the only source of authentication data that is used by pixi.</p>
-<p>E.g.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">RATTLER_AUTH_FILE</span><span class="o">=</span><span class="nv">$HOME</span>/credentials.json
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># You can also specify the file in the command line</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--auth-file<span class="w"> </span><span class="nv">$HOME</span>/credentials.json<span class="w"> </span>...
-</span></code></pre></div>
-<p>The JSON should follow the following format:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="nt">&quot;*.prefix.dev&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">        </span><span class="nt">&quot;BearerToken&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_token&quot;</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nt">&quot;otherhost.com&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">        </span><span class="nt">&quot;BasicHttp&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">            </span><span class="nt">&quot;username&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_username&quot;</span><span class="p">,</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">            </span><span class="nt">&quot;password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_password&quot;</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">        </span><span class="p">}</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span><span class="nt">&quot;conda.anaconda.org&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">        </span><span class="nt">&quot;CondaToken&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_token&quot;</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="p">}</span>
-</span></code></pre></div>
-<p>Note: if you use a wildcard in the host, any subdomain will match (e.g. <code>*.prefix.dev</code> also matches <code>repo.prefix.dev</code>).</p>
-<p>Lastly you can set the authentication override file in the <a href="../global_configuration/">global configuration file</a>.</p>
 
 
 
@@ -1205,9 +1294,9 @@ When this environment variable is set, it provides the only source of authentica
           
             
             <a
-              href="../../ide_integration/pycharm/"
+              href="../global_configuration/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: PyCharm"
+              aria-label="Previous: Global Configuration"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1218,7 +1307,7 @@ When this environment variable is set, it provides the only source of authentica
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  PyCharm
+                  Global Configuration
                 </div>
               </div>
             </a>
@@ -1228,16 +1317,16 @@ When this environment variable is set, it provides the only source of authentica
           
             
             <a
-              href="../advanced_tasks/"
+              href="../../examples/cpp-sdl/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Tasks"
+              aria-label="Next: C++/Cmake"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Tasks
+                  C++/Cmake
                 </div>
               </div>
               <div class="md-footer__button md-icon">

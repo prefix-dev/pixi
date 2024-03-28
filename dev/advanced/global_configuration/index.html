@@ -14,7 +14,7 @@
         <link rel="prev" href="../github_actions/">
       
       
-        <link rel="next" href="../../examples/cpp-sdl/">
+        <link rel="next" href="../pyproject_toml/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -736,6 +736,27 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pyproject_toml/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pyproject.toml
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1048,8 +1069,14 @@
 configuration (that does not belong into the project file). The configuration is
 loaded in the following order:</p>
 <ol>
-<li>Global configuration folder (e.g. <code>~/.config/pixi/config.toml</code> on Linux,
-   dependent on XDG_CONFIG_HOME)</li>
+<li>XDG compliant configuration folder (<code>$XDG_CONFIG_HOME/pixi/config.toml</code> or
+   <code>$HOME/.config/pixi/config.toml</code>)</li>
+<li>Global configuration folder, depending on the OS:<ul>
+<li>Linux: <code>$HOME/.config/pixi/config.toml</code></li>
+<li>macOS: <code>$HOME/Library/Application Support/pixi/config.toml</code></li>
+<li>Windows: <code>%APPDATA%\pixi\config.toml</code></li>
+</ul>
+</li>
 <li>Global .pixi folder: <code>~/.pixi/config.toml</code> (or <code>$PIXI_HOME/config.toml</code> if
    the <code>PIXI_HOME</code> environment variable is set)</li>
 <li>Project-local .pixi folder: <code>$PIXI_PROJECT/.pixi/config.toml</code></li>
@@ -1229,16 +1256,16 @@ packages on Github</a>.</p>
           
             
             <a
-              href="../../examples/cpp-sdl/"
+              href="../pyproject_toml/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: C++/Cmake"
+              aria-label="Next: Pyproject.toml"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  C++/Cmake
+                  Pyproject.toml
                 </div>
               </div>
               <div class="md-footer__button md-icon">

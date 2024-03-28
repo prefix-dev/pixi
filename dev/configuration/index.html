@@ -951,6 +951,27 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/pyproject_toml/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pyproject.toml
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1480,7 +1501,13 @@
 <p>The <code>pixi.toml</code> is the pixi project configuration file, also known as the project manifest.</p>
 <p>A <code>toml</code> file is structured in different tables.
 This document will explain the usage of the different tables.
-For more technical documentation check <a href="https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html">crates.io</a>.</p>
+For more technical documentation check pixi on <a href="https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html">crates.io</a>.</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>We also support the <code>pyproject.toml</code> file. It has the same structure as the <code>pixi.toml</code> file. except that you need to prepend the tables with <code>tool.pixi</code> instead of just the table name.
+For example, the <code>[project]</code> table becomes <code>[tool.pixi.project]</code>.
+There are also some small extras that are available in the <code>pyproject.toml</code> file, checkout the <a href="../advanced/pyproject_toml/">pyproject.toml</a> documentation for more information.</p>
+</div>
 <h2 id="the-project-table">The <code>project</code> table<a class="headerlink" href="#the-project-table" title="Permanent link">#</a></h2>
 <p>The minimally required information in the <code>project</code> table is:
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[project]</span>
@@ -1490,76 +1517,62 @@ For more technical documentation check <a href="https://docs.rs/pixi/latest/pixi
 </span></code></pre></div></p>
 <h3 id="name"><code>name</code><a class="headerlink" href="#name" title="Permanent link">#</a></h3>
 <p>The name of the project.
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[project]</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;project-name&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;project-name&quot;</span>
 </span></code></pre></div></p>
 <h3 id="channels"><code>channels</code><a class="headerlink" href="#channels" title="Permanent link">#</a></h3>
 <p>This is a list that defines the channels used to fetch the packages from.
 If you want to use channels hosted on <code>anaconda.org</code> you only need to use the name of the channel directly.
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;robostack&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;bioconda&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;nvidia&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;robostack&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;bioconda&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;nvidia&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="p">]</span>
 </span></code></pre></div></p>
 <p>Channels situated on the file system are also supported with <strong>absolute</strong> file paths:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[project]</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;file:///home/user/staged-recipes/build_artifacts&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;file:///home/user/staged-recipes/build_artifacts&quot;</span><span class="p">]</span>
 </span></code></pre></div></p>
 <p>To access private or public channels on <a href="https://prefix.dev/channels">prefix.dev</a> or <a href="https://github.com/mamba-org/quetz">Quetz</a> use the url including the hostname:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[project]</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;https://repo.prefix.dev/channel-name&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;https://repo.prefix.dev/channel-name&quot;</span><span class="p">]</span>
 </span></code></pre></div></p>
 <h3 id="platforms"><code>platforms</code><a class="headerlink" href="#platforms" title="Permanent link">#</a></h3>
 <p>Defines the list of platforms that the project supports.
 Pixi solves the dependencies for all these platforms and puts them in the lockfile (<code>pixi.lock</code>).</p>
-<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[project]</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
+<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 The available platforms are listed here: <a href="https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html">link</a></p>
 <h3 id="version-optional"><code>version</code> (optional)<a class="headerlink" href="#version-optional" title="Permanent link">#</a></h3>
 <p>The version of the project.
 This should be a valid version based on the conda Version Spec.
 See the <a href="https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html">version documentation</a>, for an explanation of what is allowed in a Version Spec.
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[project]</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.2.3&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.2.3&quot;</span>
 </span></code></pre></div></p>
 <h3 id="authors-optional"><code>authors</code> (optional)<a class="headerlink" href="#authors-optional" title="Permanent link">#</a></h3>
 <p>This is a list of authors of the project.
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[project]</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;John Doe &lt;j.doe@prefix.dev&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Marie Curie &lt;mss1867@gmail.com&gt;&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;John Doe &lt;j.doe@prefix.dev&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Marie Curie &lt;mss1867@gmail.com&gt;&quot;</span><span class="p">]</span>
 </span></code></pre></div></p>
 <h3 id="description-optional"><code>description</code> (optional)<a class="headerlink" href="#description-optional" title="Permanent link">#</a></h3>
 <p>This should contain a short description of the project.
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[project]</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;A simple description&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;A simple description&quot;</span>
 </span></code></pre></div></p>
 <h3 id="license-optional"><code>license</code> (optional)<a class="headerlink" href="#license-optional" title="Permanent link">#</a></h3>
 <p>The license as a valid <a href="https://spdx.org/licenses/">SPDX</a> string (e.g. MIT AND Apache-2.0)
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[project]</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">license</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MIT&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">license</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MIT&quot;</span>
 </span></code></pre></div></p>
 <h3 id="license-file-optional"><code>license-file</code> (optional)<a class="headerlink" href="#license-file-optional" title="Permanent link">#</a></h3>
 <p>Relative path to the license file.
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[project]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">license-file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;LICENSE.md&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">license-file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;LICENSE.md&quot;</span>
 </span></code></pre></div></p>
 <h3 id="readme-optional"><code>readme</code> (optional)<a class="headerlink" href="#readme-optional" title="Permanent link">#</a></h3>
 <p>Relative path to the README file.
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[project]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">readme</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;README.md&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">readme</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;README.md&quot;</span>
 </span></code></pre></div></p>
 <h3 id="homepage-optional"><code>homepage</code> (optional)<a class="headerlink" href="#homepage-optional" title="Permanent link">#</a></h3>
 <p>URL of the project homepage.
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[project]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">homepage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://pixi.sh&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">homepage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://pixi.sh&quot;</span>
 </span></code></pre></div></p>
 <h3 id="repository-optional"><code>repository</code> (optional)<a class="headerlink" href="#repository-optional" title="Permanent link">#</a></h3>
 <p>URL of the project source repository.
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[project]</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">repository</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/prefix-dev/pixi&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">repository</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/prefix-dev/pixi&quot;</span>
 </span></code></pre></div></p>
 <h3 id="documentation-optional"><code>documentation</code> (optional)<a class="headerlink" href="#documentation-optional" title="Permanent link">#</a></h3>
 <p>URL of the project documentation.
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[project]</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">documentation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://pixi.sh&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">documentation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://pixi.sh&quot;</span>
 </span></code></pre></div></p>
 <h2 id="the-tasks-table">The <code>tasks</code> table<a class="headerlink" href="#the-tasks-table" title="Permanent link">#</a></h2>
 <p>Tasks are a way to automate certain custom commands in your project.

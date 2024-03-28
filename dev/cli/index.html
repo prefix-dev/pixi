@@ -1074,6 +1074,27 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/pyproject_toml/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pyproject.toml
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1736,9 +1757,10 @@ They both take precedence over <code>--color</code> and <code>PIXI_COLOR</code>.
 <h2 id="init"><code>init</code><a class="headerlink" href="#init" title="Permanent link">#</a></h2>
 <p>This command is used to create a new project.
 It initializes a <code>pixi.toml</code> file and also prepares a <code>.gitignore</code> to prevent the environment from being added to <code>git</code>.</p>
+<p>It also supports the <a href="../advanced/pyproject_toml/"><code>pyproject.toml</code></a> file, if you have a <code>pyproject.toml</code> file in the directory where you run <code>pixi init</code>, it appends the pixi data to the <code>pyproject.toml</code> instead of a new <code>pixi.toml</code> file.</p>
 <h5 id="arguments">Arguments<a class="headerlink" href="#arguments" title="Permanent link">#</a></h5>
 <ol>
-<li><code>[PATH]</code>: Where to place the project (defaults to current path) [default: .]</li>
+<li><code>[PATH]</code>: Where to place the project (defaults to current path) [default: <code>.</code>]</li>
 </ol>
 <h5 id="options">Options<a class="headerlink" href="#options" title="Permanent link">#</a></h5>
 <ul>
@@ -1760,7 +1782,7 @@ We don't support <code>git+</code> urls as dependencies for pip packages and for
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>pixi<span class="w"> </span>init<span class="w"> </span>--import<span class="w"> </span>environment.yml
 </span></code></pre></div>
 <h2 id="add"><code>add</code><a class="headerlink" href="#add" title="Permanent link">#</a></h2>
-<p>Adds dependencies to the <code>pixi.toml</code>.
+<p>Adds dependencies to the <a href="../configuration/">manifest file</a>.
 It will only add if the package with its version constraint is able to work with rest of the dependencies in the project.
 <a href="../advanced/multi_platform_configuration/">More info</a> on multi-platform configuration.</p>
 <h5 id="arguments_1">Arguments<a class="headerlink" href="#arguments_1" title="Permanent link">#</a></h5>
@@ -1769,7 +1791,7 @@ It will only add if the package with its version constraint is able to work with
 </ol>
 <h5 id="options_1">Options<a class="headerlink" href="#options_1" title="Permanent link">#</a></h5>
 <ul>
-<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <code>pixi.toml</code>, by default it searches for one in the parent directories.</li>
+<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--host</code>: Specifies a host dependency, important for building a package.</li>
 <li><code>--build</code>: Specifies a build dependency, important for building a package.</li>
 <li><code>--pypi</code>: Specifies a PyPI dependency, not a conda package.
@@ -1794,12 +1816,12 @@ It will only add if the package with its version constraint is able to work with
 </span></code></pre></div>
 <h2 id="install"><code>install</code><a class="headerlink" href="#install" title="Permanent link">#</a></h2>
 <p>Installs all dependencies specified in the lockfile <code>pixi.lock</code>.
-Which gets generated on <code>pixi add</code> or when you manually change the <code>pixi.toml</code> file and run <code>pixi install</code>.</p>
+Which gets generated on <code>pixi add</code> or when you manually change the <a href="../configuration/">manifest file</a> file and run <code>pixi install</code>.</p>
 <h5 id="options_2">Options<a class="headerlink" href="#options_2" title="Permanent link">#</a></h5>
 <ul>
-<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <code>pixi.toml</code>, by default it searches for one in the parent directories.</li>
+<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--frozen</code>: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
-<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <code>pixi.toml</code><sup id="fnref5:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
+<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref5:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>install
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pixi<span class="w"> </span>install<span class="w"> </span>--manifest-path<span class="w"> </span>~/myproject/pixi.toml
@@ -1809,7 +1831,7 @@ Which gets generated on <code>pixi add</code> or when you manually change the <c
 <h2 id="run"><code>run</code><a class="headerlink" href="#run" title="Permanent link">#</a></h2>
 <p>The <code>run</code> commands first checks if the environment is ready to use.
 When you didn't run <code>pixi install</code> the run command will do that for you.
-The custom tasks defined in the <code>pixi.toml</code> are also available through the run command.</p>
+The custom tasks defined in the <a href="../configuration/">manifest file</a> are also available through the run command.</p>
 <p>You cannot run <code>pixi run source setup.bash</code> as <code>source</code> is not available in the <code>deno_task_shell</code> commandos and not an executable.</p>
 <h5 id="arguments_2">Arguments<a class="headerlink" href="#arguments_2" title="Permanent link">#</a></h5>
 <ol>
@@ -1817,9 +1839,9 @@ The custom tasks defined in the <code>pixi.toml</code> are also available throug
 </ol>
 <h5 id="options_3">Options<a class="headerlink" href="#options_3" title="Permanent link">#</a></h5>
 <ul>
-<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <code>pixi.toml</code>, by default it searches for one in the parent directories.</li>
+<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--frozen</code>: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
-<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <code>pixi.toml</code><sup id="fnref4:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
+<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref4:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>python
@@ -1865,14 +1887,14 @@ By only calling:
 </span></code></pre></div></p>
 </div>
 <h2 id="remove"><code>remove</code><a class="headerlink" href="#remove" title="Permanent link">#</a></h2>
-<p>Removes dependencies from the <code>pixi.toml</code>.</p>
+<p>Removes dependencies from the <a href="../configuration/">manifest file</a>.</p>
 <h5 id="arguments_3">Arguments<a class="headerlink" href="#arguments_3" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;DEPS&gt;...</code>: List of dependencies you wish to remove from the project.</li>
 </ol>
 <h5 id="options_4">Options<a class="headerlink" href="#options_4" title="Permanent link">#</a></h5>
 <ul>
-<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <code>pixi.toml</code>, by default it searches for one in the parent directories.</li>
+<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--host</code>: Specifies a host dependency, important for building a package.</li>
 <li><code>--build</code>: Specifies a build dependency, important for building a package.</li>
 <li><code>--pypi</code>: Specifies a PyPI dependency, not a conda package.</li>
@@ -1894,10 +1916,10 @@ By only calling:
 <p>If you want to make a shorthand for a specific command you can add a task for it.</p>
 <h5 id="options_5">Options<a class="headerlink" href="#options_5" title="Permanent link">#</a></h5>
 <ul>
-<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <code>pixi.toml</code>, by default it searches for one in the parent directories.</li>
+<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 </ul>
 <h3 id="task-add"><code>task add</code><a class="headerlink" href="#task-add" title="Permanent link">#</a></h3>
-<p>Add a task to the <code>pixi.toml</code>, use <code>--depends-on</code> to add tasks you want to run before this task, e.g. build before an execute task.</p>
+<p>Add a task to the <a href="../configuration/">manifest file</a>, use <code>--depends-on</code> to add tasks you want to run before this task, e.g. build before an execute task.</p>
 <h5 id="arguments_4">Arguments<a class="headerlink" href="#arguments_4" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;NAME&gt;</code>: The name of the task.</li>
@@ -1921,7 +1943,7 @@ If you want to use <code>$</code> in the task you need to escape it with a <code
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>build-osx<span class="w"> </span><span class="s2">&quot;METAL=1 cargo build&quot;</span><span class="w"> </span>--platform<span class="w"> </span>osx-64
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>train<span class="w"> </span>python<span class="w"> </span>train.py<span class="w"> </span>--feature<span class="w"> </span>cuda
 </span></code></pre></div>
-<p>This adds the following to the <code>pixi.toml</code>:</p>
+<p>This adds the following to the <a href="../configuration/">manifest file</a>:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[tasks]</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">cow</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cowpy </span><span class="se">\&quot;</span><span class="s2">Hello User</span><span class="se">\&quot;</span><span class="s2">&quot;</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">tls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ls&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cwd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;tests&quot;</span><span class="w"> </span><span class="p">}</span>
@@ -1939,7 +1961,7 @@ If you want to use <code>$</code> in the task you need to escape it with a <code
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--test<span class="w"> </span>test1
 </span></code></pre></div>
 <h3 id="task-remove"><code>task remove</code><a class="headerlink" href="#task-remove" title="Permanent link">#</a></h3>
-<p>Remove the task from the <code>pixi.toml</code></p>
+<p>Remove the task from the <a href="../configuration/">manifest file</a></p>
 <h5 id="arguments_5">Arguments<a class="headerlink" href="#arguments_5" title="Permanent link">#</a></h5>
 <ul>
 <li><code>&lt;NAMES&gt;</code>: The names of the tasks, space separated.</li>
@@ -1987,10 +2009,10 @@ If you want to use <code>$</code> in the task you need to escape it with a <code
 <li><code>--json</code>: Whether to output in json format.</li>
 <li><code>--json-pretty</code>: Whether to output in pretty json format</li>
 <li><code>--sort-by &lt;SORT_BY&gt;</code>: Sorting strategy [default: name] [possible values: size, name, type]</li>
-<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: The path to <code>pixi.toml</code>, by default it searches for one in the parent directories.</li>
+<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: The path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--environment</code>(<code>-e</code>): The environment's packages to list, if non is provided the default environment's packages will be listed.</li>
 <li><code>--frozen</code>: Install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
-<li><code>--locked</code>: Only install if the <code>pixi.lock</code> is up-to-date with the <code>pixi.toml</code><sup id="fnref3:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
+<li><code>--locked</code>: Only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref3:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--no-install</code>: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by <code>--frozen</code> and <code>--locked</code>)</li>
 </ul>
 <p><div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="sb">```</span>shell
@@ -2003,7 +2025,7 @@ If you want to use <code>$</code> in the task you need to escape it with a <code
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>pixi<span class="w"> </span>list<span class="w"> </span>--locked
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>pixi<span class="w"> </span>list<span class="w"> </span>--no-install
 </span></code></pre></div>
-Output will look like this, where <code>python</code> will be green as it is the package that was explicitly added to the <code>pixi.toml</code>:</p>
+Output will look like this, where <code>python</code> will be green as it is the package that was explicitly added to the <a href="../configuration/">manifest file</a>:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>➜<span class="w"> </span>pixi<span class="w"> </span>list
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w"> </span>Package<span class="w">           </span>Version<span class="w">     </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w"> </span>_libgcc_mutex<span class="w">     </span><span class="m">0</span>.1<span class="w">         </span>conda_forge<span class="w">         </span><span class="m">2</span>.5<span class="w"> </span>KiB<span class="w">    </span>conda<span class="w">  </span>_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -2033,9 +2055,9 @@ Output will look like this, where <code>python</code> will be green as it is the
 To exit the pixi shell, simply run <code>exit</code>.</p>
 <h5 id="options_11">Options<a class="headerlink" href="#options_11" title="Permanent link">#</a></h5>
 <ul>
-<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <code>pixi.toml</code>, by default it searches for one in the parent directories.</li>
+<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--frozen</code>: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
-<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <code>pixi.toml</code><sup id="fnref2:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
+<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref2:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to activate the shell in, if none are provided the default environment will be used or a selector will be given to select the right environment.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi<span class="w"> </span>shell
@@ -2055,9 +2077,9 @@ To exit the pixi shell, simply run <code>exit</code>.</p>
 <ul>
 <li><code>--shell &lt;SHELL&gt; (-s)</code>: The shell for which the activation script should be printed. Defaults to the current shell.
     Currently supported variants: [<code>bash</code>,  <code>zsh</code>,  <code>xonsh</code>,  <code>cmd</code>,  <code>powershell</code>,  <code>fish</code>,  <code>nushell</code>]</li>
-<li><code>--manifest-path</code>: the path to <code>pixi.toml</code>, by default it searches for one in the parent directories.</li>
+<li><code>--manifest-path</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--frozen</code>: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
-<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <code>pixi.toml</code><sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
+<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.</li>
 </ul>
 <p><div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>shell-hook
@@ -2081,7 +2103,7 @@ Example use-case, when you want to get rid of the <code>pixi</code> executable i
 </ol>
 <h6 id="options_13">Options<a class="headerlink" href="#options_13" title="Permanent link">#</a></h6>
 <ul>
-<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <code>pixi.toml</code>, by default it searches for one in the parent directories.</li>
+<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses. Defaults to <code>conda-forge</code>. (Allowed to be used more than once)</li>
 <li><code>--limit &lt;LIMIT&gt; (-l)</code>: optionally limit the number of search results</li>
 <li><code>--platform &lt;PLATFORM&gt; (-p)</code>: specify a platform that you want to search for. (default: current platform)</li>
@@ -2109,7 +2131,7 @@ overridden with the <code>--force</code> flag</p>
 More information <a href="../advanced/explain_info_command/">here</a>.</p>
 <h5 id="options_15">Options<a class="headerlink" href="#options_15" title="Permanent link">#</a></h5>
 <ul>
-<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <code>pixi.toml</code>, by default it searches for one in the parent directories.</li>
+<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--extended</code>: extend the information with more slow queries to the system, like directory sizes.</li>
 <li><code>--json</code>: Get a machine-readable version of the information as output.</li>
 </ul>
@@ -2163,10 +2185,10 @@ More information <a href="../advanced/explain_info_command/">here</a>.</p>
 global(system) level.</p>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
-</div>
 <p>Binaries and environments installed globally are stored in <code>~/.pixi</code>
 by default, this can be changed by setting the <code>PIXI_HOME</code> environment
 variable.</p>
+</div>
 <h3 id="global-install"><code>global install</code><a class="headerlink" href="#global-install" title="Permanent link">#</a></h3>
 <p>This command installs package(s) into its own environment and adds the binary to <code>PATH</code>, allowing you to access it anywhere on your system without activating the environment.</p>
 <h5 id="arguments_11">Arguments<a class="headerlink" href="#arguments_11" title="Permanent link">#</a></h5>
@@ -2259,7 +2281,7 @@ they will be listed out in the command output. Here is an example of a few insta
 <p>This subcommand allows you to modify the project configuration through the command line interface.</p>
 <h5 id="options_20">Options<a class="headerlink" href="#options_20" title="Permanent link">#</a></h5>
 <ul>
-<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <code>pixi.toml</code>, by default it searches for one in the parent directories.</li>
+<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 </ul>
 <h3 id="project-channel-add"><code>project channel add</code><a class="headerlink" href="#project-channel-add" title="Permanent link">#</a></h3>
 <p>Add channels to the channel list in the project configuration.
@@ -2385,8 +2407,8 @@ When you add channels, the channels are tested for existence, added to the lockf
 <p>An <strong>up-to-date</strong> lockfile means that the dependencies in the lockfile are allowed by the dependencies in the manifest file.
 For example</p>
 <ul>
-<li>a <code>pixi.toml</code> with <code>python = "&gt;= 3.11"</code> is up-to-date with a <code>name: python, version: 3.11.0</code> in the <code>pixi.lock</code>.</li>
-<li>a <code>pixi.toml</code> with <code>python = "&gt;= 3.12"</code> is <strong>not</strong> up-to-date with a <code>name: python, version: 3.11.0</code> in the <code>pixi.lock</code>.</li>
+<li>a manifest with <code>python = "&gt;= 3.11"</code> is up-to-date with a <code>name: python, version: 3.11.0</code> in the <code>pixi.lock</code>.</li>
+<li>a manifest with <code>python = "&gt;= 3.12"</code> is <strong>not</strong> up-to-date with a <code>name: python, version: 3.11.0</code> in the <code>pixi.lock</code>.</li>
 </ul>
 <p>Being up-to-date does <strong>not</strong> mean that the lockfile holds the latest version available on the channel for the given dependency.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref2:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref3:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref4:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref5:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
 </li>

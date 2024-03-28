@@ -854,6 +854,27 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pyproject_toml/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pyproject.toml
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1325,28 +1346,16 @@ In that case, if pixi cannot find the <code>__cuda</code> virtual package on you
 <p>Pixi caches all previously downloaded packages in a cache folder.
 This cache folder is shared between all pixi projects and globally installed tools.
 Normally the locations would be:</p>
-<table>
-<thead>
-<tr>
-<th>Platform</th>
-<th>Value</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Linux</td>
-<td><code>$XDG_CACHE_HOME/rattler</code> or <code>$HOME</code>/.cache/rattler</td>
-</tr>
-<tr>
-<td>macOS</td>
-<td><code>$HOME</code>/Library/Caches/rattler</td>
-</tr>
-<tr>
-<td>Windows</td>
-<td><code>{FOLDERID_LocalAppData}/rattler</code></td>
-</tr>
-</tbody>
-</table>
+<ol>
+<li>XDG compliant cache folder when it's available (<code>$XDG_CACHE_HOME/pixi</code>
+   or <code>$HOME/.cache/pixi</code>)</li>
+<li>Platform-specific default cache folder:<ul>
+<li>Linux: <code>$XDG_CACHE_HOME/rattler</code> or <code>$HOME</code>/.cache/rattler</li>
+<li>macOS: <code>$HOME</code>/Library/Caches/rattler</li>
+<li>Windows: <code>%APPDATA%\rattler</code></li>
+</ul>
+</li>
+</ol>
 <p>When your system is filling up you can easily remove this folder.
 It will re-download everything it needs the next time you install a project.</p>
 <h3 id="auth-storage">Auth storage<a class="headerlink" href="#auth-storage" title="Permanent link">#</a></h3>
@@ -1356,10 +1365,9 @@ It will re-download everything it needs the next time you install a project.</p>
 <p>The size of the previously mentioned "Cache dir" in Mebibytes.</p>
 <h2 id="project-info">Project info<a class="headerlink" href="#project-info" title="Permanent link">#</a></h2>
 <p>Everything below <code>Project</code> is info about the project you're currently in.
-This info is only available if your path has a manifest file (<code>pixi.toml</code>).</p>
+This info is only available if your path has a <a href="../../configuration/">manifest file</a>.</p>
 <h3 id="manifest-file">Manifest file<a class="headerlink" href="#manifest-file" title="Permanent link">#</a></h3>
-<p>The path to the manifest file that describes the project.
-For now, this can only be <code>pixi.toml</code>.</p>
+<p>The path to the <a href="../../configuration/">manifest file</a> that describes the project.</p>
 <h3 id="last-updated">Last updated<a class="headerlink" href="#last-updated" title="Permanent link">#</a></h3>
 <p>The last time the lockfile was updated, either manually or by pixi itself.</p>
 <h2 id="environment-info">Environment info<a class="headerlink" href="#environment-info" title="Permanent link">#</a></h2>
