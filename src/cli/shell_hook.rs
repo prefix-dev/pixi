@@ -30,7 +30,7 @@ pub struct Args {
     lock_file_usage: LockFileUsageArgs,
 
     /// The environment to activate in the script
-    #[arg(long, short)]
+    #[arg(long, short, env = "PIXI_ENVIRONMENT_NAME")]
     environment: Option<String>,
 }
 

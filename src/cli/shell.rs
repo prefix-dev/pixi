@@ -28,7 +28,8 @@ pub struct Args {
     #[clap(flatten)]
     lock_file_usage: LockFileUsageArgs,
 
-    #[arg(long, short)]
+    /// The environment to list packages for. Defaults to the default environment.
+    #[arg(long, short, env = "PIXI_ENVIRONMENT_NAME")]
     environment: Option<String>,
 
     #[clap(flatten)]

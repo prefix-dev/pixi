@@ -93,7 +93,7 @@ pub struct ListArgs {
 
     /// The environment the list should be generated for
     /// If not specified, the default environment is used.
-    #[arg(long, short)]
+    #[arg(long, short, env = "PIXI_ENVIRONMENT_NAME")]
     pub environment: Option<String>,
 }
 

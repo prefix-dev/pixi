@@ -53,7 +53,7 @@ pub struct Args {
     pub manifest_path: Option<PathBuf>,
 
     /// The environment to list packages for. Defaults to the default environment.
-    #[arg(short, long)]
+    #[arg(long, short, env = "PIXI_ENVIRONMENT_NAME")]
     pub environment: Option<String>,
 
     #[clap(flatten)]
