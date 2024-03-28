@@ -23,6 +23,7 @@ pub mod self_update;
 pub mod shell;
 pub mod shell_hook;
 pub mod task;
+pub mod tree;
 pub mod upload;
 
 #[derive(Parser, Debug)]
@@ -75,6 +76,7 @@ pub enum Command {
     Remove(remove::Args),
     SelfUpdate(self_update::Args),
     List(list::Args),
+    Tree(tree::Args),
 }
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
@@ -230,6 +232,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Remove(cmd) => remove::execute(cmd).await,
         Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
         Command::List(cmd) => list::execute(cmd).await,
+        Command::Tree(cmd) => tree::execute(cmd).await,
     }
 }
 
