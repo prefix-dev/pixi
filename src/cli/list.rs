@@ -53,8 +53,8 @@ pub struct Args {
     pub manifest_path: Option<PathBuf>,
 
     /// The environment to list packages for. Defaults to the default environment.
-    #[arg(short, long)]
-    pub environment: Option<String>,
+    #[arg(short, long, env = "PIXI_ENVIRONMENT_NAME")]
+    pub environment: Option<EnvironmentName>,
 
     #[clap(flatten)]
     pub lock_file_usage: super::LockFileUsageArgs,
@@ -99,9 +99,7 @@ where
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment_name = args
-        .environment
-        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
+    let environment_name = args.environment.unwrap_or(EnvironmentName::Default);
     let environment = project
         .environment(&environment_name)
         .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
@@ -202,16 +200,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         json_packages(&packages_to_output, args.json_pretty);
     } else {
         // print packages as table
-        print_packages_as_table(&packages_to_output).expect("an io error occurred");
+        print_packages_as_table(&packages_to_output, &environment_name)
+            .expect("an io error occurred");
     }
 
     Ok(())
 }
 
-fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
+fn print_packages_as_table(
+    packages: &Vec<PackageToOutput>,
+    environment: &EnvironmentName,
+) -> io::Result<()> {
     let mut writer = tabwriter::TabWriter::new(stdout());
 
     let header_style = console::Style::new().bold();
+    writeln!(
+        writer,
+        "# Packages in environment {}",
+        environment.fancy_display().bold()
+    )?;
     writeln!(
         writer,
         "{}\t{}\t{}\t{}\t{}\t{}",
