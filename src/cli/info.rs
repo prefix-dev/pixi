@@ -379,9 +379,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if args.json {
         println!("{}", serde_json::to_string_pretty(&info).into_diagnostic()?);
+
+        Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
         Ok(())
     } else {
         println!("{}", info);
+
+        Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
         Ok(())
     }
 }

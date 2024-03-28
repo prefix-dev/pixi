@@ -164,6 +164,20 @@ impl Project {
                 PYPROJECT_MANIFEST
             ),
         };
+
+        if std::env::var("PIXI_IN_SHELL").is_ok() {
+            if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
+                if env_manifest_path.as_str() != project_toml.to_str().unwrap() {
+                    tracing::warn!(
+                        "Using manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
+                        env_manifest_path,
+                        project_toml.to_string_lossy()
+                    );
+                    return Self::load(Path::new(env_manifest_path.as_str()));
+                }
+            }
+        }
+
         Self::load(&project_toml)
     }
 
@@ -208,6 +222,24 @@ impl Project {
             None => Project::discover()?,
         };
         Ok(project)
+    }
+
+    /// Warns if Pixi is using a manifest from an environment variable rather than a discovered version
+    pub fn warn_on_discovered_from_env(manifest_path: Option<&Path>) {
+        if manifest_path.is_none() && std::env::var("PIXI_IN_SHELL").is_ok() {
+            let discover_path = find_project_manifest();
+            let env_path = std::env::var("PIXI_PROJECT_MANIFEST");
+
+            if let (Some(discover_path), Ok(env_path)) = (discover_path, env_path) {
+                if env_path.as_str() != discover_path.to_str().unwrap() {
+                    tracing::warn!(
+                        "Used manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
+                        env_path,
+                        discover_path.to_string_lossy()
+                    );
+                }
+            }
+        }
     }
 
     pub fn with_cli_config<C>(mut self, config: C) -> Self
