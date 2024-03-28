@@ -1,5 +1,6 @@
 ---
 source: src/cli/init.rs
+assertion_line: 567
 expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
@@ -74,9 +75,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -115,9 +114,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -156,9 +153,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -197,9 +192,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -238,9 +231,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -279,9 +270,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -320,9 +309,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -361,9 +348,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -402,9 +387,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -443,9 +426,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -484,9 +465,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -525,9 +504,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -566,9 +543,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -607,9 +582,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -648,9 +621,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -689,9 +660,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -730,9 +699,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -781,9 +748,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },
@@ -822,9 +787,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                     },
                 ),
                 subdir: None,
-                namespace: Some(
-                    "",
-                ),
+                namespace: None,
                 md5: None,
                 sha256: None,
             },

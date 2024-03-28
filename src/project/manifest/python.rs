@@ -5,7 +5,6 @@ use serde::{de::Error, Deserialize, Deserializer, Serialize};
 use std::path::{Path, PathBuf};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
-use toml_edit::Item;
 use url::Url;
 
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
@@ -174,14 +173,14 @@ pub enum ParsePyPiRequirementError {
 
 impl fmt::Display for PyPiRequirement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let item: Item = self.clone().into();
-        write!(f, "{item}")
+        let toml = toml_edit::Value::from(self.clone());
+        write!(f, "{toml}")
     }
 }
 
-impl From<PyPiRequirement> for Item {
+impl From<PyPiRequirement> for toml_edit::Value {
     /// PyPiRequirement to a toml_edit item, to put in the manifest file.
-    fn from(val: PyPiRequirement) -> Item {
+    fn from(val: PyPiRequirement) -> toml_edit::Value {
         fn insert_extras(table: &mut toml_edit::InlineTable, extras: &[ExtraName]) {
             if !extras.is_empty() {
                 table.insert(
@@ -217,7 +216,7 @@ impl From<PyPiRequirement> for Item {
                     );
                 }
                 insert_extras(&mut table, extras);
-                Item::Value(toml_edit::Value::InlineTable(table.to_owned()))
+                toml_edit::Value::InlineTable(table.to_owned())
             }
             PyPiRequirement::Git {
                 git: _,
@@ -239,9 +238,9 @@ impl From<PyPiRequirement> for Item {
             PyPiRequirement::Url { url: _, extras: _ } => {
                 unimplemented!("url")
             }
-            PyPiRequirement::RawVersion(version) => Item::Value(toml_edit::Value::String(
-                toml_edit::Formatted::new(version.to_string()),
-            )),
+            PyPiRequirement::RawVersion(version) => {
+                toml_edit::Value::String(toml_edit::Formatted::new(version.to_string()))
+            }
         }
     }
 }
