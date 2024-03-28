@@ -1089,7 +1089,6 @@ mod tests {
     use rstest::*;
     use std::str::FromStr;
     use tempfile::tempdir;
-    use toml_edit::Item;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -1406,7 +1405,7 @@ mod tests {
             .clone()
             .into_iter()
             .flat_map(|d| d.into_iter())
-            .map(|(name, spec)| format!("{} = {}", name.as_source(), Item::from(spec)))
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), toml_edit::Value::from(spec)))
             .join("\n"));
     }
 
