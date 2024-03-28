@@ -819,6 +819,19 @@
           "minLength": 1,
           "title": "Path",
           "type": "string"
+        },
+        "editable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "If true the package will be installed as editable",
+          "title": "Editable"
         }
       },
       "title": "PyPIPathRequirement",

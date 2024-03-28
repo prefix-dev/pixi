@@ -142,6 +142,8 @@ class PyPIPathRequirement(_PyPIRequirement):
         None,
         description="A path to a local source or wheel",
     )
+    editable: Optional[bool] = Field(None, description="If true the package will be installed as editable")
+
 
 
 class PyPIUrlRequirement(_PyPIRequirement):
