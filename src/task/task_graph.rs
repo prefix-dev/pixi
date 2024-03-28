@@ -309,7 +309,7 @@ mod test {
         platform: Option<Platform>,
         environment_name: Option<EnvironmentName>,
     ) -> Vec<String> {
-        let project = Project::from_str(Path::new(""), project_str).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), project_str).unwrap();
 
         let environment = environment_name.map(|name| project.environment(&name).unwrap());
         let search_envs = SearchEnvironments::from_opt_env(&project, environment, platform);
