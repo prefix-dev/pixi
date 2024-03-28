@@ -26,9 +26,7 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project =
         Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
-    let environment_name = args
-        .environment
-        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
+    let environment_name = EnvironmentName::from_arg_or_env_var(args.environment);
     let environment = project
         .environment(&environment_name)
         .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;

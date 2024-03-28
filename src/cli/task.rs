@@ -6,7 +6,6 @@ use itertools::Itertools;
 use miette::miette;
 use rattler_conda_types::Platform;
 use std::path::PathBuf;
-use std::str::FromStr;
 use toml_edit::{Array, Item, Table, Value};
 
 #[derive(Parser, Debug)]
@@ -253,7 +252,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
             );
         }
         Operation::List(args) => {
-            let env = EnvironmentName::from_str(args.environment.as_deref().unwrap_or("default"))?;
+            let env = EnvironmentName::from_arg_or_env_var(args.environment);
             let tasks = project
                 .environment(&env)
                 .ok_or(miette!("Environment `{}` not found in project", env))?
