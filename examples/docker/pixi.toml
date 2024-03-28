@@ -12,6 +12,9 @@ python = ">=3.12"
 flask = ">=3.0.2,<3.1"
 gunicorn = ">=21.2.0,<21.3"
 
+[pypi-dependencies]
+docker-project = { path = ".", editable = true }
+
 [host-dependencies]
 pip = "*"
 
@@ -24,7 +27,6 @@ test = "pytest"
 build = "*"
 hatchling = "*"
 [feature.build.tasks]
-postinstall = "pip install --no-build-isolation --no-deps --disable-pip-version-check -e ."
 build-wheel = "python -m build --no-isolation --wheel ."
 
 [feature.prod.tasks]

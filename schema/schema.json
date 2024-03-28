@@ -512,8 +512,53 @@
         "platforms": {
           "description": "The platforms that the project supports",
           "items": {
-            "minLength": 1,
-            "type": "string"
+            "anyOf": [
+              {
+                "const": "linux-32"
+              },
+              {
+                "const": "linux-64"
+              },
+              {
+                "const": "linux-aarch64"
+              },
+              {
+                "const": "linux-armv6l"
+              },
+              {
+                "const": "linux-armv7l"
+              },
+              {
+                "const": "linux-ppc64le"
+              },
+              {
+                "const": "linux-ppc64"
+              },
+              {
+                "const": "linux-s390x"
+              },
+              {
+                "const": "linux-riscv32"
+              },
+              {
+                "const": "linux-riscv64"
+              },
+              {
+                "const": "osx-64"
+              },
+              {
+                "const": "osx-arm64"
+              },
+              {
+                "const": "win-32"
+              },
+              {
+                "const": "win-64"
+              },
+              {
+                "const": "win-arm64"
+              }
+            ]
           },
           "title": "Platforms",
           "type": "array"
@@ -532,7 +577,7 @@
           "description": "The license of the project",
           "title": "License"
         },
-        "license_file": {
+        "license-file": {
           "anyOf": [
             {
               "pattern": "^[^\\\\]+$",
@@ -544,7 +589,7 @@
           ],
           "default": null,
           "description": "The path to the license file of the project",
-          "title": "License File"
+          "title": "License-File"
         },
         "readme": {
           "anyOf": [
@@ -774,6 +819,19 @@
           "minLength": 1,
           "title": "Path",
           "type": "string"
+        },
+        "editable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "If true the package will be installed as editable",
+          "title": "Editable"
         }
       },
       "title": "PyPIPathRequirement",

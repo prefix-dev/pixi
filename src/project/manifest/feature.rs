@@ -297,7 +297,7 @@ mod tests {
     #[test]
     fn test_dependencies_borrowed() {
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "foo"
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn test_activation() {
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "foo"
