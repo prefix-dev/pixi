@@ -12,7 +12,7 @@ use rattler_conda_types::{
 };
 use rattler_lock::{ConversionError, Package, PypiPackageData, PypiSourceTreeHashable, UrlOrPath};
 use requirements_txt::EditableRequirement;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{
     borrow::Cow,
@@ -82,6 +82,9 @@ pub enum PlatformUnsat {
 
     #[error("source tree hash for {0} does not match the hash in the lock-file")]
     SourceTreeHashMismatch(PackageName),
+
+    #[error("the path '{0}, cannot be canonicalized")]
+    FailedToCanonicalizePath(PathBuf, #[source] std::io::Error),
 }
 
 /// Verifies that all the requirements of the specified `environment` can be satisfied with the
@@ -534,7 +537,9 @@ pub fn verify_package_platform_satisfiability(
                     // If this is path based package we need to check if the source tree hash still matches.
                     // and if it is a directory
                     if let UrlOrPath::Path(path) = &record.0.url_or_path {
-                        let path = project_root.join(path);
+                        let path = dunce::canonicalize(project_root.join(path)).map_err(|e| {
+                            PlatformUnsat::FailedToCanonicalizePath(path.clone(), e)
+                        })?;
                         if path.is_dir() {
                             let hashable = PypiSourceTreeHashable::from_directory(path)
                                 .map_err(|e| {
