@@ -10,9 +10,11 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
+use pyproject_toml::PyProjectToml;
 use rattler_conda_types::ParseStrictness::{Lenient, Strict};
 use rattler_conda_types::{Channel, MatchSpec, Platform};
 use regex::Regex;
+use std::collections::HashMap;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::str::FromStr;
@@ -62,6 +64,13 @@ const PYROJECT_TEMPLATE: &str = r#"
 name = "{{ name }}"
 channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
 platforms = ["{{ platforms|join("\", \"") }}"]
+{%- for env, features in environments|items %}
+{%- if loop.first %}
+
+[tool.pixi.environments]
+{%- endif %}
+{{env}} = {features = {{features}}, solve-group = "default"}
+{%- endfor %}
 
 "#;
 
@@ -159,6 +168,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let path = dir.join(consts::PYPROJECT_MANIFEST);
             let file = fs::read_to_string(path.clone()).unwrap();
             if !file.contains("[tool.pixi.project]") {
+                let pyproject = PyProjectToml::new(&file).unwrap();
+                let environments = environments_from_extras(&pyproject);
                 let rv = env
                     .render_named_str(
                         consts::PYPROJECT_MANIFEST,
@@ -166,7 +177,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         context! {
                             name,
                             channels,
-                            platforms
+                            platforms,
+                            environments,
                         },
                     )
                     .unwrap();
@@ -388,6 +400,20 @@ fn parse_channels(channels: Vec<String>) -> Vec<String> {
     new_channels
 }
 
+pub fn environments_from_extras(pyproject: &PyProjectToml) -> HashMap<String, Vec<String>> {
+    let mut environments = HashMap::new();
+    if let Some(Some(extras)) = &pyproject.project.as_ref().map(|p| &p.optional_dependencies) {
+        for (extra, _reqs) in extras {
+            let features = vec![extra.to_string()];
+            // TODO add self references
+            // for req in reqs.iter() {
+            //     if req.name == PackageName::from_str(self.project.name) {}
+            // }
+            environments.insert(extra.clone(), features);
+        }
+    }
+    environments
+}
 #[cfg(test)]
 mod tests {
     use super::*;

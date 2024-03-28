@@ -5,6 +5,8 @@ use std::str::FromStr;
 use toml_edit;
 use toml_edit::TomlError;
 
+use crate::FeatureName;
+
 use super::{
     error::RequirementConversionError, python::PyPiPackageName, ProjectManifest, PyPiRequirement,
     SpecType,
@@ -74,9 +76,24 @@ impl From<PyProjectManifest> for ProjectManifest {
         }
 
         // For each extra group, create a feature of the same name if it does not exist,
-        // add dependencies and create corresponding environments if they do not exist
-        // TODO: Add solve groups as well?
-        // TODO: Deal with self referencing extras?
+        // and add pypi dependencies from project.optional-dependencies
+        if let Some(Some(extras)) = &item.project.as_ref().map(|p| &p.optional_dependencies) {
+            for (extra, reqs) in extras {
+                let target = manifest
+                    .features
+                    .entry(FeatureName::Named(extra.to_string()))
+                    .or_default()
+                    .targets
+                    .default_mut();
+                for req in reqs.iter() {
+                    // TODO: filter out self references
+                    target.add_pypi_dependency(
+                        PyPiPackageName::from_normalized(req.name.clone()),
+                        PyPiRequirement::from(req.clone()),
+                    )
+                }
+            }
+        }
 
         manifest
     }
