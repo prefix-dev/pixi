@@ -43,7 +43,7 @@ Here is an example manifest file that highlights some of the features:
 
     [tool.pixi.target.win-64.dependencies]
     # Overwrite the needed python version only on win-64
-    python = "3.7"
+    python = "~=3.7.0"
 
 
     [tool.pixi.activation]
