@@ -290,7 +290,7 @@ impl<'de> Deserialize<'de> for Feature {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::project::manifest::Manifest;
+    use crate::project::manifest::{Manifest, ManifestKind};
     use assert_matches::assert_matches;
     use std::path::Path;
 
@@ -316,6 +316,7 @@ mod tests {
         [feature.bla.host-dependencies]
         # empty on purpose
         "#,
+            ManifestKind::Pixi,
         )
         .unwrap();
 
@@ -377,6 +378,7 @@ mod tests {
         [target.linux-64.activation]
         scripts = ["linux-64.bat"]
         "#,
+            ManifestKind::Pixi,
         )
         .unwrap();
 

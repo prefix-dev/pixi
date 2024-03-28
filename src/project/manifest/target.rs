@@ -106,6 +106,16 @@ impl Target {
         all_deps
     }
 
+    /// Checks if this target contains a dependency
+    pub fn has_dependency(&self, dep_str: &str, spec_type: Option<SpecType>) -> bool {
+        match PackageName::from_str(dep_str) {
+            Ok(pkg) => self
+                .dependencies(spec_type)
+                .is_some_and(|deps| deps.contains_key(&pkg)),
+            Err(_) => false, // an invalid package name cannot be a dependency
+        }
+    }
+
     /// Removes a dependency from this target.
     pub fn remove_dependency(
         &mut self,
@@ -123,6 +133,37 @@ impl Target {
                     .shift_remove_entry(&dep)
                     .ok_or_else(|| SpecIsMissing::dep_is_missing(dep_str, spec_type))
             })
+    }
+
+    /// Adds a dependency to a target
+    pub fn add_dependency(
+        &mut self,
+        dep_name: PackageName,
+        spec: NamelessMatchSpec,
+        spec_type: SpecType,
+    ) {
+        self.dependencies
+            .entry(spec_type)
+            .or_default()
+            .insert(dep_name, spec);
+    }
+
+    /// Checks if this target contains a pypi dependency
+    pub fn has_pypi_dependency(&self, dep_str: &str) -> bool {
+        match PyPiPackageName::from_str(dep_str) {
+            Ok(pkg) => self
+                .pypi_dependencies
+                .as_ref()
+                .is_some_and(|deps| deps.contains_key(&pkg)),
+            Err(_) => false, // an invalid package name cannot be a dependency
+        }
+    }
+
+    /// Adds a pypi dependency to a target
+    pub fn add_pypi_dependency(&mut self, name: PyPiPackageName, requirement: PyPiRequirement) {
+        self.pypi_dependencies
+            .get_or_insert_with(Default::default)
+            .insert(name, requirement);
     }
 }
 

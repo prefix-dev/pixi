@@ -75,6 +75,7 @@ pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.23" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.23" }
 platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.23" }
 pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.23" }
+pyproject-toml = "0.10.0"
 rattler = { version = "0.19.4", default-features = false, features = [
     "cli-tools",
 ] }
