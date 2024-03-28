@@ -61,7 +61,7 @@ async fn parse_project() {
     }
 
     let pixi_toml = include_str!("./pixi_tomls/many_targets.toml");
-    let project = Project::from_str(&PathBuf::from("./many"), pixi_toml).unwrap();
+    let project = Project::from_str(&PathBuf::from("./many/pixi.toml"), pixi_toml).unwrap();
     assert_debug_snapshot!(dependency_names(&project, Platform::Linux64));
     assert_debug_snapshot!(dependency_names(&project, Platform::OsxArm64));
     assert_debug_snapshot!(dependency_names(&project, Platform::Win64));
@@ -76,7 +76,7 @@ async fn parse_valid_schema_projects() {
         let path = entry.path();
         if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
             let pixi_toml = std::fs::read_to_string(&path).unwrap();
-            let _project = Project::from_str(&PathBuf::from(""), &pixi_toml).unwrap();
+            let _project = Project::from_str(&PathBuf::from("pixi.toml"), &pixi_toml).unwrap();
         }
     }
 }

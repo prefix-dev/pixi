@@ -216,7 +216,7 @@ mod tests {
             [environments]
             test = ["test"]
         "#;
-        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(result.is_ok());
@@ -240,7 +240,7 @@ mod tests {
             [environments]
             test = ["test"]
         "#;
-        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
@@ -266,7 +266,7 @@ mod tests {
             test = ["test"]
             prod = ["prod"]
         "#;
-        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
@@ -298,7 +298,7 @@ mod tests {
             test = ["test"]
             prod = ["prod"]
         "#;
-        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(result.unwrap().0.name().is_default());
@@ -330,7 +330,7 @@ mod tests {
             [environments]
             other = ["other"]
         "#;
-        let project = Project::from_str(Path::new(""), manifest_str).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
         let result = search.find_task("bla".into(), FindTaskSource::CmdArgs);
         // Ambiguous task because it is the same name and code but it is defined in different environments

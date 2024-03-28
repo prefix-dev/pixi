@@ -110,7 +110,7 @@ mod tests {
     use insta::assert_snapshot;
 
     use crate::{
-        project::manifest::{python::PyPiPackageName, Manifest, ManifestKind, PyPiRequirement},
+        project::manifest::{python::PyPiPackageName, Manifest, PyPiRequirement},
         FeatureName,
     };
 
@@ -274,18 +274,13 @@ mod tests {
 
     #[test]
     fn test_build_manifest() {
-        let _manifest =
-            Manifest::from_str(Path::new(""), PYPROJECT_FULL, ManifestKind::Pyproject).unwrap();
+        let _manifest = Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_FULL).unwrap();
     }
 
     #[test]
     fn test_add_pypi_dependency() {
-        let mut manifest = Manifest::from_str(
-            Path::new(""),
-            PYPROJECT_BOILERPLATE,
-            ManifestKind::Pyproject,
-        )
-        .unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_BOILERPLATE).unwrap();
 
         // Add numpy to pyproject
         let name = PyPiPackageName::from_str("numpy").unwrap();
@@ -310,12 +305,8 @@ mod tests {
 
     #[test]
     fn test_remove_pypi_dependency() {
-        let mut manifest = Manifest::from_str(
-            Path::new(""),
-            PYPROJECT_BOILERPLATE,
-            ManifestKind::Pyproject,
-        )
-        .unwrap();
+        let mut manifest =
+            Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_BOILERPLATE).unwrap();
 
         // Remove flask from pyproject
         let name = PyPiPackageName::from_str("flask").unwrap();
