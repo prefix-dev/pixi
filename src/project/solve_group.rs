@@ -190,7 +190,7 @@ mod tests {
     #[test]
     fn test_solve_group() {
         let project = Project::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "foobar"

@@ -114,7 +114,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         //  - Implement it for `[crate::project::manifest::ProjectManifest]` to do this for other filetypes, e.g. (pyproject.toml, requirements.txt)
         let (conda_deps, pypi_deps, channels) = conda_env_to_manifest(conda_env_file, &config)?;
         let rv = render_project(&env, name, version, &author, channels, &platforms);
-        let mut project = Project::from_str(&dir, &rv)?;
+        let mut project = Project::from_str(&dir.join("pixi.toml"), &rv)?;
         for spec in conda_deps {
             for platform in platforms.iter() {
                 // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
