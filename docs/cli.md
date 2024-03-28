@@ -514,7 +514,7 @@ Store authentication information for given host.
 ```shell
 pixi auth login repo.prefix.dev --token pfx_JQEV-m_2bdz-D8NSyRSaNdHANx0qHjq7f2iD
 pixi auth login anaconda.org --conda-token ABCDEFGHIJKLMNOP
-pixi auth login https://myquetz.server --user john --password xxxxxx
+pixi auth login https://myquetz.server --username john --password xxxxxx
 ```
 
 ### `auth logout`
