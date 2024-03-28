@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use clap::Parser;
+use console::Color;
 use itertools::Itertools;
 use rattler_conda_types::Platform;
 
@@ -36,8 +37,8 @@ pub struct Args {
     #[arg(long)]
     pub no_install: bool,
 
-    /// Invert tree and show what depends on given package
-    #[arg(short, long)]
+    /// Invert tree and show what depends on given package in the regex argument
+    #[arg(short, long, requires = "regex")]
     pub invert: bool,
 }
 
@@ -126,8 +127,19 @@ async fn print_inverted_tree(args: Args) -> Result<(), miette::Error> {
         return Ok(());
     }
 
+    // Get the explicit project dependencies
+    let project_dependency_names = environment
+        .dependencies(None, Some(platform))
+        .names()
+        .map(|p| p.as_source().to_string())
+        .collect_vec();
+
     for pkg_name in root_package_names {
-        println!("\n{}", pkg_name);
+        if project_dependency_names.contains(&pkg_name.to_string()) {
+            println!("\n{}", console::style(pkg_name).fg(Color::Green).bold());
+        } else {
+            println!("\n{}", pkg_name);
+        }
 
         let package = needed_map.get(pkg_name).unwrap();
 
@@ -138,7 +150,15 @@ async fn print_inverted_tree(args: Args) -> Result<(), miette::Error> {
             } else {
                 UTF8_SYMBOLS.tee
             };
-            println!("{} {}", symbol, needed_by);
+            if project_dependency_names.contains(needed_by) {
+                println!(
+                    "{} {}",
+                    symbol,
+                    console::style(needed_by).fg(Color::Green).bold()
+                );
+            } else {
+                println!("{} {}", symbol, needed_by);
+            }
 
             let prefix = if index == needed_count - 1 {
                 UTF8_SYMBOLS.empty
@@ -146,7 +166,12 @@ async fn print_inverted_tree(args: Args) -> Result<(), miette::Error> {
                 UTF8_SYMBOLS.down
             };
 
-            print_needed_by(needed_by, format!("{} ", prefix), &needed_map);
+            print_needed_by(
+                needed_by,
+                format!("{} ", prefix),
+                &needed_map,
+                &project_dependency_names,
+            );
         }
     }
 
@@ -158,6 +183,7 @@ fn print_needed_by(
     package_name: &str,
     prefix: String,
     needed_map: &HashMap<&str, InvertedPackage>,
+    project_dependency_names: &Vec<String>,
 ) {
     if let Some(package) = needed_map.get(&package_name) {
         let needed_count = package.needed_by.len();
@@ -167,7 +193,16 @@ fn print_needed_by(
             } else {
                 UTF8_SYMBOLS.tee
             };
-            println!("{}{} {}", prefix, symbol, needed_by);
+            if project_dependency_names.contains(needed_by) {
+                println!(
+                    "{}{} {}",
+                    prefix,
+                    symbol,
+                    console::style(needed_by).fg(Color::Green).bold()
+                );
+            } else {
+                println!("{}{} {}", prefix, symbol, needed_by);
+            }
 
             let new_prefix = if index == needed_count - 1 {
                 format!("{}{} ", prefix, UTF8_SYMBOLS.empty)
@@ -175,7 +210,7 @@ fn print_needed_by(
                 format!("{}{} ", prefix, UTF8_SYMBOLS.down)
             };
 
-            print_needed_by(needed_by, new_prefix, needed_map);
+            print_needed_by(needed_by, new_prefix, needed_map, project_dependency_names);
         }
     }
 }
@@ -266,7 +301,12 @@ async fn print_tree(args: Args) -> Result<(), miette::Error> {
         };
         let dep = dependency_map.get(&pkg_name.as_str()).unwrap();
 
-        println!("{} {} v{}", symbol, pkg_name, dep.version);
+        println!(
+            "{} {} v{}",
+            symbol,
+            console::style(pkg_name).fg(Color::Green).bold(),
+            dep.version
+        );
 
         let prefix = if index == project_dependency_count - 1 {
             UTF8_SYMBOLS.empty
