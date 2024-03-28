@@ -163,15 +163,15 @@ pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.24" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.24" }
 
 # deno_task_shell = { path = "../deno_task_shell" }
-rattler = { git = "https://github.com/baszalmstra/rattler", rev = "e5aaed3e2551399985e3c11a87c2c0aedb31b0d3" }
-rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "e5aaed3e2551399985e3c11a87c2c0aedb31b0d3" }
-rattler_digest = { git = "https://github.com/baszalmstra/rattler", rev = "e5aaed3e2551399985e3c11a87c2c0aedb31b0d3" }
-rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev = "e5aaed3e2551399985e3c11a87c2c0aedb31b0d3" }
-rattler_networking = { git = "https://github.com/baszalmstra/rattler", rev = "e5aaed3e2551399985e3c11a87c2c0aedb31b0d3" }
-rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev = "e5aaed3e2551399985e3c11a87c2c0aedb31b0d3" }
-rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "e5aaed3e2551399985e3c11a87c2c0aedb31b0d3" }
-rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "e5aaed3e2551399985e3c11a87c2c0aedb31b0d3" }
-rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "e5aaed3e2551399985e3c11a87c2c0aedb31b0d3" }
+rattler = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
+rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
+rattler_digest = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
+rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
+rattler_networking = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
+rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
+rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
+rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
+rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 #rattler_digest = { path = "../rattler/crates/rattler_digest" }
 #rattler_networking = { path = "../rattler/crates/rattler_networking" }
