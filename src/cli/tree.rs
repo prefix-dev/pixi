@@ -23,7 +23,7 @@ pub struct Args {
     pub platform: Option<Platform>,
 
     /// The path to 'pixi.toml'
-    #[arg(long, env = "PIXI_PROJECT_MANIFEST")]
+    #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
     /// The environment to list packages for. Defaults to the default environment.
