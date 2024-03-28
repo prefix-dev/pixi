@@ -180,38 +180,16 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.24" }
 #rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
 #rattler_lock = { path = "../rattler/crates/rattler_lock" }
 
-# Change these lines if you want a patched version of uv
-[patch.'https://github.com/astral-sh/uv']
-# pep440_rs = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# pep508_rs = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-build = { git = "https://github.com/wolfv/uv", tag = "expose-yanks" }
-# uv-cache = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-client = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-dispatch = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-distribution = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-installer = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-interpreter = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-normalize = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-resolver = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-traits = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# distribution-filename = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# distribution-types = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# install-wheel-rs = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# platform-tags = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# pypi-types = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# requirements-txt = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-
 # deno_task_shell = { path = "../deno_task_shell" }
-# rattler = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_conda_types = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_digest = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_lock = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_networking = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_shell = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_solve = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-
+rattler = { git = "https://github.com/baszalmstra/rattler", rev = "09db70ea97bf422260e23438e4bb120469e674d9" }
+rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "09db70ea97bf422260e23438e4bb120469e674d9" }
+rattler_digest = { git = "https://github.com/baszalmstra/rattler", rev = "09db70ea97bf422260e23438e4bb120469e674d9" }
+rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev = "09db70ea97bf422260e23438e4bb120469e674d9" }
+rattler_networking = { git = "https://github.com/baszalmstra/rattler", rev = "09db70ea97bf422260e23438e4bb120469e674d9" }
+rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev = "09db70ea97bf422260e23438e4bb120469e674d9" }
+rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "09db70ea97bf422260e23438e4bb120469e674d9" }
+rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "09db70ea97bf422260e23438e4bb120469e674d9" }
+rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "09db70ea97bf422260e23438e4bb120469e674d9" }
 
 # rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 # rattler_digest = { path = "../rattler/crates/rattler_digest" }
@@ -221,3 +199,8 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.24" }
 # rattler_solve = { path = "../rattler/crates/rattler_solve" }
 # rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
 # rattler_lock = { path = "../rattler/crates/rattler_lock" }
+
+# Change these lines if you want a patched version of uv
+[patch.'https://github.com/astral-sh/uv']
+
+
