@@ -2,6 +2,7 @@
 
 mod outdated;
 mod package_identifier;
+mod pypi_editables;
 mod records_by_name;
 mod resolve;
 mod satisfiability;

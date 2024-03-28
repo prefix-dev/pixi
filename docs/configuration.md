@@ -251,12 +251,9 @@ PyPI packages are not indexed on [prefix.dev](https://prefix.dev/channels) but c
 
 !!! warning "Important considerations"
     - **Stability**: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the `dependencies` table where possible.
-    - **Compatibility limitations**: Currently, pixi doesn't support:
-        - `git` dependencies (`git+https://github.com/package-org/package.git`)
-        - Source dependencies
-        - Private PyPI repositories
+    - **Compatibility limitations**: Currently, pixi doesn't support: Private PyPI repositories
 
-#### PEP404 Version specification:
+#### Version specification:
 These dependencies don't follow the conda matchspec specification.
 The `version` is a string specification of the version according to [PEP404/PyPA](https://packaging.python.org/en/latest/specifications/version-specifiers/).
 Additionally, a list of extra's can be included, which are essentially optional dependencies.
@@ -271,10 +268,78 @@ See the example below to see how this is used in practice:
 python = ">=3.6"
 
 [pypi-dependencies]
-pytest = "*"  # This means any version (the wildcard `*` is a pixi addition, not part of the specification)
+fastapi = "*"  # This means any version (the wildcard `*` is a pixi addition, not part of the specification)
 pre-commit = "~=3.5.0" # This is a single version specifier
 # Using the toml map allows the user to add `extras`
-requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]}
+pandas = { version = ">=1.0.0", extras = ["dataframe", "sql"]}
+
+# git dependencies
+# With ssh
+flask = { git = "ssh://git@github.com/pallets/flask" }
+# With https and a specific revision
+requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
+# TODO: will support later -> branch = '' or tag = '' to specify a branch or tag
+
+# You can also directly add a source dependency from a path, tip keep this relative to the root of the project.
+minimal-project = { path = "./minimal-project", editable = true}
+
+# You can also use a direct url, to either a `.tar.gz` or `.zip`, or a `.whl` file
+click = { url = "https://github.com/pallets/click/releases/download/8.1.7/click-8.1.7-py3-none-any.whl" }
+
+# You can also just the default git repo, it will checkout the default branch
+pytest = { git = "https://github.com/pytest-dev/pytest.git"}
+```
+
+#### Full specification
+The full specification of a PyPI dependencies that pixi supports can be split into the following fields:
+##### `extras`
+A list of extras to install with the package. e.g. `["dataframe", "sql"]`
+The extras field works with all other version specifiers as it is an addition to the version specifier.
+```toml
+pandas = { version = ">=1.0.0", extras = ["dataframe", "sql"]}
+pytest = { git = "URL", extras = ["dev"]}
+black = { url = "URL", extras = ["cli"]}
+minimal-project = { path = "./minimal-project", editable = true, extras = ["dev"]}
+```
+
+##### `version`
+The version of the package to install. e.g. `">=1.0.0"` or `*` which stands for any version, this is pixi specific.
+Version is our default field so using no inline table (`{}`) will default to this field.
+```toml
+py-rattler = "*"
+ruff = "~=1.0.0"
+pytest = {version = "*", extras = ["dev"]}
+```
+
+##### `git`
+A git repository to install from.
+This support both https:// and ssh:// urls.
+
+Use `git` in combination with `rev` or `subdirectory`:
+- `rev`: A specific revision to install. e.g. `rev = "0106aced5faa299e6ede89d1230bd6784f2c3660`
+- `subdirectory`: A subdirectory to install from. `subdirectory = "src"` or `subdirectory = "src/packagex"`
+
+```toml
+# Note don't forget the `ssh://` or `https://` prefix!
+pytest = { git = "https://github.com/pytest-dev/pytest.git"}
+requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
+py-rattler = { git = "ssh://git@github.com:mamba-org/rattler.git", subdirectory = "py-rattler" }
+```
+
+##### `path`
+A local path to install from. e.g. `path = "./path/to/package"`
+We would advise to keep your path projects in the project, and to use a relative path.
+
+Set `editable` to `true` to install in editable mode, this is highly recommended as it is hard to reinstall if you're not using editable mode. e.g. `editable = true`
+
+```toml
+minimal-project = { path = "./minimal-project", editable = true}
+```
+
+##### `url`
+A URL to install a wheel or sdist directly from an url.
+```toml
+pandas = {url = "https://files.pythonhosted.org/packages/3d/59/2afa81b9fb300c90531803c0fd43ff4548074fa3e8d0f747ef63b3b5e77a/pandas-2.2.1.tar.gz"}
 ```
 
 
@@ -282,14 +347,18 @@ requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]}
     Use the `--pypi` flag with the `add` command to quickly add PyPI packages from the CLI.
     E.g `pixi add --pypi flask`
 
-#### Source dependencies
+    _This does not support all the features of the `pypi-dependencies` table yet._
+
+#### Source dependencies (`sdist`)
 The [Source Distribution Format](https://packaging.python.org/en/latest/specifications/source-distribution-format/) is a source based format (sdist for short), that a package can include alongside the binary wheel format.
 Because these distributions need to be built, the need a python executable to do this.
 This is why python needs to be present in a conda environment.
 Sdists usually depend on system packages to be built, especially when compiling C/C++ based python bindings.
-Think for example of Python SDL2 bindindings depending on the C library: SDL2.
+Think for example of Python SDL2 bindings depending on the C library: SDL2.
 To help built these dependencies we activate the conda environment that includes these pypi dependencies before resolving.
 This way when a source distribution depends on `gcc` for example, it's used from the conda environment instead of the system.
+
+
 
 ### `host-dependencies`
 
