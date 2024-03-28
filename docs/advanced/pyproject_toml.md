@@ -1,4 +1,4 @@
-# Pyproject.toml in pixi
+# `pyproject.toml` in pixi
 We support the use of the `pyproject.toml` as our manifest file in pixi.
 This allows the user to keep one file with all configuration.
 The `pyproject.toml` file is a standard for Python projects.
