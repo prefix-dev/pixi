@@ -7,29 +7,52 @@ description: Learn how to set up for different platforms/OS's
 [Pixi's vision](../vision.md) includes being supported on all major platforms. Sometimes that needs some extra configuration to work well.
 On this page, you will learn what you can configure to align better with the platform you are making your application for.
 
-Here is an example `pixi.toml` that highlights some of the features:
+Here is an example manifest file that highlights some of the features:
 
-```toml title="pixi.toml"
-[project]
-# Default project info....
-# A list of platforms you are supporting with your package.
-platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    [project]
+    # Default project info....
+    # A list of platforms you are supporting with your package.
+    platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
-[dependencies]
-python = ">=3.8"
+    [dependencies]
+    python = ">=3.8"
 
-[target.win-64.dependencies]
-# Overwrite the needed python version only on win-64
-python = "3.7"
+    [target.win-64.dependencies]
+    # Overwrite the needed python version only on win-64
+    python = "3.7"
 
 
-[activation]
-scripts = ["setup.sh"]
+    [activation]
+    scripts = ["setup.sh"]
 
-[target.win-64.activation]
-# Overwrite activation scripts only for windows
-scripts = ["setup.bat"]
-```
+    [target.win-64.activation]
+    # Overwrite activation scripts only for windows
+    scripts = ["setup.bat"]
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    [tool.pixi.project]
+    # Default project info....
+    # A list of platforms you are supporting with your package.
+    platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
+    [tool.pixi.dependencies]
+    python = ">=3.8"
+
+    [tool.pixi.target.win-64.dependencies]
+    # Overwrite the needed python version only on win-64
+    python = "~=3.7.0"
+
+
+    [tool.pixi.activation]
+    scripts = ["setup.sh"]
+
+    [tool.pixi.target.win-64.activation]
+    # Overwrite activation scripts only for windows
+    scripts = ["setup.bat"]
+    ```
 
 ## Platform definition
 
@@ -75,7 +98,7 @@ We also specifically want `python` on `3.8` when installing on Windows.
 This will overwrite the dependencies from the generic set of dependencies.
 This will not touch any of the other platforms.
 
-You can use pixi's cli to add these dependencies to the `pixi.toml`
+You can use pixi's cli to add these dependencies to the manifest file.
 
 ```shell
 pixi add --platform win-64 posix

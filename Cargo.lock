@@ -3049,6 +3049,7 @@ dependencies = [
  "pep508_rs",
  "platform-tags",
  "pypi-types",
+ "pyproject-toml",
  "rattler",
  "rattler_conda_types",
  "rattler_digest",

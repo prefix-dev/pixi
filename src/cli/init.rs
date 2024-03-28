@@ -57,6 +57,13 @@ platforms = ["{{ platforms|join("\", \"") }}"]
 [dependencies]
 
 "#;
+const PYROJECT_TEMPLATE: &str = r#"
+[tool.pixi.project]
+name = "{{ name }}"
+channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
+platforms = ["{{ platforms|join("\", \"") }}"]
+
+"#;
 
 const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
 .pixi
@@ -106,57 +113,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         //  - Use .condarc as channel config
         //  - Implement it for `[crate::project::manifest::ProjectManifest]` to do this for other filetypes, e.g. (pyproject.toml, requirements.txt)
         let (conda_deps, pypi_deps, channels) = conda_env_to_manifest(conda_env_file, &config)?;
-
-        let rv = env
-            .render_named_str(
-                consts::PROJECT_MANIFEST,
-                PROJECT_TEMPLATE,
-                context! {
-                    name,
-                    version,
-                    author,
-                    channels,
-                    platforms
-                },
-            )
-            .unwrap();
-
+        let rv = render_project(&env, name, version, &author, channels, &platforms);
         let mut project = Project::from_str(&dir, &rv)?;
         for spec in conda_deps {
-            match &args.platforms.is_empty() {
-                true => project.manifest.add_dependency(
+            for platform in platforms.iter() {
+                // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
+                project.manifest.add_dependency(
                     &spec,
                     crate::SpecType::Run,
-                    None,
+                    Some(platform.parse().into_diagnostic()?),
                     &FeatureName::default(),
-                )?,
-                false => {
-                    for platform in args.platforms.iter() {
-                        // TODO: fix serialization of channels in rattler_conda_types::MatchSpec
-                        project.manifest.add_dependency(
-                            &spec,
-                            crate::SpecType::Run,
-                            Some(platform.parse().into_diagnostic()?),
-                            &FeatureName::default(),
-                        )?;
-                    }
-                }
+                )?;
             }
         }
         for spec in pypi_deps {
-            match &args.platforms.is_empty() {
-                true => project
-                    .manifest
-                    .add_pypi_dependency(&spec.0, &spec.1, None)?,
-                false => {
-                    for platform in args.platforms.iter() {
-                        project.manifest.add_pypi_dependency(
-                            &spec.0,
-                            &spec.1,
-                            Some(platform.parse().into_diagnostic()?),
-                        )?;
-                    }
-                }
+            for platform in platforms.iter() {
+                project.manifest.add_pypi_dependency(
+                    &spec.0,
+                    &spec.1,
+                    Some(platform.parse().into_diagnostic()?),
+                )?;
             }
         }
         project.save()?;
@@ -178,21 +154,42 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             config.default_channels().to_vec()
         };
 
-        let rv = env
-            .render_named_str(
-                consts::PROJECT_MANIFEST,
-                PROJECT_TEMPLATE,
-                context! {
-                    name,
-                    version,
-                    author,
-                    channels,
-                    platforms
-                },
-            )
-            .unwrap();
-        fs::write(&manifest_path, rv).into_diagnostic()?;
-    };
+        // Inject a tool.pixi.project section into an existing pyproject.toml file if there is one without
+        if dir.join(consts::PYPROJECT_MANIFEST).is_file() {
+            let path = dir.join(consts::PYPROJECT_MANIFEST);
+            let file = fs::read_to_string(path.clone()).unwrap();
+            if !file.contains("[tool.pixi.project]") {
+                let rv = env
+                    .render_named_str(
+                        consts::PYPROJECT_MANIFEST,
+                        PYROJECT_TEMPLATE,
+                        context! {
+                            name,
+                            channels,
+                            platforms
+                        },
+                    )
+                    .unwrap();
+                if let Err(e) = {
+                    fs::OpenOptions::new()
+                        .append(true)
+                        .open(path.clone())
+                        .and_then(|mut p| p.write_all(rv.as_bytes()))
+                } {
+                    tracing::warn!(
+                        "Warning, couldn't update '{}' because of: {}",
+                        path.to_string_lossy(),
+                        e
+                    );
+                }
+            }
+
+        // Create a pixi.toml
+        } else {
+            let rv = render_project(&env, name, version, &author, channels, &platforms);
+            fs::write(&manifest_path, rv).into_diagnostic()?;
+        };
+    }
 
     // create a .gitignore if one is missing
     if let Err(e) = create_or_append_file(&gitignore_path, GITIGNORE_TEMPLATE) {
@@ -220,6 +217,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     );
 
     Ok(())
+}
+
+fn render_project(
+    env: &Environment<'_>,
+    name: String,
+    version: &str,
+    author: &Option<(String, String)>,
+    channels: Vec<String>,
+    platforms: &Vec<String>,
+) -> String {
+    env.render_named_str(
+        consts::PROJECT_MANIFEST,
+        PROJECT_TEMPLATE,
+        context! {
+            name,
+            version,
+            author,
+            channels,
+            platforms
+        },
+    )
+    .unwrap()
 }
 
 fn get_name_from_dir(path: &Path) -> miette::Result<String> {

@@ -122,7 +122,7 @@ To add a task to run the `bar.py` file, use:
 pixi task add bar "python bar.py" --cwd scripts
 ```
 
-This will add the following line to `pixi.toml`:
+This will add the following line to [manifest file](../configuration.md):
 ```toml title="pixi.toml"
 [tasks]
 bar = { cmd = "python bar.py", cwd = "scripts" }

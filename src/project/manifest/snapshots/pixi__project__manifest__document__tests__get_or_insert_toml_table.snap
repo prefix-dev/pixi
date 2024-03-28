@@ -1,0 +1,17 @@
+---
+source: src/project/manifest/document.rs
+expression: manifest.document.to_string()
+---
+        [project]
+        name = "foo"
+        version = "0.1.0"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64"]
+
+[tasks]
+
+[target.linux-64.tasks]
+
+[feature.test.tasks]
+
+[feature.test.target.linux-64.tasks]

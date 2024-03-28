@@ -9,18 +9,17 @@ pub mod virtual_packages;
 use async_once_cell::OnceCell as AsyncCell;
 use distribution_types::IndexLocations;
 use indexmap::{Equivalent, IndexMap, IndexSet};
-use miette::{IntoDiagnostic, NamedSource, WrapErr};
+use miette::{IntoDiagnostic, NamedSource};
 
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
 use reqwest_middleware::ClientWithMiddleware;
+use std::fs;
 use std::hash::Hash;
 
 use std::{
     collections::{HashMap, HashSet},
     env,
-    ffi::OsStr,
     fmt::{Debug, Formatter},
-    fs,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -31,7 +30,7 @@ use crate::project::grouped_environment::GroupedEnvironment;
 use crate::task::TaskName;
 use crate::utils::reqwest::build_reqwest_clients;
 use crate::{
-    consts::{self, PROJECT_MANIFEST},
+    consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
     task::Task,
 };
 use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
@@ -41,7 +40,7 @@ pub use dependencies::Dependencies;
 pub use environment::Environment;
 pub use solve_group::SolveGroup;
 
-use self::manifest::Environments;
+use self::manifest::{Environments, ManifestKind};
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -147,8 +146,9 @@ impl Project {
     }
 
     /// Constructs a project from a manifest.
+    /// Assumes the manifest is a Pixi manifest
     pub fn from_str(root: &Path, content: &str) -> miette::Result<Self> {
-        let manifest = Manifest::from_str(root, content)?;
+        let manifest = Manifest::from_str(root, content, ManifestKind::Pixi)?;
         Ok(Self::from_manifest(manifest))
     }
 
@@ -156,9 +156,13 @@ impl Project {
     /// directories.
     /// This will also set the current working directory to the project root.
     pub fn discover() -> miette::Result<Self> {
-        let project_toml = match find_project_root() {
-            Some(root) => root.join(PROJECT_MANIFEST),
-            None => miette::bail!("could not find {}", PROJECT_MANIFEST),
+        let project_toml = match find_project_manifest() {
+            Some(file) => file,
+            None => miette::bail!(
+                "could not find {} or {} which is configured to use pixi",
+                PROJECT_MANIFEST,
+                PYPROJECT_MANIFEST
+            ),
         };
         Self::load(&project_toml)
     }
@@ -195,25 +199,13 @@ impl Project {
 
         // Determine the parent directory of the manifest file
         let full_path = dunce::canonicalize(manifest_path).into_diagnostic()?;
-        if full_path.file_name().and_then(OsStr::to_str) != Some(PROJECT_MANIFEST) {
-            miette::bail!("the manifest-path must point to a {PROJECT_MANIFEST} file");
-        }
 
         let root = full_path
             .parent()
             .ok_or_else(|| miette::miette!("can not find parent of {}", manifest_path.display()))?;
 
         // Load the TOML document
-        let manifest = fs::read_to_string(manifest_path)
-            .into_diagnostic()
-            .and_then(|content| Manifest::from_str(root, content))
-            .wrap_err_with(|| {
-                format!(
-                    "failed to parse {} from {}",
-                    consts::PROJECT_MANIFEST,
-                    root.display()
-                )
-            })?;
+        let manifest = Manifest::from_path(manifest_path)?;
 
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
@@ -491,13 +483,29 @@ impl Project {
     }
 }
 
-/// Iterates over the current directory and all its parent directories and returns the first
-/// directory path that contains the [`consts::PROJECT_MANIFEST`].
-pub fn find_project_root() -> Option<PathBuf> {
+/// Iterates over the current directory and all its parent directories and returns the manifest path in the first
+/// directory path that contains the [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
+pub fn find_project_manifest() -> Option<PathBuf> {
     let current_dir = env::current_dir().ok()?;
-    std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent())
-        .find(|dir| dir.join(consts::PROJECT_MANIFEST).is_file())
-        .map(Path::to_path_buf)
+    std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent()).find_map(|dir| {
+        [PROJECT_MANIFEST, PYPROJECT_MANIFEST]
+            .iter()
+            .find_map(|manifest| {
+                let path = dir.join(manifest);
+                if path.is_file() {
+                    // Only match pyproject.toml files that contain "[tool.pixi.project]"
+                    if *manifest == PYPROJECT_MANIFEST {
+                        let contents = fs::read_to_string(&path).ok()?;
+                        if !contents.contains("[tool.pixi.project]") {
+                            return None;
+                        }
+                    }
+                    Some(path.to_path_buf())
+                } else {
+                    None
+                }
+            })
+    })
 }
 
 #[cfg(test)]
@@ -542,7 +550,8 @@ mod tests {
         for file_content in file_contents {
             let file_content = format!("{PROJECT_BOILERPLATE}\n{file_content}");
 
-            let manifest = Manifest::from_str(Path::new(""), &file_content).unwrap();
+            let manifest =
+                Manifest::from_str(Path::new(""), &file_content, ManifestKind::Pixi).unwrap();
             let project = Project::from_manifest(manifest);
             let expected_result = vec![VirtualPackage::LibC(LibC {
                 family: "glibc".to_string(),
@@ -577,6 +586,7 @@ mod tests {
         let manifest = Manifest::from_str(
             Path::new(""),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            ManifestKind::Pixi,
         )
         .unwrap();
         let project = Project::from_manifest(manifest);
@@ -610,6 +620,7 @@ mod tests {
         let manifest = Manifest::from_str(
             Path::new(""),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            ManifestKind::Pixi,
         )
         .unwrap();
         let project = Project::from_manifest(manifest);
@@ -639,6 +650,7 @@ mod tests {
         let manifest = Manifest::from_str(
             Path::new(""),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            ManifestKind::Pixi,
         )
         .unwrap();
         let project = Project::from_manifest(manifest);
@@ -667,6 +679,7 @@ mod tests {
         let manifest = Manifest::from_str(
             Path::new(""),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            ManifestKind::Pixi,
         )
         .unwrap();
 
