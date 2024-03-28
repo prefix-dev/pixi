@@ -97,6 +97,17 @@ pixi install --frozen
 pixi install --locked
 ```
 
+To reinitialize the lockfile in your project, you can remove the existing `pixi.lock` file and run `pixi install`.
+This process will regenerate the lockfile based on the dependencies defined in your manifest file:
+
+```sh
+rm pixi.lock && pixi install
+```
+This action ensures that your project's dependencies are reset and updated according to the current specifications in manifest file.
+
+In a future version of Pixi, we will introduce the `pixi update` command.
+This command will allow you to update the lockfile directly, without manually deleting the `pixi.lock` file, making the dependency management process even smoother.
+
 ## `run`
 
 The `run` commands first checks if the environment is ready to use.
