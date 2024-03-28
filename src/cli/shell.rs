@@ -215,6 +215,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Get the environment variables we need to set activate the environment in the shell.
     let env = get_activation_env(&environment, args.lock_file_usage.into()).await?;
+    let mut env = env.clone();
+    env.insert(String::from("PIXI_IN_SHELL"), String::from("1"));
     tracing::debug!("Pixi environment activation:\n{:?}", env);
 
     // Start the shell as the last part of the activation script based on the default shell.
@@ -248,12 +250,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "unix")]
     let res = match interactive_shell {
-        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt).await,
-        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt),
-        ShellEnum::Bash(bash) => start_unix_shell(bash, vec!["-l", "-i"], env, prompt).await,
-        ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], env, prompt).await,
-        ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], env, prompt).await,
-        ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], env, prompt).await,
+        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, &env, prompt).await,
+        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, &env, prompt),
+        ShellEnum::Bash(bash) => start_unix_shell(bash, vec!["-l", "-i"], &env, prompt).await,
+        ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], &env, prompt).await,
+        ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], &env, prompt).await,
+        ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], &env, prompt).await,
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell)
         }

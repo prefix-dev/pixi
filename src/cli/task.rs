@@ -280,6 +280,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
+    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
 }
 
