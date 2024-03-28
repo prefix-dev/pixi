@@ -66,8 +66,7 @@ dependencies = {flake8 = "3.7.9", black = "19.10b0"}
 
 [environments]
 test = {features = ["test"], solve-group = "test"}
-prod = {features = ["prod"], solve-group = "test"}
-lint = ["lint"]
+prod = {features = ["test2"], solve-group = "test"}
 
 [activation]
 scripts = ["activate.sh", "deactivate.sh"]

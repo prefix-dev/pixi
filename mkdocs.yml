@@ -113,6 +113,7 @@ nav:
     - Channel Logic: advanced/channel_priority.md
     - GitHub Actions: advanced/github_actions.md
     - Global Configuration: advanced/global_configuration.md
+    - Pyproject.toml: advanced/pyproject_toml.md
   - Examples:
       - C++/Cmake: examples/cpp-sdl.md
       - OpenCV: examples/opencv.md

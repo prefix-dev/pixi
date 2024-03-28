@@ -8,7 +8,12 @@ The `pixi.toml` is the pixi project configuration file, also known as the projec
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
-For more technical documentation check [crates.io](https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html).
+For more technical documentation check pixi on [crates.io](https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html).
+
+!!! tip
+    We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
+    For example, the `[project]` table becomes `[tool.pixi.project]`.
+    There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](advanced/pyproject_toml.md) documentation for more information.
 
 ## The `project` table
 The minimally required information in the `project` table is:
@@ -22,7 +27,6 @@ platforms = ["linux-64"]
 ### `name`
 The name of the project.
 ```toml
-[project]
 name = "project-name"
 ```
 
@@ -30,19 +34,16 @@ name = "project-name"
 This is a list that defines the channels used to fetch the packages from.
 If you want to use channels hosted on `anaconda.org` you only need to use the name of the channel directly.
 ```toml
-[project]
 channels = ["conda-forge", "robostack", "bioconda", "nvidia", "pytorch"]
 ```
 
 Channels situated on the file system are also supported with **absolute** file paths:
 ```toml
-[project]
 channels = ["conda-forge", "file:///home/user/staged-recipes/build_artifacts"]
 ```
 
 To access private or public channels on [prefix.dev](https://prefix.dev/channels) or [Quetz](https://github.com/mamba-org/quetz) use the url including the hostname:
 ```toml
-[project]
 channels = ["conda-forge", "https://repo.prefix.dev/channel-name"]
 ```
 
@@ -51,7 +52,6 @@ Defines the list of platforms that the project supports.
 Pixi solves the dependencies for all these platforms and puts them in the lockfile (`pixi.lock`).
 
 ```toml
-[project]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 ```
 The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html)
@@ -61,63 +61,54 @@ The version of the project.
 This should be a valid version based on the conda Version Spec.
 See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation of what is allowed in a Version Spec.
 ```toml
-[project]
 version = "1.2.3"
 ```
 
 ### `authors` (optional)
 This is a list of authors of the project.
 ```toml
-[project]
 authors = ["John Doe <j.doe@prefix.dev>", "Marie Curie <mss1867@gmail.com>"]
 ```
 
 ### `description` (optional)
 This should contain a short description of the project.
 ```toml
-[project]
 description = "A simple description"
 ```
 
 ### `license` (optional)
 The license as a valid [SPDX](https://spdx.org/licenses/) string (e.g. MIT AND Apache-2.0)
 ```toml
-[project]
 license = "MIT"
 ```
 
 ### `license-file` (optional)
 Relative path to the license file.
 ```toml
-[project]
 license-file = "LICENSE.md"
 ```
 
 ### `readme` (optional)
 Relative path to the README file.
 ```toml
-[project]
 readme = "README.md"
 ```
 
 ### `homepage` (optional)
 URL of the project homepage.
 ```toml
-[project]
 homepage = "https://pixi.sh"
 ```
 
 ### `repository` (optional)
 URL of the project source repository.
 ```toml
-[project]
 repository = "https://github.com/prefix-dev/pixi"
 ```
 
 ### `documentation` (optional)
 URL of the project documentation.
 ```toml
-[project]
 documentation = "https://pixi.sh"
 ```
 

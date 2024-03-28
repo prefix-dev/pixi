@@ -2,6 +2,7 @@ use console::Style;
 use lazy_static::lazy_static;
 
 pub const PROJECT_MANIFEST: &str = "pixi.toml";
+pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const PROJECT_LOCK_FILE: &str = "pixi.lock";
 pub const PIXI_DIR: &str = ".pixi";
 pub const CONFIG_FILE: &str = "config.toml";
