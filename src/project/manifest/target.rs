@@ -457,7 +457,7 @@ mod tests {
     #[test]
     fn test_targets_overwrite_order() {
         let manifest = Project::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "test"

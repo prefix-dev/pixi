@@ -290,14 +290,14 @@ impl<'de> Deserialize<'de> for Feature {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::project::manifest::{Manifest, ManifestKind};
+    use crate::project::manifest::Manifest;
     use assert_matches::assert_matches;
     use std::path::Path;
 
     #[test]
     fn test_dependencies_borrowed() {
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "foo"
@@ -316,7 +316,6 @@ mod tests {
         [feature.bla.host-dependencies]
         # empty on purpose
         "#,
-            ManifestKind::Pixi,
         )
         .unwrap();
 
@@ -365,7 +364,7 @@ mod tests {
     #[test]
     fn test_activation() {
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "foo"
@@ -378,7 +377,6 @@ mod tests {
         [target.linux-64.activation]
         scripts = ["linux-64.bat"]
         "#,
-            ManifestKind::Pixi,
         )
         .unwrap();
 
