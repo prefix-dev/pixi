@@ -1,16 +1,17 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use clap::Parser;
 use console::Color;
 use itertools::Itertools;
 use rattler_conda_types::Platform;
+use rattler_lock::Package;
 
 use crate::lock_file::UpdateLockFileOptions;
 use crate::project::manifest::EnvironmentName;
 use crate::Project;
 
-// Show a tree of project dependencies
+/// Show a tree of project dependencies
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
 pub struct Args {
@@ -59,21 +60,6 @@ static UTF8_SYMBOLS: Symbols = Symbols {
 };
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    if args.invert {
-        print_inverted_tree(args).await?;
-    } else {
-        print_tree(args).await?;
-    }
-    Ok(())
-}
-
-#[derive(Debug)]
-struct InvertedPackage {
-    needed_by: Vec<String>,
-}
-
-// Prints an inverted tree which requires a regex
-async fn print_inverted_tree(args: Args) -> Result<(), miette::Error> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
     let environment_name = args
         .environment
@@ -94,115 +80,89 @@ async fn print_inverted_tree(args: Args) -> Result<(), miette::Error> {
         .environment(environment.name().as_str())
         .and_then(|env| env.packages(platform).map(Vec::from_iter))
         .unwrap_or_default();
-    let conda_records = locked_deps.iter().filter_map(|d| d.as_conda());
 
-    let mut needed_map = HashMap::new();
+    let dep_map = generate_dependency_map(&locked_deps);
 
-    for rec in conda_records {
-        let package_record = rec.package_record();
+    let direct_deps = direct_dependencies(&environment, &platform);
 
-        for dep in package_record.depends.iter() {
-            if let Some((dep_name, _)) = dep.split_once(' ') {
-                let package = needed_map
-                    .entry(dep_name)
-                    .or_insert(InvertedPackage { needed_by: vec![] });
-                package
-                    .needed_by
-                    .push(package_record.name.as_source().to_string());
-            }
-        }
+    if args.invert {
+        print_inverted_dependency_tree(&invert_dep_map(&dep_map), &direct_deps, &args.regex)?;
+    } else {
+        print_dependency_tree(&dep_map, &direct_deps, &args.regex)?;
+    }
+    Ok(())
+}
+
+/// Filter and print an inverted dependency tree
+fn print_inverted_dependency_tree(
+    inverted_dep_map: &HashMap<String, InvertedPkg>,
+    direct_deps: &Vec<String>,
+    regex: &Option<String>,
+) -> Result<(), miette::Error> {
+    let regex = regex
+        .as_ref()
+        .ok_or("")
+        .map_err(|_| miette::miette!("The -i flag requires a package name."))?;
+    let regex = regex::Regex::new(regex).map_err(|_| miette::miette!("Invalid regex pattern"))?;
+
+    let mut root_pkg_names = inverted_dep_map.keys().collect_vec();
+    root_pkg_names.retain(|p| regex.is_match(p));
+
+    if root_pkg_names.is_empty() {
+        Err(miette::miette!(
+            "Nothing depends on the given regular expression",
+        ))?;
     }
 
-    let mut root_package_names: Vec<&&str> = needed_map.keys().collect();
-
-    let regex = args
-        .regex
-        .ok_or("The `-i` flag requires a package name.")
-        .map_err(|_| miette::miette!("The `-i` flag requires a package name."))?;
-    let regex = regex::Regex::new(&regex).map_err(|_| miette::miette!("Invalid regex"))?;
-    root_package_names.retain(|p| regex.is_match(p));
-
-    if root_package_names.is_empty() {
-        println!("Nothing depends on the given regular expression");
-        return Ok(());
-    }
-
-    // Get the explicit project dependencies
-    let project_dependency_names = environment
-        .dependencies(None, Some(platform))
-        .names()
-        .map(|p| p.as_source().to_string())
-        .collect_vec();
-
-    for pkg_name in root_package_names {
-        if project_dependency_names.contains(&pkg_name.to_string()) {
-            println!("\n{}", console::style(pkg_name).fg(Color::Green).bold());
-        } else {
-            println!("\n{}", pkg_name);
-        }
-
-        let package = needed_map.get(pkg_name).unwrap();
-
-        let needed_count = package.needed_by.len();
-        for (index, needed_by) in package.needed_by.iter().enumerate() {
-            let symbol = if index == needed_count - 1 {
-                UTF8_SYMBOLS.ell
-            } else {
-                UTF8_SYMBOLS.tee
-            };
-            if project_dependency_names.contains(needed_by) {
-                println!(
-                    "{} {}",
-                    symbol,
-                    console::style(needed_by).fg(Color::Green).bold()
-                );
-            } else {
-                println!("{} {}", symbol, needed_by);
-            }
-
-            let prefix = if index == needed_count - 1 {
-                UTF8_SYMBOLS.empty
-            } else {
-                UTF8_SYMBOLS.down
-            };
-
-            print_needed_by(
-                needed_by,
-                format!("{} ", prefix),
-                &needed_map,
-                &project_dependency_names,
+    for pkg_name in root_pkg_names.iter() {
+        if let Some(pkg) = inverted_dep_map.get(*pkg_name) {
+            println!(
+                "\n{} v{}",
+                if direct_deps.contains(&pkg.name) {
+                    console::style(pkg.name.clone()).fg(Color::Green).bold()
+                } else {
+                    console::style(pkg.name.clone())
+                },
+                pkg.version
             );
+
+            print_inverted_leaf(pkg, String::from(""), inverted_dep_map, direct_deps);
         }
     }
 
     Ok(())
 }
 
-// Recursively print what a package is needed by as part of an inverted tree
-fn print_needed_by(
-    package_name: &str,
+/// Recursively print inverted dependency tree leaf nodes
+fn print_inverted_leaf(
+    pkg: &InvertedPkg,
     prefix: String,
-    needed_map: &HashMap<&str, InvertedPackage>,
-    project_dependency_names: &Vec<String>,
+    inverted_dep_map: &HashMap<String, InvertedPkg>,
+    direct_deps: &Vec<String>,
 ) {
-    if let Some(package) = needed_map.get(&package_name) {
-        let needed_count = package.needed_by.len();
-        for (index, needed_by) in package.needed_by.iter().enumerate() {
-            let symbol = if index == needed_count - 1 {
-                UTF8_SYMBOLS.ell
-            } else {
-                UTF8_SYMBOLS.tee
-            };
-            if project_dependency_names.contains(needed_by) {
-                println!(
-                    "{}{} {}",
-                    prefix,
-                    symbol,
-                    console::style(needed_by).fg(Color::Green).bold()
-                );
-            } else {
-                println!("{}{} {}", prefix, symbol, needed_by);
-            }
+    let needed_count = pkg.needed_by.len();
+    for (index, needed_name) in pkg.needed_by.iter().enumerate() {
+        let last = index == needed_count - 1;
+        let symbol = if last {
+            UTF8_SYMBOLS.ell
+        } else {
+            UTF8_SYMBOLS.tee
+        };
+
+        if let Some(needed_pkg) = inverted_dep_map.get(needed_name) {
+            println!(
+                "{}{} {} v{}",
+                prefix,
+                symbol,
+                if direct_deps.contains(&needed_pkg.name) {
+                    console::style(needed_pkg.name.clone())
+                        .fg(Color::Green)
+                        .bold()
+                } else {
+                    console::style(needed_pkg.name.clone())
+                },
+                needed_pkg.version,
+            );
 
             let new_prefix = if index == needed_count - 1 {
                 format!("{}{} ", prefix, UTF8_SYMBOLS.empty)
@@ -210,166 +170,227 @@ fn print_needed_by(
                 format!("{}{} ", prefix, UTF8_SYMBOLS.down)
             };
 
-            print_needed_by(needed_by, new_prefix, needed_map, project_dependency_names);
+            print_inverted_leaf(needed_pkg, new_prefix, inverted_dep_map, direct_deps)
         }
     }
 }
 
-#[derive(Debug)]
-struct Dependency {
-    name: String,
-}
+/// Filter and print a top down dependency tree
+fn print_dependency_tree(
+    dep_map: &HashMap<String, Pkg>,
+    direct_deps: &[String],
+    regex: &Option<String>,
+) -> Result<(), miette::Error> {
+    let mut direct_deps = direct_deps.to_owned();
 
-#[derive(Debug)]
-struct TreePackage {
-    dependencies: Vec<Dependency>,
-    version: String,
-}
+    if let Some(regex) = regex {
+        let regex = regex::Regex::new(regex).map_err(|_| miette::miette!("Invalid regex"))?;
+        direct_deps.retain(|p| regex.is_match(p));
 
-// Print a top down dependency tree
-async fn print_tree(args: Args) -> Result<(), miette::Error> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment_name = args
-        .environment
-        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
-    let environment = project
-        .environment(&environment_name)
-        .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
-    let lock_file = project
-        .up_to_date_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_usage.into(),
-            no_install: args.no_install,
-            ..UpdateLockFileOptions::default()
-        })
-        .await?;
-    let platform = args.platform.unwrap_or_else(Platform::current);
-    let locked_deps = lock_file
-        .lock_file
-        .environment(environment.name().as_str())
-        .and_then(|env| env.packages(platform).map(Vec::from_iter))
-        .unwrap_or_default();
-    let conda_records = locked_deps.iter().filter_map(|d| d.as_conda());
-    let mut dependency_map = HashMap::new();
-
-    for rec in conda_records {
-        let package_record = rec.package_record();
-
-        let mut dependencies = Vec::new();
-
-        for dep in package_record.depends.iter() {
-            if let Some((dep_name, _)) = dep.split_once(' ') {
-                dependencies.push(Dependency {
-                    name: dep_name.to_string(),
-                });
-            }
-        }
-
-        dependency_map.insert(
-            package_record.name.as_source(),
-            TreePackage {
-                dependencies,
-                version: package_record.version.as_str().to_string(),
-            },
-        );
-    }
-
-    let mut project_dependency_names = environment
-        .dependencies(None, Some(platform))
-        .names()
-        .map(|p| p.as_source().to_string())
-        .collect_vec();
-
-    if let Some(regex) = args.regex {
-        let regex = regex::Regex::new(&regex).map_err(|_| miette::miette!("Invalid regex"))?;
-        project_dependency_names.retain(|p| regex.is_match(p));
-
-        if project_dependency_names.is_empty() {
+        if direct_deps.is_empty() {
             Err(miette::miette!(
                 "No top level dependencies matched the given regular expression"
             ))?;
         }
     }
 
-    let mut visited_dependencies = Vec::new();
-    let project_dependency_count = project_dependency_names.len();
-    for (index, pkg_name) in project_dependency_names.iter().enumerate() {
-        visited_dependencies.push(pkg_name.to_owned());
-        let symbol = if index == project_dependency_count - 1 {
+    let mut visited_pkgs = Vec::new();
+    let direct_dep_count = direct_deps.len();
+
+    for (index, pkg_name) in direct_deps.iter().enumerate() {
+        visited_pkgs.push(pkg_name.to_owned());
+
+        let last = index == direct_dep_count - 1;
+        let symbol = if last {
             UTF8_SYMBOLS.ell
         } else {
             UTF8_SYMBOLS.tee
         };
-        let dep = dependency_map.get(&pkg_name.as_str()).unwrap();
+        if let Some(pkg) = dep_map.get(pkg_name) {
+            println!(
+                "{} {} v{}",
+                symbol,
+                console::style(pkg.name.clone()).fg(Color::Green).bold(),
+                pkg.version
+            );
 
-        println!(
-            "{} {} v{}",
-            symbol,
-            console::style(pkg_name).fg(Color::Green).bold(),
-            dep.version
-        );
-
-        let prefix = if index == project_dependency_count - 1 {
-            UTF8_SYMBOLS.empty
-        } else {
-            UTF8_SYMBOLS.down
-        };
-        print_dependencies(
-            dep,
-            format!("{} ", prefix),
-            &dependency_map,
-            &mut visited_dependencies,
-        );
+            let prefix = if last {
+                UTF8_SYMBOLS.empty
+            } else {
+                UTF8_SYMBOLS.down
+            };
+            print_dependency_leaf(pkg, format!("{} ", prefix), dep_map, &mut visited_pkgs)
+        }
     }
     Ok(())
 }
 
-// Recursively print the dependencies in a regular tree
-fn print_dependencies(
-    package: &TreePackage,
+/// Recursively print top down dependency tree nodes
+fn print_dependency_leaf(
+    pkg: &Pkg,
     prefix: String,
-    dependency_map: &HashMap<&str, TreePackage>,
-    visited_dependencies: &mut Vec<String>,
+    dep_map: &HashMap<String, Pkg>,
+    visited_pkgs: &mut Vec<String>,
 ) {
-    let dep_count = package.dependencies.len();
-    for (index, pkg_name) in package
-        .dependencies
-        .iter()
-        .map(|d| d.name.clone())
-        .enumerate()
-    {
-        let symbol = if index == dep_count - 1 {
+    let dep_count = pkg.dependencies.len();
+    for (index, dep_name) in pkg.dependencies.iter().enumerate() {
+        let last = index == dep_count - 1;
+        let symbol = if last {
             UTF8_SYMBOLS.ell
         } else {
             UTF8_SYMBOLS.tee
         };
 
-        // Skip virtual packages
-        if pkg_name.starts_with("__") {
+        // skip virtual packages
+        if dep_name.starts_with("__") {
             continue;
         }
 
-        let dep = dependency_map.get(&pkg_name.as_str()).unwrap();
-        let visited = visited_dependencies.contains(&pkg_name);
-        visited_dependencies.push(pkg_name.as_str().to_owned());
+        if let Some(dep) = dep_map.get(dep_name) {
+            let visited = visited_pkgs.contains(&dep.name);
+            visited_pkgs.push(dep.name.to_owned());
 
-        println!(
-            "{}{} {} v{} {}",
-            prefix,
-            symbol,
-            pkg_name,
-            dep.version,
-            if visited { "(*)" } else { "" }
-        );
+            println!(
+                "{}{} {} v{} {}",
+                prefix,
+                symbol,
+                dep.name,
+                dep.version,
+                if visited { "(*)" } else { "" }
+            );
 
-        let new_prefix = if index == dep_count - 1 {
-            format!("{}{} ", prefix, UTF8_SYMBOLS.empty)
-        } else {
-            format!("{}{} ", prefix, UTF8_SYMBOLS.down)
-        };
+            if visited {
+                continue;
+            }
 
-        if visited {
-            continue;
+            let new_prefix = if last {
+                format!("{}{} ", prefix, UTF8_SYMBOLS.empty)
+            } else {
+                format!("{}{} ", prefix, UTF8_SYMBOLS.down)
+            };
+            print_dependency_leaf(dep, new_prefix, dep_map, visited_pkgs);
         }
-        print_dependencies(dep, new_prefix, dependency_map, visited_dependencies);
     }
+}
+
+/// Extract the direct Conda and PyPI dependencies from the environment
+fn direct_dependencies(
+    environment: &crate::project::Environment<'_>,
+    platform: &Platform,
+) -> Vec<String> {
+    let mut project_dependency_names = environment
+        .dependencies(None, Some(*platform))
+        .names()
+        .map(|p| p.as_source().to_string())
+        .collect_vec();
+    project_dependency_names.extend(
+        environment
+            .pypi_dependencies(Some(*platform))
+            .into_iter()
+            .map(|(name, _)| name.as_normalized().to_string()),
+    );
+    project_dependency_names
+}
+
+#[derive(Debug)]
+struct Pkg {
+    name: String,
+    version: String,
+    dependencies: Vec<String>,
+}
+
+#[derive(Debug)]
+struct InvertedPkg {
+    name: String,
+    version: String,
+    needed_by: Vec<String>,
+}
+
+/// Builds a hashmap of dependencies, with names, versions, and what they depend on
+fn generate_dependency_map(locked_deps: &Vec<Package>) -> HashMap<String, Pkg> {
+    let mut dep_map = HashMap::new();
+
+    for dep in locked_deps {
+        let version = dep.version().into_owned();
+
+        if let Some(dep) = dep.as_conda() {
+            let name = dep.package_record().name.as_normalized().to_string();
+            let mut dependencies = Vec::new();
+            for d in dep.package_record().depends.iter() {
+                if let Some((dep_name, _)) = d.split_once(' ') {
+                    dependencies.push(dep_name.to_string())
+                }
+            }
+
+            dep_map.insert(
+                name.clone(),
+                Pkg {
+                    name: name.clone(),
+                    version,
+                    dependencies: unique_deps(dependencies),
+                },
+            );
+        } else if let Some(dep) = dep.as_pypi() {
+            let name = dep.data().package.name.to_string();
+
+            let mut dependencies = Vec::new();
+            for p in dep.data().package.requires_dist.iter() {
+                if let Some(markers) = &p.marker {
+                    tracing::info!(
+                        "A bunch of markers on {}, skipping for now {:?}",
+                        p.name,
+                        markers
+                    );
+                } else {
+                    dependencies.push(p.name.to_string())
+                }
+            }
+            dep_map.insert(
+                name.clone(),
+                Pkg {
+                    name: name.clone(),
+                    version,
+                    dependencies: unique_deps(dependencies),
+                },
+            );
+        }
+    }
+    dep_map
+}
+
+/// Only return the unique dependencies
+fn unique_deps(dependencies: Vec<String>) -> Vec<String> {
+    let mut unique_deps = HashSet::new();
+
+    for d in dependencies {
+        unique_deps.insert(d);
+    }
+    unique_deps.into_iter().collect()
+}
+
+/// Given a map of dependencies, invert it so that it has what a package is needed by,
+/// rather than what it depends on
+fn invert_dep_map(dep_map: &HashMap<String, Pkg>) -> HashMap<String, InvertedPkg> {
+    let mut inverted_deps = HashMap::new();
+
+    for (pkg_name, pkg) in dep_map {
+        inverted_deps.insert(
+            pkg_name.to_string(),
+            InvertedPkg {
+                name: pkg.name.clone(),
+                version: pkg.version.clone(),
+                needed_by: Vec::new(),
+            },
+        );
+    }
+
+    for pkg in dep_map.values() {
+        for dep in pkg.dependencies.iter() {
+            if let Some(idep) = inverted_deps.get_mut(dep) {
+                idep.needed_by.push(pkg.name.clone());
+            }
+        }
+    }
+
+    inverted_deps
 }
