@@ -68,6 +68,7 @@ platforms = ["{{ platforms|join("\", \"") }}"]
 {%- if loop.first %}
 
 [tool.pixi.environments]
+default = {features = [], solve-group = "default"}
 {%- endif %}
 {{env}} = {features = {{features}}, solve-group = "default"}
 {%- endfor %}
@@ -403,12 +404,20 @@ fn parse_channels(channels: Vec<String>) -> Vec<String> {
 pub fn environments_from_extras(pyproject: &PyProjectToml) -> HashMap<String, Vec<String>> {
     let mut environments = HashMap::new();
     if let Some(Some(extras)) = &pyproject.project.as_ref().map(|p| &p.optional_dependencies) {
-        for (extra, _reqs) in extras {
-            let features = vec![extra.to_string()];
-            // TODO add self references
-            // for req in reqs.iter() {
-            //     if req.name == PackageName::from_str(self.project.name) {}
-            // }
+        let pname = &pyproject
+            .project
+            .as_ref()
+            .map(|p| pep508_rs::PackageName::new(p.name.clone()).unwrap());
+        for (extra, reqs) in extras {
+            let mut features = vec![extra.to_string()];
+            // Add any references to other groups of extra dependencies
+            for req in reqs.iter() {
+                if pname.as_ref().is_some_and(|n| n == &req.name) {
+                    for extra in &req.extras {
+                        features.push(extra.to_string())
+                    }
+                }
+            }
             environments.insert(extra.clone(), features);
         }
     }

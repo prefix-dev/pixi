@@ -85,8 +85,15 @@ impl From<PyProjectManifest> for ProjectManifest {
                     .or_default()
                     .targets
                     .default_mut();
+                let pname = &item
+                    .project
+                    .as_ref()
+                    .map(|p| pep508_rs::PackageName::new(p.name.clone()).unwrap());
                 for req in reqs.iter() {
-                    // TODO: filter out self references
+                    // filter out any self references in groups of extra dependencies
+                    if pname.as_ref().is_some_and(|n| n == &req.name) {
+                        continue;
+                    }
                     target.add_pypi_dependency(
                         PyPiPackageName::from_normalized(req.name.clone()),
                         PyPiRequirement::from(req.clone()),
