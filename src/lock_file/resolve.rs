@@ -75,10 +75,18 @@ impl UvResolutionContext {
         )
         .into_diagnostic()
         .context("failed to create uv cache")?;
+        let keyring_provider = project
+            .config()
+            .keyring_provider
+            .clone()
+            .map_or(uv_auth::KeyringProvider::Disabled, |kp| {
+                uv_auth::KeyringProvider::from(kp)
+            });
         let registry_client = Arc::new(
             RegistryClientBuilder::new(cache.clone())
                 .client(project.client().clone())
                 .connectivity(Connectivity::Online)
+                .keyring_provider(keyring_provider)
                 .build(),
         );
         let in_flight = Arc::new(InFlight::default());

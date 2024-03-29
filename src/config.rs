@@ -7,6 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use url::Url;
+use uv_auth::KeyringProvider as UvAuthKeyringProvider;
 
 use crate::consts;
 
@@ -140,6 +141,27 @@ pub struct Config {
 
     /// Configuration for repodata fetching.
     pub repodata_config: Option<RepodataConfig>,
+
+    /// Configuration for Uv keyring support
+    #[serde(default)]
+    pub keyring_provider: Option<KeyringProvider>,
+}
+
+/// Matches uv-auth KeyringProvider, to allow for deserialization
+#[derive(Default, Clone, Debug, Deserialize)]
+pub enum KeyringProvider {
+    #[default]
+    Disabled,
+    Subprocess,
+}
+
+impl From<KeyringProvider> for UvAuthKeyringProvider {
+    fn from(kp: KeyringProvider) -> Self {
+        match kp {
+            KeyringProvider::Disabled => UvAuthKeyringProvider::Disabled,
+            KeyringProvider::Subprocess => UvAuthKeyringProvider::Subprocess,
+        }
+    }
 }
 
 impl From<ConfigCli> for Config {
@@ -256,6 +278,7 @@ impl Config {
             // currently this is always the default so just use the current value
             channel_config: self.channel_config,
             repodata_config: other.repodata_config.or(self.repodata_config),
+            keyring_provider: other.keyring_provider.or(self.keyring_provider),
         }
     }
 
