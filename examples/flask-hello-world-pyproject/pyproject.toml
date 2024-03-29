@@ -13,7 +13,7 @@ build-backend = "setuptools.build_meta"
 [tool.pixi.project]
 name = "flask-hello-world-pyproject"
 channels = ["conda-forge"]
-platforms = ["linux-64"]
+platforms = ["linux-64", "osx-arm64"]
 
 [tool.pixi.tasks]
 start = "python -m flask run --port=5050"
