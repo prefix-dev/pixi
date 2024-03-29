@@ -401,6 +401,10 @@ fn parse_channels(channels: Vec<String>) -> Vec<String> {
     new_channels
 }
 
+/// Builds a list of pixi environments from pyproject groups of extra dependencies:
+///  - one environment is created per group of extra, with the same name as the group of extra
+///  - each environment includes the feature of the same name as the group of extra
+///  - it will also include other features inferred from any self references to other groups of extras
 pub fn environments_from_extras(pyproject: &PyProjectToml) -> HashMap<String, Vec<String>> {
     let mut environments = HashMap::new();
     if let Some(Some(extras)) = &pyproject.project.as_ref().map(|p| &p.optional_dependencies) {

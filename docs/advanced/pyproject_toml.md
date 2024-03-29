@@ -104,6 +104,50 @@ matplotlib = "*"
 This would result in the conda dependencies being installed and the pypi dependencies being ignored.
 As pixi takes the conda dependencies over the pypi dependencies.
 
+## Optional dependencies
+If your python project includes groups of optional dependencies, pixi will automatically interpret them as pixi features of the same name with the associated pypi dependencies.
+
+You can add them to pixi environments manually, or use `pixi init` to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.
+
+For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
+```toml title="pyproject.toml"
+[project]
+name = "my_project"
+dependencies = ["package1"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+all = ["package2","my_project[test]"]
+```
+
+Running `pixi init` in that project folder will transform the `pyproject.toml` file into: 
+```toml title="pyproject.toml"
+[project]
+name = "my_project"
+dependencies = ["package1"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+all = ["package2","my_project[test]"]
+
+[tool.pixi.project]
+name = "my_project"
+channels = ["conda-forge"]
+platforms = ["linux-64"] # if executed on linux
+
+[tool.pixi.environments]
+default = {features = [], solve-group = "default"}
+test = {features = ["test"], solve-group = "default"}
+all = {features = ["all", "test"], solve-group = "default"}
+```
+In this example, three environments will be created by pixi:
+
+ - **default** with 'package1' as pypi dependency
+ - **test** with 'package1' and 'pytest' as pypi dependencies
+ - **all** with 'package1', 'package2' and 'pytest' as pypi dependencies
+
+All environments will be solved together, as indicated by the common `solve-group`, and added to the lock file. You can edit the `[tool.pixi.environments]` section manually to adapt it to your use case (e.g. if you do not need a particular environement).
+
 ## Example
 As the `pyproject.toml` file supports the full pixi spec with `[tool.pixi]` prepended an example would look like this:
 ```toml title="pyproject.toml"
