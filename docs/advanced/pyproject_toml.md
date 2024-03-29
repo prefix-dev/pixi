@@ -110,7 +110,7 @@ If your python project includes groups of optional dependencies, pixi will autom
 You can add them to pixi environments manually, or use `pixi init` to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
-```toml title="pyproject.toml"
+```toml
 [project]
 name = "my_project"
 dependencies = ["package1"]
@@ -120,8 +120,8 @@ test = ["pytest"]
 all = ["package2","my_project[test]"]
 ```
 
-Running `pixi init` in that project folder will transform the `pyproject.toml` file into: 
-```toml title="pyproject.toml"
+Running `pixi init` in that project folder will transform the `pyproject.toml` file into:
+```toml
 [project]
 name = "my_project"
 dependencies = ["package1"]
@@ -146,7 +146,7 @@ In this example, three environments will be created by pixi:
  - **test** with 'package1' and 'pytest' as pypi dependencies
  - **all** with 'package1', 'package2' and 'pytest' as pypi dependencies
 
-All environments will be solved together, as indicated by the common `solve-group`, and added to the lock file. You can edit the `[tool.pixi.environments]` section manually to adapt it to your use case (e.g. if you do not need a particular environement).
+All environments will be solved together, as indicated by the common `solve-group`, and added to the lock file. You can edit the `[tool.pixi.environments]` section manually to adapt it to your use case (e.g. if you do not need a particular environment).
 
 ## Example
 As the `pyproject.toml` file supports the full pixi spec with `[tool.pixi]` prepended an example would look like this:
