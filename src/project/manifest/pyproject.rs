@@ -1,7 +1,7 @@
 use pep508_rs::VersionOrUrl;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 use toml_edit;
 use toml_edit::TomlError;
 
@@ -58,7 +58,7 @@ impl From<PyProjectManifest> for ProjectManifest {
             SpecType::Run,
         );
 
-        // add pyproject dependencies as pypi dependencies
+        // Add pyproject dependencies as pypi dependencies
         if let Some(deps) = item
             .project
             .as_ref()
@@ -71,6 +71,18 @@ impl From<PyProjectManifest> for ProjectManifest {
                     PyPiRequirement::from(d),
                 )
             }
+        }
+
+        // Add the project itself as an editable dependency
+        if let Some(name) = &item.project.as_ref().map(|p| &p.name) {
+            target.add_pypi_dependency(
+                PyPiPackageName::from_str(name).unwrap(),
+                PyPiRequirement::Path {
+                    path: PathBuf::from("."),
+                    editable: Some(true),
+                    extras: Default::default(),
+                },
+            );
         }
 
         // For each extra group, create a feature of the same name if it does not exist,

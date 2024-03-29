@@ -2,11 +2,13 @@
 name = "flask-hello-world-pyproject"
 version = "0.1.0"
 description = "Example how to get started with flask in a pixi environment."
-license = "MIT OR Apache-2.0"
-homepage = "https://github.com/prefix/pixi"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["flask==2.*"]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [tool.pixi.project]
 name = "flask-hello-world-pyproject"
