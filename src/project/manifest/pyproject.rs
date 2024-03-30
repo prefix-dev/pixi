@@ -51,7 +51,7 @@ impl From<PyProjectManifest> for ProjectManifest {
         let pythonspec = pyproject
             .requires_python
             .clone()
-            .map(|v| VersionOrUrl::VersionSpecifier(v));
+            .map(VersionOrUrl::VersionSpecifier);
         let target = manifest.default_feature_mut().targets.default_mut();
         target.add_dependency(
             PackageName::from_str("python").unwrap(),
@@ -121,6 +121,9 @@ mod tests {
     };
 
     const PYPROJECT_FULL: &str = r#"
+        [project]
+        name = "project"
+
         [tool.pixi.project]
         name = "project"
         version = "0.1.0"
