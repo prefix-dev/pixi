@@ -170,7 +170,7 @@ packages:
   name: flask-hello-world-pyproject
   version: 0.1.0
   path: .
-  sha256: 7aed9987d51016500b094b3031c0d05596ba1c147a1c2cb0ec4f4ced97538c6c
+  sha256: c1e56228c1a5fc9bd90dadb6910583b67435ef41016d139cc2bac34f2617c640
   requires_dist:
   - flask ==2.*
   requires_python: '>=3.11'
