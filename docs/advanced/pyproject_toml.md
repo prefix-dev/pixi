@@ -145,8 +145,7 @@ test = ["test"]
 
 ## Build-system section
 The `pyproject.toml` file normally contains a `[build-system]` section.
-Currently, pixi does not use this section, but it is recommended to keep it in the file for compatibility with other tools.
-
+Pixi will use this section to install the project (as an editable install, i.e. equivalent to `pip install -e .`) automatically and add it to the lock file.
 ```toml title="pyproject.toml"
 [build-system]
 requires = ["setuptools", "wheel"]
