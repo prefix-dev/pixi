@@ -398,7 +398,7 @@ pixi tree --environment docs
 ```
 
 !!! warning
-    `pixi tree`'s support for PyPI packages is still under development, and not all packages are currently being parsed. Add `-v` to increase verbosity to display notices to see which packages are currently unable to be parsed.
+    Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
 
 Output will look like this, where direct packages in the [manifest file](configuration.md) will be green. Once a package has been displayed once, the tree won't continue to recurse through it's dependencies (compare the first time `python` appears, vs the rest), and it will instead be marked with a star `(*)`.
 
