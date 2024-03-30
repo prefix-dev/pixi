@@ -1,30 +1,22 @@
 use futures::stream::FuturesUnordered;
-use futures::{StreamExt};
-use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
+use futures::StreamExt;
+
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use rattler_digest::Sha256Hash;
 use reqwest::StatusCode;
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use std::{collections::HashMap, str::FromStr};
-use std::time::Duration;
-use tokio::sync::Semaphore;
-use url::Url;
+use reqwest_middleware::ClientWithMiddleware;
 
-use crate::config::get_cache_dir;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
+
+use super::Reporter;
 
 const STORAGE_URL: &str = "https://conda-mapping.prefix.dev";
 const HASH_DIR: &str = "hash-v0";
-
-pub trait Reporter: Send + Sync {
-    fn download_started(&self, package: &RepoDataRecord, total: usize);
-    fn download_finished(&self, package: &RepoDataRecord, total: usize);
-    fn download_failed(&self, package: &RepoDataRecord, total: usize);
-}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Package {
@@ -66,28 +58,10 @@ async fn try_fetch_single_mapping(
 
 /// Downloads and caches the conda-forge conda-to-pypi name mapping.
 pub async fn conda_pypi_name_mapping(
-    client: reqwest::Client,
+    client: &ClientWithMiddleware,
     conda_packages: &[RepoDataRecord],
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<HashMap<Sha256Hash, Package>> {
-    // Construct a client with a retry policy and local caching
-    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
-    let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
-    let cache_strategy = Cache(HttpCache {
-        mode: CacheMode::Default,
-        manager: CACacheManager {
-            path: get_cache_dir()
-                .expect("missing cache directory")
-                .join("http-cache"),
-        },
-        options: HttpCacheOptions::default(),
-    });
-
-    let client = ClientBuilder::new(client)
-        .with(cache_strategy)
-        .with(retry_strategy)
-        .build();
-
     let filtered_packages = conda_packages
         .iter()
         .filter_map(|package| {
@@ -104,7 +78,7 @@ pub async fn conda_pypi_name_mapping(
     let concurrency_limit = Arc::new(Semaphore::new(100));
     for (record, hash) in filtered_packages {
         if let Some(reporter) = &reporter {
-            reporter.download_started(&record, total_records);
+            reporter.download_started(record, total_records);
         }
 
         let client = client.clone();
@@ -125,8 +99,8 @@ pub async fn conda_pypi_name_mapping(
             // Report the result to the reporter
             if let Some(reporter) = reporter {
                 match &result {
-                    Ok(_) => reporter.download_finished(&record, total_records),
-                    Err(_) => reporter.download_failed(&record, total_records),
+                    Ok(_) => reporter.download_finished(record, total_records),
+                    Err(_) => reporter.download_failed(record, total_records),
                 }
             }
 
@@ -160,7 +134,7 @@ pub async fn conda_pypi_name_mapping(
 
 /// Amend the records with pypi purls if they are not present yet.
 pub async fn amend_pypi_purls(
-    client: reqwest::Client,
+    client: &ClientWithMiddleware,
     conda_packages: &mut [RepoDataRecord],
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
@@ -168,6 +142,7 @@ pub async fn amend_pypi_purls(
     for record in conda_packages.iter_mut() {
         amend_pypi_purls_for_record(record, &conda_mapping)?;
     }
+
     Ok(())
 }
 
@@ -210,14 +185,4 @@ fn amend_pypi_purls_for_record(
     }
 
     Ok(())
-}
-
-/// Returns `true` if the specified record refers to a conda-forge package.
-pub fn is_conda_forge_record(record: &RepoDataRecord) -> bool {
-    Url::from_str(&record.channel).map_or(false, |u| is_conda_forge_url(&u))
-}
-
-/// Returns `true` if the specified url refers to a conda-forge channel.
-pub fn is_conda_forge_url(url: &Url) -> bool {
-    url.path().starts_with("/conda-forge")
 }

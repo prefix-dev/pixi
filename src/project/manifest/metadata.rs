@@ -50,4 +50,7 @@ pub struct ProjectMetadata {
 
     /// URL of the project documentation
     pub documentation: Option<Url>,
+
+    /// URL of the pypi name mapping
+    pub pypi_name_mapping: Option<Url>,
 }

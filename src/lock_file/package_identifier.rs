@@ -1,5 +1,5 @@
 use crate::project::manifest::python::PyPiPackageName;
-use crate::pypi_name_mapping;
+use crate::pypi_mapping;
 use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
@@ -41,7 +41,7 @@ impl PypiPackageIdentifier {
 
         // If there is no pypi purl, but the package is a conda-forge package, we just assume that
         // the name of the package is equivalent to the name of the python package.
-        if !has_pypi_purl && pypi_name_mapping::is_conda_forge_record(record) {
+        if !has_pypi_purl && pypi_mapping::is_conda_forge_record(record) {
             // Convert the conda package names to pypi package names. If the conversion fails we
             // just assume that its not a valid python package.
             let name = PackageName::from_str(record.package_record.name.as_source()).ok();

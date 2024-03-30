@@ -1,5 +1,6 @@
 use crate::lock_file::{PypiRecord, UvResolutionContext};
 use crate::project::grouped_environment::GroupedEnvironmentName;
+use crate::pypi_mapping::{self, Reporter};
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::is_python_record;
 use crate::{
@@ -12,7 +13,6 @@ use crate::{
     prefix::Prefix,
     progress::global_multi_progress,
     project::{grouped_environment::GroupedEnvironment, Environment},
-    pypi_name_mapping,
     repodata::fetch_sparse_repodata_targets,
     utils::BarrierCell,
     EnvironmentName, Project,
@@ -1105,6 +1105,9 @@ async fn spawn_solve_conda_environment_task(
     // Whether there are pypi dependencies, and we should fetch purls.
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
+    // Whether we should use custom mapping location
+    let custom_mapping_location = group.project().custom_pypi_mapping();
+
     tokio::spawn(
         async move {
             let _permit = concurrency_semaphore
@@ -1162,8 +1165,9 @@ async fn spawn_solve_conda_environment_task(
             // Add purl's for the conda packages that are also available as pypi packages if we need them.
             if has_pypi_dependencies {
                 pb.set_message("extracting pypi packages");
-                pypi_name_mapping::amend_pypi_purls(
+                pypi_mapping::amend_pypi_purls(
                     client,
+                    custom_mapping_location,
                     &mut records,
                     Some(pb.purl_amend_reporter()),
                 )
@@ -1551,9 +1555,7 @@ impl SolveProgressBar {
             consts::PLATFORM_STYLE.apply_to(platform)
         );
 
-        pb.set_style(
-            indicatif::ProgressStyle::with_template(&format!("    {{prefix:20!}} ..",)).unwrap(),
-        );
+        pb.set_style(indicatif::ProgressStyle::with_template("    {{prefix:20!}} ..").unwrap());
         pb.enable_steady_tick(Duration::from_millis(100));
         pb.set_prefix(name_and_platform);
         Self { pb }
@@ -1576,9 +1578,8 @@ impl SolveProgressBar {
         self.pb.set_length(total as u64);
         self.pb.set_position(0);
         self.pb.set_style(
-            indicatif::ProgressStyle::with_template(&format!(
-                "  {{spinner:.dim}} {{prefix:20!}} [{{elapsed_precise}}] [{{bar:20!.bright.yellow/dim.white}}] {{pos:>4}}/{{len:4}} {{msg:.dim}}",
-            ))
+            indicatif::ProgressStyle::with_template(
+                "  {{spinner:.dim}} {{prefix:20!}} [{{elapsed_precise}}] [{{bar:20!.bright.yellow/dim.white}}] {{pos:>4}}/{{len:4}} {{msg:.dim}}")
                 .unwrap()
                 .progress_chars("━━╾─"),
         );
@@ -1586,9 +1587,9 @@ impl SolveProgressBar {
 
     pub fn reset_style(&self) {
         self.pb.set_style(
-            indicatif::ProgressStyle::with_template(&format!(
+            indicatif::ProgressStyle::with_template(
                 "  {{spinner:.dim}} {{prefix:20!}} [{{elapsed_precise}}] {{msg:.dim}}",
-            ))
+            )
             .unwrap(),
         );
     }
@@ -1604,7 +1605,7 @@ impl SolveProgressBar {
         self.pb.finish_and_clear();
     }
 
-    fn purl_amend_reporter(self: &Arc<Self>) -> Arc<dyn pypi_name_mapping::Reporter> {
+    fn purl_amend_reporter(self: &Arc<Self>) -> Arc<dyn Reporter> {
         Arc::new(PurlAmendReporter {
             pb: self.clone(),
             style_set: AtomicBool::new(false),
@@ -1617,7 +1618,7 @@ struct PurlAmendReporter {
     style_set: AtomicBool,
 }
 
-impl pypi_name_mapping::Reporter for PurlAmendReporter {
+impl pypi_mapping::Reporter for PurlAmendReporter {
     fn download_started(&self, _package: &RepoDataRecord, total: usize) {
         if !self.style_set.swap(true, Ordering::Relaxed) {
             self.pb.set_update_style(total);

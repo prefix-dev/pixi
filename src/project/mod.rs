@@ -28,6 +28,7 @@ use std::{
 use crate::activation::{get_environment_variables, run_activation};
 use crate::config::Config;
 use crate::project::grouped_environment::GroupedEnvironment;
+use crate::pypi_mapping::MappingSource;
 use crate::task::TaskName;
 use crate::utils::reqwest::build_reqwest_clients;
 use crate::{
@@ -414,6 +415,11 @@ impl Project {
     /// `[pypi-dependencies]` is specified without any requirements this will return true.
     pub fn has_pypi_dependencies(&self) -> bool {
         self.manifest.has_pypi_dependencies()
+    }
+
+    /// Returns the custom location of pypi-name-mapping
+    pub fn custom_pypi_mapping(&self) -> MappingSource {
+        self.manifest.custom_pypi_mapping()
     }
 
     /// Returns the Python index locations to use for this project.

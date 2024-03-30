@@ -12,6 +12,7 @@ mod validation;
 use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
 use crate::project::manifest::python::PyPiPackageName;
+use crate::pypi_mapping::MappingSource;
 use crate::task::TaskName;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 pub use activation::Activation;
@@ -504,6 +505,16 @@ impl Manifest {
             .values()
             .flat_map(|f| f.targets.targets())
             .any(|f| f.pypi_dependencies.is_some())
+    }
+
+    /// Returns what pypi mapping configuration we should use.
+    /// It can be a custom one  in following format : conda_name: pypi_name
+    /// Or we can use our self-hosted
+    pub fn custom_pypi_mapping(&self) -> MappingSource {
+        match self.parsed.project.pypi_name_mapping.clone() {
+            Some(url) => MappingSource::Custom(url),
+            None => MappingSource::Prefix,
+        }
     }
 
     /// Returns a mutable reference to the specified array either in project or feature.
