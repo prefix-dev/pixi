@@ -39,18 +39,19 @@ impl PyProjectManifest {
 
 impl From<PyProjectManifest> for ProjectManifest {
     fn from(item: PyProjectManifest) -> Self {
-        // Start by loading the data nested under "tool.pixi"
+        // Start by loading the data nested under "tool.pixi" as manifest,
+        // and a reference to the pyproject project table
         let mut manifest = item.tool.pixi.clone();
+        let pyproject = item.project.as_ref().expect("project table should exist");
 
         // TODO: tool.pixi.project.name should be made optional or read from project.name
         // TODO: could copy across / convert some other optional fields if relevant
 
         // Add python as dependency based on the project.requires_python property (if any)
-        let pythonspec = item
-            .project
-            .as_ref()
-            .and_then(|p| p.requires_python.as_ref())
-            .map(|v| VersionOrUrl::VersionSpecifier(v.clone()));
+        let pythonspec = pyproject
+            .requires_python
+            .clone()
+            .map(|v| VersionOrUrl::VersionSpecifier(v));
         let target = manifest.default_feature_mut().targets.default_mut();
         target.add_dependency(
             PackageName::from_str("python").unwrap(),
@@ -59,12 +60,7 @@ impl From<PyProjectManifest> for ProjectManifest {
         );
 
         // Add pyproject dependencies as pypi dependencies
-        if let Some(deps) = item
-            .project
-            .as_ref()
-            .and_then(|p| p.dependencies.as_ref())
-            .cloned()
-        {
+        if let Some(deps) = pyproject.dependencies.clone() {
             for d in deps.into_iter() {
                 target.add_pypi_dependency(
                     PyPiPackageName::from_normalized(d.name.clone()),
@@ -74,16 +70,14 @@ impl From<PyProjectManifest> for ProjectManifest {
         }
 
         // Add the project itself as an editable dependency
-        if let Some(name) = &item.project.as_ref().map(|p| &p.name) {
-            target.add_pypi_dependency(
-                PyPiPackageName::from_str(name).unwrap(),
-                PyPiRequirement::Path {
-                    path: PathBuf::from("."),
-                    editable: Some(true),
-                    extras: Default::default(),
-                },
-            );
-        }
+        target.add_pypi_dependency(
+            PyPiPackageName::from_str(&pyproject.name).unwrap(),
+            PyPiRequirement::Path {
+                path: PathBuf::from("."),
+                editable: Some(true),
+                extras: Default::default(),
+            },
+        );
 
         // For each extra group, create a feature of the same name if it does not exist,
         // add dependencies and create corresponding environments if they do not exist
