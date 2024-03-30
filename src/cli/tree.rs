@@ -1,11 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use clap::Parser;
 use console::Color;
 use itertools::Itertools;
 use rattler_conda_types::Platform;
-use rattler_lock::Package;
 
 use crate::lock_file::UpdateLockFileOptions;
 use crate::project::manifest::EnvironmentName;
@@ -13,7 +12,17 @@ use crate::Project;
 
 /// Show a tree of project dependencies
 #[derive(Debug, Parser)]
-#[clap(arg_required_else_help = false)]
+#[clap(arg_required_else_help = false, long_about=format!(
+    "\
+    Show a tree of project dependencies\n\
+    \n\
+    Dependency names highlighted in {} are directly specified in the manifest. \
+    {} version numbers are Conda packages where as PyPI version numbers are {}.
+    ",
+    console::style("green").fg(Color::Green).bold(),
+    console::style("Yellow").fg(Color::Yellow),
+    console::style("blue").fg(Color::Blue)
+))]
 pub struct Args {
     /// List only packages matching a regular expression
     #[arg()]
@@ -95,7 +104,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 /// Filter and print an inverted dependency tree
 fn print_inverted_dependency_tree(
-    inverted_dep_map: &HashMap<String, InvertedPkg>,
+    inverted_dep_map: &HashMap<String, InvertedPackage>,
     direct_deps: &Vec<String>,
     regex: &Option<String>,
 ) -> Result<(), miette::Error> {
@@ -123,7 +132,10 @@ fn print_inverted_dependency_tree(
                 } else {
                     console::style(pkg.name.clone())
                 },
-                pkg.version
+                match pkg.source {
+                    PackageSource::Conda => console::style(pkg.version.clone()).fg(Color::Yellow),
+                    PackageSource::Pypi => console::style(pkg.version.clone()).fg(Color::Blue),
+                },
             );
 
             print_inverted_leaf(pkg, String::from(""), inverted_dep_map, direct_deps);
@@ -135,9 +147,9 @@ fn print_inverted_dependency_tree(
 
 /// Recursively print inverted dependency tree leaf nodes
 fn print_inverted_leaf(
-    pkg: &InvertedPkg,
+    pkg: &InvertedPackage,
     prefix: String,
-    inverted_dep_map: &HashMap<String, InvertedPkg>,
+    inverted_dep_map: &HashMap<String, InvertedPackage>,
     direct_deps: &Vec<String>,
 ) {
     let needed_count = pkg.needed_by.len();
@@ -161,7 +173,12 @@ fn print_inverted_leaf(
                 } else {
                     console::style(needed_pkg.name.clone())
                 },
-                needed_pkg.version,
+                match needed_pkg.source {
+                    PackageSource::Conda =>
+                        console::style(needed_pkg.version.clone()).fg(Color::Yellow),
+                    PackageSource::Pypi =>
+                        console::style(needed_pkg.version.clone()).fg(Color::Blue),
+                },
             );
 
             let new_prefix = if index == needed_count - 1 {
@@ -177,7 +194,7 @@ fn print_inverted_leaf(
 
 /// Filter and print a top down dependency tree
 fn print_dependency_tree(
-    dep_map: &HashMap<String, Pkg>,
+    dep_map: &HashMap<String, Package>,
     direct_deps: &[String],
     regex: &Option<String>,
 ) -> Result<(), miette::Error> {
@@ -211,7 +228,10 @@ fn print_dependency_tree(
                 "{} {} v{}",
                 symbol,
                 console::style(pkg.name.clone()).fg(Color::Green).bold(),
-                pkg.version
+                match pkg.source {
+                    PackageSource::Conda => console::style(pkg.version.clone()).fg(Color::Yellow),
+                    PackageSource::Pypi => console::style(pkg.version.clone()).fg(Color::Blue),
+                }
             );
 
             let prefix = if last {
@@ -227,9 +247,9 @@ fn print_dependency_tree(
 
 /// Recursively print top down dependency tree nodes
 fn print_dependency_leaf(
-    pkg: &Pkg,
+    pkg: &Package,
     prefix: String,
-    dep_map: &HashMap<String, Pkg>,
+    dep_map: &HashMap<String, Package>,
     visited_pkgs: &mut Vec<String>,
 ) {
     let dep_count = pkg.dependencies.len();
@@ -255,7 +275,10 @@ fn print_dependency_leaf(
                 prefix,
                 symbol,
                 dep.name,
-                dep.version,
+                match dep.source {
+                    PackageSource::Conda => console::style(dep.version.clone()).fg(Color::Yellow),
+                    PackageSource::Pypi => console::style(dep.version.clone()).fg(Color::Blue),
+                },
                 if visited { "(*)" } else { "" }
             );
 
@@ -292,22 +315,30 @@ fn direct_dependencies(
     project_dependency_names
 }
 
+#[derive(Debug, Copy, Clone)]
+enum PackageSource {
+    Conda,
+    Pypi,
+}
+
 #[derive(Debug)]
-struct Pkg {
+struct Package {
     name: String,
     version: String,
     dependencies: Vec<String>,
+    source: PackageSource,
 }
 
 #[derive(Debug)]
-struct InvertedPkg {
+struct InvertedPackage {
     name: String,
     version: String,
     needed_by: Vec<String>,
+    source: PackageSource,
 }
 
 /// Builds a hashmap of dependencies, with names, versions, and what they depend on
-fn generate_dependency_map(locked_deps: &Vec<Package>) -> HashMap<String, Pkg> {
+fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<String, Package> {
     let mut dep_map = HashMap::new();
 
     for dep in locked_deps {
@@ -324,10 +355,11 @@ fn generate_dependency_map(locked_deps: &Vec<Package>) -> HashMap<String, Pkg> {
 
             dep_map.insert(
                 name.clone(),
-                Pkg {
+                Package {
                     name: name.clone(),
                     version,
-                    dependencies: unique_deps(dependencies),
+                    dependencies: dependencies.into_iter().unique().collect(),
+                    source: PackageSource::Conda,
                 },
             );
         } else if let Some(dep) = dep.as_pypi() {
@@ -337,8 +369,9 @@ fn generate_dependency_map(locked_deps: &Vec<Package>) -> HashMap<String, Pkg> {
             for p in dep.data().package.requires_dist.iter() {
                 if let Some(markers) = &p.marker {
                     tracing::info!(
-                        "A bunch of markers on {}, skipping for now {:?}",
+                        "Extra and environment markers currently cannot be parsed on {} which is specified by {}, skipping. {:?}",
                         p.name,
+                        name,
                         markers
                     );
                 } else {
@@ -347,10 +380,11 @@ fn generate_dependency_map(locked_deps: &Vec<Package>) -> HashMap<String, Pkg> {
             }
             dep_map.insert(
                 name.clone(),
-                Pkg {
+                Package {
                     name: name.clone(),
                     version,
-                    dependencies: unique_deps(dependencies),
+                    dependencies: dependencies.into_iter().unique().collect(),
+                    source: PackageSource::Pypi,
                 },
             );
         }
@@ -358,31 +392,23 @@ fn generate_dependency_map(locked_deps: &Vec<Package>) -> HashMap<String, Pkg> {
     dep_map
 }
 
-/// Only return the unique dependencies
-fn unique_deps(dependencies: Vec<String>) -> Vec<String> {
-    let mut unique_deps = HashSet::new();
-
-    for d in dependencies {
-        unique_deps.insert(d);
-    }
-    unique_deps.into_iter().collect()
-}
-
 /// Given a map of dependencies, invert it so that it has what a package is needed by,
 /// rather than what it depends on
-fn invert_dep_map(dep_map: &HashMap<String, Pkg>) -> HashMap<String, InvertedPkg> {
-    let mut inverted_deps = HashMap::new();
-
-    for (pkg_name, pkg) in dep_map {
-        inverted_deps.insert(
-            pkg_name.to_string(),
-            InvertedPkg {
-                name: pkg.name.clone(),
-                version: pkg.version.clone(),
-                needed_by: Vec::new(),
-            },
-        );
-    }
+fn invert_dep_map(dep_map: &HashMap<String, Package>) -> HashMap<String, InvertedPackage> {
+    let mut inverted_deps: HashMap<String, InvertedPackage> = dep_map
+        .iter()
+        .map(|(pkg_name, pkg)| {
+            (
+                pkg_name.clone(),
+                InvertedPackage {
+                    name: pkg.name.clone(),
+                    version: pkg.version.clone(),
+                    needed_by: Vec::new(),
+                    source: pkg.source,
+                },
+            )
+        })
+        .collect();
 
     for pkg in dep_map.values() {
         for dep in pkg.dependencies.iter() {

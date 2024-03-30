@@ -329,8 +329,6 @@ List project's packages. Highlighted packages are explicit dependencies.
 - `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
 
 ```shell
-
-```shell
 pixi list
 pixi list --json-pretty
 pixi list --sort-by size
@@ -389,8 +387,6 @@ The package tree can also be inverted (`-i`), to see which packages require a sp
 - `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
 
 ```shell
-
-```shell
 pixi tree
 pixi tree pre-commit
 pixi tree -i yaml
@@ -400,7 +396,10 @@ pixi tree --environment docs
 !!! warning
     Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
 
-Output will look like this, where direct packages in the [manifest file](configuration.md) will be green. Once a package has been displayed once, the tree won't continue to recurse through it's dependencies (compare the first time `python` appears, vs the rest), and it will instead be marked with a star `(*)`.
+Output will look like this, where direct packages in the [manifest file](configuration.md) will be green.
+Once a package has been displayed once, the tree won't continue to recurse through it's dependencies (compare the first time `livzlib` appears, vs the rest), and it will instead be marked with a star `(*)`.
+
+Version numbers are colored by the package type, yellow for Conda packages and blue for PyPI.
 
 ```shell
 ➜ pixi tree
@@ -421,22 +420,7 @@ Output will look like this, where direct packages in the [manifest file](configu
 │   │       │   └── libzlib v1.2.13 (*)
 │   │       └── ncurses v6.4.20240210 (*)
 │   ├── pyyaml v6.0.1
-│   │   ├── python_abi v3.12
-│   │   ├── python v3.12.2 (*)
-│   │   └── yaml v0.2.5
-│   ├── identify v2.5.35
-│   │   └── python v3.12.2 (*)
-│   ├── python v3.12.2 (*)
-│   ├── virtualenv v20.25.1
-│   │   ├── distlib v0.3.8
-│   │   │   └── python v3.12.2 (*)
-│   │   ├── python v3.12.2 (*)
-│   │   ├── filelock v3.13.1
-│   │   │   └── python v3.12.2 (*)
-│   │   └── platformdirs v4.2.0
-│   │       └── python v3.12.2 (*)
-│   └── nodeenv v1.8.0
-│       └── python v3.12.2 (*)
+...
 ├── rust v1.76.0
 │   └── rust-std-aarch64-apple-darwin v1.76.0
 ├── openssl v3.2.1
@@ -445,78 +429,7 @@ Output will look like this, where direct packages in the [manifest file](configu
 │   │   ├── libiconv v1.17
 │   │   ├── gettext v0.21.1
 │   │   │   └── libiconv v1.17 (*)
-│   │   ├── libffi v3.4.2 (*)
-│   │   ├── libcxx v16.0.6
-│   │   ├── pcre2 v10.42
-│   │   │   ├── libzlib v1.2.13 (*)
-│   │   │   └── bzip2 v1.0.8 (*)
-│   │   └── libzlib v1.2.13 (*)
-│   └── libiconv v1.17 (*)
-├── git v2.42.0
-│   ├── libexpat v2.6.2 (*)
-│   ├── libzlib v1.2.13 (*)
-│   ├── perl v5.32.1
-│   ├── pcre2 v10.42 (*)
-│   ├── openssl v3.2.1 (*)
-│   └── libiconv v1.17 (*)
-├── cffconvert v2.0.0
-│   ├── ruamel.yaml v0.18.6
-│   │   ├── python_abi v3.12 (*)
-│   │   ├── ruamel.yaml.clib v0.2.8
-│   │   │   ├── python_abi v3.12 (*)
-│   │   │   └── python v3.12.2 (*)
-│   │   └── python v3.12.2 (*)
-│   ├── jsonschema v3.2.0
-│   │   ├── python v3.12.2 (*)
-│   │   ├── pyrsistent v0.20.0
-│   │   │   ├── python_abi v3.12 (*)
-│   │   │   └── python v3.12.2 (*)
-│   │   ├── six v1.16.0
-│   │   └── attrs v23.2.0
-│   │       └── python v3.12.2 (*)
-│   ├── requests v2.31.0
-│   │   ├── idna v3.6
-│   │   │   └── python v3.12.2 (*)
-│   │   ├── python v3.12.2 (*)
-│   │   ├── urllib3 v2.2.1
-│   │   │   ├── pysocks v1.7.1
-│   │   │   │   └── python v3.12.2 (*)
-│   │   │   ├── python v3.12.2 (*)
-│   │   │   └── brotli-python v1.1.0
-│   │   │       ├── python v3.12.2 (*)
-│   │   │       ├── python_abi v3.12 (*)
-│   │   │       └── libcxx v16.0.6 (*)
-│   │   ├── certifi v2024.2.2
-│   │   │   └── python v3.12.2 (*)
-│   │   └── charset-normalizer v3.3.2
-│   │       └── python v3.12.2 (*)
-│   ├── click v8.1.7
-│   │   └── python v3.12.2 (*)
-│   ├── pykwalify v1.8.0
-│   │   ├── python v3.12.2 (*)
-│   │   ├── docopt v0.6.2
-│   │   ├── python-dateutil v2.9.0
-│   │   │   ├── python v3.12.2 (*)
-│   │   │   └── six v1.16.0 (*)
-│   │   └── ruamel.yaml v0.18.6 (*)
-│   └── python v3.12.2 (*)
-└── tbump v6.9.0
-    ├── cli-ui v0.17.2
-    │   ├── colorama v0.4.6
-    │   │   └── python v3.12.2 (*)
-    │   ├── python v3.12.2 (*)
-    │   ├── tabulate v0.9.0
-    │   │   └── python v3.12.2 (*)
-    │   └── unidecode v1.3.8
-    │       └── python v3.12.2 (*)
-    ├── python v3.12.2 (*)
-    ├── schema v0.7.5
-    │   ├── contextlib2 v21.6.0
-    │   │   └── python v3.12.2 (*)
-    │   └── python v3.12.2 (*)
-    ├── tomlkit v0.12.4
-    │   └── python v3.12.2 (*)
-    └── docopt v0.6.2 (*)
+...
 ```
 
 A regex pattern can be specified to filter the tree to just those that show a specific direct dependency:
@@ -546,19 +459,11 @@ A regex pattern can be specified to filter the tree to just those that show a sp
     │   │   └── python v3.12.2 (*)
     │   └── python v3.12.2 (*)
     ├── pyyaml v6.0.1
-    │   ├── python_abi v3.12
-    │   ├── python v3.12.2 (*)
-    │   └── yaml v0.2.5
-    ├── nodeenv v1.8.0
-    │   └── python v3.12.2 (*)
-    ├── python v3.12.2 (*)
-    ├── cfgv v3.3.1
-    │   └── python v3.12.2 (*)
-    └── identify v2.5.35
-        └── python v3.12.2 (*)
+...
 ```
 
-Additionly the tree can be inverted, and it can show which packages depend on a regex pattern. The packages specified in the manifest will also be highlighted (in this case `cffconvert` and `pre-commit` would be).
+Additionly the tree can be inverted, and it can show which packages depend on a regex pattern.
+The packages specified in the manifest will also be highlighted (in this case `cffconvert` and `pre-commit` would be).
 
 ```shell
 ➜ pixi tree -i yaml
