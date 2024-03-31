@@ -539,18 +539,15 @@ platforms = ["linux-64", "osx-arm64"]
 ### The `environments` table
 The `environments` table allows you to define environments that are created using the features defined in the `feature` tables.
 
-!!! important
-    `default` is always implied when creating environments.
-    If you don't want to use the `default` feature you can keep all the non feature tables empty.
-
 The environments table is defined using the following fields:
 
-- `features: Vec<Feature>`: The features that are included in the environment set, which is also the default field in the environments.
-- `solve-group: String`: The solve group is used to group environments together at the solve stage.
+- `features`: The features that are included in the environment, which is also the default field in the environments. Unless `no-default-feature` is set to `false`; the default feature is always included.
+- `solve-group`: The solve group is used to group environments together at the solve stage.
   This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
   For instance when testing a production environment with additional test dependencies.
   These dependencies will then be the same version in all environments that have the same solve group.
   But the different environments contain different subsets of the solve-groups dependencies set.
+- `no-default-feature`: Whether to include the default feature in that environment. The default is to include the default feature.
 
 ```toml title="Simplest example"
 [environments]

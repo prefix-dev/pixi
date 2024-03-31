@@ -257,7 +257,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
             let tasks = project
                 .environment(&env)
                 .ok_or(miette!("Environment `{}` not found in project", env))?
-                .tasks(Some(Platform::current()), true)?
+                .tasks(Some(Platform::current()))?
                 .into_keys()
                 .collect_vec();
             if tasks.is_empty() {

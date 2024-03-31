@@ -106,12 +106,8 @@ impl<'p> Environment<'p> {
             .join(self.environment.name.as_str())
     }
 
-    /// Returns references to the features that make up this environment. The default feature is
-    /// always added at the end.
-    pub fn features(
-        &self,
-        include_default: bool,
-    ) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
+    /// Returns references to the features that make up this environment.
+    pub fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         let environment_features = self.environment.features.iter().map(|feature_name| {
             self.project
                 .manifest
@@ -121,10 +117,10 @@ impl<'p> Environment<'p> {
                 .expect("feature usage should have been validated upfront")
         });
 
-        if include_default {
-            Either::Left(environment_features.chain([self.project.manifest.default_feature()]))
-        } else {
+        if self.environment.no_default_feature {
             Either::Right(environment_features)
+        } else {
+            Either::Left(environment_features.chain([self.project.manifest.default_feature()]))
         }
     }
 
@@ -138,7 +134,7 @@ impl<'p> Environment<'p> {
     /// used instead. However, these are not considered during deduplication. This means the default
     /// channels are always added to the end of the list.
     pub fn channels(&self) -> IndexSet<&'p Channel> {
-        self.features(true)
+        self.features()
             .filter_map(|feature| match feature.name {
                 // Use the user-specified channels of each feature if the feature defines them. Only
                 // for the default feature do we use the default channels from the project metadata
@@ -171,7 +167,7 @@ impl<'p> Environment<'p> {
     /// Features can specify which platforms they support through the `platforms` key. If a feature
     /// does not specify any platforms the features defined by the project are used.
     pub fn platforms(&self) -> HashSet<Platform> {
-        self.features(true)
+        self.features()
             .map(|feature| {
                 match &feature.platforms {
                     Some(platforms) => &platforms.value,
@@ -196,11 +192,10 @@ impl<'p> Environment<'p> {
     pub fn tasks(
         &self,
         platform: Option<Platform>,
-        include_default: bool,
     ) -> Result<HashMap<&'p TaskName, &'p Task>, UnsupportedPlatformError> {
         self.validate_platform_support(platform)?;
         let result = self
-            .features(include_default)
+            .features()
             .flat_map(|feature| feature.targets.resolve(platform))
             .rev() // Reverse to get the most specific targets last.
             .flat_map(|target| target.tasks.iter())
@@ -215,10 +210,7 @@ impl<'p> Environment<'p> {
         name: &TaskName,
         platform: Option<Platform>,
     ) -> Result<&'p Task, UnknownTask> {
-        match self
-            .tasks(platform, true)
-            .map(|tasks| tasks.get(name).copied())
-        {
+        match self.tasks(platform).map(|tasks| tasks.get(name).copied()) {
             Err(_) | Ok(None) => Err(UnknownTask {
                 project: self.project,
                 environment: self.name().clone(),
@@ -259,7 +251,7 @@ impl<'p> Environment<'p> {
     /// the features that make up the environment. If multiple features specify a requirement for
     /// the same system package, the highest is chosen.
     pub fn local_system_requirements(&self) -> SystemRequirements {
-        self.features(true)
+        self.features()
             .map(|feature| &feature.system_requirements)
             .fold(SystemRequirements::default(), |acc, req| {
                 acc.union(req)
@@ -273,7 +265,7 @@ impl<'p> Environment<'p> {
     /// requirement for the same package that both requirements are returned. The different
     /// requirements per package are sorted in the same order as the features they came from.
     pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
-        self.features(true)
+        self.features()
             .filter_map(|f| f.dependencies(kind, platform))
             .map(|deps| Dependencies::from(deps.into_owned()))
             .reduce(|acc, deps| acc.union(&deps))
@@ -289,7 +281,7 @@ impl<'p> Environment<'p> {
         &self,
         platform: Option<Platform>,
     ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
-        self.features(true)
+        self.features()
             .filter_map(|f| f.pypi_dependencies(platform))
             .fold(IndexMap::default(), |mut acc, deps| {
                 // Either clone the values from the Cow or move the values from the owned map.
@@ -316,7 +308,7 @@ impl<'p> Environment<'p> {
     /// The activation scripts of all features are combined in the order they are defined for the
     /// environment.
     pub fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
-        self.features(true)
+        self.features()
             .filter_map(|f| f.activation_scripts(platform))
             .flatten()
             .cloned()
@@ -343,7 +335,7 @@ impl<'p> Environment<'p> {
 
     /// Returns true if the environments contains any reference to a pypi dependency.
     pub fn has_pypi_dependencies(&self) -> bool {
-        self.features(true).any(|f| f.has_pypi_dependencies())
+        self.features().any(|f| f.has_pypi_dependencies())
     }
 }
 
@@ -449,7 +441,7 @@ mod tests {
 
         assert!(manifest
             .default_environment()
-            .tasks(Some(Platform::Osx64), true)
+            .tasks(Some(Platform::Osx64))
             .is_err())
     }
 

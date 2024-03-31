@@ -352,7 +352,7 @@ impl Project {
     /// TODO: Remove this function and use the tasks from the default environment instead.
     pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&TaskName, &Task> {
         self.default_environment()
-            .tasks(platform, true)
+            .tasks(platform)
             .unwrap_or_default()
     }
 

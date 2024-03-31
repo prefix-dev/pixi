@@ -170,8 +170,8 @@ impl<'p> GroupedEnvironment<'p> {
     /// Returns the features of the group
     pub fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         match self {
-            GroupedEnvironment::Group(group) => Either::Left(group.features(true)),
-            GroupedEnvironment::Environment(env) => Either::Right(env.features(true)),
+            GroupedEnvironment::Group(group) => Either::Left(group.features()),
+            GroupedEnvironment::Environment(env) => Either::Right(env.features()),
         }
     }
 }

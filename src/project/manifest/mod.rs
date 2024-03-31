@@ -1023,6 +1023,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
                 features: Vec::new(),
                 features_source_loc: None,
                 solve_group: None,
+                no_default_feature: false,
             });
             environments.by_name.insert(EnvironmentName::Default, 0);
         }
@@ -1033,11 +1034,14 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             environments.by_name.insert(name.clone(), environment_idx);
 
             // Decompose the TOML
-            let (features, features_source_loc, solve_group) = match env {
-                TomlEnvironmentMapOrSeq::Map(env) => {
-                    (env.features.value, env.features.span, env.solve_group)
-                }
-                TomlEnvironmentMapOrSeq::Seq(features) => (features, None, None),
+            let (features, features_source_loc, solve_group, no_default_feature) = match env {
+                TomlEnvironmentMapOrSeq::Map(env) => (
+                    env.features.value,
+                    env.features.span,
+                    env.solve_group,
+                    env.no_default_feature,
+                ),
+                TomlEnvironmentMapOrSeq::Seq(features) => (features, None, None, false),
             };
 
             // Add to the solve group if defined
@@ -1068,6 +1072,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
                 features,
                 features_source_loc,
                 solve_group,
+                no_default_feature,
             });
         }
 

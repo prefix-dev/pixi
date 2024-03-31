@@ -124,6 +124,9 @@ pub struct Environment {
     /// An optional solver-group. Multiple environments can share the same solve-group. All the
     /// dependencies of the environment that share the same solve-group will be solved together.
     pub solve_group: Option<usize>,
+
+    /// Whether to include the default feature automatically or not
+    pub no_default_feature: bool,
 }
 
 /// Helper struct to deserialize the environment from TOML.
@@ -134,6 +137,8 @@ pub(super) struct TomlEnvironment {
     #[serde(default)]
     pub features: PixiSpanned<Vec<String>>,
     pub solve_group: Option<String>,
+    #[serde(default)]
+    pub no_default_feature: bool,
 }
 
 pub(super) enum TomlEnvironmentMapOrSeq {
