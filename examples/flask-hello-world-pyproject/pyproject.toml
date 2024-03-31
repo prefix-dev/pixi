@@ -15,5 +15,8 @@ name = "flask-hello-world-pyproject"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64"]
 
+[tool.pixi.pypi-dependencies]
+flask-hello-world-pyproject = { path = ".", editable = true }
+
 [tool.pixi.tasks]
 start = "python -m flask --app flask_hello_world_pyproject.app:app run --port=5050"
