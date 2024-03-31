@@ -51,8 +51,8 @@ description = "Add a short description here"
 {%- if author %}
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
-channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
-platforms = ["{{ platforms|join("\", \"") }}"]
+channels = {{ channels }}
+platforms = {{ platforms }}
 
 [tasks]
 
@@ -62,15 +62,15 @@ platforms = ["{{ platforms|join("\", \"") }}"]
 const PYROJECT_TEMPLATE: &str = r#"
 [tool.pixi.project]
 name = "{{ name }}"
-channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
-platforms = ["{{ platforms|join("\", \"") }}"]
+channels = {{ channels }}
+platforms = {{ platforms }}
 {%- for env, features in environments|items %}
 {%- if loop.first %}
 
 [tool.pixi.environments]
-default = {features = [], solve-group = "default"}
+default = { features = [], solve-group = "default" }
 {%- endif %}
-{{env}} = {features = {{features}}, solve-group = "default"}
+{{env}} = { features = {{ features }}, solve-group = "default" }
 {%- endfor %}
 
 "#;
