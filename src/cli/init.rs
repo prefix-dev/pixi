@@ -10,6 +10,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
+use pyproject_toml::PyProjectToml;
 use rattler_conda_types::ParseStrictness::{Lenient, Strict};
 use rattler_conda_types::{Channel, MatchSpec, Platform};
 use regex::Regex;
@@ -148,9 +149,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await?;
     } else {
-        // Default to something to avoid errors
-        let name = get_name_from_dir(&dir).unwrap_or_else(|_| String::from("new_project"));
-
         let channels = if let Some(channels) = args.channels {
             channels
         } else {
@@ -162,6 +160,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let path = dir.join(consts::PYPROJECT_MANIFEST);
             let file = fs::read_to_string(path.clone()).unwrap();
             if !file.contains("[tool.pixi.project]") {
+                // Get name from the pyproject [project] table
+                let name = match PyProjectToml::new(file.as_str()) {
+                    Ok(pyproject) => pyproject
+                        .project
+                        .map(|p| p.name)
+                        .expect("'name' should be defined in the [project] table"),
+                    Err(e) => miette::bail!("Failed to parse 'pyproject.toml'. Error is {}", e),
+                };
                 let rv = env
                     .render_named_str(
                         consts::PYPROJECT_MANIFEST,
@@ -189,6 +195,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Create a pixi.toml
         } else {
+            // Default name to something to avoid errors
+            let name = get_name_from_dir(&dir).unwrap_or_else(|_| String::from("new_project"));
             let rv = render_project(&env, name, version, &author, channels, &platforms);
             fs::write(&manifest_path, rv).into_diagnostic()?;
         };

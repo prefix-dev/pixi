@@ -1,7 +1,7 @@
 use pep508_rs::VersionOrUrl;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
-use std::{path::PathBuf, str::FromStr};
+use std::str::FromStr;
 use toml_edit;
 use toml_edit::TomlError;
 
@@ -42,7 +42,10 @@ impl From<PyProjectManifest> for ProjectManifest {
         // Start by loading the data nested under "tool.pixi" as manifest,
         // and create a reference to the 'pyproject.toml' project table
         let mut manifest = item.tool.pixi.clone();
-        let pyproject = item.project.as_ref().expect("project table should exist");
+        let pyproject = item
+            .project
+            .as_ref()
+            .expect("the [project] table should exist");
 
         // TODO: tool.pixi.project.name should be made optional or read from project.name
         // TODO: could copy across / convert some other optional fields if relevant
