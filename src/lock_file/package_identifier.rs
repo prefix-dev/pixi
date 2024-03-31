@@ -1,5 +1,4 @@
 use crate::project::manifest::python::PyPiPackageName;
-use crate::pypi_mapping;
 use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
@@ -30,32 +29,17 @@ impl PypiPackageIdentifier {
         result: &mut Vec<Self>,
     ) -> Result<(), ConversionError> {
         // Check the PURLs for a python package.
-        let mut has_pypi_purl = false;
         for purl in record.package_record.purls.iter() {
             if let Some(entry) = Self::try_from_purl(purl, &record.package_record.version.as_str())?
             {
                 result.push(entry);
-                has_pypi_purl = true;
             }
         }
-
-        // If there is no pypi purl, but the package is a conda-forge package, we just assume that
-        // the name of the package is equivalent to the name of the python package.
-        if !has_pypi_purl && pypi_mapping::is_conda_forge_record(record) {
-            // Convert the conda package names to pypi package names. If the conversion fails we
-            // just assume that its not a valid python package.
-            let name = PackageName::from_str(record.package_record.name.as_source()).ok();
-            let version =
-                pep440_rs::Version::from_str(&record.package_record.version.as_str()).ok();
-            if let (Some(name), Some(version)) = (name, version) {
-                result.push(PypiPackageIdentifier {
-                    name: PyPiPackageName::from_normalized(name),
-                    version,
-                    // TODO: We can't really tell which python extras are enabled in a conda package.
-                    extras: Default::default(),
-                })
-            }
-        }
+        // // In previous implementation of this function
+        // // If there was no pypi purl, but the package was a conda-forge package, we assumed that
+        // // the name of the package is equivalent to the name of the python package.
+        // // This could potentially lead to issues similar with pandoc https://github.com/prefix-dev/pixi/issues/710
+        // // With new approach, we add them *only* if they are present in our mapping.
 
         Ok(())
     }
