@@ -207,19 +207,20 @@ mod tests {
         [environments]
         foo = { features=["foo"], solve-group="group1" }
         bar = { features=["bar"], solve-group="group1" }
+        baz = { features=["bar"], solve-group="group2", no-default-feature=true }
         "#,
         )
         .unwrap();
 
         let environments = project.environments();
-        assert_eq!(environments.len(), 3);
+        assert_eq!(environments.len(), 4);
 
         let default_environment = project.default_environment();
         let foo_environment = project.environment("foo").unwrap();
         let bar_environment = project.environment("bar").unwrap();
 
         let solve_groups = project.solve_groups();
-        assert_eq!(solve_groups.len(), 1);
+        assert_eq!(solve_groups.len(), 2);
 
         let solve_group = solve_groups[0].clone();
         let solve_group_envs = solve_group.environments().collect_vec();
@@ -241,7 +242,7 @@ mod tests {
         assert_eq!(bar_system_requirements.cuda, "12.0".parse().ok());
         assert_eq!(default_system_requirements.cuda, None);
 
-        // Check that the solve group contains all the dependencies of its environments
+        // Check that the solve group 'group1' contains all the dependencies of its environments
         let package_names: HashSet<_> = solve_group
             .dependencies(None, None)
             .names()
@@ -250,6 +251,22 @@ mod tests {
         assert_eq!(
             package_names,
             ["a", "b", "c"]
+                .into_iter()
+                .map(PackageName::new_unchecked)
+                .collect::<HashSet<_>>()
+        );
+
+        // Check that the solve group 'group2' contains all the dependencies of its environments
+        // it should not contain 'a', which is a dependency of the default environment
+        let solve_group = solve_groups[1].clone();
+        let package_names: HashSet<_> = solve_group
+            .dependencies(None, None)
+            .names()
+            .cloned()
+            .collect();
+        assert_eq!(
+            package_names,
+            ["c"]
                 .into_iter()
                 .map(PackageName::new_unchecked)
                 .collect::<HashSet<_>>()
