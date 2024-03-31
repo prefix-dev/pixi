@@ -14,8 +14,11 @@ platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 ```
 This is the minimum requirement for pixi to understand and parse the project.
 
-If you use `pixi init` in a folder that has a `pyproject.toml` file, pixi will automatically add the `[tool.pixi.project]` section to the file.
-And will also add some defaults to the `.gitignore` and `.gitattributes` file.
+However, it is recommended you use `pixi init` in a folder that has a `pyproject.toml` file. Pixi will automatically
+
+ - Add the above `[tool.pixi.project]` section to the file, auto-detecting your current platform;
+ - Add the current project as an editable pypi dependency;
+ - Add some defaults to the `.gitignore` and `.gitattributes` file.
 
 ## Python dependency
 The `pyproject.toml` file supports the `requires_python` field.
@@ -144,8 +147,7 @@ test = ["test"]
 ```
 
 ## Build-system section
-The `pyproject.toml` file normally contains a `[build-system]` section.
-Pixi will use this section to install the project (as an editable install, i.e. equivalent to `pip install -e .`) automatically and add it to the lock file.
+The `pyproject.toml` file normally contains a `[build-system]` section. Pixi will use this section to build and install the project if it is added as a path pypi dependency.
 ```toml title="pyproject.toml"
 [build-system]
 requires = ["setuptools", "wheel"]

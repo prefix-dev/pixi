@@ -40,7 +40,7 @@ impl PyProjectManifest {
 impl From<PyProjectManifest> for ProjectManifest {
     fn from(item: PyProjectManifest) -> Self {
         // Start by loading the data nested under "tool.pixi" as manifest,
-        // and a reference to the pyproject project table
+        // and create a reference to the 'pyproject.toml' project table
         let mut manifest = item.tool.pixi.clone();
         let pyproject = item.project.as_ref().expect("project table should exist");
 
@@ -68,16 +68,6 @@ impl From<PyProjectManifest> for ProjectManifest {
                 )
             }
         }
-
-        // Add the project itself as an editable dependency
-        target.add_pypi_dependency(
-            PyPiPackageName::from_str(&pyproject.name).unwrap(),
-            PyPiRequirement::Path {
-                path: PathBuf::from("."),
-                editable: Some(true),
-                extras: Default::default(),
-            },
-        );
 
         // For each extra group, create a feature of the same name if it does not exist,
         // add dependencies and create corresponding environments if they do not exist

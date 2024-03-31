@@ -63,6 +63,9 @@ name = "{{ name }}"
 channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
 platforms = ["{{ platforms|join("\", \"") }}"]
 
+[tool.pixi.pypi-dependencies]
+{{ name }} = { path = ".", editable = true }
+
 "#;
 
 const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
