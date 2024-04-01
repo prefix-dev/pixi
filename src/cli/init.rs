@@ -50,6 +50,8 @@ platforms = ["{{ platforms|join("\", \"") }}"]
 [dependencies]
 
 "#;
+
+/// The pyproject.toml template
 const PYROJECT_TEMPLATE: &str = r#"
 [tool.pixi.project]
 name = "{{ name }}"
@@ -91,7 +93,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Create a 'pixi.toml' manifest and populate it by importing a conda environment file
     if let Some(env_file_path) = args.env_file {
-        // Check if the 'pixi.toml' project file doesn't already exist. We don't want to overwrite it.
+        // Check if the 'pixi.toml' file doesn't already exist. We don't want to overwrite it.
         if pixi_manifest_path.is_file() {
             miette::bail!("{} already exists", consts::PROJECT_MANIFEST);
         }
@@ -170,9 +172,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }
             }
 
-        // Create a pixi.toml
+        // Create a 'pixi.toml' manifest
         } else {
-            // Check if the 'pixi.toml' project file doesn't already exist. We don't want to overwrite it.
+            // Check if the 'pixi.toml' file doesn't already exist. We don't want to overwrite it.
             if pixi_manifest_path.is_file() {
                 miette::bail!("{} already exists", consts::PROJECT_MANIFEST);
             }
