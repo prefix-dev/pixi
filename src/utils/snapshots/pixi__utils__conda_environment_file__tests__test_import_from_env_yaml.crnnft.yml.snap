@@ -133,7 +133,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    index: None,
                     extras: [],
                 },
             ),

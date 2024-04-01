@@ -253,7 +253,6 @@ mod tests {
                     PyPiPackageName::from_str("torch").unwrap(),
                     PyPiRequirement::Version {
                         version: "==1.8.1".parse().unwrap(),
-                        index: None,
                         extras: vec![],
                     }
                 ),
@@ -298,6 +297,7 @@ mod tests {
             );
         }
     }
+
     #[test]
     fn test_parse_conda_env_file_with_explicit_pip_dep() {
         let example_conda_env_file = r#"
