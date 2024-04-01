@@ -142,8 +142,9 @@ class PyPIPathRequirement(_PyPIRequirement):
         None,
         description="A path to a local source or wheel",
     )
-    editable: Optional[bool] = Field(None, description="If true the package will be installed as editable")
-
+    editable: Optional[bool] = Field(
+        None, description="If true the package will be installed as editable"
+    )
 
 
 class PyPIUrlRequirement(_PyPIRequirement):
@@ -253,6 +254,11 @@ class Environment(StrictBaseModel):
         None,
         alias="solve-group",
         description="The group name for environments that should be solved together",
+    )
+    no_default_feature: Optional[bool] = Field(
+        False,
+        alias="no-default-feature",
+        description="Whether to add the default feature automatically",
     )
 
 

@@ -99,6 +99,19 @@
           "default": null,
           "description": "The group name for environments that should be solved together",
           "title": "Solve-Group"
+        },
+        "no-default-feature": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": false,
+          "description": "Whether to add the default feature automatically",
+          "title": "No-Default-Feature"
         }
       },
       "title": "Environment",
