@@ -68,7 +68,6 @@ platforms = {{ platforms }}
 {%- if loop.first %}
 
 [tool.pixi.environments]
-default = { features = [], solve-group = "default" }
 {%- endif %}
 {{env}} = { features = {{ features }}, solve-group = "default" }
 {%- endfor %}

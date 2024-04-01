@@ -564,6 +564,13 @@ prod = {features = ["prod"], solve-group = "test"}
 lint = ["lint"]
 ```
 
+Unless the `default` environment is redefined, it is included in the `default` solve group. That is, the following is implied unless overridden in the manifest's `[environments]` table:
+```toml title="default environment"
+[environments]
+default = { features = [], solve-group = "default" } # the default environment includes the 'default' feature only
+```
+
+
 ## Global configuration
 
 The global configuration options are documented in the [global configuration](advanced/global_configuration.md) section.
