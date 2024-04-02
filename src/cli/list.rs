@@ -7,7 +7,7 @@ use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
 use rattler_conda_types::Platform;
-use rattler_lock::Package;
+use rattler_lock::{Package, UrlOrPath};
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
@@ -64,6 +64,10 @@ pub struct Args {
     pub no_install: bool,
 }
 
+fn serde_skip_is_editable(editable: &bool) -> bool {
+    *editable == false
+}
+
 #[derive(Serialize)]
 struct PackageToOutput {
     name: String,
@@ -73,6 +77,8 @@ struct PackageToOutput {
     kind: String,
     source: Option<String>,
     is_explicit: bool,
+    #[serde(skip_serializing_if = "serde_skip_is_editable")]
+    is_editable: bool,
 }
 
 /// Get directory size
@@ -157,7 +163,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         environment
             .pypi_dependencies(Some(platform))
             .into_iter()
-            .map(|(name, _)| name.as_source().to_string()),
+            .map(|(name, _)| name.as_normalized().as_dist_info_name().into_owned()),
     );
     // Convert the list of package record to specific output format
     let mut packages_to_output = locked_deps
@@ -242,12 +248,17 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
 
         writeln!(
             writer,
-            "\t{}\t{}\t{}\t{}\t{}",
+            "\t{}\t{}\t{}\t{}\t{}{}",
             &package.version,
             package.build.as_deref().unwrap_or(""),
             size_human,
             &package.kind,
-            package.source.as_deref().unwrap_or("")
+            package.source.as_deref().unwrap_or(""),
+            if package.is_editable {
+                format!(" {}", console::style("(editable)").fg(Color::Yellow))
+            } else {
+                "".to_string()
+            }
         )?;
     }
 
@@ -297,14 +308,25 @@ fn create_package_to_output<'a, 'b>(
         Package::Conda(pkg) => pkg.file_name().map(ToOwned::to_owned),
         Package::Pypi(p) => {
             let package_data = p.data().package;
-            registry_index.as_mut().and_then(|registry| {
-                let version = registry.get_version(&package_data.name, &package_data.version)?;
-                Some(version.filename.to_string())
-            })
+            registry_index
+                .as_mut()
+                .and_then(|registry| {
+                    let version =
+                        registry.get_version(&package_data.name, &package_data.version)?;
+                    Some(version.filename.to_string())
+                })
+                .or_else(|| match &package_data.url_or_path {
+                    UrlOrPath::Url(url) => Some(url.to_string()),
+                    UrlOrPath::Path(path) => Some(path.to_string_lossy().into_owned()),
+                })
         }
     };
 
     let is_explicit = project_dependency_names.contains(&name);
+    let is_editable = match p {
+        Package::Conda(_) => false,
+        Package::Pypi(p) => p.data().package.editable,
+    };
 
     PackageToOutput {
         name,
@@ -314,5 +336,6 @@ fn create_package_to_output<'a, 'b>(
         kind,
         source,
         is_explicit,
+        is_editable,
     }
 }
