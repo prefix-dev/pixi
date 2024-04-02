@@ -65,7 +65,7 @@ pub struct Args {
 }
 
 fn serde_skip_is_editable(editable: &bool) -> bool {
-    *editable == false
+    !(*editable)
 }
 
 #[derive(Serialize)]
