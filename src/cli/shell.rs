@@ -21,7 +21,7 @@ use rattler_shell::shell::CmdExe;
 /// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     manifest_path: Option<PathBuf>,
 

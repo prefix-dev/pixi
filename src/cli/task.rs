@@ -147,7 +147,7 @@ pub struct Args {
     #[clap(subcommand)]
     pub operation: Operation,
 
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 }

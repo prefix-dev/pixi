@@ -22,7 +22,7 @@ pub struct Args {
     #[arg(short, long)]
     shell: Option<ShellEnum>,
 
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     manifest_path: Option<PathBuf>,
 
