@@ -48,7 +48,7 @@ pub struct Args {
     #[arg(long, default_value = "name", value_enum)]
     pub sort_by: SortBy,
 
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
