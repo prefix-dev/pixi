@@ -24,7 +24,7 @@ use indexmap::map::Entry;
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
-use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource};
+use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, WrapErr};
 use pyproject::PyProjectManifest;
 pub use python::PyPiRequirement;
 use rattler_conda_types::{
@@ -47,7 +47,7 @@ use std::{
 pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector, Targets};
 use thiserror::Error;
-use toml_edit::{value, DocumentMut, TomlError};
+use toml_edit::{DocumentMut, TomlError};
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -60,6 +60,17 @@ pub enum GetFeatureError {
 pub enum ManifestKind {
     Pixi,
     Pyproject,
+}
+
+impl ManifestKind {
+    /// Try to determine the type of manifest from a path
+    pub fn try_from_path(path: &Path) -> Option<Self> {
+        match path.file_name().and_then(OsStr::to_str)? {
+            consts::PROJECT_MANIFEST => Some(Self::Pixi),
+            consts::PYPROJECT_MANIFEST => Some(Self::Pyproject),
+            _ => None,
+        }
+    }
 }
 
 /// Handles the project's manifest file.
@@ -86,35 +97,34 @@ pub struct Manifest {
 impl Manifest {
     /// Create a new manifest from a path
     pub fn from_path(path: impl AsRef<Path>) -> miette::Result<Self> {
-        let kind = match path.as_ref().file_name().and_then(OsStr::to_str) {
-            Some(consts::PROJECT_MANIFEST) => ManifestKind::Pixi,
-            Some(consts::PYPROJECT_MANIFEST) => ManifestKind::Pyproject,
-            _ => miette::bail!(
-                "the manifest-path must point to a {} or {} file",
-                consts::PROJECT_MANIFEST,
-                consts::PYPROJECT_MANIFEST,
-            ),
-        };
         let contents = std::fs::read_to_string(path.as_ref()).into_diagnostic()?;
-        let parent = path
-            .as_ref()
-            .parent()
-            .expect("Path should always have a parent");
-        Self::from_str(parent, contents, kind)
+        Self::from_str(path.as_ref(), contents)
+    }
+
+    /// Return the toml manifest file name ('pixi.toml' or 'pyproject.toml')
+    pub fn file_name(&self) -> &str {
+        match self.document {
+            ManifestSource::PixiToml(_) => consts::PROJECT_MANIFEST,
+            ManifestSource::PyProjectToml(_) => consts::PYPROJECT_MANIFEST,
+        }
     }
 
     /// Create a new manifest from a string
-    pub fn from_str(
-        root: &Path,
-        contents: impl Into<String>,
-        kind: ManifestKind,
-    ) -> miette::Result<Self> {
+    pub fn from_str(manifest_path: &Path, contents: impl Into<String>) -> miette::Result<Self> {
+        let manifest_kind = ManifestKind::try_from_path(manifest_path).ok_or_else(|| {
+            miette::miette!("unrecognized manifest file: {}", manifest_path.display())
+        })?;
+        let root = manifest_path
+            .parent()
+            .expect("manifest_path should always have a parent");
+
         let contents = contents.into();
-        let parsed = match kind {
-            ManifestKind::Pixi => ProjectManifest::from_toml_str(&contents),
-            ManifestKind::Pyproject => {
-                PyProjectManifest::from_toml_str(&contents).map(|x| x.into())
-            }
+        let (parsed, file_name) = match manifest_kind {
+            ManifestKind::Pixi => (ProjectManifest::from_toml_str(&contents), "pixi.toml"),
+            ManifestKind::Pyproject => (
+                PyProjectManifest::from_toml_str(&contents).map(|x| x.into()),
+                "pyproject.toml",
+            ),
         };
 
         let (manifest, document) = match parsed
@@ -127,7 +137,7 @@ impl Manifest {
                         labels = vec![LabeledSpan::at(span, e.message())],
                         "failed to parse project manifest"
                     )
-                    .with_source_code(NamedSource::new(consts::PROJECT_MANIFEST, contents)));
+                    .with_source_code(NamedSource::new(file_name, contents)));
                 } else {
                     return Err(e).into_diagnostic();
                 }
@@ -135,10 +145,7 @@ impl Manifest {
         };
 
         // Validate the contents of the manifest
-        manifest.validate(
-            NamedSource::new(consts::PROJECT_MANIFEST, contents.to_owned()),
-            root,
-        )?;
+        manifest.validate(NamedSource::new(file_name, contents.to_owned()), root)?;
 
         // Notify the user that pypi-dependencies are still experimental
         if manifest
@@ -155,19 +162,13 @@ impl Manifest {
             }
         }
 
-        let (source, path) = match kind {
-            ManifestKind::Pixi => (
-                ManifestSource::PixiToml(document),
-                root.join(consts::PROJECT_MANIFEST),
-            ),
-            ManifestKind::Pyproject => (
-                ManifestSource::PyProjectToml(document),
-                root.join(consts::PYPROJECT_MANIFEST),
-            ),
+        let source = match manifest_kind {
+            ManifestKind::Pixi => ManifestSource::PixiToml(document),
+            ManifestKind::Pyproject => ManifestSource::PyProjectToml(document),
         };
 
         Ok(Self {
-            path,
+            path: manifest_path.to_path_buf(),
             contents,
             document: source,
             parsed: manifest,
@@ -613,28 +614,23 @@ impl Manifest {
     }
 
     /// Set the project description
-    pub fn set_description(&mut self, description: &String) -> miette::Result<()> {
+    pub fn set_description(&mut self, description: &str) -> miette::Result<()> {
         // Update in both the manifest and the toml
         self.parsed.project.description = Some(description.to_string());
-        let document = match &mut self.document {
-            ManifestSource::PyProjectToml(document) => document,
-            ManifestSource::PixiToml(document) => document,
-        };
-        document["project"]["description"] = value(description);
+        self.document.set_description(description);
 
         Ok(())
     }
 
     /// Set the project version
-    pub fn set_version(&mut self, version: &String) -> miette::Result<()> {
+    pub fn set_version(&mut self, version: &str) -> miette::Result<()> {
         // Update in both the manifest and the toml
-        self.parsed.project.version = Some(Version::from_str(version).unwrap());
-        let document = match &mut self.document {
-            ManifestSource::PyProjectToml(document) => document,
-            ManifestSource::PixiToml(document) => document,
-        };
-        document["project"]["version"] = value(version);
-
+        self.parsed.project.version = Some(
+            Version::from_str(version)
+                .into_diagnostic()
+                .context("could not convert version to a valid project version")?,
+        );
+        self.document.set_version(version);
         Ok(())
     }
 
@@ -1317,7 +1313,7 @@ mod tests {
             scripts = [".pixi/install/setup.sh", "test"]
             "#;
 
-        let manifest = Manifest::from_str(Path::new(""), contents, ManifestKind::Pixi).unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
         let default_activation_scripts = manifest
             .default_feature()
             .targets
@@ -1427,8 +1423,7 @@ mod tests {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) {
-        let mut manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         // Initially the dependency should exist
         assert!(manifest
@@ -1479,8 +1474,7 @@ mod tests {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) {
-        let mut manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         let package_name = PyPiPackageName::from_str(name).unwrap();
 
@@ -1625,8 +1619,7 @@ feature_target_dep = "*"
             fooz = "*"
         "#;
 
-        let mut manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         manifest
             .remove_dependency(
@@ -1675,8 +1668,7 @@ feature_target_dep = "*"
             platforms = ["linux-64", "win-64"]
         "#;
 
-        let mut manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         assert_eq!(
             manifest.parsed.project.version.as_ref().unwrap().clone(),
@@ -1703,8 +1695,7 @@ feature_target_dep = "*"
             platforms = ["linux-64", "win-64"]
         "#;
 
-        let mut manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         assert_eq!(
             manifest
@@ -1745,8 +1736,7 @@ feature_target_dep = "*"
             platforms = ["linux-64", "win-64"]
         "#;
 
-        let mut manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         assert_eq!(
             manifest.parsed.project.platforms.value,
@@ -1817,8 +1807,7 @@ feature_target_dep = "*"
             test = ["test"]
         "#;
 
-        let mut manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         assert_eq!(
             manifest.parsed.project.platforms.value,
@@ -1878,8 +1867,7 @@ platforms = ["linux-64", "win-64"]
 [feature.test.dependencies]
         "#;
 
-        let mut manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         assert_eq!(manifest.parsed.project.channels, vec![]);
 
@@ -2022,8 +2010,7 @@ platforms = ["linux-64", "win-64"]
             channels = ["test_channel"]
         "#;
 
-        let mut manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         assert_eq!(
             manifest.parsed.project.channels,
@@ -2091,8 +2078,7 @@ platforms = ["linux-64", "win-64"]
             test1 = {features = ["test", "py310"], solve-group = "test"}
             test2 = {features = ["py39"], solve-group = "test"}
         "#;
-        let manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
         let default_env = manifest.default_environment();
         assert_eq!(default_env.name, EnvironmentName::Default);
         assert_eq!(default_env.features, vec!["py39"]);
@@ -2151,8 +2137,7 @@ platforms = ["linux-64", "win-64"]
             target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 
         "#;
-        let manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         let cuda_feature = manifest
             .parsed
@@ -2285,9 +2270,8 @@ platforms = ["linux-64", "win-64"]
         #[case] should_have_pypi_dependencies: bool,
     ) {
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
-            ManifestKind::Pixi,
         )
         .unwrap();
         assert_eq!(
@@ -2311,8 +2295,7 @@ test = "test initial"
 
         "#;
 
-        let mut manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         manifest
             .add_task(
@@ -2363,8 +2346,7 @@ foo = "*"
 [feature.test.dependencies]
 bar = "*"
             "#;
-        let mut manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
         manifest
             .add_dependency(
                 &MatchSpec::from_str(" baz >=1.2.3", Strict).unwrap(),

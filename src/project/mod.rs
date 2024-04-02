@@ -40,7 +40,7 @@ pub use dependencies::Dependencies;
 pub use environment::Environment;
 pub use solve_group::SolveGroup;
 
-use self::manifest::{Environments, ManifestKind};
+use self::manifest::Environments;
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -147,8 +147,8 @@ impl Project {
 
     /// Constructs a project from a manifest.
     /// Assumes the manifest is a Pixi manifest
-    pub fn from_str(root: &Path, content: &str) -> miette::Result<Self> {
-        let manifest = Manifest::from_str(root, content, ManifestKind::Pixi)?;
+    pub fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
+        let manifest = Manifest::from_str(manifest_path, content)?;
         Ok(Self::from_manifest(manifest))
     }
 
@@ -170,7 +170,7 @@ impl Project {
     /// Returns the source code of the project as [`NamedSource`].
     /// Used in error reporting.
     pub fn manifest_named_source(&self) -> NamedSource<String> {
-        NamedSource::new(PROJECT_MANIFEST, self.manifest.contents.clone())
+        NamedSource::new(self.manifest.file_name(), self.manifest.contents.clone())
     }
 
     /// Loads a project from manifest file.
@@ -471,19 +471,26 @@ pub fn find_project_manifest() -> Option<PathBuf> {
             .find_map(|manifest| {
                 let path = dir.join(manifest);
                 if path.is_file() {
-                    // Only match pyproject.toml files that contain "[tool.pixi.project]"
-                    if *manifest == PYPROJECT_MANIFEST {
-                        let contents = fs::read_to_string(&path).ok()?;
-                        if !contents.contains("[tool.pixi.project]") {
-                            return None;
+                    match *manifest {
+                        PROJECT_MANIFEST => Some(path.to_path_buf()),
+                        PYPROJECT_MANIFEST if is_valid_pixi_pyproject_toml(&path) => {
+                            Some(path.to_path_buf())
                         }
+                        _ => None,
                     }
-                    Some(path.to_path_buf())
                 } else {
                     None
                 }
             })
     })
+}
+
+/// Checks whether a path is a valid `pyproject.toml` for use with pixi file by checking if it
+/// contains the `[tool.pixi.project]` section.
+fn is_valid_pixi_pyproject_toml(path: &Path) -> bool {
+    fs::read_to_string(path)
+        .map(|content| content.contains("[tool.pixi.project]"))
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -528,8 +535,7 @@ mod tests {
         for file_content in file_contents {
             let file_content = format!("{PROJECT_BOILERPLATE}\n{file_content}");
 
-            let manifest =
-                Manifest::from_str(Path::new(""), &file_content, ManifestKind::Pixi).unwrap();
+            let manifest = Manifest::from_str(Path::new("pixi.toml"), &file_content).unwrap();
             let project = Project::from_manifest(manifest);
             let expected_result = vec![VirtualPackage::LibC(LibC {
                 family: "glibc".to_string(),
@@ -562,9 +568,8 @@ mod tests {
         "#;
 
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
-            ManifestKind::Pixi,
         )
         .unwrap();
         let project = Project::from_manifest(manifest);
@@ -596,9 +601,8 @@ mod tests {
         wolflib = "1.0"
         "#;
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
-            ManifestKind::Pixi,
         )
         .unwrap();
         let project = Project::from_manifest(manifest);
@@ -626,9 +630,8 @@ mod tests {
             scripts = ["pixi.toml", "pixi.lock"]
             "#;
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
-            ManifestKind::Pixi,
         )
         .unwrap();
         let project = Project::from_manifest(manifest);
@@ -655,9 +658,8 @@ mod tests {
             test = "test linux"
             "#;
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
-            ManifestKind::Pixi,
         )
         .unwrap();
 

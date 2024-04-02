@@ -1,7 +1,7 @@
 use miette::{miette, Report};
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use std::{fmt, path::Path};
-use toml_edit::{Array, Item, Table, Value};
+use toml_edit::{value, Array, Item, Table, Value};
 
 use crate::{consts, FeatureName, SpecType, Task};
 
@@ -9,7 +9,7 @@ use super::{python::PyPiPackageName, PyPiRequirement};
 
 const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";
 
-/// Discriminates between a pixi.toml and a pyproject.toml manifest
+/// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest
 #[derive(Debug, Clone)]
 pub enum ManifestSource {
     PyProjectToml(toml_edit::DocumentMut),
@@ -315,12 +315,22 @@ impl ManifestSource {
 
         Ok(())
     }
+
+    /// Sets the description of the project
+    pub fn set_description(&mut self, description: &str) {
+        self.as_table_mut()["project"]["description"] = value(description);
+    }
+
+    /// Sets the version of the project
+    pub fn set_version(&mut self, version: &str) {
+        self.as_table_mut()["project"]["version"] = value(version);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::project::manifest::{Manifest, ManifestKind};
+    use crate::project::manifest::Manifest;
     use insta::assert_snapshot;
     use std::path::Path;
 
@@ -334,8 +344,7 @@ mod tests {
 
     #[test]
     fn test_get_or_insert_toml_table() {
-        let mut manifest =
-            Manifest::from_str(Path::new(""), PROJECT_BOILERPLATE, ManifestKind::Pixi).unwrap();
+        let mut manifest = Manifest::from_str(Path::new("pixi.toml"), PROJECT_BOILERPLATE).unwrap();
         let _ = manifest
             .document
             .get_or_insert_toml_table(None, &FeatureName::Default, "tasks");
@@ -369,8 +378,7 @@ platforms = ["linux-64", "win-64"]
 
         "#;
 
-        let manifest =
-            Manifest::from_str(Path::new(""), file_contents, ManifestKind::Pixi).unwrap();
+        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
         // Test all different options for the feature name and platform
         assert_eq!(
             "dependencies".to_string(),

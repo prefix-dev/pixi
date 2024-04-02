@@ -100,6 +100,17 @@ pixi install --frozen
 pixi install --locked
 ```
 
+To reinitialize the lockfile in your project, you can remove the existing `pixi.lock` file and run `pixi install`.
+This process will regenerate the lockfile based on the dependencies defined in your manifest file:
+
+```sh
+rm pixi.lock && pixi install
+```
+This action ensures that your project's dependencies are reset and updated according to the current specifications in manifest file.
+
+In a future version of `pixi`, we will introduce the `pixi update` command, see [#73](https://github.com/prefix-dev/pixi/issues/73).
+This command will allow you to update the lockfile directly, without manually deleting the `pixi.lock` file, making the dependency management process even smoother.
+
 ## `run`
 
 The `run` commands first checks if the environment is ready to use.
@@ -503,7 +514,7 @@ Store authentication information for given host.
 ```shell
 pixi auth login repo.prefix.dev --token pfx_JQEV-m_2bdz-D8NSyRSaNdHANx0qHjq7f2iD
 pixi auth login anaconda.org --conda-token ABCDEFGHIJKLMNOP
-pixi auth login https://myquetz.server --user john --password xxxxxx
+pixi auth login https://myquetz.server --username john --password xxxxxx
 ```
 
 ### `auth logout`

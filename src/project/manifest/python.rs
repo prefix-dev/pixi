@@ -2,6 +2,7 @@ use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
 use serde::Serializer;
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
@@ -139,7 +140,6 @@ pub enum PyPiRequirement {
     },
     Version {
         version: VersionOrStar,
-        index: Option<String>,
         #[serde(default)]
         extras: Vec<ExtraName>,
     },
@@ -200,22 +200,12 @@ impl From<PyPiRequirement> for Item {
         }
 
         match &val {
-            PyPiRequirement::Version {
-                version,
-                index,
-                extras,
-            } => {
+            PyPiRequirement::Version { version, extras } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
                 table.insert(
                     "version",
                     toml_edit::Value::String(toml_edit::Formatted::new(version.to_string())),
                 );
-                if let Some(index) = index {
-                    table.insert(
-                        "index",
-                        toml_edit::Value::String(toml_edit::Formatted::new(index.to_string())),
-                    );
-                }
                 insert_extras(&mut table, extras);
                 Item::Value(toml_edit::Value::InlineTable(table.to_owned()))
             }
@@ -253,7 +243,6 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
             match version_or_url {
                 pep508_rs::VersionOrUrl::VersionSpecifier(v) => PyPiRequirement::Version {
                     version: VersionOrStar::Version(v),
-                    index: None,
                     extras: req.extras,
                 },
                 pep508_rs::VersionOrUrl::Url(u) => PyPiRequirement::Url {
@@ -264,7 +253,6 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
         } else if !req.extras.is_empty() {
             PyPiRequirement::Version {
                 version: VersionOrStar::Star,
-                index: None,
                 extras: req.extras,
             }
         } else {
@@ -306,6 +294,77 @@ pub enum AsPep508Error {
         source: url::ParseError,
         url: String,
     },
+    #[error("using an editable flag for a path that is not a directory: {path}")]
+    EditableIsNotDir { path: PathBuf },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum RequirementOrEditable {
+    Editable(PackageName, requirements_txt::EditableRequirement),
+    Pep508Requirement(pep508_rs::Requirement),
+}
+
+impl Display for RequirementOrEditable {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            RequirementOrEditable::Editable(name, req) => {
+                write!(f, "{} = {:?}", name, req)
+            }
+            RequirementOrEditable::Pep508Requirement(req) => {
+                write!(f, "{}", req)
+            }
+        }
+    }
+}
+
+impl RequirementOrEditable {
+    /// Returns the name of the package that this requirement is for.
+    pub fn name(&self) -> &PackageName {
+        match self {
+            RequirementOrEditable::Editable(name, _) => name,
+            RequirementOrEditable::Pep508Requirement(req) => &req.name,
+        }
+    }
+
+    /// Returns any extras that this requirement has.
+    pub fn extras(&self) -> &[ExtraName] {
+        match self {
+            RequirementOrEditable::Editable(_, req) => &req.extras,
+            RequirementOrEditable::Pep508Requirement(req) => &req.extras,
+        }
+    }
+
+    /// Returns an editable requirement if it is an editable requirement.
+    pub fn into_editable(self) -> Option<requirements_txt::EditableRequirement> {
+        match self {
+            RequirementOrEditable::Editable(_, editable) => Some(editable),
+            _ => None,
+        }
+    }
+
+    /// Returns a pep508 requirement if it is a pep508 requirement.
+    pub fn into_requirement(self) -> Option<pep508_rs::Requirement> {
+        match self {
+            RequirementOrEditable::Pep508Requirement(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    /// Returns an editable requirement if it is an editable requirement.
+    pub fn as_editable(&self) -> Option<&requirements_txt::EditableRequirement> {
+        match self {
+            RequirementOrEditable::Editable(_name, editable) => Some(editable),
+            _ => None,
+        }
+    }
+
+    /// Returns a pep508 requirement if it is a pep508 requirement.
+    pub fn as_requirement(&self) -> Option<&pep508_rs::Requirement> {
+        match self {
+            RequirementOrEditable::Pep508Requirement(e) => Some(e),
+            _ => None,
+        }
+    }
 }
 
 impl PyPiRequirement {
@@ -324,17 +383,13 @@ impl PyPiRequirement {
         &self,
         name: &PackageName,
         project_root: &Path,
-    ) -> Result<pep508_rs::Requirement, AsPep508Error> {
+    ) -> Result<RequirementOrEditable, AsPep508Error> {
         let version_or_url = match self {
-            PyPiRequirement::Version {
-                version,
-                index: _,
-                extras: _,
-            } => version.clone().into(),
+            PyPiRequirement::Version { version, extras: _ } => version.clone().into(),
             PyPiRequirement::Path {
                 path,
-                editable: _,
-                extras: _,
+                editable,
+                extras,
             } => {
                 let joined = project_root.join(path);
                 let canonicalized =
@@ -346,7 +401,23 @@ impl PyPiRequirement {
                     .to_str()
                     .map(|s| s.to_owned())
                     .unwrap_or_else(String::new);
-                let verbatim = VerbatimUrl::from_path(canonicalized).with_given(given);
+                let verbatim = VerbatimUrl::from_path(canonicalized.clone()).with_given(given);
+
+                if *editable == Some(true) {
+                    if !canonicalized.is_dir() {
+                        return Err(AsPep508Error::EditableIsNotDir { path: path.clone() });
+                    }
+
+                    return Ok(RequirementOrEditable::Editable(
+                        name.clone(),
+                        requirements_txt::EditableRequirement {
+                            url: verbatim,
+                            extras: extras.clone(),
+                            path: canonicalized,
+                        },
+                    ));
+                }
+
                 Some(pep508_rs::VersionOrUrl::Url(verbatim))
             }
             PyPiRequirement::Git {
@@ -375,12 +446,14 @@ impl PyPiRequirement {
             PyPiRequirement::RawVersion(version) => version.clone().into(),
         };
 
-        Ok(pep508_rs::Requirement {
-            name: name.clone(),
-            extras: self.extras().to_vec(),
-            version_or_url,
-            marker: None,
-        })
+        Ok(RequirementOrEditable::Pep508Requirement(
+            pep508_rs::Requirement {
+                name: name.clone(),
+                extras: self.extras().to_vec(),
+                version_or_url,
+                marker: None,
+            },
+        ))
     }
 }
 
@@ -444,7 +517,7 @@ mod tests {
         let requirement: IndexMap<uv_normalize::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(
                 r#"
-                    foo = { version=">=3.12", extras = ["bar"], index = "artifact-registry" }
+                    foo = { version=">=3.12", extras = ["bar"]}
                     "#,
             )
             .unwrap();
@@ -457,7 +530,6 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement::Version {
                 version: ">=3.12".parse().unwrap(),
-                index: Some("artifact-registry".to_string()),
                 extras: vec![ExtraName::from_str("bar").unwrap()],
             }
         );
@@ -475,7 +547,6 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement::Version {
                 version: ">=3.12,<3.13.0".parse().unwrap(),
-                index: None,
                 extras: vec![
                     ExtraName::from_str("bar").unwrap(),
                     ExtraName::from_str("foo").unwrap(),
@@ -499,7 +570,6 @@ mod tests {
             pypi_requirement,
             PyPiRequirement::Version {
                 version: "==1.2.3".parse().unwrap(),
-                index: None,
                 extras: vec![
                     ExtraName::from_str("feature1").unwrap(),
                     ExtraName::from_str("feature2").unwrap()
