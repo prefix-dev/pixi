@@ -1,8 +1,10 @@
 use super::util::IndicatifWriter;
 use crate::progress;
+use crate::progress::global_multi_progress;
 use clap::Parser;
 use clap_complete;
 use clap_verbosity_flag::Verbosity;
+use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
 use std::{env, io::IsTerminal};
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
@@ -40,6 +42,10 @@ struct Args {
     /// Whether the log needs to be colored.
     #[clap(long, default_value = "auto", global = true, env = "PIXI_COLOR")]
     color: ColorOutput,
+
+    /// Hide all progress bars
+    #[clap(long, default_value = "false", global = true, env = "PIXI_NO_PROGRESS")]
+    no_progress: bool,
 }
 
 /// Generates a completion script for a shell.
@@ -127,6 +133,11 @@ pub async fn execute() -> miette::Result<()> {
     // Enable disable colors for the colors crate
     console::set_colors_enabled(use_colors);
     console::set_colors_enabled_stderr(use_colors);
+
+    // Hide all progress bars if the user requested it.
+    if args.no_progress {
+        global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
+    }
 
     let (low_level_filter, level_filter, pixi_level) = match args.verbose.log_level_filter() {
         clap_verbosity_flag::LevelFilter::Off => {
