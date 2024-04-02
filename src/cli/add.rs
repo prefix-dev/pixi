@@ -118,7 +118,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let spec_platforms = &args.platform;
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.default_environment().dir().as_path())?;
+    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
 
     // Add the platform if it is not already present
     let platforms_to_add = spec_platforms
