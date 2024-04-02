@@ -30,4 +30,4 @@ minimal-project = { path = "./minimal-project", editable = true}
 click = { url = "https://github.com/pallets/click/releases/download/8.1.7/click-8.1.7-py3-none-any.whl" }
 
 # You can also just the default git repo, it will checkout the default branch
-pytest = { git = "https://github.com/pytest-dev/pytest.git"}
+pytest = { git = "https://github.com/pytest-dev/pytest.git" }
