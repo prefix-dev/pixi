@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pixi list shows path and editable by @baszalmstra in [#1100](https://github.com/prefix-dev/pixi/pull/1100)
 - Docs ci by @ruben-arts in [#1074](https://github.com/prefix-dev/pixi/pull/1074)
 - Add error for unsupported pypi dependencies by @baszalmstra in [#1052](https://github.com/prefix-dev/pixi/pull/1052)
+- Interactively delete environment when it was relocated by @baszalmstra in [#1102](https://github.com/prefix-dev/pixi/pull/1102)
+- Allow solving for different platforms by @baszalmstra in [#1101](https://github.com/prefix-dev/pixi/pull/1101)
+- Don't allow extra keys in pypi requirements by @baszalmstra in [#1104](https://github.com/prefix-dev/pixi/pull/1104)
+- Solve when moving dependency from conda to pypi by @baszalmstra in [#1099](https://github.com/prefix-dev/pixi/pull/1099)
 
 ## New Contributors
 * @pya made their first contribution in [#1091](https://github.com/prefix-dev/pixi/pull/1091)
