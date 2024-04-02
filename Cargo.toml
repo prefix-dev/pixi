@@ -161,7 +161,6 @@ toml = "0.8.12"
 # If you change this also change the versions in the the patch section for uv
 pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.24" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.24" }
-
 # deno_task_shell = { path = "../deno_task_shell" }
 # rattler = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
 # rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
