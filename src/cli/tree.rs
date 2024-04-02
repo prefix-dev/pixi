@@ -242,11 +242,6 @@ fn print_dependency_leaf(
             UTF8_SYMBOLS.tee
         };
 
-        // skip virtual packages
-        if dep_name.starts_with("__") {
-            continue;
-        }
-
         if let Some(dep) = dep_map.get(dep_name) {
             let visited = visited_pkgs.contains(&dep.name);
             visited_pkgs.push(dep.name.to_owned());
@@ -268,6 +263,22 @@ fn print_dependency_leaf(
                 format!("{}{} ", prefix, UTF8_SYMBOLS.down)
             };
             print_dependency_leaf(dep, new_prefix, dep_map, visited_pkgs, direct_deps);
+        } else {
+            let visited = visited_pkgs.contains(dep_name);
+            visited_pkgs.push(dep_name.to_owned());
+
+            print_package(
+                format!("{prefix}{symbol}"),
+                &Package {
+                    name: dep_name.to_owned(),
+                    version: String::from(""),
+                    dependencies: Vec::new(),
+                    needed_by: Vec::new(),
+                    source: PackageSource::Conda,
+                },
+                false,
+                visited,
+            )
         }
     }
 }
@@ -278,7 +289,7 @@ fn print_dependency_leaf(
 /// marked with a star (*).
 fn print_package(prefix: String, package: &Package, direct: bool, visited: bool) {
     println!(
-        "{}{} v{} {}",
+        "{}{} {} {}",
         prefix,
         if direct {
             console::style(&package.name).fg(Color::Green).bold()
@@ -354,7 +365,7 @@ fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<
                 },
             );
         } else if let Some(dep) = dep.as_pypi() {
-            let name = dep.data().package.name.to_string();
+            let name = dep.data().package.name.as_dist_info_name().into_owned();
 
             let mut dependencies = Vec::new();
             for p in dep.data().package.requires_dist.iter() {
