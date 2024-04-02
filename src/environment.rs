@@ -9,7 +9,6 @@ use crate::{
     project::{
         grouped_environment::GroupedEnvironment,
         manifest::{EnvironmentName, SystemRequirements},
-        virtual_packages::verify_current_platform_has_required_virtual_packages,
         Environment,
     },
     Project,
@@ -152,10 +151,6 @@ fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
 pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
-
-    // Make sure the system requirements are met
-    verify_current_platform_has_required_virtual_packages(&project.default_environment())
-        .into_diagnostic()?;
 
     // TODO: remove on a 1.0 release
     // Check for old `env` folder as we moved to `envs` in 0.13.0
