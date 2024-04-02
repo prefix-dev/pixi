@@ -30,22 +30,17 @@ test = "python test.py --cuda"
 [feature.cuda.dependencies]
 pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
 
-[system-requirements]
-macos = "13.3"
-cuda = "12.1"
+[feature.mlx]
+platforms = ["osx-arm64"]
+system-requirements = {macos = "13.3"}
 
-[target.osx-arm64.tasks]
+[feature.mlx.tasks]
 train = "python train.py --mlx"
 test = "python test.py --mlx"
 
-[target.osx-arm64.dependencies]
+[feature.mlx.dependencies]
 mlx = "*"
 
-[target..tasks]
-train = "python train.py --cuda"
-
-[feature.test.dependencies]
-pytest = ">=7.0.0,<7.1"
-
 [environments]
-test = ["test"]
+cuda = ["cuda"]
+mlx = ["mlx"]
