@@ -101,6 +101,14 @@ impl Manifest {
         Self::from_str(path.as_ref(), contents)
     }
 
+    /// Return the toml manifest file name ('pixi.toml' or 'pyproject.toml')
+    pub fn file_name(&self) -> &str {
+        match self.document {
+            ManifestSource::PixiToml(_) => consts::PROJECT_MANIFEST,
+            ManifestSource::PyProjectToml(_) => consts::PYPROJECT_MANIFEST,
+        }
+    }
+
     /// Create a new manifest from a string
     pub fn from_str(manifest_path: &Path, contents: impl Into<String>) -> miette::Result<Self> {
         let manifest_kind = ManifestKind::try_from_path(manifest_path).ok_or_else(|| {
@@ -111,11 +119,12 @@ impl Manifest {
             .expect("manifest_path should always have a parent");
 
         let contents = contents.into();
-        let parsed = match manifest_kind {
-            ManifestKind::Pixi => ProjectManifest::from_toml_str(&contents),
-            ManifestKind::Pyproject => {
-                PyProjectManifest::from_toml_str(&contents).map(|x| x.into())
-            }
+        let (parsed, file_name) = match manifest_kind {
+            ManifestKind::Pixi => (ProjectManifest::from_toml_str(&contents), "pixi.toml"),
+            ManifestKind::Pyproject => (
+                PyProjectManifest::from_toml_str(&contents).map(|x| x.into()),
+                "pyproject.toml",
+            ),
         };
 
         let (manifest, document) = match parsed
@@ -128,7 +137,7 @@ impl Manifest {
                         labels = vec![LabeledSpan::at(span, e.message())],
                         "failed to parse project manifest"
                     )
-                    .with_source_code(NamedSource::new(consts::PROJECT_MANIFEST, contents)));
+                    .with_source_code(NamedSource::new(file_name, contents)));
                 } else {
                     return Err(e).into_diagnostic();
                 }
@@ -136,10 +145,7 @@ impl Manifest {
         };
 
         // Validate the contents of the manifest
-        manifest.validate(
-            NamedSource::new(consts::PROJECT_MANIFEST, contents.to_owned()),
-            root,
-        )?;
+        manifest.validate(NamedSource::new(file_name, contents.to_owned()), root)?;
 
         // Notify the user that pypi-dependencies are still experimental
         if manifest
