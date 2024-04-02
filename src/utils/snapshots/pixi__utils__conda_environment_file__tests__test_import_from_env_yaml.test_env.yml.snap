@@ -1,5 +1,5 @@
 ---
-source: src/cli/init.rs
+source: src/utils/conda_environment_file.rs
 expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
@@ -119,7 +119,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    index: None,
                     extras: [],
                 },
             ),
@@ -141,7 +140,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    index: None,
                     extras: [],
                 },
             ),
@@ -163,7 +161,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    index: None,
                     extras: [],
                 },
             ),
@@ -185,7 +182,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    index: None,
                     extras: [],
                 },
             ),
@@ -207,7 +203,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    index: None,
                     extras: [],
                 },
             ),
@@ -229,7 +224,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    index: None,
                     extras: [],
                 },
             ),
@@ -251,7 +245,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    index: None,
                     extras: [],
                 },
             ),
@@ -273,7 +266,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    index: None,
                     extras: [],
                 },
             ),
@@ -297,7 +289,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
                 Version {
                     version: Star,
-                    index: None,
                     extras: [
                         ExtraName(
                             "extra",
@@ -314,7 +305,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 },
                 Version {
                     version: Star,
-                    index: None,
                     extras: [
                         ExtraName(
                             "extra1",
@@ -343,7 +333,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    index: None,
                     extras: [
                         ExtraName(
                             "extra1",
@@ -372,7 +361,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    index: None,
                     extras: [
                         ExtraName(
                             "extra1",
@@ -401,7 +389,6 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    index: None,
                     extras: [
                         ExtraName(
                             "extra1",
