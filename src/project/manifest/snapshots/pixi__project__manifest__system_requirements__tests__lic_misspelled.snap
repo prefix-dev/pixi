@@ -6,5 +6,4 @@ TOML parse error at line 2, column 30
   |
 2 |         [system-requirements.lic]
   |                              ^^^
-unknown field `lic`, expected one of `macos`, `linux`, `cuda`, `libc`, `archspec`
-
+unknown field `lic`, expected one of `macos`, `linux`, `cuda`, `libc`

@@ -4,11 +4,6 @@ expression: packages
 ---
 [
     Unix,
-    Archspec(
-        Archspec {
-            spec: "arm64",
-        },
-    ),
     Osx(
         Osx {
             version: Version {

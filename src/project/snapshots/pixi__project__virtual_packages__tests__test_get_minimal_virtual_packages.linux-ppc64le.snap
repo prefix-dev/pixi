@@ -21,9 +21,4 @@ expression: packages
             },
         },
     ),
-    Archspec(
-        Archspec {
-            spec: "ppc64le",
-        },
-    ),
 ]

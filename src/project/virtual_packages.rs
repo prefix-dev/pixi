@@ -4,9 +4,7 @@ use crate::project::Environment;
 use itertools::Itertools;
 use miette::Diagnostic;
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
-use rattler_virtual_packages::{
-    Archspec, Cuda, DetectVirtualPackageError, LibC, Linux, Osx, VirtualPackage,
-};
+use rattler_virtual_packages::{Cuda, DetectVirtualPackageError, LibC, Linux, Osx, VirtualPackage};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -67,12 +65,6 @@ pub fn get_minimal_virtual_packages(
 
     if platform.is_windows() {
         virtual_packages.push(VirtualPackage::Win);
-    }
-
-    if let Some(archspec) = system_requirements.archspec.clone() {
-        virtual_packages.push(VirtualPackage::Archspec(Archspec { spec: archspec }))
-    } else if let Some(archspec) = Archspec::from_platform(platform) {
-        virtual_packages.push(archspec.into())
     }
 
     // Add platform specific packages

@@ -4,9 +4,4 @@ expression: packages
 ---
 [
     Win,
-    Archspec(
-        Archspec {
-            spec: "x86_64",
-        },
-    ),
 ]
