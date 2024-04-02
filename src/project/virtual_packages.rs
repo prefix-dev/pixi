@@ -218,7 +218,10 @@ mod tests {
         let system_requirements = SystemRequirements::default();
 
         for platform in platforms {
-            let packages = get_minimal_virtual_packages(platform, &system_requirements);
+            let packages = get_minimal_virtual_packages(platform, &system_requirements)
+                .into_iter()
+                .map(GenericVirtualPackage::from)
+                .collect_vec();
             let snapshot_name = format!("test_get_minimal_virtual_packages.{}", platform);
             assert_debug_snapshot!(snapshot_name, packages);
         }
