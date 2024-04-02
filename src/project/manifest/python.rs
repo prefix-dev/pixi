@@ -116,7 +116,7 @@ impl<'de> Deserialize<'de> for VersionOrStar {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(untagged, rename_all = "snake_case")]
+#[serde(untagged, rename_all = "snake_case", deny_unknown_fields)]
 pub enum PyPiRequirement {
     Git {
         git: Url,
