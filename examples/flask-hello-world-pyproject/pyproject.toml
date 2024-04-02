@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Example how to get started with flask in a pixi environment."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["flask==2.*"]
+dependencies = ["flask==2.*", "pytest"]
 
 [build-system]
 requires = ["setuptools", "wheel"]
@@ -20,3 +20,4 @@ flask-hello-world-pyproject = { path = ".", editable = true }
 
 [tool.pixi.tasks]
 start = "python -m flask --app flask_hello_world_pyproject.app:app run --port=5050"
+test = "pytest -v tests/*"
