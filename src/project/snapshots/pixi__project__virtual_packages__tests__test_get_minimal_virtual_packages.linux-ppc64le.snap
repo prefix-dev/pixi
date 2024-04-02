@@ -3,22 +3,48 @@ source: src/project/virtual_packages.rs
 expression: packages
 ---
 [
-    Unix,
-    Linux(
-        Linux {
-            version: Version {
-                version: [[0], [5], [10]],
-                local: [],
-            },
+    GenericVirtualPackage {
+        name: PackageName {
+            normalized: None,
+            source: "__unix",
         },
-    ),
-    LibC(
-        LibC {
-            family: "glibc",
-            version: Version {
-                version: [[0], [2], [17]],
-                local: [],
-            },
+        version: Version {
+            version: [[0], [0]],
+            local: [],
         },
-    ),
+        build_string: "0",
+    },
+    GenericVirtualPackage {
+        name: PackageName {
+            normalized: None,
+            source: "__linux",
+        },
+        version: Version {
+            version: [[0], [5], [10]],
+            local: [],
+        },
+        build_string: "0",
+    },
+    GenericVirtualPackage {
+        name: PackageName {
+            normalized: None,
+            source: "__glibc",
+        },
+        version: Version {
+            version: [[0], [2], [17]],
+            local: [],
+        },
+        build_string: "0",
+    },
+    GenericVirtualPackage {
+        name: PackageName {
+            normalized: None,
+            source: "__archspec",
+        },
+        version: Version {
+            version: [[0], [1]],
+            local: [],
+        },
+        build_string: "ppc64le",
+    },
 ]
