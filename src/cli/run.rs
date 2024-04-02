@@ -36,7 +36,7 @@ pub struct Args {
     /// The task you want to run in the projects environment.
     pub task: Vec<String>,
 
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 

@@ -140,7 +140,6 @@ pub enum PyPiRequirement {
     },
     Version {
         version: VersionOrStar,
-        index: Option<String>,
         #[serde(default)]
         extras: Vec<ExtraName>,
     },
@@ -201,22 +200,12 @@ impl From<PyPiRequirement> for Item {
         }
 
         match &val {
-            PyPiRequirement::Version {
-                version,
-                index,
-                extras,
-            } => {
+            PyPiRequirement::Version { version, extras } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
                 table.insert(
                     "version",
                     toml_edit::Value::String(toml_edit::Formatted::new(version.to_string())),
                 );
-                if let Some(index) = index {
-                    table.insert(
-                        "index",
-                        toml_edit::Value::String(toml_edit::Formatted::new(index.to_string())),
-                    );
-                }
                 insert_extras(&mut table, extras);
                 Item::Value(toml_edit::Value::InlineTable(table.to_owned()))
             }
@@ -254,7 +243,6 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
             match version_or_url {
                 pep508_rs::VersionOrUrl::VersionSpecifier(v) => PyPiRequirement::Version {
                     version: VersionOrStar::Version(v),
-                    index: None,
                     extras: req.extras,
                 },
                 pep508_rs::VersionOrUrl::Url(u) => PyPiRequirement::Url {
@@ -265,7 +253,6 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
         } else if !req.extras.is_empty() {
             PyPiRequirement::Version {
                 version: VersionOrStar::Star,
-                index: None,
                 extras: req.extras,
             }
         } else {
@@ -398,11 +385,7 @@ impl PyPiRequirement {
         project_root: &Path,
     ) -> Result<RequirementOrEditable, AsPep508Error> {
         let version_or_url = match self {
-            PyPiRequirement::Version {
-                version,
-                index: _,
-                extras: _,
-            } => version.clone().into(),
+            PyPiRequirement::Version { version, extras: _ } => version.clone().into(),
             PyPiRequirement::Path {
                 path,
                 editable,
@@ -534,7 +517,7 @@ mod tests {
         let requirement: IndexMap<uv_normalize::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(
                 r#"
-                    foo = { version=">=3.12", extras = ["bar"], index = "artifact-registry" }
+                    foo = { version=">=3.12", extras = ["bar"]}
                     "#,
             )
             .unwrap();
@@ -547,7 +530,6 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement::Version {
                 version: ">=3.12".parse().unwrap(),
-                index: Some("artifact-registry".to_string()),
                 extras: vec![ExtraName::from_str("bar").unwrap()],
             }
         );
@@ -565,7 +547,6 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement::Version {
                 version: ">=3.12,<3.13.0".parse().unwrap(),
-                index: None,
                 extras: vec![
                     ExtraName::from_str("bar").unwrap(),
                     ExtraName::from_str("foo").unwrap(),
@@ -589,7 +570,6 @@ mod tests {
             pypi_requirement,
             PyPiRequirement::Version {
                 version: "==1.2.3".parse().unwrap(),
-                index: None,
                 extras: vec![
                     ExtraName::from_str("feature1").unwrap(),
                     ExtraName::from_str("feature2").unwrap()
