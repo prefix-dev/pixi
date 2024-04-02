@@ -323,7 +323,7 @@ List project's packages. Highlighted packages are explicit dependencies.
 - `--json-pretty`: Whether to output in pretty json format
 - `--sort-by <SORT_BY>`: Sorting strategy [default: name] [possible values: size, name, type]
 - `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](configuration.md), by default it searches for one in the parent directories.
-- `--environment`(`-e`): The environment's packages to list, if non is provided the default environment's packages will be listed.
+- `--environment (-e)`: The environment's packages to list, if non is provided the default environment's packages will be listed.
 - `--frozen`: Install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
@@ -397,7 +397,7 @@ pixi tree --environment docs
     Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
 
 Output will look like this, where direct packages in the [manifest file](configuration.md) will be green.
-Once a package has been displayed once, the tree won't continue to recurse through its dependencies (compare the first time `libzlib` appears, vs the rest), and it will instead be marked with a star `(*)`.
+Once a package has been displayed once, the tree won't continue to recurse through its dependencies (compare the first time `python` appears, vs the rest), and it will instead be marked with a star `(*)`.
 
 Version numbers are colored by the package type, yellow for Conda packages and blue for PyPI.
 
@@ -406,30 +406,26 @@ Version numbers are colored by the package type, yellow for Conda packages and b
 ├── pre-commit v3.3.3
 │   ├── cfgv v3.3.1
 │   │   └── python v3.12.2
+│   │       ├── bzip2 v1.0.8
+│   │       ├── libexpat v2.6.2
+│   │       ├── libffi v3.4.2
 │   │       ├── libsqlite v3.45.2
 │   │       │   └── libzlib v1.2.13
 │   │       ├── libzlib v1.2.13 (*)
-│   │       ├── libffi v3.4.2
-│   │       ├── libexpat v2.6.2
-│   │       ├── readline v8.2
-│   │       │   └── ncurses v6.4.20240210
-│   │       ├── xz v5.2.6
+│   │       ├── ncurses v6.4.20240210
 │   │       ├── openssl v3.2.1
-│   │       ├── bzip2 v1.0.8
+│   │       ├── readline v8.2
+│   │       │   └── ncurses v6.4.20240210 (*)
 │   │       ├── tk v8.6.13
 │   │       │   └── libzlib v1.2.13 (*)
-│   │       └── ncurses v6.4.20240210 (*)
-│   ├── pyyaml v6.0.1
+│   │       └── xz v5.2.6
+│   ├── identify v2.5.35
+│   │   └── python v3.12.2 (*)
 ...
-├── rust v1.76.0
-│   └── rust-std-aarch64-apple-darwin v1.76.0
-├── openssl v3.2.1
-├── pkg-config v0.29.2
-│   ├── libglib v2.78.4
-│   │   ├── libiconv v1.17
-│   │   ├── gettext v0.21.1
-│   │   │   └── libiconv v1.17 (*)
+└── tbump v6.9.0
 ...
+    └── tomlkit v0.12.4
+        └── python v3.12.2 (*)
 ```
 
 A regex pattern can be specified to filter the tree to just those that show a specific direct dependency:
