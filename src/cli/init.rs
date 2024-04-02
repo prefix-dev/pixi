@@ -181,6 +181,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         pyproject_manifest_path.to_string_lossy(),
                         e
                     );
+                } else {
+                    // Inform about the addition of the package itself as an editable dependency of the project
+                    eprintln!(
+                        "{}Added package '{}' as an editable dependency.",
+                        console::style(console::Emoji("✔ ", "")).green(),
+                        name
+                    );
                 }
             }
 
