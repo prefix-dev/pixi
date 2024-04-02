@@ -235,6 +235,9 @@ pub async fn get_task_env<'p>(
     lock_file_derived_data: &mut LockFileDerivedData<'p>,
     environment: &Environment<'p>,
 ) -> miette::Result<HashMap<String, String>> {
+    // Make sure the system requirements are met
+    verify_current_platform_has_required_virtual_packages(environment).into_diagnostic()?;
+
     // Ensure there is a valid prefix
     lock_file_derived_data.prefix(environment).await?;
 
