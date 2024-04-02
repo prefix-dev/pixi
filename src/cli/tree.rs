@@ -268,7 +268,7 @@ fn print_dependency_leaf(
             visited_pkgs.push(dep_name.to_owned());
 
             print_package(
-                format!("{prefix}{symbol}"),
+                format!("{prefix}{symbol} "),
                 &Package {
                     name: dep_name.to_owned(),
                     version: String::from(""),
@@ -377,7 +377,7 @@ fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<
                         markers
                     );
                 } else {
-                    dependencies.push(p.name.to_string())
+                    dependencies.push(p.name.as_dist_info_name().into_owned())
                 }
             }
             dep_map.insert(
