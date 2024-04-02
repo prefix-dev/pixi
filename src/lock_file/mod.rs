@@ -17,9 +17,7 @@ pub use outdated::OutdatedEnvironments;
 pub use package_identifier::PypiPackageIdentifier;
 pub use records_by_name::{PypiRecordsByName, RepoDataRecordsByName};
 pub use resolve::{resolve_conda, resolve_pypi, UvResolutionContext};
-pub use satisfiability::{
-    verify_environment_satisfiability, verify_platform_satisfiability, PlatformUnsat,
-};
+pub use satisfiability::{verify_environment_satisfiability, verify_platform_satisfiability};
 pub use update::{LockFileDerivedData, UpdateLockFileOptions};
 
 /// A list of conda packages that are locked for a specific platform.
