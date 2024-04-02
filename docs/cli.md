@@ -381,7 +381,7 @@ The package tree can also be inverted (`-i`), to see which packages require a sp
 - `--invert (-i)`: Invert the dependency tree, that is given a `REGEX` pattern that matches some packages, show all the packages that depend on those.
 - `--platform <PLATFORM> (-p)`: The platform to list packages for. Defaults to the current platform
 - `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](configuration.md), by default it searches for one in the parent directories.
-- `--environment`(`-e`): The environment's packages to list, if non is provided the default environment's packages will be listed.
+- `--environment (-e)`: The environment's packages to list, if non is provided the default environment's packages will be listed.
 - `--frozen`: Install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
@@ -397,7 +397,7 @@ pixi tree --environment docs
     Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
 
 Output will look like this, where direct packages in the [manifest file](configuration.md) will be green.
-Once a package has been displayed once, the tree won't continue to recurse through it's dependencies (compare the first time `livzlib` appears, vs the rest), and it will instead be marked with a star `(*)`.
+Once a package has been displayed once, the tree won't continue to recurse through its dependencies (compare the first time `libzlib` appears, vs the rest), and it will instead be marked with a star `(*)`.
 
 Version numbers are colored by the package type, yellow for Conda packages and blue for PyPI.
 

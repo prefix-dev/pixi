@@ -17,7 +17,7 @@ use crate::Project;
     Show a tree of project dependencies\n\
     \n\
     Dependency names highlighted in {} are directly specified in the manifest. \
-    {} version numbers are Conda packages where as PyPI version numbers are {}.
+    {} version numbers are conda packages, PyPI version numbers are {}.
     ",
     console::style("green").fg(Color::Green).bold(),
     console::style("Yellow").fg(Color::Yellow),
@@ -307,7 +307,7 @@ fn direct_dependencies(
         environment
             .pypi_dependencies(Some(*platform))
             .into_iter()
-            .map(|(name, _)| name.as_normalized().to_string()),
+            .map(|(name, _)| name.as_normalized().as_dist_info_name().into_owned()),
     );
     project_dependency_names
 }
