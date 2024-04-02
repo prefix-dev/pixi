@@ -1,7 +1,8 @@
 use pep508_rs::VersionOrUrl;
+use pyproject_toml::PyProjectToml;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 use toml_edit;
 use toml_edit::TomlError;
 
@@ -15,7 +16,7 @@ use super::{
 #[derive(Deserialize, Debug, Clone)]
 pub struct PyProjectManifest {
     #[serde(flatten)]
-    inner: pyproject_toml::PyProjectToml,
+    inner: PyProjectToml,
     tool: Tool,
 }
 
@@ -25,7 +26,7 @@ struct Tool {
 }
 
 impl std::ops::Deref for PyProjectManifest {
-    type Target = pyproject_toml::PyProjectToml;
+    type Target = PyProjectToml;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -124,6 +125,33 @@ fn version_or_url_to_nameless_matchspec(
             ..Default::default()
         }),
     }
+}
+
+/// Builds a list of pixi environments from pyproject groups of extra dependencies:
+///  - one environment is created per group of extra, with the same name as the group of extra
+///  - each environment includes the feature of the same name as the group of extra
+///  - it will also include other features inferred from any self references to other groups of extras
+pub fn environments_from_extras(pyproject: &PyProjectToml) -> HashMap<String, Vec<String>> {
+    let mut environments = HashMap::new();
+    if let Some(Some(extras)) = &pyproject.project.as_ref().map(|p| &p.optional_dependencies) {
+        let pname = &pyproject
+            .project
+            .as_ref()
+            .map(|p| pep508_rs::PackageName::new(p.name.clone()).unwrap());
+        for (extra, reqs) in extras {
+            let mut features = vec![extra.to_string()];
+            // Add any references to other groups of extra dependencies
+            for req in reqs.iter() {
+                if pname.as_ref().is_some_and(|n| n == &req.name) {
+                    for extra in &req.extras {
+                        features.push(extra.to_string())
+                    }
+                }
+            }
+            environments.insert(extra.clone(), features);
+        }
+    }
+    environments
 }
 
 #[cfg(test)]

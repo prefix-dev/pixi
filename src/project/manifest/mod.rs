@@ -5,7 +5,7 @@ mod environment;
 mod error;
 mod feature;
 mod metadata;
-mod pyproject;
+pub mod pyproject;
 pub mod python;
 mod system_requirements;
 mod target;

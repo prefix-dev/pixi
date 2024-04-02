@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
+use crate::project::manifest::pyproject::environments_from_extras;
 use crate::utils::conda_environment_file::CondaEnvFile;
 use crate::{config::get_default_author, consts};
 use crate::{FeatureName, Project};
@@ -9,7 +10,6 @@ use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use pyproject_toml::PyProjectToml;
 use rattler_conda_types::Platform;
-use std::collections::HashMap;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::{fs, path::PathBuf};
@@ -291,32 +291,6 @@ fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
     }
 }
 
-/// Builds a list of pixi environments from pyproject groups of extra dependencies:
-///  - one environment is created per group of extra, with the same name as the group of extra
-///  - each environment includes the feature of the same name as the group of extra
-///  - it will also include other features inferred from any self references to other groups of extras
-pub fn environments_from_extras(pyproject: &PyProjectToml) -> HashMap<String, Vec<String>> {
-    let mut environments = HashMap::new();
-    if let Some(Some(extras)) = &pyproject.project.as_ref().map(|p| &p.optional_dependencies) {
-        let pname = &pyproject
-            .project
-            .as_ref()
-            .map(|p| pep508_rs::PackageName::new(p.name.clone()).unwrap());
-        for (extra, reqs) in extras {
-            let mut features = vec![extra.to_string()];
-            // Add any references to other groups of extra dependencies
-            for req in reqs.iter() {
-                if pname.as_ref().is_some_and(|n| n == &req.name) {
-                    for extra in &req.extras {
-                        features.push(extra.to_string())
-                    }
-                }
-            }
-            environments.insert(extra.clone(), features);
-        }
-    }
-    environments
-}
 #[cfg(test)]
 mod tests {
     use super::*;
