@@ -1,7 +1,7 @@
 use pep508_rs::VersionOrUrl;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 use toml_edit;
 use toml_edit::TomlError;
 
@@ -71,6 +71,18 @@ impl From<PyProjectManifest> for ProjectManifest {
                 )
             }
         }
+
+        // Add the project itself as an editable dependency
+        // TODO: Do not do it if a settings prevents it, or if the same
+        // path dependency has been added explicitly in the [tool.pixi.pypi-dependencies] table
+        target.add_pypi_dependency(
+            PyPiPackageName::from_str(&pyproject.name).unwrap(),
+            PyPiRequirement::Path {
+                path: PathBuf::from("."),
+                editable: Some(true),
+                extras: Default::default(),
+            },
+        );
 
         // For each extra group, create a feature of the same name if it does not exist,
         // add dependencies and create corresponding environments if they do not exist
