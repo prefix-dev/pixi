@@ -170,7 +170,7 @@ impl Project {
     /// Returns the source code of the project as [`NamedSource`].
     /// Used in error reporting.
     pub fn manifest_named_source(&self) -> NamedSource<String> {
-        NamedSource::new(PROJECT_MANIFEST, self.manifest.contents.clone())
+        NamedSource::new(self.manifest.file_name(), self.manifest.contents.clone())
     }
 
     /// Loads a project from manifest file.

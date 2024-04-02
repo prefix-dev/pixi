@@ -19,7 +19,7 @@ pub enum Command {
 pub struct Args {
     #[command(subcommand)]
     command: Command,
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 }
