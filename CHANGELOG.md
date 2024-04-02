@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2024-04-02
+### ✨ Highlights
+- This release adds support for `pyproject.toml`, now pixi reads from the `[tool.pixi]` table.
+- We now support editable PyPI dependencies, and PyPI source dependencies, including `git`, `path`, and `url` dependencies.
+
+> [!TIP]
+> These new features are part of the ongoing effort to make pixi more flexible, powerful, and comfortable for the python users.
+> They are still in progress so expect more improvements on these features soon, so please report any issues you encounter and follow our next releases!
+
+### 📃 Details
+#### Added
+- Support for `pyproject.toml` by @olivier-lacroix in [#999](https://github.com/prefix-dev/pixi/pull/999)
+- Support for PyPI source dependencies by @tdejager in [#985](https://github.com/prefix-dev/pixi/pull/985)
+- Support for editable PyPI dependencies by @tdejager in [#1044](https://github.com/prefix-dev/pixi/pull/1044)
+
+#### Changed
+- `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` compliance by @chawyehsu in [#1050](https://github.com/prefix-dev/pixi/pull/1050)
+- Build pixi for windows arm by @baszalmstra in [#1053](https://github.com/prefix-dev/pixi/pull/1053)
+- Platform literals by @baszalmstra in [#1054](https://github.com/prefix-dev/pixi/pull/1054)
+- Cli docs: --user is actually --username
+- Fixed error in auth example (CLI docs) by @ytausch in [#1076](https://github.com/prefix-dev/pixi/pull/1076)
+
+#### Documentation
+- Add lockfile update description in preparation for pixi update by @ruben-arts in [#1073](https://github.com/prefix-dev/pixi/pull/1073)
+- `zsh` may be used for installation on macOS by @pya in [#1091](https://github.com/prefix-dev/pixi/pull/1091)
+- Fix typo in `pixi auth` documentation by @ytausch in [#1076](https://github.com/prefix-dev/pixi/pull/1076)
+
+#### Fixed
+- Test failure on riscv64 by @hack3ric in [#1045](https://github.com/prefix-dev/pixi/pull/1045)
+- Validation test was testing on a wrong pixi.toml by @ruben-arts in [#1056](https://github.com/prefix-dev/pixi/pull/1056)
+- Pixi list shows path and editable by @baszalmstra in [#1100](https://github.com/prefix-dev/pixi/pull/1100)
+- Docs ci by @ruben-arts in [#1074](https://github.com/prefix-dev/pixi/pull/1074)
+- Add error for unsupported pypi dependencies by @baszalmstra in [#1052](https://github.com/prefix-dev/pixi/pull/1052)
+
+## New Contributors
+* @pya made their first contribution in [#1091](https://github.com/prefix-dev/pixi/pull/1091)
+* @ytausch made their first contribution in [#1076](https://github.com/prefix-dev/pixi/pull/1076)
+* @hack3ric made their first contribution in [#1045](https://github.com/prefix-dev/pixi/pull/1045)
+* @olivier-lacroix made their first contribution in [#999](https://github.com/prefix-dev/pixi/pull/999)
+* @henryiii made their first contribution in [#1063](https://github.com/prefix-dev/pixi/pull/1063)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.17.1..v0.18.0)
+
 ## [0.17.1] - 2024-03-21
 ### ✨ Highlights
 
