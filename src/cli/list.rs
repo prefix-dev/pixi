@@ -157,7 +157,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         environment
             .pypi_dependencies(Some(platform))
             .into_iter()
-            .map(|(name, _)| name.as_source().to_string()),
+            .map(|(name, _)| name.as_normalized().as_dist_info_name().into_owned()),
     );
     // Convert the list of package record to specific output format
     let mut packages_to_output = locked_deps

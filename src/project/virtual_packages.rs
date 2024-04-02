@@ -4,7 +4,9 @@ use crate::project::Environment;
 use itertools::Itertools;
 use miette::Diagnostic;
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
-use rattler_virtual_packages::{Cuda, DetectVirtualPackageError, LibC, Linux, Osx, VirtualPackage};
+use rattler_virtual_packages::{
+    Archspec, Cuda, DetectVirtualPackageError, LibC, Linux, Osx, VirtualPackage,
+};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -81,17 +83,19 @@ pub fn get_minimal_virtual_packages(
         virtual_packages.push(VirtualPackage::Cuda(Cuda { version }));
     }
 
+    // Archspec is only based on the platform for now
+    if let Some(spec) = Archspec::from_platform(platform) {
+        virtual_packages.push(VirtualPackage::Archspec(spec));
+    }
+
     virtual_packages
 }
 
 impl Environment<'_> {
     /// Returns the set of virtual packages to use for the specified platform. This method
     /// takes into account the system requirements specified in the project manifest.
-    pub fn virtual_packages(&self, platform: Platform) -> Vec<GenericVirtualPackage> {
+    pub fn virtual_packages(&self, platform: Platform) -> Vec<VirtualPackage> {
         get_minimal_virtual_packages(platform, &self.system_requirements())
-            .into_iter()
-            .map(GenericVirtualPackage::from)
-            .collect()
     }
 }
 
@@ -150,10 +154,18 @@ pub fn verify_current_platform_has_required_virtual_packages(
         .map(GenericVirtualPackage::from)
         .map(|vpkg| (vpkg.name.clone(), vpkg))
         .collect::<HashMap<_, _>>();
-    let required_pkgs = environment.virtual_packages(current_platform);
+    let required_pkgs = environment
+        .virtual_packages(current_platform)
+        .into_iter()
+        .map(GenericVirtualPackage::from);
 
     // Check for every local minimum package if it is available and on the correct version.
     for req_pkg in required_pkgs {
+        if req_pkg.name.as_normalized() == "__archspec" {
+            // Skip archspec packages completely for now.
+            continue;
+        }
+
         if let Some(local_vpkg) = system_virtual_packages.get(&req_pkg.name) {
             if req_pkg.build_string != local_vpkg.build_string {
                 return Err(VerifyCurrentPlatformError::MismatchingBuildString {
