@@ -13,6 +13,7 @@ description: All pixi cli subcommands
 - `--color <COLOR>`: Whether the log needs to be colored [env: `PIXI_COLOR=`] [default: `auto`] [possible values: always, never, auto].
 Pixi also honor the `FORCE_COLOR` and `NO_COLOR` environment variables.
 They both take precedence over `--color` and `PIXI_COLOR`.
+- `--no-progress`: Disables the progress bar.[env: `PIXI_NO_PROGRESS`] [default: `false`]
 
 
 ## `init`
