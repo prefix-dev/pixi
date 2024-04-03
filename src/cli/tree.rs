@@ -29,7 +29,7 @@ pub struct Args {
     pub regex: Option<String>,
 
     /// The platform to list packages for. Defaults to the current platform.
-    #[arg(long)]
+    #[arg(long, short)]
     pub platform: Option<Platform>,
 
     /// The path to 'pixi.toml'

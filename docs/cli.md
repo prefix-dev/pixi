@@ -391,6 +391,7 @@ pixi tree
 pixi tree pre-commit
 pixi tree -i yaml
 pixi tree --environment docs
+pixi tree --platform win-64
 ```
 
 !!! warning
@@ -458,7 +459,7 @@ A regex pattern can be specified to filter the tree to just those that show a sp
 ...
 ```
 
-Additionly the tree can be inverted, and it can show which packages depend on a regex pattern.
+Additionally, the tree can be inverted, and it can show which packages depend on a regex pattern.
 The packages specified in the manifest will also be highlighted (in this case `cffconvert` and `pre-commit` would be).
 
 ```shell
