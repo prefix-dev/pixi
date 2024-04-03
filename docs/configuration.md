@@ -541,7 +541,7 @@ The `environments` table allows you to define environments that are created usin
 
 The environments table is defined using the following fields:
 
-- `features`: The features that are included in the environment, which is also the default field in the environments. Unless `no-default-feature` is set to `false`; the default feature is always included.
+- `features`: The features that are included in the environment, which is also the default field in the environments. Unless `no-default-feature` is set to `true`; the default feature is always included.
 - `solve-group`: The solve group is used to group environments together at the solve stage.
   This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
   For instance when testing a production environment with additional test dependencies.
