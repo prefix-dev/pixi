@@ -147,7 +147,7 @@ test = ["test"]
 ```
 
 ## Build-system section
-The `pyproject.toml` file normally contains a `[build-system]` section.  Pixi will use this section to build and install the project if it is added as a pypi path dependency. 
+The `pyproject.toml` file normally contains a `[build-system]` section.  Pixi will use this section to build and install the project if it is added as a pypi path dependency.
 
 If the `pyproject.toml` file does not contain any `[build-system]` section, pixi will fall back to [uv](https://github.com/astral-sh/uv)'s default, which is equivalent to the below:
 
