@@ -37,6 +37,8 @@ hypothesis = "*"
 [feature.test.tasks]
 test = "pytest -s"
 
+[feature.lint]
+channels = ["conda-forge"]
 [feature.lint.dependencies]
 pre-commit = "*"
 [feature.lint.tasks]
@@ -52,7 +54,7 @@ py39 = ["py39", "test"]
 py310 = ["py310", "test"]
 py311 = ["py311", "test"]
 py312 = ["py312", "test"]
-lint = { features=["lint"], no-default-feature=true}
+lint = { features=["lint"], no-default-feature=true }
 
 ## test this with:
 #pixi run test

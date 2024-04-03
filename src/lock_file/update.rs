@@ -412,6 +412,30 @@ fn determine_pypi_solve_permits(project: &Project) -> usize {
     default_max_concurrent_solves()
 }
 
+/// Determine the repodata that we're going to need to solve the environments. For all outdated
+/// conda targets we take the union of all the channels that are used by the environment.
+///
+/// The NoArch platform is always added regardless of whether it is explicitly used by the
+/// environment.
+fn determine_fetch_targets(outdated: &OutdatedEnvironments) -> IndexSet<(Channel, Platform)> {
+    let mut fetch_targets = IndexSet::new();
+    for (environment, platforms) in outdated.conda.iter() {
+        if environment.channels().is_empty() {
+            tracing::warn!(
+                "environment '{}' has no channels defined",
+                environment.name().fancy_display()
+            );
+        }
+        for channel in environment.channels() {
+            for platform in platforms {
+                fetch_targets.insert((channel.clone(), *platform));
+            }
+            fetch_targets.insert((channel.clone(), Platform::NoArch));
+        }
+    }
+    fetch_targets
+}
+
 /// Ensures that the lock-file is up-to-date with the project.
 ///
 /// This function will return a [`LockFileDerivedData`] struct that contains the lock-file and any
@@ -475,20 +499,7 @@ pub async fn ensure_up_to_date_lock_file(
         miette::bail!("lock-file not up-to-date with the project");
     }
 
-    // Determine the repodata that we're going to need to solve the environments. For all outdated
-    // conda targets we take the union of all the channels that are used by the environment.
-    //
-    // The NoArch platform is always added regardless of whether it is explicitly used by the
-    // environment.
-    let mut fetch_targets = IndexSet::new();
-    for (environment, platforms) in outdated.conda.iter() {
-        for channel in environment.channels() {
-            for platform in platforms {
-                fetch_targets.insert((channel.clone(), *platform));
-            }
-            fetch_targets.insert((channel.clone(), Platform::NoArch));
-        }
-    }
+    let fetch_targets = determine_fetch_targets(&outdated);
 
     // Fetch all the repodata that we need to solve the environments.
     let mut repo_data = fetch_sparse_repodata_targets(
