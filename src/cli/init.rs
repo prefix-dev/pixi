@@ -66,6 +66,7 @@ platforms = ["{{ platforms|join("\", \"") }}"]
 
 const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
 .pixi
+*.egg-info
 
 "#;
 
