@@ -324,12 +324,10 @@ List project's packages. Highlighted packages are explicit dependencies.
 - `--json-pretty`: Whether to output in pretty json format
 - `--sort-by <SORT_BY>`: Sorting strategy [default: name] [possible values: size, name, type]
 - `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](configuration.md), by default it searches for one in the parent directories.
-- `--environment`(`-e`): The environment's packages to list, if non is provided the default environment's packages will be listed.
+- `--environment (-e)`: The environment's packages to list, if non is provided the default environment's packages will be listed.
 - `--frozen`: Install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
-
-```shell
 
 ```shell
 pixi list
@@ -367,6 +365,124 @@ Output will look like this, where `python` will be green as it is the package th
  tk                8.6.13      noxft_h4845f30_101  3.2 MiB    conda  tk-8.6.13-noxft_h4845f30_101.conda
  tzdata            2023d       h0c530f3_0          116.8 KiB  conda  tzdata-2023d-h0c530f3_0.conda
  xz                5.2.6       h166bdaf_0          408.6 KiB  conda  xz-5.2.6-h166bdaf_0.tar.bz2
+```
+
+## `tree`
+
+Display the project's packages in a tree. Highlighted packages are those specified in the manifest.
+
+The package tree can also be inverted (`-i`), to see which packages require a specific dependencies.
+
+##### Arguments
+
+- `REGEX` optional regex of which direct dependencies to filter the tree to, or which dependencies to start with when inverting the tree.
+
+##### Options
+
+- `--invert (-i)`: Invert the dependency tree, that is given a `REGEX` pattern that matches some packages, show all the packages that depend on those.
+- `--platform <PLATFORM> (-p)`: The platform to list packages for. Defaults to the current platform
+- `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](configuration.md), by default it searches for one in the parent directories.
+- `--environment (-e)`: The environment's packages to list, if non is provided the default environment's packages will be listed.
+- `--frozen`: Install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
+
+```shell
+pixi tree
+pixi tree pre-commit
+pixi tree -i yaml
+pixi tree --environment docs
+pixi tree --platform win-64
+```
+
+!!! warning
+    Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
+
+Output will look like this, where direct packages in the [manifest file](configuration.md) will be green.
+Once a package has been displayed once, the tree won't continue to recurse through its dependencies (compare the first time `python` appears, vs the rest), and it will instead be marked with a star `(*)`.
+
+Version numbers are colored by the package type, yellow for Conda packages and blue for PyPI.
+
+```shell
+➜ pixi tree
+├── pre-commit v3.3.3
+│   ├── cfgv v3.3.1
+│   │   └── python v3.12.2
+│   │       ├── bzip2 v1.0.8
+│   │       ├── libexpat v2.6.2
+│   │       ├── libffi v3.4.2
+│   │       ├── libsqlite v3.45.2
+│   │       │   └── libzlib v1.2.13
+│   │       ├── libzlib v1.2.13 (*)
+│   │       ├── ncurses v6.4.20240210
+│   │       ├── openssl v3.2.1
+│   │       ├── readline v8.2
+│   │       │   └── ncurses v6.4.20240210 (*)
+│   │       ├── tk v8.6.13
+│   │       │   └── libzlib v1.2.13 (*)
+│   │       └── xz v5.2.6
+│   ├── identify v2.5.35
+│   │   └── python v3.12.2 (*)
+...
+└── tbump v6.9.0
+...
+    └── tomlkit v0.12.4
+        └── python v3.12.2 (*)
+```
+
+A regex pattern can be specified to filter the tree to just those that show a specific direct dependency:
+
+```shell
+➜ pixi tree pre-commit
+└── pre-commit v3.3.3
+    ├── virtualenv v20.25.1
+    │   ├── filelock v3.13.1
+    │   │   └── python v3.12.2
+    │   │       ├── libexpat v2.6.2
+    │   │       ├── readline v8.2
+    │   │       │   └── ncurses v6.4.20240210
+    │   │       ├── libsqlite v3.45.2
+    │   │       │   └── libzlib v1.2.13
+    │   │       ├── bzip2 v1.0.8
+    │   │       ├── libzlib v1.2.13 (*)
+    │   │       ├── libffi v3.4.2
+    │   │       ├── tk v8.6.13
+    │   │       │   └── libzlib v1.2.13 (*)
+    │   │       ├── xz v5.2.6
+    │   │       ├── ncurses v6.4.20240210 (*)
+    │   │       └── openssl v3.2.1
+    │   ├── platformdirs v4.2.0
+    │   │   └── python v3.12.2 (*)
+    │   ├── distlib v0.3.8
+    │   │   └── python v3.12.2 (*)
+    │   └── python v3.12.2 (*)
+    ├── pyyaml v6.0.1
+...
+```
+
+Additionally, the tree can be inverted, and it can show which packages depend on a regex pattern.
+The packages specified in the manifest will also be highlighted (in this case `cffconvert` and `pre-commit` would be).
+
+```shell
+➜ pixi tree -i yaml
+
+ruamel.yaml v0.18.6
+├── pykwalify v1.8.0
+│   └── cffconvert v2.0.0
+└── cffconvert v2.0.0
+
+pyyaml v6.0.1
+└── pre-commit v3.3.3
+
+ruamel.yaml.clib v0.2.8
+└── ruamel.yaml v0.18.6
+    ├── pykwalify v1.8.0
+    │   └── cffconvert v2.0.0
+    └── cffconvert v2.0.0
+
+yaml v0.2.5
+└── pyyaml v6.0.1
+    └── pre-commit v3.3.3
 ```
 
 ## `shell`
