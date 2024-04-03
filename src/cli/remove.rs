@@ -19,7 +19,7 @@ pub struct Args {
     #[arg(required = true)]
     pub deps: Vec<String>,
 
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 

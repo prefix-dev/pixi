@@ -15,13 +15,14 @@ use crate::unix::PtySession;
 
 use crate::cli::LockFileUsageArgs;
 use crate::project::manifest::EnvironmentName;
+use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 #[cfg(target_family = "windows")]
 use rattler_shell::shell::CmdExe;
 
 /// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     manifest_path: Option<PathBuf>,
 
@@ -205,6 +206,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let environment = project
         .environment(&environment_name)
         .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
+
+    verify_current_platform_has_required_virtual_packages(&environment).into_diagnostic()?;
 
     let prompt_name = match environment_name {
         EnvironmentName::Default => project.name().to_string(),

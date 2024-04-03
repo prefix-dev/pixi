@@ -29,7 +29,7 @@ pub struct Args {
     #[arg(long)]
     json: bool,
 
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 }
@@ -293,7 +293,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let project_info = project.clone().map(|p| ProjectInfo {
-        manifest_path: p.root().to_path_buf().join("pixi.toml"),
+        manifest_path: p.manifest_path(),
         last_updated: last_updated(p.lock_file_path()).ok(),
         pixi_folder_size,
         configuration: p.config().loaded_from.clone(),

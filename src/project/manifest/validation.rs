@@ -1,8 +1,5 @@
 use crate::project::manifest::{Environment, FeatureName, SystemRequirements};
-use crate::{
-    consts,
-    project::manifest::{Feature, ProjectManifest, TargetSelector},
-};
+use crate::project::manifest::{Feature, ProjectManifest, TargetSelector};
 use itertools::Itertools;
 use miette::{IntoDiagnostic, LabeledSpan, NamedSource, Report, WrapErr};
 use rattler_conda_types::Platform;
@@ -206,8 +203,7 @@ fn create_unsupported_platform_report(
             format!("'{}' is not a supported platform", platform)
         )],
         help = format!(
-            "Add any of '{platform}' to the `{}` array of the {} manifest.",
-            consts::PROJECT_MANIFEST,
+            "Add any of '{platform}' to the `{}` array of the TOML manifest.",
             if feature.platforms.is_some() {
                 format!(
                     "feature.{}.platforms",
