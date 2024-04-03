@@ -20,7 +20,7 @@
       
       
       <link rel="icon" href="../assets/pixi.png">
-      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.14">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.16">
     
     
       
@@ -28,7 +28,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.10ba22f1.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.bcfcd587.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
@@ -485,6 +485,15 @@
   <a href="#list" class="md-nav__link">
     <span class="md-ellipsis">
       list
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tree" class="md-nav__link">
+    <span class="md-ellipsis">
+      tree
     </span>
   </a>
   
@@ -1459,6 +1468,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tree" class="md-nav__link">
+    <span class="md-ellipsis">
+      tree
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#shell" class="md-nav__link">
     <span class="md-ellipsis">
       shell
@@ -1821,7 +1839,7 @@ Which gets generated on <code>pixi add</code> or when you manually change the <a
 <ul>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--frozen</code>: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
-<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref5:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
+<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref6:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>install
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pixi<span class="w"> </span>install<span class="w"> </span>--manifest-path<span class="w"> </span>~/myproject/pixi.toml
@@ -1848,7 +1866,7 @@ The custom tasks defined in the <a href="../configuration/">manifest file</a> ar
 <ul>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--frozen</code>: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
-<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref4:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
+<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref5:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>python
@@ -2017,20 +2035,19 @@ If you want to use <code>$</code> in the task you need to escape it with a <code
 <li><code>--json-pretty</code>: Whether to output in pretty json format</li>
 <li><code>--sort-by &lt;SORT_BY&gt;</code>: Sorting strategy [default: name] [possible values: size, name, type]</li>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: The path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
-<li><code>--environment</code>(<code>-e</code>): The environment's packages to list, if non is provided the default environment's packages will be listed.</li>
+<li><code>--environment (-e)</code>: The environment's packages to list, if non is provided the default environment's packages will be listed.</li>
 <li><code>--frozen</code>: Install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
-<li><code>--locked</code>: Only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref3:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
+<li><code>--locked</code>: Only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref4:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--no-install</code>: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by <code>--frozen</code> and <code>--locked</code>)</li>
 </ul>
-<p><div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="sb">```</span>shell
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pixi<span class="w"> </span>list
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>pixi<span class="w"> </span>list<span class="w"> </span>--json-pretty
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>pixi<span class="w"> </span>list<span class="w"> </span>--sort-by<span class="w"> </span>size
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>pixi<span class="w"> </span>list<span class="w"> </span>--platform<span class="w"> </span>win-64
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>pixi<span class="w"> </span>list<span class="w"> </span>--environment<span class="w"> </span>cuda
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>pixi<span class="w"> </span>list<span class="w"> </span>--frozen
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>pixi<span class="w"> </span>list<span class="w"> </span>--locked
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>pixi<span class="w"> </span>list<span class="w"> </span>--no-install
+<p><div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>list
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pixi<span class="w"> </span>list<span class="w"> </span>--json-pretty
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>pixi<span class="w"> </span>list<span class="w"> </span>--sort-by<span class="w"> </span>size
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>pixi<span class="w"> </span>list<span class="w"> </span>--platform<span class="w"> </span>win-64
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>pixi<span class="w"> </span>list<span class="w"> </span>--environment<span class="w"> </span>cuda
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>pixi<span class="w"> </span>list<span class="w"> </span>--frozen
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>pixi<span class="w"> </span>list<span class="w"> </span>--locked
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>pixi<span class="w"> </span>list<span class="w"> </span>--no-install
 </span></code></pre></div>
 Output will look like this, where <code>python</code> will be green as it is the package that was explicitly added to the <a href="../configuration/">manifest file</a>:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>➜<span class="w"> </span>pixi<span class="w"> </span>list
@@ -2057,30 +2074,134 @@ Output will look like this, where <code>python</code> will be green as it is the
 </span><span id="__span-15-22"><a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a><span class="w"> </span>tzdata<span class="w">            </span>2023d<span class="w">       </span>h0c530f3_0<span class="w">          </span><span class="m">116</span>.8<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>tzdata-2023d-h0c530f3_0.conda
 </span><span id="__span-15-23"><a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a><span class="w"> </span>xz<span class="w">                </span><span class="m">5</span>.2.6<span class="w">       </span>h166bdaf_0<span class="w">          </span><span class="m">408</span>.6<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>xz-5.2.6-h166bdaf_0.tar.bz2
 </span></code></pre></div>
+<h2 id="tree"><code>tree</code><a class="headerlink" href="#tree" title="Permanent link">#</a></h2>
+<p>Display the project's packages in a tree. Highlighted packages are those specified in the manifest.</p>
+<p>The package tree can also be inverted (<code>-i</code>), to see which packages require a specific dependencies.</p>
+<h5 id="arguments_7">Arguments<a class="headerlink" href="#arguments_7" title="Permanent link">#</a></h5>
+<ul>
+<li><code>REGEX</code> optional regex of which direct dependencies to filter the tree to, or which dependencies to start with when inverting the tree.</li>
+</ul>
+<h5 id="options_11">Options<a class="headerlink" href="#options_11" title="Permanent link">#</a></h5>
+<ul>
+<li><code>--invert (-i)</code>: Invert the dependency tree, that is given a <code>REGEX</code> pattern that matches some packages, show all the packages that depend on those.</li>
+<li><code>--platform &lt;PLATFORM&gt; (-p)</code>: The platform to list packages for. Defaults to the current platform</li>
+<li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: The path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
+<li><code>--environment (-e)</code>: The environment's packages to list, if non is provided the default environment's packages will be listed.</li>
+<li><code>--frozen</code>: Install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
+<li><code>--locked</code>: Only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref3:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
+<li><code>--no-install</code>: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by <code>--frozen</code> and <code>--locked</code>)</li>
+</ul>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>tree
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>pixi<span class="w"> </span>tree<span class="w"> </span>pre-commit
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>pixi<span class="w"> </span>tree<span class="w"> </span>-i<span class="w"> </span>yaml
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>pixi<span class="w"> </span>tree<span class="w"> </span>--environment<span class="w"> </span>docs
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>pixi<span class="w"> </span>tree<span class="w"> </span>--platform<span class="w"> </span>win-64
+</span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Use <code>-v</code> to show which <code>pypi</code> packages are not yet parsed correctly. The <code>extras</code> and <code>markers</code> parsing is still under development.</p>
+</div>
+<p>Output will look like this, where direct packages in the <a href="../configuration/">manifest file</a> will be green.
+Once a package has been displayed once, the tree won't continue to recurse through its dependencies (compare the first time <code>python</code> appears, vs the rest), and it will instead be marked with a star <code>(*)</code>.</p>
+<p>Version numbers are colored by the package type, yellow for Conda packages and blue for PyPI.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>➜<span class="w"> </span>pixi<span class="w"> </span>tree
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>├──<span class="w"> </span>pre-commit<span class="w"> </span>v3.3.3
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>│<span class="w">   </span>├──<span class="w"> </span>cfgv<span class="w"> </span>v3.3.1
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>│<span class="w">   </span>│<span class="w">   </span>└──<span class="w"> </span>python<span class="w"> </span>v3.12.2
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>bzip2<span class="w"> </span>v1.0.8
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>libexpat<span class="w"> </span>v2.6.2
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>libffi<span class="w"> </span>v3.4.2
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>libsqlite<span class="w"> </span>v3.45.2
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>│<span class="w">   </span>│<span class="w">       </span>│<span class="w">   </span>└──<span class="w"> </span>libzlib<span class="w"> </span>v1.2.13
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>libzlib<span class="w"> </span>v1.2.13<span class="w"> </span><span class="o">(</span>*<span class="o">)</span>
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>ncurses<span class="w"> </span>v6.4.20240210
+</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>openssl<span class="w"> </span>v3.2.1
+</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>readline<span class="w"> </span>v8.2
+</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>│<span class="w">   </span>│<span class="w">       </span>│<span class="w">   </span>└──<span class="w"> </span>ncurses<span class="w"> </span>v6.4.20240210<span class="w"> </span><span class="o">(</span>*<span class="o">)</span>
+</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>tk<span class="w"> </span>v8.6.13
+</span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>│<span class="w">   </span>│<span class="w">       </span>│<span class="w">   </span>└──<span class="w"> </span>libzlib<span class="w"> </span>v1.2.13<span class="w"> </span><span class="o">(</span>*<span class="o">)</span>
+</span><span id="__span-17-17"><a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a>│<span class="w">   </span>│<span class="w">       </span>└──<span class="w"> </span>xz<span class="w"> </span>v5.2.6
+</span><span id="__span-17-18"><a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a>│<span class="w">   </span>├──<span class="w"> </span>identify<span class="w"> </span>v2.5.35
+</span><span id="__span-17-19"><a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a>│<span class="w">   </span>│<span class="w">   </span>└──<span class="w"> </span>python<span class="w"> </span>v3.12.2<span class="w"> </span><span class="o">(</span>*<span class="o">)</span>
+</span><span id="__span-17-20"><a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a>...
+</span><span id="__span-17-21"><a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a>└──<span class="w"> </span>tbump<span class="w"> </span>v6.9.0
+</span><span id="__span-17-22"><a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a>...
+</span><span id="__span-17-23"><a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a><span class="w">    </span>└──<span class="w"> </span>tomlkit<span class="w"> </span>v0.12.4
+</span><span id="__span-17-24"><a id="__codelineno-17-24" name="__codelineno-17-24" href="#__codelineno-17-24"></a><span class="w">        </span>└──<span class="w"> </span>python<span class="w"> </span>v3.12.2<span class="w"> </span><span class="o">(</span>*<span class="o">)</span>
+</span></code></pre></div>
+<p>A regex pattern can be specified to filter the tree to just those that show a specific direct dependency:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>➜<span class="w"> </span>pixi<span class="w"> </span>tree<span class="w"> </span>pre-commit
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>└──<span class="w"> </span>pre-commit<span class="w"> </span>v3.3.3
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">    </span>├──<span class="w"> </span>virtualenv<span class="w"> </span>v20.25.1
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">    </span>│<span class="w">   </span>├──<span class="w"> </span>filelock<span class="w"> </span>v3.13.1
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">   </span>└──<span class="w"> </span>python<span class="w"> </span>v3.12.2
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>libexpat<span class="w"> </span>v2.6.2
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>readline<span class="w"> </span>v8.2
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">       </span>│<span class="w">   </span>└──<span class="w"> </span>ncurses<span class="w"> </span>v6.4.20240210
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>libsqlite<span class="w"> </span>v3.45.2
+</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">       </span>│<span class="w">   </span>└──<span class="w"> </span>libzlib<span class="w"> </span>v1.2.13
+</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>bzip2<span class="w"> </span>v1.0.8
+</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>libzlib<span class="w"> </span>v1.2.13<span class="w"> </span><span class="o">(</span>*<span class="o">)</span>
+</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>libffi<span class="w"> </span>v3.4.2
+</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>tk<span class="w"> </span>v8.6.13
+</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">       </span>│<span class="w">   </span>└──<span class="w"> </span>libzlib<span class="w"> </span>v1.2.13<span class="w"> </span><span class="o">(</span>*<span class="o">)</span>
+</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>xz<span class="w"> </span>v5.2.6
+</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">       </span>├──<span class="w"> </span>ncurses<span class="w"> </span>v6.4.20240210<span class="w"> </span><span class="o">(</span>*<span class="o">)</span>
+</span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">       </span>└──<span class="w"> </span>openssl<span class="w"> </span>v3.2.1
+</span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="w">    </span>│<span class="w">   </span>├──<span class="w"> </span>platformdirs<span class="w"> </span>v4.2.0
+</span><span id="__span-18-20"><a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">   </span>└──<span class="w"> </span>python<span class="w"> </span>v3.12.2<span class="w"> </span><span class="o">(</span>*<span class="o">)</span>
+</span><span id="__span-18-21"><a id="__codelineno-18-21" name="__codelineno-18-21" href="#__codelineno-18-21"></a><span class="w">    </span>│<span class="w">   </span>├──<span class="w"> </span>distlib<span class="w"> </span>v0.3.8
+</span><span id="__span-18-22"><a id="__codelineno-18-22" name="__codelineno-18-22" href="#__codelineno-18-22"></a><span class="w">    </span>│<span class="w">   </span>│<span class="w">   </span>└──<span class="w"> </span>python<span class="w"> </span>v3.12.2<span class="w"> </span><span class="o">(</span>*<span class="o">)</span>
+</span><span id="__span-18-23"><a id="__codelineno-18-23" name="__codelineno-18-23" href="#__codelineno-18-23"></a><span class="w">    </span>│<span class="w">   </span>└──<span class="w"> </span>python<span class="w"> </span>v3.12.2<span class="w"> </span><span class="o">(</span>*<span class="o">)</span>
+</span><span id="__span-18-24"><a id="__codelineno-18-24" name="__codelineno-18-24" href="#__codelineno-18-24"></a><span class="w">    </span>├──<span class="w"> </span>pyyaml<span class="w"> </span>v6.0.1
+</span><span id="__span-18-25"><a id="__codelineno-18-25" name="__codelineno-18-25" href="#__codelineno-18-25"></a>...
+</span></code></pre></div>
+<p>Additionally, the tree can be inverted, and it can show which packages depend on a regex pattern.
+The packages specified in the manifest will also be highlighted (in this case <code>cffconvert</code> and <code>pre-commit</code> would be).</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>➜<span class="w"> </span>pixi<span class="w"> </span>tree<span class="w"> </span>-i<span class="w"> </span>yaml
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>ruamel.yaml<span class="w"> </span>v0.18.6
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>├──<span class="w"> </span>pykwalify<span class="w"> </span>v1.8.0
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>│<span class="w">   </span>└──<span class="w"> </span>cffconvert<span class="w"> </span>v2.0.0
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>└──<span class="w"> </span>cffconvert<span class="w"> </span>v2.0.0
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>pyyaml<span class="w"> </span>v6.0.1
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>└──<span class="w"> </span>pre-commit<span class="w"> </span>v3.3.3
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>ruamel.yaml.clib<span class="w"> </span>v0.2.8
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>└──<span class="w"> </span>ruamel.yaml<span class="w"> </span>v0.18.6
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="w">    </span>├──<span class="w"> </span>pykwalify<span class="w"> </span>v1.8.0
+</span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a><span class="w">    </span>│<span class="w">   </span>└──<span class="w"> </span>cffconvert<span class="w"> </span>v2.0.0
+</span><span id="__span-19-15"><a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a><span class="w">    </span>└──<span class="w"> </span>cffconvert<span class="w"> </span>v2.0.0
+</span><span id="__span-19-16"><a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a>
+</span><span id="__span-19-17"><a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a>yaml<span class="w"> </span>v0.2.5
+</span><span id="__span-19-18"><a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a>└──<span class="w"> </span>pyyaml<span class="w"> </span>v6.0.1
+</span><span id="__span-19-19"><a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a><span class="w">    </span>└──<span class="w"> </span>pre-commit<span class="w"> </span>v3.3.3
+</span></code></pre></div>
 <h2 id="shell"><code>shell</code><a class="headerlink" href="#shell" title="Permanent link">#</a></h2>
 <p>This command starts a new shell in the project's environment.
 To exit the pixi shell, simply run <code>exit</code>.</p>
-<h5 id="options_11">Options<a class="headerlink" href="#options_11" title="Permanent link">#</a></h5>
+<h5 id="options_12">Options<a class="headerlink" href="#options_12" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--frozen</code>: install the environment as defined in the lockfile. Without checking the status of the lockfile. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
 <li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref2:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to activate the shell in, if none are provided the default environment will be used or a selector will be given to select the right environment.</li>
 </ul>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>shell
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nb">exit</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>pixi<span class="w"> </span>shell<span class="w"> </span>--manifest-path<span class="w"> </span>~/myproject/pixi.toml
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="nb">exit</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>pixi<span class="w"> </span>shell<span class="w"> </span>--frozen
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="nb">exit</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>pixi<span class="w"> </span>shell<span class="w"> </span>--locked
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="nb">exit</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>pixi<span class="w"> </span>shell<span class="w"> </span>--environment<span class="w"> </span>cuda
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="nb">exit</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi<span class="w"> </span>shell
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="nb">exit</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>pixi<span class="w"> </span>shell<span class="w"> </span>--manifest-path<span class="w"> </span>~/myproject/pixi.toml
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="nb">exit</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>pixi<span class="w"> </span>shell<span class="w"> </span>--frozen
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="nb">exit</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>pixi<span class="w"> </span>shell<span class="w"> </span>--locked
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="nb">exit</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>pixi<span class="w"> </span>shell<span class="w"> </span>--environment<span class="w"> </span>cuda
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="nb">exit</span>
 </span></code></pre></div>
 <h2 id="shell-hook"><code>shell-hook</code><a class="headerlink" href="#shell-hook" title="Permanent link">#</a></h2>
 <p>This command prints the activation script of an environment.</p>
-<h5 id="options_12">Options<a class="headerlink" href="#options_12" title="Permanent link">#</a></h5>
+<h5 id="options_13">Options<a class="headerlink" href="#options_13" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--shell &lt;SHELL&gt; (-s)</code>: The shell for which the activation script should be printed. Defaults to the current shell.
     Currently supported variants: [<code>bash</code>,  <code>zsh</code>,  <code>xonsh</code>,  <code>cmd</code>,  <code>powershell</code>,  <code>fish</code>,  <code>nushell</code>]</li>
@@ -2089,70 +2210,70 @@ To exit the pixi shell, simply run <code>exit</code>.</p>
 <li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.</li>
 </ul>
-<p><div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>shell-hook
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--shell<span class="w"> </span>bash
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--shell<span class="w"> </span>zsh
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>-s<span class="w"> </span>powershell
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--manifest-path<span class="w"> </span>~/myproject/pixi.toml
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--frozen
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--locked
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--environment<span class="w"> </span>cuda
+<p><div class="language-shell highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>pixi<span class="w"> </span>shell-hook
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--shell<span class="w"> </span>bash
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--shell<span class="w"> </span>zsh
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>-s<span class="w"> </span>powershell
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--manifest-path<span class="w"> </span>~/myproject/pixi.toml
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--frozen
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--locked
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--environment<span class="w"> </span>cuda
 </span></code></pre></div>
 Example use-case, when you want to get rid of the <code>pixi</code> executable in a Docker container.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--shell<span class="w"> </span>bash<span class="w"> </span>&gt;<span class="w"> </span>/etc/profile.d/pixi.sh
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>rm<span class="w"> </span>~/.pixi/bin/pixi<span class="w"> </span><span class="c1"># Now the environment will be activated without the need for the pixi executable.</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--shell<span class="w"> </span>bash<span class="w"> </span>&gt;<span class="w"> </span>/etc/profile.d/pixi.sh
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>rm<span class="w"> </span>~/.pixi/bin/pixi<span class="w"> </span><span class="c1"># Now the environment will be activated without the need for the pixi executable.</span>
 </span></code></pre></div></p>
 <h2 id="search"><code>search</code><a class="headerlink" href="#search" title="Permanent link">#</a></h2>
 <p>Search a package, output will list the latest version of the package.</p>
-<h5 id="arguments_7">Arguments<a class="headerlink" href="#arguments_7" title="Permanent link">#</a></h5>
+<h5 id="arguments_8">Arguments<a class="headerlink" href="#arguments_8" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PACKAGE&gt;</code>:  Name of package to search, it's possible to use wildcards (<code>*</code>).</li>
 </ol>
-<h6 id="options_13">Options<a class="headerlink" href="#options_13" title="Permanent link">#</a></h6>
+<h6 id="options_14">Options<a class="headerlink" href="#options_14" title="Permanent link">#</a></h6>
 <ul>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses. Defaults to <code>conda-forge</code>. (Allowed to be used more than once)</li>
 <li><code>--limit &lt;LIMIT&gt; (-l)</code>: optionally limit the number of search results</li>
 <li><code>--platform &lt;PLATFORM&gt; (-p)</code>: specify a platform that you want to search for. (default: current platform)</li>
 </ul>
-<div class="language-zsh highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>search<span class="w"> </span>pixi
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>search<span class="w"> </span>--limit<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="s2">&quot;py*&quot;</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># search in a different channel and for a specific platform</span>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>pixi<span class="w"> </span>search<span class="w"> </span>-c<span class="w"> </span>robostack<span class="w"> </span>--platform<span class="w"> </span>linux-64<span class="w"> </span><span class="s2">&quot;plotjuggler*&quot;</span>
+<div class="language-zsh highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi<span class="w"> </span>search<span class="w"> </span>pixi
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>pixi<span class="w"> </span>search<span class="w"> </span>--limit<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="s2">&quot;py*&quot;</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># search in a different channel and for a specific platform</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>pixi<span class="w"> </span>search<span class="w"> </span>-c<span class="w"> </span>robostack<span class="w"> </span>--platform<span class="w"> </span>linux-64<span class="w"> </span><span class="s2">&quot;plotjuggler*&quot;</span>
 </span></code></pre></div>
 <h2 id="self-update"><code>self-update</code><a class="headerlink" href="#self-update" title="Permanent link">#</a></h2>
 <p>Update pixi to the latest version or a specific version. If the pixi binary is not found in the default location (e.g.
 <code>~/.pixi/bin/pixi</code>), pixi won't update to prevent breaking the current installation (Homebrew, etc.). The behaviour can be
 overridden with the <code>--force</code> flag</p>
-<h5 id="options_14">Options<a class="headerlink" href="#options_14" title="Permanent link">#</a></h5>
+<h5 id="options_15">Options<a class="headerlink" href="#options_15" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--version &lt;VERSION&gt;</code>: The desired version (to downgrade or upgrade to). Update to the latest version if not specified.</li>
 <li><code>--force</code>: Force the update even if the pixi binary is not found in the default location.</li>
 </ul>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi<span class="w"> </span>self-update
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>pixi<span class="w"> </span>self-update<span class="w"> </span>--version<span class="w"> </span><span class="m">0</span>.13.0
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>pixi<span class="w"> </span>self-update<span class="w"> </span>--force
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>pixi<span class="w"> </span>self-update
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>pixi<span class="w"> </span>self-update<span class="w"> </span>--version<span class="w"> </span><span class="m">0</span>.13.0
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>pixi<span class="w"> </span>self-update<span class="w"> </span>--force
 </span></code></pre></div>
 <h2 id="info"><code>info</code><a class="headerlink" href="#info" title="Permanent link">#</a></h2>
 <p>Shows helpful information about the pixi installation, cache directories, disk usage, and more.
 More information <a href="../advanced/explain_info_command/">here</a>.</p>
-<h5 id="options_15">Options<a class="headerlink" href="#options_15" title="Permanent link">#</a></h5>
+<h5 id="options_16">Options<a class="headerlink" href="#options_16" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--extended</code>: extend the information with more slow queries to the system, like directory sizes.</li>
 <li><code>--json</code>: Get a machine-readable version of the information as output.</li>
 </ul>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>pixi<span class="w"> </span>info
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>pixi<span class="w"> </span>info<span class="w"> </span>--json<span class="w"> </span>--extended
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>pixi<span class="w"> </span>info
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>pixi<span class="w"> </span>info<span class="w"> </span>--json<span class="w"> </span>--extended
 </span></code></pre></div>
 <h2 id="upload"><code>upload</code><a class="headerlink" href="#upload" title="Permanent link">#</a></h2>
 <p>Upload a package to a prefix.dev channel</p>
-<h5 id="arguments_8">Arguments<a class="headerlink" href="#arguments_8" title="Permanent link">#</a></h5>
+<h5 id="arguments_9">Arguments<a class="headerlink" href="#arguments_9" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;HOST&gt;</code>: The host + channel to upload to.</li>
 <li><code>&lt;PACKAGE_FILE&gt;</code>: The package file to upload.</li>
 </ol>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>pixi<span class="w"> </span>upload<span class="w"> </span>repo.prefix.dev/my_channel<span class="w"> </span>my_package.conda
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>pixi<span class="w"> </span>upload<span class="w"> </span>repo.prefix.dev/my_channel<span class="w"> </span>my_package.conda
 </span></code></pre></div>
 <h2 id="auth"><code>auth</code><a class="headerlink" href="#auth" title="Permanent link">#</a></h2>
 <p>This command is used to authenticate the user's access to remote hosts such as <code>prefix.dev</code> or <code>anaconda.org</code> for private channels.</p>
@@ -2162,30 +2283,30 @@ More information <a href="../advanced/explain_info_command/">here</a>.</p>
 <p class="admonition-title">Tip</p>
 <p>The host is real hostname not a channel.</p>
 </div>
-<h5 id="arguments_9">Arguments<a class="headerlink" href="#arguments_9" title="Permanent link">#</a></h5>
+<h5 id="arguments_10">Arguments<a class="headerlink" href="#arguments_10" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;HOST&gt;</code>: The host to authenticate with.</li>
 </ol>
-<h5 id="options_16">Options<a class="headerlink" href="#options_16" title="Permanent link">#</a></h5>
+<h5 id="options_17">Options<a class="headerlink" href="#options_17" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--token &lt;TOKEN&gt;</code>: The token to use for authentication with prefix.dev.</li>
 <li><code>--username &lt;USERNAME&gt;</code>: The username to use for basic HTTP authentication</li>
 <li><code>--password &lt;PASSWORD&gt;</code>: The password to use for basic HTTP authentication.</li>
 <li><code>--conda-token &lt;CONDA_TOKEN&gt;</code>: The token to use on <code>anaconda.org</code> / <code>quetz</code> authentication.</li>
 </ul>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>repo.prefix.dev<span class="w"> </span>--token<span class="w"> </span>pfx_JQEV-m_2bdz-D8NSyRSaNdHANx0qHjq7f2iD
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>anaconda.org<span class="w"> </span>--conda-token<span class="w"> </span>ABCDEFGHIJKLMNOP
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>https://myquetz.server<span class="w"> </span>--username<span class="w"> </span>john<span class="w"> </span>--password<span class="w"> </span>xxxxxx
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>repo.prefix.dev<span class="w"> </span>--token<span class="w"> </span>pfx_JQEV-m_2bdz-D8NSyRSaNdHANx0qHjq7f2iD
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>anaconda.org<span class="w"> </span>--conda-token<span class="w"> </span>ABCDEFGHIJKLMNOP
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>https://myquetz.server<span class="w"> </span>--username<span class="w"> </span>john<span class="w"> </span>--password<span class="w"> </span>xxxxxx
 </span></code></pre></div>
 <h3 id="auth-logout"><code>auth logout</code><a class="headerlink" href="#auth-logout" title="Permanent link">#</a></h3>
 <p>Remove authentication information for a given host.</p>
-<h5 id="arguments_10">Arguments<a class="headerlink" href="#arguments_10" title="Permanent link">#</a></h5>
+<h5 id="arguments_11">Arguments<a class="headerlink" href="#arguments_11" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;HOST&gt;</code>: The host to authenticate with.</li>
 </ol>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span><span class="nb">logout</span><span class="w"> </span>&lt;HOST&gt;
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>pixi<span class="w"> </span>auth<span class="w"> </span><span class="nb">logout</span><span class="w"> </span>repo.prefix.dev
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>pixi<span class="w"> </span>auth<span class="w"> </span><span class="nb">logout</span><span class="w"> </span>anaconda.org
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span><span class="nb">logout</span><span class="w"> </span>&lt;HOST&gt;
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>pixi<span class="w"> </span>auth<span class="w"> </span><span class="nb">logout</span><span class="w"> </span>repo.prefix.dev
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>pixi<span class="w"> </span>auth<span class="w"> </span><span class="nb">logout</span><span class="w"> </span>anaconda.org
 </span></code></pre></div>
 <h2 id="global"><code>global</code><a class="headerlink" href="#global" title="Permanent link">#</a></h2>
 <p>Global is the main entry point for the part of pixi that executes on the
@@ -2198,214 +2319,214 @@ variable.</p>
 </div>
 <h3 id="global-install"><code>global install</code><a class="headerlink" href="#global-install" title="Permanent link">#</a></h3>
 <p>This command installs package(s) into its own environment and adds the binary to <code>PATH</code>, allowing you to access it anywhere on your system without activating the environment.</p>
-<h5 id="arguments_11">Arguments<a class="headerlink" href="#arguments_11" title="Permanent link">#</a></h5>
+<h5 id="arguments_12">Arguments<a class="headerlink" href="#arguments_12" title="Permanent link">#</a></h5>
 <p>1.<code>&lt;PACKAGE&gt;</code>: The package(s) to install, this can also be a version constraint.</p>
-<h5 id="options_17">Options<a class="headerlink" href="#options_17" title="Permanent link">#</a></h5>
+<h5 id="options_18">Options<a class="headerlink" href="#options_18" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses. Defaults to <code>conda-forge</code>. (Allowed to be used more than once)</li>
 </ul>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ruff
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="c1"># multiple packages can be installed at once</span>
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>starship<span class="w"> </span>rattler-build
-</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="c1"># specify the channel(s)</span>
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>trackplot
-</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="c1"># Or in a more concise form</span>
-</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
-</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>
-</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="c1"># Support full conda matchspec</span>
-</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9.*
-</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build_number=1]&quot;</span>
-</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build=he550d4f_1_cpython]&quot;</span>
-</span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.11.0<span class="o">=</span>h10a6764_1_cpython
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ruff
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1"># multiple packages can be installed at once</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>starship<span class="w"> </span>rattler-build
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># specify the channel(s)</span>
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="c1"># Or in a more concise form</span>
+</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>
+</span><span id="__span-29-9"><a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a><span class="c1"># Support full conda matchspec</span>
+</span><span id="__span-29-10"><a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9.*
+</span><span id="__span-29-11"><a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build_number=1]&quot;</span>
+</span><span id="__span-29-12"><a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build=he550d4f_1_cpython]&quot;</span>
+</span><span id="__span-29-13"><a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.11.0<span class="o">=</span>h10a6764_1_cpython
 </span></code></pre></div>
 <p>After using global install, you can use the package you installed anywhere on your system.</p>
 <h3 id="global-list"><code>global list</code><a class="headerlink" href="#global-list" title="Permanent link">#</a></h3>
 <p>This command shows the current installed global environments including what binaries come with it.
 A global installed package/environment can possibly contain multiple binaries and
 they will be listed out in the command output. Here is an example of a few installed packages:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>&gt; pixi global list
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>Global install location: /home/hanabi/.pixi
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>├── bat 0.24.0
-</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>|   └─ exec: bat
-</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>├── conda-smithy 3.31.1
-</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>|   └─ exec: feedstocks, conda-smithy
-</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>├── rattler-build 0.13.0
-</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>|   └─ exec: rattler-build
-</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>├── ripgrep 14.1.0
-</span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a>|   └─ exec: rg
-</span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a>└── uv 0.1.17
-</span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a>    └─ exec: uv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>&gt; pixi global list
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>Global install location: /home/hanabi/.pixi
+</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>├── bat 0.24.0
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>|   └─ exec: bat
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>├── conda-smithy 3.31.1
+</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>|   └─ exec: feedstocks, conda-smithy
+</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>├── rattler-build 0.13.0
+</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>|   └─ exec: rattler-build
+</span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>├── ripgrep 14.1.0
+</span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>|   └─ exec: rg
+</span><span id="__span-30-11"><a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>└── uv 0.1.17
+</span><span id="__span-30-12"><a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a>    └─ exec: uv
 </span></code></pre></div>
 <h3 id="global-upgrade"><code>global upgrade</code><a class="headerlink" href="#global-upgrade" title="Permanent link">#</a></h3>
 <p>This command upgrades a globally installed package (to the latest version by default).</p>
-<h5 id="arguments_12">Arguments<a class="headerlink" href="#arguments_12" title="Permanent link">#</a></h5>
+<h5 id="arguments_13">Arguments<a class="headerlink" href="#arguments_13" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PACKAGE&gt;</code>: The package to upgrade.</li>
 </ol>
-<h5 id="options_18">Options<a class="headerlink" href="#options_18" title="Permanent link">#</a></h5>
-<ul>
-<li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses.
-  Defaults to <code>conda-forge</code>. Note the channel the package was installed from
-  will be always used for upgrade. (Allowed to be used more than once)</li>
-</ul>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>ruff
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>trackplot
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="c1"># Or in a more concise form</span>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
-</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>
-</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="c1"># Conda matchspec is supported</span>
-</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="c1"># You can specify the version to upgrade to when you don&#39;t want the latest version</span>
-</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a><span class="c1"># or you can even use it to downgrade a globally installed package</span>
-</span><span id="__span-27-9"><a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.10
-</span></code></pre></div>
-<h3 id="global-upgrade-all"><code>global upgrade-all</code><a class="headerlink" href="#global-upgrade-all" title="Permanent link">#</a></h3>
-<p>This command upgrades all globally installed packages to their latest version.</p>
 <h5 id="options_19">Options<a class="headerlink" href="#options_19" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses.
   Defaults to <code>conda-forge</code>. Note the channel the package was installed from
   will be always used for upgrade. (Allowed to be used more than once)</li>
 </ul>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all
-</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda
-</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="c1"># Or in a more concise form</span>
-</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>ruff
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="c1"># Or in a more concise form</span>
+</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a>
+</span><span id="__span-31-6"><a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a><span class="c1"># Conda matchspec is supported</span>
+</span><span id="__span-31-7"><a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="c1"># You can specify the version to upgrade to when you don&#39;t want the latest version</span>
+</span><span id="__span-31-8"><a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a><span class="c1"># or you can even use it to downgrade a globally installed package</span>
+</span><span id="__span-31-9"><a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.10
+</span></code></pre></div>
+<h3 id="global-upgrade-all"><code>global upgrade-all</code><a class="headerlink" href="#global-upgrade-all" title="Permanent link">#</a></h3>
+<p>This command upgrades all globally installed packages to their latest version.</p>
+<h5 id="options_20">Options<a class="headerlink" href="#options_20" title="Permanent link">#</a></h5>
+<ul>
+<li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses.
+  Defaults to <code>conda-forge</code>. Note the channel the package was installed from
+  will be always used for upgrade. (Allowed to be used more than once)</li>
+</ul>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all
+</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda
+</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="c1"># Or in a more concise form</span>
+</span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
 </span></code></pre></div>
 <h3 id="global-remove"><code>global remove</code><a class="headerlink" href="#global-remove" title="Permanent link">#</a></h3>
 <p>Removes a package previously installed into a globally accessible location via
 <code>pixi global install</code></p>
 <p>Use <code>pixi global info</code> to find out what the package name is that belongs to the tool you want to remove.</p>
-<h5 id="arguments_13">Arguments<a class="headerlink" href="#arguments_13" title="Permanent link">#</a></h5>
+<h5 id="arguments_14">Arguments<a class="headerlink" href="#arguments_14" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PACKAGE&gt;</code>: The package(s) to remove.</li>
 </ol>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>pre-commit
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="c1"># multiple packages can be removed at once</span>
-</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>pre-commit<span class="w"> </span>starship
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>pre-commit
+</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>
+</span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="c1"># multiple packages can be removed at once</span>
+</span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>pre-commit<span class="w"> </span>starship
 </span></code></pre></div>
 <h2 id="project"><code>project</code><a class="headerlink" href="#project" title="Permanent link">#</a></h2>
 <p>This subcommand allows you to modify the project configuration through the command line interface.</p>
-<h5 id="options_20">Options<a class="headerlink" href="#options_20" title="Permanent link">#</a></h5>
+<h5 id="options_21">Options<a class="headerlink" href="#options_21" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 </ul>
 <h3 id="project-channel-add"><code>project channel add</code><a class="headerlink" href="#project-channel-add" title="Permanent link">#</a></h3>
 <p>Add channels to the channel list in the project configuration.
 When you add channels, the channels are tested for existence, added to the lockfile and the environment is reinstalled.</p>
-<h5 id="arguments_14">Arguments<a class="headerlink" href="#arguments_14" title="Permanent link">#</a></h5>
+<h5 id="arguments_15">Arguments<a class="headerlink" href="#arguments_15" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;CHANNEL&gt;</code>: The channels to add, name or URL.</li>
 </ol>
-<h5 id="options_21">Options<a class="headerlink" href="#options_21" title="Permanent link">#</a></h5>
+<h5 id="options_22">Options<a class="headerlink" href="#options_22" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--no-install</code>: do not update the environment, only add changed packages to the lock-file.</li>
 <li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the channel is added.</li>
 </ul>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>pixi project channel add robostack
-</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>pixi project channel add bioconda conda-forge robostack
-</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>pixi project channel add file:///home/user/local_channel
-</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>pixi project channel add https://repo.prefix.dev/conda-forge
-</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>pixi project channel add --no-install robostack
-</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>pixi project channel add --feature cuda nividia
+<div class="language-text highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>pixi project channel add robostack
+</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>pixi project channel add bioconda conda-forge robostack
+</span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>pixi project channel add file:///home/user/local_channel
+</span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a>pixi project channel add https://repo.prefix.dev/conda-forge
+</span><span id="__span-34-5"><a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a>pixi project channel add --no-install robostack
+</span><span id="__span-34-6"><a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a>pixi project channel add --feature cuda nividia
 </span></code></pre></div>
 <h3 id="project-channel-list"><code>project channel list</code><a class="headerlink" href="#project-channel-list" title="Permanent link">#</a></h3>
 <p>List the channels in the project file</p>
-<h5 id="options_22">Options<a class="headerlink" href="#options_22" title="Permanent link">#</a></h5>
+<h5 id="options_23">Options<a class="headerlink" href="#options_23" title="Permanent link">#</a></h5>
 <ul>
 <li><code>urls</code>: show the urls of the channels instead of the names.</li>
 </ul>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>list
-</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>Environment:<span class="w"> </span>default
-</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>-<span class="w"> </span>conda-forge
-</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>
-</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>list<span class="w"> </span>--urls
-</span><span id="__span-31-6"><a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a>Environment:<span class="w"> </span>default
-</span><span id="__span-31-7"><a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a>-<span class="w"> </span>https://conda.anaconda.org/conda-forge/
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>list
+</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>Environment:<span class="w"> </span>default
+</span><span id="__span-35-3"><a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>-<span class="w"> </span>conda-forge
+</span><span id="__span-35-4"><a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a>
+</span><span id="__span-35-5"><a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>list<span class="w"> </span>--urls
+</span><span id="__span-35-6"><a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a>Environment:<span class="w"> </span>default
+</span><span id="__span-35-7"><a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a>-<span class="w"> </span>https://conda.anaconda.org/conda-forge/
 </span></code></pre></div>
 <h3 id="project-channel-remove"><code>project channel remove</code><a class="headerlink" href="#project-channel-remove" title="Permanent link">#</a></h3>
 <p>List the channels in the project file</p>
-<h5 id="arguments_15">Arguments<a class="headerlink" href="#arguments_15" title="Permanent link">#</a></h5>
-<ol>
-<li><code>&lt;CHANNEL&gt;...</code>: The channels to remove, name(s) or URL(s).</li>
-</ol>
-<h5 id="options_23">Options<a class="headerlink" href="#options_23" title="Permanent link">#</a></h5>
-<ul>
-<li><code>--no-install</code>: do not update the environment, only add changed packages to the lock-file.</li>
-<li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the channel is removed.</li>
-</ul>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>conda-forge
-</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>https://conda.anaconda.org/conda-forge/
-</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>--no-install<span class="w"> </span>conda-forge
-</span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>--feature<span class="w"> </span>cuda<span class="w"> </span>nividia
-</span></code></pre></div>
-<h3 id="project-description-get"><code>project description get</code><a class="headerlink" href="#project-description-get" title="Permanent link">#</a></h3>
-<p>Get the project description.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>description<span class="w"> </span>get
-</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>Package<span class="w"> </span>management<span class="w"> </span>made<span class="w"> </span>easy!
-</span></code></pre></div>
-<h3 id="project-description-set"><code>project description set</code><a class="headerlink" href="#project-description-set" title="Permanent link">#</a></h3>
-<p>Set the project description.</p>
 <h5 id="arguments_16">Arguments<a class="headerlink" href="#arguments_16" title="Permanent link">#</a></h5>
 <ol>
-<li><code>&lt;DESCRIPTION&gt;</code>: The description to set.</li>
-</ol>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>description<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="s2">&quot;my new description&quot;</span>
-</span></code></pre></div>
-<h3 id="project-platform-add"><code>project platform add</code><a class="headerlink" href="#project-platform-add" title="Permanent link">#</a></h3>
-<p>Adds a platform(s) to the project file and updates the lockfile.</p>
-<h5 id="arguments_17">Arguments<a class="headerlink" href="#arguments_17" title="Permanent link">#</a></h5>
-<ol>
-<li><code>&lt;PLATFORM&gt;...</code>: The platforms to add.</li>
+<li><code>&lt;CHANNEL&gt;...</code>: The channels to remove, name(s) or URL(s).</li>
 </ol>
 <h5 id="options_24">Options<a class="headerlink" href="#options_24" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--no-install</code>: do not update the environment, only add changed packages to the lock-file.</li>
-<li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the platform will be added.</li>
+<li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the channel is removed.</li>
 </ul>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>win-64
-</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>win-64
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>conda-forge
+</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>https://conda.anaconda.org/conda-forge/
+</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>--no-install<span class="w"> </span>conda-forge
+</span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>--feature<span class="w"> </span>cuda<span class="w"> </span>nividia
 </span></code></pre></div>
-<h3 id="project-platform-list"><code>project platform list</code><a class="headerlink" href="#project-platform-list" title="Permanent link">#</a></h3>
-<p>List the platforms in the project file.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>list
-</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>osx-64
-</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>linux-64
-</span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a>win-64
-</span><span id="__span-36-5"><a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a>osx-arm64
+<h3 id="project-description-get"><code>project description get</code><a class="headerlink" href="#project-description-get" title="Permanent link">#</a></h3>
+<p>Get the project description.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>description<span class="w"> </span>get
+</span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>Package<span class="w"> </span>management<span class="w"> </span>made<span class="w"> </span>easy!
 </span></code></pre></div>
-<h3 id="project-platform-remove"><code>project platform remove</code><a class="headerlink" href="#project-platform-remove" title="Permanent link">#</a></h3>
-<p>Remove platform(s) from the project file and updates the lockfile.</p>
+<h3 id="project-description-set"><code>project description set</code><a class="headerlink" href="#project-description-set" title="Permanent link">#</a></h3>
+<p>Set the project description.</p>
+<h5 id="arguments_17">Arguments<a class="headerlink" href="#arguments_17" title="Permanent link">#</a></h5>
+<ol>
+<li><code>&lt;DESCRIPTION&gt;</code>: The description to set.</li>
+</ol>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>description<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="s2">&quot;my new description&quot;</span>
+</span></code></pre></div>
+<h3 id="project-platform-add"><code>project platform add</code><a class="headerlink" href="#project-platform-add" title="Permanent link">#</a></h3>
+<p>Adds a platform(s) to the project file and updates the lockfile.</p>
 <h5 id="arguments_18">Arguments<a class="headerlink" href="#arguments_18" title="Permanent link">#</a></h5>
 <ol>
-<li><code>&lt;PLATFORM&gt;...</code>: The platforms to remove.</li>
+<li><code>&lt;PLATFORM&gt;...</code>: The platforms to add.</li>
 </ol>
 <h5 id="options_25">Options<a class="headerlink" href="#options_25" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--no-install</code>: do not update the environment, only add changed packages to the lock-file.</li>
+<li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the platform will be added.</li>
+</ul>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>win-64
+</span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>win-64
+</span></code></pre></div>
+<h3 id="project-platform-list"><code>project platform list</code><a class="headerlink" href="#project-platform-list" title="Permanent link">#</a></h3>
+<p>List the platforms in the project file.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>list
+</span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>osx-64
+</span><span id="__span-40-3"><a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a>linux-64
+</span><span id="__span-40-4"><a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a>win-64
+</span><span id="__span-40-5"><a id="__codelineno-40-5" name="__codelineno-40-5" href="#__codelineno-40-5"></a>osx-arm64
+</span></code></pre></div>
+<h3 id="project-platform-remove"><code>project platform remove</code><a class="headerlink" href="#project-platform-remove" title="Permanent link">#</a></h3>
+<p>Remove platform(s) from the project file and updates the lockfile.</p>
+<h5 id="arguments_19">Arguments<a class="headerlink" href="#arguments_19" title="Permanent link">#</a></h5>
+<ol>
+<li><code>&lt;PLATFORM&gt;...</code>: The platforms to remove.</li>
+</ol>
+<h5 id="options_26">Options<a class="headerlink" href="#options_26" title="Permanent link">#</a></h5>
+<ul>
+<li><code>--no-install</code>: do not update the environment, only add changed packages to the lock-file.</li>
 <li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the platform will be removed.</li>
 </ul>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>remove<span class="w"> </span>win-64
-</span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>remove<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>win-64
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>remove<span class="w"> </span>win-64
+</span><span id="__span-41-2"><a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>remove<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>win-64
 </span></code></pre></div>
 <h3 id="project-version-get"><code>project version get</code><a class="headerlink" href="#project-version-get" title="Permanent link">#</a></h3>
 <p>Get the project version.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>get
-</span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="m">0</span>.11.0
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>get
+</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="m">0</span>.11.0
 </span></code></pre></div>
 <h3 id="project-version-set"><code>project version set</code><a class="headerlink" href="#project-version-set" title="Permanent link">#</a></h3>
 <p>Set the project version.</p>
-<h5 id="arguments_19">Arguments<a class="headerlink" href="#arguments_19" title="Permanent link">#</a></h5>
+<h5 id="arguments_20">Arguments<a class="headerlink" href="#arguments_20" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;VERSION&gt;</code>: The version to set.</li>
 </ol>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="s2">&quot;0.13.0&quot;</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="s2">&quot;0.13.0&quot;</span>
 </span></code></pre></div>
 <h3 id="project-version-majorminorpatch"><code>project version {major|minor|patch}</code><a class="headerlink" href="#project-version-majorminorpatch" title="Permanent link">#</a></h3>
 <p>Bump the project version to {MAJOR|MINOR|PATCH}.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>major
-</span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>minor
-</span><span id="__span-40-3"><a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>patch
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>major
+</span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>minor
+</span><span id="__span-44-3"><a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>patch
 </span></code></pre></div>
 <div class="footnote">
 <hr />
@@ -2417,7 +2538,7 @@ For example</p>
 <li>a manifest with <code>python = "&gt;= 3.11"</code> is up-to-date with a <code>name: python, version: 3.11.0</code> in the <code>pixi.lock</code>.</li>
 <li>a manifest with <code>python = "&gt;= 3.12"</code> is <strong>not</strong> up-to-date with a <code>name: python, version: 3.11.0</code> in the <code>pixi.lock</code>.</li>
 </ul>
-<p>Being up-to-date does <strong>not</strong> mean that the lockfile holds the latest version available on the channel for the given dependency.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref2:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref3:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref4:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref5:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+<p>Being up-to-date does <strong>not</strong> mean that the lockfile holds the latest version available on the channel for the given dependency.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref2:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref3:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref4:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref5:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref6:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
 </li>
 </ol>
 </div>
