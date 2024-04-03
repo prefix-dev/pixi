@@ -340,21 +340,29 @@ struct Package {
 
 /// Builds a hashmap of dependencies, with names, versions, and what they depend on
 fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<String, Package> {
-    let mut dep_map = HashMap::new();
+    let mut package_dependencies_map = HashMap::new();
 
-    for dep in locked_deps {
-        let version = dep.version().into_owned();
+    for package in locked_deps {
+        let version = package.version().into_owned();
 
-        if let Some(dep) = dep.as_conda() {
-            let name = dep.package_record().name.as_normalized().to_string();
-            let mut dependencies = Vec::new();
-            for d in dep.package_record().depends.iter() {
-                if let Some((dep_name, _)) = d.split_once(' ') {
-                    dependencies.push(dep_name.to_string())
-                }
-            }
+        if let Some(conda_package) = package.as_conda() {
+            let name = conda_package
+                .package_record()
+                .name
+                .as_normalized()
+                .to_string();
+            // Parse the dependencies of the package
+            let dependencies: Vec<String> = conda_package
+                .package_record()
+                .depends
+                .iter()
+                .map(|d| {
+                    d.split_once(' ')
+                        .map_or_else(|| d.to_string(), |(dep_name, _)| dep_name.to_string())
+                })
+                .collect();
 
-            dep_map.insert(
+            package_dependencies_map.insert(
                 name.clone(),
                 Package {
                     name: name.clone(),
@@ -364,11 +372,16 @@ fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<
                     source: PackageSource::Conda,
                 },
             );
-        } else if let Some(dep) = dep.as_pypi() {
-            let name = dep.data().package.name.as_dist_info_name().into_owned();
+        } else if let Some(pypi_package) = package.as_pypi() {
+            let name = pypi_package
+                .data()
+                .package
+                .name
+                .as_dist_info_name()
+                .into_owned();
 
             let mut dependencies = Vec::new();
-            for p in dep.data().package.requires_dist.iter() {
+            for p in pypi_package.data().package.requires_dist.iter() {
                 if let Some(markers) = &p.marker {
                     tracing::info!(
                         "Extra and environment markers currently cannot be parsed on {} which is specified by {}, skipping. {:?}",
@@ -380,7 +393,7 @@ fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<
                     dependencies.push(p.name.as_dist_info_name().into_owned())
                 }
             }
-            dep_map.insert(
+            package_dependencies_map.insert(
                 name.clone(),
                 Package {
                     name: name.clone(),
@@ -392,7 +405,7 @@ fn generate_dependency_map(locked_deps: &Vec<rattler_lock::Package>) -> HashMap<
             );
         }
     }
-    dep_map
+    package_dependencies_map
 }
 
 /// Given a map of dependencies, invert it so that it has what a package is needed by,
