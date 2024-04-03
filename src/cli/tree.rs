@@ -97,6 +97,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else {
         print_dependency_tree(&dep_map, &direct_deps, &args.regex)?;
     }
+    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
 }
 
