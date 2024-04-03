@@ -36,6 +36,9 @@ pub enum PlatformUnsat {
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
     UnsatisfiableRequirement(RequirementOrEditable, String),
 
+    #[error("the conda package does not satisfy the pypi requirement '{0}' (required by '{1}')")]
+    CondaUnsatisfiableRequirement(Requirement, String),
+
     #[error("there was a duplicate entry for '{0}'")]
     DuplicateEntry(String),
 
@@ -85,6 +88,23 @@ pub enum PlatformUnsat {
 
     #[error("the path '{0}, cannot be canonicalized")]
     FailedToCanonicalizePath(PathBuf, #[source] std::io::Error),
+}
+
+impl PlatformUnsat {
+    /// Returns true if this is a problem with pypi packages only. This means the conda packages
+    /// are still considered valid.
+    pub fn is_pypi_only(&self) -> bool {
+        matches!(
+            self,
+            PlatformUnsat::UnsatisfiableRequirement(_, _)
+                | PlatformUnsat::TooManyPypiPackages(_)
+                | PlatformUnsat::AsPep508Error(_, _)
+                | PlatformUnsat::FailedToDetermineSourceTreeHash(_, _)
+                | PlatformUnsat::PythonVersionMismatch(_, _, _)
+                | PlatformUnsat::UnexpectedEditablePackage(_)
+                | PlatformUnsat::SourceTreeHashMismatch(_),
+        )
+    }
 }
 
 /// Verifies that all the requirements of the specified `environment` can be satisfied with the
@@ -453,8 +473,8 @@ pub fn verify_package_platform_satisfiability(
                             if !identifier.satisfies(&req) =>
                         {
                             // The record does not match the spec, the lock-file is inconsistent.
-                            return Err(PlatformUnsat::UnsatisfiableRequirement(
-                                RequirementOrEditable::Pep508Requirement(req),
+                            return Err(PlatformUnsat::CondaUnsatisfiableRequirement(
+                                req,
                                 source.into_owned(),
                             ));
                         }

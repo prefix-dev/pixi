@@ -58,7 +58,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.default_environment().dir().as_path())?;
+    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
 
     // Extract the passed in environment name.
     let explicit_environment = args
@@ -235,6 +235,9 @@ pub async fn get_task_env<'p>(
     lock_file_derived_data: &mut LockFileDerivedData<'p>,
     environment: &Environment<'p>,
 ) -> miette::Result<HashMap<String, String>> {
+    // Make sure the system requirements are met
+    verify_current_platform_has_required_virtual_packages(environment).into_diagnostic()?;
+
     // Ensure there is a valid prefix
     lock_file_derived_data.prefix(environment).await?;
 
