@@ -54,7 +54,6 @@ platforms = ["{{ platforms|join("\", \"") }}"]
 /// The pyproject.toml template
 const PYROJECT_TEMPLATE: &str = r#"
 [tool.pixi.project]
-name = "{{ name }}"
 channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
 platforms = ["{{ platforms|join("\", \"") }}"]
 

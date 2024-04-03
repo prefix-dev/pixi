@@ -220,7 +220,12 @@ impl Project {
 
     /// Returns the name of the project
     pub fn name(&self) -> &str {
-        &self.manifest.parsed.project.name
+        self.manifest
+            .parsed
+            .project
+            .name
+            .as_ref()
+            .expect("name should always be defined.")
     }
 
     /// Returns the version of the project

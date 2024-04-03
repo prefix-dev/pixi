@@ -1,6 +1,6 @@
 use crate::project::manifest::{FeatureName, TargetSelector};
 use crate::project::SpecType;
-use miette::Diagnostic;
+use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use rattler_conda_types::{InvalidPackageNameError, ParseMatchSpecError};
 use thiserror::Error;
 
@@ -70,4 +70,49 @@ pub enum RequirementConversionError {
     ParseError(#[from] ParseMatchSpecError),
     #[error("Error converting requirement from pypi to conda")]
     Unimplemented,
+}
+
+#[derive(Error, Debug, Clone)]
+pub enum TomlError {
+    #[error("failed to parse project manifest")]
+    Error(#[from] toml_edit::TomlError),
+    #[error("'pyproject.toml' should contain a [project] table")]
+    NoProjectTable(std::ops::Range<usize>),
+    #[error("The [project] table should contain a 'name'")]
+    NoProjectName(Option<std::ops::Range<usize>>),
+}
+
+impl TomlError {
+    pub fn to_fancy<T>(&self, file_name: &str, contents: impl Into<String>) -> Result<T, Report> {
+        if let Some(span) = self.clone().span() {
+            Err(miette::miette!(
+                labels = vec![LabeledSpan::at(span, self.message())],
+                "failed to parse project manifest"
+            )
+            .with_source_code(NamedSource::new(file_name, contents.into())))
+        } else {
+            Err(self).into_diagnostic()
+        }
+    }
+
+    fn span(self) -> Option<std::ops::Range<usize>> {
+        match self {
+            TomlError::Error(e) => e.span(),
+            TomlError::NoProjectTable(span) => Some(span),
+            TomlError::NoProjectName(span) => span,
+        }
+    }
+    fn message(&self) -> &str {
+        match self {
+            TomlError::Error(e) => e.message(),
+            TomlError::NoProjectTable(_) => "Missing field `project`",
+            TomlError::NoProjectName(_) => "Missing field `name`",
+        }
+    }
+}
+
+impl From<toml_edit::de::Error> for TomlError {
+    fn from(e: toml_edit::de::Error) -> Self {
+        toml_edit::TomlError::from(e).into()
+    }
 }
