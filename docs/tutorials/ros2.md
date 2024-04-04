@@ -51,7 +51,7 @@ pixi add ros-humble-desktop ros-humble-turtlesim
 This will add the `ros-humble-desktop` and `ros-humble-turtlesim` packages to your manifest.
 Depending on your internet speed this might take a minute, as it will also install ROS in your project folder (`.pixi`).
 
-Now run the `turltesim` example
+Now run the `turtlesim` example
 ```shell
 pixi run ros2 run turtlesim turtlesim_node
 ```
