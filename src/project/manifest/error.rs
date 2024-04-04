@@ -75,7 +75,7 @@ pub enum RequirementConversionError {
 #[derive(Error, Debug, Clone)]
 pub enum TomlError {
     #[error("{0}")]
-    Error(toml_edit::TomlError),
+    Error(#[from] toml_edit::TomlError),
     #[error("Missing field `project`")]
     NoProjectTable,
     #[error("Missing field `name`")]
@@ -95,11 +95,11 @@ impl TomlError {
         }
     }
 
-    fn span(self) -> Option<std::ops::Range<usize>> {
+    fn span(&self) -> Option<std::ops::Range<usize>> {
         match self {
             TomlError::Error(e) => e.span(),
             TomlError::NoProjectTable => Some(0..1),
-            TomlError::NoProjectName(span) => span,
+            TomlError::NoProjectName(span) => span.clone(),
         }
     }
     fn message(&self) -> &str {
@@ -113,10 +113,5 @@ impl TomlError {
 impl From<toml_edit::de::Error> for TomlError {
     fn from(e: toml_edit::de::Error) -> Self {
         TomlError::Error(e.into())
-    }
-}
-impl From<toml_edit::TomlError> for TomlError {
-    fn from(e: toml_edit::TomlError) -> Self {
-        TomlError::Error(e)
     }
 }
