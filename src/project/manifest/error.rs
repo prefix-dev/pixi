@@ -74,16 +74,16 @@ pub enum RequirementConversionError {
 
 #[derive(Error, Debug, Clone)]
 pub enum TomlError {
-    #[error("failed to parse project manifest")]
-    Error(#[from] toml_edit::TomlError),
-    #[error("'pyproject.toml' should contain a [project] table")]
-    NoProjectTable(std::ops::Range<usize>),
-    #[error("The [project] table should contain a 'name'")]
+    #[error("{0}")]
+    Error(toml_edit::TomlError),
+    #[error("Missing field `project`")]
+    NoProjectTable,
+    #[error("Missing field `name`")]
     NoProjectName(Option<std::ops::Range<usize>>),
 }
 
 impl TomlError {
-    pub fn to_fancy<T>(&self, file_name: &str, contents: impl Into<String>) -> Result<T, Report> {
+    pub fn to_fancy<T>(self, file_name: &str, contents: impl Into<String>) -> Result<T, Report> {
         if let Some(span) = self.clone().span() {
             Err(miette::miette!(
                 labels = vec![LabeledSpan::at(span, self.message())],
@@ -98,21 +98,25 @@ impl TomlError {
     fn span(self) -> Option<std::ops::Range<usize>> {
         match self {
             TomlError::Error(e) => e.span(),
-            TomlError::NoProjectTable(span) => Some(span),
+            TomlError::NoProjectTable => Some(0..1),
             TomlError::NoProjectName(span) => span,
         }
     }
     fn message(&self) -> &str {
         match self {
             TomlError::Error(e) => e.message(),
-            TomlError::NoProjectTable(_) => "Missing field `project`",
+            TomlError::NoProjectTable => "Missing field `project`",
             TomlError::NoProjectName(_) => "Missing field `name`",
         }
     }
 }
-
 impl From<toml_edit::de::Error> for TomlError {
     fn from(e: toml_edit::de::Error) -> Self {
-        toml_edit::TomlError::from(e).into()
+        TomlError::Error(e.into())
+    }
+}
+impl From<toml_edit::TomlError> for TomlError {
+    fn from(e: toml_edit::TomlError) -> Self {
+        TomlError::Error(e)
     }
 }

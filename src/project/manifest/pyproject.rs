@@ -40,7 +40,7 @@ impl PyProjectManifest {
         // This will ensure project.name is defined
         // TODO: do we want to Err if tool.pixi.name is defined?
         if manifest.project.is_none() {
-            return Err(TomlError::NoProjectTable(0..1));
+            return Err(TomlError::NoProjectTable);
         }
 
         Ok(manifest)
