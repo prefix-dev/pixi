@@ -137,7 +137,7 @@ fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
         tracing::info!("Creating history file: {}", history_file.display());
         std::fs::write(
             history_file,
-            "# not relevant for pixi but for `conda run -p`",
+            "// not relevant for pixi but for `conda run -p`",
         )
         .into_diagnostic()?;
     }
