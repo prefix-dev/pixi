@@ -84,7 +84,7 @@ Then run the build command
 pixi run colcon build
 ```
 
-This will create a sourcable script in the `install` folder, you can source this script through an activation script to use your custom node.
+This will create a sourceable script in the `install` folder, you can source this script through an activation script to use your custom node.
 Normally this would be the script you add to your `.bashrc` but now you tell pixi to use it.
 
 ```toml title="pixi.toml"
