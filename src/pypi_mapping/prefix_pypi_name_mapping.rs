@@ -150,7 +150,7 @@ pub async fn amend_pypi_purls(
 ///
 /// This function guesses the PyPI package name from the conda package name if the record refers to
 /// a conda-forge package.
-fn amend_pypi_purls_for_record(
+pub fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
     conda_forge_mapping: &HashMap<Sha256Hash, Package>,
 ) -> miette::Result<()> {
@@ -177,7 +177,7 @@ fn amend_pypi_purls_for_record(
                     };
 
                     let built_purl = purl.build().expect("valid pypi package url and version");
-
+                    tracing::warn!("purls added {:?}", built_purl);
                     record.package_record.purls.push(built_purl);
                 }
             }

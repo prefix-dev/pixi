@@ -9,10 +9,11 @@ mod system_requirements;
 mod target;
 mod validation;
 
+use crate::config::Config;
 use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
 use crate::project::manifest::python::PyPiPackageName;
-use crate::pypi_mapping::MappingSource;
+use crate::pypi_mapping::{ChannelName, MappingLocation, MappingSource};
 use crate::task::TaskName;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 pub use activation::Activation;
@@ -24,6 +25,7 @@ use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource};
 pub use python::PyPiRequirement;
+use rattler_conda_types::Channel;
 use rattler_conda_types::{
     ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName,
     ParseStrictness::{Lenient, Strict},
@@ -44,6 +46,8 @@ pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector, Targets};
 use thiserror::Error;
 use toml_edit::{value, Array, DocumentMut, Item, Table, TomlError, Value};
+use url::ParseError;
+use url::Url;
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -510,10 +514,51 @@ impl Manifest {
     /// Returns what pypi mapping configuration we should use.
     /// It can be a custom one  in following format : conda_name: pypi_name
     /// Or we can use our self-hosted
-    pub fn custom_pypi_mapping(&self) -> MappingSource {
+    pub fn custom_pypi_mapping(&self) -> miette::Result<MappingSource> {
         match self.parsed.project.pypi_name_mapping.clone() {
-            Some(url) => MappingSource::Custom(url),
-            None => MappingSource::Prefix,
+            Some(url) => {
+                let config = Config::load_global();
+
+                // transform user defined channels into rattler::Channel
+                let channels = url
+                    .keys()
+                    .map(|channel_str| {
+                        Channel::from_str(channel_str, config.channel_config())
+                            .map(|channel| (channel_str, channel.canonical_name()))
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                    .into_diagnostic()?;
+
+                let mapping = channels
+                        .iter()
+                        .map(|(channel_str, channel)| {
+
+                            let mapping_location = url.get(*channel_str).unwrap();
+
+                            let url_or_path = match Url::parse(mapping_location) {
+                                Ok(url) => MappingLocation::Url(url),
+                                Err(err) => {
+                                    if let ParseError::RelativeUrlWithoutBase = err {
+                                        MappingLocation::Path(PathBuf::from(mapping_location))
+                                    } else {
+                                        miette::bail!("Could not convert {mapping_location} to neither URL or Path")
+                                    }
+                                }
+                            };
+
+                            Ok((channel.clone(), url_or_path))
+                        })
+                        .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
+
+                let default_conda_forge =
+                    Channel::from_str("conda-forge", config.channel_config()).into_diagnostic()?;
+
+                Ok(MappingSource::Custom {
+                    mapping,
+                    default_conda_forge,
+                })
+            }
+            None => Ok(MappingSource::Prefix),
         }
     }
 

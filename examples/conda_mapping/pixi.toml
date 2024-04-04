@@ -1,0 +1,27 @@
+[project]
+name = "conda_mapping"
+version = "0.1.0"
+description = "Add a short description here"
+authors = ["Bas Zalmstra <bas@prefix.dev>"]
+channels = ["conda-forge", "robostack"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
+pypi-name-mapping = { "conda-forge" = "https://gist.githubusercontent.com/nichmor/fbd2d03d1ae4d8c950710a8918386211/raw/ffa191d09da63b599c733ec444dd47c123cb6c3d/custom_conda_forge_mapping.json", "robostack" = "robostack_mapping.json"}
+
+
+[tasks]
+test = "python test_pycosat_example.py"
+
+[dependencies]
+python = "~=3.11.0"
+scipy = "~=1.11.4"
+boltons = "*"
+jupyter-ros = { version = "*", channel="robostack" }
+
+[pypi-dependencies]
+black = { version = "~=23.10", extras = ["jupyter"] }
+
+
+[system-requirements]
+# Tensorflow on macOS arm64 requires macOS 12.0 or higher
+macos = "12.0"

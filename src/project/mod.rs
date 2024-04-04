@@ -419,7 +419,9 @@ impl Project {
 
     /// Returns the custom location of pypi-name-mapping
     pub fn custom_pypi_mapping(&self) -> MappingSource {
-        self.manifest.custom_pypi_mapping()
+        self.manifest
+            .custom_pypi_mapping()
+            .expect("mapping source should be ok")
     }
 
     /// Returns the Python index locations to use for this project.

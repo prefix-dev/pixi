@@ -2,7 +2,7 @@ use crate::utils::spanned::PixiSpanned;
 use rattler_conda_types::{Platform, Version};
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 use url::Url;
 
 /// Describes the contents of the `[package]` section of the project manifest.
@@ -52,5 +52,5 @@ pub struct ProjectMetadata {
     pub documentation: Option<Url>,
 
     /// URL of the pypi name mapping
-    pub pypi_name_mapping: Option<Url>,
+    pub pypi_name_mapping: Option<HashMap<String, String>>,
 }
