@@ -47,7 +47,7 @@ impl SystemRequirements {
         if let Some(libc) = self.libc.clone() {
             result.push(VirtualPackage::LibC(libc.into()))
         }
-        if let Some(archspec) = self.archspec.clone() {
+        if let Some(_archspec) = self.archspec.clone() {
             tracing::info!("The archspec system-requirement is deprecated and not used.");
         }
         result
