@@ -105,7 +105,7 @@ This would result in the conda dependencies being installed and the pypi depende
 As pixi takes the conda dependencies over the pypi dependencies.
 
 ## Optional dependencies
-If your python project includes groups of optional dependencies, pixi will automatically interpret them as pixi features of the same name with the associated pypi dependencies.
+If your python project includes groups of optional dependencies, pixi will automatically interpret them as [pixi features](../configuration.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
 
 You can add them to pixi environments manually, or use `pixi init` to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.
 
