@@ -7,6 +7,7 @@ use clap::Parser;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
+use pyproject_toml::PyProjectToml;
 use rattler_conda_types::Platform;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
@@ -58,10 +59,14 @@ name = "{{ name }}"
 channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
 platforms = ["{{ platforms|join("\", \"") }}"]
 
+[tool.pixi.pypi-dependencies]
+{{ name }} = { path = ".", editable = true }
+
 "#;
 
 const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
 .pixi
+*.egg-info
 
 "#;
 
@@ -147,12 +152,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if pyproject_manifest_path.is_file() {
             let file = fs::read_to_string(pyproject_manifest_path.clone()).unwrap();
             if !file.contains("[tool.pixi.project]") {
+                // Get name from the pyproject [project] table
+                let name = match PyProjectToml::new(file.as_str()) {
+                    Ok(pyproject) => pyproject
+                        .project
+                        .map(|p| p.name)
+                        .expect("'name' should be defined in the [project] table"),
+                    Err(e) => miette::bail!("Failed to parse 'pyproject.toml'. Error is {}", e),
+                };
                 let rv = env
                     .render_named_str(
                         consts::PYPROJECT_MANIFEST,
                         PYROJECT_TEMPLATE,
                         context! {
-                            default_name,
+                            name,
                             channels,
                             platforms
                         },
@@ -168,6 +181,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         "Warning, couldn't update '{}' because of: {}",
                         pyproject_manifest_path.to_string_lossy(),
                         e
+                    );
+                } else {
+                    // Inform about the addition of the package itself as an editable dependency of the project
+                    eprintln!(
+                        "{}Added package '{}' as an editable dependency.",
+                        console::style(console::Emoji("✔ ", "")).green(),
+                        name
                     );
                 }
             }
