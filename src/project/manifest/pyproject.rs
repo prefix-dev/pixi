@@ -39,18 +39,22 @@ impl PyProjectManifest {
 
 impl From<PyProjectManifest> for ProjectManifest {
     fn from(item: PyProjectManifest) -> Self {
-        // Start by loading the data nested under "tool.pixi"
+        // Start by loading the data nested under "tool.pixi" as manifest,
+        // and create a reference to the 'pyproject.toml' project table
         let mut manifest = item.tool.pixi.clone();
+        let pyproject = item
+            .project
+            .as_ref()
+            .expect("the [project] table should exist");
 
         // TODO: tool.pixi.project.name should be made optional or read from project.name
         // TODO: could copy across / convert some other optional fields if relevant
 
         // Add python as dependency based on the project.requires_python property (if any)
-        let pythonspec = item
-            .project
-            .as_ref()
-            .and_then(|p| p.requires_python.as_ref())
-            .map(|v| VersionOrUrl::VersionSpecifier(v.clone()));
+        let pythonspec = pyproject
+            .requires_python
+            .clone()
+            .map(VersionOrUrl::VersionSpecifier);
         let target = manifest.default_feature_mut().targets.default_mut();
         target.add_dependency(
             PackageName::from_str("python").unwrap(),
@@ -58,13 +62,8 @@ impl From<PyProjectManifest> for ProjectManifest {
             SpecType::Run,
         );
 
-        // add pyproject dependencies as pypi dependencies
-        if let Some(deps) = item
-            .project
-            .as_ref()
-            .and_then(|p| p.dependencies.as_ref())
-            .cloned()
-        {
+        // Add pyproject dependencies as pypi dependencies
+        if let Some(deps) = pyproject.dependencies.clone() {
             for d in deps.into_iter() {
                 target.add_pypi_dependency(
                     PyPiPackageName::from_normalized(d.name.clone()),
@@ -115,6 +114,9 @@ mod tests {
     };
 
     const PYPROJECT_FULL: &str = r#"
+        [project]
+        name = "project"
+
         [tool.pixi.project]
         name = "project"
         version = "0.1.0"
