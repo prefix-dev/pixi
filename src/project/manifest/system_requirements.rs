@@ -27,6 +27,9 @@ pub struct SystemRequirements {
 
     /// Dictates information about the libc version (and optional family).
     pub libc: Option<LibCSystemRequirement>,
+
+    /// Information about the system architecture.
+    pub archspec: Option<String>,
 }
 
 impl SystemRequirements {
@@ -44,7 +47,9 @@ impl SystemRequirements {
         if let Some(libc) = self.libc.clone() {
             result.push(VirtualPackage::LibC(libc.into()))
         }
-
+        if let Some(archspec) = self.archspec.clone() {
+            tracing::info!("The archspec system-requirement is deprecated and not used.");
+        }
         result
     }
 
@@ -97,11 +102,26 @@ impl SystemRequirements {
             (libc, _) => libc.clone(),
         };
 
+        let archspec = match (&self.archspec, &other.archspec) {
+            (Some(archspec), Some(other_archspec)) => {
+                if archspec != other_archspec {
+                    return Err(SystemRequirementsUnionError::MismatchingArchSpec(
+                        archspec.to_string(),
+                        other_archspec.to_string(),
+                    ));
+                }
+                Some(archspec.clone())
+            }
+            (None, Some(other_archspec)) => Some(other_archspec.clone()),
+            (archspec, _) => archspec.clone(),
+        };
+
         Ok(Self {
             linux,
             cuda,
             macos,
             libc,
+            archspec,
         })
     }
 }
@@ -110,6 +130,9 @@ impl SystemRequirements {
 pub enum SystemRequirementsUnionError {
     #[error("two different libc families were specified: '{0}' and '{1}'")]
     DifferentLibcFamilies(String, String),
+
+    #[error("cannot combine archspecs: '{0}' and '{1}'")]
+    MismatchingArchSpec(String, String),
 }
 
 #[derive(Debug, Clone)]

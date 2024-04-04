@@ -6,4 +6,5 @@ TOML parse error at line 3, column 9
   |
 3 |         lib = "2.12"
   |         ^^^
-unknown field `lib`, expected one of `macos`, `linux`, `cuda`, `libc`
+unknown field `lib`, expected one of `macos`, `linux`, `cuda`, `libc`, `archspec`
+
