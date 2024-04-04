@@ -1053,7 +1053,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
                 name: EnvironmentName::Default,
                 features: Vec::new(),
                 features_source_loc: None,
-                solve_group: Some(solve_groups.add("default", 0)),
+                solve_group: None,
             });
             environments.by_name.insert(EnvironmentName::Default, 0);
         }
