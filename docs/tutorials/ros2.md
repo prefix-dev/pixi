@@ -75,7 +75,7 @@ pixi run ros2 pkg create --build-type ament_python --destination-directory src -
 
 To build the package we need some more dependencies:
 ```shell
-pixi add colcon-core colcon-ros
+pixi add colcon-common-extensions
 ```
 Add the created initialization script for the ros workspace to your manifest file.
 
