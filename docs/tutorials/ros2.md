@@ -30,7 +30,7 @@ name = "my_ros2_project"
 version = "0.1.0"
 description = "Add a short description here"
 authors = ["User Name <user.name@email.url>"]
-channels = ["robostack", "conda-forge"]
+channels = ["robostack-staging", "conda-forge"]
 platforms = ["linux-64"]
 
 [tasks]
