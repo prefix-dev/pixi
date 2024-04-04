@@ -13,8 +13,11 @@ platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 ```
 This is the minimum requirement for pixi to understand and parse the project.
 
-If you use `pixi init` in a folder that has a `pyproject.toml` file, pixi will automatically add the `[tool.pixi.project]` section to the file.
-And will also add some defaults to the `.gitignore` and `.gitattributes` file.
+However, it is recommended you use `pixi init` in a folder that has a `pyproject.toml` file. Pixi will automatically
+
+ - Add the above `[tool.pixi.project]` section to the file, auto-detecting your current platform;
+ - Add the current project as an editable pypi dependency;
+ - Add some defaults to the `.gitignore` and `.gitattributes` file.
 
 ## Python dependency
 The `pyproject.toml` file supports the `requires_python` field.
@@ -139,11 +142,19 @@ test = ["test"]
 ```
 
 ## Build-system section
-The `pyproject.toml` file normally contains a `[build-system]` section.
-Currently, pixi does not use this section, but it is recommended to keep it in the file for compatibility with other tools.
+The `pyproject.toml` file normally contains a `[build-system]` section.  Pixi will use this section to build and install the project if it is added as a pypi path dependency.
+
+If the `pyproject.toml` file does not contain any `[build-system]` section, pixi will fall back to [uv](https://github.com/astral-sh/uv)'s default, which is equivalent to the below:
 
 ```toml title="pyproject.toml"
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools >= 40.8.0"]
+build-backend = "setuptools.build_meta:__legacy__"
+```
+Including a `[build-system]` section is **highly recommended**. If you are not sure of the [build-backend](https://packaging.python.org/en/latest/tutorials/packaging-projects/#choosing-build-backend) you want to use, including the `[build-system]` section below in your `pyproject.toml` is a good starting point
+
+```toml title="pyproject.toml"
+[build-system]
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 ```
