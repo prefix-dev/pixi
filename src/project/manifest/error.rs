@@ -83,15 +83,15 @@ pub enum TomlError {
 }
 
 impl TomlError {
-    pub fn to_fancy<T>(self, file_name: &str, contents: impl Into<String>) -> Result<T, Report> {
-        if let Some(span) = self.clone().span() {
+    pub fn to_fancy<T>(&self, file_name: &str, contents: impl Into<String>) -> Result<T, Report> {
+        if let Some(span) = self.span() {
             Err(miette::miette!(
                 labels = vec![LabeledSpan::at(span, self.message())],
                 "failed to parse project manifest"
             )
             .with_source_code(NamedSource::new(file_name, contents.into())))
         } else {
-            Err(self).into_diagnostic()
+            Err(self.clone()).into_diagnostic()
         }
     }
 

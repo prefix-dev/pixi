@@ -128,7 +128,7 @@ mod tests {
     const PYPROJECT_FULL: &str = r#"
         [project]
         name = "project"
-        
+
         [tool.pixi.project]
         version = "0.1.0"
         description = "A project"
