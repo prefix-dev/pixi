@@ -31,6 +31,7 @@ version = "0.1.0"
 description = "Add a short description here"
 authors = ["User Name <user.name@email.url>"]
 channels = ["robostack-staging", "conda-forge"]
+# Your project can support multiple platforms, the current platform will be automatically added.
 platforms = ["linux-64"]
 
 [tasks]
@@ -57,7 +58,7 @@ pixi run ros2 run turtlesim turtlesim_node
 ```
 Congratulations you have ROS2 running on your machine with pixi!
 
-??? example Some more fun with the turtle
+??? example "Some more fun with the turtle"
     To control the turtle you can run the following command in a new terminal
     ```shell
     cd my_ros2_project
@@ -87,10 +88,28 @@ pixi run colcon build
 This will create a sourceable script in the `install` folder, you can source this script through an activation script to use your custom node.
 Normally this would be the script you add to your `.bashrc` but now you tell pixi to use it.
 
-```toml title="pixi.toml"
-[activation]
-scripts = ["install/setup.sh"]
-```
+=== "Linux & macOS"
+    ```toml title="pixi.toml"
+    [activation]
+    scripts = ["install/setup.sh"]
+    ```
+=== "Windows"
+    ```toml title="pixi.toml"
+    [activation]
+    scripts = ["install/setup.bat"]
+    ```
+??? tip "Multi platform support"
+    You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project.
+    Use the following example to add support for both Linux and Windows, using the [target](../advanced/multi_platform_configuration.md#activation) syntax.
+    ```toml
+    [project]
+    platforms = ["linux-64", "win-64"]
+
+    [activation]
+    scripts = ["install/setup.sh"]
+    [target.win-64.activation]
+    scripts = ["install/setup.bat"]
+    ```
 
 Now you can run your custom node with the following command
 ```shell
