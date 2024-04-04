@@ -24,7 +24,7 @@ use indexmap::map::Entry;
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
-use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, WrapErr};
+use miette::{miette, Diagnostic, IntoDiagnostic, NamedSource, WrapErr};
 use pyproject::PyProjectManifest;
 pub use python::PyPiRequirement;
 use rattler_conda_types::{
@@ -47,7 +47,9 @@ use std::{
 pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector, Targets};
 use thiserror::Error;
-use toml_edit::{DocumentMut, TomlError};
+use toml_edit::DocumentMut;
+
+use self::error::TomlError;
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -127,21 +129,14 @@ impl Manifest {
             ),
         };
 
-        let (manifest, document) = match parsed
-            .and_then(|manifest| contents.parse::<DocumentMut>().map(|doc| (manifest, doc)))
-        {
+        let (manifest, document) = match parsed.and_then(|manifest| {
+            contents
+                .parse::<DocumentMut>()
+                .map(|doc| (manifest, doc))
+                .map_err(TomlError::from)
+        }) {
             Ok(result) => result,
-            Err(e) => {
-                if let Some(span) = e.span() {
-                    return Err(miette::miette!(
-                        labels = vec![LabeledSpan::at(span, e.message())],
-                        "failed to parse project manifest"
-                    )
-                    .with_source_code(NamedSource::new(file_name, contents)));
-                } else {
-                    return Err(e).into_diagnostic();
-                }
-            }
+            Err(e) => e.to_fancy(file_name, &contents)?,
         };
 
         // Validate the contents of the manifest
@@ -777,7 +772,15 @@ pub struct ProjectManifest {
 impl ProjectManifest {
     /// Parses a toml string into a project manifest.
     pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        toml_edit::de::from_str(source).map_err(TomlError::from)
+        let manifest: ProjectManifest = toml_edit::de::from_str(source).map_err(TomlError::from)?;
+
+        // Make sure project.name is defined
+        if manifest.project.name.is_none() {
+            let span = source.parse::<DocumentMut>().map_err(TomlError::from)?["project"].span();
+            return Err(TomlError::NoProjectName(span));
+        }
+
+        Ok(manifest)
     }
 
     /// Returns the default feature.
@@ -1118,7 +1121,7 @@ mod tests {
         // From PathBuf
         let manifest = Manifest::from_path(path).unwrap();
 
-        assert_eq!(manifest.parsed.project.name, "foo");
+        assert_eq!(manifest.parsed.project.name.unwrap(), "foo");
         assert_eq!(
             manifest.parsed.project.version,
             Some(Version::from_str("0.1.0").unwrap())

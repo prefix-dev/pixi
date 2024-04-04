@@ -8,7 +8,6 @@ We don't advise to use the `pyproject.toml` file for anything else than python p
 When you already have a `pyproject.toml` file in your project, you can add the following section to it:
 ```toml
 [tool.pixi.project]
-name = "my_project"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 ```
@@ -31,7 +30,6 @@ name = "my_project"
 requires-python = ">=3.9"
 
 [tool.pixi.project]
-name = "my_project"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 ```
@@ -62,7 +60,6 @@ dependencies = [
 ]
 
 [tool.pixi.project]
-name = "my_project"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 ```
@@ -95,7 +92,6 @@ dependencies = [
 ]
 
 [tool.pixi.project]
-name = "my_project"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
@@ -121,7 +117,6 @@ dependencies = [
 ]
 
 [tool.pixi.project]
-name = "my_project"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 

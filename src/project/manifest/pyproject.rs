@@ -3,11 +3,11 @@ use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenie
 use serde::Deserialize;
 use std::str::FromStr;
 use toml_edit;
-use toml_edit::TomlError;
 
 use super::{
-    error::RequirementConversionError, python::PyPiPackageName, ProjectManifest, PyPiRequirement,
-    SpecType,
+    error::{RequirementConversionError, TomlError},
+    python::PyPiPackageName,
+    ProjectManifest, PyPiRequirement, SpecType,
 };
 
 #[derive(Deserialize, Debug, Clone)]
@@ -33,7 +33,17 @@ impl std::ops::Deref for PyProjectManifest {
 impl PyProjectManifest {
     /// Parses a toml string into a pyproject manifest.
     pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        toml_edit::de::from_str(source).map_err(TomlError::from)
+        let manifest: PyProjectManifest =
+            toml_edit::de::from_str(source).map_err(TomlError::from)?;
+
+        // Make sure [project] exists in pyproject.toml,
+        // This will ensure project.name is defined
+        // TODO: do we want to Err if tool.pixi.name is defined?
+        if manifest.project.is_none() {
+            return Err(TomlError::NoProjectTable);
+        }
+
+        Ok(manifest)
     }
 }
 
@@ -47,8 +57,9 @@ impl From<PyProjectManifest> for ProjectManifest {
             .as_ref()
             .expect("the [project] table should exist");
 
-        // TODO: tool.pixi.project.name should be made optional or read from project.name
+        // Get tool.pixi.project.name from project.name
         // TODO: could copy across / convert some other optional fields if relevant
+        manifest.project.name = item.project.as_ref().map(|p| p.name.clone());
 
         // Add python as dependency based on the project.requires_python property (if any)
         let pythonspec = pyproject
@@ -118,7 +129,6 @@ mod tests {
         name = "project"
 
         [tool.pixi.project]
-        name = "project"
         version = "0.1.0"
         description = "A project"
         authors = ["Author <author@bla.com>"]
