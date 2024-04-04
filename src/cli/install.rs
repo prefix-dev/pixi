@@ -9,7 +9,7 @@ use std::path::PathBuf;
 /// Install all dependencies
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
