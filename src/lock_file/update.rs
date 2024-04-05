@@ -1664,7 +1664,7 @@ impl SolveProgressBar {
         self.pb.set_position(0);
         self.pb.set_style(
             indicatif::ProgressStyle::with_template(
-                "  {{spinner:.dim}} {{prefix:20!}} [{{elapsed_precise}}] [{{bar:20!.bright.yellow/dim.white}}] {{pos:>4}}/{{len:4}} {{msg:.dim}}")
+                "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {pos:>4}/{len:4} {msg:.dim}")
                 .unwrap()
                 .progress_chars("━━╾─"),
         );
@@ -1673,7 +1673,7 @@ impl SolveProgressBar {
     pub fn reset_style(&self) {
         self.pb.set_style(
             indicatif::ProgressStyle::with_template(
-                "  {{spinner:.dim}} {{prefix:20!}} [{{elapsed_precise}}] {{msg:.dim}}",
+                "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] {msg:.dim}",
             )
             .unwrap(),
         );
