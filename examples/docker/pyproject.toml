@@ -1,17 +1,15 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["flit_core>=3.2,<4"]
+build-backend = "flit_core.buildapi"
 
 [project]
 name = "docker-project"
 description = "A python project that gets installed in a docker container."
 version = "0.1.0"
-authors = [
-  {name = "prefix.dev", email = "noreply@prefix.dev"},
-]
+authors = [{ name = "prefix.dev", email = "noreply@prefix.dev" }]
 classifiers = [
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
 ]
 requires-python = ">=3.12"
 
@@ -20,22 +18,19 @@ channels = ["conda-forge"]
 platforms = ["linux-64", "linux-aarch64", "osx-arm64"]
 
 [tool.pixi.dependencies]
-python = ">=3.12"
 flask = ">=3.0.2,<3.1"
 gunicorn = ">=21.2.0,<21.3"
 
+# Built editable in development mode
 [tool.pixi.feature.dev.pypi-dependencies]
 docker-project = { path = ".", editable = true }
 
-[tool.pixi.host-dependencies]
-pip = "*"
+# Built non-editable in production mode
+[tool.pixi.feature.prod.pypi-dependencies]
+docker-project = { path = ".", editable = false }
 
 [tool.pixi.feature.test.dependencies]
 pytest = "*"
-
-[tool.pixi.feature.build.dependencies]
-build = "*"
-hatchling = "*"
 
 [tool.pixi.tasks]
 dev = "flask --app docker_project:app run"
@@ -44,12 +39,6 @@ start = "gunicorn -w 4 docker_project:app --bind :8000"
 [tool.pixi.feature.test.tasks]
 test = "pytest"
 
-[tool.pixi.feature.build.tasks]
-build-wheel = "python -m build --no-isolation --wheel ."
-
-[tool.pixi.feature.prod.tasks]
-postinstall-production = "pip install --no-deps --disable-pip-version-check dist/docker_project-*.whl"
-
 [tool.pixi.environments]
-default = ["test", "build", "dev"]
-prod = ["prod"]
+default = { features = ["test", "dev"] }
+prod = { features = ["prod"] }
