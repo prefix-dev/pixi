@@ -221,7 +221,7 @@ fn print_dependency_tree(
                 ))?;
             }
 
-            tracing::warn!("No top level dependencies matched the regular expression, showing matching transitive dependencies");
+            tracing::info!("No top level dependencies matched the regular expression, showing matching transitive dependencies");
 
             return print_transitive_dependency_tree(dep_map, direct_deps, filtered_keys);
         }
