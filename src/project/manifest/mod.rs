@@ -5,7 +5,7 @@ mod environment;
 mod error;
 mod feature;
 mod metadata;
-mod pyproject;
+pub mod pyproject;
 pub mod python;
 mod system_requirements;
 mod target;
@@ -751,6 +751,31 @@ impl SolveGroups {
     pub fn iter(&self) -> impl Iterator<Item = &SolveGroup> + '_ {
         self.solve_groups.iter()
     }
+
+    /// Adds an environment (by index) to a solve-group.
+    /// If the solve-group does not exist, it is created
+    ///
+    /// Returns the index of the solve-group
+    fn add(&mut self, name: &str, environment_idx: usize) -> usize {
+        match self.by_name.get(name) {
+            Some(idx) => {
+                // The solve-group exists, add the environment index to it
+                self.solve_groups[*idx].environments.push(environment_idx);
+                *idx
+            }
+            None => {
+                // The solve-group does not exist, create it
+                // and initialise it with the environment index
+                let idx = self.solve_groups.len();
+                self.solve_groups.push(SolveGroup {
+                    name: name.to_string(),
+                    environments: vec![environment_idx],
+                });
+                self.by_name.insert(name.to_string(), idx);
+                idx
+            }
+        }
+    }
 }
 
 /// Describes the contents of a project manifest.
@@ -1038,9 +1063,6 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 
         // Add all named environments
         for (name, env) in toml_manifest.environments {
-            let environment_idx = environments.environments.len();
-            environments.by_name.insert(name.clone(), environment_idx);
-
             // Decompose the TOML
             let (features, features_source_loc, solve_group) = match env {
                 TomlEnvironmentMapOrSeq::Map(env) => {
@@ -1049,34 +1071,13 @@ impl<'de> Deserialize<'de> for ProjectManifest {
                 TomlEnvironmentMapOrSeq::Seq(features) => (features, None, None),
             };
 
-            // Add to the solve group if defined
-            let solve_group = if let Some(solve_group) = solve_group {
-                Some(match solve_groups.by_name.get(&solve_group) {
-                    Some(idx) => {
-                        solve_groups.solve_groups[*idx]
-                            .environments
-                            .push(environment_idx);
-                        *idx
-                    }
-                    None => {
-                        let idx = solve_groups.solve_groups.len();
-                        solve_groups.solve_groups.push(SolveGroup {
-                            name: solve_group.clone(),
-                            environments: vec![environment_idx],
-                        });
-                        solve_groups.by_name.insert(solve_group, idx);
-                        idx
-                    }
-                })
-            } else {
-                None
-            };
-
+            let environment_idx = environments.environments.len();
+            environments.by_name.insert(name.clone(), environment_idx);
             environments.environments.push(Environment {
                 name,
                 features,
                 features_source_loc,
-                solve_group,
+                solve_group: solve_group.map(|sg| solve_groups.add(&sg, environment_idx)),
             });
         }
 
