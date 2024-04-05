@@ -223,10 +223,10 @@ mod tests {
         let foo_environment = project.environment("foo").unwrap();
         let bar_environment = project.environment("bar").unwrap();
 
-        let solve_groups = project.solve_groups(); // contains 'default', 'group1'
-        assert_eq!(solve_groups.len(), 2);
+        let solve_groups = project.solve_groups();
+        assert_eq!(solve_groups.len(), 1);
 
-        let solve_group = solve_groups[1].clone(); // 'group1' solve group
+        let solve_group = solve_groups[0].clone();
         let solve_group_envs = solve_group.environments().collect_vec();
         assert_eq!(solve_group_envs.len(), 2);
         assert_eq!(solve_group_envs[0].name(), "foo");
@@ -235,10 +235,7 @@ mod tests {
         // Make sure that the environments properly reference the group
         assert_eq!(foo_environment.solve_group(), Some(solve_group.clone()));
         assert_eq!(bar_environment.solve_group(), Some(solve_group.clone()));
-        assert_eq!(
-            default_environment.solve_group(),
-            Some(solve_groups[0].clone())
-        );
+        assert_eq!(default_environment.solve_group(), None);
 
         // Make sure that all the environments share the same system requirements, because they are
         // in the same solve-group.

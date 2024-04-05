@@ -2,7 +2,7 @@ mod activation;
 pub(crate) mod channel;
 mod document;
 mod environment;
-pub mod error;
+mod error;
 mod feature;
 mod metadata;
 pub mod pyproject;
