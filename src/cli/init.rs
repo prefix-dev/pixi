@@ -193,12 +193,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         name
                     );
                     // Inform about the addition of environments from extras (if any)
-                    if !environments.is_empty() {
+                    let envs = environments
+                        .keys()
+                        .map(AsRef::as_ref)
+                        .collect::<Vec<&str>>();
+                    if envs.len() > 1 {
                         eprintln!(
-                            "{}Added environments '{:?}' from optional extras.",
+                            "{}Added environments {} from optional extras.",
                             console::style(console::Emoji("✔ ", "")).green(),
-                            environments.keys().collect::<Vec<_>>()
-                        );
+                            format!("'{}'", envs.join("', '"))
+                        )
+                    } else if envs.len() == 1 {
+                        eprintln!(
+                            "{}Added environment {} from optional extras.",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            format!("'{}'", envs[0])
+                        )
                     }
                 }
             }
