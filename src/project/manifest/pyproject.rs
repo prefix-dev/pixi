@@ -1,3 +1,4 @@
+use miette::Report;
 use pep508_rs::VersionOrUrl;
 use pyproject_toml::PyProjectToml;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
@@ -162,6 +163,22 @@ pub fn environments_from_extras(pyproject: &PyProjectToml) -> HashMap<String, Ve
         }
     }
     environments
+}
+
+/// Parses a non-pixi pyproject.toml string.
+pub fn pyproject(source: &str) -> Result<PyProjectToml, Report> {
+    match toml_edit::de::from_str::<PyProjectToml>(source).map_err(TomlError::from) {
+        Err(e) => e.to_fancy("pyproject.toml", source),
+        Ok(pyproject) => {
+            // Make sure [project] exists in pyproject.toml,
+            // This will ensure project.name is defined
+            if pyproject.project.is_none() {
+                return TomlError::NoProjectTable.to_fancy("pyproject.toml", source);
+            } else {
+                Ok(pyproject)
+            }
+        }
+    }
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
-use crate::project::manifest::pyproject::environments_from_extras;
+use crate::project::manifest::pyproject;
 use crate::utils::conda_environment_file::CondaEnvFile;
 use crate::{config::get_default_author, consts};
 use crate::{FeatureName, Project};
@@ -8,7 +8,6 @@ use clap::Parser;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
-use pyproject_toml::PyProjectToml;
 use rattler_conda_types::Platform;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
@@ -160,16 +159,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if pyproject_manifest_path.is_file() {
             let file = fs::read_to_string(pyproject_manifest_path.clone()).unwrap();
             if !file.contains("[tool.pixi.project]") {
-                let pyproject = PyProjectToml::new(&file).unwrap();
-                let environments = environments_from_extras(&pyproject);
-                // Get name from the pyproject [project] table
-                let name = match PyProjectToml::new(file.as_str()) {
-                    Ok(pyproject) => pyproject
-                        .project
-                        .map(|p| p.name)
-                        .expect("'name' should be defined in the [project] table"),
-                    Err(e) => miette::bail!("Failed to parse 'pyproject.toml'. Error is {}", e),
-                };
+                let pyproject = pyproject::pyproject(&file)?;
+                let name = pyproject.project.as_ref().unwrap().name.clone();
+                let environments = pyproject::environments_from_extras(&pyproject);
                 let rv = env
                     .render_named_str(
                         consts::PYPROJECT_MANIFEST,
@@ -200,9 +192,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         console::style(console::Emoji("✔ ", "")).green(),
                         name
                     );
+                    // Inform about the addition of environments from extras (if any)
+                    if !environments.is_empty() {
+                        eprintln!(
+                            "{}Added environments '{:?}' from optional extras.",
+                            console::style(console::Emoji("✔ ", "")).green(),
+                            environments.keys().collect::<Vec<_>>()
+                        );
+                    }
                 }
             }
-
         // Create a 'pixi.toml' manifest
         } else {
             // Check if the 'pixi.toml' file doesn't already exist. We don't want to overwrite it.
