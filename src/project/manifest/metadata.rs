@@ -51,6 +51,6 @@ pub struct ProjectMetadata {
     /// URL of the project documentation
     pub documentation: Option<Url>,
 
-    /// URL of the pypi name mapping
-    pub pypi_name_mapping: Option<HashMap<String, String>>,
+    /// URL or Path of the conda to pypi name mapping
+    pub conda_pypi_map: Option<HashMap<String, String>>,
 }
