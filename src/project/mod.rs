@@ -154,10 +154,27 @@ impl Project {
     }
 
     /// Discovers the project manifest file in the current directory or any of the parent
-    /// directories.
+    /// directories, or use the manifest specified by the environment.
     /// This will also set the current working directory to the project root.
     pub fn discover() -> miette::Result<Self> {
-        let project_toml = match find_project_manifest() {
+        let project_toml = find_project_manifest();
+
+        if std::env::var("PIXI_IN_SHELL").is_ok() {
+            if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
+                if let Some(project_toml) = project_toml {
+                    if env_manifest_path != project_toml.to_string_lossy() {
+                        tracing::warn!(
+                            "Using mainfest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
+                            env_manifest_path,
+                            project_toml.to_string_lossy()
+                        );
+                    }
+                }
+                return Self::load(Path::new(env_manifest_path.as_str()));
+            }
+        }
+
+        let project_toml = match project_toml {
             Some(file) => file,
             None => miette::bail!(
                 "could not find {} or {} which is configured to use pixi",
@@ -165,19 +182,6 @@ impl Project {
                 PYPROJECT_MANIFEST
             ),
         };
-
-        if std::env::var("PIXI_IN_SHELL").is_ok() {
-            if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
-                if env_manifest_path.as_str() != project_toml.to_str().unwrap() {
-                    tracing::warn!(
-                        "Using manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
-                        env_manifest_path,
-                        project_toml.to_string_lossy()
-                    );
-                    return Self::load(Path::new(env_manifest_path.as_str()));
-                }
-            }
-        }
 
         Self::load(&project_toml)
     }
