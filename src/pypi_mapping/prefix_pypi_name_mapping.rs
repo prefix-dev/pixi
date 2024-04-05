@@ -177,7 +177,6 @@ pub fn amend_pypi_purls_for_record(
                     };
 
                     let built_purl = purl.build().expect("valid pypi package url and version");
-                    tracing::warn!("purls added {:?}", built_purl);
                     record.package_record.purls.push(built_purl);
                 }
             }

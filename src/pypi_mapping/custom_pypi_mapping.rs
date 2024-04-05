@@ -90,11 +90,7 @@ pub async fn amend_pypi_purls(
     let custom_mapping = fetch_custom_mapping(client, mapping_url).await?;
 
     for record in conda_packages.iter_mut() {
-        if record.channel.contains(&conda_forge_name)
-            && !mapping_url.contains_key(&conda_forge_name)
-        {
-            // we need to use prefix conda-forge mapping for conda-forge
-            // and for others channels to rely on the custom one
+        if !mapping_url.contains_key(&record.channel) {
             prefix_pypi_name_mapping::amend_pypi_purls_for_record(
                 record,
                 prefix_mapping
