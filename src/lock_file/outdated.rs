@@ -1,4 +1,4 @@
-use super::{verify_environment_satisfiability, verify_platform_satisfiability, PlatformUnsat};
+use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::lock_file::satisfiability::EnvironmentUnsat;
 use crate::{consts, project::Environment, project::SolveGroup, Project};
 use itertools::Itertools;
@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 ///
 /// Use the [`OutdatedEnvironments::from_project_and_lock_file`] to create an instance of this
 /// struct by examining the project and lock-file and finding any mismatches.
+#[derive(Debug)]
 pub struct OutdatedEnvironments<'p> {
     /// The conda environments that are considered out of date with the lock-file.
     pub conda: HashMap<Environment<'p>, HashSet<Platform>>,
@@ -144,9 +145,14 @@ fn find_unsatisfiable_targets<'p>(
 
         // Verify each individual platform
         for platform in platforms {
-            match verify_platform_satisfiability(&environment, &locked_environment, platform) {
+            match verify_platform_satisfiability(
+                &environment,
+                &locked_environment,
+                platform,
+                project.root(),
+            ) {
                 Ok(_) => {}
-                Err(unsat @ PlatformUnsat::UnsatisfiableRequirement(_, _)) => {
+                Err(unsat) if unsat.is_pypi_only() => {
                     tracing::info!(
                         "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
                         environment.name().fancy_display()

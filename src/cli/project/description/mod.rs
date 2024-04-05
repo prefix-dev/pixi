@@ -8,7 +8,7 @@ use std::path::PathBuf;
 /// Commands to manage project description.
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[clap(long, global = true)]
     pub manifest_path: Option<PathBuf>,
 

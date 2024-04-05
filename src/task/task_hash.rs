@@ -2,7 +2,7 @@ use crate::project;
 use crate::task::{ExecutableTask, FileHashes, FileHashesError, InvalidWorkingDirectory};
 use miette::Diagnostic;
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, Package};
+use rattler_lock::LockFile;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -57,10 +57,7 @@ impl EnvironmentHash {
         if let Some(env) = lock_file.environment(run_environment.name().as_str()) {
             if let Some(packages) = env.packages(Platform::current()) {
                 for package in packages {
-                    urls.push(match package {
-                        Package::Conda(c) => c.url().clone(),
-                        Package::Pypi(p) => p.url().clone(),
-                    })
+                    urls.push(package.url_or_path().into_owned().to_string())
                 }
             }
         }

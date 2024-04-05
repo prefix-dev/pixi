@@ -61,11 +61,12 @@ Pixi caches all previously downloaded packages in a cache folder.
 This cache folder is shared between all pixi projects and globally installed tools.
 Normally the locations would be:
 
-| Platform | Value                                               |
-|----------|-----------------------------------------------------|
-| Linux    | `$XDG_CACHE_HOME/rattler` or `$HOME`/.cache/rattler |
-| macOS    | `$HOME`/Library/Caches/rattler                      |
-| Windows  | `{FOLDERID_LocalAppData}/rattler`                   |
+1. XDG compliant cache folder when it's available (`$XDG_CACHE_HOME/pixi`
+   or `$HOME/.cache/pixi`)
+2. Platform-specific default cache folder:
+   - Linux: `$XDG_CACHE_HOME/rattler` or `$HOME`/.cache/rattler
+   - macOS: `$HOME`/Library/Caches/rattler
+   - Windows: `%APPDATA%\rattler`
 
 When your system is filling up you can easily remove this folder.
 It will re-download everything it needs the next time you install a project.
@@ -83,12 +84,11 @@ The size of the previously mentioned "Cache dir" in Mebibytes.
 ## Project info
 
 Everything below `Project` is info about the project you're currently in.
-This info is only available if your path has a manifest file (`pixi.toml`).
+This info is only available if your path has a [manifest file](../configuration.md).
 
 ### Manifest file
 
-The path to the manifest file that describes the project.
-For now, this can only be `pixi.toml`.
+The path to the [manifest file](../configuration.md) that describes the project.
 
 ### Last updated
 

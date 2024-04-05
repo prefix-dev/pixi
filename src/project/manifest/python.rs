@@ -2,7 +2,8 @@ use pep440_rs::VersionSpecifiers;
 use pep508_rs::VerbatimUrl;
 use serde::Serializer;
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
-use std::path::PathBuf;
+use std::fmt::Display;
+use std::path::{Path, PathBuf};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
 use toml_edit::Item;
@@ -115,7 +116,7 @@ impl<'de> Deserialize<'de> for VersionOrStar {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(untagged, rename_all = "snake_case")]
+#[serde(untagged, rename_all = "snake_case", deny_unknown_fields)]
 pub enum PyPiRequirement {
     Git {
         git: Url,
@@ -139,11 +140,23 @@ pub enum PyPiRequirement {
     },
     Version {
         version: VersionOrStar,
-        index: Option<String>,
         #[serde(default)]
         extras: Vec<ExtraName>,
     },
     RawVersion(VersionOrStar),
+}
+
+impl PyPiRequirement {
+    /// Returns true if the requirement is a direct dependency.
+    /// I.e. a url, path or git requirement.
+    pub fn is_direct_dependency(&self) -> bool {
+        matches!(
+            self,
+            PyPiRequirement::Git { .. }
+                | PyPiRequirement::Path { .. }
+                | PyPiRequirement::Url { .. }
+        )
+    }
 }
 
 impl Default for PyPiRequirement {
@@ -187,22 +200,12 @@ impl From<PyPiRequirement> for Item {
         }
 
         match &val {
-            PyPiRequirement::Version {
-                version,
-                index,
-                extras,
-            } => {
+            PyPiRequirement::Version { version, extras } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
                 table.insert(
                     "version",
                     toml_edit::Value::String(toml_edit::Formatted::new(version.to_string())),
                 );
-                if let Some(index) = index {
-                    table.insert(
-                        "index",
-                        toml_edit::Value::String(toml_edit::Formatted::new(index.to_string())),
-                    );
-                }
                 insert_extras(&mut table, extras);
                 Item::Value(toml_edit::Value::InlineTable(table.to_owned()))
             }
@@ -214,14 +217,14 @@ impl From<PyPiRequirement> for Item {
                 subdirectory: _,
                 extras: _,
             } => {
-                unimplemented!("git")
+                todo!("git")
             }
             PyPiRequirement::Path {
                 path: _,
                 editable: _,
                 extras: _,
             } => {
-                unimplemented!("path")
+                todo!("path")
             }
             PyPiRequirement::Url { url: _, extras: _ } => {
                 unimplemented!("url")
@@ -240,7 +243,6 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
             match version_or_url {
                 pep508_rs::VersionOrUrl::VersionSpecifier(v) => PyPiRequirement::Version {
                     version: VersionOrStar::Version(v),
-                    index: None,
                     extras: req.extras,
                 },
                 pep508_rs::VersionOrUrl::Url(u) => PyPiRequirement::Url {
@@ -251,11 +253,116 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
         } else if !req.extras.is_empty() {
             PyPiRequirement::Version {
                 version: VersionOrStar::Star,
-                index: None,
                 extras: req.extras,
             }
         } else {
             PyPiRequirement::RawVersion(VersionOrStar::Star)
+        }
+    }
+}
+
+/// Create a url that uv can use to install a version
+fn create_uv_url(
+    url: &Url,
+    rev: Option<&str>,
+    subdir: Option<&str>,
+) -> Result<Url, url::ParseError> {
+    // Create the url.
+    let url = format!("git+{url}");
+    // Add the tag or rev if it exists.
+    let url = rev
+        .as_ref()
+        .map_or_else(|| url.clone(), |tag_or_rev| format!("{url}@{tag_or_rev}"));
+
+    // Add the subdirectory if it exists.
+    let url = subdir.as_ref().map_or_else(
+        || url.clone(),
+        |subdir| format!("{url}#subdirectory={subdir}"),
+    );
+    url.parse()
+}
+
+#[derive(Error, Debug)]
+pub enum AsPep508Error {
+    #[error("error while canonicalizing {path}")]
+    CanonicalizeError {
+        source: std::io::Error,
+        path: PathBuf,
+    },
+    #[error("parsing url {url}")]
+    UrlParseError {
+        source: url::ParseError,
+        url: String,
+    },
+    #[error("using an editable flag for a path that is not a directory: {path}")]
+    EditableIsNotDir { path: PathBuf },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum RequirementOrEditable {
+    Editable(PackageName, requirements_txt::EditableRequirement),
+    Pep508Requirement(pep508_rs::Requirement),
+}
+
+impl Display for RequirementOrEditable {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            RequirementOrEditable::Editable(name, req) => {
+                write!(f, "{} = {:?}", name, req)
+            }
+            RequirementOrEditable::Pep508Requirement(req) => {
+                write!(f, "{}", req)
+            }
+        }
+    }
+}
+
+impl RequirementOrEditable {
+    /// Returns the name of the package that this requirement is for.
+    pub fn name(&self) -> &PackageName {
+        match self {
+            RequirementOrEditable::Editable(name, _) => name,
+            RequirementOrEditable::Pep508Requirement(req) => &req.name,
+        }
+    }
+
+    /// Returns any extras that this requirement has.
+    pub fn extras(&self) -> &[ExtraName] {
+        match self {
+            RequirementOrEditable::Editable(_, req) => &req.extras,
+            RequirementOrEditable::Pep508Requirement(req) => &req.extras,
+        }
+    }
+
+    /// Returns an editable requirement if it is an editable requirement.
+    pub fn into_editable(self) -> Option<requirements_txt::EditableRequirement> {
+        match self {
+            RequirementOrEditable::Editable(_, editable) => Some(editable),
+            _ => None,
+        }
+    }
+
+    /// Returns a pep508 requirement if it is a pep508 requirement.
+    pub fn into_requirement(self) -> Option<pep508_rs::Requirement> {
+        match self {
+            RequirementOrEditable::Pep508Requirement(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    /// Returns an editable requirement if it is an editable requirement.
+    pub fn as_editable(&self) -> Option<&requirements_txt::EditableRequirement> {
+        match self {
+            RequirementOrEditable::Editable(_name, editable) => Some(editable),
+            _ => None,
+        }
+    }
+
+    /// Returns a pep508 requirement if it is a pep508 requirement.
+    pub fn as_requirement(&self) -> Option<&pep508_rs::Requirement> {
+        match self {
+            RequirementOrEditable::Pep508Requirement(e) => Some(e),
+            _ => None,
         }
     }
 }
@@ -272,29 +379,66 @@ impl PyPiRequirement {
     }
 
     /// Returns the requirements as [`pep508_rs::Requirement`]s.
-    pub fn as_pep508(&self, name: &PackageName) -> pep508_rs::Requirement {
+    pub fn as_pep508(
+        &self,
+        name: &PackageName,
+        project_root: &Path,
+    ) -> Result<RequirementOrEditable, AsPep508Error> {
         let version_or_url = match self {
-            PyPiRequirement::Version {
-                version,
-                index: _,
-                extras: _,
-            } => version.clone().into(),
+            PyPiRequirement::Version { version, extras: _ } => version.clone().into(),
+            PyPiRequirement::Path {
+                path,
+                editable,
+                extras,
+            } => {
+                let joined = project_root.join(path);
+                let canonicalized =
+                    dunce::canonicalize(&joined).map_err(|e| AsPep508Error::CanonicalizeError {
+                        source: e,
+                        path: joined.clone(),
+                    })?;
+                let given = path
+                    .to_str()
+                    .map(|s| s.to_owned())
+                    .unwrap_or_else(String::new);
+                let verbatim = VerbatimUrl::from_path(canonicalized.clone()).with_given(given);
+
+                if *editable == Some(true) {
+                    if !canonicalized.is_dir() {
+                        return Err(AsPep508Error::EditableIsNotDir { path: path.clone() });
+                    }
+
+                    return Ok(RequirementOrEditable::Editable(
+                        name.clone(),
+                        requirements_txt::EditableRequirement {
+                            url: verbatim,
+                            extras: extras.clone(),
+                            path: canonicalized,
+                        },
+                    ));
+                }
+
+                Some(pep508_rs::VersionOrUrl::Url(verbatim))
+            }
             PyPiRequirement::Git {
                 git,
-                branch: _,
-                tag: _,
-                rev: _,
-                subdirectory: _,
-                extras: _,
-            } => Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(
-                git.clone(),
-            ))),
-            PyPiRequirement::Path {
-                path: _,
-                editable: _,
+                branch,
+                tag,
+                rev,
+                subdirectory: subdir,
                 extras: _,
             } => {
-                unimplemented!("No path to url conversion yet.")
+                if branch.is_some() && tag.is_some() {
+                    tracing::warn!("branch/tag are not supported *yet*, will use the `main`/`master` branch, please specify a revision using `rev` = `sha`");
+                }
+                let uv_url =
+                    create_uv_url(git, rev.as_deref(), subdir.as_deref()).map_err(|e| {
+                        AsPep508Error::UrlParseError {
+                            source: e,
+                            url: git.to_string(),
+                        }
+                    })?;
+                Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::from_url(uv_url)))
             }
             PyPiRequirement::Url { url, extras: _ } => Some(pep508_rs::VersionOrUrl::Url(
                 VerbatimUrl::from_url(url.clone()),
@@ -302,12 +446,14 @@ impl PyPiRequirement {
             PyPiRequirement::RawVersion(version) => version.clone().into(),
         };
 
-        pep508_rs::Requirement {
-            name: name.clone(),
-            extras: self.extras().to_vec(),
-            version_or_url,
-            marker: None,
-        }
+        Ok(RequirementOrEditable::Pep508Requirement(
+            pep508_rs::Requirement {
+                name: name.clone(),
+                extras: self.extras().to_vec(),
+                version_or_url,
+                marker: None,
+            },
+        ))
     }
 }
 
@@ -371,7 +517,7 @@ mod tests {
         let requirement: IndexMap<uv_normalize::PackageName, PyPiRequirement> =
             toml_edit::de::from_str(
                 r#"
-                    foo = { version=">=3.12", extras = ["bar"], index = "artifact-registry" }
+                    foo = { version=">=3.12", extras = ["bar"]}
                     "#,
             )
             .unwrap();
@@ -384,7 +530,6 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement::Version {
                 version: ">=3.12".parse().unwrap(),
-                index: Some("artifact-registry".to_string()),
                 extras: vec![ExtraName::from_str("bar").unwrap()],
             }
         );
@@ -402,7 +547,6 @@ mod tests {
             requirement.first().unwrap().1,
             &PyPiRequirement::Version {
                 version: ">=3.12,<3.13.0".parse().unwrap(),
-                index: None,
                 extras: vec![
                     ExtraName::from_str("bar").unwrap(),
                     ExtraName::from_str("foo").unwrap(),
@@ -426,7 +570,6 @@ mod tests {
             pypi_requirement,
             PyPiRequirement::Version {
                 version: "==1.2.3".parse().unwrap(),
-                index: None,
                 extras: vec![
                     ExtraName::from_str("feature1").unwrap(),
                     ExtraName::from_str("feature2").unwrap()
@@ -576,6 +719,27 @@ mod tests {
                 subdirectory: None,
                 extras: vec![],
             }
+        );
+    }
+
+    #[test]
+    fn test_deserialize_pypi_from_flask() {
+        let requirement: IndexMap<PyPiPackageName, PyPiRequirement> = toml_edit::de::from_str(
+            r#"
+                flask = { git = "https://github.com/pallets/flask.git", tag = "3.0.0"}
+                "#,
+        )
+        .unwrap();
+        assert_eq!(
+            requirement.first().unwrap().1,
+            &PyPiRequirement::Git {
+                git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
+                tag: Some("3.0.0".to_string()),
+                branch: None,
+                rev: None,
+                subdirectory: None,
+                extras: vec![],
+            },
         );
     }
 

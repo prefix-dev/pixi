@@ -11,7 +11,7 @@ use url::Url;
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ProjectMetadata {
     /// The name of the project
-    pub name: String,
+    pub name: Option<String>, // set as optional to handle conversion from pyproject.toml
 
     /// The version of the project
     #[serde_as(as = "Option<DisplayFromStr>")]

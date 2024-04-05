@@ -15,7 +15,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.5.1
   with:
-    pixi-version: v0.17.0
+    pixi-version: v0.18.0
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -305,6 +305,15 @@ On self-hosted runners, you also might want to alter the default pixi install lo
 ```
 
 1. `${{ runner.temp }}\Scripts\pixi.exe` on Windows
+
+### Using the `pyproject.toml` as a manifest file for pixi.
+You can use the pyproject.toml, but it is not the default manifest file for pixi, so it's not picked up automatically, yet.
+```yaml
+- uses: prefix-dev/setup-pixi@v0.5.1
+  with:
+    manifest-path: pyproject.toml
+- run: pixi run test
+```
 
 ## More examples
 

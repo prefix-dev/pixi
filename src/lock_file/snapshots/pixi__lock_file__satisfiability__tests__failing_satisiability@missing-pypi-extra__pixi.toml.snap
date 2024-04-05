@@ -1,7 +1,6 @@
 ---
 source: src/lock_file/satisfiability.rs
-assertion_line: 532
-expression: "format!(\"{err:?}\")"
+expression: s
 input_file: tests/non-satisfiability/missing-pypi-extra/pixi.toml
 ---
 environment 'default' does not satisfy the requirements of the project for platform 'win-64

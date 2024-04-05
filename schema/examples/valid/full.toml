@@ -6,35 +6,35 @@ version = "0.1.0"
 description = "A project"
 authors = ["Author <author@bla.com>"]
 channels = ["stable"]
-platforms = ["linux-64", "win-64", "osx-64"]
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 license = "MIT"
-license_file = "LICENSE"
+license-file = "LICENSE"
 readme = "README.md"
 homepage = "https://project.com"
 repository = "https://github.com/author/project"
 documentation = "https://docs.project.com"
 
 [dependencies]
-test = "bla"
-test1 = "bli"
+test = "*"
+test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 
 
 [pypi-dependencies]
-testpypi = "bla"
-testpypi1 = "bli"
+testpypi = "*"
+testpypi1 = "*"
 requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]} # Using the map allows the user to add `extras`
 
 [host-dependencies]
-test = "bla"
-test1 = "bli"
+test = "*"
+test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 
 [build-dependencies]
-test = "bla"
-test1 = "bli"
+test = "*"
+test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 
@@ -43,25 +43,30 @@ build = "conda build ."
 test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
 test2 = { cmd = "pytest", cwd = "tests"}
 test3 = { cmd = "pytest", depends_on = ["test2"] }
-test4 = { cwd = "tests", depends_on = ["test2"] }
+test4 = { cmd = "pytest", cwd = "tests", depends_on = ["test2"] }
 test5 = { cmd = "pytest" }
 test6 = { depends_on = ["test5"] }
 
 [system-requirements]
 linux = "5.10"
 libc = { family="glibc", version="2.17" }
-cuda = 10.1
+cuda = "10.1"
 
 [feature.test.dependencies]
-test = "bla"
+test = "*"
 
 [feature.test2.dependencies]
-test = "bla"
+test = "*"
+
+[feature.prod]
+activation = {scripts = ["activate.sh", "deactivate.sh"]}
+
+[feature.lint]
+dependencies = {flake8 = "3.7.9", black = "19.10b0"}
 
 [environments]
 test = {features = ["test"], solve-group = "test"}
-prod = {features = ["prod"], solve-group = "test"}
-lint = ["lint"]
+prod = {features = ["test2"], solve-group = "test"}
 
 [activation]
 scripts = ["activate.sh", "deactivate.sh"]
@@ -70,26 +75,26 @@ scripts = ["activate.sh", "deactivate.sh"]
 scripts = ["env_setup.bat"]
 
 [target.linux-64.dependencies]
-test = "bla"
-test1 = "bli"
+test = "*"
+test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 
 
 [target.osx-arm64.pypi-dependencies]
-testpypi = "bla"
-testpypi1 = "bli"
+testpypi = "*"
+testpypi1 = "*"
 requests = {version = ">= 2.8.1, ==2.8.*", extras=["security", "tests"]} # Using the map allows the user to add `extras`
 
 [target.osx-64.host-dependencies]
-test = "bla"
-test1 = "bli"
+test = "*"
+test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 
 [target.linux-64.build-dependencies]
-test = "bla"
-test1 = "bli"
+test = "*"
+test1 = "*"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 
@@ -98,12 +103,12 @@ build = "conda build ."
 test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
 test2 = { cmd = "pytest", cwd = "tests"}
 test3 = { cmd = "pytest", depends_on = ["test2"] }
-test4 = { cwd = "tests", depends_on = ["test2"] }
+test4 = { cmd = "pytest", cwd = "tests", depends_on = ["test2"] }
 test5 = { cmd = "pytest" }
 test6 = { depends_on = ["test5"] }
 
 [feature.test.target.linux-64.dependencies]
-test = "bla"
+test = "*"
 
 [feature.cuda]
 activation = {scripts = ["cuda_activation.sh"]}

@@ -21,11 +21,12 @@ use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, Tr
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, WrapErr};
+use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     borrow::Cow,
@@ -130,6 +131,7 @@ impl<'p> LockFileDerivedData<'p> {
             &environment.system_requirements(),
             uv_context,
             env_variables,
+            self.project.root(),
         )
         .await?;
 
@@ -391,6 +393,25 @@ fn default_max_concurrent_solves() -> usize {
     (available_parallelism.saturating_sub(2)).min(4).max(1)
 }
 
+/// If the project has any source dependencies, like `git` or `path` dependencies.
+/// for pypi dependencies, we need to limit the solve to 1,
+/// because of uv internals
+fn determine_pypi_solve_permits(project: &Project) -> usize {
+    // Get all environments
+    let environments = project.environments();
+    for environment in environments {
+        for (_, req) in environment.pypi_dependencies(None).iter() {
+            for dep in req {
+                if dep.is_direct_dependency() {
+                    return 1;
+                }
+            }
+        }
+    }
+
+    default_max_concurrent_solves()
+}
+
 /// Ensures that the lock-file is up-to-date with the project.
 ///
 /// This function will return a [`LockFileDerivedData`] struct that contains the lock-file and any
@@ -411,7 +432,11 @@ pub async fn ensure_up_to_date_lock_file(
     let max_concurrent_solves = options
         .max_concurrent_solves
         .unwrap_or_else(default_max_concurrent_solves);
+
     let solve_semaphore = Arc::new(Semaphore::new(max_concurrent_solves));
+
+    // TODO(tim): we need this semaphore, to limit the number of concurrent solves. This is a problem when using source dependencies
+    let pypi_solve_semaphore = Arc::new(Semaphore::new(determine_pypi_solve_permits(project)));
 
     // should we check the lock-file in the first place?
     if !options.lock_file_usage.should_check_if_out_of_date() {
@@ -708,7 +733,7 @@ pub async fn ensure_up_to_date_lock_file(
         // platform for this group.
         let records_future = context
             .get_latest_group_repodata_records(&group, current_platform)
-            .expect("conda records should be available now or in the future");
+            .ok_or_else(|| make_unsupported_pypi_platform_error(environment, current_platform))?;
 
         // Spawn a task to instantiate the environment
         let environment_name = environment.name().clone();
@@ -787,6 +812,8 @@ pub async fn ensure_up_to_date_lock_file(
             repodata_future,
             prefix_future,
             env_variables,
+            pypi_solve_semaphore.clone(),
+            project.root().to_path_buf(),
         );
 
         pending_futures.push(pypi_solve_future.boxed_local());
@@ -1045,6 +1072,60 @@ pub async fn ensure_up_to_date_lock_file(
             .expect("repo data should not be shared anymore"),
         uv_context,
     })
+}
+
+/// Constructs an error that indicates that the current platform cannot solve pypi dependencies because there is no python interpreter available for the current platform.
+fn make_unsupported_pypi_platform_error(
+    environment: &Environment<'_>,
+    current_platform: Platform,
+) -> miette::Report {
+    let grouped_environment = GroupedEnvironment::from(environment.clone());
+
+    // Construct a diagnostic that explains that the current platform is not supported.
+    let mut diag = MietteDiagnostic::new(format!("Unable to solve pypi dependencies for the {} {} because no compatible python interpreter can be installed for the current platform", grouped_environment.name().fancy_display(), match &grouped_environment {
+        GroupedEnvironment::Group(_) => "solve group",
+        GroupedEnvironment::Environment(_) => "environment"
+    }));
+
+    let mut labels = Vec::new();
+
+    // Add a reference to the set of platforms that are supported by the project.
+    let project_platforms = &environment.project().manifest.parsed.project.platforms;
+    if let Some(span) = project_platforms.span.clone() {
+        labels.push(LabeledSpan::at(
+            span,
+            format!("even though the projects does include support for '{current_platform}'"),
+        ));
+    }
+
+    // Find all the features that are excluding the current platform.
+    let features_without_platform = grouped_environment.features().filter_map(|feature| {
+        let platforms = feature.platforms.as_ref()?;
+        if !platforms.value.contains(&current_platform) {
+            Some((feature, platforms))
+        } else {
+            None
+        }
+    });
+
+    for (feature, platforms) in features_without_platform {
+        let Some(span) = platforms.span.as_ref() else {
+            continue;
+        };
+
+        labels.push(LabeledSpan::at(
+            span.clone(),
+            format!(
+                "feature '{}' does not support '{current_platform}'",
+                feature.name
+            ),
+        ));
+    }
+
+    diag.labels = Some(labels);
+    diag.help = Some("Try converting your [pypi-dependencies] to conda [dependencies]".to_string());
+
+    miette::Report::new(diag).with_source_code(environment.project().manifest.contents.clone())
 }
 
 /// Represents data that is sent back from a task. This is used to communicate the result of a task
@@ -1359,6 +1440,7 @@ async fn spawn_extract_environment_task(
 }
 
 /// A task that solves the pypi dependencies for a given environment.
+#[allow(clippy::too_many_arguments)]
 async fn spawn_solve_pypi_task(
     resolution_context: UvResolutionContext,
     environment: GroupedEnvironment<'_>,
@@ -1366,6 +1448,8 @@ async fn spawn_solve_pypi_task(
     repodata_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
     prefix: impl Future<Output = (Prefix, PythonStatus)>,
     env_variables: &HashMap<String, String>,
+    semaphore: Arc<Semaphore>,
+    project_root: PathBuf,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1382,7 +1466,8 @@ async fn spawn_solve_pypi_task(
     let system_requirements = environment.system_requirements();
 
     // Wait until the conda records and prefix are available.
-    let (repodata_records, (prefix, python_status)) = tokio::join!(repodata_records, prefix);
+    let (repodata_records, (prefix, python_status), _guard) =
+        tokio::join!(repodata_records, prefix, semaphore.acquire_owned());
 
     let environment_name = environment.name().clone();
     // let (pypi_packages, duration) = tokio::spawn(
@@ -1409,11 +1494,11 @@ async fn spawn_solve_pypi_task(
                 .collect(),
             system_requirements,
             &repodata_records.records,
-            &[],
             platform,
             &pb.pb,
             &python_path,
             env_variables,
+            &project_root,
         )
         .await
         .with_context(|| {

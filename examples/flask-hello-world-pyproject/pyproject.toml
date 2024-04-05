@@ -1,0 +1,31 @@
+[project]
+name = "flask-hello-world-pyproject"
+version = "0.1.0"
+description = "Example how to get started with flask in a pixi environment."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["flask==2.*"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
+[tool.pixi.pypi-dependencies]
+flask-hello-world-pyproject = { path = ".", editable = true }
+
+[tool.pixi.environments]
+default = { features = [], solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+
+[tool.pixi.tasks]
+start = "python -m flask --app flask_hello_world_pyproject.app:app run --port=5050"
+
+[tool.pixi.feature.test.tasks]
+test = "pytest -v tests/*"

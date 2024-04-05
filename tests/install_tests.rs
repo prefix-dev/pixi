@@ -203,9 +203,9 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     } else {
         prefix.join("bin/python")
     };
-    let platform = platform_host::Platform::current().unwrap();
+
     // Current interpreter and venv
-    let interpreter = uv_interpreter::Interpreter::query(&python, platform, cache).unwrap();
+    let interpreter = uv_interpreter::Interpreter::query(python, cache).unwrap();
     uv_interpreter::PythonEnvironment::from_interpreter(interpreter)
 }
 
@@ -234,19 +234,23 @@ async fn pypi_reinstall_python() {
     let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
     assert!(installed_311.iter().count() > 0);
 
+    // sleep for a few seconds to make sure we can remove stuff (Windows file system issues)
+    #[cfg(target_os = "windows")]
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
     // Reinstall python
     pixi.add("python==3.12").with_install(true).await.unwrap();
 
     // Check if site-packages has entries, should be empty now
-    let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
+    let installed_312 = uv_installer::SitePackages::from_executable(&env).unwrap();
 
     if cfg!(not(target_os = "windows")) {
         // On non-windows the site-packages should be empty
-        assert!(installed_311.iter().count() == 0);
+        assert!(installed_312.iter().count() == 0);
     } else {
         // Windows should still contain some packages
         // This is because the site-packages is not prefixed with the python version
-        assert!(installed_311.iter().count() > 0);
+        assert!(installed_312.iter().count() > 0);
     }
 }
 

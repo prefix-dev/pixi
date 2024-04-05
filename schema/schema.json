@@ -230,7 +230,22 @@
                     "type": "string"
                   },
                   {
-                    "$ref": "#/$defs/PyPIRequirementTable"
+                    "$ref": "#/$defs/PyPIVersion"
+                  },
+                  {
+                    "$ref": "#/$defs/PyPIGitBranchRequirement"
+                  },
+                  {
+                    "$ref": "#/$defs/PyPIGitTagRequirement"
+                  },
+                  {
+                    "$ref": "#/$defs/PyPIGitRevRequirement"
+                  },
+                  {
+                    "$ref": "#/$defs/PyPIPathRequirement"
+                  },
+                  {
+                    "$ref": "#/$defs/PyPIUrlRequirement"
                   }
                 ]
               },
@@ -497,8 +512,53 @@
         "platforms": {
           "description": "The platforms that the project supports",
           "items": {
-            "minLength": 1,
-            "type": "string"
+            "anyOf": [
+              {
+                "const": "linux-32"
+              },
+              {
+                "const": "linux-64"
+              },
+              {
+                "const": "linux-aarch64"
+              },
+              {
+                "const": "linux-armv6l"
+              },
+              {
+                "const": "linux-armv7l"
+              },
+              {
+                "const": "linux-ppc64le"
+              },
+              {
+                "const": "linux-ppc64"
+              },
+              {
+                "const": "linux-s390x"
+              },
+              {
+                "const": "linux-riscv32"
+              },
+              {
+                "const": "linux-riscv64"
+              },
+              {
+                "const": "osx-64"
+              },
+              {
+                "const": "osx-arm64"
+              },
+              {
+                "const": "win-32"
+              },
+              {
+                "const": "win-64"
+              },
+              {
+                "const": "win-arm64"
+              }
+            ]
           },
           "title": "Platforms",
           "type": "array"
@@ -517,7 +577,7 @@
           "description": "The license of the project",
           "title": "License"
         },
-        "license_file": {
+        "license-file": {
           "anyOf": [
             {
               "pattern": "^[^\\\\]+$",
@@ -529,7 +589,7 @@
           ],
           "default": null,
           "description": "The path to the license file of the project",
-          "title": "License File"
+          "title": "License-File"
         },
         "readme": {
           "anyOf": [
@@ -598,23 +658,9 @@
       "title": "Project",
       "type": "object"
     },
-    "PyPIRequirementTable": {
+    "PyPIGitBranchRequirement": {
       "additionalProperties": false,
       "properties": {
-        "version": {
-          "anyOf": [
-            {
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
-          "title": "Version"
-        },
         "extras": {
           "anyOf": [
             {
@@ -631,9 +677,226 @@
           "default": null,
           "description": "The extras of the package",
           "title": "Extras"
+        },
+        "git": {
+          "default": null,
+          "description": "The git url to the repo e.g https://github.com/prefix-dev/pixi",
+          "minLength": 1,
+          "title": "Git",
+          "type": "string"
+        },
+        "branch": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A git branch to use",
+          "title": "Branch"
         }
       },
-      "title": "PyPIRequirementTable",
+      "title": "PyPIGitBranchRequirement",
+      "type": "object"
+    },
+    "PyPIGitRevRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "extras": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The extras of the package",
+          "title": "Extras"
+        },
+        "git": {
+          "default": null,
+          "description": "The git url to the repo e.g https://github.com/prefix-dev/pixi",
+          "minLength": 1,
+          "title": "Git",
+          "type": "string"
+        },
+        "rev": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A git sha revision to sue",
+          "title": "Rev"
+        }
+      },
+      "title": "PyPIGitRevRequirement",
+      "type": "object"
+    },
+    "PyPIGitTagRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "extras": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The extras of the package",
+          "title": "Extras"
+        },
+        "git": {
+          "default": null,
+          "description": "The git url to the repo e.g https://github.com/prefix-dev/pixi",
+          "minLength": 1,
+          "title": "Git",
+          "type": "string"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A git tag to use",
+          "title": "Tag"
+        }
+      },
+      "title": "PyPIGitTagRequirement",
+      "type": "object"
+    },
+    "PyPIPathRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "extras": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The extras of the package",
+          "title": "Extras"
+        },
+        "path": {
+          "default": null,
+          "description": "A path to a local source or wheel",
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "editable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "If true the package will be installed as editable",
+          "title": "Editable"
+        }
+      },
+      "title": "PyPIPathRequirement",
+      "type": "object"
+    },
+    "PyPIUrlRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "extras": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The extras of the package",
+          "title": "Extras"
+        },
+        "url": {
+          "default": null,
+          "description": "A url to a remote source or wheel",
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "title": "PyPIUrlRequirement",
+      "type": "object"
+    },
+    "PyPIVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "extras": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The extras of the package",
+          "title": "Extras"
+        },
+        "version": {
+          "default": null,
+          "description": "The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "title": "PyPIVersion",
       "type": "object"
     },
     "SystemRequirements": {
@@ -835,7 +1098,22 @@
                     "type": "string"
                   },
                   {
-                    "$ref": "#/$defs/PyPIRequirementTable"
+                    "$ref": "#/$defs/PyPIVersion"
+                  },
+                  {
+                    "$ref": "#/$defs/PyPIGitBranchRequirement"
+                  },
+                  {
+                    "$ref": "#/$defs/PyPIGitTagRequirement"
+                  },
+                  {
+                    "$ref": "#/$defs/PyPIGitRevRequirement"
+                  },
+                  {
+                    "$ref": "#/$defs/PyPIPathRequirement"
+                  },
+                  {
+                    "$ref": "#/$defs/PyPIUrlRequirement"
                   }
                 ]
               },
@@ -1079,7 +1357,22 @@
                 "type": "string"
               },
               {
-                "$ref": "#/$defs/PyPIRequirementTable"
+                "$ref": "#/$defs/PyPIVersion"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitBranchRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitTagRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitRevRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIPathRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIUrlRequirement"
               }
             ]
           },
