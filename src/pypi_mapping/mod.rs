@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
-use rattler_conda_types::{Channel, RepoDataRecord};
+use rattler_conda_types::RepoDataRecord;
 use reqwest_middleware::ClientBuilder;
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use url::Url;
@@ -28,10 +28,7 @@ pub enum MappingLocation {
 }
 
 pub enum MappingSource {
-    Custom {
-        mapping: MappingMap,
-        default_conda_forge: Channel,
-    },
+    Custom { mapping: MappingMap },
     Prefix,
 }
 
@@ -60,18 +57,9 @@ pub async fn amend_pypi_purls(
         .build();
 
     match mapping_source {
-        MappingSource::Custom {
-            mapping,
-            default_conda_forge,
-        } => {
-            custom_pypi_mapping::amend_pypi_purls(
-                &client,
-                &mapping,
-                default_conda_forge,
-                conda_packages,
-                reporter,
-            )
-            .await?;
+        MappingSource::Custom { mapping } => {
+            custom_pypi_mapping::amend_pypi_purls(&client, &mapping, conda_packages, reporter)
+                .await?;
         }
         MappingSource::Prefix => {
             prefix_pypi_name_mapping::amend_pypi_purls(&client, conda_packages, reporter).await?;

@@ -527,13 +527,7 @@ impl Manifest {
                         })
                         .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
 
-                let default_conda_forge =
-                    Channel::from_str("conda-forge", config.channel_config()).into_diagnostic()?;
-
-                Ok(MappingSource::Custom {
-                    mapping,
-                    default_conda_forge,
-                })
+                Ok(MappingSource::Custom { mapping })
             }
             None => Ok(MappingSource::Prefix),
         }

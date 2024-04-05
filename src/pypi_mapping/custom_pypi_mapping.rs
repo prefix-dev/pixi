@@ -1,5 +1,5 @@
 use miette::{Context, IntoDiagnostic};
-use rattler_conda_types::{Channel, PackageUrl, RepoDataRecord};
+use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
 use std::{collections::HashMap, sync::Arc};
 
@@ -62,41 +62,27 @@ pub async fn fetch_custom_mapping(
 pub async fn amend_pypi_purls(
     client: &ClientWithMiddleware,
     mapping_url: &MappingMap,
-    default_conda_forge_channel: Channel,
     conda_packages: &mut [RepoDataRecord],
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
-    let conda_forge_name = default_conda_forge_channel.canonical_name();
-
-    let conda_forge_packages: Vec<RepoDataRecord> = conda_packages
+    let packages_for_prefix_mapping: Vec<RepoDataRecord> = conda_packages
         .iter()
-        .filter(|package| package.channel.contains(&conda_forge_name))
+        .filter(|package| !mapping_url.contains_key(&package.channel))
         .cloned()
         .collect();
 
-    let prefix_mapping = if mapping_url.contains_key(&conda_forge_name) {
-        None
-    } else {
-        Some(
-            prefix_pypi_name_mapping::conda_pypi_name_mapping(
-                client,
-                &conda_forge_packages,
-                reporter,
-            )
-            .await?,
-        )
-    };
+    let prefix_mapping = prefix_pypi_name_mapping::conda_pypi_name_mapping(
+        client,
+        &packages_for_prefix_mapping,
+        reporter,
+    )
+    .await?;
 
     let custom_mapping = fetch_custom_mapping(client, mapping_url).await?;
 
     for record in conda_packages.iter_mut() {
         if !mapping_url.contains_key(&record.channel) {
-            prefix_pypi_name_mapping::amend_pypi_purls_for_record(
-                record,
-                prefix_mapping
-                    .as_ref()
-                    .expect("prefix-mapping already should be populated"),
-            )?;
+            prefix_pypi_name_mapping::amend_pypi_purls_for_record(record, &prefix_mapping)?;
         } else {
             amend_pypi_purls_for_record(record, custom_mapping)?;
         }
