@@ -1640,7 +1640,7 @@ impl SolveProgressBar {
             consts::PLATFORM_STYLE.apply_to(platform)
         );
 
-        pb.set_style(indicatif::ProgressStyle::with_template("    {{prefix:20!}} ..").unwrap());
+        pb.set_style(indicatif::ProgressStyle::with_template("    {prefix:20!} ..").unwrap());
         pb.enable_steady_tick(Duration::from_millis(100));
         pb.set_prefix(name_and_platform);
         Self { pb }
