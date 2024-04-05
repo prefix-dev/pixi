@@ -3,10 +3,26 @@ source: src/project/virtual_packages.rs
 expression: packages
 ---
 [
-    Win,
-    Archspec(
-        Archspec {
-            spec: "x86_64",
+    GenericVirtualPackage {
+        name: PackageName {
+            normalized: None,
+            source: "__win",
         },
-    ),
+        version: Version {
+            version: [[0], [0]],
+            local: [],
+        },
+        build_string: "0",
+    },
+    GenericVirtualPackage {
+        name: PackageName {
+            normalized: None,
+            source: "__archspec",
+        },
+        version: Version {
+            version: [[0], [1]],
+            local: [],
+        },
+        build_string: "x86_64",
+    },
 ]

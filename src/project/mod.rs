@@ -11,11 +11,12 @@ use distribution_types::IndexLocations;
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use miette::{IntoDiagnostic, NamedSource};
 
-use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
+use rattler_conda_types::{Channel, Platform, Version};
 use reqwest_middleware::ClientWithMiddleware;
 use std::fs;
 use std::hash::Hash;
 
+use rattler_virtual_packages::VirtualPackage;
 use std::{
     collections::{HashMap, HashSet},
     env,
@@ -220,7 +221,12 @@ impl Project {
 
     /// Returns the name of the project
     pub fn name(&self) -> &str {
-        &self.manifest.parsed.project.name
+        self.manifest
+            .parsed
+            .project
+            .name
+            .as_ref()
+            .expect("name should always be defined.")
     }
 
     /// Returns the version of the project
@@ -366,7 +372,7 @@ impl Project {
     }
 
     /// TODO: Remove this method and use the one from Environment instead.
-    pub fn virtual_packages(&self, platform: Platform) -> Vec<GenericVirtualPackage> {
+    pub fn virtual_packages(&self, platform: Platform) -> Vec<VirtualPackage> {
         self.default_environment().virtual_packages(platform)
     }
 

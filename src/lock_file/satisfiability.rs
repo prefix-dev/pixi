@@ -350,6 +350,7 @@ pub fn verify_package_platform_satisfiability(
     let virtual_packages = environment
         .virtual_packages(platform)
         .into_iter()
+        .map(GenericVirtualPackage::from)
         .map(|vpkg| (vpkg.name.clone(), vpkg))
         .collect::<HashMap<_, _>>();
 
