@@ -14,7 +14,6 @@ use std::sync::Arc;
 use tokio::sync::Semaphore;
 
 use super::Reporter;
-use crate::pypi_mapping::is_conda_forge_record;
 
 const STORAGE_URL: &str = "https://conda-mapping.prefix.dev";
 const HASH_DIR: &str = "hash-v0";
@@ -141,11 +140,7 @@ pub async fn amend_pypi_purls(
 ) -> miette::Result<()> {
     let conda_mapping = conda_pypi_name_mapping(client, conda_packages, reporter).await?;
     for record in conda_packages.iter_mut() {
-        // right now prefix.dev mapping have only conda_forge packages
-        // so to not wrongly map we skip the non-conda-forge fow now
-        if is_conda_forge_record(record) {
-            amend_pypi_purls_for_record(record, &conda_mapping)?;
-        }
+        amend_pypi_purls_for_record(record, &conda_mapping)?;
     }
 
     Ok(())
