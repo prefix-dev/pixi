@@ -63,7 +63,7 @@ impl From<PyProjectManifest> for ProjectManifest {
 
         // Get tool.pixi.project.name from project.name
         // TODO: could copy across / convert some other optional fields if relevant
-        manifest.project.name = item.project.as_ref().map(|p| p.name.clone());
+        manifest.project.name = Some(pyproject.name.clone());
 
         // Add python as dependency based on the project.requires_python property (if any)
         let pythonspec = pyproject
@@ -89,7 +89,8 @@ impl From<PyProjectManifest> for ProjectManifest {
 
         // For each extra group, create a feature of the same name if it does not exist,
         // and add pypi dependencies from project.optional-dependencies
-        if let Some(Some(extras)) = &item.project.as_ref().map(|p| &p.optional_dependencies) {
+        if let Some(extras) = pyproject.optional_dependencies.as_ref() {
+            let project_name = pep508_rs::PackageName::new(pyproject.name.clone()).unwrap();
             for (extra, reqs) in extras {
                 let target = manifest
                     .features
@@ -97,13 +98,9 @@ impl From<PyProjectManifest> for ProjectManifest {
                     .or_default()
                     .targets
                     .default_mut();
-                let pname = &item
-                    .project
-                    .as_ref()
-                    .map(|p| pep508_rs::PackageName::new(p.name.clone()).unwrap());
                 for req in reqs.iter() {
                     // filter out any self references in groups of extra dependencies
-                    if pname.as_ref().is_some_and(|n| n == &req.name) {
+                    if project_name == req.name {
                         continue;
                     }
                     target.add_pypi_dependency(

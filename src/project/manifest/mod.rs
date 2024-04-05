@@ -1062,8 +1062,6 @@ impl<'de> Deserialize<'de> for ProjectManifest {
         }
 
         // Add all named environments
-        // Note: if the default Environment is redefined, but does not specify a solve-group,
-        // it is not added to the 'default' solve-group.
         for (name, env) in toml_manifest.environments {
             // Decompose the TOML
             let (features, features_source_loc, solve_group) = match env {

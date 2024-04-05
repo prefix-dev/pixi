@@ -130,7 +130,6 @@ test = ["pytest"]
 all = ["package2","my_project[test]"]
 
 [tool.pixi.project]
-name = "my_project"
 channels = ["conda-forge"]
 platforms = ["linux-64"] # if executed on linux
 
