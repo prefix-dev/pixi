@@ -115,7 +115,14 @@ documentation = "https://pixi.sh"
 ### `conda-pypi-map` (optional)
 Mapping of channel name or URL to location of mapping that can be URL/Path.
 Mapping should be structured in `json` format where `conda_name`: `pypi_package_name`.
-Example: `{ "jupyter-ros": "my-name-from-mapping", "boltons": "boltons-pypi" }`
+Example:
+```json title="local/robostack_mapping.json"
+{
+    "jupyter-ros": "my-name-from-mapping",
+    "boltons": "boltons-pypi"
+}
+```
+
 If `conda-forge` is not present in `conda-pypi-map` `pixi` will use `prefix.dev` mapping for it.
 ```toml
 conda-pypi-map = { "conda-forge" = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
