@@ -9,6 +9,9 @@ The audience for this tutorial is developers who are familiar with ROS2 and how 
 - You need to have `pixi` installed. If you haven't installed it yet, you can follow the instructions in the [installation guide](../index.md).
 The crux of this tutorial is to show you only need pixi!
 
+If you're new to pixi, you can check out the [basic usage](../basic_usage.md) guide.
+This will teach you the basics of pixi project within 3 minutes.
+
 ## Create a pixi project.
 ```shell
 pixi init my_ros2_project -c robostack-staging -c conda-forge
@@ -52,9 +55,15 @@ pixi add ros-humble-desktop ros-humble-turtlesim
 This will add the `ros-humble-desktop` and `ros-humble-turtlesim` packages to your manifest.
 Depending on your internet speed this might take a minute, as it will also install ROS in your project folder (`.pixi`).
 
-Now run the `turtlesim` example
+Now run the `turtlesim` example.
 ```shell
 pixi run ros2 run turtlesim turtlesim_node
+```
+
+**Or** use the `shell` command to start an activated environment in your terminal.
+```shell
+pixi shell
+ros2 run turtlesim turtlesim_node
 ```
 Congratulations you have ROS2 running on your machine with pixi!
 
@@ -168,3 +177,8 @@ pixi run ros2 run my_cpp_package my_cpp_node
     ```shell
     pixi task add hello-cpp "ros2 run my_cpp_package my_cpp_node"
     ```
+
+## Frequently asked questions
+### What happens with `rosdep`?
+Currently, we don't support `rosdep` in a pixi environment, so you'll have to add the packages using `pixi add`.
+`rosdep` will call `conda install` which isn't supported in a pixi environment.
