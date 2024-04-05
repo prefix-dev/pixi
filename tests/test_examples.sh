@@ -12,3 +12,6 @@ pixi run -v --manifest-path examples/pypi-source-deps/pixi.toml test
 echo "Running the solve-groups example:"
 pixi run -v --manifest-path examples/solve-groups/pixi.toml -e min-py38 test
 pixi run -v --manifest-path examples/solve-groups/pixi.toml -e max-py310 test
+
+echo "Running the flask-hello-world-pyproject example:"
+pixi run -v --manifest-path examples/flask-hello-world-pyproject/pyproject.toml test

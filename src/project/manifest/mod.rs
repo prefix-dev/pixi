@@ -5,7 +5,7 @@ mod environment;
 mod error;
 mod feature;
 mod metadata;
-mod pyproject;
+pub mod pyproject;
 pub mod python;
 mod system_requirements;
 mod target;
@@ -24,7 +24,7 @@ use indexmap::map::Entry;
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
-use miette::{miette, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, WrapErr};
+use miette::{miette, Diagnostic, IntoDiagnostic, NamedSource, WrapErr};
 use pyproject::PyProjectManifest;
 pub use python::PyPiRequirement;
 use rattler_conda_types::{
@@ -47,7 +47,9 @@ use std::{
 pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
 pub use target::{Target, TargetSelector, Targets};
 use thiserror::Error;
-use toml_edit::{DocumentMut, TomlError};
+use toml_edit::DocumentMut;
+
+use self::error::TomlError;
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -127,21 +129,14 @@ impl Manifest {
             ),
         };
 
-        let (manifest, document) = match parsed
-            .and_then(|manifest| contents.parse::<DocumentMut>().map(|doc| (manifest, doc)))
-        {
+        let (manifest, document) = match parsed.and_then(|manifest| {
+            contents
+                .parse::<DocumentMut>()
+                .map(|doc| (manifest, doc))
+                .map_err(TomlError::from)
+        }) {
             Ok(result) => result,
-            Err(e) => {
-                if let Some(span) = e.span() {
-                    return Err(miette::miette!(
-                        labels = vec![LabeledSpan::at(span, e.message())],
-                        "failed to parse project manifest"
-                    )
-                    .with_source_code(NamedSource::new(file_name, contents)));
-                } else {
-                    return Err(e).into_diagnostic();
-                }
-            }
+            Err(e) => e.to_fancy(file_name, &contents)?,
         };
 
         // Validate the contents of the manifest
@@ -756,6 +751,31 @@ impl SolveGroups {
     pub fn iter(&self) -> impl Iterator<Item = &SolveGroup> + '_ {
         self.solve_groups.iter()
     }
+
+    /// Adds an environment (by index) to a solve-group.
+    /// If the solve-group does not exist, it is created
+    ///
+    /// Returns the index of the solve-group
+    fn add(&mut self, name: &str, environment_idx: usize) -> usize {
+        match self.by_name.get(name) {
+            Some(idx) => {
+                // The solve-group exists, add the environment index to it
+                self.solve_groups[*idx].environments.push(environment_idx);
+                *idx
+            }
+            None => {
+                // The solve-group does not exist, create it
+                // and initialise it with the environment index
+                let idx = self.solve_groups.len();
+                self.solve_groups.push(SolveGroup {
+                    name: name.to_string(),
+                    environments: vec![environment_idx],
+                });
+                self.by_name.insert(name.to_string(), idx);
+                idx
+            }
+        }
+    }
 }
 
 /// Describes the contents of a project manifest.
@@ -777,7 +797,15 @@ pub struct ProjectManifest {
 impl ProjectManifest {
     /// Parses a toml string into a project manifest.
     pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        toml_edit::de::from_str(source).map_err(TomlError::from)
+        let manifest: ProjectManifest = toml_edit::de::from_str(source).map_err(TomlError::from)?;
+
+        // Make sure project.name is defined
+        if manifest.project.name.is_none() {
+            let span = source.parse::<DocumentMut>().map_err(TomlError::from)?["project"].span();
+            return Err(TomlError::NoProjectName(span));
+        }
+
+        Ok(manifest)
     }
 
     /// Returns the default feature.
@@ -1035,9 +1063,6 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 
         // Add all named environments
         for (name, env) in toml_manifest.environments {
-            let environment_idx = environments.environments.len();
-            environments.by_name.insert(name.clone(), environment_idx);
-
             // Decompose the TOML
             let (features, features_source_loc, solve_group) = match env {
                 TomlEnvironmentMapOrSeq::Map(env) => {
@@ -1046,34 +1071,13 @@ impl<'de> Deserialize<'de> for ProjectManifest {
                 TomlEnvironmentMapOrSeq::Seq(features) => (features, None, None),
             };
 
-            // Add to the solve group if defined
-            let solve_group = if let Some(solve_group) = solve_group {
-                Some(match solve_groups.by_name.get(&solve_group) {
-                    Some(idx) => {
-                        solve_groups.solve_groups[*idx]
-                            .environments
-                            .push(environment_idx);
-                        *idx
-                    }
-                    None => {
-                        let idx = solve_groups.solve_groups.len();
-                        solve_groups.solve_groups.push(SolveGroup {
-                            name: solve_group.clone(),
-                            environments: vec![environment_idx],
-                        });
-                        solve_groups.by_name.insert(solve_group, idx);
-                        idx
-                    }
-                })
-            } else {
-                None
-            };
-
+            let environment_idx = environments.environments.len();
+            environments.by_name.insert(name.clone(), environment_idx);
             environments.environments.push(Environment {
                 name,
                 features,
                 features_source_loc,
-                solve_group,
+                solve_group: solve_group.map(|sg| solve_groups.add(&sg, environment_idx)),
             });
         }
 
@@ -1118,7 +1122,7 @@ mod tests {
         // From PathBuf
         let manifest = Manifest::from_path(path).unwrap();
 
-        assert_eq!(manifest.parsed.project.name, "foo");
+        assert_eq!(manifest.parsed.project.name.unwrap(), "foo");
         assert_eq!(
             manifest.parsed.project.version,
             Some(Version::from_str("0.1.0").unwrap())
