@@ -2,7 +2,7 @@
 name = "conda_mapping"
 version = "0.1.0"
 description = "Add a short description here"
-authors = ["Bas Zalmstra <bas@prefix.dev>"]
+authors = ["Nichita Morcotilo <nichita@prefix.dev>"]
 channels = ["conda-forge", "robostack"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
@@ -10,7 +10,7 @@ pypi-name-mapping = { "conda-forge" = "https://gist.githubusercontent.com/nichmo
 
 
 [tasks]
-test = "python test_pycosat_example.py"
+test = "python test_conda_mapping.py"
 
 [dependencies]
 python = "~=3.11.0"

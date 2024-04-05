@@ -514,7 +514,7 @@ impl Manifest {
     /// Returns what pypi mapping configuration we should use.
     /// It can be a custom one  in following format : conda_name: pypi_name
     /// Or we can use our self-hosted
-    pub fn custom_pypi_mapping(&self) -> miette::Result<MappingSource> {
+    pub fn pypi_name_mapping_source(&self) -> miette::Result<MappingSource> {
         match self.parsed.project.pypi_name_mapping.clone() {
             Some(url) => {
                 let config = Config::load_global();

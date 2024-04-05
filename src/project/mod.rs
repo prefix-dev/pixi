@@ -418,9 +418,9 @@ impl Project {
     }
 
     /// Returns the custom location of pypi-name-mapping
-    pub fn custom_pypi_mapping(&self) -> MappingSource {
+    pub fn pypi_name_mapping_source(&self) -> MappingSource {
         self.manifest
-            .custom_pypi_mapping()
+            .pypi_name_mapping_source()
             .expect("mapping source should be ok")
     }
 
