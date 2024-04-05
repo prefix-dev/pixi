@@ -173,7 +173,7 @@ pub fn pyproject(source: &str) -> Result<PyProjectToml, Report> {
             // Make sure [project] exists in pyproject.toml,
             // This will ensure project.name is defined
             if pyproject.project.is_none() {
-                return TomlError::NoProjectTable.to_fancy("pyproject.toml", source);
+                TomlError::NoProjectTable.to_fancy("pyproject.toml", source)
             } else {
                 Ok(pyproject)
             }
