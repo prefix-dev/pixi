@@ -756,7 +756,7 @@ impl SolveGroups {
     /// If the solve-group does not exist, it is created
     ///
     /// Returns the index of the solve-group
-    pub fn add(&mut self, name: &str, environment_idx: usize) -> usize {
+    fn add(&mut self, name: &str, environment_idx: usize) -> usize {
         match self.by_name.get(name) {
             Some(idx) => {
                 // The solve-group exists, add the environment index to it

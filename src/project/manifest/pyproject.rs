@@ -3,7 +3,10 @@ use pep508_rs::VersionOrUrl;
 use pyproject_toml::PyProjectToml;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 use toml_edit;
 
 use crate::FeatureName;
@@ -88,25 +91,34 @@ impl From<PyProjectManifest> for ProjectManifest {
         }
 
         // For each extra group, create a feature of the same name if it does not exist,
-        // and add pypi dependencies from project.optional-dependencies
+        // and add pypi dependencies from project.optional-dependencies,
+        // filtering out unused features and self-references
         if let Some(extras) = pyproject.optional_dependencies.as_ref() {
             let project_name = pep508_rs::PackageName::new(pyproject.name.clone()).unwrap();
+            let mut features_used = HashSet::new();
+            for env in manifest.environments.iter() {
+                for feature in env.features.iter() {
+                    features_used.insert(feature);
+                }
+            }
             for (extra, reqs) in extras {
-                let target = manifest
-                    .features
-                    .entry(FeatureName::Named(extra.to_string()))
-                    .or_default()
-                    .targets
-                    .default_mut();
-                for req in reqs.iter() {
-                    // filter out any self references in groups of extra dependencies
-                    if project_name == req.name {
-                        continue;
+                // Filter out unused features
+                if features_used.contains(extra) {
+                    let target = manifest
+                        .features
+                        .entry(FeatureName::Named(extra.to_string()))
+                        .or_default()
+                        .targets
+                        .default_mut();
+                    for req in reqs.iter() {
+                        // filter out any self references in groups of extra dependencies
+                        if project_name != req.name {
+                            target.add_pypi_dependency(
+                                PyPiPackageName::from_normalized(req.name.clone()),
+                                PyPiRequirement::from(req.clone()),
+                            )
+                        }
                     }
-                    target.add_pypi_dependency(
-                        PyPiPackageName::from_normalized(req.name.clone()),
-                        PyPiRequirement::from(req.clone()),
-                    )
                 }
             }
         }
