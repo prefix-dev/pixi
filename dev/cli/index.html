@@ -2080,7 +2080,7 @@ Output will look like this, where <code>python</code> will be green as it is the
 <p>The package tree can also be inverted (<code>-i</code>), to see which packages require a specific dependencies.</p>
 <h5 id="arguments_7">Arguments<a class="headerlink" href="#arguments_7" title="Permanent link">#</a></h5>
 <ul>
-<li><code>REGEX</code> optional regex of which direct dependencies to filter the tree to, or which dependencies to start with when inverting the tree.</li>
+<li><code>REGEX</code> optional regex of which dependencies to filter the tree to, or which dependencies to start with when inverting the tree.</li>
 </ul>
 <h5 id="options_11">Options<a class="headerlink" href="#options_11" title="Permanent link">#</a></h5>
 <ul>
@@ -2130,7 +2130,7 @@ Once a package has been displayed once, the tree won't continue to recurse throu
 </span><span id="__span-17-23"><a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a><span class="w">    </span>└──<span class="w"> </span>tomlkit<span class="w"> </span>v0.12.4
 </span><span id="__span-17-24"><a id="__codelineno-17-24" name="__codelineno-17-24" href="#__codelineno-17-24"></a><span class="w">        </span>└──<span class="w"> </span>python<span class="w"> </span>v3.12.2<span class="w"> </span><span class="o">(</span>*<span class="o">)</span>
 </span></code></pre></div>
-<p>A regex pattern can be specified to filter the tree to just those that show a specific direct dependency:</p>
+<p>A regex pattern can be specified to filter the tree to just those that show a specific direct, or transitive dependency:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>➜<span class="w"> </span>pixi<span class="w"> </span>tree<span class="w"> </span>pre-commit
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>└──<span class="w"> </span>pre-commit<span class="w"> </span>v3.3.3
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">    </span>├──<span class="w"> </span>virtualenv<span class="w"> </span>v20.25.1
