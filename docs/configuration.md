@@ -118,9 +118,7 @@ Mapping should be structured in `json` format where `conda_name`: `pypi_package_
 Example: `{ "jupyter-ros": "my-name-from-mapping", "boltons": "boltons-pypi" }`
 If `conda-forge` is not present in `conda-pypi-map` `pixi` will use `prefix.dev` mapping for it.
 ```toml
-[project]
 conda-pypi-map = { "conda-forge" = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
-
 ```
 
 ## The `tasks` table

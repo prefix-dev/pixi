@@ -1,13 +1,7 @@
 import yaml
 
 
-
-
-PACKAGE_NAME_TO_TEST = {
-    "boltons" : "my-boltons-name",
-    "jupyter-ros": "my-name-from-mapping"
-}
-
+PACKAGE_NAME_TO_TEST = {"boltons": "my-boltons-name", "jupyter-ros": "my-name-from-mapping"}
 
 
 if __name__ == "__main__":
@@ -15,14 +9,14 @@ if __name__ == "__main__":
     # we have one remote mapping for conda-forge
     # and one local mapping for robostack
 
-    with open('pixi.lock') as pixi_lock:
+    with open("pixi.lock") as pixi_lock:
         lock = yaml.safe_load(pixi_lock)
 
-    expected_packages = [package for package in lock["packages"] if package["name"] in PACKAGE_NAME_TO_TEST ]
-
+    expected_packages = [
+        package for package in lock["packages"] if package["name"] in PACKAGE_NAME_TO_TEST
+    ]
 
     assert len(expected_packages) == 2
-
 
     for package in expected_packages:
         package_name = package["name"]

@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_once_cell::OnceCell;
 
-use crate::pypi_mapping::{is_conda_forge_record, MappingLocation};
+use crate::pypi_mapping::MappingLocation;
 
 use super::{prefix_pypi_name_mapping, MappingMap, Reporter};
 
@@ -129,7 +129,7 @@ fn amend_pypi_purls_for_record(
 
     // If this package is a conda-forge package or user specified a custom channel mapping
     // we can try to guess the pypi name from the conda name
-    if is_conda_forge_record(record) || custom_mapping.contains_key(&record.channel) {
+    if custom_mapping.contains_key(&record.channel) {
         tracing::warn!("record channel is {}", record.channel);
         if let Some(mapped_channel) = custom_mapping.get(&record.channel) {
             if let Some(mapped_name) =
