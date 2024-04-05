@@ -14,6 +14,7 @@ classifiers = [
 requires-python = ">=3.12"
 
 [tool.pixi.project]
+name = "docker-project"
 channels = ["conda-forge"]
 platforms = ["linux-64", "linux-aarch64", "osx-arm64"]
 
