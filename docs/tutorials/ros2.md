@@ -85,7 +85,7 @@ pixi run ros2 pkg create --build-type ament_python --destination-directory src -
 
 To build the package we need some more dependencies:
 ```shell
-pixi add colcon-common-extensions
+pixi add colcon-common-extensions "setuptools<=58.2.0"
 ```
 Add the created initialization script for the ros workspace to your manifest file.
 
@@ -158,8 +158,7 @@ pixi run hello
 ## Build a C++ node
 To build a C++ node you need to add the `ament_cmake` and some other build dependencies to your manifest file.
 ```shell
-pixi add ros-humble-ament-cmake-auto compilers pkg-config cmake
-pixi add gcc_linux-64 gxx_linux-64 make -p linux-64
+pixi add ros-humble-ament-cmake-auto compilers pkg-config cmake ninja
 ```
 Now you can create a C++ node with the following command
 ```shell
@@ -168,7 +167,8 @@ pixi run ros2 pkg create --build-type ament_cmake --destination-directory src --
 
 Now you can build it again and run it with the following commands
 ```shell
-pixi run build
+# Passing arguments to the build command to build with Ninja, add them to the manifest if you want to default to ninja.
+pixi run build --cmake-args -G Ninja
 pixi run ros2 run my_cpp_package my_cpp_node
 ```
 
