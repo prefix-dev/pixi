@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
+use crate::project::manifest::pyproject;
 use crate::utils::conda_environment_file::CondaEnvFile;
 use crate::{config::get_default_author, consts};
 use crate::{FeatureName, Project};
@@ -42,8 +43,8 @@ description = "Add a short description here"
 {%- if author %}
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
-channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
-platforms = ["{{ platforms|join("\", \"") }}"]
+channels = {{ channels }}
+platforms = {{ platforms }}
 
 [tasks]
 
@@ -54,14 +55,25 @@ platforms = ["{{ platforms|join("\", \"") }}"]
 /// The pyproject.toml template
 const PYROJECT_TEMPLATE: &str = r#"
 [tool.pixi.project]
-name = "{{ name }}"
-channels = [{%- if channels %}"{{ channels|join("\", \"") }}"{%- endif %}]
-platforms = ["{{ platforms|join("\", \"") }}"]
+channels = {{ channels }}
+platforms = {{ platforms }}
+
+[tool.pixi.pypi-dependencies]
+{{ name }} = { path = ".", editable = true }
+{%- for env, features in environments|items %}
+{%- if loop.first %}
+
+[tool.pixi.environments]
+default = { features = [], solve-group = "default" }
+{%- endif %}
+{{env}} = { features = {{ features }}, solve-group = "default" }
+{%- endfor %}
 
 "#;
 
 const GITIGNORE_TEMPLATE: &str = r#"# pixi environments
 .pixi
+*.egg-info
 
 "#;
 
@@ -146,29 +158,58 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Inject a tool.pixi.project section into an existing pyproject.toml file if there is one without '[tool.pixi.project]'
         if pyproject_manifest_path.is_file() {
             let file = fs::read_to_string(pyproject_manifest_path.clone()).unwrap();
-            if !file.contains("[tool.pixi.project]") {
-                let rv = env
-                    .render_named_str(
-                        consts::PYPROJECT_MANIFEST,
-                        PYROJECT_TEMPLATE,
-                        context! {
-                            default_name,
-                            channels,
-                            platforms
-                        },
+
+            // Early exit if 'pyproject.toml' already contains a '[tool.pixi.project]' section
+            if file.contains("[tool.pixi.project]") {
+                eprintln!(
+                    "{}Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.project]' section.",
+                    console::style(console::Emoji("🤔 ", "")).blue(),
+                );
+                return Ok(());
+            }
+
+            let pyproject = pyproject::pyproject(&file)?;
+            let name = pyproject.project.as_ref().unwrap().name.clone();
+            let environments = pyproject::environments_from_extras(&pyproject);
+            let rv = env
+                .render_named_str(
+                    consts::PYPROJECT_MANIFEST,
+                    PYROJECT_TEMPLATE,
+                    context! {
+                        name,
+                        channels,
+                        platforms,
+                        environments,
+                    },
+                )
+                .unwrap();
+            if let Err(e) = {
+                fs::OpenOptions::new()
+                    .append(true)
+                    .open(pyproject_manifest_path.clone())
+                    .and_then(|mut p| p.write_all(rv.as_bytes()))
+            } {
+                tracing::warn!(
+                    "Warning, couldn't update '{}' because of: {}",
+                    pyproject_manifest_path.to_string_lossy(),
+                    e
+                );
+            } else {
+                // Inform about the addition of the package itself as an editable dependency of the project
+                eprintln!(
+                    "{}Added package '{}' as an editable dependency.",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                    name
+                );
+                // Inform about the addition of environments from extras (if any)
+                if !environments.is_empty() {
+                    let envs: Vec<&str> = environments.keys().map(AsRef::as_ref).collect();
+                    eprintln!(
+                        "{}Added environment{} '{}' from optional extras.",
+                        console::style(console::Emoji("✔ ", "")).green(),
+                        if envs.len() > 1 { "s" } else { "" },
+                        envs.join("', '")
                     )
-                    .unwrap();
-                if let Err(e) = {
-                    fs::OpenOptions::new()
-                        .append(true)
-                        .open(pyproject_manifest_path.clone())
-                        .and_then(|mut p| p.write_all(rv.as_bytes()))
-                } {
-                    tracing::warn!(
-                        "Warning, couldn't update '{}' because of: {}",
-                        pyproject_manifest_path.to_string_lossy(),
-                        e
-                    );
                 }
             }
 
