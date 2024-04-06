@@ -163,7 +163,7 @@ impl Project {
                 if let Some(project_toml) = project_toml {
                     if env_manifest_path != project_toml.to_string_lossy() {
                         tracing::warn!(
-                            "Using mainfest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
+                            "Using manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
                             env_manifest_path,
                             project_toml.to_string_lossy()
                         );
