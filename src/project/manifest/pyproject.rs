@@ -3,11 +3,13 @@ use pep508_rs::VersionOrUrl;
 use pyproject_toml::PyProjectToml;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
 };
-use toml_edit;
+use toml_edit::DocumentMut;
 
 use crate::FeatureName;
 
@@ -187,6 +189,21 @@ pub fn pyproject(source: &str) -> Result<PyProjectToml, Report> {
                 Ok(pyproject)
             }
         }
+    }
+}
+
+/// Checks whether a path is a valid `pyproject.toml` for use with pixi file by checking if it
+/// contains a `[tool.pixi.project]` table.
+pub fn is_valid_pixi_pyproject_toml(path: &PathBuf) -> bool {
+    let source = fs::read_to_string(path).unwrap();
+    is_valid_pixi_pyproject_toml_str(&source).unwrap_or(false)
+}
+/// Checks whether a path is a valid `pyproject.toml` for use with pixi file by checking if it
+/// contains a `[tool.pixi.project]` table.
+pub fn is_valid_pixi_pyproject_toml_str(source: &str) -> Result<bool, Report> {
+    match source.parse::<DocumentMut>().map_err(TomlError::from) {
+        Err(e) => e.to_fancy("pyproject.toml", source),
+        Ok(doc) => Ok(doc["tool"]["pixi"]["project"].is_table()),
     }
 }
 
