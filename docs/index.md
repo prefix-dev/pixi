@@ -24,6 +24,11 @@ To install `pixi` you can run the following command in your terminal:
 
     The script will also update your `~/.bash_profile` to include `~/.pixi/bin` in your PATH, allowing you to invoke the `pixi` command from anywhere.
 
+    On Apple Silicon, you can force the installation of the x86 version:
+    ```shell
+    PIXI_ARCH=x86_64 curl -fsSL https://pixi.sh/install.sh | bash
+    ```
+
 === "Windows"
     `PowerShell`:
     ```powershell
