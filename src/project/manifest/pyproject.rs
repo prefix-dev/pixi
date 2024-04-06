@@ -376,11 +376,34 @@ mod tests {
         let name = PyPiPackageName::from_str("numpy").unwrap();
         let requirement = PyPiRequirement::RawVersion(">=3.12".parse().unwrap());
         manifest
-            .add_pypi_dependency(&name, &requirement, None)
+            .add_pypi_dependency(&name, &requirement, None, &FeatureName::Default)
             .unwrap();
 
         assert!(manifest
             .default_feature_mut()
+            .targets
+            .for_opt_target(None)
+            .unwrap()
+            .pypi_dependencies
+            .as_ref()
+            .unwrap()
+            .get(&name)
+            .is_some());
+
+        // Add numpy to feature in pyproject
+        let name = PyPiPackageName::from_str("pytest").unwrap();
+        let requirement = PyPiRequirement::RawVersion(">=3.12".parse().unwrap());
+        manifest
+            .add_pypi_dependency(
+                &name,
+                &requirement,
+                None,
+                &FeatureName::Named("test".to_string()),
+            )
+            .unwrap();
+        assert!(manifest
+            .feature(&FeatureName::Named("test".to_string()))
+            .unwrap()
             .targets
             .for_opt_target(None)
             .unwrap()

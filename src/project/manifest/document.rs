@@ -226,14 +226,7 @@ impl ManifestSource {
         feature_name: &FeatureName,
     ) -> Result<(), Report> {
         match self {
-            ManifestSource::PixiToml(_) => self.add_dependency_helper(
-                name.as_source(),
-                (*requirement).clone().into(),
-                consts::PYPI_DEPENDENCIES,
-                platform,
-                feature_name,
-            ),
-            ManifestSource::PyProjectToml(_) => {
+            ManifestSource::PyProjectToml(_) if feature_name.is_default() => {
                 let dep = requirement
                     .as_pep508(name.as_normalized(), project_root)
                     .map_err(|_| {
@@ -260,6 +253,13 @@ impl ManifestSource {
                 }
                 Ok(())
             }
+            _ => self.add_dependency_helper(
+                name.as_source(),
+                (*requirement).clone().into(),
+                consts::PYPI_DEPENDENCIES,
+                platform,
+                feature_name,
+            ),
         }
     }
 
