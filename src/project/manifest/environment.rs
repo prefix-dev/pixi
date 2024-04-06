@@ -141,8 +141,46 @@ pub struct Environment {
     /// dependencies of the environment that share the same solve-group will be solved together.
     pub solve_group: Option<usize>,
 
-    /// Whether to include the default feature automatically or not
-    pub no_default_feature: bool,
+    /// Components to include from the default feature
+    pub from_default_feature: FromDefaultFeature,
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Self {
+            name: EnvironmentName::Default,
+            features: Vec::new(),
+            features_source_loc: None,
+            solve_group: None,
+            from_default_feature: FromDefaultFeature::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FromDefaultFeature {
+    pub system_requirements: bool,
+    pub channels: bool,
+    pub platforms: bool,
+    pub dependencies: bool,
+    pub pypi_dependencies: bool,
+    pub activation: bool,
+    pub tasks: bool,
+}
+
+// by default, include everything from the default feature
+impl Default for FromDefaultFeature {
+    fn default() -> Self {
+        Self {
+            system_requirements: true,
+            channels: true,
+            platforms: true,
+            dependencies: true,
+            pypi_dependencies: true,
+            activation: true,
+            tasks: true,
+        }
+    }
 }
 
 /// Helper struct to deserialize the environment from TOML.
@@ -153,8 +191,27 @@ pub(super) struct TomlEnvironment {
     #[serde(default)]
     pub features: PixiSpanned<Vec<String>>,
     pub solve_group: Option<String>,
-    #[serde(default)]
-    pub no_default_feature: bool,
+    #[serde(flatten)]
+    pub from_default: Option<FromDefaultToml>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(super) enum FromDefaultToml {
+    IncludeFromDefault(Vec<FeatureComponentToml>),
+    ExcludeFromDefault(Vec<FeatureComponentToml>),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(super) enum FeatureComponentToml {
+    SystemRequirements,
+    Channels,
+    Platforms,
+    Dependencies,
+    PypiDependencies,
+    Activation,
+    Tasks,
 }
 
 pub(super) enum TomlEnvironmentMapOrSeq {

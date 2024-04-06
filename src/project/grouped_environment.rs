@@ -171,7 +171,7 @@ impl<'p> GroupedEnvironment<'p> {
     pub fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         match self {
             GroupedEnvironment::Group(group) => Either::Left(group.features()),
-            GroupedEnvironment::Environment(env) => Either::Right(env.features()),
+            GroupedEnvironment::Environment(env) => Either::Right(env.features(true)),
         }
     }
 }

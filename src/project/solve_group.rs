@@ -70,7 +70,7 @@ impl<'p> SolveGroup<'p> {
     /// All features of all environments are combined and deduplicated.
     pub fn features(&self) -> impl DoubleEndedIterator<Item = &'p manifest::Feature> + 'p {
         self.environments()
-            .flat_map(move |env| env.features())
+            .flat_map(move |env| env.features(true))
             .unique_by(|feat| &feat.name)
     }
 
