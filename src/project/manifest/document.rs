@@ -223,6 +223,7 @@ impl ManifestSource {
         requirement: &PyPiRequirement,
         platform: Option<Platform>,
         project_root: &Path,
+        feature_name: &FeatureName,
     ) -> Result<(), Report> {
         match self {
             ManifestSource::PixiToml(_) => self.add_dependency_helper(
@@ -230,7 +231,7 @@ impl ManifestSource {
                 (*requirement).clone().into(),
                 consts::PYPI_DEPENDENCIES,
                 platform,
-                &FeatureName::Default,
+                feature_name,
             ),
             ManifestSource::PyProjectToml(_) => {
                 let dep = requirement

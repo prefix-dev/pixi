@@ -136,6 +136,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     &spec.0,
                     &spec.1,
                     Some(platform.parse().into_diagnostic()?),
+                    &FeatureName::default(),
                 )?;
             }
         }
