@@ -43,6 +43,22 @@ impl EnvironmentName {
     pub fn fancy_display(&self) -> console::StyledObject<&str> {
         console::style(self.as_str()).magenta()
     }
+
+    /// Tries to read the environment name from an argument, then it will try
+    /// to read from an environment variable, otherwise it will fall back to default
+    pub fn from_arg_or_env_var(arg_name: Option<String>) -> Self {
+        if let Some(arg_name) = arg_name {
+            return EnvironmentName::Named(arg_name);
+        } else if std::env::var("PIXI_IN_SHELL").is_ok() {
+            if let Ok(env_var_name) = std::env::var("PIXI_ENVIRONMENT_NAME") {
+                if env_var_name == consts::DEFAULT_ENVIRONMENT_NAME {
+                    return EnvironmentName::Default;
+                }
+                return EnvironmentName::Named(env_var_name);
+            }
+        }
+        EnvironmentName::Default
+    }
 }
 
 impl Borrow<str> for EnvironmentName {

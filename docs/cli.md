@@ -375,7 +375,7 @@ The package tree can also be inverted (`-i`), to see which packages require a sp
 
 ##### Arguments
 
-- `REGEX` optional regex of which direct dependencies to filter the tree to, or which dependencies to start with when inverting the tree.
+- `REGEX` optional regex of which dependencies to filter the tree to, or which dependencies to start with when inverting the tree.
 
 ##### Options
 
@@ -430,7 +430,7 @@ Version numbers are colored by the package type, yellow for Conda packages and b
         └── python v3.12.2 (*)
 ```
 
-A regex pattern can be specified to filter the tree to just those that show a specific direct dependency:
+A regex pattern can be specified to filter the tree to just those that show a specific direct, or transitive dependency:
 
 ```shell
 ➜ pixi tree pre-commit

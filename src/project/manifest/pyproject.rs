@@ -1,8 +1,15 @@
+use miette::Report;
 use pep508_rs::VersionOrUrl;
+use pyproject_toml::PyProjectToml;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
-use std::str::FromStr;
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 use toml_edit;
+
+use crate::FeatureName;
 
 use super::{
     error::{RequirementConversionError, TomlError},
@@ -13,7 +20,7 @@ use super::{
 #[derive(Deserialize, Debug, Clone)]
 pub struct PyProjectManifest {
     #[serde(flatten)]
-    inner: pyproject_toml::PyProjectToml,
+    inner: PyProjectToml,
     tool: Tool,
 }
 
@@ -23,7 +30,7 @@ struct Tool {
 }
 
 impl std::ops::Deref for PyProjectManifest {
-    type Target = pyproject_toml::PyProjectToml;
+    type Target = PyProjectToml;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -59,7 +66,7 @@ impl From<PyProjectManifest> for ProjectManifest {
 
         // Get tool.pixi.project.name from project.name
         // TODO: could copy across / convert some other optional fields if relevant
-        manifest.project.name = item.project.as_ref().map(|p| p.name.clone());
+        manifest.project.name = Some(pyproject.name.clone());
 
         // Add python as dependency based on the project.requires_python property (if any)
         let pythonspec = pyproject
@@ -84,9 +91,37 @@ impl From<PyProjectManifest> for ProjectManifest {
         }
 
         // For each extra group, create a feature of the same name if it does not exist,
-        // add dependencies and create corresponding environments if they do not exist
-        // TODO: Add solve groups as well?
-        // TODO: Deal with self referencing extras?
+        // and add pypi dependencies from project.optional-dependencies,
+        // filtering out unused features and self-references
+        if let Some(extras) = pyproject.optional_dependencies.as_ref() {
+            let project_name = pep508_rs::PackageName::new(pyproject.name.clone()).unwrap();
+            let mut features_used = HashSet::new();
+            for env in manifest.environments.iter() {
+                for feature in env.features.iter() {
+                    features_used.insert(feature);
+                }
+            }
+            for (extra, reqs) in extras {
+                // Filter out unused features
+                if features_used.contains(extra) {
+                    let target = manifest
+                        .features
+                        .entry(FeatureName::Named(extra.to_string()))
+                        .or_default()
+                        .targets
+                        .default_mut();
+                    for req in reqs.iter() {
+                        // filter out any self references in groups of extra dependencies
+                        if project_name != req.name {
+                            target.add_pypi_dependency(
+                                PyPiPackageName::from_normalized(req.name.clone()),
+                                PyPiRequirement::from(req.clone()),
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         manifest
     }
@@ -109,6 +144,49 @@ fn version_or_url_to_nameless_matchspec(
             version: Some(VersionSpec::Any),
             ..Default::default()
         }),
+    }
+}
+
+/// Builds a list of pixi environments from pyproject groups of extra dependencies:
+///  - one environment is created per group of extra, with the same name as the group of extra
+///  - each environment includes the feature of the same name as the group of extra
+///  - it will also include other features inferred from any self references to other groups of extras
+pub fn environments_from_extras(pyproject: &PyProjectToml) -> HashMap<String, Vec<String>> {
+    let mut environments = HashMap::new();
+    if let Some(Some(extras)) = &pyproject.project.as_ref().map(|p| &p.optional_dependencies) {
+        let pname = &pyproject
+            .project
+            .as_ref()
+            .map(|p| pep508_rs::PackageName::new(p.name.clone()).unwrap());
+        for (extra, reqs) in extras {
+            let mut features = vec![extra.to_string()];
+            // Add any references to other groups of extra dependencies
+            for req in reqs.iter() {
+                if pname.as_ref().is_some_and(|n| n == &req.name) {
+                    for extra in &req.extras {
+                        features.push(extra.to_string())
+                    }
+                }
+            }
+            environments.insert(extra.clone(), features);
+        }
+    }
+    environments
+}
+
+/// Parses a non-pixi pyproject.toml string.
+pub fn pyproject(source: &str) -> Result<PyProjectToml, Report> {
+    match toml_edit::de::from_str::<PyProjectToml>(source).map_err(TomlError::from) {
+        Err(e) => e.to_fancy("pyproject.toml", source),
+        Ok(pyproject) => {
+            // Make sure [project] exists in pyproject.toml,
+            // This will ensure project.name is defined
+            if pyproject.project.is_none() {
+                TomlError::NoProjectTable.to_fancy("pyproject.toml", source)
+            } else {
+                Ok(pyproject)
+            }
+        }
     }
 }
 

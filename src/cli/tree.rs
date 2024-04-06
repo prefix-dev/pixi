@@ -70,9 +70,7 @@ static UTF8_SYMBOLS: Symbols = Symbols {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment_name = args
-        .environment
-        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
+    let environment_name = EnvironmentName::from_arg_or_env_var(args.environment);
     let environment = project
         .environment(&environment_name)
         .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
@@ -99,6 +97,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else {
         print_dependency_tree(&dep_map, &direct_deps, &args.regex)?;
     }
+    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
 }
 
@@ -174,6 +173,31 @@ fn print_inverted_leaf(
     }
 }
 
+/// Print a transitive dependency tree
+fn print_transitive_dependency_tree(
+    dep_map: &HashMap<String, Package>,
+    direct_deps: &Vec<String>,
+    filtered_keys: Vec<String>,
+) -> Result<(), miette::Error> {
+    let mut visited_pkgs = Vec::new();
+
+    for pkg_name in filtered_keys.iter() {
+        visited_pkgs.push(pkg_name.clone());
+
+        if let Some(pkg) = dep_map.get(pkg_name) {
+            print_package(
+                "\n".to_string(),
+                pkg,
+                direct_deps.contains(&pkg.name),
+                false,
+            );
+
+            print_dependency_leaf(pkg, "".to_string(), dep_map, &mut visited_pkgs, direct_deps)
+        }
+    }
+    Ok(())
+}
+
 /// Filter and print a top down dependency tree
 fn print_dependency_tree(
     dep_map: &HashMap<String, Package>,
@@ -187,9 +211,18 @@ fn print_dependency_tree(
         filtered_deps.retain(|p| regex.is_match(p));
 
         if filtered_deps.is_empty() {
-            Err(miette::miette!(
-                "No top level dependencies matched the given regular expression"
-            ))?;
+            let mut filtered_keys = dep_map.keys().map(|p| p.to_owned()).collect_vec();
+            filtered_keys.retain(|p| regex.is_match(p));
+
+            if filtered_keys.is_empty() {
+                Err(miette::miette!(
+                    "No dependencies matched the given regular expression"
+                ))?;
+            }
+
+            tracing::info!("No top level dependencies matched the regular expression, showing matching transitive dependencies");
+
+            return print_transitive_dependency_tree(dep_map, direct_deps, filtered_keys);
         }
     }
 
@@ -206,7 +239,12 @@ fn print_dependency_tree(
             UTF8_SYMBOLS.tee
         };
         if let Some(pkg) = dep_map.get(pkg_name) {
-            print_package(format!("{symbol} "), pkg, true, false);
+            print_package(
+                format!("{symbol} "),
+                pkg,
+                direct_deps.contains(&pkg.name),
+                false,
+            );
 
             let prefix = if last {
                 UTF8_SYMBOLS.empty

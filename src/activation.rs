@@ -40,6 +40,7 @@ impl Project {
                         version.to_string()
                     }),
             ),
+            (String::from("PIXI_IN_SHELL"), String::from("1")),
         ]);
 
         if let Ok(exe_path) = std::env::current_exe() {
