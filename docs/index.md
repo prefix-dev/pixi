@@ -116,10 +116,10 @@ its [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try
     | Variable             | Description                                                                        | Default Value         |
     |----------------------|------------------------------------------------------------------------------------|-----------------------|
     | `VERSION`            | The version of pixi getting installed, can be used to up- or down-grade.           | `latest`              |
-    | `PIXI_HOME`          | The location of the binary folder.                                                  | `$HOME/.pixi`         |
-    | `PIXI_ARCH`          | The architecture the pixi version was built for.                                    | `uname -m`            |
-    | `PIXI_NO_PATH_UPDATE`| If set the `$PATH` will not be updated to add `pixi` to it.                         |                       |
-    | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from.   | `/tmp`                |
+    | `PIXI_HOME`          | The location of the binary folder.                                                 | `$HOME/.pixi`         |
+    | `PIXI_ARCH`          | The architecture the pixi version was built for.                                   | `uname -m`            |
+    | `PIXI_NO_PATH_UPDATE`| If set the `$PATH` will not be updated to add `pixi` to it.                        |                       |
+    | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from. | `/tmp`                |
 
     For example, on Apple Silicon, you can force the installation of the x86 version:
     ```shell
