@@ -40,7 +40,7 @@ pub use dependencies::Dependencies;
 pub use environment::Environment;
 pub use solve_group::SolveGroup;
 
-use self::manifest::{pyproject, Environments};
+use self::manifest::{pyproject::PyProjectToml, Environments};
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -514,7 +514,7 @@ pub fn find_project_manifest() -> Option<PathBuf> {
                 if path.is_file() {
                     match *manifest {
                         PROJECT_MANIFEST => Some(path.to_path_buf()),
-                        PYPROJECT_MANIFEST if pyproject::is_valid_pixi_pyproject_toml(&path) => {
+                        PYPROJECT_MANIFEST if PyProjectToml::is_pixi(&path) => {
                             Some(path.to_path_buf())
                         }
                         _ => None,

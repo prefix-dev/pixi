@@ -1,10 +1,10 @@
 use miette::Report;
 use pep508_rs::VersionOrUrl;
-use pyproject_toml::PyProjectToml;
+use pyproject_toml::{self, Project};
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
@@ -22,7 +22,7 @@ use super::{
 #[derive(Deserialize, Debug, Clone)]
 pub struct PyProjectManifest {
     #[serde(flatten)]
-    inner: PyProjectToml,
+    inner: pyproject_toml::PyProjectToml,
     tool: Tool,
 }
 
@@ -32,7 +32,7 @@ struct Tool {
 }
 
 impl std::ops::Deref for PyProjectManifest {
-    type Target = PyProjectToml;
+    type Target = pyproject_toml::PyProjectToml;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -149,61 +149,77 @@ fn version_or_url_to_nameless_matchspec(
     }
 }
 
-/// Builds a list of pixi environments from pyproject groups of extra dependencies:
-///  - one environment is created per group of extra, with the same name as the group of extra
-///  - each environment includes the feature of the same name as the group of extra
-///  - it will also include other features inferred from any self references to other groups of extras
-pub fn environments_from_extras(pyproject: &PyProjectToml) -> HashMap<String, Vec<String>> {
-    let mut environments = HashMap::new();
-    if let Some(Some(extras)) = &pyproject.project.as_ref().map(|p| &p.optional_dependencies) {
-        let pname = &pyproject
-            .project
-            .as_ref()
-            .map(|p| pep508_rs::PackageName::new(p.name.clone()).unwrap());
-        for (extra, reqs) in extras {
-            let mut features = vec![extra.to_string()];
-            // Add any references to other groups of extra dependencies
-            for req in reqs.iter() {
-                if pname.as_ref().is_some_and(|n| n == &req.name) {
-                    for extra in &req.extras {
-                        features.push(extra.to_string())
-                    }
+/// A struct wrapping pyproject_toml::PyProjectToml
+/// ensuring it has a project table
+pub struct PyProjectToml {
+    inner: pyproject_toml::PyProjectToml,
+}
+
+impl PyProjectToml {
+    /// Parses a non-pixi pyproject.toml string into a pyproject_toml::PyProjectToml struct
+    /// making sure it contains a 'project' table
+    pub fn from(source: &str) -> Result<PyProjectToml, Report> {
+        match toml_edit::de::from_str::<pyproject_toml::PyProjectToml>(source)
+            .map_err(TomlError::from)
+        {
+            Err(e) => e.to_fancy("pyproject.toml", source),
+            Ok(pyproject) => {
+                // Make sure [project] exists in pyproject.toml,
+                // This will ensure project.name is defined
+                if pyproject.project.is_none() {
+                    TomlError::NoProjectTable.to_fancy("pyproject.toml", source)
+                } else {
+                    Ok(PyProjectToml { inner: pyproject })
                 }
             }
-            environments.insert(extra.clone(), features);
         }
     }
-    environments
-}
 
-/// Parses a non-pixi pyproject.toml string.
-pub fn pyproject(source: &str) -> Result<PyProjectToml, Report> {
-    match toml_edit::de::from_str::<PyProjectToml>(source).map_err(TomlError::from) {
-        Err(e) => e.to_fancy("pyproject.toml", source),
-        Ok(pyproject) => {
-            // Make sure [project] exists in pyproject.toml,
-            // This will ensure project.name is defined
-            if pyproject.project.is_none() {
-                TomlError::NoProjectTable.to_fancy("pyproject.toml", source)
-            } else {
-                Ok(pyproject)
+    pub fn name(&self) -> String {
+        self.project().name.clone()
+    }
+
+    pub fn project(&self) -> &Project {
+        self.inner.project.as_ref().unwrap()
+    }
+
+    /// Builds a list of pixi environments from pyproject groups of extra dependencies:
+    ///  - one environment is created per group of extra, with the same name as the group of extra
+    ///  - each environment includes the feature of the same name as the group of extra
+    ///  - it will also include other features inferred from any self references to other groups of extras
+    pub fn environments_from_extras(&self) -> HashMap<String, Vec<String>> {
+        let mut environments = HashMap::new();
+        if let Some(extras) = &self.project().optional_dependencies {
+            let pname = pep508_rs::PackageName::new(self.name()).unwrap();
+            for (extra, reqs) in extras {
+                let mut features = vec![extra.to_string()];
+                // Add any references to other groups of extra dependencies
+                for req in reqs.iter() {
+                    if pname == req.name {
+                        for extra in &req.extras {
+                            features.push(extra.to_string())
+                        }
+                    }
+                }
+                environments.insert(extra.clone(), features);
             }
         }
+        environments
     }
-}
 
-/// Checks whether a path is a valid `pyproject.toml` for use with pixi file by checking if it
-/// contains a `[tool.pixi.project]` table.
-pub fn is_valid_pixi_pyproject_toml(path: &PathBuf) -> bool {
-    let source = fs::read_to_string(path).unwrap();
-    is_valid_pixi_pyproject_toml_str(&source).unwrap_or(false)
-}
-/// Checks whether a path is a valid `pyproject.toml` for use with pixi file by checking if it
-/// contains a `[tool.pixi.project]` table.
-pub fn is_valid_pixi_pyproject_toml_str(source: &str) -> Result<bool, Report> {
-    match source.parse::<DocumentMut>().map_err(TomlError::from) {
-        Err(e) => e.to_fancy("pyproject.toml", source),
-        Ok(doc) => Ok(doc["tool"]["pixi"]["project"].is_table()),
+    /// Checks whether a path is a valid `pyproject.toml` for use with pixi by checking if it
+    /// contains a `[tool.pixi.project]` table.
+    pub fn is_pixi(path: &PathBuf) -> bool {
+        let source = fs::read_to_string(path).unwrap();
+        Self::is_pixi_str(&source).unwrap_or(false)
+    }
+    /// Checks whether a string is a valid `pyproject.toml` for use with pixi by checking if it
+    /// contains a `[tool.pixi.project]` table.
+    pub fn is_pixi_str(source: &str) -> Result<bool, Report> {
+        match source.parse::<DocumentMut>().map_err(TomlError::from) {
+            Err(e) => e.to_fancy("pyproject.toml", source),
+            Ok(doc) => Ok(doc["tool"]["pixi"]["project"].is_table()),
+        }
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::environment::{get_up_to_date_prefix, LockFileUsage};
-use crate::project::manifest::pyproject;
+use crate::project::manifest::pyproject::PyProjectToml;
 use crate::utils::conda_environment_file::CondaEnvFile;
 use crate::{config::get_default_author, consts};
 use crate::{FeatureName, Project};
@@ -160,7 +160,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let file = fs::read_to_string(&pyproject_manifest_path).unwrap();
 
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.project]' table
-            if pyproject::is_valid_pixi_pyproject_toml_str(&file)? {
+            if PyProjectToml::is_pixi_str(&file)? {
                 eprintln!(
                     "{}Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.project]' section.",
                     console::style(console::Emoji("🤔 ", "")).blue(),
@@ -168,9 +168,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 return Ok(());
             }
 
-            let pyproject = pyproject::pyproject(&file)?;
-            let name = pyproject.project.as_ref().unwrap().name.clone();
-            let environments = pyproject::environments_from_extras(&pyproject);
+            let pyproject = PyProjectToml::from(&file)?;
+            let name = pyproject.name();
+            let environments = pyproject.environments_from_extras();
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,
