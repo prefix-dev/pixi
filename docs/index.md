@@ -26,7 +26,7 @@ To install `pixi` you can run the following command in your terminal:
 
     On Apple Silicon, you can force the installation of the x86 version:
     ```shell
-    export PIXI_ARCH=x86_64 && curl -fsSL https://pixi.sh/install.sh | bash
+    PIXI_ARCH=x86_64 curl -fsSL https://pixi.sh/install.sh | bash
     ```
 
 === "Windows"
