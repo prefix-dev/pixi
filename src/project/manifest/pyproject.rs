@@ -151,12 +151,14 @@ fn version_or_url_to_nameless_matchspec(
 
 /// A struct wrapping pyproject_toml::PyProjectToml
 /// ensuring it has a project table
+///
+/// This is used during 'pixi init' to parse a potentially non-pixi 'pyproject.toml'
 pub struct PyProjectToml {
     inner: pyproject_toml::PyProjectToml,
 }
 
 impl PyProjectToml {
-    /// Parses a non-pixi pyproject.toml string into a pyproject_toml::PyProjectToml struct
+    /// Parses a non-pixi pyproject.toml string into a PyProjectToml struct
     /// making sure it contains a 'project' table
     pub fn from(source: &str) -> Result<PyProjectToml, Report> {
         match toml_edit::de::from_str::<pyproject_toml::PyProjectToml>(source)
@@ -208,17 +210,21 @@ impl PyProjectToml {
     }
 
     /// Checks whether a path is a valid `pyproject.toml` for use with pixi by checking if it
-    /// contains a `[tool.pixi.project]` table.
+    /// contains a `[tool.pixi.project]` item.
     pub fn is_pixi(path: &PathBuf) -> bool {
         let source = fs::read_to_string(path).unwrap();
         Self::is_pixi_str(&source).unwrap_or(false)
     }
     /// Checks whether a string is a valid `pyproject.toml` for use with pixi by checking if it
-    /// contains a `[tool.pixi.project]` table.
+    /// contains a `[tool.pixi.project]` item.
     pub fn is_pixi_str(source: &str) -> Result<bool, Report> {
         match source.parse::<DocumentMut>().map_err(TomlError::from) {
             Err(e) => e.to_fancy("pyproject.toml", source),
-            Ok(doc) => Ok(doc["tool"]["pixi"]["project"].is_table()),
+            Ok(doc) => Ok(doc
+                .get("tool")
+                .and_then(|t| t.get("pixi"))
+                .and_then(|p| p.get("project"))
+                .is_some()),
         }
     }
 }
