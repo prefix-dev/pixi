@@ -5,10 +5,12 @@ description: The resulting environment of a pixi installation.
 ---
 
 # Environments
+
 Pixi is a tool to manage virtual environments.
 This document explains what an environment looks like and how to use it.
 
 ## Structure
+
 A pixi environment is located in the `.pixi/envs` directory of the project.
 This location is **not** configurable as it is a specific design decision to keep the environments in the project directory.
 This keeps your machine and your project clean and isolated from each other, and makes it easy to clean up after a project is done.
@@ -39,7 +41,9 @@ Pixi will always make sure the environment is in sync with the `pixi.lock` file.
 If this is not the case then all the commands that use the environment will automatically update the environment, e.g. `pixi run`, `pixi shell`.
 
 ### Cleaning up
+
 If you want to clean up the environments, you can simply delete the `.pixi/envs` directory, and pixi will recreate the environments when needed.
+
 ```shell
 # either:
 rm -rf .pixi/envs
@@ -50,20 +54,23 @@ rm -rf .pixi/envs/cuda
 ```
 
 ## Activation
+
 An environment is nothing more than a set of files that are installed into a certain location, that somewhat mimics a global system install.
 You need to activate the environment to use it.
 In the most simple sense that mean adding the `bin` directory of the environment to the `PATH` variable.
 But there is more to it in a conda environment, as it also sets some environment variables.
 
 To do the activation we have multiple options:
+
 - Use the `pixi shell` command to open a shell with the environment activated.
 - Use the `pixi shell-hook` command to print the command to activate the environment in your current shell.
 - Use the `pixi run` command to run a command in the environment.
 
 Where the `run` command is special as it runs its own cross-platform shell and has the ability to run tasks.
-More information about tasks can be found in the [tasks documentation](advanced/advanced_tasks.md).
+More information about tasks can be found in the [tasks documentation](advanced_tasks.md).
 
 Using the `pixi shell-hook` in pixi you would get the following output:
+
 ```shell
 export PATH="/home/user/development/pixi/.pixi/envs/default/bin:/home/user/.local/bin:/home/user/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/home/user/.pixi/bin"
 export CONDA_PREFIX="/home/user/development/pixi/.pixi/envs/default"
@@ -82,6 +89,7 @@ export PIXI_PROMPT="(pixi) "
 . "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/libglib_activate.sh"
 . "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/rust.sh"
 ```
+
 It sets the `PATH` and some more environment variables. But more importantly it also runs activation scripts that are presented by the installed packages.
 An example of this would be the [`libglib_activate.sh`](https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh) script.
 Thus, just adding the `bin` directory to the `PATH` is not enough.
@@ -99,7 +107,7 @@ $ (default) which python
 ```
 
 !!! warning
-    It is not encouraged to use the traditional `conda activate`-like activation, as deactivating the environment is not really possible. Use `pixi shell` instead.
+It is not encouraged to use the traditional `conda activate`-like activation, as deactivating the environment is not really possible. Use `pixi shell` instead.
 
 ### Using `pixi` with `direnv`
 
@@ -130,6 +138,7 @@ python not found
 ```
 
 ## Environment variables
+
 The following environment variables are set by pixi, when using the `pixi run`, `pixi shell`, or `pixi shell-hook` command:
 
 - `PIXI_PROJECT_ROOT`: The root directory of the project.
@@ -144,9 +153,10 @@ The following environment variables are set by pixi, when using the `pixi run`, 
 - `PATH`: We prepend the `bin` directory of the environment to the `PATH` variable, so you can use the tools installed in the environment directly.
 
 !!! note
-    Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
+Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
 
 ## Solving environments
+
 When you run a command that uses the environment, pixi will check if the environment is in sync with the `pixi.lock` file.
 If it is not, pixi will solve the environment and update it.
 This means that pixi will retrieve the best set of packages for the dependency requirements that you specified in the `pixi.toml` and will put the output of the solve step into the `pixi.lock` file.
@@ -166,6 +176,7 @@ For this building step, `pixi` requires to first install `python` in the (conda)
 This will always be slower than the pure conda solves. So for the best pixi experience you should stay within the `[dependencies]` section of the `pixi.toml` file.
 
 ## Caching
+
 Pixi caches the packages used in the environment.
 So if you have multiple projects that use the same packages, pixi will only download the packages once.
 
