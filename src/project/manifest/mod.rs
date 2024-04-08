@@ -11,9 +11,11 @@ mod system_requirements;
 mod target;
 mod validation;
 
+use crate::config::Config;
 use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
 use crate::project::manifest::python::PyPiPackageName;
+use crate::pypi_mapping::{ChannelName, MappingLocation, MappingSource};
 use crate::task::TaskName;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 pub use activation::Activation;
@@ -25,8 +27,10 @@ use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, NamedSource, WrapErr};
+use once_cell::sync::OnceCell;
 use pyproject::PyProjectManifest;
 pub use python::PyPiRequirement;
+use rattler_conda_types::Channel;
 use rattler_conda_types::{
     ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName,
     ParseStrictness::{Lenient, Strict},
@@ -35,6 +39,7 @@ use rattler_conda_types::{
 use serde::de::{DeserializeSeed, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_with::serde_as;
+use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::fmt;
 use std::hash::Hash;
@@ -50,6 +55,8 @@ use thiserror::Error;
 use toml_edit::DocumentMut;
 
 use self::error::TomlError;
+use url::ParseError;
+use url::Url;
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -472,6 +479,70 @@ impl Manifest {
             .values()
             .flat_map(|f| f.targets.targets())
             .any(|f| f.pypi_dependencies.is_some())
+    }
+
+    /// Returns what pypi mapping configuration we should use.
+    /// It can be a custom one  in following format : conda_name: pypi_name
+    /// Or we can use our self-hosted
+    pub fn pypi_name_mapping_source(&self) -> miette::Result<&'static MappingSource> {
+        static MAPPING_SOURCE: OnceCell<MappingSource> = OnceCell::new();
+
+        MAPPING_SOURCE.get_or_try_init(||
+            match self.parsed.project.conda_pypi_map.clone() {
+                Some(url) => {
+                    let config = Config::load_global();
+
+                    // transform user defined channels into rattler::Channel
+                    let channels = url
+                        .keys()
+                        .map(|channel_str| {
+                            Channel::from_str(channel_str, config.channel_config())
+                                .map(|channel| (channel_str, channel.canonical_name()))
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                        .into_diagnostic()?;
+
+                    let project_channels = self.parsed.project.channels
+                    .iter()
+                    .map(|pc| pc.channel.canonical_name())
+                    .collect::<HashSet<_>>();
+
+
+                    // Throw a warning for each missing channel from project table
+                    channels
+                    .iter()
+                    .for_each(|(_, channel_canonical_name)| {
+                        if !project_channels.contains(channel_canonical_name){
+                            tracing::warn!("Defined custom mapping channel {} is missing from project channels", channel_canonical_name);
+                        }
+                    });
+
+                    let mapping = channels
+                            .iter()
+                            .map(|(channel_str, channel)| {
+
+                                let mapping_location = url.get(*channel_str).unwrap();
+
+                                let url_or_path = match Url::parse(mapping_location) {
+                                    Ok(url) => MappingLocation::Url(url),
+                                    Err(err) => {
+                                        if let ParseError::RelativeUrlWithoutBase = err {
+                                            MappingLocation::Path(PathBuf::from(mapping_location))
+                                        } else {
+                                            miette::bail!("Could not convert {mapping_location} to neither URL or Path")
+                                        }
+                                    }
+                                };
+
+                                Ok((channel.clone(), url_or_path))
+                            })
+                            .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
+
+                    Ok(MappingSource::Custom { mapping })
+                },
+                None => Ok(MappingSource::Prefix),
+            }
+        )
     }
 
     /// Adds the specified channels to the manifest.

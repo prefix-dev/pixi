@@ -649,6 +649,32 @@
           "default": null,
           "description": "The url of the documentation of the project",
           "title": "Documentation"
+        },
+        "conda-pypi-map": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "format": "uri",
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The conda-pypi mapping configuration",
+          "title": "Conda-Pypi-Map"
         }
       },
       "required": [

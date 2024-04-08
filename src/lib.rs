@@ -21,7 +21,7 @@ mod pypi_marker_env;
 mod pypi_tags;
 mod uv_reporter;
 
-mod pypi_name_mapping;
+mod pypi_mapping;
 
 pub use activation::get_activation_env;
 pub use lock_file::load_lock_file;

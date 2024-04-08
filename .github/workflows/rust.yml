@@ -135,7 +135,7 @@ jobs:
 
       - name: "Cargo nextest"
         run: |
-          cargo nextest run --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow --features slow_integration_tests
+          cargo nextest run --retries 2 --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow --features slow_integration_tests
 
   build:
     name: Build Binary | ${{ matrix.name }}

@@ -45,10 +45,11 @@ class StrictBaseModel(BaseModel):
 ###################
 # Project section #
 ###################
+ChannelName = NonEmptyStr | AnyHttpUrl
+
+
 class ChannelInlineTable(StrictBaseModel):
-    channel: NonEmptyStr | AnyHttpUrl = Field(
-        description="The channel the packages needs to be fetched from"
-    )
+    channel: ChannelName = Field(description="The channel the packages needs to be fetched from")
     priority: int | None = Field(None, description="The priority of the channel")
 
 
@@ -83,6 +84,9 @@ class Project(StrictBaseModel):
     )
     documentation: AnyHttpUrl | None = Field(
         None, description="The url of the documentation of the project"
+    )
+    conda_pypi_map: dict[ChannelName, AnyHttpUrl | NonEmptyStr] | None = Field(
+        None, alias="conda-pypi-map", description="The conda-pypi mapping configuration"
     )
 
 
@@ -142,8 +146,9 @@ class PyPIPathRequirement(_PyPIRequirement):
         None,
         description="A path to a local source or wheel",
     )
-    editable: Optional[bool] = Field(None, description="If true the package will be installed as editable")
-
+    editable: Optional[bool] = Field(
+        None, description="If true the package will be installed as editable"
+    )
 
 
 class PyPIUrlRequirement(_PyPIRequirement):
