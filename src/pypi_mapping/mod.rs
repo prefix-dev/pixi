@@ -34,7 +34,7 @@ pub enum MappingSource {
 
 pub async fn amend_pypi_purls(
     client: reqwest::Client,
-    mapping_source: MappingSource,
+    mapping_source: &MappingSource,
     conda_packages: &mut [RepoDataRecord],
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
@@ -58,7 +58,7 @@ pub async fn amend_pypi_purls(
 
     match mapping_source {
         MappingSource::Custom { mapping } => {
-            custom_pypi_mapping::amend_pypi_purls(&client, &mapping, conda_packages, reporter)
+            custom_pypi_mapping::amend_pypi_purls(&client, mapping, conda_packages, reporter)
                 .await?;
         }
         MappingSource::Prefix => {

@@ -29,13 +29,18 @@ pub async fn fetch_custom_mapping(
                             .send()
                             .await
                             .into_diagnostic()
-                            .context("failed to download pypi mapping from custom location")?;
+                            .context(format!("failed to download pypi mapping from {} location", url.as_str()))?;
+
+                        if !response.status().is_success() {
+                            return Err(miette::miette!("Could not request mapping located at {:?}", url.as_str()));
+                        }
 
                         let mapping_by_name: HashMap<String, String> = response
                             .json()
                             .await
                             .into_diagnostic()
-                            .context("failed to parse pypi name mapping")?;
+                            .context(format!("failed to parse pypi name mapping located at {}. Please make sure that it's a valid json", url))
+                            ?;
 
                         mapping_url_to_name.insert(name.to_string(), mapping_by_name);
                     }
@@ -112,7 +117,6 @@ fn amend_pypi_purls_for_record(
     // If this package is a conda-forge package or user specified a custom channel mapping
     // we can try to guess the pypi name from the conda name
     if custom_mapping.contains_key(&record.channel) {
-        tracing::warn!("record channel is {}", record.channel);
         if let Some(mapped_channel) = custom_mapping.get(&record.channel) {
             if let Some(mapped_name) =
                 mapped_channel.get(record.package_record.name.as_normalized())
