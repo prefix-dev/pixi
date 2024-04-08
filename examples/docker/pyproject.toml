@@ -57,6 +57,6 @@ test = "pytest"
 
 [tool.pixi.environments]
 # Default environment, has features for running in development, testing and building
-default = { features = ["test", "dev", "build"] }
+default = { features = ["test", "dev", "build"], solve-group = "default" }
 # Leaner environment for use in production
-prod = { features = ["prod"] }
+prod = { features = ["prod"], solve-group = "default" }
