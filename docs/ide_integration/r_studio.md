@@ -30,9 +30,6 @@ Here is an example of a `pixi.toml` file that sets up an RStudio task:
 ```toml
 [project]
 name = "r"
-version = "0.1.0"
-description = "Add a short description here"
-authors = ["Wolf Vollprecht <wolf@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-64", "osx-arm64"]
 
