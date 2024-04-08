@@ -13,6 +13,7 @@ readme = "README.md"
 homepage = "https://project.com"
 repository = "https://github.com/author/project"
 documentation = "https://docs.project.com"
+conda-pypi-map = {"robostack" = "robostack_mapping.json", "conda-forge" = "https://repo.prefix.dev/conda-forge"}
 
 [dependencies]
 test = "*"
