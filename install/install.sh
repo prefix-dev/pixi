@@ -9,7 +9,7 @@ BIN_DIR="$PIXI_HOME/bin"
 
 REPO=prefix-dev/pixi
 PLATFORM=$(uname -s)
-ARCH=$(uname -m)
+ARCH=${PIXI_ARCH:-$(uname -m)}
 
 if [[ $PLATFORM == "Darwin" ]]; then
   PLATFORM="apple-darwin"
