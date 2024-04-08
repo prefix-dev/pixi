@@ -20,7 +20,7 @@ description: All pixi cli subcommands
 This command is used to create a new project.
 It initializes a `pixi.toml` file and also prepares a `.gitignore` to prevent the environment from being added to `git`.
 
-It also supports the [`pyproject.toml`](./advanced/pyproject_toml.md) file, if you have a `pyproject.toml` file in the directory where you run `pixi init`, it appends the pixi data to the `pyproject.toml` instead of a new `pixi.toml` file.
+It also supports the [`pyproject.toml`](../advanced/pyproject_toml.md) file, if you have a `pyproject.toml` file in the directory where you run `pixi init`, it appends the pixi data to the `pyproject.toml` instead of a new `pixi.toml` file.
 
 ##### Arguments
 
@@ -33,9 +33,9 @@ It also supports the [`pyproject.toml`](./advanced/pyproject_toml.md) file, if y
 - `--import <ENV_FILE> (-i)`: Import an existing conda environment file, e.g. `environment.yml`.
 
 !!! info "Importing an environment.yml"
-    When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
-    The `pixi.lock` will be created when you install the environment.
-    We don't support `git+` urls as dependencies for pip packages and for the `defaults` channel we use `main`, `r` and `msys2` as the default channels.
+When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
+The `pixi.lock` will be created when you install the environment.
+We don't support `git+` urls as dependencies for pip packages and for the `defaults` channel we use `main`, `r` and `msys2` as the default channels.
 
 ```shell
 pixi init myproject
@@ -50,7 +50,7 @@ pixi init --import environment.yml
 
 Adds dependencies to the [manifest file](configuration.md).
 It will only add if the package with its version constraint is able to work with rest of the dependencies in the project.
-[More info](features/multi_platform_configuration.md) on multi-platform configuration.
+[More info](../features/multi_platform_configuration.md) on multi-platform configuration.
 
 ##### Arguments
 
@@ -148,18 +148,19 @@ pixi run --environment cuda python
 ```
 
 !!! info
-    In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the run command.
-    Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
-    This is done so that the run commands can be run across all platforms.
+In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the run command.
+Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
+This is done so that the run commands can be run across all platforms.
 
 !!! tip "Cross environment tasks"
-    If you're using the `depends_on` feature of the `tasks`, the tasks will be run in the order you specified them.
-    The `depends_on` can be used cross environment, e.g. you have this `pixi.toml`:
+If you're using the `depends_on` feature of the `tasks`, the tasks will be run in the order you specified them.
+The `depends_on` can be used cross environment, e.g. you have this `pixi.toml`:
 
 ??? "pixi.toml"
-    ```toml
-    [tasks]
-    start = { cmd = "python start.py", depends_on = ["build"] }
+
+````toml
+[tasks]
+start = { cmd = "python start.py", depends_on = ["build"] }
 
     [feature.build.tasks]
     build = "cargo build"
@@ -204,7 +205,7 @@ pixi remove --platform osx-64 --build clang
 pixi remove --feature featurex clang
 pixi remove --feature featurex --platform osx-64 clang
 pixi remove --feature featurex --platform osx-64 --build clang
-```
+````
 
 ## `task`
 
@@ -222,9 +223,9 @@ Add a task to the [manifest file](configuration.md), use `--depends-on` to add t
 
 1. `<NAME>`: The name of the task.
 2. `<COMMAND>`: The command to run. This can be more than one word.
-!!! info
-    If you are using `$` for env variables they will be resolved before adding them to the task.
-    If you want to use `$` in the task you need to escape it with a `\`, e.g. `echo \$HOME`.
+   !!! info
+   If you are using `$` for env variables they will be resolved before adding them to the task.
+   If you want to use `$` in the task you need to escape it with a `\`, e.g. `echo \$HOME`.
 
 ##### Options
 
@@ -401,7 +402,7 @@ pixi tree --platform win-64
 ```
 
 !!! warning
-    Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
+Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
 
 Output will look like this, where direct packages in the [manifest file](configuration.md) will be green.
 Once a package has been displayed once, the tree won't continue to recurse through its dependencies (compare the first time `python` appears, vs the rest), and it will instead be marked with a star `(*)`.
@@ -588,7 +589,7 @@ pixi self-update --force
 ## `info`
 
 Shows helpful information about the pixi installation, cache directories, disk usage, and more.
-More information [here](advanced/explain_info_command.md).
+More information [here](../advanced/explain_info_command.md).
 
 ##### Options
 
@@ -623,7 +624,7 @@ This command is used to authenticate the user's access to remote hosts such as `
 Store authentication information for given host.
 
 !!! tip
-    The host is real hostname not a channel.
+The host is real hostname not a channel.
 
 ##### Arguments
 
@@ -662,9 +663,9 @@ Global is the main entry point for the part of pixi that executes on the
 global(system) level.
 
 !!! tip
-    Binaries and environments installed globally are stored in `~/.pixi`
-    by default, this can be changed by setting the `PIXI_HOME` environment
-    variable.
+Binaries and environments installed globally are stored in `~/.pixi`
+by default, this can be changed by setting the `PIXI_HOME` environment
+variable.
 
 ### `global install`
 

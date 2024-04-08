@@ -13,7 +13,7 @@ For more technical documentation check pixi on [crates.io](https://docs.rs/pixi/
 !!! tip
 We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
 For example, the `[project]` table becomes `[tool.pixi.project]`.
-There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](advanced/pyproject_toml.md) documentation for more information.
+There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../advanced/pyproject_toml.md) documentation for more information.
 
 ## The `project` table
 
@@ -164,8 +164,8 @@ conda-pypi-map = { "conda-forge" = "https://example.com/mapping", "https://repo.
 Tasks are a way to automate certain custom commands in your project.
 For example, a `lint` or `format` step.
 Tasks in a pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
-For more in-depth information, check the [Advanced tasks documentation](features/advanced_tasks.md).
-Pixi's tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](features/advanced_tasks.md#our-task-runner-deno_task_shell).
+For more in-depth information, check the [Advanced tasks documentation](../features/advanced_tasks.md).
+Pixi's tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../features/advanced_tasks.md#our-task-runner-deno_task_shell).
 
 ```toml
 [tasks]
@@ -541,7 +541,7 @@ clang = ">=16.0.6"
 ## The `feature` and `environments` tables
 
 The `feature` table allows you to define features that can be used to create different `[environments]`.
-The `[environments]` table allows you to define different environments. The design is explained in the [this design document](features/multi_environment.md).
+The `[environments]` table allows you to define different environments. The design is explained in the [this design document](../features/multi_environment.md).
 
 ```toml title="Simplest example"
 [feature.test.dependencies]
@@ -638,4 +638,4 @@ lint = ["lint"]
 
 ## Global configuration
 
-The global configuration options are documented in the [global configuration](advanced/global_configuration.md) section.
+The global configuration options are documented in the [global configuration](../advanced/global_configuration.md) section.

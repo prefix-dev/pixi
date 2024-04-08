@@ -120,8 +120,8 @@ nav:
       - Global Configuration: advanced/global_configuration.md
       - Pyproject.toml: advanced/pyproject_toml.md
   - Reference:
-      - Project Configuration: configuration.md
-      - CLI: cli.md
+      - Project Configuration: reference/configuration.md
+      - CLI: reference/cli.md
   - Misc:
       - Pixi vision: vision.md
       - Community: Community.md
