@@ -15,7 +15,7 @@ This prepares `pixi` for use in large projects with multiple use-cases, multiple
 
 ## Design Considerations
 
-There are a few things we wanted to keep in mind in the desin:
+There are a few things we wanted to keep in mind in the design:
 
 1. **User-friendliness**: Pixi is a user focussed tool that goes beyond developers. The feature should have good error reporting and helpful documentation from the start.
 2. **Keep it simple**: Not understanding the multiple environments feature shouldn't limit a user to use pixi. The feature should be "invisible" to the non-multi env use-cases.
