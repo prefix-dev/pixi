@@ -3466,7 +3466,8 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.19.2"
-source = "git+https://github.com/baszalmstra/rattler?rev=09db70ea97bf422260e23438e4bb120469e674d9#09db70ea97bf422260e23438e4bb120469e674d9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a15f14fa0e0fdf3fbacabd21d66a3d6b15af5c7c0cda2e0e29bd6605dec4569"
 dependencies = [
  "blake2",
  "digest",
@@ -3514,8 +3515,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.20.0"
-source = "git+https://github.com/baszalmstra/rattler?rev=09db70ea97bf422260e23438e4bb120469e674d9#09db70ea97bf422260e23438e4bb120469e674d9"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "235b836c1acac144780e2255d8b514fd89d3f7e5e865553f22ff0cc2a5744d21"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6271,38 +6273,3 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
-
-[[patch.unused]]
-name = "rattler"
-version = "0.19.5"
-source = "git+https://github.com/baszalmstra/rattler?rev=09db70ea97bf422260e23438e4bb120469e674d9#09db70ea97bf422260e23438e4bb120469e674d9"
-
-[[patch.unused]]
-name = "rattler_conda_types"
-version = "0.20.3"
-source = "git+https://github.com/baszalmstra/rattler?rev=09db70ea97bf422260e23438e4bb120469e674d9#09db70ea97bf422260e23438e4bb120469e674d9"
-
-[[patch.unused]]
-name = "rattler_lock"
-version = "0.21.0"
-source = "git+https://github.com/baszalmstra/rattler?rev=09db70ea97bf422260e23438e4bb120469e674d9#09db70ea97bf422260e23438e4bb120469e674d9"
-
-[[patch.unused]]
-name = "rattler_repodata_gateway"
-version = "0.19.4"
-source = "git+https://github.com/baszalmstra/rattler?rev=09db70ea97bf422260e23438e4bb120469e674d9#09db70ea97bf422260e23438e4bb120469e674d9"
-
-[[patch.unused]]
-name = "rattler_shell"
-version = "0.19.4"
-source = "git+https://github.com/baszalmstra/rattler?rev=09db70ea97bf422260e23438e4bb120469e674d9#09db70ea97bf422260e23438e4bb120469e674d9"
-
-[[patch.unused]]
-name = "rattler_solve"
-version = "0.20.3"
-source = "git+https://github.com/baszalmstra/rattler?rev=09db70ea97bf422260e23438e4bb120469e674d9#09db70ea97bf422260e23438e4bb120469e674d9"
-
-[[patch.unused]]
-name = "rattler_virtual_packages"
-version = "0.19.4"
-source = "git+https://github.com/baszalmstra/rattler?rev=09db70ea97bf422260e23438e4bb120469e674d9#09db70ea97bf422260e23438e4bb120469e674d9"
