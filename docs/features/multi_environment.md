@@ -352,12 +352,13 @@ pixi run test
 ??? tip "Multiple machines from one project"
     This is an example for an ML project that should be executable on a machine that supports `cuda` and `mlx`. It should also be executable on machines that don't support `cuda` or `mlx`, we use the `cpu` feature for this.
 
-    ````toml title="pixi.toml"
+    ```toml title="pixi.toml"
     [project]
     name = "my-ml-project"
     description = "A project that does ML stuff"
     authors = ["Your Name <your.name@gmail.com>"]
-    channels = ["conda-forge", "pytorch"] # All platforms that are supported by the project as the features will take the intersection of the platforms defined there.
+    channels = ["conda-forge", "pytorch"]
+    # All platforms that are supported by the project as the features will take the intersection of the platforms defined there.
     platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
     [tasks]
@@ -401,7 +402,7 @@ pixi run test
     cuda = ["cuda"]
     mlx = ["mlx"]
     default = ["cpu"]
-    ````
+    ```
 
     ```shell title="Running the project on a cuda machine"
     pixi run train-model --environment cuda
