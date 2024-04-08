@@ -107,7 +107,7 @@ $ (default) which python
 ```
 
 !!! warning
-It is not encouraged to use the traditional `conda activate`-like activation, as deactivating the environment is not really possible. Use `pixi shell` instead.
+    It is not encouraged to use the traditional `conda activate`-like activation, as deactivating the environment is not really possible. Use `pixi shell` instead.
 
 ### Using `pixi` with `direnv`
 
@@ -153,7 +153,7 @@ The following environment variables are set by pixi, when using the `pixi run`, 
 - `PATH`: We prepend the `bin` directory of the environment to the `PATH` variable, so you can use the tools installed in the environment directly.
 
 !!! note
-Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
+    Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
 
 ## Solving environments
 

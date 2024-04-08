@@ -10,8 +10,8 @@ description: All pixi cli subcommands
 - `--help (-h)` Shows help information, use `-h` to get the short version of the help.
 - `--version (-V)`: shows the version of pixi that is used.
 - `--quiet (-q)`: Decreases the amount of output.
-- `--color <COLOR>`: Whether the log needs to be colored [env: `PIXI_COLOR=`] [default: `auto`] [possible values: always, never, auto].
-  Pixi also honor the `FORCE_COLOR` and `NO_COLOR` environment variables.
+- `--color <COLOR>`: Whether the log needs to be colored [env: `PIXI_COLOR=`] [default: `auto`] [possible values: `always`, `never`, `auto`].
+  Pixi also honors the `FORCE_COLOR` and `NO_COLOR` environment variables.
   They both take precedence over `--color` and `PIXI_COLOR`.
 - `--no-progress`: Disables the progress bar.[env: `PIXI_NO_PROGRESS`] [default: `false`]
 
@@ -31,10 +31,11 @@ It also supports the [`pyproject.toml`](./advanced/pyproject_toml.md) file, if y
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--platform <PLATFORM> (-p)`: specify a platform that the project supports. (Allowed to be used more than once)
 - `--import <ENV_FILE> (-i)`: Import an existing conda environment file, e.g. `environment.yml`.
-  !!! info "Importing an environment.yml"
-  When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
-  The `pixi.lock` will be created when you install the environment.
-  We don't support `git+` urls as dependencies for pip packages and for the `defaults` channel we use `main`, `r` and `msys2` as the default channels.
+
+!!! info "Importing an environment.yml"
+    When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
+    The `pixi.lock` will be created when you install the environment.
+    We don't support `git+` urls as dependencies for pip packages and for the `defaults` channel we use `main`, `r` and `msys2` as the default channels.
 
 ```shell
 pixi init myproject
@@ -147,26 +148,28 @@ pixi run --environment cuda python
 ```
 
 !!! info
-In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the run command.
-Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
-This is done so that the run commands can be run across all platforms.
+    In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the run command.
+    Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
+    This is done so that the run commands can be run across all platforms.
 
 !!! tip "Cross environment tasks"
-If you're using the `depends_on` feature of the `tasks`, the tasks will be run in the order you specified them.
-The `depends_on` can be used cross environment, e.g. you have this `pixi.toml`:
+    If you're using the `depends_on` feature of the `tasks`, the tasks will be run in the order you specified them.
+    The `depends_on` can be used cross environment, e.g. you have this `pixi.toml`:
+
 ??? "pixi.toml"
-```toml
-[tasks]
-start = { cmd = "python start.py", depends_on = ["build"] }
+    ```toml
+    [tasks]
+    start = { cmd = "python start.py", depends_on = ["build"] }
 
-        [feature.build.tasks]
-        build = "cargo build"
-        [feature.build.dependencies]
-        rust = ">=1.74"
+            [feature.build.tasks]
+            build = "cargo build"
+            [feature.build.dependencies]
+            rust = ">=1.74"
 
-        [environments]
-        build = ["build"]
-        ```
+            [environments]
+            build = ["build"]
+    ```
+
     Then you're able to run the `build` from the `build` environment and `start` from the default environment.
     By only calling:
     ```shell
@@ -219,9 +222,9 @@ Add a task to the [manifest file](configuration.md), use `--depends-on` to add t
 
 1. `<NAME>`: The name of the task.
 2. `<COMMAND>`: The command to run. This can be more than one word.
-   !!! info
-   If you are using `$` for env variables they will be resolved before adding them to the task.
-   If you want to use `$` in the task you need to escape it with a `\`, e.g. `echo \$HOME`.
+!!! info
+    If you are using `$` for env variables they will be resolved before adding them to the task.
+    If you want to use `$` in the task you need to escape it with a `\`, e.g. `echo \$HOME`.
 
 ##### Options
 
@@ -398,7 +401,7 @@ pixi tree --platform win-64
 ```
 
 !!! warning
-Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
+    Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
 
 Output will look like this, where direct packages in the [manifest file](configuration.md) will be green.
 Once a package has been displayed once, the tree won't continue to recurse through its dependencies (compare the first time `python` appears, vs the rest), and it will instead be marked with a star `(*)`.
@@ -620,7 +623,7 @@ This command is used to authenticate the user's access to remote hosts such as `
 Store authentication information for given host.
 
 !!! tip
-The host is real hostname not a channel.
+    The host is real hostname not a channel.
 
 ##### Arguments
 
@@ -659,9 +662,9 @@ Global is the main entry point for the part of pixi that executes on the
 global(system) level.
 
 !!! tip
-Binaries and environments installed globally are stored in `~/.pixi`
-by default, this can be changed by setting the `PIXI_HOME` environment
-variable.
+    Binaries and environments installed globally are stored in `~/.pixi`
+    by default, this can be changed by setting the `PIXI_HOME` environment
+    variable.
 
 ### `global install`
 

@@ -201,9 +201,10 @@ pixi run test
 ## Real world example use cases
 
 ??? tip "Polarify test setup"
-In `polarify` they want to test multiple versions combined with multiple versions of polars.
-This is currently done by using a matrix in GitHub actions.
-This can be replaced by using multiple environments.
+
+    In `polarify` they want to test multiple versions combined with multiple versions of polars.
+    This is currently done by using a matrix in GitHub actions.
+    This can be replaced by using multiple environments.
 
     ```toml title="pixi.toml"
     [project]
@@ -289,10 +290,11 @@ This can be replaced by using multiple environments.
     ```
 
 ??? tip "Test vs Production example"
-This is an example of a project that has a `test` feature and `prod` environment.
-The `prod` environment is a production environment that contains the run dependencies.
-The `test` feature is a set of dependencies and tasks that we want to put on top of the previously solved `prod` environment.
-This is a common use case where we want to test the production environment with additional dependencies.
+
+    This is an example of a project that has a `test` feature and `prod` environment.
+    The `prod` environment is a production environment that contains the run dependencies.
+    The `test` feature is a set of dependencies and tasks that we want to put on top of the previously solved `prod` environment.
+    This is a common use case where we want to test the production environment with additional dependencies.
 
     ```toml title="pixi.toml"
     [project]
@@ -348,15 +350,15 @@ This is a common use case where we want to test the production environment with 
     ```
 
 ??? tip "Multiple machines from one project"
-This is an example for an ML project that should be executable on a machine that supports `cuda` and `mlx`. It should also be executable on machines that don't support `cuda` or `mlx`, we use the `cpu` feature for this.
+    This is an example for an ML project that should be executable on a machine that supports `cuda` and `mlx`. It should also be executable on machines that don't support `cuda` or `mlx`, we use the `cpu` feature for this.
 
-````toml title="pixi.toml"
-[project]
-name = "my-ml-project"
-description = "A project that does ML stuff"
-authors = ["Your Name <your.name@gmail.com>"]
-channels = ["conda-forge", "pytorch"] # All platforms that are supported by the project as the features will take the intersection of the platforms defined there.
-platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+    ````toml title="pixi.toml"
+    [project]
+    name = "my-ml-project"
+    description = "A project that does ML stuff"
+    authors = ["Your Name <your.name@gmail.com>"]
+    channels = ["conda-forge", "pytorch"] # All platforms that are supported by the project as the features will take the intersection of the platforms defined there.
+    platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
     [tasks]
     train-model = "python train.py"
@@ -399,7 +401,7 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
     cuda = ["cuda"]
     mlx = ["mlx"]
     default = ["cpu"]
-    ```
+    ````
 
     ```shell title="Running the project on a cuda machine"
     pixi run train-model --environment cuda
@@ -416,4 +418,3 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
     ```shell title="Running the project on a machine without cuda or mlx"
     pixi run train-model
     ```
-````

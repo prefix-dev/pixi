@@ -12,7 +12,7 @@ please keep these two in sync by making a PR in both
 You can use PyCharm with pixi environments by using the `conda` shim provided by the [pixi-pycharm](https://github.com/pavelzw/pixi-pycharm) package.
 
 !!!warning "Windows support"
-Windows is currently not supported, see [pavelzw/pixi-pycharm #5](https://github.com/pavelzw/pixi-pycharm/issues/5). Only Linux and macOS are supported.
+    Windows is currently not supported, see [pavelzw/pixi-pycharm #5](https://github.com/pavelzw/pixi-pycharm/issues/5). Only Linux and macOS are supported.
 
 ## How to use
 
@@ -25,9 +25,9 @@ pixi add pixi-pycharm
 This will ensure that the conda shim is installed in your project's environment.
 
 !!!tip "could not determine any available versions for pixi-pycharm on win-64"
-If you get the error `could not determine any available versions for pixi-pycharm on win-64` when running `pixi add pixi-pycharm` (even when you're not on Windows),
-this is because the package is not available on Windows and pixi tries to solve the environment for all platforms.
-If you still want to use it in your pixi project (and are on Linux/macOS), you can add the following to your `pixi.toml`:
+    If you get the error `could not determine any available versions for pixi-pycharm on win-64` when running `pixi add pixi-pycharm` (even when you're not on Windows),
+    this is because the package is not available on Windows and pixi tries to solve the environment for all platforms.
+    If you still want to use it in your pixi project (and are on Linux/macOS), you can add the following to your `pixi.toml`:
 
     ```toml
     [target.unix.dependencies]
@@ -49,8 +49,8 @@ This is an executable that tricks PyCharm into thinking it's the proper `conda` 
 Under the hood it redirects all calls to the corresponding `pixi` equivalent.
 
 !!!warning "Use the conda shim from this pixi project"
-Please make sure that this is the `conda` shim from this pixi project and not another one.
-If you use multiple pixi projects, you might have to adjust the path accordingly as PyCharm remembers the path to the conda executable.
+    Please make sure that this is the `conda` shim from this pixi project and not another one.
+    If you use multiple pixi projects, you might have to adjust the path accordingly as PyCharm remembers the path to the conda executable.
 
 ![Add Python Interpreter](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/add-conda-environment-light.png#only-light)
 ![Add Python Interpreter](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/add-conda-environment-dark.png#only-dark)
