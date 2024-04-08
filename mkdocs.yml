@@ -128,6 +128,15 @@ nav:
       - FAQ: FAQ.md
 
 plugins:
+  - redirects:
+      redirect_maps:
+        "advanced/advanced_tasks.md": "features/advanced_tasks.md"
+        "environment.md": "features/environment.md"
+        "design_proposals/multi_environment_proposal.md": "features/multi_environment.md"
+        "advanced/multi_platform_configuration.md": "features/multi_platform_configuration.md"
+        "cli.md": "reference/cli.md"
+        "configuration.md": "reference/configuration.md"
+
   - search
   - social
   - mike:
