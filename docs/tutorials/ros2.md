@@ -1,13 +1,14 @@
-# Tutorial: Develop a ROS2 package with `pixi`
+# Tutorial: Develop a ROS 2 package with `pixi`
 
-In this tutorial, we will show you how to develop a ROS2 package using `pixi`.
+In this tutorial, we will show you how to develop a ROS 2 package using `pixi`.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.
 
-The audience for this tutorial is developers who are familiar with ROS2 and how are interested to try pixi for their development workflow.
+The audience for this tutorial is developers who are familiar with ROS 2 and how are interested to try pixi for their development workflow.
 
 ## Prerequisites
 - You need to have `pixi` installed. If you haven't installed it yet, you can follow the instructions in the [installation guide](../index.md).
 The crux of this tutorial is to show you only need pixi!
+- On Windows, it's advised to enable Developer mode. Go to Settings -> Update & Security -> For developers -> Developer mode.
 
 If you're new to pixi, you can check out the [basic usage](../basic_usage.md) guide.
 This will teach you the basics of pixi project within 3 minutes.
@@ -45,7 +46,7 @@ The `channels` you added to the `init` command are repositories of packages, you
 The `platforms` are the systems you want to support, in pixi you can support multiple platforms, but you have to define which platforms, so pixi can test if those are supported for your dependencies.
 For the rest of the fields, you can fill them in as you see fit.
 
-## Add ROS2 dependencies
+## Add ROS 2 dependencies
 To use a pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
 
 Let's start with the `turtlesim` example
@@ -65,7 +66,7 @@ pixi run ros2 run turtlesim turtlesim_node
 pixi shell
 ros2 run turtlesim turtlesim_node
 ```
-Congratulations you have ROS2 running on your machine with pixi!
+Congratulations you have ROS 2 running on your machine with pixi!
 
 ??? example "Some more fun with the turtle"
     To control the turtle you can run the following command in a new terminal
