@@ -159,7 +159,7 @@ pixi self-update --version x.y.z
 
 !!! note
     If you used a package manager like `brew`, `mamba`, `conda`, `paru` to install `pixi`.
-    Then use their builtin update mechanism. e.g. `brew upgrade pixi`.
+    It's preferable to use the built-in update mechanism. e.g. `brew upgrade pixi`.
 
 ## Uninstall
 
