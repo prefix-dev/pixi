@@ -161,13 +161,13 @@ pixi run --environment cuda python
     [tasks]
     start = { cmd = "python start.py", depends_on = ["build"] }
 
-            [feature.build.tasks]
-            build = "cargo build"
-            [feature.build.dependencies]
-            rust = ">=1.74"
+    [feature.build.tasks]
+    build = "cargo build"
+    [feature.build.dependencies]
+    rust = ">=1.74"
 
-            [environments]
-            build = ["build"]
+    [environments]
+    build = ["build"]
     ```
 
     Then you're able to run the `build` from the `build` environment and `start` from the default environment.
