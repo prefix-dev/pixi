@@ -18,20 +18,35 @@ name = "docker-project"
 channels = ["conda-forge"]
 platforms = ["linux-64", "linux-aarch64", "osx-arm64"]
 
+# Dependencies used in the docker container
 [tool.pixi.dependencies]
 flask = ">=3.0.2,<3.1"
 gunicorn = ">=21.2.0,<21.3"
 
-# Built editable in development mode
 [tool.pixi.feature.dev.pypi-dependencies]
+# Built editable in development mode
 docker-project = { path = ".", editable = true }
-
-# Built non-editable in production mode
-[tool.pixi.feature.prod.pypi-dependencies]
-docker-project = { path = ".", editable = false }
 
 [tool.pixi.feature.test.dependencies]
 pytest = "*"
+
+# Used for installing into production, as a post-process step
+# we would like make better integration for this in the future.
+[tool.pixi.feature.prod.host-dependencies]
+pip = "*"
+
+# We use dependencies from conda to use it to build the wheel
+[tool.pixi.feature.build.dependencies]
+build = "*"
+flit-core = ">=3.2,<4"
+
+[tool.pixi.feature.build.tasks]
+# Create a wheel for installation
+build-wheel = "python -m build --no-isolation --wheel ."
+
+[tool.pixi.feature.prod.tasks]
+# Install into the production environment
+postinstall-production = "pip install --no-deps --disable-pip-version-check dist/docker_project-*.whl"
 
 [tool.pixi.tasks]
 dev = "flask --app docker_project:app run"
@@ -41,5 +56,7 @@ start = "gunicorn -w 4 docker_project:app --bind :8000"
 test = "pytest"
 
 [tool.pixi.environments]
-default = { features = ["test", "dev"] }
+# Default environment, has features for running in development, testing and building
+default = { features = ["test", "dev", "build"] }
+# Leaner environment for use in production
 prod = { features = ["prod"] }

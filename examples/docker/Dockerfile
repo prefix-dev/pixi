@@ -2,6 +2,8 @@ FROM ghcr.io/prefix-dev/pixi:0.18.0 AS build
 
 COPY . /app
 WORKDIR /app
+RUN pixi run build-wheel
+RUN pixi run postinstall-production
 RUN pixi shell-hook -e prod > /shell-hook
 RUN echo "gunicorn -w 4 docker_project:app --bind :8000" >> /shell-hook
 
