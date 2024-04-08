@@ -60,6 +60,11 @@ impl FeatureName {
         self.name().unwrap_or(consts::DEFAULT_FEATURE_NAME)
     }
 
+    /// Returns true if the feature is the default feature.
+    pub fn is_default(&self) -> bool {
+        matches!(self, FeatureName::Default)
+    }
+
     /// Returns a styled version of the feature name for display in the console.
     pub fn fancy_display(&self) -> console::StyledObject<&str> {
         console::style(self.as_str()).cyan()

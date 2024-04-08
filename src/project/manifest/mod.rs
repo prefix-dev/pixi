@@ -391,17 +391,23 @@ impl Manifest {
         name: &PyPiPackageName,
         requirement: &PyPiRequirement,
         platform: Option<Platform>,
+        feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Add the pypi dependency to the TOML document
         let project_root = self
             .path
             .parent()
             .expect("Path should always have a parent");
-        self.document
-            .add_pypi_dependency(name, requirement, platform, project_root)?;
+        self.document.add_pypi_dependency(
+            name,
+            requirement,
+            platform,
+            project_root,
+            feature_name,
+        )?;
 
         // Add the dependency to the manifest as well
-        self.target_mut(platform, None)
+        self.target_mut(platform, Some(feature_name))
             .add_pypi_dependency(name.clone(), requirement.clone());
 
         Ok(())

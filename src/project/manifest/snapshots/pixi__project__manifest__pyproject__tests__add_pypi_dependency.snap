@@ -19,3 +19,6 @@ expression: manifest.document.to_string()
 
         [tool.pixi.tasks]
         start = "python -m flask run --port=5050"
+
+[tool.pixi.feature.test.pypi-dependencies]
+pytest = ">=3.12"
