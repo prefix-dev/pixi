@@ -136,7 +136,7 @@ its [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try
 
     | Variable         | Environment variable | Description                                                                       | Default Value               |
     |------------------|----------------------|-----------------------------------------------------------------------------------|-----------------------------|
-    | `PixiVersion`    | `PIXI_VERSION`       |The version of pixi getting installed, can be used to up- or down-grade.         | `latest`                      |
+    | `PixiVersion`    | `PIXI_VERSION`       |The version of pixi getting installed, can be used to up- or down-grade.           | `latest`                      |
     | `PixiHome`       | `PIXI_HOME`          | The location of the installation.                                                 | `$Env:USERPROFILE\.pixi`    |
     | `NoPathUpdate`   |                      | If set, the `$PATH` will not be updated to add `pixi` to it.                      |                             |
 
