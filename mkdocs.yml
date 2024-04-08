@@ -95,36 +95,38 @@ extra:
   version:
     provider: mike
 
-
 nav:
-  - Getting Started : index.md
-  - Basic Usage: basic_usage.md
-  - Reference (CLI): cli.md
-  - Configuration: configuration.md
-  - Environment: environment.md
-  - Vision: vision.md
-  - IDE Integration:
-    - PyCharm: ide_integration/pycharm.md
-  - In-depth:
-    - Authentication: advanced/authentication.md
-    - Tasks: advanced/advanced_tasks.md
-    - Multi Platform: advanced/multi_platform_configuration.md
-    - Info Command: advanced/explain_info_command.md
-    - Channel Logic: advanced/channel_priority.md
-    - GitHub Actions: advanced/github_actions.md
-    - Global Configuration: advanced/global_configuration.md
-    - Pyproject.toml: advanced/pyproject_toml.md
+  - Getting Started:
+      - Installation: index.md
+      - Basic Usage: basic_usage.md
+      - IDE Integration:
+          - PyCharm: ide_integration/pycharm.md
+  - Tutorials:
+      - ROS 2: tutorials/ros2.md
   - Examples:
       - C++/Cmake: examples/cpp-sdl.md
       - OpenCV: examples/opencv.md
       - ROS 2: examples/ros2-nav2.md
-  - Tutorials:
-      - ROS 2: tutorials/ros2.md
-  - Design Proposals:
-      - Multi Env: design_proposals/multi_environment_proposal.md
-  - Community: Community.md
-  - FAQ: FAQ.md
-
+  - Project configuration:
+      - Pixi.toml: configuration.md
+      - Pyproject.toml: advanced/pyproject_toml.md
+  - Features:
+      - Environments: environment.md
+      - Tasks: advanced/advanced_tasks.md
+      - Multi Platform: advanced/multi_platform_configuration.md
+      - Multi Environment: advanced/multi_environment.md
+  - Advanced:
+      - Authentication: advanced/authentication.md
+      - Info Command: advanced/explain_info_command.md
+      - Channel Logic: advanced/channel_priority.md
+      - GitHub Actions: advanced/github_actions.md
+      - Global Configuration: advanced/global_configuration.md
+  - Reference:
+      - CLI: cli.md
+  - Misc:
+      - Pixi vision: vision.md
+      - Community: Community.md
+      - FAQ: FAQ.md
 
 plugins:
   - search
