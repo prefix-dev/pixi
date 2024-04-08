@@ -255,7 +255,7 @@ impl ManifestSource {
             }
             _ => self.add_dependency_helper(
                 name.as_source(),
-                (*requirement).clone().into(),
+                requirement.clone().into(),
                 consts::PYPI_DEPENDENCIES,
                 platform,
                 feature_name,
