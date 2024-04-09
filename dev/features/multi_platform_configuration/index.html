@@ -6,15 +6,17 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
+        <meta name="description" content="Learn how to set up for different platforms/OS's">
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/tutorials/ros2/">
+      
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/features/multi_platform_configuration/">
       
       
-        <link rel="prev" href="../../ide_integration/pycharm/">
+        <link rel="prev" href="../advanced_tasks/">
       
       
-        <link rel="next" href="../../examples/cpp-sdl/">
+        <link rel="next" href="../multi_environment/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -22,7 +24,7 @@
     
     
       
-        <title>ROS 2 - Pixi by prefix.dev</title>
+        <title>Multi platform config - Pixi by prefix.dev</title>
       
     
     
@@ -59,11 +61,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="ROS 2 - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Multi platform config - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="None" >
+        <meta  property="og:description"  content="Learn how to set up for different platforms/OS's" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/ros2.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/features/multi_platform_configuration.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -71,15 +73,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/tutorials/ros2/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/features/multi_platform_configuration/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="ROS 2 - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Multi platform config - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="None" >
+        <meta  name="twitter:description"  content="Learn how to set up for different platforms/OS's" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/ros2.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/features/multi_platform_configuration.png" >
       
     
     
@@ -102,7 +104,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tutorial-develop-a-ros-2-package-with-pixi" class="md-skip">
+        <a href="#platform-definition" class="md-skip">
           Skip to content
         </a>
       
@@ -141,7 +143,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              ROS 2
+              Multi platform config
             
           </span>
         </div>
@@ -445,8 +447,6 @@
       
   
   
-    
-  
   
   
     
@@ -458,11 +458,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -476,7 +476,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             Tutorials
@@ -487,30 +487,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    ROS 2
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../tutorials/ros2/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -519,104 +499,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    <span class="md-ellipsis">
-      Prerequisites
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#create-a-pixi-project" class="md-nav__link">
-    <span class="md-ellipsis">
-      Create a pixi project.
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#add-ros-2-dependencies" class="md-nav__link">
-    <span class="md-ellipsis">
-      Add ROS 2 dependencies
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#add-a-custom-python-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Add a custom Python node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#simplify-the-user-experience" class="md-nav__link">
-    <span class="md-ellipsis">
-      Simplify the user experience
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#build-a-c-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Build a C++ node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#frequently-asked-questions" class="md-nav__link">
-    <span class="md-ellipsis">
-      Frequently asked questions
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Frequently asked questions">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#what-happens-with-rosdep" class="md-nav__link">
-    <span class="md-ellipsis">
-      What happens with rosdep?
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -743,8 +625,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -754,11 +638,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
@@ -772,7 +656,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             Features
@@ -786,7 +670,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/environment/" class="md-nav__link">
+      <a href="../environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -807,7 +691,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/advanced_tasks/" class="md-nav__link">
+      <a href="../advanced_tasks/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -825,10 +709,28 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../features/multi_platform_configuration/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Multi Platform
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -837,6 +739,66 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#platform-definition" class="md-nav__link">
+    <span class="md-ellipsis">
+      Platform definition
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-specifier" class="md-nav__link">
+    <span class="md-ellipsis">
+      Target specifier
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Target specifier">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dependencies
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#activation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Activation
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -849,7 +811,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/multi_environment/" class="md-nav__link">
+      <a href="../multi_environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1259,8 +1221,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1269,73 +1229,37 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#platform-definition" class="md-nav__link">
     <span class="md-ellipsis">
-      Prerequisites
+      Platform definition
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#create-a-pixi-project" class="md-nav__link">
+  <a href="#target-specifier" class="md-nav__link">
     <span class="md-ellipsis">
-      Create a pixi project.
+      Target specifier
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#add-ros-2-dependencies" class="md-nav__link">
-    <span class="md-ellipsis">
-      Add ROS 2 dependencies
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#add-a-custom-python-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Add a custom Python node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#simplify-the-user-experience" class="md-nav__link">
-    <span class="md-ellipsis">
-      Simplify the user experience
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#build-a-c-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Build a C++ node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#frequently-asked-questions" class="md-nav__link">
-    <span class="md-ellipsis">
-      Frequently asked questions
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Frequently asked questions">
+    <nav class="md-nav" aria-label="Target specifier">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#what-happens-with-rosdep" class="md-nav__link">
+  <a href="#dependencies" class="md-nav__link">
     <span class="md-ellipsis">
-      What happens with rosdep?
+      Dependencies
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#activation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Activation
     </span>
   </a>
   
@@ -1361,7 +1285,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/tutorials/ros2.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/features/multi_platform_configuration.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1369,161 +1293,116 @@
   
 
 
-<h1 id="tutorial-develop-a-ros-2-package-with-pixi">Tutorial: Develop a ROS 2 package with <code>pixi</code><a class="headerlink" href="#tutorial-develop-a-ros-2-package-with-pixi" title="Permanent link">#</a></h1>
-<p>In this tutorial, we will show you how to develop a ROS 2 package using <code>pixi</code>.
-The tutorial is written to be executed from top to bottom, missing steps might result in errors.</p>
-<p>The audience for this tutorial is developers who are familiar with ROS 2 and how are interested to try pixi for their development workflow.</p>
-<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">#</a></h2>
-<ul>
-<li>You need to have <code>pixi</code> installed. If you haven't installed it yet, you can follow the instructions in the <a href="../../">installation guide</a>.
-  The crux of this tutorial is to show you only need pixi!</li>
-<li>On Windows, it's advised to enable Developer mode. Go to Settings -&gt; Update &amp; Security -&gt; For developers -&gt; Developer mode.</li>
-</ul>
-<p>If you're new to pixi, you can check out the <a href="../../basic_usage/">basic usage</a> guide.
-This will teach you the basics of pixi project within 3 minutes.</p>
-<h2 id="create-a-pixi-project">Create a pixi project.<a class="headerlink" href="#create-a-pixi-project" title="Permanent link">#</a></h2>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>my_ros2_project<span class="w"> </span>-c<span class="w"> </span>robostack-staging<span class="w"> </span>-c<span class="w"> </span>conda-forge
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>my_ros2_project
-</span></code></pre></div>
-<p>It should have created a directory structure like this:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>my_ros2_project
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├──<span class="w"> </span>.gitattributes
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>├──<span class="w"> </span>.gitignore
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>└──<span class="w"> </span>pixi.toml
-</span></code></pre></div>
-<p>The <code>pixi.toml</code> file is the manifest file for your project. It should look like this:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_ros2_project&quot;</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Add a short description here&quot;</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;User Name &lt;user.name@email.url&gt;&quot;</span><span class="p">]</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;robostack-staging&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Your project can support multiple platforms, the current platform will be automatically added.</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">]</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="k">[tasks]</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">[dependencies]</span>
-</span></code></pre></div>
-<p>The <code>channels</code> you added to the <code>init</code> command are repositories of packages, you can search in these repositories through our <a href="https://prefix.dev/channels">prefix.dev</a> website.
-The <code>platforms</code> are the systems you want to support, in pixi you can support multiple platforms, but you have to define which platforms, so pixi can test if those are supported for your dependencies.
-For the rest of the fields, you can fill them in as you see fit.</p>
-<h2 id="add-ros-2-dependencies">Add ROS 2 dependencies<a class="headerlink" href="#add-ros-2-dependencies" title="Permanent link">#</a></h2>
-<p>To use a pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.</p>
-<p>Let's start with the <code>turtlesim</code> example</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>ros-humble-desktop<span class="w"> </span>ros-humble-turtlesim
-</span></code></pre></div>
-<p>This will add the <code>ros-humble-desktop</code> and <code>ros-humble-turtlesim</code> packages to your manifest.
-Depending on your internet speed this might take a minute, as it will also install ROS in your project folder (<code>.pixi</code>).</p>
-<p>Now run the <code>turtlesim</code> example.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>turtlesim<span class="w"> </span>turtlesim_node
-</span></code></pre></div>
-<p><strong>Or</strong> use the <code>shell</code> command to start an activated environment in your terminal.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>shell
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>ros2<span class="w"> </span>run<span class="w"> </span>turtlesim<span class="w"> </span>turtlesim_node
-</span></code></pre></div>
-<p>Congratulations you have ROS 2 running on your machine with pixi!</p>
-<details class="example">
-<summary>Some more fun with the turtle</summary>
-<p>To control the turtle you can run the following command in a new terminal
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">cd</span><span class="w"> </span>my_ros2_project
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>turtlesim<span class="w"> </span>turtle_teleop_key
-</span></code></pre></div></p>
-</details>
-<p>Now you can control the turtle with the arrow keys on your keyboard.
-<img alt="Turtlesim control" src="https://private-user-images.githubusercontent.com/12893423/319520632-c80c5054-3335-49c7-9671-92bd8702708b.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MTIyMjI2MDQsIm5iZiI6MTcxMjIyMjMwNCwicGF0aCI6Ii8xMjg5MzQyMy8zMTk1MjA2MzItYzgwYzUwNTQtMzMzNS00OWM3LTk2NzEtOTJiZDg3MDI3MDhiLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDA0MDQlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwNDA0VDA5MTgyNFomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWI1MjU0ZGY0ZjQ1OTg4ZjYyNTE1Y2I2MmYwNWU5YzQwYzFlNGExMzkyNDhjOGY4N2I4NDQ5ZTA3MzI4MzhiNDAmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.4dD3FdMZ7VBRPTLcnSPlWsSWkx4pgjKq24NEL-TnW0g" /></p>
-<h2 id="add-a-custom-python-node">Add a custom Python node<a class="headerlink" href="#add-a-custom-python-node" title="Permanent link">#</a></h2>
-<p>As ros works with custom nodes, let's add a custom node to our project.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>pkg<span class="w"> </span>create<span class="w"> </span>--build-type<span class="w"> </span>ament_python<span class="w"> </span>--destination-directory<span class="w"> </span>src<span class="w"> </span>--node-name<span class="w"> </span>my_node<span class="w"> </span>my_package
-</span></code></pre></div>
-<p>To build the package we need some more dependencies:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>colcon-common-extensions<span class="w"> </span><span class="s2">&quot;setuptools&lt;=58.2.0&quot;</span>
-</span></code></pre></div>
-<p>Add the created initialization script for the ros workspace to your manifest file.</p>
-<p>Then run the build command</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>colcon<span class="w"> </span>build
-</span></code></pre></div>
-<p>This will create a sourceable script in the <code>install</code> folder, you can source this script through an activation script to use your custom node.
-Normally this would be the script you add to your <code>.bashrc</code> but now you tell pixi to use it.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux &amp; macOS</label><label for="__tabbed_1_2">Windows</label></div>
+  <h1>Multi Platform</h1>
+
+<p><a href="../../vision/">Pixi's vision</a> includes being supported on all major platforms. Sometimes that needs some extra configuration to work well.
+On this page, you will learn what you can configure to align better with the platform you are making your application for.</p>
+<p>Here is an example manifest file that highlights some of the features:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><code>pixi.toml</code></label><label for="__tabbed_1_2"><code>pyproject.toml</code></label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[activation]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.sh&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[project]</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># Default project info....</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># A list of platforms you are supporting with your package.</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">[dependencies]</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.8&quot;</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="k">[target.win-64.dependencies]</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># Overwrite the needed python version only on win-64</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.7&quot;</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">[activation]</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.sh&quot;</span><span class="p">]</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="k">[target.win-64.activation]</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="c1"># Overwrite activation scripts only for windows</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.bat&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[activation]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.bat&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[tool.pixi.project]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Default project info....</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># A list of platforms you are supporting with your package.</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">[tool.pixi.dependencies]</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.8&quot;</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="k">[tool.pixi.target.win-64.dependencies]</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Overwrite the needed python version only on win-64</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;~=3.7.0&quot;</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="k">[tool.pixi.activation]</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.sh&quot;</span><span class="p">]</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="k">[tool.pixi.target.win-64.activation]</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="c1"># Overwrite activation scripts only for windows</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.bat&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 </div>
 </div>
 </div>
-<details class="tip">
-<summary>Multi platform support</summary>
-<p>You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project.
-Use the following example to add support for both Linux and Windows, using the <a href="../../features/multi_platform_configuration/#activation">target</a> syntax.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[project]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="k">[activation]</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.sh&quot;</span><span class="p">]</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="k">[target.win-64.activation]</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.bat&quot;</span><span class="p">]</span>
+<h2 id="platform-definition">Platform definition<a class="headerlink" href="#platform-definition" title="Permanent link">#</a></h2>
+<p>The <code>project.platforms</code> defines which platforms your project supports.
+When multiple platforms are defined, pixi determines which dependencies to install for each platform individually.
+All of this is stored in a lockfile.</p>
+<p>Running <code>pixi install</code> on a platform that is not configured will warn the user that it is not setup for that platform:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>❯<span class="w"> </span>pixi<span class="w"> </span>install
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>×<span class="w"> </span>the<span class="w"> </span>project<span class="w"> </span>is<span class="w"> </span>not<span class="w"> </span>configured<span class="w"> </span><span class="k">for</span><span class="w"> </span>your<span class="w"> </span>current<span class="w"> </span>platform
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">   </span>╭─<span class="o">[</span>pixi.toml:6:1<span class="o">]</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w"> </span><span class="m">6</span><span class="w"> </span>│<span class="w"> </span><span class="nv">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="o">]</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w"> </span><span class="m">7</span><span class="w"> </span>│<span class="w"> </span><span class="nv">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">[</span><span class="s2">&quot;osx-64&quot;</span>,<span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span>,<span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="o">]</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">   </span>·<span class="w">             </span>────────────────┬────────────────
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">   </span>·<span class="w">                             </span>╰──<span class="w"> </span>add<span class="w"> </span><span class="s1">&#39;linux-64&#39;</span><span class="w"> </span>here
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w"> </span><span class="m">8</span><span class="w"> </span>│
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">   </span>╰────
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span>help:<span class="w"> </span>The<span class="w"> </span>project<span class="w"> </span>needs<span class="w"> </span>to<span class="w"> </span>be<span class="w"> </span>configured<span class="w"> </span>to<span class="w"> </span>support<span class="w"> </span>your<span class="w"> </span>platform<span class="w"> </span><span class="o">(</span>linux-64<span class="o">)</span>.
 </span></code></pre></div>
-</details>
-<p>Now you can run your custom node with the following command</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>my_package<span class="w"> </span>my_node
+<h2 id="target-specifier">Target specifier<a class="headerlink" href="#target-specifier" title="Permanent link">#</a></h2>
+<p>With the target specifier, you can overwrite the original configuration specifically for a single platform.
+If you are targeting a specific platform in your target specifier that was not specified in your <code>project.platforms</code> then pixi will throw an error.</p>
+<h3 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">#</a></h3>
+<p>It might happen that you want to install a certain dependency only on a specific platform, or you might want to use a different version on different platforms.</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[dependencies]</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.8&quot;</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">[target.win-64.dependencies]</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">msmpi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.8&quot;</span>
 </span></code></pre></div>
-<h2 id="simplify-the-user-experience">Simplify the user experience<a class="headerlink" href="#simplify-the-user-experience" title="Permanent link">#</a></h2>
-<p>In <code>pixi</code> we have a feature called <code>tasks</code>, this allows you to define a task in your manifest file and run it with a simple command.
-Let's add a task to run the <code>turtlesim</code> example and the custom node.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>sim<span class="w"> </span><span class="s2">&quot;ros2 run turtlesim turtlesim_node&quot;</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>build<span class="w"> </span><span class="s2">&quot;colcon build --symlink-install&quot;</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>hello<span class="w"> </span><span class="s2">&quot;ros2 run my_package my_node&quot;</span>
+<p>In the above example, we specify that we depend on <code>msmpi</code> only on Windows.
+We also specifically want <code>python</code> on <code>3.8</code> when installing on Windows.
+This will overwrite the dependencies from the generic set of dependencies.
+This will not touch any of the other platforms.</p>
+<p>You can use pixi's cli to add these dependencies to the manifest file.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--platform<span class="w"> </span>win-64<span class="w"> </span>posix
 </span></code></pre></div>
-<p>Now you can run these task by simply running</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>sim
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>build
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>hello
+<p>This also works for the <code>host</code> and <code>build</code> dependencies.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--host<span class="w"> </span>--platform<span class="w"> </span>win-64<span class="w"> </span>posix
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>--build<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>clang
 </span></code></pre></div>
-<details class="tip" open="open">
-<summary>Advanced task usage</summary>
-<p>Tasks are a powerful feature in pixi.</p>
-<ul>
-<li>You can add <a href="../../features/advanced_tasks/#depends-on"><code>depends_on</code></a> to the tasks to create a task chain.</li>
-<li>You can add <a href="../../features/advanced_tasks/#working-directory"><code>cwd</code></a> to the tasks to run the task in a different directory from the root of the project.</li>
-<li>You can add <a href="../../features/advanced_tasks/#caching"><code>inputs</code> and <code>outputs</code></a> to the tasks to create a task that only runs when the inputs are changed.</li>
-<li>You can use the <a href="../../reference/configuration/#the-target-table"><code>target</code></a> syntax to run specific tasks on specific machines.</li>
-</ul>
-</details>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[tasks]</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">sim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ros2 run turtlesim turtlesim_node&quot;</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;colcon build --symlink-install&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;src&quot;</span><span class="p">]}</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">hello</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ros2 run my_package my_node&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">depends_on</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;build&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+<p>Which results in this.</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[target.win-64.host-dependencies]</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">posix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.0.*&quot;</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">[target.osx-64.build-dependencies]</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">clang</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;16.0.6.*&quot;</span>
 </span></code></pre></div>
-<h2 id="build-a-c-node">Build a C++ node<a class="headerlink" href="#build-a-c-node" title="Permanent link">#</a></h2>
-<p>To build a C++ node you need to add the <code>ament_cmake</code> and some other build dependencies to your manifest file.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>ros-humble-ament-cmake-auto<span class="w"> </span>compilers<span class="w"> </span>pkg-config<span class="w"> </span>cmake<span class="w"> </span>ninja
+<h3 id="activation">Activation<a class="headerlink" href="#activation" title="Permanent link">#</a></h3>
+<p>Pixi's vision is to enable completely cross-platform projects, but you often need to run tools that are not built by your projects.
+Generated activation scripts are often in this category, default scripts in unix are <code>bash</code> and for windows they are <code>bat</code></p>
+<p>To deal with this, you can define your activation scripts using the target definition.</p>
+<p><div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[activation]</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.sh&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;local_setup.bash&quot;</span><span class="p">]</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">[target.win-64.activation]</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.bat&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;local_setup.bat&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-<p>Now you can create a C++ node with the following command</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>pkg<span class="w"> </span>create<span class="w"> </span>--build-type<span class="w"> </span>ament_cmake<span class="w"> </span>--destination-directory<span class="w"> </span>src<span class="w"> </span>--node-name<span class="w"> </span>my_cpp_node<span class="w"> </span>my_cpp_package
-</span></code></pre></div>
-<p>Now you can build it again and run it with the following commands</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Passing arguments to the build command to build with Ninja, add them to the manifest if you want to default to ninja.</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>build<span class="w"> </span>--cmake-args<span class="w"> </span>-G<span class="w"> </span>Ninja
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>my_cpp_package<span class="w"> </span>my_cpp_node
-</span></code></pre></div>
-<details class="tip">
-<summary>Tip</summary>
-<p>Add the cpp task to the manifest file to simplify the user experience.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>hello-cpp<span class="w"> </span><span class="s2">&quot;ros2 run my_cpp_package my_cpp_node&quot;</span>
-</span></code></pre></div>
-</details>
-<h2 id="frequently-asked-questions">Frequently asked questions<a class="headerlink" href="#frequently-asked-questions" title="Permanent link">#</a></h2>
-<h3 id="what-happens-with-rosdep">What happens with <code>rosdep</code>?<a class="headerlink" href="#what-happens-with-rosdep" title="Permanent link">#</a></h3>
-<p>Currently, we don't support <code>rosdep</code> in a pixi environment, so you'll have to add the packages using <code>pixi add</code>.
-<code>rosdep</code> will call <code>conda install</code> which isn't supported in a pixi environment.</p>
+When this project is run on <code>win-64</code> it will only execute the target scripts not the scripts specified in the default <code>activation.scripts</code></p>
 
 
 
@@ -1595,9 +1474,9 @@ Let's add a task to run the <code>turtlesim</code> example and the custom node.<
           
             
             <a
-              href="../../ide_integration/pycharm/"
+              href="../advanced_tasks/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: PyCharm"
+              aria-label="Previous: Tasks"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1608,7 +1487,7 @@ Let's add a task to run the <code>turtlesim</code> example and the custom node.<
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  PyCharm
+                  Tasks
                 </div>
               </div>
             </a>
@@ -1618,16 +1497,16 @@ Let's add a task to run the <code>turtlesim</code> example and the custom node.<
           
             
             <a
-              href="../../examples/cpp-sdl/"
+              href="../multi_environment/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: C++/Cmake"
+              aria-label="Next: Multi Environment"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  C++/Cmake
+                  Multi Environment
                 </div>
               </div>
               <div class="md-footer__button md-icon">

@@ -6,15 +6,17 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
+        <meta name="description" content="Learn how to interact with pixi tasks">
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/tutorials/ros2/">
+      
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/features/advanced_tasks/">
       
       
-        <link rel="prev" href="../../ide_integration/pycharm/">
+        <link rel="prev" href="../environment/">
       
       
-        <link rel="next" href="../../examples/cpp-sdl/">
+        <link rel="next" href="../multi_platform_configuration/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -22,7 +24,7 @@
     
     
       
-        <title>ROS 2 - Pixi by prefix.dev</title>
+        <title>Advanced tasks - Pixi by prefix.dev</title>
       
     
     
@@ -59,11 +61,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="ROS 2 - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Advanced tasks - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="None" >
+        <meta  property="og:description"  content="Learn how to interact with pixi tasks" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/ros2.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/features/advanced_tasks.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -71,15 +73,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/tutorials/ros2/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/features/advanced_tasks/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="ROS 2 - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Advanced tasks - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="None" >
+        <meta  name="twitter:description"  content="Learn how to interact with pixi tasks" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/ros2.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/features/advanced_tasks.png" >
       
     
     
@@ -102,7 +104,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tutorial-develop-a-ros-2-package-with-pixi" class="md-skip">
+        <a href="#depends-on" class="md-skip">
           Skip to content
         </a>
       
@@ -141,7 +143,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              ROS 2
+              Advanced tasks
             
           </span>
         </div>
@@ -445,8 +447,6 @@
       
   
   
-    
-  
   
   
     
@@ -458,11 +458,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -476,7 +476,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             Tutorials
@@ -487,30 +487,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    ROS 2
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../tutorials/ros2/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -519,104 +499,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    <span class="md-ellipsis">
-      Prerequisites
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#create-a-pixi-project" class="md-nav__link">
-    <span class="md-ellipsis">
-      Create a pixi project.
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#add-ros-2-dependencies" class="md-nav__link">
-    <span class="md-ellipsis">
-      Add ROS 2 dependencies
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#add-a-custom-python-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Add a custom Python node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#simplify-the-user-experience" class="md-nav__link">
-    <span class="md-ellipsis">
-      Simplify the user experience
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#build-a-c-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Build a C++ node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#frequently-asked-questions" class="md-nav__link">
-    <span class="md-ellipsis">
-      Frequently asked questions
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Frequently asked questions">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#what-happens-with-rosdep" class="md-nav__link">
-    <span class="md-ellipsis">
-      What happens with rosdep?
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -743,8 +625,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -754,11 +638,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
@@ -772,7 +656,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             Features
@@ -786,7 +670,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/environment/" class="md-nav__link">
+      <a href="../environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -804,10 +688,28 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../features/advanced_tasks/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Tasks
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -816,6 +718,84 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#depends-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      Depends on
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#working-directory" class="md-nav__link">
+    <span class="md-ellipsis">
+      Working directory
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      Caching
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#our-task-runner-deno_task_shell" class="md-nav__link">
+    <span class="md-ellipsis">
+      Our task runner: deno_task_shell
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Our task runner: deno_task_shell">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#built-in-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      Built-in commands
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      Syntax
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -828,7 +808,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/multi_platform_configuration/" class="md-nav__link">
+      <a href="../multi_platform_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -849,7 +829,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/multi_environment/" class="md-nav__link">
+      <a href="../multi_environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1259,8 +1239,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1269,73 +1247,55 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#depends-on" class="md-nav__link">
     <span class="md-ellipsis">
-      Prerequisites
+      Depends on
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#create-a-pixi-project" class="md-nav__link">
+  <a href="#working-directory" class="md-nav__link">
     <span class="md-ellipsis">
-      Create a pixi project.
+      Working directory
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#add-ros-2-dependencies" class="md-nav__link">
+  <a href="#caching" class="md-nav__link">
     <span class="md-ellipsis">
-      Add ROS 2 dependencies
+      Caching
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#add-a-custom-python-node" class="md-nav__link">
+  <a href="#our-task-runner-deno_task_shell" class="md-nav__link">
     <span class="md-ellipsis">
-      Add a custom Python node
+      Our task runner: deno_task_shell
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#simplify-the-user-experience" class="md-nav__link">
-    <span class="md-ellipsis">
-      Simplify the user experience
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#build-a-c-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Build a C++ node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#frequently-asked-questions" class="md-nav__link">
-    <span class="md-ellipsis">
-      Frequently asked questions
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Frequently asked questions">
+    <nav class="md-nav" aria-label="Our task runner: deno_task_shell">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#what-happens-with-rosdep" class="md-nav__link">
+  <a href="#built-in-commands" class="md-nav__link">
     <span class="md-ellipsis">
-      What happens with rosdep?
+      Built-in commands
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      Syntax
     </span>
   </a>
   
@@ -1361,7 +1321,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/tutorials/ros2.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/features/advanced_tasks.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1369,161 +1329,189 @@
   
 
 
-<h1 id="tutorial-develop-a-ros-2-package-with-pixi">Tutorial: Develop a ROS 2 package with <code>pixi</code><a class="headerlink" href="#tutorial-develop-a-ros-2-package-with-pixi" title="Permanent link">#</a></h1>
-<p>In this tutorial, we will show you how to develop a ROS 2 package using <code>pixi</code>.
-The tutorial is written to be executed from top to bottom, missing steps might result in errors.</p>
-<p>The audience for this tutorial is developers who are familiar with ROS 2 and how are interested to try pixi for their development workflow.</p>
-<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">#</a></h2>
+  <h1>Tasks</h1>
+
+<p>When building a package, you often have to do more than just run the code.
+Steps like formatting, linting, compiling, testing, benchmarking, etc. are often part of a project.
+With pixi tasks, this should become much easier to do.</p>
+<p>Here are some quick examples</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># Commands as lists so you can also add documentation in between.</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">configure</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="s2">&quot;cmake&quot;</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="c1"># Use the cross-platform Ninja generator</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="s2">&quot;-G&quot;</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="s2">&quot;Ninja&quot;</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span><span class="c1"># The source is in the root directory</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span><span class="s2">&quot;-S&quot;</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="s2">&quot;.&quot;</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="c1"># We wanna build in the .build directory</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span><span class="s2">&quot;-B&quot;</span><span class="p">,</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">    </span><span class="s2">&quot;.build&quot;</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="c1"># Depend on other tasks</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;ninja&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-C&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;.build&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">depends_on</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;configure&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="c1"># Using environment variables</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="n">run</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python main.py $PIXI_PROJECT_ROOT&quot;</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="n">set</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;export VAR=hello &amp;&amp; echo $VAR&quot;</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="c1"># Cross platform file operations</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="n">copy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cp pixi.toml pixi_backup.toml&quot;</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="n">clean</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;rm pixi_backup.toml&quot;</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="n">move</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mv pixi.toml backup.toml&quot;</span>
+</span></code></pre></div>
+<h2 id="depends-on">Depends on<a class="headerlink" href="#depends-on" title="Permanent link">#</a></h2>
+<p>Just like packages can depend on other packages, our tasks can depend on other tasks.
+This allows for complete pipelines to be run with a single command.</p>
+<p>An obvious example is <strong>compiling</strong> before <strong>running</strong> an application.</p>
+<p>Checkout our <a href="https://github.com/prefix-dev/pixi/tree/main/examples/cpp-sdl"><code>cpp_sdl</code> example</a> for a running example.
+In that package we have some tasks that depend on each other, so we can assure that when you run <code>pixi run start</code> everything is set up as expected.</p>
+<div class="language-fish highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi task add configure <span class="s2">&quot;cmake -G Ninja -S . -B .build&quot;</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pixi task add build <span class="s2">&quot;ninja -C .build&quot;</span> --depends-on configure
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pixi task add start <span class="s2">&quot;.build/bin/sdl_example&quot;</span> --depends-on build
+</span></code></pre></div>
+<p>Results in the following lines added to the <code>pixi.toml</code></p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># Configures CMake</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">configure</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cmake -G Ninja -S . -B .build&quot;</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Build the executable but make sure CMake is configured first.</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ninja -C .build&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">depends_on</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;configure&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># Start the built executable</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.build/bin/sdl_example&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">depends_on</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;build&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>start
+</span></code></pre></div>
+<p>The tasks will be executed after each other:</p>
 <ul>
-<li>You need to have <code>pixi</code> installed. If you haven't installed it yet, you can follow the instructions in the <a href="../../">installation guide</a>.
-  The crux of this tutorial is to show you only need pixi!</li>
-<li>On Windows, it's advised to enable Developer mode. Go to Settings -&gt; Update &amp; Security -&gt; For developers -&gt; Developer mode.</li>
+<li>First <code>configure</code> because it has no dependencies.</li>
+<li>Then <code>build</code> as it only depends on <code>configure</code>.</li>
+<li>Then <code>start</code> as all it dependencies are run.</li>
 </ul>
-<p>If you're new to pixi, you can check out the <a href="../../basic_usage/">basic usage</a> guide.
-This will teach you the basics of pixi project within 3 minutes.</p>
-<h2 id="create-a-pixi-project">Create a pixi project.<a class="headerlink" href="#create-a-pixi-project" title="Permanent link">#</a></h2>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>my_ros2_project<span class="w"> </span>-c<span class="w"> </span>robostack-staging<span class="w"> </span>-c<span class="w"> </span>conda-forge
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>my_ros2_project
+<p>If one of the commands fails (exit with non-zero code.) it will stop and the next one will not be started.</p>
+<p>With this logic, you can also create aliases as you don't have to specify any command in a task.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>fmt<span class="w"> </span>ruff
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>lint<span class="w"> </span>pylint
 </span></code></pre></div>
-<p>It should have created a directory structure like this:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>my_ros2_project
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├──<span class="w"> </span>.gitattributes
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>├──<span class="w"> </span>.gitignore
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>└──<span class="w"> </span>pixi.toml
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>task<span class="w"> </span><span class="nb">alias</span><span class="w"> </span>style<span class="w"> </span>fmt<span class="w"> </span>lint
 </span></code></pre></div>
-<p>The <code>pixi.toml</code> file is the manifest file for your project. It should look like this:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_ros2_project&quot;</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Add a short description here&quot;</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;User Name &lt;user.name@email.url&gt;&quot;</span><span class="p">]</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;robostack-staging&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Your project can support multiple platforms, the current platform will be automatically added.</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">]</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="k">[tasks]</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">[dependencies]</span>
+<p>Results in the following <code>pixi.toml</code>.</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">fmt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ruff&quot;</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">lint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pylint&quot;</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">depends_on</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;fmt&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;lint&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>The <code>channels</code> you added to the <code>init</code> command are repositories of packages, you can search in these repositories through our <a href="https://prefix.dev/channels">prefix.dev</a> website.
-The <code>platforms</code> are the systems you want to support, in pixi you can support multiple platforms, but you have to define which platforms, so pixi can test if those are supported for your dependencies.
-For the rest of the fields, you can fill them in as you see fit.</p>
-<h2 id="add-ros-2-dependencies">Add ROS 2 dependencies<a class="headerlink" href="#add-ros-2-dependencies" title="Permanent link">#</a></h2>
-<p>To use a pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.</p>
-<p>Let's start with the <code>turtlesim</code> example</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>ros-humble-desktop<span class="w"> </span>ros-humble-turtlesim
+<p>Now run both tools with one command.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>style
 </span></code></pre></div>
-<p>This will add the <code>ros-humble-desktop</code> and <code>ros-humble-turtlesim</code> packages to your manifest.
-Depending on your internet speed this might take a minute, as it will also install ROS in your project folder (<code>.pixi</code>).</p>
-<p>Now run the <code>turtlesim</code> example.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>turtlesim<span class="w"> </span>turtlesim_node
+<h2 id="working-directory">Working directory<a class="headerlink" href="#working-directory" title="Permanent link">#</a></h2>
+<p>Pixi tasks support the definition of a working directory.</p>
+<p><code>cwd</code>" stands for Current Working Directory.
+The directory is relative to the pixi package root, where the <code>pixi.toml</code> file is located.</p>
+<p>Consider a pixi project structured as follows:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>├──<span class="w"> </span>pixi.toml
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>└──<span class="w"> </span>scripts
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>└──<span class="w"> </span>bar.py
 </span></code></pre></div>
-<p><strong>Or</strong> use the <code>shell</code> command to start an activated environment in your terminal.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>shell
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>ros2<span class="w"> </span>run<span class="w"> </span>turtlesim<span class="w"> </span>turtlesim_node
+<p>To add a task to run the <code>bar.py</code> file, use:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>bar<span class="w"> </span><span class="s2">&quot;python bar.py&quot;</span><span class="w"> </span>--cwd<span class="w"> </span>scripts
 </span></code></pre></div>
-<p>Congratulations you have ROS 2 running on your machine with pixi!</p>
-<details class="example">
-<summary>Some more fun with the turtle</summary>
-<p>To control the turtle you can run the following command in a new terminal
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">cd</span><span class="w"> </span>my_ros2_project
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>turtlesim<span class="w"> </span>turtle_teleop_key
-</span></code></pre></div></p>
-</details>
-<p>Now you can control the turtle with the arrow keys on your keyboard.
-<img alt="Turtlesim control" src="https://private-user-images.githubusercontent.com/12893423/319520632-c80c5054-3335-49c7-9671-92bd8702708b.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MTIyMjI2MDQsIm5iZiI6MTcxMjIyMjMwNCwicGF0aCI6Ii8xMjg5MzQyMy8zMTk1MjA2MzItYzgwYzUwNTQtMzMzNS00OWM3LTk2NzEtOTJiZDg3MDI3MDhiLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDA0MDQlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwNDA0VDA5MTgyNFomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWI1MjU0ZGY0ZjQ1OTg4ZjYyNTE1Y2I2MmYwNWU5YzQwYzFlNGExMzkyNDhjOGY4N2I4NDQ5ZTA3MzI4MzhiNDAmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.4dD3FdMZ7VBRPTLcnSPlWsSWkx4pgjKq24NEL-TnW0g" /></p>
-<h2 id="add-a-custom-python-node">Add a custom Python node<a class="headerlink" href="#add-a-custom-python-node" title="Permanent link">#</a></h2>
-<p>As ros works with custom nodes, let's add a custom node to our project.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>pkg<span class="w"> </span>create<span class="w"> </span>--build-type<span class="w"> </span>ament_python<span class="w"> </span>--destination-directory<span class="w"> </span>src<span class="w"> </span>--node-name<span class="w"> </span>my_node<span class="w"> </span>my_package
+<p>This will add the following line to <a href="../../reference/configuration/">manifest file</a>:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">bar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python bar.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cwd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;scripts&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>To build the package we need some more dependencies:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>colcon-common-extensions<span class="w"> </span><span class="s2">&quot;setuptools&lt;=58.2.0&quot;</span>
-</span></code></pre></div>
-<p>Add the created initialization script for the ros workspace to your manifest file.</p>
-<p>Then run the build command</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>colcon<span class="w"> </span>build
-</span></code></pre></div>
-<p>This will create a sourceable script in the <code>install</code> folder, you can source this script through an activation script to use your custom node.
-Normally this would be the script you add to your <code>.bashrc</code> but now you tell pixi to use it.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux &amp; macOS</label><label for="__tabbed_1_2">Windows</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[activation]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.sh&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[activation]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.bat&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-</div>
-</div>
-</div>
-<details class="tip">
-<summary>Multi platform support</summary>
-<p>You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project.
-Use the following example to add support for both Linux and Windows, using the <a href="../../features/multi_platform_configuration/#activation">target</a> syntax.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[project]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="k">[activation]</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.sh&quot;</span><span class="p">]</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="k">[target.win-64.activation]</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.bat&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-</details>
-<p>Now you can run your custom node with the following command</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>my_package<span class="w"> </span>my_node
-</span></code></pre></div>
-<h2 id="simplify-the-user-experience">Simplify the user experience<a class="headerlink" href="#simplify-the-user-experience" title="Permanent link">#</a></h2>
-<p>In <code>pixi</code> we have a feature called <code>tasks</code>, this allows you to define a task in your manifest file and run it with a simple command.
-Let's add a task to run the <code>turtlesim</code> example and the custom node.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>sim<span class="w"> </span><span class="s2">&quot;ros2 run turtlesim turtlesim_node&quot;</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>build<span class="w"> </span><span class="s2">&quot;colcon build --symlink-install&quot;</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>hello<span class="w"> </span><span class="s2">&quot;ros2 run my_package my_node&quot;</span>
-</span></code></pre></div>
-<p>Now you can run these task by simply running</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>sim
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>build
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>hello
-</span></code></pre></div>
-<details class="tip" open="open">
-<summary>Advanced task usage</summary>
-<p>Tasks are a powerful feature in pixi.</p>
+<h2 id="caching">Caching<a class="headerlink" href="#caching" title="Permanent link">#</a></h2>
+<p>When you specify <code>inputs</code> and/or <code>outputs</code> to a task, pixi will reuse the result of the task.</p>
+<p>For the cache, pixi checks that the following are true:</p>
 <ul>
-<li>You can add <a href="../../features/advanced_tasks/#depends-on"><code>depends_on</code></a> to the tasks to create a task chain.</li>
-<li>You can add <a href="../../features/advanced_tasks/#working-directory"><code>cwd</code></a> to the tasks to run the task in a different directory from the root of the project.</li>
-<li>You can add <a href="../../features/advanced_tasks/#caching"><code>inputs</code> and <code>outputs</code></a> to the tasks to create a task that only runs when the inputs are changed.</li>
-<li>You can use the <a href="../../reference/configuration/#the-target-table"><code>target</code></a> syntax to run specific tasks on specific machines.</li>
+<li>No package in the environment has changed.</li>
+<li>The selected inputs and outputs are the same as the last time the task was
+  run. We compute fingerprints of all the files selected by the globs and
+  compare them to the last time the task was run.</li>
+<li>The command is the same as the last time the task was run.</li>
 </ul>
-</details>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[tasks]</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">sim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ros2 run turtlesim turtlesim_node&quot;</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;colcon build --symlink-install&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;src&quot;</span><span class="p">]}</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">hello</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ros2 run my_package my_node&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">depends_on</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;build&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+<p>If all of these conditions are met, pixi will not run the task again and instead use the existing result.</p>
+<p>Inputs and outputs can be specified as globs, which will be expanded to all matching files.</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># This task will only run if the `main.py` file has changed.</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">run</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python main.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;main.py&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># This task will remember the result of the `curl` command and not run it again if the file `data.csv` already exists.</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">download_data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;curl -o data.csv https://example.com/data.csv&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">outputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;data.csv&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># This task will only run if the `src` directory has changed and will remember the result of the `make` command.</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;make&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;src/*.cpp&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;include/*.hpp&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">outputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;build/app.exe&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<h2 id="build-a-c-node">Build a C++ node<a class="headerlink" href="#build-a-c-node" title="Permanent link">#</a></h2>
-<p>To build a C++ node you need to add the <code>ament_cmake</code> and some other build dependencies to your manifest file.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>ros-humble-ament-cmake-auto<span class="w"> </span>compilers<span class="w"> </span>pkg-config<span class="w"> </span>cmake<span class="w"> </span>ninja
+<p>Note: if you want to debug the globs you can use the <code>--verbose</code> flag to see which files are selected.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># shows info logs of all files that were selected by the globs</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>-v<span class="w"> </span>start
 </span></code></pre></div>
-<p>Now you can create a C++ node with the following command</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>pkg<span class="w"> </span>create<span class="w"> </span>--build-type<span class="w"> </span>ament_cmake<span class="w"> </span>--destination-directory<span class="w"> </span>src<span class="w"> </span>--node-name<span class="w"> </span>my_cpp_node<span class="w"> </span>my_cpp_package
-</span></code></pre></div>
-<p>Now you can build it again and run it with the following commands</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Passing arguments to the build command to build with Ninja, add them to the manifest if you want to default to ninja.</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>build<span class="w"> </span>--cmake-args<span class="w"> </span>-G<span class="w"> </span>Ninja
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>my_cpp_package<span class="w"> </span>my_cpp_node
-</span></code></pre></div>
-<details class="tip">
-<summary>Tip</summary>
-<p>Add the cpp task to the manifest file to simplify the user experience.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>hello-cpp<span class="w"> </span><span class="s2">&quot;ros2 run my_cpp_package my_cpp_node&quot;</span>
-</span></code></pre></div>
-</details>
-<h2 id="frequently-asked-questions">Frequently asked questions<a class="headerlink" href="#frequently-asked-questions" title="Permanent link">#</a></h2>
-<h3 id="what-happens-with-rosdep">What happens with <code>rosdep</code>?<a class="headerlink" href="#what-happens-with-rosdep" title="Permanent link">#</a></h3>
-<p>Currently, we don't support <code>rosdep</code> in a pixi environment, so you'll have to add the packages using <code>pixi add</code>.
-<code>rosdep</code> will call <code>conda install</code> which isn't supported in a pixi environment.</p>
+<h2 id="our-task-runner-deno_task_shell">Our task runner: deno_task_shell<a class="headerlink" href="#our-task-runner-deno_task_shell" title="Permanent link">#</a></h2>
+<p>To support the different OS's (Windows, OSX and Linux), pixi integrates a shell that can run on all of them.
+This is <a href="https://deno.land/manual@v1.35.0/tools/task_runner#built-in-commands"><code>deno_task_shell</code></a>.
+The task shell is a limited implementation of a bourne-shell interface.</p>
+<h3 id="built-in-commands">Built-in commands<a class="headerlink" href="#built-in-commands" title="Permanent link">#</a></h3>
+<p>Next to running actual executable like <code>./myprogram</code>, <code>cmake</code> or <code>python</code> the shell has some built-in commandos.</p>
+<ul>
+<li><code>cp</code>: Copies files.</li>
+<li><code>mv</code>: Moves files.</li>
+<li><code>rm</code>: Remove files or directories.
+  Ex: <code>rm -rf [FILE]...</code> - Commonly used to recursively delete files or directories.</li>
+<li><code>mkdir</code>: Makes directories.
+  Ex. <code>mkdir -p DIRECTORY...</code> - Commonly used to make a directory and all its parents with no error if it exists.</li>
+<li><code>pwd</code>: Prints the name of the current/working directory.</li>
+<li><code>sleep</code>: Delays for a specified amount of time.
+  Ex. <code>sleep 1</code> to sleep for 1 second, <code>sleep 0.5</code> to sleep for half a second, or <code>sleep 1m</code> to sleep a minute</li>
+<li><code>echo</code>: Displays a line of text.</li>
+<li><code>cat</code>: Concatenates files and outputs them on stdout. When no arguments are provided, it reads and outputs stdin.</li>
+<li><code>exit</code>: Causes the shell to exit.</li>
+<li><code>unset</code>: Unsets environment variables.</li>
+<li><code>xargs</code>: Builds arguments from stdin and executes a command.</li>
+</ul>
+<h3 id="syntax">Syntax<a class="headerlink" href="#syntax" title="Permanent link">#</a></h3>
+<ul>
+<li><strong>Boolean list:</strong> use <code>&amp;&amp;</code> or <code>||</code> to separate two commands.<ul>
+<li><code>&amp;&amp;</code>: if the command before <code>&amp;&amp;</code> succeeds continue with the next command.</li>
+<li><code>||</code>: if the command before <code>||</code> fails continue with the next command.</li>
+</ul>
+</li>
+<li><strong>Sequential lists:</strong> use <code>;</code> to run two commands without checking if the first command failed or succeeded.</li>
+<li><strong>Environment variables:</strong><ul>
+<li>Set env variable using: <code>export ENV_VAR=value</code></li>
+<li>Use env variable using: <code>$ENV_VAR</code></li>
+<li>unset env variable using <code>unset ENV_VAR</code></li>
+</ul>
+</li>
+<li><strong>Shell variables:</strong> Shell variables are similar to environment variables, but won’t be exported to spawned commands.<ul>
+<li>Set them: <code>VAR=value</code></li>
+<li>use them: <code>VAR=value &amp;&amp; echo $VAR</code></li>
+</ul>
+</li>
+<li><strong>Pipelines:</strong> Use the stdout output of a command into the stdin a following command<ul>
+<li><code>|</code>: <code>echo Hello | python receiving_app.py</code></li>
+<li><code>|&amp;</code>: use this to also get the stderr as input.</li>
+</ul>
+</li>
+<li><strong>Command substitution:</strong> <code>$()</code> to use the output of a command as input for another command.<ul>
+<li><code>python main.py $(git rev-parse HEAD)</code></li>
+</ul>
+</li>
+<li><strong>Negate exit code:</strong> <code>!</code> before any command will negate the exit code from 1 to 0 or visa-versa.</li>
+<li><strong>Redirects:</strong> <code>&gt;</code> to redirect the stdout to a file.<ul>
+<li><code>echo hello &gt; file.txt</code> will put <code>hello</code> in <code>file.txt</code> and overwrite existing text.</li>
+<li><code>python main.py 2&gt; file.txt</code> will put the <code>stderr</code> output in <code>file.txt</code>.</li>
+<li><code>python main.py &amp;&gt; file.txt</code> will put the <code>stderr</code> <strong>and</strong> <code>stdout</code> in <code>file.txt</code>.</li>
+<li><code>echo hello &gt; file.txt</code> will append <code>hello</code> to the existing <code>file.txt</code>.</li>
+</ul>
+</li>
+<li><strong>Glob expansion:</strong> <code>*</code> to expand all options.<ul>
+<li><code>echo *.py</code> will echo all filenames that end with <code>.py</code></li>
+<li><code>echo **/*.py</code> will echo all filenames that end with <code>.py</code> in this directory and all descendant directories.</li>
+<li><code>echo data[0-9].csv</code> will echo all filenames that have a single number after <code>data</code> and before <code>.csv</code></li>
+</ul>
+</li>
+</ul>
+<p>More info in <a href="https://deno.land/manual@v1.35.0/tools/task_runner#task-runner"><code>deno_task_shell</code> documentation</a>.</p>
 
 
 
@@ -1595,9 +1583,9 @@ Let's add a task to run the <code>turtlesim</code> example and the custom node.<
           
             
             <a
-              href="../../ide_integration/pycharm/"
+              href="../environment/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: PyCharm"
+              aria-label="Previous: Environments"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1608,7 +1596,7 @@ Let's add a task to run the <code>turtlesim</code> example and the custom node.<
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  PyCharm
+                  Environments
                 </div>
               </div>
             </a>
@@ -1618,16 +1606,16 @@ Let's add a task to run the <code>turtlesim</code> example and the custom node.<
           
             
             <a
-              href="../../examples/cpp-sdl/"
+              href="../multi_platform_configuration/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: C++/Cmake"
+              aria-label="Next: Multi Platform"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  C++/Cmake
+                  Multi Platform
                 </div>
               </div>
               <div class="md-footer__button md-icon">
