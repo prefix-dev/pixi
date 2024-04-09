@@ -10,7 +10,7 @@ https://github.com/renan-r-santos/pixi-kernel-binder, please keep these two in s
 -->
 
 You can use JupyterLab with pixi by using the kernel provided by the
-[pixi-kernel](https://github.com/pavelzw/pixi-pycharm) package.
+[pixi-kernel](https://github.com/renan-r-santos/pixi-kernel) package.
 
 ## Configuring JupyterLab
 
