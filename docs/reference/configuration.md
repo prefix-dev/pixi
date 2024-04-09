@@ -189,22 +189,22 @@ System specifications are directly related to the [virtual packages](https://con
 Currently, the specified **defaults** are the same as [conda-lock](https://github.com/conda/conda-lock)'s implementation:
 
 === "Linux"
-`toml title="default system requirements for linux"
+    ```toml title="default system requirements for linux"
     [system-requirements]
     linux = "5.10"
     libc = { family="glibc", version="2.17" }
-    `
+    ```
 
 === "Windows"
-`toml title="default system requirements for windows"
+    ```toml title="default system requirements for windows"
     [system-requirements]
-    `
+    ```
 
 === "Osx"
-`toml title="default system requirements for osx"
+    ```toml title="default system requirements for osx"
     [system-requirements]
     macos = "10.15"
-    `
+    ```
 
 === "Osx-arm64"
 `toml title="default system requirements for osx-arm64"

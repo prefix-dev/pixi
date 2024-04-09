@@ -80,11 +80,11 @@ ros2 run turtlesim turtlesim_node
 Congratulations you have ROS 2 running on your machine with pixi!
 
 ??? example "Some more fun with the turtle"
-To control the turtle you can run the following command in a new terminal
-`shell
-        cd my_ros2_project
-        pixi run ros2 run turtlesim turtle_teleop_key
-    `
+    To control the turtle you can run the following command in a new terminal
+    ```shell
+    cd my_ros2_project
+    pixi run ros2 run turtlesim turtle_teleop_key
+    ```
 Now you can control the turtle with the arrow keys on your keyboard.
 ![Turtlesim control](https://private-user-images.githubusercontent.com/12893423/319520632-c80c5054-3335-49c7-9671-92bd8702708b.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MTIyMjI2MDQsIm5iZiI6MTcxMjIyMjMwNCwicGF0aCI6Ii8xMjg5MzQyMy8zMTk1MjA2MzItYzgwYzUwNTQtMzMzNS00OWM3LTk2NzEtOTJiZDg3MDI3MDhiLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDA0MDQlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwNDA0VDA5MTgyNFomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWI1MjU0ZGY0ZjQ1OTg4ZjYyNTE1Y2I2MmYwNWU5YzQwYzFlNGExMzkyNDhjOGY4N2I4NDQ5ZTA3MzI4MzhiNDAmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.4dD3FdMZ7VBRPTLcnSPlWsSWkx4pgjKq24NEL-TnW0g)
 
@@ -114,28 +114,30 @@ This will create a sourceable script in the `install` folder, you can source thi
 Normally this would be the script you add to your `.bashrc` but now you tell pixi to use it.
 
 === "Linux & macOS"
-`toml title="pixi.toml"
+    ```toml title="pixi.toml"
     [activation]
     scripts = ["install/setup.sh"]
-    `
+    ```
+
 === "Windows"
-`toml title="pixi.toml"
+    ```toml title="pixi.toml"
     [activation]
     scripts = ["install/setup.bat"]
-    `
+    ```
 
 ??? tip "Multi platform support"
-You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project.
-Use the following example to add support for both Linux and Windows, using the [target](../features/multi_platform_configuration.md#activation) syntax.
+    You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project.
+    Use the following example to add support for both Linux and Windows, using the [target](../features/multi_platform_configuration.md#activation) syntax.
+
 ```toml
 [project]
 platforms = ["linux-64", "win-64"]
 
-    [activation]
-    scripts = ["install/setup.sh"]
-    [target.win-64.activation]
-    scripts = ["install/setup.bat"]
-    ```
+[activation]
+scripts = ["install/setup.sh"]
+[target.win-64.activation]
+scripts = ["install/setup.bat"]
+```
 
 Now you can run your custom node with the following command
 
@@ -163,19 +165,19 @@ pixi run hello
 ```
 
 ???+ tip "Advanced task usage"
-Tasks are a powerful feature in pixi.
+    Tasks are a powerful feature in pixi.
 
     - You can add [`depends_on`](../features/advanced_tasks.md#depends-on) to the tasks to create a task chain.
     - You can add [`cwd`](../features/advanced_tasks.md#working-directory) to the tasks to run the task in a different directory from the root of the project.
     - You can add [`inputs` and `outputs`](../features/advanced_tasks.md#caching) to the tasks to create a task that only runs when the inputs are changed.
     - You can use the [`target`](../reference/configuration.md#the-target-table) syntax to run specific tasks on specific machines.
 
-    ```toml
-    [tasks]
-    sim = "ros2 run turtlesim turtlesim_node"
-    build = {cmd = "colcon build --symlink-install", inputs = ["src"]}
-    hello = { cmd = "ros2 run my_package my_node", depends_on = ["build"] }
-    ```
+```toml
+[tasks]
+sim = "ros2 run turtlesim turtlesim_node"
+build = {cmd = "colcon build --symlink-install", inputs = ["src"]}
+hello = { cmd = "ros2 run my_package my_node", depends_on = ["build"] }
+```
 
 ## Build a C++ node
 
@@ -200,10 +202,11 @@ pixi run ros2 run my_cpp_package my_cpp_node
 ```
 
 ??? tip
-Add the cpp task to the manifest file to simplify the user experience.
-`shell
+    Add the cpp task to the manifest file to simplify the user experience.
+
+    ```shell
     pixi task add hello-cpp "ros2 run my_cpp_package my_cpp_node"
-    `
+    ```
 
 ## Frequently asked questions
 
