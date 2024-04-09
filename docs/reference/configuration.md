@@ -177,7 +177,7 @@ alias = { depends_on=["depending"]}
 
 You can modify this table using [`pixi task`](cli.md#task).
 !!! note
-Specify different tasks for different platforms using the [target](#the-target-table) table
+    Specify different tasks for different platforms using the [target](#the-target-table) table
 
 ## The `system-requirements` table
 
