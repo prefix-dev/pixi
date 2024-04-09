@@ -99,7 +99,7 @@ async fn test_purl_are_added_for_pypi() {
 
     let lock_file = pixi.up_to_date_lock_file().await.unwrap();
 
-    // Check if packaging has a purl
+    // Check if boltons has a purl
     lock_file
         .default_environment()
         .unwrap()
@@ -113,7 +113,7 @@ async fn test_purl_are_added_for_pypi() {
             }
         });
 
-    // Add flask from pypi
+    // Add boltons from pypi
     pixi.add("boltons")
         .with_install(true)
         .set_type(pixi::DependencyType::PypiDependency)
@@ -122,7 +122,7 @@ async fn test_purl_are_added_for_pypi() {
 
     let lock_file = pixi.up_to_date_lock_file().await.unwrap();
 
-    // Check if packaging has a purl
+    // Check if boltons has a purl
     lock_file
         .default_environment()
         .unwrap()
@@ -132,15 +132,11 @@ async fn test_purl_are_added_for_pypi() {
             if dep.as_conda().unwrap().package_record().name
                 == PackageName::from_str("boltons").unwrap()
             {
-                println!(
-                    "CONDA IS {:?}",
-                    dep.as_conda().unwrap().package_record().purls
-                );
                 assert!(!dep.as_conda().unwrap().package_record().purls.is_empty());
             }
         });
 
-    // Check if packaging exists only as conda dependency
+    // Check if boltons exists only as conda dependency
     assert!(lock_file.contains_match_spec(
         DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
