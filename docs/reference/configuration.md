@@ -207,10 +207,10 @@ Currently, the specified **defaults** are the same as [conda-lock](https://githu
     ```
 
 === "Osx-arm64"
-`toml title="default system requirements for osx-arm64"
+    ```toml title="default system requirements for osx-arm64"
     [system-requirements]
     macos = "11.0"
-    `
+    ```
 
 Only if a project requires a different set should you define them.
 
@@ -271,11 +271,11 @@ package1 = { version = ">=1.2.3", build="py34_0" }
 ```
 
 !!! tip
-The dependencies can be easily added using the `pixi add` command line.
-Running `add` for an existing dependency will replace it with the newest it can use.
+    The dependencies can be easily added using the `pixi add` command line.
+    Running `add` for an existing dependency will replace it with the newest it can use.
 
 !!! note
-To specify different dependencies for different platforms use the [target](#the-target-table) table
+    To specify different dependencies for different platforms use the [target](#the-target-table) table
 
 ### `dependencies`
 
@@ -293,7 +293,7 @@ pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 ### `pypi-dependencies` (Beta feature)
 
 ??? info "Details regarding the PyPI integration"
-We use [`uv`](https://github.com/astral-sh/uv), which is a new fast pip replacement written in Rust.
+    We use [`uv`](https://github.com/astral-sh/uv), which is a new fast pip replacement written in Rust.
 
     We integrate uv as a library, so we use the uv resolver, to which we pass the conda packages as 'locked'.
     This disallows uv from installing these dependencies itself, and  ensures it uses the exact version of these packages in the resolution.
@@ -307,7 +307,9 @@ of which are supported by pixi.
 These distributions are installed into the environment after the conda environment has been resolved and installed.
 PyPI packages are not indexed on [prefix.dev](https://prefix.dev/channels) but can be viewed on [pypi.org](https://pypi.org/).
 
-!!! warning "Important considerations" - **Stability**: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the `dependencies` table where possible. - **Compatibility limitations**: Currently, pixi doesn't support: Private PyPI repositories
+!!! warning "Important considerations"
+    - **Stability**: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the `dependencies` table where possible.
+    - **Compatibility limitations**: Currently, pixi doesn't support: Private PyPI repositories
 
 #### Version specification:
 
@@ -410,8 +412,8 @@ pandas = {url = "https://files.pythonhosted.org/packages/3d/59/2afa81b9fb300c905
 ```
 
 ??? tip "Did you know you can use: `add --pypi`?"
-Use the `--pypi` flag with the `add` command to quickly add PyPI packages from the CLI.
-E.g `pixi add --pypi flask`
+    Use the `--pypi` flag with the `add` command to quickly add PyPI packages from the CLI.
+    E.g `pixi add --pypi flask`
 
     _This does not support all the features of the `pypi-dependencies` table yet._
 
@@ -459,8 +461,8 @@ Typical examples of build dependencies are:
 - `cmake` is invoked on the build machine to generate additional code- or project-files which are then include in the compilation process.
 
 !!! info
-The _build_ target refers to the machine that will execute the build.
-Programs and libraries installed by these dependencies will be executed on the build machine.
+    The _build_ target refers to the machine that will execute the build.
+    Programs and libraries installed by these dependencies will be executed on the build machine.
 
     For example, if you compile on a MacBook with an Apple Silicon chip but target Linux x86_64 then your *build* platform is `osx-arm64` and your *host* platform is `linux-64`.
 
@@ -470,9 +472,9 @@ If you want to run an activation script inside the environment when either doing
 The scripts defined in this table will be sourced when the environment is activated using `pixi run` or `pixi shell`
 
 !!! note
-The activation scripts are run by the system shell interpreter as they run before an environment is available.
-This means that it runs as `cmd.exe` on windows and `bash` on linux and osx (Unix).
-Only `.sh`, `.bash` and `.bat` files are supported.
+    The activation scripts are run by the system shell interpreter as they run before an environment is available.
+    This means that it runs as `cmd.exe` on windows and `bash` on linux and osx (Unix).
+    Only `.sh`, `.bash` and `.bat` files are supported.
 
     If you have scripts per platform use the [target](#the-target-table) table.
 
