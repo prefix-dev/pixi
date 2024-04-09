@@ -622,7 +622,7 @@ This command is used to authenticate the user's access to remote hosts such as `
 Store authentication information for given host.
 
 !!! tip
-  The host is real hostname not a channel.
+    The host is real hostname not a channel.
 
 ##### Arguments
 
