@@ -129,15 +129,15 @@ Normally this would be the script you add to your `.bashrc` but now you tell pix
     You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project.
     Use the following example to add support for both Linux and Windows, using the [target](../features/multi_platform_configuration.md#activation) syntax.
 
-```toml
-[project]
-platforms = ["linux-64", "win-64"]
+    ```toml
+    [project]
+    platforms = ["linux-64", "win-64"]
 
-[activation]
-scripts = ["install/setup.sh"]
-[target.win-64.activation]
-scripts = ["install/setup.bat"]
-```
+    [activation]
+    scripts = ["install/setup.sh"]
+    [target.win-64.activation]
+    scripts = ["install/setup.bat"]
+    ```
 
 Now you can run your custom node with the following command
 

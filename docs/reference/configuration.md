@@ -574,7 +574,8 @@ When those are used we call them the `default` feature. This is a protected name
 ```toml title="Full feature table specification"
 [feature.cuda]
 activation = {scripts = ["cuda_activation.sh"]}
-channels = ["nvidia"] # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
+# Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
+channels = ["nvidia"]
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
 pypi-dependencies = {torch = "==1.9.0"}
 platforms = ["linux-64", "osx-arm64"]
@@ -614,8 +615,8 @@ platforms = ["linux-64", "osx-arm64"]
 The `environments` table allows you to define environments that are created using the features defined in the `feature` tables.
 
 !!! important
-`default` is always implied when creating environments.
-If you don't want to use the `default` feature you can keep all the non feature tables empty.
+    `default` is always implied when creating environments.
+    If you don't want to use the `default` feature you can keep all the non feature tables empty.
 
 The environments table is defined using the following fields:
 

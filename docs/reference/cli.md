@@ -155,26 +155,25 @@ pixi run --environment cuda python
 !!! tip "Cross environment tasks"
     If you're using the `depends_on` feature of the `tasks`, the tasks will be run in the order you specified them.
     The `depends_on` can be used cross environment, e.g. you have this `pixi.toml`:
+    ??? "pixi.toml"
+        ```toml
+        [tasks]
+        start = { cmd = "python start.py", depends_on = ["build"] }
 
-??? "pixi.toml"
-    ```toml
-    [tasks]
-    start = { cmd = "python start.py", depends_on = ["build"] }
+        [feature.build.tasks]
+        build = "cargo build"
+        [feature.build.dependencies]
+        rust = ">=1.74"
 
-    [feature.build.tasks]
-    build = "cargo build"
-    [feature.build.dependencies]
-    rust = ">=1.74"
+        [environments]
+        build = ["build"]
+        ```
 
-    [environments]
-    build = ["build"]
-    ```
-
-    Then you're able to run the `build` from the `build` environment and `start` from the default environment.
-    By only calling:
-    ```shell
-    pixi run start
-    ```
+        Then you're able to run the `build` from the `build` environment and `start` from the default environment.
+        By only calling:
+        ```shell
+        pixi run start
+        ```
 
 ## `remove`
 
@@ -222,7 +221,7 @@ Add a task to the [manifest file](configuration.md), use `--depends-on` to add t
 
 1. `<NAME>`: The name of the task.
 2. `<COMMAND>`: The command to run. This can be more than one word.
-  !!! info
+!!! info
     If you are using `$` for env variables they will be resolved before adding them to the task.
     If you want to use `$` in the task you need to escape it with a `\`, e.g. `echo \$HOME`.
 
@@ -403,10 +402,10 @@ pixi tree --platform win-64
 !!! warning
     Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
 
-    Output will look like this, where direct packages in the [manifest file](configuration.md) will be green.
-    Once a package has been displayed once, the tree won't continue to recurse through its dependencies (compare the first time `python` appears, vs the rest), and it will instead be marked with a star `(*)`.
+Output will look like this, where direct packages in the [manifest file](configuration.md) will be green.
+Once a package has been displayed once, the tree won't continue to recurse through its dependencies (compare the first time `python` appears, vs the rest), and it will instead be marked with a star `(*)`.
 
-    Version numbers are colored by the package type, yellow for Conda packages and blue for PyPI.
+Version numbers are colored by the package type, yellow for Conda packages and blue for PyPI.
 
 ```shell
 ➜ pixi tree
