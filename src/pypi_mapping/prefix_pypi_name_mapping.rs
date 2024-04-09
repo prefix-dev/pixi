@@ -64,6 +64,11 @@ pub async fn conda_pypi_name_mapping(
 ) -> miette::Result<HashMap<Sha256Hash, Package>> {
     let filtered_packages = conda_packages
         .iter()
+        // because we later skip adding purls for packages
+        // that have purls
+        // here we only filter packages that don't them
+        // to save some requests
+        .filter(|package| package.package_record.purls.is_empty())
         .filter_map(|package| {
             package
                 .package_record

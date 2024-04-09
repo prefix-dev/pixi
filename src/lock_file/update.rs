@@ -1470,6 +1470,19 @@ async fn spawn_solve_pypi_task(
         tokio::join!(repodata_records, prefix, semaphore.acquire_owned());
 
     let environment_name = environment.name().clone();
+
+    let pypi_name_mapping_location = environment.project().pypi_name_mapping_source();
+
+    let mut conda_records = repodata_records.records.clone();
+
+    pypi_mapping::amend_pypi_purls(
+        environment.project().client().clone(),
+        pypi_name_mapping_location,
+        &mut conda_records,
+        None,
+    )
+    .await?;
+
     // let (pypi_packages, duration) = tokio::spawn(
     let (pypi_packages, duration) = async move {
         let pb = SolveProgressBar::new(
@@ -1493,7 +1506,7 @@ async fn spawn_solve_pypi_task(
                 .map(|(name, requirement)| (name.as_normalized().clone(), requirement))
                 .collect(),
             system_requirements,
-            &repodata_records.records,
+            &conda_records,
             platform,
             &pb.pb,
             &python_path,

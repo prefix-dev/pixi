@@ -48,6 +48,9 @@ pub enum PlatformUnsat {
     #[error("there are more conda packages in the lock-file than are used by the environment")]
     TooManyCondaPackages,
 
+    #[error("missing purls")]
+    MissingPurls,
+
     #[error("corrupted lock-file entry for '{0}'")]
     CorruptedEntry(String, ConversionError),
 
@@ -164,6 +167,20 @@ pub fn verify_platform_satisfiability(
             Package::Pypi(pypi) => {
                 pypi_packages.push((pypi.data().package.clone(), pypi.data().environment.clone()));
             }
+        }
+    }
+
+    // to reflect new purls for pypi packages
+    // we need to invalidate the locked environment
+    // if all conda packages have empty purls
+    if environment.has_pypi_dependencies()
+        && pypi_packages.is_empty()
+        && !conda_packages
+            .iter()
+            .any(|record| !record.package_record.purls.is_empty())
+    {
+        {
+            return Err(PlatformUnsat::MissingPurls);
         }
     }
 
