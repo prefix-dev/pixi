@@ -39,6 +39,22 @@ r = ">=4.3,<5"
 r-ggplot2 = ">=3.5.0,<3.6"
 ```
 
+Once RStudio has loaded, you can execute the following R code that uses the `ggplot2` package:
+
+```R
+# Load the ggplot2 package
+library(ggplot2)
+
+# Load the built-in 'mtcars' dataset
+data <- mtcars
+
+# Create a scatterplot of 'mpg' vs 'wt'
+ggplot(data, aes(x = wt, y = mpg)) +
+  geom_point() +
+  labs(x = "Weight (1000 lbs)", y = "Miles per Gallon") +
+  ggtitle("Fuel Efficiency vs. Weight")
+```
+
 !!! Note
     This example assumes that you have installed RStudio system-wide.
     We are working on updating RStudio as well as the R interpreter builds on Windows for maximum compatibility with `pixi`.
