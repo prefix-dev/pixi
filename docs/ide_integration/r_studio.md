@@ -18,6 +18,7 @@ To use the R packages installed by `pixi` in RStudio, you need to run `rstudio` 
 
 ## Full example
 
+The full example can be found here: [RStudio example](https://github.com/prefix-dev/pixi/tree/main/examples/r).
 Here is an example of a `pixi.toml` file that sets up an RStudio task:
 
 ```toml

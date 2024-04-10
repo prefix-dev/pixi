@@ -105,6 +105,7 @@ nav:
   - Vision: vision.md
   - IDE Integration:
     - PyCharm: ide_integration/pycharm.md
+    - RStudio: ide_integration/rstudio.md
   - In-depth:
     - Authentication: advanced/authentication.md
     - Tasks: advanced/advanced_tasks.md
