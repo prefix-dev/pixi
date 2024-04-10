@@ -207,7 +207,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         json_packages(&packages_to_output, args.json_pretty);
     } else {
         if !environment_name.is_default() {
-            println!("Environment: {}", environment_name.fancy_display());
+            eprintln!("Environment: {}", environment_name.fancy_display());
         }
 
         // print packages as table
