@@ -93,7 +93,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let direct_deps = direct_dependencies(&environment, &platform);
 
     if !environment_name.is_default() {
-        println!("Environment: {}", environment_name.fancy_display());
+        eprintln!("Environment: {}", environment_name.fancy_display());
     }
 
     if args.invert {
