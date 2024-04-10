@@ -6,17 +6,15 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Use PyCharm with pixi environments">
       
       
-      
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/ide_integration/pycharm/">
-      
-      
-        <link rel="prev" href="../../basic_usage/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/ide_integration/r_studio/">
       
       
-        <link rel="next" href="../r_studio/">
+        <link rel="prev" href="../pycharm/">
+      
+      
+        <link rel="next" href="../../tutorials/ros2/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -24,7 +22,7 @@
     
     
       
-        <title>PyCharm Integration - Pixi by prefix.dev</title>
+        <title>RStudio - Pixi by prefix.dev</title>
       
     
     
@@ -61,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="PyCharm Integration - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="RStudio - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="Use PyCharm with pixi environments" >
+        <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/ide_integration/pycharm.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/ide_integration/r_studio.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -73,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/ide_integration/pycharm/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/ide_integration/r_studio/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="PyCharm Integration - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="RStudio - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="Use PyCharm with pixi environments" >
+        <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/ide_integration/pycharm.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/ide_integration/r_studio.png" >
       
     
     
@@ -104,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#how-to-use" class="md-skip">
+        <a href="#developing-r-scripts-in-rstudio" class="md-skip">
           Skip to content
         </a>
       
@@ -143,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              PyCharm Integration
+              RStudio
             
           </span>
         </div>
@@ -415,6 +413,27 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../pycharm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PyCharm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -424,12 +443,14 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
+        
+      
       
         <label class="md-nav__link md-nav__link--active" for="__toc">
           
   
   <span class="md-ellipsis">
-    PyCharm
+    RStudio
   </span>
   
 
@@ -440,7 +461,7 @@
         
   
   <span class="md-ellipsis">
-    PyCharm
+    RStudio
   </span>
   
 
@@ -452,6 +473,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -460,42 +483,27 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-to-use" class="md-nav__link">
+  <a href="#installing-r-packages" class="md-nav__link">
     <span class="md-ellipsis">
-      How to use
+      Installing R packages
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="How to use">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#multiple-environments" class="md-nav__link">
-    <span class="md-ellipsis">
-      Multiple environments
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#multiple-pixi-projects" class="md-nav__link">
-    <span class="md-ellipsis">
-      Multiple pixi projects
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#debugging" class="md-nav__link">
+  <a href="#using-r-packages-in-rstudio" class="md-nav__link">
     <span class="md-ellipsis">
-      Debugging
+      Using R packages in RStudio
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#full-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      Full example
     </span>
   </a>
   
@@ -505,27 +513,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../r_studio/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    RStudio
-  </span>
-  
-
-      </a>
     </li>
   
 
@@ -1244,6 +1231,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1252,42 +1241,27 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-to-use" class="md-nav__link">
+  <a href="#installing-r-packages" class="md-nav__link">
     <span class="md-ellipsis">
-      How to use
+      Installing R packages
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="How to use">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#multiple-environments" class="md-nav__link">
-    <span class="md-ellipsis">
-      Multiple environments
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#multiple-pixi-projects" class="md-nav__link">
-    <span class="md-ellipsis">
-      Multiple pixi projects
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#debugging" class="md-nav__link">
+  <a href="#using-r-packages-in-rstudio" class="md-nav__link">
     <span class="md-ellipsis">
-      Debugging
+      Using R packages in RStudio
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#full-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      Full example
     </span>
   </a>
   
@@ -1308,7 +1282,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/ide_integration/pycharm.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/ide_integration/r_studio.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1316,73 +1290,54 @@
   
 
 
-  <h1>PyCharm</h1>
-
-<!--
-Modifications to this file are related to the README.md in https://github.com/pavelzw/pixi-pycharm,
-please keep these two in sync by making a PR in both
--->
-
-<p>You can use PyCharm with pixi environments by using the <code>conda</code> shim provided by the <a href="https://github.com/pavelzw/pixi-pycharm">pixi-pycharm</a> package.</p>
-<div class="admonition warning">
-<p class="admonition-title">Windows support</p>
-<p>Windows is currently not supported, see <a href="https://github.com/pavelzw/pixi-pycharm/issues/5">pavelzw/pixi-pycharm #5</a>. Only Linux and macOS are supported.</p>
-</div>
-<h2 id="how-to-use">How to use<a class="headerlink" href="#how-to-use" title="Permanent link">#</a></h2>
-<p>To get started, add <code>pixi-pycharm</code> to your pixi project.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>pixi-pycharm
+<h1 id="developing-r-scripts-in-rstudio">Developing R scripts in RStudio<a class="headerlink" href="#developing-r-scripts-in-rstudio" title="Permanent link">#</a></h1>
+<p>You can use <code>pixi</code> to manage your R dependencies. The conda-forge channel contains a wide range of R packages that can be installed using <code>pixi</code>.</p>
+<h2 id="installing-r-packages">Installing R packages<a class="headerlink" href="#installing-r-packages" title="Permanent link">#</a></h2>
+<p>R packages are usually prefixed with <code>r-</code> in the conda-forge channel. To install an R package, you can use the following command:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>r-&lt;package-name&gt;
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># for example</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pixi<span class="w"> </span>add<span class="w"> </span>r-ggplot2
 </span></code></pre></div>
-<p>This will ensure that the conda shim is installed in your project's environment.</p>
-<div class="admonition tip">
-<p class="admonition-title">could not determine any available versions for pixi-pycharm on win-64</p>
-<p>If you get the error <code>could not determine any available versions for pixi-pycharm on win-64</code> when running <code>pixi add pixi-pycharm</code> (even when you're not on Windows),
-this is because the package is not available on Windows and pixi tries to solve the environment for all platforms.
-If you still want to use it in your pixi project (and are on Linux/macOS), you can add the following to your <code>pixi.toml</code>:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[target.unix.dependencies]</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">pixi-pycharm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+<h2 id="using-r-packages-in-rstudio">Using R packages in RStudio<a class="headerlink" href="#using-r-packages-in-rstudio" title="Permanent link">#</a></h2>
+<p>To use the R packages installed by <code>pixi</code> in RStudio, you need to run <code>rstudio</code> from an activated environment. This can be achieved by running RStudio from <code>pixi shell</code> or from a task in the <code>pixi.toml</code> file.</p>
+<h2 id="full-example">Full example<a class="headerlink" href="#full-example" title="Permanent link">#</a></h2>
+<p>The full example can be found here: <a href="https://github.com/prefix-dev/pixi/tree/main/examples/r">RStudio example</a>.
+Here is an example of a <code>pixi.toml</code> file that sets up an RStudio task:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[project]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;r&quot;</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">[target.linux.tasks]</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">rstudio</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;rstudio&quot;</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="k">[target.osx.tasks]</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">rstudio</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;open -a rstudio&quot;</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1"># or alternatively with the full path:</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># rstudio = &quot;/Applications/RStudio.app/Contents/MacOS/RStudio&quot;</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="k">[dependencies]</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=4.3,&lt;5&quot;</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="n">r-ggplot2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.5.0,&lt;3.6&quot;</span>
 </span></code></pre></div>
-<p>This will tell pixi to only use this dependency on unix platforms.</p>
-</div>
-<p>Having <code>pixi-pycharm</code> installed, you can now configure PyCharm to use your pixi environments.
-Go to the <em>Add Python Interpreter</em> dialog (bottom right corner of the PyCharm window) and select <em>Conda Environment</em>.
-Set <em>Conda Executable</em> to the full path of the <code>conda</code> file in your pixi environment.
-You can get the path using the following command:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>run<span class="w"> </span><span class="s1">&#39;echo $CONDA_PREFIX/libexec/conda&#39;</span>
+<p>Once RStudio has loaded, you can execute the following R code that uses the <code>ggplot2</code> package:</p>
+<div class="language-R highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Load the ggplot2 package</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nf">library</span><span class="p">(</span><span class="n">ggplot2</span><span class="p">)</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Load the built-in &#39;mtcars&#39; dataset</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">data</span><span class="w"> </span><span class="o">&lt;-</span><span class="w"> </span><span class="n">mtcars</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Create a scatterplot of &#39;mpg&#39; vs &#39;wt&#39;</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nf">ggplot</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="nf">aes</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wt</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mpg</span><span class="p">))</span><span class="w"> </span><span class="o">+</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="nf">geom_point</span><span class="p">()</span><span class="w"> </span><span class="o">+</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span><span class="nf">labs</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;Weight (1000 lbs)&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;Miles per Gallon&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">+</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span><span class="nf">ggtitle</span><span class="p">(</span><span class="s">&quot;Fuel Efficiency vs. Weight&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<p>This is an executable that tricks PyCharm into thinking it's the proper <code>conda</code> executable.
-Under the hood it redirects all calls to the corresponding <code>pixi</code> equivalent.</p>
-<div class="admonition warning">
-<p class="admonition-title">Use the conda shim from this pixi project</p>
-<p>Please make sure that this is the <code>conda</code> shim from this pixi project and not another one.
-If you use multiple pixi projects, you might have to adjust the path accordingly as PyCharm remembers the path to the conda executable.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This example assumes that you have installed RStudio system-wide.
+We are working on updating RStudio as well as the R interpreter builds on Windows for maximum compatibility with <code>pixi</code>.</p>
 </div>
-<p><img alt="Add Python Interpreter" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/add-conda-environment-light.png#only-light" />
-<img alt="Add Python Interpreter" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/add-conda-environment-dark.png#only-dark" /></p>
-<p>Having selected the environment, PyCharm will now use the Python interpreter from your pixi environment.</p>
-<p>PyCharm should now be able to show you the installed packages as well.</p>
-<p><img alt="PyCharm package list" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/dependency-list-light.png#only-light" />
-<img alt="PyCharm package list" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/dependency-list-dark.png#only-dark" /></p>
-<p>You can now run your programs and tests as usual.</p>
-<p><img alt="PyCharm run tests" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/tests-light.png#only-light" />
-<img alt="PyCharm run tests" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/tests-dark.png#only-dark" /></p>
-<h3 id="multiple-environments">Multiple environments<a class="headerlink" href="#multiple-environments" title="Permanent link">#</a></h3>
-<p>If your project uses <a href="../../features/multi_environment/">multiple environments</a> to tests different Python versions or dependencies, you can add multiple environments to PyCharm
-by specifying <em>Use existing environment</em> in the <em>Add Python Interpreter</em> dialog.</p>
-<p><img alt="Multiple pixi environments" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/python-interpreters-multi-env-light.png#only-light" />
-<img alt="Multiple pixi environments" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/python-interpreters-multi-env-dark.png#only-dark" /></p>
-<p>You can then specify the corresponding environment in the bottom right corner of the PyCharm window.</p>
-<p><img alt="Specify environment" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/specify-interpreter-light.png#only-light" />
-<img alt="Specify environment" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/specify-interpreter-dark.png#only-dark" /></p>
-<h3 id="multiple-pixi-projects">Multiple pixi projects<a class="headerlink" href="#multiple-pixi-projects" title="Permanent link">#</a></h3>
-<p>When using multiple pixi projects, remember to select the correct <em>Conda Executable</em> for each project as mentioned above.
-It also might come up that you have multiple environments it might come up that you have multiple environments with the same name.</p>
-<p><img alt="Multiple default environments" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/multiple-default-envs-light.png#only-light" />
-<img alt="Multiple default environments" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/multiple-default-envs-dark.png#only-dark" /></p>
-<p>It is recommended to rename the environments to something unique.</p>
-<h2 id="debugging">Debugging<a class="headerlink" href="#debugging" title="Permanent link">#</a></h2>
-<p>Logs are written to <code>~/.cache/pixi-pycharm.log</code>.
-You can use them to debug problems.
-Please attach the logs when <a href="https://github.com/pavelzw/pixi-pycharm/issues/new?template=bug-report.md">filing a bug report</a>.</p>
 
 
 
@@ -1454,9 +1409,9 @@ Please attach the logs when <a href="https://github.com/pavelzw/pixi-pycharm/iss
           
             
             <a
-              href="../../basic_usage/"
+              href="../pycharm/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Basic Usage"
+              aria-label="Previous: PyCharm"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1467,7 +1422,7 @@ Please attach the logs when <a href="https://github.com/pavelzw/pixi-pycharm/iss
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Basic Usage
+                  PyCharm
                 </div>
               </div>
             </a>
@@ -1477,16 +1432,16 @@ Please attach the logs when <a href="https://github.com/pavelzw/pixi-pycharm/iss
           
             
             <a
-              href="../r_studio/"
+              href="../../tutorials/ros2/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: RStudio"
+              aria-label="Next: ROS 2"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  RStudio
+                  ROS 2
                 </div>
               </div>
               <div class="md-footer__button md-icon">
