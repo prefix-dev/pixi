@@ -101,7 +101,7 @@ nav:
       - Basic Usage: basic_usage.md
       - IDE Integration:
           - PyCharm: ide_integration/pycharm.md
-          - RStudio: ide_integration/rstudio.md
+          - RStudio: ide_integration/r_studio.md
   - Tutorials:
       - ROS 2: tutorials/ros2.md
   - Examples:
