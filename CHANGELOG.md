@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2024-04-10
+### ✨ Highlights
+- This release adds a new `pixi tree` command to show the dependency tree of the project.
+- Pixi now persists the manifest and environment when activating a shell, so you can use pixi as if you are in that folder while in the shell.
+
+### 📃 Details
+#### Added
+- `pixi tree` command to show dependency tree by @abkfenris in [#1069](https://github.com/prefix-dev/pixi/pull/1069)
+- Persistent shell manifests by @abkfenris in [#1080](https://github.com/prefix-dev/pixi/pull/1080)
+- Add to pypi in feature (`pixi add --feature test --pypi package`) by @ruben-arts in [#1135](https://github.com/prefix-dev/pixi/pull/1135)
+- Use new mapping by @nichmor in [#888](https://github.com/prefix-dev/pixi/pull/888)
+- `--no-progress` to disable all progress bars by @baszalmstra in [#1105](https://github.com/prefix-dev/pixi/pull/1105)
+- Create a table if channel is specified (`pixi add conda-forge::rattler-build`) by @baszalmstra in [#1079](https://github.com/prefix-dev/pixi/pull/1079)
+
+#### Changed
+- Add the project itself as an editable dependency by @olivier-lacroix in [#1084](https://github.com/prefix-dev/pixi/pull/1084)
+- Get `tool.pixi.project.name` from `project.name` by @olivier-lacroix in [#1112](https://github.com/prefix-dev/pixi/pull/1112)
+- Create `features` and `environments` from extras by @olivier-lacroix in [#1077](https://github.com/prefix-dev/pixi/pull/1077)
+- Pypi supports come out of Beta by @olivier-lacroix in [#1120](https://github.com/prefix-dev/pixi/pull/1120)
+- Enable to force `PIXI_ARCH` for pixi installation by @beenje in [#1129](https://github.com/prefix-dev/pixi/pull/1129)
+- Improve tool.pixi.project detection logic by @olivier-lacroix in [#1127](https://github.com/prefix-dev/pixi/pull/1127)
+- Add purls for packages if adding pypi dependencies by @nichmor in [#1148](https://github.com/prefix-dev/pixi/pull/1148)
+- Add env name if not default to `tree` and `list` commands by @ruben-arts in [#1145](https://github.com/prefix-dev/pixi/pull/1145)
+
+#### Documentation
+- Add MODFLOW 6 to community docs by @Hofer-Julian in [#1125](https://github.com/prefix-dev/pixi/pull/1125)
+- Addition of ros2 tutorial by @ruben-arts in [#1116](https://github.com/prefix-dev/pixi/pull/1116)
+- Improve install script docs by @ruben-arts in [#1136](https://github.com/prefix-dev/pixi/pull/1136)
+- More structured table of content by @tdejager in [#1142](https://github.com/prefix-dev/pixi/pull/1142)
+
+#### Fixed
+- Amend syntax in `conda-meta/history` to prevent `conda.history.History.parse()` error by @jaimergp in [#1117](https://github.com/prefix-dev/pixi/pull/1117)
+- Fix docker example and include `pyproject.toml` by @tdejager in [#1121](https://github.com/prefix-dev/pixi/pull/1121)
+
+## New Contributors
+* @abkfenris made their first contribution in [#1069](https://github.com/prefix-dev/pixi/pull/1069)
+* @beenje made their first contribution in [#1129](https://github.com/prefix-dev/pixi/pull/1129)
+* @jaimergp made their first contribution in [#1117](https://github.com/prefix-dev/pixi/pull/1117)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.18.0..v0.19.0)
+
+
 ## [0.18.0] - 2024-04-02
 ### ✨ Highlights
 - This release adds support for `pyproject.toml`, now pixi reads from the `[tool.pixi]` table.
@@ -31,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add lockfile update description in preparation for pixi update by @ruben-arts in [#1073](https://github.com/prefix-dev/pixi/pull/1073)
 - `zsh` may be used for installation on macOS by @pya in [#1091](https://github.com/prefix-dev/pixi/pull/1091)
 - Fix typo in `pixi auth` documentation by @ytausch in [#1076](https://github.com/prefix-dev/pixi/pull/1076)
+- Add `rstudio` to the IDE integration docs by @wolfv in [#1144](https://github.com/prefix-dev/pixi/pull/1144)
 
 #### Fixed
 - Test failure on riscv64 by @hack3ric in [#1045](https://github.com/prefix-dev/pixi/pull/1045)
