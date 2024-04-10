@@ -4,8 +4,46 @@ title: JupyterLab Integration
 description: Use JupyterLab with pixi environments
 ---
 
+## Basic usage
+
+Using JupyterLab with pixi is very simple.
+You can just create a new pixi project and add the `jupyterlab` package to it.
+The full example is provided under the following [Github link](https://github.com/prefix-dev/pixi/tree/main/examples/jupyterlab).
+
+```bash
+pixi init
+pixi add jupyterlab
+```
+
+This will create a new pixi project and add the `jupyterlab` package to it. You can then start JupyterLab using the
+following command:
+
+```bash
+pixi run jupyter lab
+```
+
+If you want to add more "kernels" to JupyterLab, you can simply add them to your current project – as well as any dependencies from the scientific stack you might need.
+
+```bash
+pixi add bash_kernel ipywidgets matplotlib numpy pandas  # ...
+```
+
+### What kernels are available?
+
+You can easily install more "kernels" for JupyterLab. The `conda-forge` repository has a number of interesting additional kernels - not just Python!
+
+- [**`bash_kernel`**](https://prefix.dev/channels/conda-forge/packages/bash_kernel) A kernel for bash
+- [**`xeus-cpp`**](https://prefix.dev/channels/conda-forge/packages/xeus-cpp) A C++ kernel based on the new clang-repl
+- [**`xeus-cling`**](https://prefix.dev/channels/conda-forge/packages/xeus-cling) A C++ kernel based on the slightly older Cling
+- [**`xeus-lua`**](https://prefix.dev/channels/conda-forge/packages/xeus-lua) A Lua kernel
+- [**`xeus-sql`**](https://prefix.dev/channels/conda-forge/packages/xeus-sql) A kernel for SQL
+- [**`r-irkernel`**](https://prefix.dev/channels/conda-forge/packages/r-irkernel) An R kernel
+
+
+## Using JupyterLab with the pixi kernel
+
 <!--
-Modifications to this file are related to the README.md in https://github.com/renan-r-santos/pixi-kernel and
+Modifications to the following section are related to the README.md in https://github.com/renan-r-santos/pixi-kernel and
 https://github.com/renan-r-santos/pixi-kernel-binder, please keep these two in sync by making a PR in both
 -->
 
