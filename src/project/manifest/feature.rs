@@ -214,6 +214,14 @@ impl Feature {
             .next()
     }
 
+    pub fn activation_env(&self, platform: Option<Platform>) -> Option<&HashMap<String, String>> {
+        self.targets
+            .resolve(platform)
+            .filter_map(|t| t.activation.as_ref())
+            .filter_map(|a| a.env.as_ref())
+            .next()
+    }
+
     /// Returns true if the feature contains any reference to a pypi dependencies.
     pub fn has_pypi_dependencies(&self) -> bool {
         self.targets

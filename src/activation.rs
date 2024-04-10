@@ -65,14 +65,16 @@ impl Environment<'_> {
             }
             EnvironmentName::Default => self.project().name().to_string(),
         };
-        HashMap::from_iter([
+        let mut map = HashMap::from_iter([
             (format!("{ENV_PREFIX}NAME"), self.name().to_string()),
             (
                 format!("{ENV_PREFIX}PLATFORMS"),
                 self.platforms().iter().map(|plat| plat.as_str()).join(","),
             ),
             ("PIXI_PROMPT".to_string(), format!("({}) ", prompt)),
-        ])
+        ]);
+        map.extend(self.activation_env(Some(Platform::current())));
+        map
     }
 }
 
@@ -239,6 +241,9 @@ mod tests {
         channels = ["conda-forge"]
         platforms = ["linux-64", "osx-64", "win-64"]
 
+        [activation.env]
+        TEST = "123test123"
+
         [feature.test.dependencies]
         pytest = "*"
         [environments]
@@ -260,6 +265,7 @@ mod tests {
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "test");
         assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));
         assert!(env.get("PIXI_PROMPT").unwrap().contains("test"));
+        assert!(env.get("TEST").unwrap().contains("123test123"));
     }
 
     #[test]

@@ -323,6 +323,18 @@ impl<'p> Environment<'p> {
             .collect()
     }
 
+    /// Returns the environment variables that should be set when activating this environment.
+    ///
+    /// The environment variables of all features are combined in the order they are defined for the environment.
+    pub fn activation_env(&self, platform: Option<Platform>) -> HashMap<String, String> {
+        self.features(true)
+            .filter_map(|f| f.activation_env(platform))
+            .fold(HashMap::new(), |mut acc, env| {
+                acc.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
+                acc
+            })
+    }
+
     /// Validates that the given platform is supported by this environment.
     fn validate_platform_support(
         &self,
