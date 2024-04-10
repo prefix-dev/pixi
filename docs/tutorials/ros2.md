@@ -11,8 +11,9 @@ The audience for this tutorial is developers who are familiar with ROS 2 and how
   The crux of this tutorial is to show you only need pixi!
 - On Windows, it's advised to enable Developer mode. Go to Settings -> Update & Security -> For developers -> Developer mode.
 
-If you're new to pixi, you can check out the [basic usage](../basic_usage.md) guide.
-This will teach you the basics of pixi project within 3 minutes.
+!!! note ""
+    If you're new to pixi, you can check out the [basic usage](../basic_usage.md) guide.
+    This will teach you the basics of pixi project within 3 minutes.
 
 ## Create a pixi project.
 
