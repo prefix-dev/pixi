@@ -1,8 +1,12 @@
+use std::str::FromStr;
+
 use crate::common::{
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };
-use rattler_conda_types::Platform;
+use rattler_conda_types::{PackageName, Platform};
+use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
+use serial_test::serial;
 use tempfile::TempDir;
 use url::Url;
 
@@ -82,4 +86,65 @@ async fn conda_solve_group_functionality() {
         lock_file.contains_match_spec("test", platform, "bar"),
         "test should contain bar"
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[serial]
+// #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_purl_are_added_for_pypi() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+    // Add and update lockfile with this version of python
+    pixi.add("boltons").with_install(true).await.unwrap();
+
+    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+
+    // Check if boltons has a purl
+    lock_file
+        .default_environment()
+        .unwrap()
+        .packages(Platform::current())
+        .unwrap()
+        .for_each(|dep| {
+            if dep.as_conda().unwrap().package_record().name
+                == PackageName::from_str("boltons").unwrap()
+            {
+                assert!(dep.as_conda().unwrap().package_record().purls.is_empty());
+            }
+        });
+
+    // Add boltons from pypi
+    pixi.add("boltons")
+        .with_install(true)
+        .set_type(pixi::DependencyType::PypiDependency)
+        .await
+        .unwrap();
+
+    let lock_file = pixi.up_to_date_lock_file().await.unwrap();
+
+    // Check if boltons has a purl
+    lock_file
+        .default_environment()
+        .unwrap()
+        .packages(Platform::current())
+        .unwrap()
+        .for_each(|dep| {
+            if dep.as_conda().unwrap().package_record().name
+                == PackageName::from_str("boltons").unwrap()
+            {
+                assert!(!dep.as_conda().unwrap().package_record().purls.is_empty());
+            }
+        });
+
+    // Check if boltons exists only as conda dependency
+    assert!(lock_file.contains_match_spec(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "boltons"
+    ));
+    assert!(!lock_file.contains_pypi_package(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "boltons"
+    ));
 }

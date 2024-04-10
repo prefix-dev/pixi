@@ -6,7 +6,7 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{Channel, ChannelConfig, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
 
@@ -402,16 +402,19 @@ fn print_matching_packages<W: Write>(
         (packages, &[][..])
     };
 
+    let channel_config = ChannelConfig::default();
     for package in packages {
         // TODO: change channel fetch logic to be more robust
         // currently it relies on channel field being a url with trailing slash
         // https://github.com/mamba-org/rattler/issues/146
-        let channel_name =
-            if let Some(channel) = package.channel.strip_prefix("https://conda.anaconda.org/") {
-                channel.trim_end_matches('/')
-            } else {
-                package.channel.as_str()
-            };
+        let channel_name = if let Some(channel) = package
+            .channel
+            .strip_prefix(channel_config.channel_alias.as_str())
+        {
+            channel.trim_end_matches('/')
+        } else {
+            package.channel.as_str()
+        };
 
         let channel_name = format!("{}/{}", channel_name, package.package_record.subdir);
 
