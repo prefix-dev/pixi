@@ -21,6 +21,7 @@ use crate::Project;
 pub enum SortBy {
     Size,
     Name,
+    // BREAK: remove the alias
     #[value(alias = "type")]
     Kind,
 }
