@@ -2,12 +2,43 @@ use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
 use std::{collections::HashMap, sync::Arc};
+use url::Url;
 
 use async_once_cell::OnceCell;
 
 use crate::pypi_mapping::MappingLocation;
 
 use super::{prefix_pypi_name_mapping, MappingMap, Reporter};
+
+pub async fn fetch_mapping_from_url(
+    client: &ClientWithMiddleware,
+    url: &Url,
+) -> miette::Result<HashMap<String, String>> {
+    let response = client
+        .get(url.clone())
+        .send()
+        .await
+        .into_diagnostic()
+        .context(format!(
+            "failed to download pypi mapping from {} location",
+            url.as_str()
+        ))?;
+
+    if !response.status().is_success() {
+        return Err(miette::miette!(
+            "Could not request mapping located at {:?}",
+            url.as_str()
+        ));
+    }
+
+    let mapping_by_name: HashMap<String, String> =
+        response.json().await.into_diagnostic().context(format!(
+        "failed to parse pypi name mapping located at {}. Please make sure that it's a valid json",
+        url
+    ))?;
+
+    Ok(mapping_by_name)
+}
 
 pub async fn fetch_custom_mapping(
     client: &ClientWithMiddleware,
@@ -29,18 +60,19 @@ pub async fn fetch_custom_mapping(
                             .send()
                             .await
                             .into_diagnostic()
-                            .context(format!("failed to download pypi mapping from {} location", url.as_str()))?;
+                            .context(format!(
+                                "failed to download pypi mapping from {} location",
+                                url.as_str()
+                            ))?;
 
                         if !response.status().is_success() {
-                            return Err(miette::miette!("Could not request mapping located at {:?}", url.as_str()));
+                            return Err(miette::miette!(
+                                "Could not request mapping located at {:?}",
+                                url.as_str()
+                            ));
                         }
 
-                        let mapping_by_name: HashMap<String, String> = response
-                            .json()
-                            .await
-                            .into_diagnostic()
-                            .context(format!("failed to parse pypi name mapping located at {}. Please make sure that it's a valid json", url))
-                            ?;
+                        let mapping_by_name = fetch_mapping_from_url(client, url).await?;
 
                         mapping_url_to_name.insert(name.to_string(), mapping_by_name);
                     }
@@ -82,12 +114,18 @@ pub async fn amend_pypi_purls(
         reporter,
     )
     .await?;
+    let compressed_mapping =
+        prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client).await?;
 
     let custom_mapping = fetch_custom_mapping(client, mapping_url).await?;
 
     for record in conda_packages.iter_mut() {
         if !mapping_url.contains_key(&record.channel) {
-            prefix_pypi_name_mapping::amend_pypi_purls_for_record(record, &prefix_mapping)?;
+            prefix_pypi_name_mapping::amend_pypi_purls_for_record(
+                record,
+                &prefix_mapping,
+                &compressed_mapping,
+            )?;
         } else {
             amend_pypi_purls_for_record(record, custom_mapping)?;
         }

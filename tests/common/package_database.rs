@@ -120,7 +120,7 @@ impl PackageDatabase {
 /// Description of a package.
 #[derive(Clone, Debug)]
 pub struct Package {
-    package_record: PackageRecord,
+    pub package_record: PackageRecord,
     subdir: Platform,
     archive_type: ArchiveType,
 }
