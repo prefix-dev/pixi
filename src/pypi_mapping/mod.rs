@@ -9,7 +9,7 @@ use url::Url;
 use crate::config::get_cache_dir;
 
 mod custom_pypi_mapping;
-mod prefix_pypi_name_mapping;
+pub mod prefix_pypi_name_mapping;
 
 pub trait Reporter: Send + Sync {
     fn download_started(&self, package: &RepoDataRecord, total: usize);

@@ -1,10 +1,11 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use crate::common::{
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };
-use rattler_conda_types::{PackageName, Platform};
+use pixi::pypi_mapping;
+use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use serial_test::serial;
 use tempfile::TempDir;
@@ -147,4 +148,40 @@ async fn test_purl_are_added_for_pypi() {
         Platform::current(),
         "boltons"
     ));
+}
+
+#[tokio::test]
+async fn test_compressed_mapping_catch_missing_package() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    let project = pixi.project().unwrap();
+    let client = project.authenticated_client();
+    let foo_bar_package = Package::build("foo-bar-car", "2").finish();
+
+    let mut repo_data_record = RepoDataRecord {
+        package_record: foo_bar_package.package_record,
+        file_name: "foo-bar-car".to_owned(),
+        url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
+        channel: "dummy-channel".to_owned(),
+    };
+
+    let packages = vec![repo_data_record.clone()];
+
+    let conda_mapping =
+        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
+            .await
+            .unwrap();
+    let compressed_mapping = HashMap::from([("foo-bar-car".to_owned(), "my-test-name".to_owned())]);
+
+    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
+        &mut repo_data_record,
+        &conda_mapping,
+        &compressed_mapping,
+    )
+    .unwrap();
+
+    let first_purl = repo_data_record.package_record.purls.pop().unwrap();
+
+    assert!(first_purl.name() == "my-test-name")
 }
