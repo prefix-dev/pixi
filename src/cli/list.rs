@@ -21,6 +21,7 @@ use crate::Project;
 pub enum SortBy {
     Size,
     Name,
+    #[value(alias = "type")]
     Kind,
 }
 
