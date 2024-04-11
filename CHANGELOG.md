@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.1] - 2024-04-11
+### ✨ Highlights
+This fixes the issue where pixi would generate broken environments/lockfiles when a mapping for a brand-new version of a package is missing.
+
+### 📃 Details
+- Add fallback mechanism for missing mapping by @nichmor in [#1166](https://github.com/prefix-dev/pixi/pull/1166)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.19.0..v0.19.1)
+
 ## [0.19.0] - 2024-04-10
 ### ✨ Highlights
 - This release adds a new `pixi tree` command to show the dependency tree of the project.

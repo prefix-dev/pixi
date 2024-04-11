@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
 use rattler_conda_types::RepoDataRecord;
@@ -9,7 +9,7 @@ use url::Url;
 use crate::config::get_cache_dir;
 
 mod custom_pypi_mapping;
-mod prefix_pypi_name_mapping;
+pub mod prefix_pypi_name_mapping;
 
 pub trait Reporter: Send + Sync {
     fn download_started(&self, package: &RepoDataRecord, total: usize);
@@ -67,4 +67,14 @@ pub async fn amend_pypi_purls(
     }
 
     Ok(())
+}
+
+/// Returns `true` if the specified record refers to a conda-forge package.
+pub fn is_conda_forge_record(record: &RepoDataRecord) -> bool {
+    Url::from_str(&record.channel).map_or(false, |u| is_conda_forge_url(&u))
+}
+
+/// Returns `true` if the specified url refers to a conda-forge channel.
+pub fn is_conda_forge_url(url: &Url) -> bool {
+    url.path().starts_with("/conda-forge")
 }
