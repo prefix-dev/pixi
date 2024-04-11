@@ -56,13 +56,28 @@ pub async fn amend_pypi_purls(
         .with(retry_strategy)
         .build();
 
+    // This is a default mapping that will be used if no custom mapping is provided
+    let mut default_mapping = MappingMap::new();
+    default_mapping.insert(
+        "conda-forge".to_string(),
+        MappingLocation::Url(
+            Url::parse("https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/mapping_as_grayskull.json").unwrap(),
+        ),
+    );
+
     match mapping_source {
         MappingSource::Custom { mapping } => {
             custom_pypi_mapping::amend_pypi_purls(&client, mapping, conda_packages, reporter)
                 .await?;
         }
-        MappingSource::Prefix => {
-            prefix_pypi_name_mapping::amend_pypi_purls(&client, conda_packages, reporter).await?;
+        _ => {
+            custom_pypi_mapping::amend_pypi_purls(
+                &client,
+                &default_mapping,
+                conda_packages,
+                reporter,
+            )
+            .await?;
         }
     }
 

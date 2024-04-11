@@ -138,7 +138,7 @@ pub async fn conda_pypi_name_mapping(
 }
 
 /// Amend the records with pypi purls if they are not present yet.
-pub async fn amend_pypi_purls(
+pub async fn _amend_pypi_purls(
     client: &ClientWithMiddleware,
     conda_packages: &mut [RepoDataRecord],
     reporter: Option<Arc<dyn Reporter>>,
