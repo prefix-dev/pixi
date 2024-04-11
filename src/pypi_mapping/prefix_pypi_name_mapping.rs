@@ -12,11 +12,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
+use url::Url;
 
-use super::Reporter;
+use super::{custom_pypi_mapping, Reporter};
 
 const STORAGE_URL: &str = "https://conda-mapping.prefix.dev";
 const HASH_DIR: &str = "hash-v0";
+const COMPRESSED_MAPPING: &str =
+    "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/mapping_as_grayskull.json";
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Package {
@@ -137,6 +140,16 @@ pub async fn conda_pypi_name_mapping(
     Ok(result_map)
 }
 
+/// Downloads and caches prefix.dev conda-pypi mapping.
+pub async fn conda_pypi_name_compressed_mapping(
+    client: &ClientWithMiddleware,
+) -> miette::Result<HashMap<String, String>> {
+    let compressed_mapping_url =
+        Url::parse(COMPRESSED_MAPPING).expect("COMPRESSED_MAPPING static variable should be valid");
+
+    custom_pypi_mapping::fetch_mapping_from_url(client, &compressed_mapping_url).await
+}
+
 /// Amend the records with pypi purls if they are not present yet.
 pub async fn amend_pypi_purls(
     client: &ClientWithMiddleware,
@@ -144,8 +157,9 @@ pub async fn amend_pypi_purls(
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
     let conda_mapping = conda_pypi_name_mapping(client, conda_packages, reporter).await?;
+    let compressed_mapping = conda_pypi_name_compressed_mapping(client).await?;
     for record in conda_packages.iter_mut() {
-        amend_pypi_purls_for_record(record, &conda_mapping)?;
+        amend_pypi_purls_for_record(record, &conda_mapping, &compressed_mapping)?;
     }
 
     Ok(())
@@ -158,6 +172,7 @@ pub async fn amend_pypi_purls(
 pub fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
     conda_forge_mapping: &HashMap<Sha256Hash, Package>,
+    compressed_mapping: &HashMap<String, String>,
 ) -> miette::Result<()> {
     // If the package already has a pypi name we can stop here.
     if record
@@ -171,21 +186,23 @@ pub fn amend_pypi_purls_for_record(
 
     if let Some(sha256) = record.package_record.sha256 {
         if let Some(mapped_name) = conda_forge_mapping.get(&sha256) {
-            if let Some(pypi_names_with_versions) = &mapped_name.versions {
-                for (pypi_name, pypi_version) in pypi_names_with_versions {
-                    let mut purl = PackageUrl::builder(String::from("pypi"), pypi_name);
-                    // sometimes packages are mapped to 0.0.0
-                    // we don't want this version because we can't prove if it's actual or not
-                    let pypi_version_str = pypi_version.to_string();
-                    if pypi_version_str != "0.0.0" {
-                        purl = purl.with_version(pypi_version_str);
-                    };
-
-                    let built_purl = purl.build().expect("valid pypi package url and version");
+            if let Some(pypi_names) = &mapped_name.versions {
+                for pypi_name in pypi_names.keys() {
+                    let purl = PackageUrl::builder(String::from("pypi"), pypi_name);
+                    let built_purl = purl.build().expect("valid pypi package url");
                     record.package_record.purls.push(built_purl);
                 }
             }
+        } else if let Some(mapped_name) =
+            compressed_mapping.get(record.package_record.name.as_normalized())
+        {
+            // maybe the packages is not yet updated
+            // so fallback to the one from compressed mapping
+            let purl = PackageUrl::builder(String::from("pypi"), mapped_name);
+            let built_purl = purl.build().expect("valid pypi package url");
+            record.package_record.purls.push(built_purl);
         }
+        // nothing was matched so we don't add purls for it
     }
 
     Ok(())
