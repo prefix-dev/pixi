@@ -5,7 +5,7 @@ use crate::common::{
     LockFileExt, PixiControl,
 };
 use pixi::pypi_mapping;
-use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use serial_test::serial;
 use tempfile::TempDir;
