@@ -33,19 +33,21 @@ my_rust_project
 
 The `pixi.toml` file is the manifest file for your project. It should look like this:
 
-```toml title="pixi.toml"
+```toml  title="pixi.toml"
 [project]
 name = "my_rust_project"
 version = "0.1.0"
 description = "Add a short description here"
 authors = ["User Name <user.name@email.url>"]
 channels = ["conda-forge"]
-platforms = ["linux-64"]
+platforms = ["linux-64"] # (1)!
 
 [tasks]
 
 [dependencies]
 ```
+
+1. The `platforms` is set to your system's platform by default. You can change it to any platform you want to support. e.g. `["linux-64", "osx-64", "osx-arm64", "win-64"]`.
 
 ## Add Rust dependencies
 
@@ -54,13 +56,18 @@ To use a pixi project you don't need any dependencies on your system, all the de
 pixi add rust
 ```
 
-This will add the `rust` package to your `pixi.toml` file. Which includes the `rust` toolchain, and `cargo`.
+This will add the `rust` package to your `pixi.toml` file under `[dependencies]`.
+Which includes the `rust` toolchain, and `cargo`.
 
 ## Add a `cargo` project
 Now that you have rust installed, you can create a `cargo` project in your `pixi` project.
 ```shell
 pixi run cargo init
 ```
+
+`pixi run` is pixi's way to run commands in the `pixi` environment, it will make sure that the environment is set up correctly for the command to run.
+It runs its own cross-platform shell, if you want more information checkout the [`tasks` documentation](../features/advanced_tasks.md).
+You can also activate the environment in your own shell by running `pixi shell`, after that you don't need `pixi run ...` anymore.
 
 Now we can build a `cargo` project using `pixi`.
 ```shell
@@ -113,7 +120,7 @@ pixi run cargo add git2
 If your system is not preconfigured to build C and have the `libssl-dev` package installed you will not be able to build the project:
 ```shell
 pixi run build
-```
+...
 Could not find directory of OpenSSL installation, and this `-sys` crate cannot
 proceed without this knowledge. If OpenSSL is installed and this crate had
 trouble finding it,  you can set the `OPENSSL_DIR` environment variable for the
@@ -137,7 +144,7 @@ could not be found. If you have OpenSSL installed you can likely fix this by
 installing `pkg-config`.
 ...
 ```
-You can fix this, by adding some dependencies, with pixi:
+You can fix this, by adding the necessary dependencies for building git2, with pixi:
 ```shell
 pixi add openssl pkg-config compilers
 ```
@@ -151,3 +158,38 @@ pixi run build
     Finished dev [unoptimized + debuginfo] target(s) in 7.44s
      Running `target/debug/my_rust_project`
 ```
+
+## Extra: Add more tasks
+You can add more tasks to your `pixi.toml` file to simplify your workflow.
+
+For example, you can add a `test` task to run your tests:
+```shell
+pixi task add test "cargo test"
+```
+
+And you can add a `clean` task to clean your project:
+```shell
+pixi task add clean "cargo clean"
+```
+
+You can add a formatting task to your project:
+```shell
+pixi task add fmt "cargo fmt"
+```
+
+You can extend these tasks to run multiple commands with the use of the `depends_on` field.
+```shell
+pixi task add lint "cargo clippy" --depends-on fmt
+```
+
+## Conclusion
+In this tutorial, we showed you how to create a Rust project using `pixi`.
+We also showed you how to **add dependencies** to your project using `pixi`.
+This way you can make sure that your project is **reproducible** on **any system** that has `pixi` installed.
+
+
+## Show Off Your Work!
+Finished with your project?
+We'd love to see what you've created!
+Share your work on social media using the hashtag #pixi and tag us @prefix_dev.
+Let's inspire the community together!
