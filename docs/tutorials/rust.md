@@ -95,7 +95,7 @@ pixi run start
 Hello, world!
 ```
 
-Congratulations you have a Rust project running on your machine with pixi!
+Congratulations, you have a Rust project running on your machine with pixi!
 
 ## Next steps, why is this useful when there is `rustup`?
 Cargo is not a binary package manager, but a source package manager.
