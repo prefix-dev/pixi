@@ -4,6 +4,7 @@ In this tutorial, we will show you how to develop a Rust package using `pixi`.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.
 
 The audience for this tutorial is developers who are familiar with Rust and `cargo` and how are interested to try pixi for their development workflow.
+The benefit would be within a rust workflow that you lock both rust and the C/System dependencies your project might be using. E.g tokio users will almost most definitely use `openssl`.
 
 !!! note ""
     If you're new to pixi, you can check out the [basic usage](../basic_usage.md) guide.
