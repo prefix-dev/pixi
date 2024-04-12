@@ -53,7 +53,7 @@ To use a pixi project you don't need any dependencies on your system, all the de
 pixi add rust
 ```
 
-This will add the `rust` package to your `pixi.toml` file.
+This will add the `rust` package to your `pixi.toml` file. Which includes the `rust` toolchain, and `cargo`.
 
 ## Add a `cargo` project
 As you now have rust installed, you can create a `cargo` project in your `pixi` project.
