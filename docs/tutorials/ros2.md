@@ -209,6 +209,17 @@ pixi run ros2 run my_cpp_package my_cpp_node
     pixi task add hello-cpp "ros2 run my_cpp_package my_cpp_node"
     ```
 
+## Conclusion
+In this tutorial, we showed you how to create a Python & CMake ROS2 project using `pixi`.
+We also showed you how to **add dependencies** to your project using `pixi`, and how to **run your project** using `pixi run`.
+This way you can make sure that your project is **reproducible** on all your machines that have `pixi` installed.
+
+## Show Off Your Work!
+Finished with your project?
+We'd love to see what you've created!
+Share your work on social media using the hashtag #pixi and tag us @prefix_dev.
+Let's inspire the community together!
+
 ## Frequently asked questions
 
 ### What happens with `rosdep`?
