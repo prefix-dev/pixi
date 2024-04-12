@@ -142,7 +142,7 @@ You can fix this, by adding some dependencies, with pixi:
 pixi add openssl pkg-config compilers
 ```
 
-Now you can build your project again:
+Now you should be able to build your project again:
 ```shell
 pixi run build
 ...
