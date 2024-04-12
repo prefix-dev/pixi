@@ -113,7 +113,7 @@ pixi run cargo add git2
 If your system is not preconfigured to build C and have the `libssl-dev` package installed you will not be able to build the project:
 ```shell
 pixi run build
-...
+```
 Could not find directory of OpenSSL installation, and this `-sys` crate cannot
 proceed without this knowledge. If OpenSSL is installed and this crate had
 trouble finding it,  you can set the `OPENSSL_DIR` environment variable for the
