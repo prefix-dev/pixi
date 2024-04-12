@@ -98,7 +98,7 @@ Hello, world!
 Congratulations, you have a Rust project running on your machine with pixi!
 
 ## Next steps, why is this useful when there is `rustup`?
-Cargo is not a binary package manager, but a source package manager.
+Cargo is not a binary package manager, but a source-based package manager.
 This means that you need to have the Rust compiler installed on your system to use it.
 And possibly other dependencies that are not included in the `cargo` package manager.
 For example, you might need to install `openssl` or `libssl-dev` on your system to build a package.
