@@ -136,7 +136,7 @@ could not be found. If you have OpenSSL installed you can likely fix this by
 installing `pkg-config`.
 ...
 ```
-You can fix this with pixi:
+You can fix this, by adding some dependencies, with pixi:
 ```shell
 pixi add openssl pkg-config compilers
 ```
