@@ -1,13 +1,17 @@
+use std::collections::HashMap;
 use std::io;
 use std::io::{stdout, Write};
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use clap::Parser;
 use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
-use rattler_conda_types::Platform;
+use miette::IntoDiagnostic;
+use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform, VersionWithSource};
 use rattler_lock::{Package, UrlOrPath};
+use rattler_repodata_gateway::sparse::SparseRepoData;
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
@@ -64,13 +68,21 @@ pub struct Args {
     /// Don't install the environment for pypi solving, only update the lock-file if it can solve without installing.
     #[arg(long)]
     pub no_install: bool,
+
+    /// Find and filter to just packages that have newer versions
+    #[arg(short, long)]
+    pub outdated: bool,
 }
 
 fn serde_skip_is_editable(editable: &bool) -> bool {
     !(*editable)
 }
 
-#[derive(Serialize)]
+fn serde_skip_new_version(new_version: &Option<String>) -> bool {
+    new_version.is_none()
+}
+
+#[derive(Serialize, Clone)]
 struct PackageToOutput {
     name: String,
     version: String,
@@ -81,6 +93,8 @@ struct PackageToOutput {
     is_explicit: bool,
     #[serde(skip_serializing_if = "serde_skip_is_editable")]
     is_editable: bool,
+    #[serde(skip_serializing_if = "serde_skip_new_version")]
+    new_version: Option<String>,
 }
 
 /// Get directory size
@@ -180,6 +194,67 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .collect::<Vec<_>>();
     }
 
+    if args.outdated {
+        let sparse_repo_data = project.fetch_sparse_repodata().await?;
+        let platform_sparse_repo_data = environment
+            .channels()
+            .into_iter()
+            .cloned()
+            .cartesian_product(vec![platform, Platform::NoArch])
+            .filter_map(|target| sparse_repo_data.get(&target));
+
+        let conda_package_names = packages_to_output
+            .clone()
+            .into_iter()
+            .filter(|package| package.kind == *"conda")
+            .map(|package| MatchSpec::from_str(&package.name, ParseStrictness::Strict))
+            .collect::<Result<Vec<_>, _>>()
+            .into_diagnostic()?;
+
+        let conda_package_names = conda_package_names
+            .into_iter()
+            .map(|spec| match &spec.name {
+                Some(name) => Ok(name.clone()),
+                None => Err(miette::miette!("missing package name for spec '{spec}'")),
+            })
+            .collect::<miette::Result<Vec<PackageName>>>()?;
+
+        let available_packages = SparseRepoData::load_records_recursive(
+            platform_sparse_repo_data,
+            conda_package_names.iter().cloned(),
+            None,
+        )
+        .into_diagnostic()?;
+
+        let mut latest_versions = HashMap::new();
+
+        for group in available_packages {
+            for record in group.iter().peekable() {
+                let name = record.package_record.name.as_normalized();
+                let version = record.package_record.version.clone();
+
+                let entry = latest_versions
+                    .entry(name.to_owned())
+                    .or_insert(version.clone());
+                if entry.as_ref() < &version {
+                    *entry = version;
+                }
+            }
+        }
+        for package in packages_to_output.iter_mut() {
+            if let Some(new_version) = latest_versions.get(&package.name) {
+                // println!("{} {} {}", &package.name, &package.version, &new_version);
+                if VersionWithSource::from_str(package.version.as_str()).into_diagnostic()?
+                    < *new_version
+                {
+                    package.new_version = Some(new_version.to_string());
+                }
+            }
+        }
+
+        // packages_to_output.retain(|package| package.new_version.is_some());
+    }
+
     // Sort according to the sorting strategy
     match args.sort_by {
         SortBy::Size => {
@@ -255,7 +330,15 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
         writeln!(
             writer,
             "\t{}\t{}\t{}\t{}\t{}{}",
-            &package.version,
+            if let Some(new_version) = &package.new_version {
+                format!(
+                    "{} ({})",
+                    &package.version,
+                    console::style(new_version).fg(Color::Red)
+                )
+            } else {
+                package.version.to_string()
+            },
             package.build.as_deref().unwrap_or(""),
             size_human,
             &package.kind,
@@ -343,5 +426,6 @@ fn create_package_to_output<'a, 'b>(
         source,
         is_explicit,
         is_editable,
+        new_version: None,
     }
 }
