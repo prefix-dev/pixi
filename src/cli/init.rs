@@ -4,7 +4,6 @@ use crate::project::manifest::pyproject::PyProjectToml;
 use crate::utils::conda_environment_file::CondaEnvFile;
 use crate::{config::get_default_author, consts};
 use crate::{FeatureName, Project};
-use clap::ArgAction;
 use clap::Parser;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
@@ -34,7 +33,7 @@ pub struct Args {
     pub env_file: Option<PathBuf>,
 
     /// Create a pyproject.toml manifest instead of a pixi.toml manifest
-    #[arg(long, action = ArgAction::SetTrue, conflicts_with = "env_file")]
+    #[arg(long, conflicts_with = "env_file")]
     pub pyproject: bool,
 }
 
