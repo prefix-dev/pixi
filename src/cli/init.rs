@@ -34,7 +34,7 @@ pub struct Args {
     pub env_file: Option<PathBuf>,
 
     /// Create a pyproject.toml manifest instead of a pixi.toml manifest
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, action = ArgAction::SetTrue, conflicts_with = "env_file")]
     pub pyproject: bool,
 }
 

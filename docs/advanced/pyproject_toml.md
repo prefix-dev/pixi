@@ -9,9 +9,9 @@ We don't advise to use the `pyproject.toml` file for anything else than python p
 
 When you already have a `pyproject.toml` file in your project, you can run `pixi init` in a that folder. Pixi will automatically
 
-- Add the above `[tool.pixi.project]` section to the file, auto-detecting your current platform;
+- Add a `[tool.pixi.project]` section to the file, with the platform and channel information required by pixi;
 - Add the current project as an editable pypi dependency;
-- Add some defaults to the `.gitignore` and `.gitattributes` file.
+- Add some defaults to the `.gitignore` and `.gitattributes` files.
 
 If you do not have an existing `pyproject.toml` file , you can run `pixi init --pyproject` in your project folder. In that case, pixi will create a `pyproject.toml` manifest from scratch with some sane defaults.
 
