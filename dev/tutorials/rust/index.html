@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/global_configuration/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/tutorials/rust/">
       
       
-        <link rel="prev" href="../github_actions/">
+        <link rel="prev" href="../ros2/">
       
       
-        <link rel="next" href="../pyproject_toml/">
+        <link rel="next" href="../../examples/cpp-sdl/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>Global Configuration - Pixi by prefix.dev</title>
+        <title>Rust - Pixi by prefix.dev</title>
       
     
     
@@ -59,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Global Configuration - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Rust - Pixi by prefix.dev" >
       
         <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/global_configuration.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/rust.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -71,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/global_configuration/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/tutorials/rust/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Global Configuration - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Rust - Pixi by prefix.dev" >
       
         <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/global_configuration.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/rust.png" >
       
     
     
@@ -102,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#global-configuration-in-pixi" class="md-skip">
+        <a href="#tutorial-develop-a-rust-package-using-pixi" class="md-skip">
           Skip to content
         </a>
       
@@ -141,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Global Configuration
+              Rust
             
           </span>
         </div>
@@ -466,8 +466,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -477,11 +479,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -495,7 +497,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             Tutorials
@@ -509,7 +511,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tutorials/ros2/" class="md-nav__link">
+      <a href="../ros2/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -527,10 +529,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../tutorials/rust/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Rust
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -539,6 +561,98 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prerequisites
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#create-a-pixi-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      Create a pixi project.
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#add-rust-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      Add Rust dependencies
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#add-a-cargo-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      Add a cargo project
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps-why-is-this-useful-when-there-is-rustup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Next steps, why is this useful when there is rustup?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extra-add-more-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Extra: Add more tasks
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Conclusion
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#show-off-your-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      Show Off Your Work!
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -796,8 +910,6 @@
       
   
   
-    
-  
   
   
     
@@ -809,11 +921,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
@@ -827,7 +939,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Advanced
@@ -841,7 +953,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../authentication/" class="md-nav__link">
+      <a href="../../advanced/authentication/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -862,7 +974,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../explain_info_command/" class="md-nav__link">
+      <a href="../../advanced/explain_info_command/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -883,7 +995,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../channel_priority/" class="md-nav__link">
+      <a href="../../advanced/channel_priority/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -904,7 +1016,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../github_actions/" class="md-nav__link">
+      <a href="../../advanced/github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -922,30 +1034,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Global Configuration
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../advanced/global_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -954,59 +1046,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      Reference
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#mirror-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      Mirror configuration
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Mirror configuration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#oci-mirrors" class="md-nav__link">
-    <span class="md-ellipsis">
-      OCI Mirrors
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1019,7 +1058,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../pyproject_toml/" class="md-nav__link">
+      <a href="../../advanced/pyproject_toml/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1266,35 +1305,74 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#reference" class="md-nav__link">
+  <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
-      Reference
+      Prerequisites
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#mirror-configuration" class="md-nav__link">
+  <a href="#create-a-pixi-project" class="md-nav__link">
     <span class="md-ellipsis">
-      Mirror configuration
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Mirror configuration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#oci-mirrors" class="md-nav__link">
-    <span class="md-ellipsis">
-      OCI Mirrors
+      Create a pixi project.
     </span>
   </a>
   
 </li>
-        
-      </ul>
-    </nav>
+      
+        <li class="md-nav__item">
+  <a href="#add-rust-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      Add Rust dependencies
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#add-a-cargo-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      Add a cargo project
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps-why-is-this-useful-when-there-is-rustup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Next steps, why is this useful when there is rustup?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extra-add-more-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Extra: Add more tasks
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Conclusion
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#show-off-your-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      Show Off Your Work!
+    </span>
+  </a>
   
 </li>
       
@@ -1313,7 +1391,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/global_configuration.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/tutorials/rust.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1321,104 +1399,152 @@
   
 
 
-<h1 id="global-configuration-in-pixi">Global configuration in pixi<a class="headerlink" href="#global-configuration-in-pixi" title="Permanent link">#</a></h1>
-<p>Pixi supports some global configuration options, as well as project-scoped
-configuration (that does not belong into the project file). The configuration is
-loaded in the following order:</p>
-<ol>
-<li>XDG compliant configuration folder (<code>$XDG_CONFIG_HOME/pixi/config.toml</code> or
-   <code>$HOME/.config/pixi/config.toml</code>)</li>
-<li>Global configuration folder, depending on the OS:<ul>
-<li>Linux: <code>$HOME/.config/pixi/config.toml</code></li>
-<li>macOS: <code>$HOME/Library/Application Support/pixi/config.toml</code></li>
-<li>Windows: <code>%APPDATA%\pixi\config.toml</code></li>
-</ul>
-</li>
-<li>Global .pixi folder: <code>~/.pixi/config.toml</code> (or <code>$PIXI_HOME/config.toml</code> if
-   the <code>PIXI_HOME</code> environment variable is set)</li>
-<li>Project-local .pixi folder: <code>$PIXI_PROJECT/.pixi/config.toml</code></li>
-<li>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code> etc.)</li>
-</ol>
+<h1 id="tutorial-develop-a-rust-package-using-pixi">Tutorial: Develop a Rust package using <code>pixi</code><a class="headerlink" href="#tutorial-develop-a-rust-package-using-pixi" title="Permanent link">#</a></h1>
+<p>In this tutorial, we will show you how to develop a Rust package using <code>pixi</code>.
+The tutorial is written to be executed from top to bottom, missing steps might result in errors.</p>
+<p>The audience for this tutorial is developers who are familiar with Rust and <code>cargo</code> and how are interested to try pixi for their development workflow.
+The benefit would be within a rust workflow that you lock both rust and the C/System dependencies your project might be using. E.g tokio users will almost most definitely use <code>openssl</code>.</p>
 <div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>To find the locations where <code>pixi</code> looks for configuration files, run
-<code>pixi</code> with <code>-v</code> or <code>--verbose</code>.</p>
+<p>If you're new to pixi, you can check out the <a href="../../basic_usage/">basic usage</a> guide.
+This will teach you the basics of pixi project within 3 minutes.</p>
 </div>
-<h2 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">#</a></h2>
-<p>The following reference describes all available configuration options.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># The default channels to select when running `pixi init` or `pixi global install`.</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># This defaults to only conda-forge.</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">default_channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># When set to false, the `(pixi)` prefix in the shell prompt is removed.</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1"># This applies to the `pixi shell` subcommand.</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># You can override this from the CLI with `--change-ps1`.</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">change_ps1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># When set to true, the TLS certificates are not verified. Note that this is a</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1"># security risk and should only be used for testing purposes or internal networks.</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># You can override this from the CLI with `--tls-no-verify`.</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">tls_no_verify</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="c1"># Override from where the authentication information is loaded.</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="c1"># Usually we try to use the keyring to load authentication data from, and only use a JSON</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="c1"># file as fallback. This option allows you to force the use of a JSON file.</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="c1"># Read more in the authentication section.</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="n">authentication_override_file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/path/to/your/override.json&quot;</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1"># configuration for conda channel-mirrors</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="k">[mirrors]</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="c1"># redirect all requests for conda-forge to the prefix.dev mirror</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">    </span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="p">]</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="c1"># redirect all requests for bioconda to one of the three listed mirrors</span>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="c1"># Note: for repodata we try the first mirror first.</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="s2">&quot;https://conda.anaconda.org/bioconda&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">    </span><span class="s2">&quot;https://conda.anaconda.org/bioconda&quot;</span><span class="p">,</span>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">    </span><span class="c1"># OCI registries are also supported</span>
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">    </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/bioconda&quot;</span><span class="p">,</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">    </span><span class="s2">&quot;https://prefix.dev/bioconda&quot;</span><span class="p">,</span>
-</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="p">]</span>
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>
-</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="k">[repodata_options]</span>
-</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="c1"># disable fetching of jlap, bz2 or zstd repodata files.</span>
-</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="c1"># This should only be used for specific old versions of artifactory and other non-compliant</span>
-</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="c1"># servers.</span>
-</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="n">disable_jlap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">  </span><span class="c1"># don&#39;t try to download repodata.jlap</span>
-</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="n">disable_bzip2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="c1"># don&#39;t try to download repodata.json.bz2</span>
-</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a><span class="n">disable_zstd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">  </span><span class="c1"># don&#39;t try to download repodata.json.zst</span>
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">#</a></h2>
+<ul>
+<li>You need to have <code>pixi</code> installed. If you haven't installed it yet, you can follow the instructions in the <a href="../../">installation guide</a>.
+  The crux of this tutorial is to show you only need pixi!</li>
+</ul>
+<h2 id="create-a-pixi-project">Create a pixi project.<a class="headerlink" href="#create-a-pixi-project" title="Permanent link">#</a></h2>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>my_rust_project
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>my_rust_project
 </span></code></pre></div>
-<h2 id="mirror-configuration">Mirror configuration<a class="headerlink" href="#mirror-configuration" title="Permanent link">#</a></h2>
-<p>You can configure mirrors for conda channels. We expect that mirrors are exact
-copies of the original channel. The implementation will look for the mirror key
-(a URL) in the <code>mirrors</code> section of the configuration file and replace the
-original URL with the mirror URL.</p>
-<p>To also include the original URL, you have to repeat it in the list of mirrors.</p>
-<p>The mirrors are prioritized based on the order of the list. We attempt to fetch
-the repodata (the most important file) from the first mirror in the list. The
-repodata contains all the SHA256 hashes of the individual packages, so it is
-important to get this file from a trusted source.</p>
-<p>You can also specify mirrors for an entire "host", e.g.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="s2">&quot;https://prefix.dev/&quot;</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="p">]</span>
+<p>It should have created a directory structure like this:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>my_rust_project
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├──<span class="w"> </span>.gitattributes
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>├──<span class="w"> </span>.gitignore
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>└──<span class="w"> </span>pixi.toml
 </span></code></pre></div>
-<p>This will forward all request to channels on anaconda.org to prefix.dev.
-Channels that are not currently mirrored on prefix.dev will fail in the above example.</p>
-<h3 id="oci-mirrors">OCI Mirrors<a class="headerlink" href="#oci-mirrors" title="Permanent link">#</a></h3>
-<p>You can also specify mirrors on the OCI registry. There is a public mirror on
-the Github container registry (ghcr.io) that is maintained by the conda-forge
-team. You can use it like this:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">]</span>
+<p>The <code>pixi.toml</code> file is the manifest file for your project. It should look like this:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_rust_project&quot;</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Add a short description here&quot;</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;User Name &lt;user.name@email.url&gt;&quot;</span><span class="p">]</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">]</span><span class="w"> </span><span class="c1"># (1)!</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="k">[tasks]</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="k">[dependencies]</span>
 </span></code></pre></div>
-<p>The GHCR mirror also contains <code>bioconda</code> packages. You can search the <a href="https://github.com/orgs/channel-mirrors/packages">available
-packages on Github</a>.</p>
+<ol>
+<li>The <code>platforms</code> is set to your system's platform by default. You can change it to any platform you want to support. e.g. <code>["linux-64", "osx-64", "osx-arm64", "win-64"]</code>.</li>
+</ol>
+<h2 id="add-rust-dependencies">Add Rust dependencies<a class="headerlink" href="#add-rust-dependencies" title="Permanent link">#</a></h2>
+<p>To use a pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>rust
+</span></code></pre></div></p>
+<p>This will add the <code>rust</code> package to your <code>pixi.toml</code> file under <code>[dependencies]</code>.
+Which includes the <code>rust</code> toolchain, and <code>cargo</code>.</p>
+<h2 id="add-a-cargo-project">Add a <code>cargo</code> project<a class="headerlink" href="#add-a-cargo-project" title="Permanent link">#</a></h2>
+<p>Now that you have rust installed, you can create a <code>cargo</code> project in your <code>pixi</code> project.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>init
+</span></code></pre></div></p>
+<p><code>pixi run</code> is pixi's way to run commands in the <code>pixi</code> environment, it will make sure that the environment is set up correctly for the command to run.
+It runs its own cross-platform shell, if you want more information checkout the <a href="../../features/advanced_tasks/"><code>tasks</code> documentation</a>.
+You can also activate the environment in your own shell by running <code>pixi shell</code>, after that you don't need <code>pixi run ...</code> anymore.</p>
+<p>Now we can build a <code>cargo</code> project using <code>pixi</code>.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>build
+</span></code></pre></div>
+To simplify the build process, you can add a <code>build</code> task to your <code>pixi.toml</code> file using the following command:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>build<span class="w"> </span><span class="s2">&quot;cargo build&quot;</span>
+</span></code></pre></div>
+Which creates this field in the <code>pixi.toml</code> file:
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cargo build&quot;</span>
+</span></code></pre></div></p>
+<p>And now you can build your project using:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>build
+</span></code></pre></div></p>
+<p>You can also run your project using:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>run
+</span></code></pre></div>
+Which you can simplify with a task again.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>start<span class="w"> </span><span class="s2">&quot;cargo run&quot;</span>
+</span></code></pre></div></p>
+<p>So you should get the following output:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>start
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>Hello,<span class="w"> </span>world!
+</span></code></pre></div></p>
+<p>Congratulations, you have a Rust project running on your machine with pixi!</p>
+<h2 id="next-steps-why-is-this-useful-when-there-is-rustup">Next steps, why is this useful when there is <code>rustup</code>?<a class="headerlink" href="#next-steps-why-is-this-useful-when-there-is-rustup" title="Permanent link">#</a></h2>
+<p>Cargo is not a binary package manager, but a source-based package manager.
+This means that you need to have the Rust compiler installed on your system to use it.
+And possibly other dependencies that are not included in the <code>cargo</code> package manager.
+For example, you might need to install <code>openssl</code> or <code>libssl-dev</code> on your system to build a package.
+This is the case for <code>pixi</code> as well, but <code>pixi</code> will install these dependencies in your project folder, so you don't have to worry about them.</p>
+<p>Add the following dependencies to your cargo project:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>add<span class="w"> </span>git2
+</span></code></pre></div></p>
+<p>If your system is not preconfigured to build C and have the <code>libssl-dev</code> package installed you will not be able to build the project:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>build
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>...
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>Could<span class="w"> </span>not<span class="w"> </span>find<span class="w"> </span>directory<span class="w"> </span>of<span class="w"> </span>OpenSSL<span class="w"> </span>installation,<span class="w"> </span>and<span class="w"> </span>this<span class="w"> </span><span class="sb">`</span>-sys<span class="sb">`</span><span class="w"> </span>crate<span class="w"> </span>cannot
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>proceed<span class="w"> </span>without<span class="w"> </span>this<span class="w"> </span>knowledge.<span class="w"> </span>If<span class="w"> </span>OpenSSL<span class="w"> </span>is<span class="w"> </span>installed<span class="w"> </span>and<span class="w"> </span>this<span class="w"> </span>crate<span class="w"> </span>had
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>trouble<span class="w"> </span>finding<span class="w"> </span>it,<span class="w">  </span>you<span class="w"> </span>can<span class="w"> </span><span class="nb">set</span><span class="w"> </span>the<span class="w"> </span><span class="sb">`</span>OPENSSL_DIR<span class="sb">`</span><span class="w"> </span>environment<span class="w"> </span>variable<span class="w"> </span><span class="k">for</span><span class="w"> </span>the
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>compilation<span class="w"> </span>process.
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>Make<span class="w"> </span>sure<span class="w"> </span>you<span class="w"> </span>also<span class="w"> </span>have<span class="w"> </span>the<span class="w"> </span>development<span class="w"> </span>packages<span class="w"> </span>of<span class="w"> </span>openssl<span class="w"> </span>installed.
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>For<span class="w"> </span>example,<span class="w"> </span><span class="sb">`</span>libssl-dev<span class="sb">`</span><span class="w"> </span>on<span class="w"> </span>Ubuntu<span class="w"> </span>or<span class="w"> </span><span class="sb">`</span>openssl-devel<span class="sb">`</span><span class="w"> </span>on<span class="w"> </span>Fedora.
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>If<span class="w"> </span>you<span class="s1">&#39;re in a situation where you think the directory *should* be found</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="s1">automatically, please open a bug at https://github.com/sfackler/rust-openssl</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="s1">and include information about your system as well as this message.</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="s1">$HOST = x86_64-unknown-linux-gnu</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="s1">$TARGET = x86_64-unknown-linux-gnu</span>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="s1">openssl-sys = 0.9.102</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>
+</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a>
+</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="s1">It looks like you&#39;</span>re<span class="w"> </span>compiling<span class="w"> </span>on<span class="w"> </span>Linux<span class="w"> </span>and<span class="w"> </span>also<span class="w"> </span>targeting<span class="w"> </span>Linux.<span class="w"> </span>Currently<span class="w"> </span>this
+</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a>requires<span class="w"> </span>the<span class="w"> </span><span class="sb">`</span>pkg-config<span class="sb">`</span><span class="w"> </span>utility<span class="w"> </span>to<span class="w"> </span>find<span class="w"> </span>OpenSSL<span class="w"> </span>but<span class="w"> </span>unfortunately<span class="w"> </span><span class="sb">`</span>pkg-config<span class="sb">`</span>
+</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a>could<span class="w"> </span>not<span class="w"> </span>be<span class="w"> </span>found.<span class="w"> </span>If<span class="w"> </span>you<span class="w"> </span>have<span class="w"> </span>OpenSSL<span class="w"> </span>installed<span class="w"> </span>you<span class="w"> </span>can<span class="w"> </span>likely<span class="w"> </span>fix<span class="w"> </span>this<span class="w"> </span>by
+</span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a>installing<span class="w"> </span><span class="sb">`</span>pkg-config<span class="sb">`</span>.
+</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a>...
+</span></code></pre></div>
+You can fix this, by adding the necessary dependencies for building git2, with pixi:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>openssl<span class="w"> </span>pkg-config<span class="w"> </span>compilers
+</span></code></pre></div></p>
+<p>Now you should be able to build your project again:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>build
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>...
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">   </span>Compiling<span class="w"> </span>git2<span class="w"> </span>v0.18.3
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">   </span>Compiling<span class="w"> </span>my_rust_project<span class="w"> </span>v0.1.0<span class="w"> </span><span class="o">(</span>/my_rust_project<span class="o">)</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span>Finished<span class="w"> </span>dev<span class="w"> </span><span class="o">[</span>unoptimized<span class="w"> </span>+<span class="w"> </span>debuginfo<span class="o">]</span><span class="w"> </span>target<span class="o">(</span>s<span class="o">)</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="m">7</span>.44s
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">     </span>Running<span class="w"> </span><span class="sb">`</span>target/debug/my_rust_project<span class="sb">`</span>
+</span></code></pre></div></p>
+<h2 id="extra-add-more-tasks">Extra: Add more tasks<a class="headerlink" href="#extra-add-more-tasks" title="Permanent link">#</a></h2>
+<p>You can add more tasks to your <code>pixi.toml</code> file to simplify your workflow.</p>
+<p>For example, you can add a <code>test</code> task to run your tests:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="s2">&quot;cargo test&quot;</span>
+</span></code></pre></div></p>
+<p>And you can add a <code>clean</code> task to clean your project:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>clean<span class="w"> </span><span class="s2">&quot;cargo clean&quot;</span>
+</span></code></pre></div></p>
+<p>You can add a formatting task to your project:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>fmt<span class="w"> </span><span class="s2">&quot;cargo fmt&quot;</span>
+</span></code></pre></div></p>
+<p>You can extend these tasks to run multiple commands with the use of the <code>depends_on</code> field.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>lint<span class="w"> </span><span class="s2">&quot;cargo clippy&quot;</span><span class="w"> </span>--depends-on<span class="w"> </span>fmt
+</span></code></pre></div></p>
+<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
+<p>In this tutorial, we showed you how to create a Rust project using <code>pixi</code>.
+We also showed you how to <strong>add dependencies</strong> to your project using <code>pixi</code>.
+This way you can make sure that your project is <strong>reproducible</strong> on <strong>any system</strong> that has <code>pixi</code> installed.</p>
+<h2 id="show-off-your-work">Show Off Your Work!<a class="headerlink" href="#show-off-your-work" title="Permanent link">#</a></h2>
+<p>Finished with your project?
+We'd love to see what you've created!
+Share your work on social media using the hashtag #pixi and tag us @prefix_dev.
+Let's inspire the community together!</p>
 
 
 
@@ -1490,9 +1616,9 @@ packages on Github</a>.</p>
           
             
             <a
-              href="../github_actions/"
+              href="../ros2/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: GitHub Actions"
+              aria-label="Previous: ROS 2"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1503,7 +1629,7 @@ packages on Github</a>.</p>
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  GitHub Actions
+                  ROS 2
                 </div>
               </div>
             </a>
@@ -1513,16 +1639,16 @@ packages on Github</a>.</p>
           
             
             <a
-              href="../pyproject_toml/"
+              href="../../examples/cpp-sdl/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Pyproject.toml"
+              aria-label="Next: C++/Cmake"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Pyproject.toml
+                  C++/Cmake
                 </div>
               </div>
               <div class="md-footer__button md-icon">
