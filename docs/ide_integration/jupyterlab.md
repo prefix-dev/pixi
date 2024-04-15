@@ -39,55 +39,39 @@ You can easily install more "kernels" for JupyterLab. The `conda-forge` reposito
 - [**`xeus-sql`**](https://prefix.dev/channels/conda-forge/packages/xeus-sql) A kernel for SQL
 - [**`r-irkernel`**](https://prefix.dev/channels/conda-forge/packages/r-irkernel) An R kernel
 
-
-## Using JupyterLab with the pixi kernel
+## Advanced usage
 
 <!--
 Modifications to the following section are related to the README.md in https://github.com/renan-r-santos/pixi-kernel and
 https://github.com/renan-r-santos/pixi-kernel-binder, please keep these two in sync by making a PR in both
 -->
 
-You can use JupyterLab with pixi by using the kernel provided by the
-[pixi-kernel](https://github.com/renan-r-santos/pixi-kernel) package.
+If you want to have only one instance of JupyterLab running but still want per-directory Pixi environments, you can use
+one of the kernels provided by the [**`pixi-kernel`**](https://prefix.dev/channels/conda-forge/packages/pixi-kernel)
+package.
 
-## Configuring JupyterLab
+### Configuring JupyterLab
 
-To get started, create a `pixi` project and add `jupyterlab` and `pixi-kernel`.
+To get started, create a Pixi project, add `jupyterlab` and `pixi-kernel` and then start JupyterLab:
 
 ```bash
 pixi init
 pixi add jupyterlab pixi-kernel
-```
-
-Having installed the dependencies, create a folder for your notebooks and start JupyterLab using the following command:
-
-```bash
-mkdir -p pixi-notebooks
-pixi run jupyter lab --notebook-dir=pixi-notebooks
+pixi run jupyter lab
 ```
 
 This will start JupyterLab and open it in your browser.
 
-![JupyterLab launcher screen showing Pixi Kernel](https://raw.githubusercontent.com/renan-r-santos/pixi-kernel/main/assets/launch-light.png#only-light)
-![JupyterLab launcher screen showing Pixi Kernel](https://raw.githubusercontent.com/renan-r-santos/pixi-kernel/main/assets/launch-dark.png#only-dark)
+![JupyterLab launcher screen showing Pixi
+Kernel](https://raw.githubusercontent.com/renan-r-santos/pixi-kernel/main/assets/launch-light.png#only-light)
+![JupyterLab launcher screen showing Pixi
+Kernel](https://raw.githubusercontent.com/renan-r-santos/pixi-kernel/main/assets/launch-dark.png#only-dark)
 
-## Using Pixi in notebooks
+`pixi-kernel` searches for a manifest file, either `pixi.toml` or `pyproject.toml`, in the same directory of your
+notebook or in any parent directory. When it finds one, it will use the environment specified in the manifest file to
+start the kernel and run your notebooks.
 
-You need to create a `pixi` project specific to the folder where your notebooks are located and add `ipykernel` as a
-dependency:
+### Binder
 
-```bash
-cd pixi-notebooks
-pixi init
-pixi add ipykernel
-```
-
-Then create a notebook and when asked to select a kernel, choose `Pixi`.
-
-## Binder
-
-If you just want to test using Pixi in JupyterLab, you can go directly to
+If you just want to check a JupyterLab environment running in the cloud using `pixi-kernel`, you can visit
 [Binder](https://mybinder.org/v2/gh/renan-r-santos/pixi-kernel-binder/main?labpath=example.ipynb).
-
-The repository [pixi-kernel-binder](https://github.com/renan-r-santos/pixi-kernel-binder) provides all the configuration
-needed to run Pixi on Binder.
