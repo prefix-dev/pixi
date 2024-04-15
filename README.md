@@ -264,7 +264,7 @@ You can use pixi in GitHub Actions to install dependencies and run commands.
 It supports automatic caching of your environments.
 
 ```yml
-- uses: prefix-dev/setup-pixi@v0.5.1
+- uses: prefix-dev/setup-pixi@v0.6.0
 - run: pixi run cowpy "Thanks for using pixi"
 ```
 
