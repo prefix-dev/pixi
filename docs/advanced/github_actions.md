@@ -306,6 +306,9 @@ On self-hosted runners, you also might want to alter the default pixi install lo
 
 1. `${{ runner.temp }}\Scripts\pixi.exe` on Windows
 
+You can also use a preinstalled local version of pixi on the runner by not setting any of the `pixi-version`,
+`pixi-url` or `pixi-bin-path` inputs. This action will then try to find a local version of pixi in the runner's PATH.
+
 ### Using the `pyproject.toml` as a manifest file for pixi.
 You can use the pyproject.toml, but it is not the default manifest file for pixi, so it's not picked up automatically, yet.
 ```yaml
