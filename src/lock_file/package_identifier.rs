@@ -1,4 +1,7 @@
-use crate::{project::manifest::python::PyPiPackageName, pypi_mapping};
+use crate::{
+    project::manifest::python::PyPiPackageName,
+    pypi_mapping::{self, prefix_pypi_name_mapping::PurlType},
+};
 use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
@@ -33,17 +36,21 @@ impl PypiPackageIdentifier {
     ) -> Result<(), ConversionError> {
         // Check the PURLs for a python package.
         let mut has_pypi_purl = false;
+        let mut not_pypi = false;
+
         for purl in record.package_record.purls.iter() {
             if let Some(entry) = Self::try_from_purl(purl, &record.package_record.version.as_str())?
             {
                 result.push(entry);
                 has_pypi_purl = true;
+            } else if let Some(true) = Self::not_pypi(purl) {
+                not_pypi = true;
             }
         }
 
         // If there is no pypi purl, but the package is a conda-forge package, we just assume that
         // the name of the package is equivalent to the name of the python package.
-        if !has_pypi_purl && pypi_mapping::is_conda_forge_record(record) {
+        if !has_pypi_purl && !not_pypi && pypi_mapping::is_conda_forge_record(record) {
             // Convert the conda package names to pypi package names. If the conversion fails we
             // just assume that its not a valid python package.
             let name = PackageName::from_str(record.package_record.name.as_source()).ok();
@@ -84,6 +91,15 @@ impl PypiPackageIdentifier {
             Self::from_pypi_purl(package_url, fallback_version).map(Some)
         } else {
             Ok(None)
+        }
+    }
+
+    /// Verify if record is not pypi type
+    pub fn not_pypi(package_url: &PackageUrl) -> Option<bool> {
+        if package_url.package_type() == PurlType::NonPypi.to_string().as_str() {
+            Some(true)
+        } else {
+            None
         }
     }
 

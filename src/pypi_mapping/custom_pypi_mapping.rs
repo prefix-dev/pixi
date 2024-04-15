@@ -1,6 +1,7 @@
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
+use serde::de::DeserializeOwned;
 use std::{collections::HashMap, sync::Arc};
 use url::Url;
 
@@ -10,10 +11,10 @@ use crate::pypi_mapping::MappingLocation;
 
 use super::{prefix_pypi_name_mapping, MappingMap, Reporter};
 
-pub async fn fetch_mapping_from_url(
+pub async fn fetch_mapping_from_url<T: DeserializeOwned>(
     client: &ClientWithMiddleware,
     url: &Url,
-) -> miette::Result<HashMap<String, String>> {
+) -> miette::Result<T> {
     let response = client
         .get(url.clone())
         .send()
@@ -31,8 +32,7 @@ pub async fn fetch_mapping_from_url(
         ));
     }
 
-    let mapping_by_name: HashMap<String, String> =
-        response.json().await.into_diagnostic().context(format!(
+    let mapping_by_name: T = response.json().await.into_diagnostic().context(format!(
         "failed to parse pypi name mapping located at {}. Please make sure that it's a valid json",
         url
     ))?;
@@ -117,6 +117,8 @@ pub async fn amend_pypi_purls(
     let compressed_mapping =
         prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client).await?;
 
+    let non_pypi_names_mapping = prefix_pypi_name_mapping::conda_non_pypi_names(client).await?;
+
     let custom_mapping = fetch_custom_mapping(client, mapping_url).await?;
 
     for record in conda_packages.iter_mut() {
@@ -125,6 +127,7 @@ pub async fn amend_pypi_purls(
                 record,
                 &prefix_mapping,
                 &compressed_mapping,
+                &non_pypi_names_mapping,
             )?;
         } else {
             amend_pypi_purls_for_record(record, custom_mapping)?;

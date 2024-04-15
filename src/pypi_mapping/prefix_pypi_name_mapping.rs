@@ -10,6 +10,7 @@ use reqwest_middleware::ClientWithMiddleware;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use url::Url;
@@ -21,6 +22,9 @@ const HASH_DIR: &str = "hash-v0";
 const COMPRESSED_MAPPING: &str =
     "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/mapping_as_grayskull.json";
 
+const CONDA_NOT_PYPI_NAMES: &str =
+    "https://raw.githubusercontent.com/prefix-dev/parselmouth/6e6d7c682442102f91b26d83c46e39db03c6290c/files/non_pypi_names.json";
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Package {
     pypi_normalized_names: Option<Vec<String>>,
@@ -28,6 +32,21 @@ pub struct Package {
     conda_name: String,
     package_name: String,
     direct_url: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+pub enum PurlType {
+    Pypi,
+    NonPypi,
+}
+
+impl Display for PurlType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            PurlType::Pypi => write!(f, "pypi"),
+            PurlType::NonPypi => write!(f, "non-pypi"),
+        }
+    }
 }
 
 async fn try_fetch_single_mapping(
@@ -147,7 +166,20 @@ pub async fn conda_pypi_name_compressed_mapping(
     let compressed_mapping_url =
         Url::parse(COMPRESSED_MAPPING).expect("COMPRESSED_MAPPING static variable should be valid");
 
-    custom_pypi_mapping::fetch_mapping_from_url(client, &compressed_mapping_url).await
+    custom_pypi_mapping::fetch_mapping_from_url::<HashMap<String, String>>(
+        client,
+        &compressed_mapping_url,
+    )
+    .await
+}
+
+/// Downloads a map for non_pypi_named conda packages
+pub async fn conda_non_pypi_names(client: &ClientWithMiddleware) -> miette::Result<Vec<String>> {
+    let conda_not_pypi_names_url = Url::parse(CONDA_NOT_PYPI_NAMES)
+        .expect("COMPRESSED_MAPPING static variable should be valid");
+
+    custom_pypi_mapping::fetch_mapping_from_url::<Vec<String>>(client, &conda_not_pypi_names_url)
+        .await
 }
 
 /// Amend the records with pypi purls if they are not present yet.
@@ -158,8 +190,14 @@ pub async fn amend_pypi_purls(
 ) -> miette::Result<()> {
     let conda_mapping = conda_pypi_name_mapping(client, conda_packages, reporter).await?;
     let compressed_mapping = conda_pypi_name_compressed_mapping(client).await?;
+    let conda_non_pypi_names = conda_non_pypi_names(client).await?;
     for record in conda_packages.iter_mut() {
-        amend_pypi_purls_for_record(record, &conda_mapping, &compressed_mapping)?;
+        amend_pypi_purls_for_record(
+            record,
+            &conda_mapping,
+            &compressed_mapping,
+            &conda_non_pypi_names,
+        )?;
     }
 
     Ok(())
@@ -173,6 +211,7 @@ pub fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
     conda_forge_mapping: &HashMap<Sha256Hash, Package>,
     compressed_mapping: &HashMap<String, String>,
+    conda_non_pypi_names: &[String],
 ) -> miette::Result<()> {
     // If the package already has a pypi name we can stop here.
     if record
@@ -186,9 +225,9 @@ pub fn amend_pypi_purls_for_record(
 
     if let Some(sha256) = record.package_record.sha256 {
         if let Some(mapped_name) = conda_forge_mapping.get(&sha256) {
-            if let Some(pypi_names) = &mapped_name.versions {
-                for pypi_name in pypi_names.keys() {
-                    let purl = PackageUrl::builder(String::from("pypi"), pypi_name);
+            if let Some(pypi_names) = &mapped_name.pypi_normalized_names {
+                for pypi_name in pypi_names {
+                    let purl = PackageUrl::builder(PurlType::Pypi.to_string(), pypi_name);
                     let built_purl = purl.build().expect("valid pypi package url");
                     record.package_record.purls.push(built_purl);
                 }
@@ -198,11 +237,23 @@ pub fn amend_pypi_purls_for_record(
         {
             // maybe the packages is not yet updated
             // so fallback to the one from compressed mapping
-            let purl = PackageUrl::builder(String::from("pypi"), mapped_name);
+            let purl = PackageUrl::builder(PurlType::Pypi.to_string(), mapped_name);
             let built_purl = purl.build().expect("valid pypi package url");
             record.package_record.purls.push(built_purl);
         }
         // nothing was matched so we don't add purls for it
+    }
+
+    if record.package_record.purls.is_empty()
+        && conda_non_pypi_names.contains(&String::from(record.package_record.name.as_normalized()))
+    {
+        //check if conda name mean different pypi package
+        let purl = PackageUrl::builder(
+            PurlType::NonPypi.to_string(),
+            record.package_record.name.as_normalized(),
+        );
+        let built_purl = purl.build().expect("valid non-pypi package url");
+        record.package_record.purls.push(built_purl);
     }
 
     Ok(())
