@@ -1324,31 +1324,27 @@ please keep these two in sync by making a PR in both
 -->
 
 <p>You can use PyCharm with pixi environments by using the <code>conda</code> shim provided by the <a href="https://github.com/pavelzw/pixi-pycharm">pixi-pycharm</a> package.</p>
-<div class="admonition warning">
-<p class="admonition-title">Windows support</p>
-<p>Windows is currently not supported, see <a href="https://github.com/pavelzw/pixi-pycharm/issues/5">pavelzw/pixi-pycharm #5</a>. Only Linux and macOS are supported.</p>
-</div>
 <h2 id="how-to-use">How to use<a class="headerlink" href="#how-to-use" title="Permanent link">#</a></h2>
 <p>To get started, add <code>pixi-pycharm</code> to your pixi project.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>pixi-pycharm
 </span></code></pre></div>
 <p>This will ensure that the conda shim is installed in your project's environment.</p>
-<div class="admonition tip">
-<p class="admonition-title">could not determine any available versions for pixi-pycharm on win-64</p>
-<p>If you get the error <code>could not determine any available versions for pixi-pycharm on win-64</code> when running <code>pixi add pixi-pycharm</code> (even when you're not on Windows),
-this is because the package is not available on Windows and pixi tries to solve the environment for all platforms.
-If you still want to use it in your pixi project (and are on Linux/macOS), you can add the following to your <code>pixi.toml</code>:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[target.unix.dependencies]</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">pixi-pycharm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
-</span></code></pre></div>
-<p>This will tell pixi to only use this dependency on unix platforms.</p>
-</div>
 <p>Having <code>pixi-pycharm</code> installed, you can now configure PyCharm to use your pixi environments.
 Go to the <em>Add Python Interpreter</em> dialog (bottom right corner of the PyCharm window) and select <em>Conda Environment</em>.
-Set <em>Conda Executable</em> to the full path of the <code>conda</code> file in your pixi environment.
+Set <em>Conda Executable</em> to the full path of the <code>conda</code> file (on Windows: <code>conda.bat</code>) which is located in <code>.pixi/envs/default/libexec</code>.
 You can get the path using the following command:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>run<span class="w"> </span><span class="s1">&#39;echo $CONDA_PREFIX/libexec/conda&#39;</span>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux &amp; macOS</label><label for="__tabbed_1_2">Windows</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>run<span class="w"> </span><span class="s1">&#39;echo $CONDA_PREFIX/libexec/conda&#39;</span>
 </span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>run<span class="w"> </span><span class="s1">&#39;echo $CONDA_PREFIX\\libexec\\conda.bat&#39;</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
 <p>This is an executable that tricks PyCharm into thinking it's the proper <code>conda</code> executable.
 Under the hood it redirects all calls to the corresponding <code>pixi</code> equivalent.</p>
 <div class="admonition warning">
