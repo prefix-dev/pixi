@@ -371,7 +371,7 @@ pub(super) async fn globally_install_package(
 
     // Construct the reusable activation script for the shell and generate an invocation script
     // for each executable added by the package to the environment.
-    let mut activation_script = create_activation_script(&prefix, shell.clone())?;
+    let activation_script = create_activation_script(&prefix, shell.clone())?;
 
     let bin_dir = BinDir::create().await?;
     let script_mapping =
