@@ -163,6 +163,7 @@ def hello():
 def say_hello():
     print(*hello())
 ```
+Now add the `rich` dependency using: `pixi add --pypi rich`.
 
 Let's see if it this works by running:
 
