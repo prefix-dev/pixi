@@ -90,7 +90,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let dep_map = generate_dependency_map(&locked_deps);
 
-    let direct_deps = direct_dependencies(&environment, &platform);
+    let direct_deps = direct_dependencies(&environment, &platform, &dep_map);
 
     if !environment_name.is_default() {
         eprintln!("Environment: {}", environment_name.fancy_display());
@@ -350,22 +350,39 @@ fn print_package(prefix: String, package: &Package, direct: bool, visited: bool)
 fn direct_dependencies(
     environment: &crate::project::Environment<'_>,
     platform: &Platform,
+    dep_map: &HashMap<String, Package>,
 ) -> Vec<String> {
     let mut project_dependency_names = environment
         .dependencies(None, Some(*platform))
         .names()
+        .filter(|p| {
+            if let Some(value) = dep_map.get(p.as_source()) {
+                value.source == PackageSource::Conda
+            } else {
+                false
+            }
+        })
         .map(|p| p.as_source().to_string())
         .collect_vec();
+
     project_dependency_names.extend(
         environment
             .pypi_dependencies(Some(*platform))
             .into_iter()
+            .filter(|(name, _)| {
+                if let Some(value) = dep_map.get(name.as_normalized().as_dist_info_name().as_ref())
+                {
+                    value.source == PackageSource::Pypi
+                } else {
+                    false
+                }
+            })
             .map(|(name, _)| name.as_normalized().as_dist_info_name().into_owned()),
     );
     project_dependency_names
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum PackageSource {
     Conda,
     Pypi,
