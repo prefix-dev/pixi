@@ -76,11 +76,6 @@ platforms = ["osx-arm64"]
 # 2. Editable installs
 [tool.pixi.pypi-dependencies]
 pixi_py = { path = ".", editable = true }
-
-# 3. Environments
-[tool.pixi.environments]
-default = { solve-group = "default" }
-test = { features = ["test"], solve-group = "default" }
 ```
 
 Let's go over them one by one:
@@ -100,7 +95,7 @@ default = { solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
 ```
 
-We've added the optional dependencies to the `pyproject.toml` and this automatically creates a `feature`, which is a collection of `dependencies`, `tasks`, `channels` etc.
+We've added the optional dependencies to the `pyproject.toml` and this automatically creates a [`feature`](../reference/configuration.md/#the-feature-and-environments-tables), which is a collection of `dependencies`, `tasks`, `channels` etc.
 These features can be combined
 
 3. We've created the `default` and `test` environments. The `default` environment is the default environment that is created when you run `pixi install`. The `test` environment is created from the optional dependencies in the `pyproject.toml` file. You can execute commands in this environment with e.g `pixi run -e test python`
