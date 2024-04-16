@@ -196,6 +196,7 @@ impl PixiControl {
                 channels: None,
                 platforms: Vec::new(),
                 env_file: None,
+                pyproject: false,
             },
         }
     }
@@ -209,6 +210,7 @@ impl PixiControl {
                 channels: None,
                 platforms,
                 env_file: None,
+                pyproject: false,
             },
         }
     }

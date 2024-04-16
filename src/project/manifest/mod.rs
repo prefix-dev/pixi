@@ -698,7 +698,11 @@ impl Manifest {
         name: Option<&FeatureName>,
     ) -> &mut Target {
         let feature = match name {
-            Some(feature) => self.parsed.features.entry(feature.clone()).or_default(),
+            Some(feature) => self
+                .parsed
+                .features
+                .entry(feature.clone())
+                .or_insert_with(|| Feature::new(feature.clone())),
             None => self.default_feature_mut(),
         };
         feature
