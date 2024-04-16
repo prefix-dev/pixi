@@ -21,8 +21,8 @@ use crate::{
 };
 
 use distribution_types::{
-    BuiltDist, DirectUrlSourceDist, Dist, IndexLocations, Name, PrioritizedDist, Resolution,
-    SourceDist,
+    BuiltDist, DirectUrlSourceDist, Dist, HashPolicy, IndexLocations, Name, PrioritizedDist,
+    Resolution, SourceDist,
 };
 use distribution_types::{FileLocation, SourceDistCompatibility};
 use futures::FutureExt;
@@ -42,7 +42,9 @@ use rattler_solve::{resolvo, SolverImpl};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
-use uv_configuration::{ConfigSettings, NoBinary, NoBuild, SetupPyStrategy};
+use uv_configuration::{
+    ConfigSettings, Constraints, NoBinary, NoBuild, Overrides, SetupPyStrategy,
+};
 
 use url::Url;
 use uv_cache::Cache;
@@ -55,7 +57,7 @@ use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, DistFinder, FlatIndex, InMemoryIndex, Manifest, Options,
     PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
 };
-use uv_types::{BuildContext, InFlight};
+use uv_types::{BuildContext, EmptyInstalledPackages, HashStrategy, InFlight};
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
@@ -66,6 +68,7 @@ pub struct UvResolutionContext {
     pub index_locations: Arc<IndexLocations>,
     pub no_build: NoBuild,
     pub no_binary: NoBinary,
+    pub hash_strategy: HashStrategy,
 }
 
 impl UvResolutionContext {
@@ -92,6 +95,7 @@ impl UvResolutionContext {
             index_locations,
             no_build: NoBuild::None,
             no_binary: NoBinary::None,
+            hash_strategy: HashStrategy::default(),
         })
     }
 }
@@ -309,7 +313,7 @@ pub async fn resolve_pypi(
         FlatIndex::from_entries(
             entries,
             &tags,
-            &uv_types::HashStrategy::None,
+            &context.hash_strategy,
             &context.no_build,
             &context.no_binary,
         )
@@ -348,7 +352,7 @@ pub async fn resolve_pypi(
             ))),
             marker: None,
         })
-        .collect();
+        .collect::<Vec<_>>();
 
     // Build any editables
     let built_editables = build_editables(&editables, &context.cache, &build_dispatch)
@@ -359,25 +363,23 @@ pub async fn resolve_pypi(
 
     let manifest = Manifest::new(
         requirements,
-        constraints,
-        Vec::new(),
+        Constraints::from_requirements(constraints),
+        Overrides::default(),
         Vec::new(),
         None,
         built_editables.clone(),
+        uv_resolver::Exclusions::None,
+        Vec::new(),
     );
 
     let fallback_provider = DefaultResolverProvider::new(
         &context.registry_client,
-        DistributionDatabase::new(
-            &context.cache,
-            &tags,
-            &context.registry_client,
-            &build_dispatch,
-        ),
+        DistributionDatabase::new(&context.registry_client, &build_dispatch),
         &flat_index,
         &tags,
         PythonRequirement::new(&interpreter, &marker_environment),
         AllowedYanks::default(),
+        &context.hash_strategy,
         options.exclude_newer,
         build_dispatch.no_binary(),
         &NoBuild::None,
@@ -390,10 +392,12 @@ pub async fn resolve_pypi(
     let resolution = Resolver::new_custom_io(
         manifest,
         options,
+        &context.hash_strategy,
         &marker_environment,
         PythonRequirement::new(&interpreter, &marker_environment),
         &in_memory_index,
         provider,
+        &EmptyInstalledPackages,
     )
     .into_diagnostic()
     .context("failed to resolve pypi dependencies")?
@@ -407,12 +411,7 @@ pub async fn resolve_pypi(
 
     let resolution = Resolution::from(resolution);
 
-    let database = DistributionDatabase::new(
-        &context.cache,
-        &tags,
-        &context.registry_client,
-        &build_dispatch,
-    );
+    let database = DistributionDatabase::new(&context.registry_client, &build_dispatch);
 
     let resolution = DistFinder::new(
         &tags,
@@ -487,7 +486,7 @@ pub async fn resolve_pypi(
                     .and_then(|file| parse_hashes_from_hex(&file.hashes.sha256, &file.hashes.md5));
 
                 let (metadata, url) = database
-                    .get_or_build_wheel_metadata(&Dist::Source(source.clone()))
+                    .get_or_build_wheel_metadata(&Dist::Source(source.clone()), HashPolicy::None)
                     .await
                     .into_diagnostic()?;
 

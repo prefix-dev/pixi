@@ -95,8 +95,8 @@ rattler_solve = { version = "0.20.4", default-features = false, features = [
 rattler_virtual_packages = { version = "0.19.5", default-features = false }
 regex = "1.10.4"
 requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-reqwest = { version = "0.11.27", default-features = false }
-reqwest-middleware = "0.2.5"
+reqwest = { version = "0.12.3", default-features = false }
+reqwest-middleware = "0.3.0"
 reqwest-retry = "0.4.0"
 self-replace = "1.3.7"
 serde = "1.0.197"
