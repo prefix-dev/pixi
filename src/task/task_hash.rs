@@ -132,7 +132,7 @@ impl InputHashes {
             return Ok(None);
         };
 
-        let files = FileHashes::from_files(&task.working_directory()?, inputs.iter()).await?;
+        let files = FileHashes::from_files(&task.project().root(), inputs.iter()).await?;
         Ok(Some(Self { files }))
     }
 }
@@ -150,7 +150,7 @@ impl OutputHashes {
             return Ok(None);
         };
 
-        let files = FileHashes::from_files(&task.working_directory()?, outputs.iter()).await?;
+        let files = FileHashes::from_files(&task.project().root(), outputs.iter()).await?;
         Ok(Some(Self { files }))
     }
 }

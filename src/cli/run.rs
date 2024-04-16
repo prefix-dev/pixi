@@ -150,7 +150,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         {
             CanSkip::No(cache) => cache,
             CanSkip::Yes => {
-                eprintln!("Task can be skipped (cache hit) 🚀");
+                eprintln!("Task \"{}\" can be skipped (cache hit) 🚀", executable_task.name().unwrap_or(""));
                 task_idx += 1;
                 continue;
             }
