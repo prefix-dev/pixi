@@ -58,7 +58,7 @@ We now have the following directory structure:
 └── pyproject.toml
 ```
 
-We've uses a flat-layout here but we support both.
+We've used a flat-layout here but we support both [flat- and src-layouts](https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout).
 
 ### What's in the pyproject?
 
