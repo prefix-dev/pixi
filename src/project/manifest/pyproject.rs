@@ -204,7 +204,8 @@ impl PyProjectToml {
                         }
                     }
                 }
-                environments.insert(extra.clone(), features);
+                // Environments can only contain number, strings and dashes
+                environments.insert(extra.replace('_', "-").clone(), features);
             }
         }
         environments
