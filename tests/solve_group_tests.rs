@@ -173,11 +173,13 @@ async fn test_compressed_mapping_catch_missing_package() {
             .await
             .unwrap();
     let compressed_mapping = HashMap::from([("foo-bar-car".to_owned(), "my-test-name".to_owned())]);
+    let not_pypi_name_mapping = Vec::from(["pandoc".to_owned()]);
 
     pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
         &mut repo_data_record,
         &conda_mapping,
         &compressed_mapping,
+        &not_pypi_name_mapping,
     )
     .unwrap();
 
