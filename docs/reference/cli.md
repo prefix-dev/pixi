@@ -66,7 +66,7 @@ It will only add if the package with its version constraint is able to work with
   Parses dependencies as [PEP508](https://peps.python.org/pep-0508/) requirements, supporting extras and versions.
   See [configuration](configuration.md) for details.
 - `--no-install`: Don't install the package to the environment, only add the package to the lock-file.
-- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
+- `--no-lock file-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 - `--feature <FEATURE> (-f)`: The feature for which the dependency should be added.
 
@@ -80,20 +80,20 @@ pixi add --build cmake
 pixi add --pypi requests[security]
 pixi add --platform osx-64 --build clang
 pixi add --no-install numpy
-pixi add --no-lockfile-update numpy
+pixi add --no-lock file-update numpy
 pixi add --feature featurex numpy
 ```
 
 ## `install`
 
-Installs all dependencies specified in the lockfile `pixi.lock`.
+Installs all dependencies specified in the lock file `pixi.lock`.
 Which gets generated on `pixi add` or when you manually change the [manifest file](configuration.md) file and run `pixi install`.
 
 ##### Options
-    /// Install the environment as defined in the lockfile, doesn't abort when lockfile isn't up-to-date with the manifest file.
+    /// Install the environment as defined in the lock file, doesn't abort when lock file isn't up-to-date with the manifest file.
 
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](configuration.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lockfile, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 
 ```shell
@@ -103,8 +103,8 @@ pixi install --frozen
 pixi install --locked
 ```
 
-To reinitialize the lockfile in your project, you can remove the existing `pixi.lock` file and run `pixi install`.
-This process will regenerate the lockfile based on the dependencies defined in your manifest file:
+To reinitialize the lock file in your project, you can remove the existing `pixi.lock` file and run `pixi install`.
+This process will regenerate the lock file based on the dependencies defined in your manifest file:
 
 ```sh
 rm pixi.lock && pixi install
@@ -113,7 +113,7 @@ rm pixi.lock && pixi install
 This action ensures that your project's dependencies are reset and updated according to the current specifications in manifest file.
 
 In a future version of `pixi`, we will introduce the `pixi update` command, see [#73](https://github.com/prefix-dev/pixi/issues/73).
-This command will allow you to update the lockfile directly, without manually deleting the `pixi.lock` file, making the dependency management process even smoother.
+This command will allow you to update the lock file directly, without manually deleting the `pixi.lock` file, making the dependency management process even smoother.
 
 ## `run`
 
@@ -130,7 +130,7 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 ##### Options
 
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](configuration.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lockfile, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.
 
@@ -330,7 +330,7 @@ List project's packages. Highlighted packages are explicit dependencies.
 - `--sort-by <SORT_BY>`: Sorting strategy [default: name] [possible values: size, name, type]
 - `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](configuration.md), by default it searches for one in the parent directories.
 - `--environment (-e)`: The environment's packages to list, if non is provided the default environment's packages will be listed.
-- `--frozen`: install the environment as defined in the lockfile, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
 
@@ -389,7 +389,7 @@ The package tree can also be inverted (`-i`), to see which packages require a sp
 - `--platform <PLATFORM> (-p)`: The platform to list packages for. Defaults to the current platform
 - `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](configuration.md), by default it searches for one in the parent directories.
 - `--environment (-e)`: The environment's packages to list, if non is provided the default environment's packages will be listed.
-- `--frozen`: install the environment as defined in the lockfile, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
 
@@ -499,7 +499,7 @@ To exit the pixi shell, simply run `exit`.
 ##### Options
 
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](configuration.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lockfile, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate the shell in, if none are provided the default environment will be used or a selector will be given to select the right environment.
 
@@ -525,7 +525,7 @@ This command prints the activation script of an environment.
 - `--shell <SHELL> (-s)`: The shell for which the activation script should be printed. Defaults to the current shell.
   Currently supported variants: [`bash`, `zsh`, `xonsh`, `cmd`, `powershell`, `fish`, `nushell`]
 - `--manifest-path`: the path to [manifest file](configuration.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lockfile, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.
 
@@ -790,7 +790,7 @@ This subcommand allows you to modify the project configuration through the comma
 ### `project channel add`
 
 Add channels to the channel list in the project configuration.
-When you add channels, the channels are tested for existence, added to the lockfile and the environment is reinstalled.
+When you add channels, the channels are tested for existence, added to the lock file and the environment is reinstalled.
 
 ##### Arguments
 
@@ -872,7 +872,7 @@ pixi project description set "my new description"
 
 ### `project platform add`
 
-Adds a platform(s) to the project file and updates the lockfile.
+Adds a platform(s) to the project file and updates the lock file.
 
 ##### Arguments
 
@@ -902,7 +902,7 @@ osx-arm64
 
 ### `project platform remove`
 
-Remove platform(s) from the project file and updates the lockfile.
+Remove platform(s) from the project file and updates the lock file.
 
 ##### Arguments
 
@@ -950,10 +950,10 @@ pixi project version patch
 ```
 
 [^1]:
-    An **up-to-date** lockfile means that the dependencies in the lockfile are allowed by the dependencies in the manifest file.
+    An **up-to-date** lock file means that the dependencies in the lock file are allowed by the dependencies in the manifest file.
     For example
 
     - a manifest with `python = ">= 3.11"` is up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
     - a manifest with `python = ">= 3.12"` is **not** up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
 
-    Being up-to-date does **not** mean that the lockfile holds the latest version available on the channel for the given dependency.
+    Being up-to-date does **not** mean that the lock file holds the latest version available on the channel for the given dependency.

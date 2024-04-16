@@ -58,7 +58,7 @@ channels = ["conda-forge", "https://repo.prefix.dev/channel-name"]
 ### `platforms`
 
 Defines the list of platforms that the project supports.
-Pixi solves the dependencies for all these platforms and puts them in the lockfile (`pixi.lock`).
+Pixi solves the dependencies for all these platforms and puts them in the lock file (`pixi.lock`).
 
 ```toml
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
@@ -238,7 +238,7 @@ If you want to use `cuda` in your project you need to add the following to your 
 cuda = "11" # or any other version of cuda you want to use
 ```
 
-This informs the solver that cuda is going to be available, so it can lock it into the lockfile if needed.
+This informs the solver that cuda is going to be available, so it can lock it into the lock file if needed.
 
 ## The `dependencies` table(s)
 

@@ -39,7 +39,7 @@ Developed with ❤️ at [prefix.dev](https://prefix.dev).
 
 - Supports **multiple languages** including Python, C++, and R using Conda packages. You can find available packages on [prefix.dev](https://prefix.dev).
 - Compatible with all major operating systems: Linux, Windows, macOS (including Apple Silicon).
-- Always includes an up-to-date **lockfile**.
+- Always includes an up-to-date **lock file**.
 - Provides a clean and simple Cargo-like **command-line interface**.
 - Allows you to install tools **per-project** or **system-wide**.
 - Entirely written in **Rust** and built on top of the **[rattler](https://github.com/mamba-org/rattler)** library.
