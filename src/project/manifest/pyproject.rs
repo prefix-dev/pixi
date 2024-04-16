@@ -16,7 +16,7 @@ use crate::FeatureName;
 use super::{
     error::{RequirementConversionError, TomlError},
     python::PyPiPackageName,
-    ProjectManifest, PyPiRequirement, SpecType,
+    Feature, ProjectManifest, PyPiRequirement, SpecType,
 };
 
 #[derive(Deserialize, Debug, Clone)]
@@ -106,10 +106,11 @@ impl From<PyProjectManifest> for ProjectManifest {
             for (extra, reqs) in extras {
                 // Filter out unused features
                 if features_used.contains(extra) {
+                    let feature_name = FeatureName::Named(extra.to_string());
                     let target = manifest
                         .features
-                        .entry(FeatureName::Named(extra.to_string()))
-                        .or_default()
+                        .entry(feature_name.clone())
+                        .or_insert_with(move || Feature::new(feature_name))
                         .targets
                         .default_mut();
                     for req in reqs.iter() {
@@ -203,7 +204,8 @@ impl PyProjectToml {
                         }
                     }
                 }
-                environments.insert(extra.clone(), features);
+                // Environments can only contain number, strings and dashes
+                environments.insert(extra.replace('_', "-").clone(), features);
             }
         }
         environments

@@ -244,10 +244,27 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
                     version: VersionOrStar::Version(v),
                     extras: req.extras,
                 },
-                pep508_rs::VersionOrUrl::Url(u) => PyPiRequirement::Url {
-                    url: u.to_url(),
-                    extras: req.extras,
-                },
+                pep508_rs::VersionOrUrl::Url(u) => {
+                    let url = u.to_url();
+                    // Have a different code path when the url is a file.
+                    // i.e. package @ file:///path/to/package
+                    if url.scheme() == "file" {
+                        // Convert the file url to a path.
+                        let file = url
+                            .to_file_path()
+                            .expect("could not convert to file url to path");
+                        PyPiRequirement::Path {
+                            path: file,
+                            editable: None,
+                            extras: req.extras,
+                        }
+                    } else {
+                        PyPiRequirement::Url {
+                            url,
+                            extras: req.extras,
+                        }
+                    }
+                }
             }
         } else if !req.extras.is_empty() {
             PyPiRequirement::Version {

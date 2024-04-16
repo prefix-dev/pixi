@@ -517,15 +517,30 @@ pub async fn resolve_pypi(
                             None
                         };
 
+                        // Given a pyproject.toml and either case:
+                        //   1) dependencies = [ foo @ /home/foo ]
+                        //   2) tool.pixi.pypi-depencies.foo = { path = "/home/foo"}
+                        // uv has different behavior for each.
+                        //
+                        //   1) Because uv processes 1) during the 'source build' first we get a `file::` as a given. Which is never relative.
+                        //        because of PEP508.
+                        //   2) We get our processed path as a given, which can be relative, as our lock may store relative url's.
+                        //
+                        // For case 1) we can just use the original path, as it can never be relative. And should be the same
+                        // For case 2) we need to use the given as it may be relative
+                        //
+                        // I think this has to do with the order of UV processing the requirements
+                        let given = path.url.given().expect("path should have a given url");
+                        let given_path = if given.starts_with("file://") {
+                            path.path
+                        } else {
+                            PathBuf::from(given)
+                        };
+
                         // Create the url for the lock file. This is based on the passed in URL
                         // instead of from the source path to copy the path that was passed in from
                         // the requirement.
-                        let url_or_path = path
-                            .url
-                            .given()
-                            .map(|path| UrlOrPath::Path(PathBuf::from(path)))
-                            .expect("path should be given");
-
+                        let url_or_path = UrlOrPath::Path(given_path);
                         (url_or_path, hash, path.editable)
                     }
                 };
