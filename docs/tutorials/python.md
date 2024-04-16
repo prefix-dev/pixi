@@ -171,7 +171,8 @@ Let's see if it this works by running:
 pixi r python -c "import pixi_py; pixi_py.say_hello()"
 Hello, World! 🧛
 ```
-
+??? note "Slow?" 
+	The first time this might be slow because we install the project but the second time it will be instant. 
 So we are running a python interpreter installed from conda. And we are importing the `pixi_py` package that is installed in editable mode. And we are calling the `say_hello` function that we just added. And it works! Cool!
 
 ## Testing this code
