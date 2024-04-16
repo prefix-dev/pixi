@@ -87,7 +87,7 @@ Let's go over them one by one:
 Now let's add some optional dependencies:
 
 ```toml
-[project.optional-depencencies]
+[project.optional-dependencies]
 test = ["pytest"]
 
 # 3. Environments
