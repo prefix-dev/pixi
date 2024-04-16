@@ -115,6 +115,7 @@ nav:
       - Tasks: features/advanced_tasks.md
       - Multi Platform: features/multi_platform_configuration.md
       - Multi Environment: features/multi_environment.md
+      - Lockfile: features/lockfile.md
   - Advanced:
       - Authentication: advanced/authentication.md
       - Info Command: advanced/explain_info_command.md
