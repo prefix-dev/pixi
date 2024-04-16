@@ -129,9 +129,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 eprintln!();
             }
             eprintln!(
-                "{}{}{}{}{}",
+                "{}{}{} in {}{}{}",
                 console::Emoji("✨ ", ""),
                 console::style("Pixi task (").bold(),
+                console::style(executable_task.name().unwrap_or("unnamed"))
+                    .green()
+                    .bold(),
                 executable_task
                     .run_environment
                     .name()
