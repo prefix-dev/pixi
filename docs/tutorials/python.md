@@ -125,7 +125,7 @@ We also have a new file called `pixi.lock` in the project root. This file contai
 ## What's in the environment?
 
 !!! Python interpreters
-    The python interpreter is also installed in the environment. This is because the python interpreter version is read from the `requires-python` field in the `pyproject.toml` file. This is used to determine the python version to install in the environment. This way pixi automatically manages/bootstraps the python interpreter for you similar as to a tool like `rye` can do.
+    The python interpreter is also installed in the environment. This is because the python interpreter version is read from the `requires-python` field in the `pyproject.toml` file. This is used to determine the python version to install in the environment. This way pixi automatically manages/bootstraps the python interpreter for you, so no more `brew`, `apt` or other system install steps.
 
 Using `pixi list` you can see what's in the environment, this is essentially a nicer view on the lock file:
 
