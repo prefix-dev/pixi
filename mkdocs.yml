@@ -103,6 +103,7 @@ nav:
           - PyCharm: ide_integration/pycharm.md
           - RStudio: ide_integration/r_studio.md
   - Tutorials:
+      - Python: tutorials/python.md
       - ROS 2: tutorials/ros2.md
       - Rust: tutorials/rust.md
   - Examples:
