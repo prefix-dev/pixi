@@ -44,11 +44,19 @@ pixi_py = { path = ".", editable = true }
 
 Let's add the python project to the tree:
 
-```shell
-cd pixi_py # move into the project directory
-mkdir pixi_py
-touch pixi_py/__init__.py
-```
+=== "Linux & macOS"
+    ```shell
+    cd pixi_py # move into the project directory
+    mkdir pixi_py
+    touch pixi_py/__init__.py
+    ```
+
+=== "Windows"
+    ```shell
+    cd pixi_py
+    mkdir pixi_py
+    type nul > pixi_py\__init__.py
+    ```
 
 We now have the following directory structure:
 
