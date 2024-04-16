@@ -45,6 +45,7 @@ mypy = { path = ".", editable = true }
 Let's add the python project to the tree:
 
 ```shell
+cd pixi_py # move into the project directory
 mkdir pixi_py
 touch pixi_py/__init__.py
 ```
