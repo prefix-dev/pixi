@@ -28,6 +28,7 @@ use distribution_types::{FileLocation, SourceDistCompatibility};
 use futures::FutureExt;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
+use install_wheel_rs::linker::LinkMode;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::{Requirement, VerbatimUrl};
@@ -41,19 +42,20 @@ use rattler_solve::{resolvo, SolverImpl};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use uv_configuration::{ConfigSettings, NoBinary, NoBuild, SetupPyStrategy};
 
 use url::Url;
 use uv_cache::Cache;
-use uv_client::{Connectivity, FlatIndex, FlatIndexClient, RegistryClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, Reporter};
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
-    AllowedYanks, DefaultResolverProvider, DistFinder, InMemoryIndex, Manifest, Options,
+    AllowedYanks, DefaultResolverProvider, DistFinder, FlatIndex, InMemoryIndex, Manifest, Options,
     PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
 };
-use uv_traits::{BuildContext, ConfigSettings, InFlight, NoBinary, NoBuild, SetupPyStrategy};
+use uv_types::{BuildContext, InFlight};
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
@@ -140,12 +142,15 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
                 url: VerbatimUrl::unknown(repodata_record.url.clone()),
             }));
 
-            let prioritized_dist =
-                PrioritizedDist::from_source(dist, None, SourceDistCompatibility::Compatible);
+            let prioritized_dist = PrioritizedDist::from_source(
+                dist,
+                Vec::new(),
+                SourceDistCompatibility::Compatible(distribution_types::Hash::Matched),
+            );
 
-            return ready(Ok(VersionsResponse::Found(VersionMap::from(
+            return ready(Ok(VersionsResponse::Found(vec![VersionMap::from(
                 BTreeMap::from_iter([(identifier.version.clone(), prioritized_dist)]),
-            ))))
+            )])))
             .right_future();
         }
 
@@ -166,7 +171,6 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
                 // packages are properly installed including its dependencies.
                 return ready(Ok((
                     Metadata23 {
-                        metadata_version: "1.0".to_string(),
                         name: name.clone(),
                         version: iden.version.clone(),
                         requires_dist: vec![],
@@ -302,7 +306,13 @@ pub async fn resolve_pypi(
             .fetch(context.index_locations.flat_index())
             .await
             .into_diagnostic()?;
-        FlatIndex::from_entries(entries, &tags)
+        FlatIndex::from_entries(
+            entries,
+            &tags,
+            &uv_types::HashStrategy::None,
+            &context.no_build,
+            &context.no_binary,
+        )
     };
 
     let in_memory_index = InMemoryIndex::default();
@@ -320,7 +330,8 @@ pub async fn resolve_pypi(
         &context.in_flight,
         SetupPyStrategy::default(),
         &config_settings,
-        uv_traits::BuildIsolation::Isolated,
+        uv_types::BuildIsolation::Isolated,
+        LinkMode::default(),
         &context.no_build,
         &context.no_binary,
     )
