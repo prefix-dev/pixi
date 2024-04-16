@@ -71,16 +71,23 @@ impl From<PyProjectManifest> for ProjectManifest {
         manifest.project.name = Some(pyproject.name.clone());
 
         // Add python as dependency based on the project.requires_python property (if any)
-        let pythonspec = pyproject
+        let python_spec = pyproject
             .requires_python
             .clone()
             .map(VersionOrUrl::VersionSpecifier);
+
         let target = manifest.default_feature_mut().targets.default_mut();
-        target.add_dependency(
-            PackageName::from_str("python").unwrap(),
-            version_or_url_to_nameless_matchspec(&pythonspec).unwrap(),
-            SpecType::Run,
-        );
+        if !target.has_dependency("python", Some(SpecType::Run)) || python_spec.is_some() {
+            if target.has_dependency("python", Some(SpecType::Run)) {
+                tracing::warn!("Overwriting `python` dependency from [tool.pixi.dependencies] with `requires-python` version from pyproject.toml");
+            }
+
+            target.add_dependency(
+                PackageName::from_str("python").unwrap(),
+                version_or_url_to_nameless_matchspec(&python_spec).unwrap(),
+                SpecType::Run,
+            );
+        }
 
         // Add pyproject dependencies as pypi dependencies
         if let Some(deps) = pyproject.dependencies.clone() {
@@ -138,10 +145,13 @@ fn version_or_url_to_nameless_matchspec(
 ) -> Result<NamelessMatchSpec, RequirementConversionError> {
     match version {
         // TODO: avoid going through string representation for conversion
-        Some(VersionOrUrl::VersionSpecifier(v)) => Ok(NamelessMatchSpec::from_str(
-            v.to_string().as_str(),
-            Lenient,
-        )?),
+        Some(VersionOrUrl::VersionSpecifier(v)) => {
+            let version_string = v.to_string();
+            // Double equals works a bit different in conda vs. python
+            let version_string = version_string.strip_prefix("==").unwrap_or(&version_string);
+
+            Ok(NamelessMatchSpec::from_str(version_string, Lenient)?)
+        }
         Some(VersionOrUrl::Url(_)) => Err(RequirementConversionError::Unimplemented),
         None => Ok(NamelessMatchSpec {
             version: Some(VersionSpec::Any),
@@ -237,6 +247,9 @@ mod tests {
     use std::str::FromStr;
 
     use insta::assert_snapshot;
+    use pep440_rs::VersionSpecifiers;
+    use pep508_rs::VersionOrUrl;
+    use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use crate::{
         project::manifest::{python::PyPiPackageName, Manifest, PyPiRequirement},
@@ -480,5 +493,23 @@ mod tests {
             .is_none());
 
         assert_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_version_url_to_matchspec() {
+        fn cmp(v1: &str, v2: &str) {
+            let v = VersionOrUrl::VersionSpecifier(VersionSpecifiers::from_str(v1).unwrap());
+            let matchspec = super::version_or_url_to_nameless_matchspec(&Some(v)).unwrap();
+            let vspec = VersionSpec::from_str(v2, ParseStrictness::Strict).unwrap();
+            assert_eq!(matchspec.version, Some(vspec));
+        }
+
+        // Check that we remove leading `==` for the conda version spec
+        cmp("==3.12", "3.12");
+        cmp("==3.12.*", "3.12.*");
+        // rest should work just fine
+        cmp(">=3.12", ">=3.12");
+        cmp(">=3.10,<3.12", ">=3.10,<3.12");
+        cmp("~=3.12", "~=3.12");
     }
 }
