@@ -37,7 +37,7 @@ channels = ["conda-forge"]
 platforms = ["osx-arm64"]
 
 [tool.pixi.pypi-dependencies]
-mypy = { path = ".", editable = true }
+pixi_py = { path = ".", editable = true }
 
 [tool.pixi.tasks]
 ```
@@ -134,17 +134,13 @@ libexpat         2.6.2         hebf3989_0          62.2 KiB   conda  libexpat-2.
 libffi           3.4.2         h3422bc3_5          38.1 KiB   conda  libffi-3.4.2-h3422bc3_5.tar.bz2
 libsqlite        3.45.2        h091b4b1_0          806 KiB    conda  libsqlite-3.45.2-h091b4b1_0.conda
 libzlib          1.2.13        h53f4e23_5          47 KiB     conda  libzlib-1.2.13-h53f4e23_5.conda
-markdown_it_py   3.0.0                             224.2 KiB  pypi   markdown_it_py-3.0.0-py3-none-any.whl
-mdurl            0.1.2                             22.8 KiB   pypi   mdurl-0.1.2-py3-none-any.whl
 ncurses          6.4.20240210  h078ce10_0          801 KiB    conda  ncurses-6.4.20240210-h078ce10_0.conda
 openssl          3.2.1         h0d3ecfb_1          2.7 MiB    conda  openssl-3.2.1-h0d3ecfb_1.conda
-pixi_py          0.1.0                                        pypi   . (editable)
-pygments         2.17.2                            4.1 MiB    pypi   pygments-2.17.2-py3-none-any.whl
-python           3.12.2        hdf0ec26_0_cpython  12.5 MiB   conda  python-3.12.2-hdf0ec26_0_cpython.conda
+python           3.12.3        h4a7b5fc_0_cpython  12.6 MiB   conda  python-3.12.3-h4a7b5fc_0_cpython.conda
 readline         8.2           h92ec313_1          244.5 KiB  conda  readline-8.2-h92ec313_1.conda
-rich             13.7.1                            925.4 KiB  pypi   rich-13.7.1-py3-none-any.whl
 tk               8.6.13        h5083fa2_1          3 MiB      conda  tk-8.6.13-h5083fa2_1.conda
 tzdata           2024a         h0c530f3_0          117 KiB    conda  tzdata-2024a-h0c530f3_0.conda
+pixi_py          0.1.0                                        pypi   . (editable)
 xz               5.2.6         h57fd34a_0          230.2 KiB  conda  xz-5.2.6-h57fd34a_0.tar.bz2
 ```
 
@@ -171,8 +167,8 @@ Let's see if it this works by running:
 pixi r python -c "import pixi_py; pixi_py.say_hello()"
 Hello, World! 🧛
 ```
-??? note "Slow?" 
-	The first time this might be slow because we install the project but the second time it will be instant. 
+??? note "Slow?"
+	The first time this might be slow because we install the project but the second time it will be instant.
 So we are running a python interpreter installed from conda. And we are importing the `pixi_py` package that is installed in editable mode. And we are calling the `say_hello` function that we just added. And it works! Cool!
 
 ## Testing this code
