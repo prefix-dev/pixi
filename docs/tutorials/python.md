@@ -14,26 +14,32 @@ We support two manifests formats, `pyproject.toml` and `pixi.toml`. In this tuto
 Lets start out by making a directory and creating a new `pyproject.toml` file.
 
 ```shell
-mkdir pixi_py
-cd pixi_py
+pixi init pixi_py --pyproject
 ```
 
-Put the following file in the directory:
+This gives you the following pyproject.toml:
 
 ```toml
 [project]
 name = "pixi_py"
 version = "0.1.0"
-description = "Example how to use a python project with pixi"
-requires-python = ">=3.11"
-dependencies = ["rich"]
-
-[project.optional-dependencies]
-test = ["pytest"]
+description = "Add a short description here"
+authors = [{name = "Tim de Jager", email = "tim@prefix.dev"}]
+requires-python = ">= 3.11"
+dependencies = []
 
 [build-system]
-requires = ["flit_core>=3.2,<4"]
-build-backend = "flit_core.buildapi"
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+mypy = { path = ".", editable = true }
+
+[tool.pixi.tasks]
 ```
 
 Let's add the python project to the tree:
@@ -52,16 +58,11 @@ We now have the following directory structure:
 └── pyproject.toml
 ```
 
-### Initialization: `pixi init`
-Now let's run `pixi init` to add the required `[tool.pixi.*]` sections to the `pyproject.toml` file.
+We've uses a flat-layout here but we support both.
 
-```shell
-$ pixi init
-✔ Added package 'pixi_py' as an editable dependency.
-✔ Added environment 'test' from optional extras.
-```
+### What's in the pyproject?
 
-Okay, so let's have a look at what's changed.
+Okay, so let's have a look at what's sections have been added.
 
 These things were added to the pyproject.toml file:
 
@@ -69,6 +70,7 @@ These things were added to the pyproject.toml file:
 # 1. Main pixi entry
 [tool.pixi.project]
 channels = ["conda-forge"]
+# This is your machine platform by default
 platforms = ["osx-arm64"]
 
 # 2. Editable installs
@@ -85,14 +87,31 @@ Let's go over them one by one:
 
 1. The `channels` and `platforms` are added to the `[tool.pixi.project]` section. Channels like `conda-forge` manage packages similar to pypi but allow for different packages across languages. Platforms determines for what platform to generate the lock for.
 2. The `pixi_py` package is added as an editable dependency. This means that the package is installed in editable mode, so you can make changes to the package and see the changes reflected in the environment. In pixi, unlike other package managers this is explicitly stated in the `pyproject.toml` file. The main reason being so that you can choose into which environment this package should be included.
-3. `pixi init` automatically created two environments, `default` and `test`. The `default` environment is the default environment that is created when you run `pixi install`. The `test` environment is created from the optional dependencies in the `pyproject.toml` file. You can execute commands in this environment with e.g `pixi run -e test python`
+
+Now let's add some optional dependencies:
+
+```toml
+[project.optional-depencencies]
+test = ["pytest"]
+
+# 3. Environments
+[tool.pixi.environments]
+default = { solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+```
+
+We've added the optional dependencies to the `pyproject.toml` and this automatically creates a `feature`, which is a collection of `dependencies`, `tasks`, `channels` etc.
+These features can be combined
+
+3. We've created the `default` and `test` environments. The `default` environment is the default environment that is created when you run `pixi install`. The `test` environment is created from the optional dependencies in the `pyproject.toml` file. You can execute commands in this environment with e.g `pixi run -e test python`
 
 ??? note "Solve Groups"
     Solve groups are a way to group dependencies together. This is useful when you have multiple environments that share the same dependencies. This way you can solve dependencies together. E.g maybe `pytest` is a dependency that influences the dependencies of the `default` environment. By putting these in the same solve group, you assure that the versions in `test` and `default` are exactly the same versions.
 
+
 ### Installation: `pixi install`
 
-Now let's install the project with `pixi install`:
+Now let's `install` the project with `pixi install`:
 
 ```shell
 $ pixi install
@@ -156,11 +175,11 @@ pixi r python -c "import pixi_py; pixi_py.say_hello()"
 Hello, World! 🧛
 ```
 
-So we are running a conda installed python. And we are importing the `pixi_py` package that is installed in editable mode. And we are calling the `say_hello` function that we just added. And it works! Cool!
+So we are running a python interpreter installed from conda. And we are importing the `pixi_py` package that is installed in editable mode. And we are calling the `say_hello` function that we just added. And it works! Cool!
 
 ## Testing this code
 
-Okay, so let add a test for this function. Let's add a `test_me.py` file in root of the project.
+Okay, so let add a test for this function. Let's add a `tests/test_me.py` file in root of the project.
 
 Giving us the following project structure:
 
@@ -170,7 +189,7 @@ Giving us the following project structure:
 ├── pixi_py
 │   ├── __init__.py
 ├── pyproject.toml
-└── test_me.py
+└── tests/test_me.py
 ```
 
 ```python
@@ -183,7 +202,7 @@ def test_pixi_py():
 Let's add an easy task for running the tests.
 
 ```shell
-$ pixi task add --feature test test "pytest ."
+$ pixi task add --feature test test "pytest"
 ✔ Added task `test`: pytest .
 ```
 
@@ -271,3 +290,5 @@ In this tutorial you've seen how easy it is to use a `pyproject.toml` to manage 
 Hopefully, this provides for flexible and powerful way to manage your python projects, and a fertile base for further exploration with pixi.
 
 Thanks for reading! Happy Coding 🚀
+
+Any questions? Feel free to reach out on [X](https://twitter.com/prefix_dev), [join our Discord](https://discord.gg/kKV8ZxyzY4), send us an [e-mail](mailto:hi@prefix.dev) or follow our [GitHub](https://github.com/prefix-dev).
