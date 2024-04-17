@@ -113,7 +113,7 @@ The lock file has a version number, this is to ensure that the lock file is comp
 ```yaml
 version: 4
 ```
-The pixi is backward compatible with the lock file, but not forward compatible.
+Pixi is backward compatible with the lock file, but not forward compatible.
 This means that you can use an older lock file with a newer version of `pixi`, but not the other way around.
 
 ## Your lock file is big
