@@ -122,12 +122,12 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
 uv-build = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 uv-interpreter = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
