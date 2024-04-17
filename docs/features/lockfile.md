@@ -6,7 +6,7 @@
 A lock file locks the environment in a specific state.
 Within pixi a lock file is a description of the packages in an environment.
 The lock file contains two definitions:
-- The environments that are used in the project with there complete set of packages. e.g.:
+- The environments that are used in the project with their complete set of packages. e.g.:
     ```yaml
     environments:
         default:
