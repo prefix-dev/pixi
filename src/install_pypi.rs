@@ -9,6 +9,7 @@ use miette::{miette, IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
 use pep508_rs::VerbatimUrl;
 use platform_tags::Tags;
+use pypi_types::{HashAlgorithm, HashDigest};
 use requirements_txt::EditableRequirement;
 use tempfile::{tempdir, TempDir};
 use url::Url;
@@ -92,39 +93,33 @@ fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_ty
     // Convert PackageHashes to uv hashes
     let hashes = if let Some(ref hash) = pkg.hash {
         match hash {
-            rattler_lock::PackageHashes::Md5(md5) => pypi_types::Hashes {
-                md5: Some(format!("{:x}", md5).into()),
-                sha256: None,
-                sha384: None,
-                sha512: None,
-            },
-            rattler_lock::PackageHashes::Sha256(sha256) => pypi_types::Hashes {
-                md5: None,
-                sha256: Some(format!("{:x}", sha256).into()),
-                sha384: None,
-                sha512: None,
-            },
-            rattler_lock::PackageHashes::Md5Sha256(md5, sha256) => pypi_types::Hashes {
-                md5: Some(format!("{:x}", md5).into()),
-                sha256: Some(format!("{:x}", sha256).into()),
-                sha384: None,
-                sha512: None,
-            },
+            rattler_lock::PackageHashes::Md5(md5) => vec![HashDigest {
+                algorithm: HashAlgorithm::Md5,
+                digest: format!("{:x}", md5).into(),
+            }],
+            rattler_lock::PackageHashes::Sha256(sha256) => vec![HashDigest {
+                algorithm: HashAlgorithm::Sha256,
+                digest: format!("{:x}", sha256).into(),
+            }],
+            rattler_lock::PackageHashes::Md5Sha256(md5, sha256) => vec![
+                HashDigest {
+                    algorithm: HashAlgorithm::Md5,
+                    digest: format!("{:x}", md5).into(),
+                },
+                HashDigest {
+                    algorithm: HashAlgorithm::Sha256,
+                    digest: format!("{:x}", sha256).into(),
+                },
+            ],
         }
     } else {
-        pypi_types::Hashes {
-            md5: None,
-            sha256: None,
-            sha384: None,
-            sha512: None,
-        }
+        vec![]
     };
 
     distribution_types::File {
         filename: filename.to_string(),
         dist_info_metadata: false,
-        // TODO use a Vec<HashDigest> here
-        hashes: vec![],
+        hashes,
         requires_python: pkg.requires_python.clone(),
         upload_time_utc_ms: None,
         yanked: None,

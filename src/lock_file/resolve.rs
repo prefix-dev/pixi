@@ -21,8 +21,8 @@ use crate::{
 };
 
 use distribution_types::{
-    BuiltDist, DirectUrlSourceDist, Dist, DistributionMetadata, HashPolicy, IndexLocations, Name,
-    PrioritizedDist, Resolution, ResolvedDist, SourceDist,
+    BuiltDist, DirectUrlSourceDist, Dist, HashPolicy, IndexLocations, Name, PrioritizedDist,
+    Resolution, ResolvedDist, SourceDist,
 };
 use distribution_types::{FileLocation, SourceDistCompatibility};
 use futures::FutureExt;
@@ -32,7 +32,7 @@ use install_wheel_rs::linker::LinkMode;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::{Requirement, VerbatimUrl};
-use pypi_types::Metadata23;
+use pypi_types::{HashAlgorithm, HashDigest, Metadata23};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
@@ -101,23 +101,34 @@ impl UvResolutionContext {
     }
 }
 
-/// This function takes as input a set of dependencies and system requirements and returns a set of
-/// locked packages.
+fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes> {
+    let mut sha256 = None;
+    let mut md5 = None;
 
-fn parse_hashes_from_hex(
-    sha256: &Option<Box<str>>,
-    md5: &Option<Box<str>>,
-) -> Option<PackageHashes> {
+    for hash in hashes {
+        match hash.algorithm() {
+            HashAlgorithm::Sha256 => {
+                sha256 = Some(hash.digest.to_string());
+            }
+            HashAlgorithm::Md5 => {
+                md5 = Some(hash.digest.to_string());
+            }
+            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 => {
+                // We do not support these algorithms
+            }
+        }
+    }
+
     match (sha256, md5) {
         (Some(sha256), None) => Some(PackageHashes::Sha256(
-            parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),
+            parse_digest_from_hex::<Sha256>(&sha256).expect("invalid sha256"),
         )),
         (None, Some(md5)) => Some(PackageHashes::Md5(
-            parse_digest_from_hex::<Md5>(md5).expect("invalid md5"),
+            parse_digest_from_hex::<Md5>(&md5).expect("invalid md5"),
         )),
         (Some(sha256), Some(md5)) => Some(PackageHashes::Md5Sha256(
-            parse_digest_from_hex::<Md5>(md5).expect("invalid md5"),
-            parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),
+            parse_digest_from_hex::<Md5>(&md5).expect("invalid md5"),
+            parse_digest_from_hex::<Sha256>(&sha256).expect("invalid sha256"),
         )),
         (None, None) => None,
     }
@@ -169,7 +180,7 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
         &'io self,
         dist: &'io Dist,
     ) -> impl Future<Output = WheelMetadataResult> + Send + 'io {
-        if let Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist { url, name })) = dist {
+        if let Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist { name, .. })) = dist {
             if let Some((_, iden)) = self.conda_python_identifiers.get(name) {
                 // If this is a Source dist and the package is actually installed by conda we
                 // create fake metadata with no dependencies. We assume that all conda installed
@@ -185,19 +196,6 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
                     hashes: vec![],
                 })))
                 .left_future();
-
-                // return ready(Ok((
-                //     Metadata23 {
-                //         name: name.clone(),
-                //         version: iden.version.clone(),
-                //         requires_dist: vec![],
-                //         requires_python: None,
-                //         // TODO: This field is not actually properly used.
-                //         provides_extras: iden.extras.iter().cloned().collect(),
-                //     },
-                //     Some(url.to_url()),
-                // )))
-                // .left_future();
             }
         }
 
@@ -449,9 +447,7 @@ pub async fn resolve_pypi(
                             _ => todo!("unsupported URL"),
                         };
 
-                        // let hash =
-                        //     parse_hashes_from_hex(&dist.file.hashes.sha256, &dist.file.hashes.md5);
-                        let hash = None;
+                        let hash = parse_hashes_from_hash_vec(&dist.file.hashes);
                         (url, hash)
                     }
                     BuiltDist::DirectUrl(dist) => {
@@ -488,7 +484,8 @@ pub async fn resolve_pypi(
                 // Handle new hash stuff
                 let hash = source
                     .file()
-                    .and_then(|file| parse_hashes_from_hex(&None, &None));
+                    .and_then(|file| parse_hashes_from_hash_vec(&file.hashes));
+
                 let metadata_response = database
                     .get_or_build_wheel_metadata(&Dist::Source(source.clone()), HashPolicy::None)
                     .await
