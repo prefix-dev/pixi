@@ -122,8 +122,9 @@ fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_ty
 
     distribution_types::File {
         filename: filename.to_string(),
-        dist_info_metadata: None,
-        hashes,
+        dist_info_metadata: false,
+        // TODO use a Vec<HashDigest> here
+        hashes: vec![],
         requires_python: pkg.requires_python.clone(),
         upload_time_utc_ms: None,
         yanked: None,

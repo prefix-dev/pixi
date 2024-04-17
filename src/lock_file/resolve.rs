@@ -21,8 +21,8 @@ use crate::{
 };
 
 use distribution_types::{
-    BuiltDist, DirectUrlSourceDist, Dist, HashPolicy, IndexLocations, Name, PrioritizedDist,
-    Resolution, SourceDist,
+    BuiltDist, DirectUrlSourceDist, Dist, DistributionMetadata, HashPolicy, IndexLocations, Name,
+    PrioritizedDist, Resolution, ResolvedDist, SourceDist,
 };
 use distribution_types::{FileLocation, SourceDistCompatibility};
 use futures::FutureExt;
@@ -50,12 +50,13 @@ use url::Url;
 use uv_cache::Cache;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
-use uv_distribution::{DistributionDatabase, Reporter};
+use uv_distribution::{ArchiveMetadata, DistributionDatabase, Reporter};
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
-    AllowedYanks, DefaultResolverProvider, DistFinder, FlatIndex, InMemoryIndex, Manifest, Options,
-    PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
+    AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, MetadataResponse,
+    Options, PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
+    WheelMetadataResult,
 };
 use uv_types::{BuildContext, EmptyInstalledPackages, HashStrategy, InFlight};
 
@@ -95,7 +96,7 @@ impl UvResolutionContext {
             index_locations,
             no_build: NoBuild::None,
             no_binary: NoBinary::None,
-            hash_strategy: HashStrategy::default(),
+            hash_strategy: HashStrategy::None,
         })
     }
 }
@@ -167,24 +168,36 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
     fn get_or_build_wheel_metadata<'io>(
         &'io self,
         dist: &'io Dist,
-    ) -> impl Future<Output = uv_resolver::WheelMetadataResult> + Send + 'io {
+    ) -> impl Future<Output = WheelMetadataResult> + Send + 'io {
         if let Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist { url, name })) = dist {
             if let Some((_, iden)) = self.conda_python_identifiers.get(name) {
                 // If this is a Source dist and the package is actually installed by conda we
                 // create fake metadata with no dependencies. We assume that all conda installed
                 // packages are properly installed including its dependencies.
-                return ready(Ok((
-                    Metadata23 {
-                        name: name.clone(),
+                return ready(Ok(MetadataResponse::Found(ArchiveMetadata {
+                    metadata: Metadata23 {
+                        name: iden.name.as_normalized().clone(),
                         version: iden.version.clone(),
                         requires_dist: vec![],
                         requires_python: None,
-                        // TODO: This field is not actually properly used.
                         provides_extras: iden.extras.iter().cloned().collect(),
                     },
-                    Some(url.to_url()),
-                )))
+                    hashes: vec![],
+                })))
                 .left_future();
+
+                // return ready(Ok((
+                //     Metadata23 {
+                //         name: name.clone(),
+                //         version: iden.version.clone(),
+                //         requires_dist: vec![],
+                //         requires_python: None,
+                //         // TODO: This field is not actually properly used.
+                //         provides_extras: iden.extras.iter().cloned().collect(),
+                //     },
+                //     Some(url.to_url()),
+                // )))
+                // .left_future();
             }
         }
 
@@ -413,19 +426,6 @@ pub async fn resolve_pypi(
 
     let database = DistributionDatabase::new(&context.registry_client, &build_dispatch);
 
-    let resolution = DistFinder::new(
-        &tags,
-        &context.registry_client,
-        &interpreter,
-        &flat_index,
-        build_dispatch.no_binary(),
-        &NoBuild::None,
-    )
-    .resolve(&resolution.requirements())
-    .await
-    .into_diagnostic()
-    .context("failed to find matching pypi distributions for the resolution")?;
-
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     for dist in resolution.into_distributions() {
         // If this refers to a conda package we can skip it
@@ -434,7 +434,11 @@ pub async fn resolve_pypi(
         }
 
         let pypi_package_data = match dist {
-            Dist::Built(dist) => {
+            ResolvedDist::Installed(_) => {
+                // TODO handle installed distributions
+                continue;
+            }
+            ResolvedDist::Installable(Dist::Built(dist)) => {
                 let (url_or_path, hash) = match &dist {
                     BuiltDist::Registry(dist) => {
                         let url = match &dist.file.url {
@@ -445,9 +449,9 @@ pub async fn resolve_pypi(
                             _ => todo!("unsupported URL"),
                         };
 
-                        let hash =
-                            parse_hashes_from_hex(&dist.file.hashes.sha256, &dist.file.hashes.md5);
-
+                        // let hash =
+                        //     parse_hashes_from_hex(&dist.file.hashes.sha256, &dist.file.hashes.md5);
+                        let hash = None;
                         (url, hash)
                     }
                     BuiltDist::DirectUrl(dist) => {
@@ -480,30 +484,27 @@ pub async fn resolve_pypi(
                     hash,
                 }
             }
-            Dist::Source(source) => {
+            ResolvedDist::Installable(Dist::Source(source)) => {
+                // Handle new hash stuff
                 let hash = source
                     .file()
-                    .and_then(|file| parse_hashes_from_hex(&file.hashes.sha256, &file.hashes.md5));
-
-                let (metadata, url) = database
+                    .and_then(|file| parse_hashes_from_hex(&None, &None));
+                let metadata_response = database
                     .get_or_build_wheel_metadata(&Dist::Source(source.clone()), HashPolicy::None)
                     .await
                     .into_diagnostic()?;
+                let metadata = metadata_response.metadata;
 
                 // Use the precise url if we got it back
                 // otherwise try to construct it from the source
                 let (url_or_path, hash, editable) = match source {
                     SourceDist::Registry(reg) => {
-                        let url_or_path = if let Some(url) = url {
-                            UrlOrPath::Url(url)
-                        } else {
-                            match &reg.file.url {
-                                FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
-                                    Url::from_str(url).expect("invalid absolute url"),
-                                ),
-                                FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
-                                _ => todo!("unsupported URL"),
+                        let url_or_path = match &reg.file.url {
+                            FileLocation::AbsoluteUrl(url) => {
+                                UrlOrPath::Url(Url::from_str(url).expect("invalid absolute url"))
                             }
+                            FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
+                            _ => todo!("unsupported URL"),
                         };
                         (url_or_path, hash, false)
                     }
