@@ -108,6 +108,22 @@ All the commands that support the interaction with the lock file also include so
         C[manifest] --> A[lockfile] --> B[environment]
     ```
 
+## Lockfile satisfiability
+The lock file is a description of the environment, and it should always be satisfiable.
+Satisfiable means that the given manifest file and the created environment are in sync with the lockfile.
+If the lock file is not satisfiable, pixi will generate a new lock file automatically.
+
+Steps to check if the lock file is satisfiable:
+- All `environments` in the manifest file are in the lock file
+- All `channels` in the manifest file are in the lock file
+- All `packages` in the manifest file are in the lock file, and the versions in the lock file are compatible with the requirements in the manifest file, for both `conda` and `pypi` packages.
+  - Conda packages use a `matchspec` which can match on all the information we store in the lockfile, even `timestamp`, `subdir` and `license`.
+- If `pypi-dependecies` are added, all `conda` package that are python packages in the lock file have a `purls` field.
+- All hashes for the `pypi` editable packages are correct.
+- There is only a single entry for every package in the lock file.
+
+If you want to get more details checkout the [actual code](https://github.com/prefix-dev/pixi/blob/main/src/lock_file/satisfiability.rs) as this is a simplification of the actual code.
+
 ## The version of the lock file
 The lock file has a version number, this is to ensure that the lock file is compatible with the local version of `pixi`.
 ```yaml
