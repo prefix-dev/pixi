@@ -1,8 +1,8 @@
+use indexmap::IndexMap;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_with::{formats::PreferMany, serde_as, OneOrMany};
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 
@@ -131,7 +131,7 @@ impl Task {
     }
 
     /// Returns the environment variables for the task to run in.
-    pub fn env(&self) -> Option<&HashMap<String, String>> {
+    pub fn env(&self) -> Option<&IndexMap<String, String>> {
         match self {
             Task::Plain(_) => None,
             Task::Custom(_) => None,
@@ -180,7 +180,7 @@ pub struct Execute {
     pub cwd: Option<PathBuf>,
 
     /// A list of environment variables to set before running the command
-    pub env: Option<HashMap<String, String>>,
+    pub env: Option<IndexMap<String, String>>,
 }
 
 impl From<Execute> for Task {
@@ -257,15 +257,10 @@ impl Display for Task {
             Task::Plain(cmd) => {
                 write!(f, "{}", cmd)?;
             }
-            Task::Execute(cmd) => {
-                match &cmd.cmd {
-                    CmdArgs::Single(cmd) => write!(f, "{}", cmd)?,
-                    CmdArgs::Multiple(mult) => write!(f, "{}", mult.join(" "))?,
-                };
-                if !cmd.depends_on.is_empty() {
-                    write!(f, ", ")?;
-                }
-            }
+            Task::Execute(cmd) => match &cmd.cmd {
+                CmdArgs::Single(cmd) => write!(f, "{}", cmd)?,
+                CmdArgs::Multiple(mult) => write!(f, "{}", mult.join(" "))?,
+            },
             _ => {}
         };
 
@@ -274,19 +269,26 @@ impl Display for Task {
             if depends_on.len() == 1 {
                 write!(
                     f,
-                    "depends_on = '{}'",
+                    ", depends_on = '{}'",
                     depends_on.iter().map(|t| t.fancy_display()).join(",")
-                )
+                )?;
             } else {
                 write!(
                     f,
-                    "depends_on = [{}]",
+                    ", depends_on = [{}]",
                     depends_on.iter().map(|t| t.fancy_display()).join(",")
-                )
+                )?;
             }
-        } else {
-            Ok(())
         }
+
+        let env = self.env();
+        if let Some(env) = env {
+            if !env.is_empty() {
+                write!(f, ", env = {:?}", env)?;
+            }
+        }
+
+        Ok(())
     }
 }
 

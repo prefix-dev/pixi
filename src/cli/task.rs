@@ -2,9 +2,11 @@ use crate::project::manifest::{EnvironmentName, FeatureName};
 use crate::task::{quote, Alias, CmdArgs, Execute, Task, TaskName};
 use crate::Project;
 use clap::Parser;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::miette;
 use rattler_conda_types::Platform;
+use std::error::Error;
 use std::path::PathBuf;
 use toml_edit::{Array, Item, Table, Value};
 
@@ -68,6 +70,20 @@ pub struct AddArgs {
     /// The working directory relative to the root of the project
     #[arg(long)]
     pub cwd: Option<PathBuf>,
+
+    /// The environment variable to set, use --env key=value multiple times for more than one variable
+    #[arg(long, value_parser = parse_key_val)]
+    pub env: Vec<(String, String)>,
+}
+
+/// Parse a single key-value pair
+fn parse_key_val(s: &str) -> Result<(String, String), Box<dyn Error + Send + Sync + 'static>> {
+    let pos = s
+        .find('=')
+        .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{}`", s))?;
+    let key = s[..pos].to_string();
+    let value = s[pos + 1..].to_string();
+    Ok((key, value))
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -116,16 +132,21 @@ impl From<AddArgs> for Task {
         // complex, or alias command.
         if cmd_args.trim().is_empty() && !depends_on.is_empty() {
             Self::Alias(Alias { depends_on })
-        } else if depends_on.is_empty() && value.cwd.is_none() {
+        } else if depends_on.is_empty() && value.cwd.is_none() && value.env.is_empty() {
             Self::Plain(cmd_args)
         } else {
+            let cwd = value.cwd;
+            let mut env = IndexMap::new();
+            for (key, value) in value.env {
+                env.insert(key, value);
+            }
             Self::Execute(Execute {
                 cmd: CmdArgs::Single(cmd_args),
                 depends_on,
                 inputs: None,
                 outputs: None,
-                cwd: value.cwd,
-                env: Default::default(),
+                cwd,
+                env: Some(env),
             })
         }
     }
@@ -312,6 +333,9 @@ impl From<Task> for Item {
                 }
                 if let Some(cwd) = process.cwd {
                     table.insert("cwd", cwd.to_string_lossy().to_string().into());
+                }
+                if let Some(env) = process.env {
+                    table.insert("env", Value::InlineTable(env.into_iter().collect()));
                 }
                 Item::Value(Value::InlineTable(table))
             }
