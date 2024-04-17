@@ -126,14 +126,13 @@ impl<'p> ExecutableTask<'p> {
         let mut export = String::new();
         if let Some(env) = self.task.env() {
             for (key, value) in env {
-                if std::env::var(key.as_str()).is_err() {
-                    tracing::info!(
-                        "Setting environment variable: {}={}, as it is not set",
-                        key,
-                        value
-                    );
+                if value.contains(format!("${}", key).as_str())
+                    || std::env::var(key.as_str()).is_err()
+                {
+                    tracing::info!("Setting environment variable: {}={}", key, value);
                     export.push_str(&format!("export {}={};\n", key, value));
                 }
+                tracing::info!("Environment variable {} already set", key);
             }
         }
 
