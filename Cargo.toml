@@ -163,15 +163,15 @@ toml = "0.8.12"
 pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 # deno_task_shell = { path = "../deno_task_shell" }
-rattler = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
-rattler_conda_types = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
-rattler_digest = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
-rattler_lock = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
-rattler_networking = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
-rattler_repodata_gateway = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
-rattler_shell = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
-rattler_solve = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
-rattler_virtual_packages = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
+rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_lock = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
 # rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 # rattler_digest = { path = "../rattler/crates/rattler_digest" }
 # rattler_networking = { path = "../rattler/crates/rattler_networking" }
