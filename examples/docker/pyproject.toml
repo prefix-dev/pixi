@@ -1,16 +1,62 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["flit_core>=3.2,<4"]
+build-backend = "flit_core.buildapi"
 
 [project]
 name = "docker-project"
 description = "A python project that gets installed in a docker container."
 version = "0.1.0"
-authors = [
-  {name = "prefix.dev", email = "noreply@prefix.dev"},
-]
+authors = [{ name = "prefix.dev", email = "noreply@prefix.dev" }]
 classifiers = [
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
 ]
 requires-python = ">=3.12"
+
+[tool.pixi.project]
+name = "docker-project"
+channels = ["conda-forge"]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64"]
+
+# Dependencies used in the docker container
+[tool.pixi.dependencies]
+flask = ">=3.0.2,<3.1"
+gunicorn = ">=21.2.0,<21.3"
+
+[tool.pixi.feature.dev.pypi-dependencies]
+# Built editable in development mode
+docker-project = { path = ".", editable = true }
+
+[tool.pixi.feature.test.dependencies]
+pytest = "*"
+
+# Used for installing into production, as a post-process step
+# we would like make better integration for this in the future.
+[tool.pixi.feature.prod.host-dependencies]
+pip = "*"
+
+# We use dependencies from conda to use it to build the wheel
+[tool.pixi.feature.build.dependencies]
+build = "*"
+flit-core = ">=3.2,<4"
+
+[tool.pixi.feature.build.tasks]
+# Create a wheel for installation
+build-wheel = "python -m build --no-isolation --wheel ."
+
+[tool.pixi.feature.prod.tasks]
+# Install into the production environment
+postinstall-production = "pip install --no-deps --disable-pip-version-check dist/docker_project-*.whl"
+
+[tool.pixi.tasks]
+dev = "flask --app docker_project:app run"
+start = "gunicorn -w 4 docker_project:app --bind :8000"
+
+[tool.pixi.feature.test.tasks]
+test = "pytest"
+
+[tool.pixi.environments]
+# Default environment, has features for running in development, testing and building
+default = { features = ["test", "dev", "build"], solve-group = "default" }
+# Leaner environment for use in production
+prod = { features = ["prod"], solve-group = "default" }

@@ -21,7 +21,7 @@ mod pypi_marker_env;
 mod pypi_tags;
 mod uv_reporter;
 
-mod pypi_name_mapping;
+pub mod pypi_mapping;
 
 pub use activation::get_activation_env;
 pub use lock_file::load_lock_file;
@@ -34,11 +34,3 @@ pub use task::{
     CmdArgs, ExecutableTask, FindTaskError, FindTaskSource, RunOutput, SearchEnvironments, Task,
     TaskDisambiguation, TaskExecutionError, TaskGraph, TaskGraphError,
 };
-
-use rattler_networking::retry_policies::ExponentialBackoff;
-
-/// The default retry policy employed by pixi.
-/// TODO: At some point we might want to make this configurable.
-pub fn default_retry_policy() -> ExponentialBackoff {
-    ExponentialBackoff::builder().build_with_max_retries(3)
-}

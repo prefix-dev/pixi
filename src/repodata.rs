@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::project::Environment;
 use crate::{config, progress, project::Project};
 use futures::{stream, StreamExt, TryStreamExt};
@@ -26,7 +27,13 @@ impl Environment<'_> {
     ) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
         let channels = self.channels();
         let platforms = self.platforms();
-        fetch_sparse_repodata(channels, platforms, self.project().authenticated_client()).await
+        fetch_sparse_repodata(
+            channels,
+            platforms,
+            self.project().authenticated_client(),
+            Some(self.project().config()),
+        )
+        .await
     }
 }
 
@@ -34,6 +41,7 @@ pub async fn fetch_sparse_repodata(
     channels: impl IntoIterator<Item = &'_ Channel>,
     target_platforms: impl IntoIterator<Item = Platform>,
     authenticated_client: &ClientWithMiddleware,
+    config: Option<&Config>,
 ) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
     let channels = channels.into_iter();
     let target_platforms = target_platforms.into_iter().collect_vec();
@@ -54,12 +62,13 @@ pub async fn fetch_sparse_repodata(
         }
     }
 
-    fetch_sparse_repodata_targets(fetch_targets, authenticated_client).await
+    fetch_sparse_repodata_targets(fetch_targets, authenticated_client, config).await
 }
 
 pub async fn fetch_sparse_repodata_targets(
     fetch_targets: impl IntoIterator<Item = (Channel, Platform)>,
     authenticated_client: &ClientWithMiddleware,
+    config: Option<&Config>,
 ) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
     let mut fetch_targets = fetch_targets.into_iter().peekable();
     if fetch_targets.peek().is_none() {
@@ -78,6 +87,17 @@ pub async fn fetch_sparse_repodata_targets(
     let multi_progress = progress::global_multi_progress();
     let mut progress_bars = Vec::new();
 
+    let fetch_repodata_options = config
+        .as_ref()
+        .and_then(|config| config.repodata_config.as_ref())
+        .map(|config| FetchRepoDataOptions {
+            bz2_enabled: !config.disable_bzip2.unwrap_or_default(),
+            jlap_enabled: !config.disable_jlap.unwrap_or_default(),
+            zstd_enabled: !config.disable_zstd.unwrap_or_default(),
+            ..Default::default()
+        })
+        .unwrap_or_default();
+
     let repo_data = stream::iter(fetch_targets)
         .map(|(channel, platform)| {
             // Construct a progress bar for the fetch
@@ -93,7 +113,7 @@ pub async fn fetch_sparse_repodata_targets(
             let repodata_cache = repodata_cache_path.clone();
             let download_client = authenticated_client.clone();
             let top_level_progress = top_level_progress.clone();
-
+            let fetch_options = fetch_repodata_options.clone();
             async move {
                 let result = fetch_repo_data_records_with_progress(
                     channel.clone(),
@@ -102,6 +122,7 @@ pub async fn fetch_sparse_repodata_targets(
                     download_client,
                     progress_bar.clone(),
                     platform != Platform::NoArch,
+                    fetch_options,
                 )
                 .await;
 
@@ -133,6 +154,7 @@ async fn fetch_repo_data_records_with_progress(
     client: ClientWithMiddleware,
     progress_bar: indicatif::ProgressBar,
     allow_not_found: bool,
+    fetch_options: FetchRepoDataOptions,
 ) -> miette::Result<Option<SparseRepoData>> {
     // Download the repodata.json
     let download_progress_progress_bar = progress_bar.clone();
@@ -140,9 +162,7 @@ async fn fetch_repo_data_records_with_progress(
         channel.platform_url(platform),
         client,
         repodata_cache.to_path_buf(),
-        FetchRepoDataOptions {
-            ..FetchRepoDataOptions::default()
-        },
+        fetch_options,
         Some(Box::new(move |fetch::DownloadProgress { total, bytes }| {
             download_progress_progress_bar.set_length(total.unwrap_or(bytes));
             download_progress_progress_bar.set_position(bytes);

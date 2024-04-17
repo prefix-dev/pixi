@@ -41,7 +41,6 @@ test = "python test.py --mlx"
 [feature.mlx.dependencies]
 mlx = "*"
 
-
 [environments]
 cuda = ["cuda"]
 mlx = ["mlx"]

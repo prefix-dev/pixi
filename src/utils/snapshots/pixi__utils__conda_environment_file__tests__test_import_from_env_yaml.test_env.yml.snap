@@ -1,0 +1,414 @@
+---
+source: src/utils/conda_environment_file.rs
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
+---
+(
+    (
+        [
+            MatchSpec {
+                name: Some(
+                    PackageName {
+                        normalized: None,
+                        source: "python",
+                    },
+                ),
+                version: Some(
+                    StrictRange(
+                        StartsWith,
+                        StrictVersion(
+                            Version {
+                                version: [[0], [3], [5], [5]],
+                                local: [],
+                            },
+                        ),
+                    ),
+                ),
+                build: None,
+                build_number: None,
+                file_name: None,
+                channel: None,
+                subdir: None,
+                namespace: None,
+                md5: None,
+                sha256: None,
+            },
+            MatchSpec {
+                name: Some(
+                    PackageName {
+                        normalized: None,
+                        source: "setuptools",
+                    },
+                ),
+                version: Some(
+                    Range(
+                        GreaterEquals,
+                        Version {
+                            version: [[0], [39], [1], [0]],
+                            local: [],
+                        },
+                    ),
+                ),
+                build: None,
+                build_number: None,
+                file_name: None,
+                channel: None,
+                subdir: None,
+                namespace: None,
+                md5: None,
+                sha256: None,
+            },
+            MatchSpec {
+                name: Some(
+                    PackageName {
+                        normalized: None,
+                        source: "wheel",
+                    },
+                ),
+                version: Some(
+                    Range(
+                        LessEquals,
+                        Version {
+                            version: [[0], [0], [31], [1]],
+                            local: [],
+                        },
+                    ),
+                ),
+                build: None,
+                build_number: None,
+                file_name: None,
+                channel: None,
+                subdir: None,
+                namespace: None,
+                md5: None,
+                sha256: None,
+            },
+            MatchSpec {
+                name: Some(
+                    PackageName {
+                        normalized: None,
+                        source: "pip",
+                    },
+                ),
+                version: None,
+                build: None,
+                build_number: None,
+                file_name: None,
+                channel: None,
+                subdir: None,
+                namespace: None,
+                md5: None,
+                sha256: None,
+            },
+        ],
+        [
+            (
+                PyPiPackageName {
+                    source: "package1",
+                    normalized: PackageName(
+                        "package1",
+                    ),
+                },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: Equal,
+                                    version: "1.0.0",
+                                },
+                            ],
+                        ),
+                    ),
+                    extras: [],
+                },
+            ),
+            (
+                PyPiPackageName {
+                    source: "package2",
+                    normalized: PackageName(
+                        "package2",
+                    ),
+                },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: Equal,
+                                    version: "2.0",
+                                },
+                            ],
+                        ),
+                    ),
+                    extras: [],
+                },
+            ),
+            (
+                PyPiPackageName {
+                    source: "package3",
+                    normalized: PackageName(
+                        "package3",
+                    ),
+                },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: Equal,
+                                    version: "3",
+                                },
+                            ],
+                        ),
+                    ),
+                    extras: [],
+                },
+            ),
+            (
+                PyPiPackageName {
+                    source: "package4",
+                    normalized: PackageName(
+                        "package4",
+                    ),
+                },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: LessThanEqual,
+                                    version: "4.0.0",
+                                },
+                            ],
+                        ),
+                    ),
+                    extras: [],
+                },
+            ),
+            (
+                PyPiPackageName {
+                    source: "package5",
+                    normalized: PackageName(
+                        "package5",
+                    ),
+                },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: GreaterThanEqual,
+                                    version: "5.0.0",
+                                },
+                            ],
+                        ),
+                    ),
+                    extras: [],
+                },
+            ),
+            (
+                PyPiPackageName {
+                    source: "package6",
+                    normalized: PackageName(
+                        "package6",
+                    ),
+                },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: GreaterThan,
+                                    version: "6.0.0",
+                                },
+                            ],
+                        ),
+                    ),
+                    extras: [],
+                },
+            ),
+            (
+                PyPiPackageName {
+                    source: "package7",
+                    normalized: PackageName(
+                        "package7",
+                    ),
+                },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: LessThan,
+                                    version: "7.0.0",
+                                },
+                            ],
+                        ),
+                    ),
+                    extras: [],
+                },
+            ),
+            (
+                PyPiPackageName {
+                    source: "package8",
+                    normalized: PackageName(
+                        "package8",
+                    ),
+                },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: NotEqual,
+                                    version: "8.0.0",
+                                },
+                            ],
+                        ),
+                    ),
+                    extras: [],
+                },
+            ),
+            (
+                PyPiPackageName {
+                    source: "package9",
+                    normalized: PackageName(
+                        "package9",
+                    ),
+                },
+                RawVersion(
+                    Star,
+                ),
+            ),
+            (
+                PyPiPackageName {
+                    source: "package10",
+                    normalized: PackageName(
+                        "package10",
+                    ),
+                },
+                Version {
+                    version: Star,
+                    extras: [
+                        ExtraName(
+                            "extra",
+                        ),
+                    ],
+                },
+            ),
+            (
+                PyPiPackageName {
+                    source: "package11",
+                    normalized: PackageName(
+                        "package11",
+                    ),
+                },
+                Version {
+                    version: Star,
+                    extras: [
+                        ExtraName(
+                            "extra1",
+                        ),
+                        ExtraName(
+                            "extra2",
+                        ),
+                    ],
+                },
+            ),
+            (
+                PyPiPackageName {
+                    source: "package12",
+                    normalized: PackageName(
+                        "package12",
+                    ),
+                },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: Equal,
+                                    version: "12.0.0",
+                                },
+                            ],
+                        ),
+                    ),
+                    extras: [
+                        ExtraName(
+                            "extra1",
+                        ),
+                        ExtraName(
+                            "extra2",
+                        ),
+                    ],
+                },
+            ),
+            (
+                PyPiPackageName {
+                    source: "package13",
+                    normalized: PackageName(
+                        "package13",
+                    ),
+                },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: GreaterThanEqual,
+                                    version: "13.0.0",
+                                },
+                            ],
+                        ),
+                    ),
+                    extras: [
+                        ExtraName(
+                            "extra1",
+                        ),
+                        ExtraName(
+                            "extra2",
+                        ),
+                    ],
+                },
+            ),
+            (
+                PyPiPackageName {
+                    source: "package14",
+                    normalized: PackageName(
+                        "package14",
+                    ),
+                },
+                Version {
+                    version: Version(
+                        VersionSpecifiers(
+                            [
+                                VersionSpecifier {
+                                    operator: LessThanEqual,
+                                    version: "14.0.0",
+                                },
+                            ],
+                        ),
+                    ),
+                    extras: [
+                        ExtraName(
+                            "extra1",
+                        ),
+                        ExtraName(
+                            "extra2",
+                        ),
+                    ],
+                },
+            ),
+        ],
+        [],
+    ),
+    [
+        "main",
+        "r",
+        "msys2",
+        "conda-forge",
+    ],
+    Some(
+        "test_env",
+    ),
+)

@@ -4,7 +4,7 @@ use std::convert::identity;
 use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf, string::String};
 
-use crate::consts;
+use crate::config::ConfigCli;
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
 use itertools::Itertools;
@@ -15,7 +15,7 @@ use crate::activation::get_environment_variables;
 use crate::environment::verify_prefix_location_unchanged;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{
-    AmbiguousTask, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
+    AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
     SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskName,
 };
 use crate::Project;
@@ -36,7 +36,7 @@ pub struct Args {
     /// The task you want to run in the projects environment.
     pub task: Vec<String>,
 
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
@@ -45,22 +45,20 @@ pub struct Args {
 
     #[arg(long, short)]
     pub environment: Option<String>,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
 }
 
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Load the project
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
+    let project =
+        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(
-        project
-            .default_environment()
-            .dir()
-            .join(consts::PREFIX_FILE_NAME)
-            .as_path(),
-    )?;
+    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
 
     // Extract the passed in environment name.
     let explicit_environment = args
@@ -131,9 +129,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 eprintln!();
             }
             eprintln!(
-                "{}{}{}{}{}",
+                "{}{}{} in {}{}{}",
                 console::Emoji("✨ ", ""),
                 console::style("Pixi task (").bold(),
+                console::style(executable_task.name().unwrap_or("unnamed"))
+                    .green()
+                    .bold(),
                 executable_task
                     .run_environment
                     .name()
@@ -143,6 +144,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 executable_task.display_command(),
             );
         }
+
+        // check task cache
+        let task_cache = match executable_task
+            .can_skip(&lock_file)
+            .await
+            .into_diagnostic()?
+        {
+            CanSkip::No(cache) => cache,
+            CanSkip::Yes => {
+                eprintln!(
+                    "Task '{}' can be skipped (cache hit) 🚀",
+                    console::style(executable_task.name().unwrap_or("")).bold()
+                );
+                task_idx += 1;
+                continue;
+            }
+        };
 
         // If we don't have a command environment yet, we need to compute it. We lazily compute the
         // task environment because we only need the environment if a task is actually executed.
@@ -169,8 +187,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(err) => return Err(err.into()),
         }
+
+        // Update the task cache with the new hash
+        executable_task
+            .save_cache(&lock_file, task_cache)
+            .await
+            .into_diagnostic()?;
     }
 
+    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
 }
 
@@ -217,6 +242,9 @@ pub async fn get_task_env<'p>(
     lock_file_derived_data: &mut LockFileDerivedData<'p>,
     environment: &Environment<'p>,
 ) -> miette::Result<HashMap<String, String>> {
+    // Make sure the system requirements are met
+    verify_current_platform_has_required_virtual_packages(environment).into_diagnostic()?;
+
     // Ensure there is a valid prefix
     lock_file_derived_data.prefix(environment).await?;
 

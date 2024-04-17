@@ -2,6 +2,7 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::config::{Config, ConfigCli};
 use crate::install::execute_transaction;
 use crate::{config, prefix::Prefix, progress::await_in_progress};
 use clap::Parser;
@@ -10,8 +11,7 @@ use miette::IntoDiagnostic;
 use rattler::install::Transaction;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{
-    Channel, ChannelConfig, MatchSpec, PackageName, ParseStrictness, Platform, PrefixRecord,
-    RepoDataRecord,
+    MatchSpec, PackageName, ParseStrictness, Platform, PrefixRecord, RepoDataRecord,
 };
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
@@ -41,14 +41,17 @@ pub struct Args {
     /// For example: `pixi global install --channel conda-forge --channel bioconda`.
     ///
     /// By default, if no channel is provided, `conda-forge` is used.
-    #[clap(short, long, default_values = ["conda-forge"])]
+    #[clap(short, long)]
     channel: Vec<String>,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 }
 
 /// Create the environment activation script
 fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result<String> {
     let activator =
-        Activator::from_path(prefix.root(), shell, Platform::Osx64).into_diagnostic()?;
+        Activator::from_path(prefix.root(), shell, Platform::current()).into_diagnostic()?;
     let result = activator
         .activation(ActivationVariables {
             conda_prefix: None,
@@ -206,11 +209,18 @@ pub(super) async fn create_executable_scripts(
             .run_command(
                 &mut script,
                 [
-                    format!(r###""{}""###, prefix.root().join(exec).to_string_lossy()).as_str(),
+                    format!("\"{}\"", prefix.root().join(exec).to_string_lossy()).as_str(),
                     get_catch_all_arg(shell),
                 ],
             )
             .expect("should never fail");
+
+        if matches!(shell, ShellEnum::CmdExe(_)) {
+            // wrap the script contents in `@echo off` and `setlocal` to prevent echoing the script
+            // and to prevent leaking environment variables into the parent shell (e.g. PATH would grow longer and longer)
+            script = format!("@echo off\nsetlocal\n{}\nendlocal", script);
+        }
+
         tokio::fs::write(&executable_script_path, script)
             .await
             .into_diagnostic()?;
@@ -231,13 +241,8 @@ pub(super) async fn create_executable_scripts(
 /// Install a global command
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Figure out what channels we are using
-    let channel_config = ChannelConfig::default();
-    let channels = args
-        .channel
-        .iter()
-        .map(|c| Channel::from_str(c, &channel_config))
-        .collect::<Result<Vec<Channel>, _>>()
-        .into_diagnostic()?;
+    let config = Config::with_cli_config(&args.config);
+    let channels = config.compute_channels(&args.channel).into_diagnostic()?;
 
     // Find the MatchSpec we want to install
     let specs = args
@@ -248,7 +253,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
 
     // Fetch sparse repodata
-    let (authenticated_client, sparse_repodata) = get_client_and_sparse_repodata(&channels).await?;
+    let (authenticated_client, sparse_repodata) =
+        get_client_and_sparse_repodata(&channels, &config).await?;
 
     // Install the package(s)
     let mut executables = vec![];
@@ -258,7 +264,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         let (prefix_package, scripts, _) =
             globally_install_package(&package_name, records, authenticated_client.clone()).await?;
-        let channel_name = channel_name_from_prefix(&prefix_package, &channel_config);
+        let channel_name = channel_name_from_prefix(&prefix_package, config.channel_config());
         let record = &prefix_package.repodata_record.package_record;
 
         // Warn if no executables were created for the package
@@ -366,6 +372,7 @@ pub(super) async fn globally_install_package(
     // Construct the reusable activation script for the shell and generate an invocation script
     // for each executable added by the package to the environment.
     let activation_script = create_activation_script(&prefix, shell.clone())?;
+
     let bin_dir = BinDir::create().await?;
     let script_mapping =
         find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;

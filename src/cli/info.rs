@@ -5,6 +5,7 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_networking::authentication_storage;
 use rattler_virtual_packages::VirtualPackage;
 use serde::Serialize;
 use serde_with::serde_as;
@@ -28,7 +29,7 @@ pub struct Args {
     #[arg(long)]
     json: bool,
 
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 }
@@ -39,6 +40,7 @@ pub struct ProjectInfo {
     last_updated: Option<String>,
     pixi_folder_size: Option<String>,
     version: Option<String>,
+    configuration: Vec<PathBuf>,
 }
 
 #[derive(Serialize)]
@@ -184,7 +186,6 @@ impl Display for Info {
         }
 
         writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Cache dir"), cache_dir)?;
-
         if let Some(cache_size) = &self.cache_size {
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Cache size"), cache_size)?;
         }
@@ -206,6 +207,19 @@ impl Display for Info {
                 "{:>WIDTH$}: {}",
                 bold.apply_to("Manifest file"),
                 pi.manifest_path.to_string_lossy()
+            )?;
+
+            let config_locations = pi
+                .configuration
+                .iter()
+                .map(|p| p.to_string_lossy())
+                .join(", ");
+
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Config locations"),
+                config_locations
             )?;
 
             if let Some(update_time) = &pi.last_updated {
@@ -279,9 +293,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let project_info = project.clone().map(|p| ProjectInfo {
-        manifest_path: p.root().to_path_buf().join("pixi.toml"),
+        manifest_path: p.manifest_path(),
         last_updated: last_updated(p.lock_file_path()).ok(),
         pixi_folder_size,
+        configuration: p.config().loaded_from.clone(),
         version: p.version().clone().map(|v| v.to_string()),
     });
 
@@ -338,24 +353,39 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(GenericVirtualPackage::from)
         .collect::<Vec<_>>();
 
+    let config = project
+        .map(|p| p.config().clone())
+        .unwrap_or_else(config::Config::load_global);
+
+    let auth_file = config
+        .authentication_override_file()
+        .map(|x| x.to_owned())
+        .unwrap_or_else(|| {
+            authentication_storage::backends::file::FileStorage::default()
+                .path
+                .clone()
+        });
+
     let info = Info {
         platform: Platform::current().to_string(),
         virtual_packages,
         version: env!("CARGO_PKG_VERSION").to_string(),
         cache_dir: Some(config::get_cache_dir()?),
         cache_size,
-        auth_dir: rattler_networking::authentication_storage::backends::file::FileStorage::default(
-        )
-        .path,
+        auth_dir: auth_file,
         project_info,
         environments_info,
     };
 
     if args.json {
         println!("{}", serde_json::to_string_pretty(&info).into_diagnostic()?);
+
+        Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
         Ok(())
     } else {
         println!("{}", info);
+
+        Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
         Ok(())
     }
 }

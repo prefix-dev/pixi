@@ -13,9 +13,9 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ## Usage
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.5.1
+- uses: prefix-dev/setup-pixi@v0.6.0
   with:
-    pixi-version: v0.16.1
+    pixi-version: v0.19.1
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -24,23 +24,25 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 
 !!!warning "Pin your action versions"
     Since pixi is not yet stable, the API of this action may change between minor versions.
-    Please pin the versions of this action to a specific version (i.e., `prefix-dev/setup-pixi@v0.5.1`) to avoid breaking changes.
+    Please pin the versions of this action to a specific version (i.e., `prefix-dev/setup-pixi@v0.6.0`) to avoid breaking changes.
     You can automatically update the version of this action by using [Dependabot](https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot).
 
     Put the following in your `.github/dependabot.yml` file to enable Dependabot for your GitHub Actions:
 
-    ```yaml
+    ```yaml title=".github/dependabot.yml"
     version: 2
     updates:
       - package-ecosystem: github-actions
         directory: /
         schedule:
-          interval: monthly # or daily, weekly
+          interval: monthly # (1)!
         groups:
           dependencies:
             patterns:
               - "*"
     ```
+
+    1.  or `daily`, `weekly`
 
 ## Features
 
@@ -65,7 +67,7 @@ You can specify the behavior by setting the `cache` input argument.
 
     ```yaml
     - uses: prefix-dev/setup-pixi@v0.5.1
-    with:
+      with:
         cache: true
         cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
     ```
@@ -109,7 +111,7 @@ test:
       environment: [py311, py312]
   steps:
   - uses: actions/checkout@v4
-  - uses: prefix-dev/setup-pixi@v0.5.1
+  - uses: prefix-dev/setup-pixi@v0.6.0
     with:
       environments: ${{ matrix.environment }}
 ```
@@ -119,13 +121,21 @@ test:
 The following example will install both the `py311` and the `py312` environment on the runner.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.5.1
+- uses: prefix-dev/setup-pixi@v0.6.0
   with:
-    # separated by spaces
-    environments: >-
+    environments: >- # (1)!
       py311
       py312
+- run: |
+  pixi run -e py311 test
+  pixi run -e py312 test
 ```
+
+1. separated by spaces, equivalent to
+
+   ```yaml
+   environments: py311 py312
+   ```
 
 !!!warning "Caching behavior if you don't specify environments"
     If you don't specify any environment, the `default` environment will be installed and cached, even if you use other environments.
@@ -151,7 +161,7 @@ Specify the token using the `auth-token` input argument.
 This form of authentication (bearer token in the request headers) is mainly used at [prefix.dev](https://prefix.dev).
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.5.1
+- uses: prefix-dev/setup-pixi@v0.6.0
   with:
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -163,7 +173,7 @@ Specify the username and password using the `auth-username` and `auth-password` 
 This form of authentication (HTTP Basic Auth) is used in some enterprise environments with [artifactory](https://jfrog.com/artifactory) for example.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.5.1
+- uses: prefix-dev/setup-pixi@v0.6.0
   with:
     auth-host: custom-artifactory.com
     auth-username: ${{ secrets.PIXI_USERNAME }}
@@ -176,11 +186,13 @@ Specify the conda-token using the `conda-token` input argument.
 This form of authentication (token is encoded in URL: `https://my-quetz-instance.com/t/<token>/get/custom-channel`) is used at [anaconda.org](https://anaconda.org) or with [quetz instances](https://github.com/mamba-org/quetz).
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.5.1
+- uses: prefix-dev/setup-pixi@v0.6.0
   with:
-    auth-host: anaconda.org # or my-quetz-instance.com
+    auth-host: anaconda.org # (1)!
     conda-token: ${{ secrets.CONDA_TOKEN }}
 ```
+
+1. or my-quetz-instance.com
 
 ### Custom shell wrapper
 
@@ -188,28 +200,34 @@ This form of authentication (token is encoded in URL: `https://my-quetz-instance
 This can be useful if you want to run commands inside of the pixi environment, but don't want to use the `pixi run` command for each command.
 
 ```yaml
-- run: | # everything here will be run inside of the pixi environment
+- run: | # (1)!
     python --version
     pip install -e --no-deps .
   shell: pixi run bash -e {0}
 ```
 
+1. everything here will be run inside of the pixi environment
+
 You can even run Python scripts like this:
 
 ```yaml
-- run: | # everything here will be run inside of the pixi environment
+- run: | # (1)!
     import my_package
     print("Hello world!")
   shell: pixi run python {0}
 ```
 
+1. everything here will be run inside of the pixi environment
+
 If you want to use PowerShell, you need to specify `-Command` as well.
 
 ```yaml
-- run: | # everything here will be run inside of the pixi environment
+- run: | # (1)!
     python --version | Select-String "3.11"
   shell: pixi run pwsh -Command {0} # pwsh works on all platforms
 ```
+
+1. everything here will be run inside of the pixi environment
 
 !!!note "How does it work under the hood?"
     Under the hood, the `shell: xyz {0}` option is implemented by creating a temporary script file and calling `xyz` with that script file as an argument.
@@ -223,7 +241,7 @@ You can specify whether `setup-pixi` should run `pixi install --frozen` or `pixi
 See the [official documentation](https://prefix.dev/docs/pixi/cli#install) for more information about the `--frozen` and `--locked` flags.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.5.1
+- uses: prefix-dev/setup-pixi@v0.6.0
   with:
     locked: true
     # or
@@ -253,11 +271,12 @@ The second type is the debug logging of the pixi executable.
 This can be specified by setting the `log-level` input.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.5.1
+- uses: prefix-dev/setup-pixi@v0.6.0
   with:
-    # one of `q`, `default`, `v`, `vv`, or `vvv`.
-    log-level: vvv
+    log-level: vvv # (1)!
 ```
+
+1. One of `q`, `default`, `v`, `vv`, or `vvv`.
 
 If nothing is specified, `log-level` will default to `default` or `vv` depending on if [debug logging is enabled for the action](#debug-logging-of-the-action).
 
@@ -279,13 +298,26 @@ If nothing is specified, `post-cleanup` will default to `true`.
 On self-hosted runners, you also might want to alter the default pixi install location to a temporary location. You can use `pixi-bin-path: ${{ runner.temp }}/bin/pixi` to do this.
 
 ```yaml
-- uses: prefix-dev/setup-pixi@v0.5.1
+- uses: prefix-dev/setup-pixi@v0.6.0
   with:
     post-cleanup: true
     pixi-bin-path: ${{ runner.temp }}/bin/pixi # (1)!
 ```
 
 1. `${{ runner.temp }}\Scripts\pixi.exe` on Windows
+
+You can also use a preinstalled local version of pixi on the runner by not setting any of the `pixi-version`,
+`pixi-url` or `pixi-bin-path` inputs. This action will then try to find a local version of pixi in the runner's PATH.
+
+### Using the `pyproject.toml` as a manifest file for pixi.
+`setup-pixi` will automatically pick up the `pyproject.toml` if it contains a `[tool.pixi.project]` section and no `pixi.toml`.
+This can be overwritten by setting the `manifest-path` input argument.
+
+```yaml
+- uses: prefix-dev/setup-pixi@v0.6.0
+  with:
+    manifest-path: pyproject.toml
+```
 
 ## More examples
 

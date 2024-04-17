@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, ParseStrictness};
+use rattler_conda_types::{Channel, MatchSpec, ParseStrictness};
+
+use crate::config::{Config, ConfigCli};
 
 use super::{
     common::{find_installed_package, get_client_and_sparse_repodata, load_package_records},
@@ -23,19 +25,17 @@ pub struct Args {
     ///
     /// By default, if no channel is provided, `conda-forge` is used, the channel
     /// the package was installed from will always be used.
-    #[clap(short, long, default_values = ["conda-forge"])]
+    #[clap(short, long)]
     channel: Vec<String>,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let packages = list_global_packages().await?;
-    let channel_config = ChannelConfig::default();
-    let mut channels = args
-        .channel
-        .iter()
-        .map(|c| Channel::from_str(c, &channel_config))
-        .collect::<Result<Vec<Channel>, _>>()
-        .into_diagnostic()?;
+    let config = Config::with_cli_config(&args.config);
+    let mut channels = config.compute_channels(&args.channel).into_diagnostic()?;
 
     let mut installed_versions = HashMap::with_capacity(packages.len());
 
@@ -43,7 +43,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let prefix_record = find_installed_package(package_name).await?;
         let last_installed_channel = Channel::from_str(
             prefix_record.repodata_record.channel.clone(),
-            &channel_config,
+            config.channel_config(),
         )
         .into_diagnostic()?;
 
@@ -61,7 +61,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     channels = channels.into_iter().unique().collect::<Vec<_>>();
 
     // Fetch sparse repodata
-    let (authenticated_client, sparse_repodata) = get_client_and_sparse_repodata(&channels).await?;
+    let (authenticated_client, sparse_repodata) =
+        get_client_and_sparse_repodata(&channels, &config).await?;
 
     let mut upgraded = false;
     for package_name in packages.iter() {

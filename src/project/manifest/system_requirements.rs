@@ -1,6 +1,6 @@
 use miette::Diagnostic;
 use rattler_conda_types::Version;
-use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
+use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 use std::str::FromStr;
@@ -44,13 +44,12 @@ impl SystemRequirements {
         if let Some(version) = self.macos.clone() {
             result.push(VirtualPackage::Osx(Osx { version }))
         }
-        if let Some(spec) = self.archspec.clone() {
-            result.push(VirtualPackage::Archspec(Archspec { spec }))
-        }
         if let Some(libc) = self.libc.clone() {
             result.push(VirtualPackage::LibC(libc.into()))
         }
-
+        if let Some(_archspec) = self.archspec.clone() {
+            tracing::info!("The archspec system-requirement is deprecated and not used.");
+        }
         result
     }
 
@@ -223,7 +222,7 @@ mod tests {
     use assert_matches::assert_matches;
     use insta::assert_snapshot;
     use rattler_conda_types::Version;
-    use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
+    use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
     use serde::Deserialize;
     use std::str::FromStr;
 
@@ -233,7 +232,6 @@ mod tests {
         linux = "5.11"
         cuda = "12.2"
         macos = "10.15"
-        archspec = "arm64"
         libc = { family = "glibc", version = "2.12" }
         "#;
 
@@ -249,9 +247,6 @@ mod tests {
             }),
             VirtualPackage::Osx(Osx {
                 version: Version::from_str("10.15").unwrap(),
-            }),
-            VirtualPackage::Archspec(Archspec {
-                spec: "arm64".to_string(),
             }),
             VirtualPackage::LibC(LibC {
                 version: Version::from_str("2.12").unwrap(),
@@ -475,33 +470,5 @@ mod tests {
         );
 
         assert_matches!(eglibc_2_17.union(&glibc_2_12).unwrap_err(), SystemRequirementsUnionError::DifferentLibcFamilies(fam_a, fam_b) if fam_a == "eglibc" && fam_b == "glibc");
-    }
-
-    #[test]
-    fn test_union_archspec() {
-        let a = SystemRequirements {
-            archspec: Some("arm64".to_string()),
-            ..Default::default()
-        };
-        let b = SystemRequirements {
-            archspec: Some("x86_64".to_string()),
-            ..Default::default()
-        };
-        let c = SystemRequirements {
-            archspec: None,
-            ..Default::default()
-        };
-        assert_matches!(
-            a.union(&b).unwrap_err(),
-            SystemRequirementsUnionError::MismatchingArchSpec(a,b) if a == "arm64" && b == "x86_64"
-        );
-        assert_eq!(
-            c.union(&b).unwrap(),
-            SystemRequirements {
-                archspec: Some("x86_64".to_string()),
-                ..Default::default()
-            }
-        );
-        assert_eq!(c.union(&b).unwrap(), b.union(&c).unwrap());
     }
 }

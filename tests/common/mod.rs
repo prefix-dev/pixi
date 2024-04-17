@@ -159,7 +159,7 @@ impl PixiControl {
     /// Creates a new PixiControl instance from an existing manifest
     pub fn from_manifest(manifest: &str) -> miette::Result<PixiControl> {
         let pixi = Self::new()?;
-        std::fs::write(&pixi.manifest_path(), manifest)
+        std::fs::write(pixi.manifest_path(), manifest)
             .into_diagnostic()
             .context("failed to write pixi.toml")?;
         Ok(pixi)
@@ -167,7 +167,7 @@ impl PixiControl {
 
     /// Updates the complete manifest
     pub fn update_manifest(&self, manifest: &str) -> miette::Result<()> {
-        std::fs::write(&self.manifest_path(), manifest)
+        std::fs::write(self.manifest_path(), manifest)
             .into_diagnostic()
             .context("failed to write pixi.toml")?;
         Ok(())
@@ -196,6 +196,7 @@ impl PixiControl {
                 channels: None,
                 platforms: Vec::new(),
                 env_file: None,
+                pyproject: false,
             },
         }
     }
@@ -209,6 +210,7 @@ impl PixiControl {
                 channels: None,
                 platforms,
                 env_file: None,
+                pyproject: false,
             },
         }
     }
@@ -227,6 +229,7 @@ impl PixiControl {
                 platform: Default::default(),
                 pypi: false,
                 feature: None,
+                config: Default::default(),
             },
         }
     }
@@ -242,6 +245,7 @@ impl PixiControl {
                 pypi: false,
                 platform: Default::default(),
                 feature: None,
+                config: Default::default(),
             },
         }
     }
@@ -309,7 +313,7 @@ impl PixiControl {
                 Some(task_env) => task_env,
             };
 
-            let output = task.execute_with_pipes(&task_env, None).await?;
+            let output = task.execute_with_pipes(task_env, None).await?;
             result.stdout.push_str(&output.stdout);
             result.stderr.push_str(&output.stderr);
             result.exit_code = output.exit_code;
@@ -318,7 +322,7 @@ impl PixiControl {
             }
         }
 
-        return Ok(result);
+        Ok(result)
     }
 
     /// Returns a [`InstallBuilder`]. To execute the command and await the result call `.await` on the return value.
@@ -331,6 +335,7 @@ impl PixiControl {
                     frozen: false,
                     locked: false,
                 },
+                config: Default::default(),
             },
         }
     }

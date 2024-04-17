@@ -1,4 +1,4 @@
-FROM ghcr.io/prefix-dev/pixi:0.14.0 AS build
+FROM ghcr.io/prefix-dev/pixi:0.18.0 AS build
 
 COPY . /app
 WORKDIR /app

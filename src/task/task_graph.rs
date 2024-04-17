@@ -309,7 +309,7 @@ mod test {
         platform: Option<Platform>,
         environment_name: Option<EnvironmentName>,
     ) -> Vec<String> {
-        let project = Project::from_str(Path::new(""), project_str).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), project_str).unwrap();
 
         let environment = environment_name.map(|name| project.environment(&name).unwrap());
         let search_envs = SearchEnvironments::from_opt_env(&project, environment, platform);
@@ -317,7 +317,7 @@ mod test {
         let graph = TaskGraph::from_cmd_args(
             &project,
             &search_envs,
-            run_args.into_iter().map(|arg| arg.to_string()).collect(),
+            run_args.iter().map(|arg| arg.to_string()).collect(),
         )
         .unwrap();
 
@@ -408,7 +408,7 @@ mod test {
         [project]
         name = "pixi"
         channels = ["conda-forge"]
-        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
     "#,
                 &["echo bla"],
                 None,
@@ -538,7 +538,7 @@ mod test {
         [project]
         name = "pixi"
         channels = ["conda-forge"]
-        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
 
         [tasks]
         foo = "echo foo"

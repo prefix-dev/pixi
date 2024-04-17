@@ -1,22 +1,40 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional, Literal
 
 from pydantic import (
     AnyHttpUrl,
     BaseModel,
     Field,
     PositiveFloat,
-    conint,
-    constr,
+    StringConstraints,
 )
 
-NonEmptyStr = constr(min_length=1)
-PathNoBackslash = constr(pattern=r"^[^\\]+$")
+NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
+PathNoBackslash = Annotated[str, StringConstraints(pattern=r"^[^\\]+$")]
 Glob = NonEmptyStr
-UnsignedInt = conint(ge=0)
-GitUrl = constr(pattern=r"((git|ssh|http(s)?)|(git@[\w\.]+))(:(\/\/)?)([\w\.@:\/\\-~]+)")
+UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
+GitUrl = Annotated[
+    str, StringConstraints(pattern=r"((git|ssh|http(s)?)|(git@[\w\.]+))(:(\/\/)?)([\w\.@:\/\\-~]+)")
+]
+Platform = (
+    Literal["linux-32"]
+    | Literal["linux-64"]
+    | Literal["linux-aarch64"]
+    | Literal["linux-armv6l"]
+    | Literal["linux-armv7l"]
+    | Literal["linux-ppc64le"]
+    | Literal["linux-ppc64"]
+    | Literal["linux-s390x"]
+    | Literal["linux-riscv32"]
+    | Literal["linux-riscv64"]
+    | Literal["osx-64"]
+    | Literal["osx-arm64"]
+    | Literal["win-32"]
+    | Literal["win-64"]
+    | Literal["win-arm64"]
+)
 
 
 class StrictBaseModel(BaseModel):
@@ -27,10 +45,11 @@ class StrictBaseModel(BaseModel):
 ###################
 # Project section #
 ###################
+ChannelName = NonEmptyStr | AnyHttpUrl
+
+
 class ChannelInlineTable(StrictBaseModel):
-    channel: NonEmptyStr | AnyHttpUrl = Field(
-        description="The channel the packages needs to be fetched from"
-    )
+    channel: ChannelName = Field(description="The channel the packages needs to be fetched from")
     priority: int | None = Field(None, description="The priority of the channel")
 
 
@@ -51,10 +70,10 @@ class Project(StrictBaseModel):
     channels: list[Channel] = Field(
         None, description="The conda channels that can be used in the project"
     )
-    platforms: list[NonEmptyStr] = Field(description="The platforms that the project supports")
+    platforms: list[Platform] = Field(description="The platforms that the project supports")
     license: NonEmptyStr | None = Field(None, description="The license of the project")
     license_file: PathNoBackslash | None = Field(
-        None, description="The path to the license file of the project"
+        None, alias="license-file", description="The path to the license file of the project"
     )
     readme: PathNoBackslash | None = Field(
         None, description="The path to the readme file of the project"
@@ -65,6 +84,9 @@ class Project(StrictBaseModel):
     )
     documentation: AnyHttpUrl | None = Field(
         None, description="The url of the documentation of the project"
+    )
+    conda_pypi_map: dict[ChannelName, AnyHttpUrl | NonEmptyStr] | None = Field(
+        None, alias="conda-pypi-map", description="The conda-pypi mapping configuration"
     )
 
 
@@ -90,15 +112,68 @@ MatchSpec = NonEmptyStr | MatchspecTable
 CondaPackageName = NonEmptyStr
 
 
-class PyPIRequirementTable(StrictBaseModel):
-    version: NonEmptyStr | None = Field(
-        None,
-        description="The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
-    )
+# { version = "sdfds" extras = ["sdf"] }
+# { git = "sfds", rev = "fssd" }
+# { path = "asfdsf" }
+# { url = "asdfs" }
+
+
+class _PyPIRequirement(StrictBaseModel):
     extras: list[NonEmptyStr] | None = Field(None, description="The extras of the package")
 
 
-PyPIRequirement = NonEmptyStr | PyPIRequirementTable
+class _PyPiGitRequirement(_PyPIRequirement):
+    git: NonEmptyStr = Field(
+        None,
+        description="The git url to the repo e.g https://github.com/prefix-dev/pixi",
+    )
+
+
+class PyPIGitRevRequirement(_PyPiGitRequirement):
+    rev: Optional[NonEmptyStr] = Field(None, description="A git sha revision to sue")
+
+
+class PyPIGitBranchRequirement(_PyPiGitRequirement):
+    branch: Optional[NonEmptyStr] = Field(None, description="A git branch to use")
+
+
+class PyPIGitTagRequirement(_PyPiGitRequirement):
+    tag: Optional[NonEmptyStr] = Field(None, description="A git tag to use")
+
+
+class PyPIPathRequirement(_PyPIRequirement):
+    path: NonEmptyStr = Field(
+        None,
+        description="A path to a local source or wheel",
+    )
+    editable: Optional[bool] = Field(
+        None, description="If true the package will be installed as editable"
+    )
+
+
+class PyPIUrlRequirement(_PyPIRequirement):
+    url: NonEmptyStr = Field(
+        None,
+        description="A url to a remote source or wheel",
+    )
+
+
+class PyPIVersion(_PyPIRequirement):
+    version: NonEmptyStr = Field(
+        None,
+        description="The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
+    )
+
+
+PyPIRequirement = (
+    NonEmptyStr
+    | PyPIVersion
+    | PyPIGitBranchRequirement
+    | PyPIGitTagRequirement
+    | PyPIGitRevRequirement
+    | PyPIPathRequirement
+    | PyPIUrlRequirement
+)
 PyPIPackageName = NonEmptyStr
 
 DependenciesField = Field(
@@ -130,6 +205,13 @@ class TaskInlineTable(StrictBaseModel):
     cwd: PathNoBackslash | None = Field(None, description="The working directory to run the task")
     depends_on: list[NonEmptyStr] | NonEmptyStr | None = Field(
         None, description="The tasks that this task depends on"
+    )
+    inputs: list[Glob] | None = Field(
+        None,
+        description="A list of glob patterns that should be watched for changes before this command is run",
+    )
+    outputs: list[Glob] | None = Field(
+        None, description="A list of glob patterns that are generated by this command"
     )
 
 
@@ -279,10 +361,8 @@ class BaseManifest(StrictBaseModel):
         description="The targets of the project",
         examples=[{"linux": {"dependencies": {"python": "3.8"}}}],
     )
-    tool: Any = Field(
-        None, description="A third-party tool configuration, ignored by pixi"
-    )
+    tool: Any = Field(None, description="A third-party tool configuration, ignored by pixi")
 
 
 if __name__ == "__main__":
-    print(json.dumps(BaseManifest.schema(), indent=2))
+    print(json.dumps(BaseManifest.model_json_schema(), indent=2))

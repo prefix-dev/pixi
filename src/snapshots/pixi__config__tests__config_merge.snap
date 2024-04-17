@@ -1,0 +1,51 @@
+---
+source: src/config.rs
+expression: debug
+---
+Config {
+    default_channels: [
+        "conda-forge",
+        "bioconda",
+        "defaults",
+    ],
+    change_ps1: Some(
+        true,
+    ),
+    authentication_override_file: None,
+    tls_no_verify: Some(
+        false,
+    ),
+    mirrors: {},
+    loaded_from: [
+        "path/config_1.toml",
+        "path/config_2.toml",
+    ],
+    channel_config: ChannelConfig {
+        channel_alias: Url {
+            scheme: "https",
+            cannot_be_a_base: false,
+            username: "",
+            password: None,
+            host: Some(
+                Domain(
+                    "conda.anaconda.org",
+                ),
+            ),
+            port: None,
+            path: "/",
+            query: None,
+            fragment: None,
+        },
+    },
+    repodata_config: Some(
+        RepodataConfig {
+            disable_jlap: Some(
+                true,
+            ),
+            disable_bzip2: None,
+            disable_zstd: Some(
+                true,
+            ),
+        },
+    ),
+}

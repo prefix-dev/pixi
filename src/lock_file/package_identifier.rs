@@ -1,10 +1,10 @@
-use crate::project::manifest::python::PyPiPackageName;
-use crate::pypi_name_mapping;
+use crate::{project::manifest::python::PyPiPackageName, pypi_mapping};
 use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
-use rattler_lock::CondaPackage;
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
+use url::Url;
+
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 /// Defines information about a Pypi package extracted from either a python package or from a
 /// conda package.
@@ -12,6 +12,7 @@ use uv_normalize::{ExtraName, InvalidNameError, PackageName};
 pub struct PypiPackageIdentifier {
     pub name: PyPiPackageName,
     pub version: pep440_rs::Version,
+    pub url: Url,
     pub extras: HashSet<ExtraName>,
 }
 
@@ -21,54 +22,6 @@ impl PypiPackageIdentifier {
     pub fn from_record(record: &RepoDataRecord) -> Result<Vec<Self>, ConversionError> {
         let mut result = Vec::new();
         Self::from_record_into(record, &mut result)?;
-        Ok(result)
-    }
-
-    /// Constructs a new instance from a locked Pypi dependency.
-    pub fn from_locked_pypi_dependency(
-        package: &rattler_lock::PypiPackage,
-    ) -> Result<Self, ConversionError> {
-        Ok(Self {
-            name: PyPiPackageName::from_normalized(package.data().package.name.clone()),
-            version: package.data().package.version.clone(),
-            extras: package.extras().iter().cloned().collect(),
-        })
-    }
-
-    /// Determine the python packages that will be installed when the specified locked dependency is
-    /// installed.
-    pub fn from_locked_conda_dependency(
-        package: &CondaPackage,
-    ) -> Result<Vec<Self>, ConversionError> {
-        let record = package.package_record();
-        let mut result = Vec::new();
-
-        // Get the PyPI urls from the package
-        let mut has_pypi_purl = false;
-        for purl in record.purls.iter() {
-            if let Some(entry) = Self::try_from_purl(purl, &record.version.as_str())? {
-                result.push(entry);
-                has_pypi_purl = true;
-            }
-        }
-
-        // If there is no pypi purl, but the package is a conda-forge package, we just assume that
-        // the name of the package is equivalent to the name of the python package.
-        if !has_pypi_purl && pypi_name_mapping::is_conda_forge_url(package.url()) {
-            // Convert the conda package names to pypi package names. If the conversion fails we
-            // just assume that its not a valid python package.
-            let name = PackageName::from_str(record.name.as_normalized()).ok();
-            let version = pep440_rs::Version::from_str(&record.version.as_str()).ok();
-            if let (Some(name), Some(version)) = (name, version) {
-                result.push(PypiPackageIdentifier {
-                    name: PyPiPackageName::from_normalized(name),
-                    version,
-                    // TODO: We can't really tell which python extras are enabled in a conda package.
-                    extras: Default::default(),
-                });
-            }
-        }
-
         Ok(result)
     }
 
@@ -90,7 +43,7 @@ impl PypiPackageIdentifier {
 
         // If there is no pypi purl, but the package is a conda-forge package, we just assume that
         // the name of the package is equivalent to the name of the python package.
-        if !has_pypi_purl && pypi_name_mapping::is_conda_forge_record(record) {
+        if !has_pypi_purl && pypi_mapping::is_conda_forge_record(record) {
             // Convert the conda package names to pypi package names. If the conversion fails we
             // just assume that its not a valid python package.
             let name = PackageName::from_str(record.package_record.name.as_source()).ok();
@@ -100,6 +53,7 @@ impl PypiPackageIdentifier {
                 result.push(PypiPackageIdentifier {
                     name: PyPiPackageName::from_normalized(name),
                     version,
+                    url: record.url.clone(),
                     // TODO: We can't really tell which python extras are enabled in a conda package.
                     extras: Default::default(),
                 })
@@ -153,6 +107,7 @@ impl PypiPackageIdentifier {
 
         Ok(Self {
             name: PyPiPackageName::from_normalized(name),
+            url: Url::parse(&package_url.to_string()).expect("cannot parse purl -> url"),
             version,
             extras,
         })
@@ -166,26 +121,16 @@ impl PypiPackageIdentifier {
 
         // Check the version of the requirement
         match &requirement.version_or_url {
-            None => {}
-            Some(VersionOrUrl::Url(_)) => {
-                return true;
+            None => true,
+            Some(VersionOrUrl::Url(url)) => {
+                // Check if the URL matches
+                url.to_url() == self.url
             }
-            Some(VersionOrUrl::VersionSpecifier(spec)) => {
-                if !spec.contains(&self.version) {
-                    return false;
-                }
+            Some(VersionOrUrl::VersionSpecifier(required_spec)) => {
+                // Check if the locked version is contained in the required version specifier
+                required_spec.contains(&self.version)
             }
         }
-
-        // TODO: uv doesn't properly support this yet.
-        // // Check if the required extras exist
-        // for extra in requirement.extras.iter() {
-        //     if !self.extras.contains(extra) {
-        //         return false;
-        //     }
-        // }
-
-        true
     }
 }
 

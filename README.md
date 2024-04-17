@@ -21,7 +21,7 @@
 [build]: https://github.com/prefix-dev/pixi/actions/
 [chat-badge]: https://img.shields.io/discord/1082332781146800168.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2&style=flat-square
 [chat-url]: https://discord.gg/kKV8ZxyzY4
-[pixi-badge]:https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json
+[pixi-badge]:https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json&style=flat-square
 [pixi-url]: https://pixi.sh
 
 </h1>
@@ -80,6 +80,14 @@ brew install pixi
 
 The script will also update your ~/.bash_profile to include ~/.pixi/bin in your PATH, allowing you to invoke the pixi command from anywhere.
 You might need to restart your terminal or source your shell for the changes to take effect.
+
+Starting with macOS Catalina [zsh is the default login shell and interactive shell](https://support.apple.com/en-us/102360). Therefore, you might want to use `zsh` instead of `bash` in the install command:
+
+```zsh
+curl -fsSL https://pixi.sh/install.sh | zsh
+```
+
+The script will also update your ~/.zshrc to include ~/.pixi/bin in your PATH, allowing you to invoke the pixi command from anywhere.
 
 ### Windows
 
@@ -256,7 +264,7 @@ You can use pixi in GitHub Actions to install dependencies and run commands.
 It supports automatic caching of your environments.
 
 ```yml
-- uses: prefix-dev/setup-pixi@v0.5.1
+- uses: prefix-dev/setup-pixi@v0.6.0
 - run: pixi run cowpy "Thanks for using pixi"
 ```
 

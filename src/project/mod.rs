@@ -9,29 +9,29 @@ pub mod virtual_packages;
 use async_once_cell::OnceCell as AsyncCell;
 use distribution_types::IndexLocations;
 use indexmap::{Equivalent, IndexMap, IndexSet};
-use miette::{IntoDiagnostic, NamedSource, WrapErr};
+use miette::{IntoDiagnostic, NamedSource};
 
-use rattler_conda_types::{Channel, GenericVirtualPackage, Platform, Version};
-use rattler_networking::AuthenticationMiddleware;
-use reqwest::Client;
+use rattler_conda_types::{Channel, Platform, Version};
 use reqwest_middleware::ClientWithMiddleware;
 use std::hash::Hash;
 
+use rattler_virtual_packages::VirtualPackage;
 use std::{
     collections::{HashMap, HashSet},
     env,
-    ffi::OsStr,
     fmt::{Debug, Formatter},
-    fs,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
 use crate::activation::{get_environment_variables, run_activation};
+use crate::config::Config;
 use crate::project::grouped_environment::GroupedEnvironment;
+use crate::pypi_mapping::MappingSource;
 use crate::task::TaskName;
+use crate::utils::reqwest::build_reqwest_clients;
 use crate::{
-    consts::{self, PROJECT_MANIFEST},
+    consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
     task::Task,
 };
 use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
@@ -41,7 +41,7 @@ pub use dependencies::Dependencies;
 pub use environment::Environment;
 pub use solve_group::SolveGroup;
 
-use self::manifest::Environments;
+use self::manifest::{pyproject::PyProjectToml, Environments};
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -102,6 +102,8 @@ pub struct Project {
     pub(crate) manifest: Manifest,
     /// The cache that contains environment variables
     env_vars: HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>>,
+    /// The global configuration as loaded from the config file(s)
+    config: Config,
 }
 
 impl Debug for Project {
@@ -116,16 +118,21 @@ impl Debug for Project {
 impl Project {
     /// Constructs a new instance from an internal manifest representation
     pub fn from_manifest(manifest: Manifest) -> Self {
-        let (client, authenticated_client) = build_reqwest_clients();
-
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
+        let root = manifest.path.parent().unwrap_or(Path::new("")).to_owned();
+
+        let config =
+            Config::load(&root.join(consts::PIXI_DIR)).unwrap_or_else(|_| Config::load_global());
+
+        let (client, authenticated_client) = build_reqwest_clients(Some(&config));
         Self {
-            root: manifest.path.parent().unwrap_or(Path::new("")).to_owned(),
+            root,
             client,
             authenticated_client,
             manifest,
             env_vars,
+            config,
         }
     }
 
@@ -140,55 +147,68 @@ impl Project {
     }
 
     /// Constructs a project from a manifest.
-    pub fn from_str(root: &Path, content: &str) -> miette::Result<Self> {
-        let manifest = Manifest::from_str(root, content)?;
+    /// Assumes the manifest is a Pixi manifest
+    pub fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
+        let manifest = Manifest::from_str(manifest_path, content)?;
         Ok(Self::from_manifest(manifest))
     }
 
     /// Discovers the project manifest file in the current directory or any of the parent
-    /// directories.
+    /// directories, or use the manifest specified by the environment.
     /// This will also set the current working directory to the project root.
     pub fn discover() -> miette::Result<Self> {
-        let project_toml = match find_project_root() {
-            Some(root) => root.join(PROJECT_MANIFEST),
-            None => miette::bail!("could not find {}", PROJECT_MANIFEST),
+        let project_toml = find_project_manifest();
+
+        if std::env::var("PIXI_IN_SHELL").is_ok() {
+            if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
+                if let Some(project_toml) = project_toml {
+                    if env_manifest_path != project_toml.to_string_lossy() {
+                        tracing::warn!(
+                            "Using manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
+                            env_manifest_path,
+                            project_toml.to_string_lossy()
+                        );
+                    }
+                }
+                return Self::load(Path::new(env_manifest_path.as_str()));
+            }
+        }
+
+        let project_toml = match project_toml {
+            Some(file) => file,
+            None => miette::bail!(
+                "could not find {} or {} which is configured to use pixi",
+                PROJECT_MANIFEST,
+                PYPROJECT_MANIFEST
+            ),
         };
+
         Self::load(&project_toml)
     }
 
     /// Returns the source code of the project as [`NamedSource`].
     /// Used in error reporting.
     pub fn manifest_named_source(&self) -> NamedSource<String> {
-        NamedSource::new(PROJECT_MANIFEST, self.manifest.contents.clone())
+        NamedSource::new(self.manifest.file_name(), self.manifest.contents.clone())
     }
 
     /// Loads a project from manifest file.
-    fn load(manifest_path: &Path) -> miette::Result<Self> {
+    pub fn load(manifest_path: &Path) -> miette::Result<Self> {
         // Determine the parent directory of the manifest file
         let full_path = dunce::canonicalize(manifest_path).into_diagnostic()?;
-        if full_path.file_name().and_then(OsStr::to_str) != Some(PROJECT_MANIFEST) {
-            miette::bail!("the manifest-path must point to a {PROJECT_MANIFEST} file");
-        }
 
         let root = full_path
             .parent()
             .ok_or_else(|| miette::miette!("can not find parent of {}", manifest_path.display()))?;
 
         // Load the TOML document
-        let manifest = fs::read_to_string(manifest_path)
-            .into_diagnostic()
-            .and_then(|content| Manifest::from_str(root, content))
-            .wrap_err_with(|| {
-                format!(
-                    "failed to parse {} from {}",
-                    consts::PROJECT_MANIFEST,
-                    root.display()
-                )
-            })?;
+        let manifest = Manifest::from_path(manifest_path)?;
 
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
-        let (client, authenticated_client) = build_reqwest_clients();
+        let config = Config::load(&root.join(consts::PIXI_DIR))?;
+
+        let (client, authenticated_client) = build_reqwest_clients(Some(&config));
 
         Ok(Self {
             root: root.to_owned(),
@@ -196,6 +216,7 @@ impl Project {
             authenticated_client,
             manifest,
             env_vars,
+            config,
         })
     }
 
@@ -208,9 +229,40 @@ impl Project {
         Ok(project)
     }
 
+    /// Warns if Pixi is using a manifest from an environment variable rather than a discovered version
+    pub fn warn_on_discovered_from_env(manifest_path: Option<&Path>) {
+        if manifest_path.is_none() && std::env::var("PIXI_IN_SHELL").is_ok() {
+            let discover_path = find_project_manifest();
+            let env_path = std::env::var("PIXI_PROJECT_MANIFEST");
+
+            if let (Some(discover_path), Ok(env_path)) = (discover_path, env_path) {
+                if env_path.as_str() != discover_path.to_str().unwrap() {
+                    tracing::warn!(
+                        "Used manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
+                        env_path,
+                        discover_path.to_string_lossy()
+                    );
+                }
+            }
+        }
+    }
+
+    pub fn with_cli_config<C>(mut self, config: C) -> Self
+    where
+        C: Into<Config>,
+    {
+        self.config = self.config.merge_config(config.into());
+        self
+    }
+
     /// Returns the name of the project
     pub fn name(&self) -> &str {
-        &self.manifest.parsed.project.name
+        self.manifest
+            .parsed
+            .project
+            .name
+            .as_ref()
+            .expect("name should always be defined.")
     }
 
     /// Returns the version of the project
@@ -356,7 +408,7 @@ impl Project {
     }
 
     /// TODO: Remove this method and use the one from Environment instead.
-    pub fn virtual_packages(&self, platform: Platform) -> Vec<GenericVirtualPackage> {
+    pub fn virtual_packages(&self, platform: Platform) -> Vec<VirtualPackage> {
         self.default_environment().virtual_packages(platform)
     }
 
@@ -398,27 +450,18 @@ impl Project {
         self.manifest.has_pypi_dependencies()
     }
 
+    /// Returns the custom location of pypi-name-mapping
+    pub fn pypi_name_mapping_source(&self) -> &'static MappingSource {
+        self.manifest
+            .pypi_name_mapping_source()
+            .expect("mapping source should be ok")
+    }
+
     /// Returns the Python index locations to use for this project.
     pub fn pypi_index_locations(&self) -> IndexLocations {
         // TODO: Currently we just default to Pypi always.
         IndexLocations::default()
     }
-
-    // /// Returns the package database used for caching python metadata, wheels and more. See the
-    // /// documentation of [`rip::index::PackageDb`] for more information.
-    // pub fn pypi_package_db(&self) -> miette::Result<Arc<PackageDb>> {
-    //     Ok(self
-    //         .package_db
-    //         .get_or_try_init(|| {
-    //             PackageDb::new(
-    //                 PackageSources::from(self.pypi_index_url()),
-    //                 self.authenticated_client().clone(),
-    //                 &config::get_cache_dir()?.join("pypi/"),
-    //             )
-    //             .map(Arc::new)
-    //         })?
-    //         .clone())
-    // }
 
     /// Returns the reqwest client used for http networking
     pub fn client(&self) -> &reqwest::Client {
@@ -429,6 +472,10 @@ impl Project {
     /// use authentication from `rattler_networking`
     pub fn authenticated_client(&self) -> &ClientWithMiddleware {
         &self.authenticated_client
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 
     /// Return a combination of static environment variables generated from the project and the environment
@@ -457,33 +504,34 @@ impl Project {
         })
         .await
     }
+
+    pub(crate) fn task_cache_folder(&self) -> PathBuf {
+        self.pixi_dir().join(consts::TASK_CACHE_DIR)
+    }
 }
 
-fn build_reqwest_clients() -> (Client, ClientWithMiddleware) {
-    static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
-
-    let timeout = 5 * 60;
-    let client = Client::builder()
-        .pool_max_idle_per_host(20)
-        .user_agent(APP_USER_AGENT)
-        .timeout(std::time::Duration::from_secs(timeout))
-        .build()
-        .expect("failed to create reqwest Client");
-
-    let authenticated_client = reqwest_middleware::ClientBuilder::new(client.clone())
-        .with_arc(Arc::new(AuthenticationMiddleware::default()))
-        .build();
-
-    (client, authenticated_client)
-}
-
-/// Iterates over the current directory and all its parent directories and returns the first
-/// directory path that contains the [`consts::PROJECT_MANIFEST`].
-pub fn find_project_root() -> Option<PathBuf> {
+/// Iterates over the current directory and all its parent directories and returns the manifest path in the first
+/// directory path that contains the [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
+pub fn find_project_manifest() -> Option<PathBuf> {
     let current_dir = env::current_dir().ok()?;
-    std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent())
-        .find(|dir| dir.join(consts::PROJECT_MANIFEST).is_file())
-        .map(Path::to_path_buf)
+    std::iter::successors(Some(current_dir.as_path()), |prev| prev.parent()).find_map(|dir| {
+        [PROJECT_MANIFEST, PYPROJECT_MANIFEST]
+            .iter()
+            .find_map(|manifest| {
+                let path = dir.join(manifest);
+                if path.is_file() {
+                    match *manifest {
+                        PROJECT_MANIFEST => Some(path.to_path_buf()),
+                        PYPROJECT_MANIFEST if PyProjectToml::is_pixi(&path) => {
+                            Some(path.to_path_buf())
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            })
+    })
 }
 
 #[cfg(test)]
@@ -528,7 +576,7 @@ mod tests {
         for file_content in file_contents {
             let file_content = format!("{PROJECT_BOILERPLATE}\n{file_content}");
 
-            let manifest = Manifest::from_str(Path::new(""), &file_content).unwrap();
+            let manifest = Manifest::from_str(Path::new("pixi.toml"), &file_content).unwrap();
             let project = Project::from_manifest(manifest);
             let expected_result = vec![VirtualPackage::LibC(LibC {
                 family: "glibc".to_string(),
@@ -561,7 +609,7 @@ mod tests {
         "#;
 
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
         )
         .unwrap();
@@ -594,7 +642,7 @@ mod tests {
         wolflib = "1.0"
         "#;
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
         )
         .unwrap();
@@ -623,7 +671,7 @@ mod tests {
             scripts = ["pixi.toml", "pixi.lock"]
             "#;
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
         )
         .unwrap();
@@ -651,7 +699,7 @@ mod tests {
             test = "test linux"
             "#;
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
         )
         .unwrap();
