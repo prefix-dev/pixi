@@ -45,9 +45,5 @@ outputs = [
     ".build/bin/sdl_example"
 ]
 
-
-[tasks]
-xxx = { cmd = "echo $ABC", env = { ABC = "asdsad" }}
-
 [environments]
 build = ["build"]
