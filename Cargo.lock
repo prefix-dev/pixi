@@ -3124,6 +3124,7 @@ dependencies = [
  "uv-configuration",
  "uv-dispatch",
  "uv-distribution",
+ "uv-git",
  "uv-installer",
  "uv-interpreter",
  "uv-normalize",

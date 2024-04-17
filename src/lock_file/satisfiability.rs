@@ -20,6 +20,7 @@ use std::{
 };
 use thiserror::Error;
 use url::Url;
+use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
 
 #[derive(Debug, Error, Diagnostic)]
@@ -238,6 +239,9 @@ pub fn pypi_satifisfies_editable(
 
         // If the spec does not specify a revision than any will do
         // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
+        if *spec_git_url.url.reference() == GitReference::DefaultBranch {
+            return base_is_same;
+        }
         // If the spec does specify a revision than the revision must match
         base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
     } else {
@@ -289,6 +293,9 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
 
                 // If the spec does not specify a revision than any will do
                 // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
+                if *spec_git_url.url.reference() == GitReference::DefaultBranch {
+                    return base_is_same;
+                }
                 // If the spec does specify a revision than the revision must match
                 base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
             } else {
