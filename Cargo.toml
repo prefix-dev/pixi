@@ -50,7 +50,7 @@ distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 dunce = "1.0.4"
 flate2 = "1.0.28"
 futures = "0.3.30"
-http-cache-reqwest = "0.13.0"
+http-cache-reqwest = "0.14.0"
 human_bytes = "0.4.3"
 humantime = "2.1.0"
 ignore = "0.4.22"
@@ -76,7 +76,7 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 pyproject-toml = "0.10.0"
-rattler = { version = "0.20.0", default-features = false, features = [
+rattler = { version = "0.21.0", default-features = false, features = [
     "cli-tools",
 ] }
 rattler_conda_types = { version = "0.20.4", default-features = false }
@@ -97,7 +97,7 @@ regex = "1.10.4"
 requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 reqwest = { version = "0.12.3", default-features = false }
 reqwest-middleware = "0.3.0"
-reqwest-retry = "0.4.0"
+reqwest-retry = "0.5.0"
 self-replace = "1.3.7"
 serde = "1.0.197"
 serde-untagged = "0.1.5"
@@ -163,23 +163,25 @@ toml = "0.8.12"
 pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 # deno_task_shell = { path = "../deno_task_shell" }
-# rattler = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
-# rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
-# rattler_digest = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
-# rattler_lock = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
-# rattler_networking = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
-# rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
-# rattler_shell = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
-# rattler_solve = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
-# rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", rev = "b6ccac0f72df9617d6d02220595ed4595aa34e1c" }
-#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-#rattler_digest = { path = "../rattler/crates/rattler_digest" }
-#rattler_networking = { path = "../rattler/crates/rattler_networking" }
-#rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-#rattler_shell = { path = "../rattler/crates/rattler_shell" }
-#rattler_solve = { path = "../rattler/crates/rattler_solve" }
-#rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
-#rattler_lock = { path = "../rattler/crates/rattler_lock" }
+rattler = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
+rattler_conda_types = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
+rattler_digest = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
+rattler_lock = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
+rattler_networking = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
+rattler_repodata_gateway = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
+rattler_shell = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
+rattler_solve = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
+rattler_virtual_packages = { git = "https://github.com/wolfv/rattler", rev = "8f7b19067f5c3716f83c06d82b4620ccfb5e2766" }
+# rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
+# rattler_digest = { path = "../rattler/crates/rattler_digest" }
+# rattler_networking = { path = "../rattler/crates/rattler_networking" }
+# rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
+# rattler_shell = { path = "../rattler/crates/rattler_shell" }
+# rattler_solve = { path = "../rattler/crates/rattler_solve" }
+# rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
+# rattler_lock = { path = "../rattler/crates/rattler_lock" }
+# rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
+# rattler = { path = "../rattler/crates/rattler" }
 
 # Change these lines if you want a patched version of uv
 [patch.'https://github.com/astral-sh/uv']
@@ -201,24 +203,3 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 # platform-tags = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
 # pypi-types = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
 # requirements-txt = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-
-# deno_task_shell = { path = "../deno_task_shell" }
-# rattler = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_conda_types = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_digest = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_lock = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_networking = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_shell = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_solve = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-# rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", rev = "2fb7fc1f60b250985e0674b22c5d42fd31798826" }
-
-
-# rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-# rattler_digest = { path = "../rattler/crates/rattler_digest" }
-# rattler_networking = { path = "../rattler/crates/rattler_networking" }
-# rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-# rattler_shell = { path = "../rattler/crates/rattler_shell" }
-# rattler_solve = { path = "../rattler/crates/rattler_solve" }
-# rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
-# rattler_lock = { path = "../rattler/crates/rattler_lock" }
