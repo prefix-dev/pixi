@@ -290,7 +290,7 @@ rust = "1.72"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 ```
 
-### `pypi-dependencies` (Beta feature)
+### `pypi-dependencies`
 
 ??? info "Details regarding the PyPI integration"
     We use [`uv`](https://github.com/astral-sh/uv), which is a new fast pip replacement written in Rust.
@@ -309,7 +309,7 @@ PyPI packages are not indexed on [prefix.dev](https://prefix.dev/channels) but c
 
 !!! warning "Important considerations"
     - **Stability**: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the `dependencies` table where possible.
-    - **Compatibility limitations**: Currently, pixi doesn't support: Private PyPI repositories
+    - **Compatibility limitation**: Currently, pixi doesn't support private PyPI repositories
 
 #### Version specification:
 
