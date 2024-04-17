@@ -1,5 +1,5 @@
 use miette::Report;
-use pep508_rs::VersionOrUrl;
+use pep440_rs::VersionSpecifiers;
 use pyproject_toml::{self, Project};
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
@@ -71,22 +71,23 @@ impl From<PyProjectManifest> for ProjectManifest {
         manifest.project.name = Some(pyproject.name.clone());
 
         // Add python as dependency based on the project.requires_python property (if any)
-        let python_spec = pyproject
-            .requires_python
-            .clone()
-            .map(VersionOrUrl::VersionSpecifier);
+        let python_spec = pyproject.requires_python.clone();
 
         let target = manifest.default_feature_mut().targets.default_mut();
-        if !target.has_dependency("python", Some(SpecType::Run)) || python_spec.is_some() {
-            if target.has_dependency("python", Some(SpecType::Run)) {
-                tracing::warn!("Overwriting `python` dependency from [tool.pixi.dependencies] with `requires-python` version from pyproject.toml");
-            }
-
+        // If the target doesn't have any python dependency, we add it from the `requires-python`
+        if !target.has_dependency("python", Some(SpecType::Run)) {
             target.add_dependency(
                 PackageName::from_str("python").unwrap(),
                 version_or_url_to_nameless_matchspec(&python_spec).unwrap(),
                 SpecType::Run,
             );
+        } else if let Some(_spec) = python_spec {
+            if target.has_dependency("python", Some(SpecType::Run)) {
+                // TODO: implement some comparison or spec merging logic here
+                tracing::info!(
+                    "Overriding the requires-python with the one defined in pixi dependencies"
+                )
+            }
         }
 
         // Add pyproject dependencies as pypi dependencies
@@ -141,18 +142,17 @@ impl From<PyProjectManifest> for ProjectManifest {
 /// This will only work if it is not URL and the VersionSpecifier can successfully
 /// be interpreted as a NamelessMatchSpec.version
 fn version_or_url_to_nameless_matchspec(
-    version: &Option<VersionOrUrl>,
+    version: &Option<VersionSpecifiers>,
 ) -> Result<NamelessMatchSpec, RequirementConversionError> {
     match version {
         // TODO: avoid going through string representation for conversion
-        Some(VersionOrUrl::VersionSpecifier(v)) => {
+        Some(v) => {
             let version_string = v.to_string();
             // Double equals works a bit different in conda vs. python
             let version_string = version_string.strip_prefix("==").unwrap_or(&version_string);
 
             Ok(NamelessMatchSpec::from_str(version_string, Lenient)?)
         }
-        Some(VersionOrUrl::Url(_)) => Err(RequirementConversionError::Unimplemented),
         None => Ok(NamelessMatchSpec {
             version: Some(VersionSpec::Any),
             ..Default::default()
@@ -248,7 +248,6 @@ mod tests {
 
     use insta::assert_snapshot;
     use pep440_rs::VersionSpecifiers;
-    use pep508_rs::VersionOrUrl;
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use crate::{
@@ -498,7 +497,7 @@ mod tests {
     #[test]
     fn test_version_url_to_matchspec() {
         fn cmp(v1: &str, v2: &str) {
-            let v = VersionOrUrl::VersionSpecifier(VersionSpecifiers::from_str(v1).unwrap());
+            let v = VersionSpecifiers::from_str(v1).unwrap();
             let matchspec = super::version_or_url_to_nameless_matchspec(&Some(v)).unwrap();
             let vspec = VersionSpec::from_str(v2, ParseStrictness::Strict).unwrap();
             assert_eq!(matchspec.version, Some(vspec));
