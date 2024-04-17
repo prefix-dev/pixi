@@ -1248,9 +1248,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#pypi-dependencies-beta-feature" class="md-nav__link">
+  <a href="#pypi-dependencies" class="md-nav__link">
     <span class="md-ellipsis">
-      pypi-dependencies (Beta feature)
+      pypi-dependencies
     </span>
   </a>
   
@@ -1680,9 +1680,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#pypi-dependencies-beta-feature" class="md-nav__link">
+  <a href="#pypi-dependencies" class="md-nav__link">
     <span class="md-ellipsis">
-      pypi-dependencies (Beta feature)
+      pypi-dependencies
     </span>
   </a>
   
@@ -1985,7 +1985,7 @@ Even if the dependency defines a channel that channel should be added to the <co
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="n">rust</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.72&quot;</span>
 </span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="n">pytorch-cpu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;~=1.1&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<h3 id="pypi-dependencies-beta-feature"><code>pypi-dependencies</code> (Beta feature)<a class="headerlink" href="#pypi-dependencies-beta-feature" title="Permanent link">#</a></h3>
+<h3 id="pypi-dependencies"><code>pypi-dependencies</code><a class="headerlink" href="#pypi-dependencies" title="Permanent link">#</a></h3>
 <details class="info">
 <summary>Details regarding the PyPI integration</summary>
 <p>We use <a href="https://github.com/astral-sh/uv"><code>uv</code></a>, which is a new fast pip replacement written in Rust.</p>
@@ -2003,7 +2003,7 @@ PyPI packages are not indexed on <a href="https://prefix.dev/channels">prefix.de
 <p class="admonition-title">Important considerations</p>
 <ul>
 <li><strong>Stability</strong>: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the <code>dependencies</code> table where possible.</li>
-<li><strong>Compatibility limitations</strong>: Currently, pixi doesn't support: Private PyPI repositories</li>
+<li><strong>Compatibility limitation</strong>: Currently, pixi doesn't support private PyPI repositories</li>
 </ul>
 </div>
 <h4 id="version-specification">Version specification:<a class="headerlink" href="#version-specification" title="Permanent link">#</a></h4>
