@@ -6,17 +6,17 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="The resulting environment of a pixi installation.">
+        <meta name="description" content="Use JupyterLab with pixi environments">
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/features/environment/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/ide_integration/jupyterlab/">
       
       
-        <link rel="prev" href="../../examples/ros2-nav2/">
+        <link rel="prev" href="../../basic_usage/">
       
       
-        <link rel="next" href="../advanced_tasks/">
+        <link rel="next" href="../pycharm/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -24,7 +24,7 @@
     
     
       
-        <title>Environment - Pixi by prefix.dev</title>
+        <title>JupyterLab Integration - Pixi by prefix.dev</title>
       
     
     
@@ -61,11 +61,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Environment - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="JupyterLab Integration - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="The resulting environment of a pixi installation." >
+        <meta  property="og:description"  content="Use JupyterLab with pixi environments" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/features/environment.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/ide_integration/jupyterlab.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -73,15 +73,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/features/environment/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/ide_integration/jupyterlab/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Environment - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="JupyterLab Integration - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="The resulting environment of a pixi installation." >
+        <meta  name="twitter:description"  content="Use JupyterLab with pixi environments" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/features/environment.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/ide_integration/jupyterlab.png" >
       
     
     
@@ -104,7 +104,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#environments" class="md-skip">
+        <a href="#basic-usage" class="md-skip">
           Skip to content
         </a>
       
@@ -143,7 +143,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Environment
+              JupyterLab Integration
             
           </span>
         </div>
@@ -292,8 +292,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -303,11 +305,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" checked>
         
           
           <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="">
@@ -321,7 +323,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_1">
             <span class="md-nav__icon md-icon"></span>
             Getting Started
@@ -374,6 +376,8 @@
                 
   
   
+    
+  
   
   
     
@@ -382,11 +386,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1_3" checked>
         
           
           <label class="md-nav__link" for="__nav_1_3" id="__nav_1_3_label" tabindex="0">
@@ -400,7 +404,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_1_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_1_3">
             <span class="md-nav__icon md-icon"></span>
             IDE Integration
@@ -411,10 +415,28 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../ide_integration/jupyterlab/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    JupyterLab
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -423,6 +445,81 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#basic-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Basic usage
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Basic usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-kernels-are-available" class="md-nav__link">
+    <span class="md-ellipsis">
+      What kernels are available?
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Advanced usage
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuring-jupyterlab" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuring JupyterLab
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#binder" class="md-nav__link">
+    <span class="md-ellipsis">
+      Binder
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -435,7 +532,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ide_integration/pycharm/" class="md-nav__link">
+      <a href="../pycharm/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -456,7 +553,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ide_integration/r_studio/" class="md-nav__link">
+      <a href="../r_studio/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -709,8 +806,6 @@
       
   
   
-    
-  
   
   
     
@@ -722,11 +817,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
@@ -740,7 +835,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             Features
@@ -751,30 +846,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Environments
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../features/environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -783,110 +858,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#structure" class="md-nav__link">
-    <span class="md-ellipsis">
-      Structure
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Structure">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#cleaning-up" class="md-nav__link">
-    <span class="md-ellipsis">
-      Cleaning up
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#activation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Activation
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#traditional-conda-activate-like-activation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Traditional conda activate-like activation
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Traditional conda activate-like activation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#using-pixi-with-direnv" class="md-nav__link">
-    <span class="md-ellipsis">
-      Using pixi with direnv
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#environment-variables" class="md-nav__link">
-    <span class="md-ellipsis">
-      Environment variables
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#solving-environments" class="md-nav__link">
-    <span class="md-ellipsis">
-      Solving environments
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#caching" class="md-nav__link">
-    <span class="md-ellipsis">
-      Caching
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -899,7 +870,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../advanced_tasks/" class="md-nav__link">
+      <a href="../../features/advanced_tasks/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -920,7 +891,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../multi_platform_configuration/" class="md-nav__link">
+      <a href="../../features/multi_platform_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -941,7 +912,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../multi_environment/" class="md-nav__link">
+      <a href="../../features/multi_environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1351,8 +1322,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1361,19 +1330,19 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#structure" class="md-nav__link">
+  <a href="#basic-usage" class="md-nav__link">
     <span class="md-ellipsis">
-      Structure
+      Basic usage
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Structure">
+    <nav class="md-nav" aria-label="Basic usage">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#cleaning-up" class="md-nav__link">
+  <a href="#what-kernels-are-available" class="md-nav__link">
     <span class="md-ellipsis">
-      Cleaning up
+      What kernels are available?
     </span>
   </a>
   
@@ -1385,28 +1354,28 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#activation" class="md-nav__link">
+  <a href="#advanced-usage" class="md-nav__link">
     <span class="md-ellipsis">
-      Activation
+      Advanced usage
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuring-jupyterlab" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuring JupyterLab
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#traditional-conda-activate-like-activation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Traditional conda activate-like activation
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Traditional conda activate-like activation">
-      <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#using-pixi-with-direnv" class="md-nav__link">
+  <a href="#binder" class="md-nav__link">
     <span class="md-ellipsis">
-      Using pixi with direnv
+      Binder
     </span>
   </a>
   
@@ -1414,33 +1383,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#environment-variables" class="md-nav__link">
-    <span class="md-ellipsis">
-      Environment variables
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#solving-environments" class="md-nav__link">
-    <span class="md-ellipsis">
-      Solving environments
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#caching" class="md-nav__link">
-    <span class="md-ellipsis">
-      Caching
-    </span>
-  </a>
   
 </li>
       
@@ -1459,7 +1401,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/features/environment.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/ide_integration/jupyterlab.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1467,153 +1409,58 @@
   
 
 
-<h1 id="environments">Environments<a class="headerlink" href="#environments" title="Permanent link">#</a></h1>
-<p>Pixi is a tool to manage virtual environments.
-This document explains what an environment looks like and how to use it.</p>
-<h2 id="structure">Structure<a class="headerlink" href="#structure" title="Permanent link">#</a></h2>
-<p>A pixi environment is located in the <code>.pixi/envs</code> directory of the project.
-This location is <strong>not</strong> configurable as it is a specific design decision to keep the environments in the project directory.
-This keeps your machine and your project clean and isolated from each other, and makes it easy to clean up after a project is done.</p>
-<p>If you look at the <code>.pixi/envs</code> directory, you will see a directory for each environment, the <code>default</code> being the one that is normally used, if you specify a custom environment the name you specified will be used.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>.pixi
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>└──<span class="w"> </span>envs
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span>├──<span class="w"> </span>cuda
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span>│<span class="w">   </span>├──<span class="w"> </span>bin
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span>│<span class="w">   </span>├──<span class="w"> </span>conda-meta
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span>│<span class="w">   </span>├──<span class="w"> </span>etc
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span>│<span class="w">   </span>├──<span class="w"> </span>include
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span>│<span class="w">   </span>├──<span class="w"> </span>lib
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span>│<span class="w">   </span>...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span>└──<span class="w"> </span>default
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">        </span>├──<span class="w"> </span>bin
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">        </span>├──<span class="w"> </span>conda-meta
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">        </span>├──<span class="w"> </span>etc
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">        </span>├──<span class="w"> </span>include
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">        </span>├──<span class="w"> </span>lib
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">        </span>...
+  <h1>JupyterLab</h1>
+
+<h2 id="basic-usage">Basic usage<a class="headerlink" href="#basic-usage" title="Permanent link">#</a></h2>
+<p>Using JupyterLab with pixi is very simple.
+You can just create a new pixi project and add the <code>jupyterlab</code> package to it.
+The full example is provided under the following <a href="https://github.com/prefix-dev/pixi/tree/main/examples/jupyterlab">Github link</a>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>jupyterlab
 </span></code></pre></div>
-<p>These directories are conda environments, and you can use them as such, but you cannot manually edit them, this should always go through the <code>pixi.toml</code>.
-Pixi will always make sure the environment is in sync with the <code>pixi.lock</code> file.
-If this is not the case then all the commands that use the environment will automatically update the environment, e.g. <code>pixi run</code>, <code>pixi shell</code>.</p>
-<h3 id="cleaning-up">Cleaning up<a class="headerlink" href="#cleaning-up" title="Permanent link">#</a></h3>
-<p>If you want to clean up the environments, you can simply delete the <code>.pixi/envs</code> directory, and pixi will recreate the environments when needed.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># either:</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>rm<span class="w"> </span>-rf<span class="w"> </span>.pixi/envs
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># or per environment:</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>rm<span class="w"> </span>-rf<span class="w"> </span>.pixi/envs/default
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>rm<span class="w"> </span>-rf<span class="w"> </span>.pixi/envs/cuda
+<p>This will create a new pixi project and add the <code>jupyterlab</code> package to it. You can then start JupyterLab using the
+following command:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>jupyter<span class="w"> </span>lab
 </span></code></pre></div>
-<h2 id="activation">Activation<a class="headerlink" href="#activation" title="Permanent link">#</a></h2>
-<p>An environment is nothing more than a set of files that are installed into a certain location, that somewhat mimics a global system install.
-You need to activate the environment to use it.
-In the most simple sense that mean adding the <code>bin</code> directory of the environment to the <code>PATH</code> variable.
-But there is more to it in a conda environment, as it also sets some environment variables.</p>
-<p>To do the activation we have multiple options:</p>
+<p>If you want to add more "kernels" to JupyterLab, you can simply add them to your current project – as well as any dependencies from the scientific stack you might need.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>bash_kernel<span class="w"> </span>ipywidgets<span class="w"> </span>matplotlib<span class="w"> </span>numpy<span class="w"> </span>pandas<span class="w">  </span><span class="c1"># ...</span>
+</span></code></pre></div>
+<h3 id="what-kernels-are-available">What kernels are available?<a class="headerlink" href="#what-kernels-are-available" title="Permanent link">#</a></h3>
+<p>You can easily install more "kernels" for JupyterLab. The <code>conda-forge</code> repository has a number of interesting additional kernels - not just Python!</p>
 <ul>
-<li>Use the <code>pixi shell</code> command to open a shell with the environment activated.</li>
-<li>Use the <code>pixi shell-hook</code> command to print the command to activate the environment in your current shell.</li>
-<li>Use the <code>pixi run</code> command to run a command in the environment.</li>
+<li><a href="https://prefix.dev/channels/conda-forge/packages/bash_kernel"><strong><code>bash_kernel</code></strong></a> A kernel for bash</li>
+<li><a href="https://prefix.dev/channels/conda-forge/packages/xeus-cpp"><strong><code>xeus-cpp</code></strong></a> A C++ kernel based on the new clang-repl</li>
+<li><a href="https://prefix.dev/channels/conda-forge/packages/xeus-cling"><strong><code>xeus-cling</code></strong></a> A C++ kernel based on the slightly older Cling</li>
+<li><a href="https://prefix.dev/channels/conda-forge/packages/xeus-lua"><strong><code>xeus-lua</code></strong></a> A Lua kernel</li>
+<li><a href="https://prefix.dev/channels/conda-forge/packages/xeus-sql"><strong><code>xeus-sql</code></strong></a> A kernel for SQL</li>
+<li><a href="https://prefix.dev/channels/conda-forge/packages/r-irkernel"><strong><code>r-irkernel</code></strong></a> An R kernel</li>
 </ul>
-<p>Where the <code>run</code> command is special as it runs its own cross-platform shell and has the ability to run tasks.
-More information about tasks can be found in the <a href="../advanced_tasks/">tasks documentation</a>.</p>
-<p>Using the <code>pixi shell-hook</code> in pixi you would get the following output:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/bin:/home/user/.local/bin:/home/user/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/home/user/.pixi/bin&quot;</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CONDA_PREFIX</span><span class="o">=</span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default&quot;</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_PROJECT_NAME</span><span class="o">=</span><span class="s2">&quot;pixi&quot;</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_PROJECT_ROOT</span><span class="o">=</span><span class="s2">&quot;/home/user/development/pixi&quot;</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_PROJECT_VERSION</span><span class="o">=</span><span class="s2">&quot;0.12.0&quot;</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_PROJECT_MANIFEST</span><span class="o">=</span><span class="s2">&quot;/home/user/development/pixi/pixi.toml&quot;</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CONDA_DEFAULT_ENV</span><span class="o">=</span><span class="s2">&quot;pixi&quot;</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_ENVIRONMENT_PLATFORMS</span><span class="o">=</span><span class="s2">&quot;osx-64,linux-64,win-64,osx-arm64&quot;</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_ENVIRONMENT_NAME</span><span class="o">=</span><span class="s2">&quot;default&quot;</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_PROMPT</span><span class="o">=</span><span class="s2">&quot;(pixi) &quot;</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>.<span class="w"> </span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-binutils_linux-64.sh&quot;</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>.<span class="w"> </span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-gcc_linux-64.sh&quot;</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>.<span class="w"> </span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-gfortran_linux-64.sh&quot;</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>.<span class="w"> </span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-gxx_linux-64.sh&quot;</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>.<span class="w"> </span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/libglib_activate.sh&quot;</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>.<span class="w"> </span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/rust.sh&quot;</span>
+<h2 id="advanced-usage">Advanced usage<a class="headerlink" href="#advanced-usage" title="Permanent link">#</a></h2>
+<!--
+Modifications to the following section are related to the README.md in https://github.com/renan-r-santos/pixi-kernel and
+https://github.com/renan-r-santos/pixi-kernel-binder, please keep these two in sync by making a PR in both
+-->
+
+<p>If you want to have only one instance of JupyterLab running but still want per-directory Pixi environments, you can use
+one of the kernels provided by the <a href="https://prefix.dev/channels/conda-forge/packages/pixi-kernel"><strong><code>pixi-kernel</code></strong></a>
+package.</p>
+<h3 id="configuring-jupyterlab">Configuring JupyterLab<a class="headerlink" href="#configuring-jupyterlab" title="Permanent link">#</a></h3>
+<p>To get started, create a Pixi project, add <code>jupyterlab</code> and <code>pixi-kernel</code> and then start JupyterLab:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>init
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>jupyterlab<span class="w"> </span>pixi-kernel
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>jupyter<span class="w"> </span>lab
 </span></code></pre></div>
-<p>It sets the <code>PATH</code> and some more environment variables. But more importantly it also runs activation scripts that are presented by the installed packages.
-An example of this would be the <a href="https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh"><code>libglib_activate.sh</code></a> script.
-Thus, just adding the <code>bin</code> directory to the <code>PATH</code> is not enough.</p>
-<h2 id="traditional-conda-activate-like-activation">Traditional <code>conda activate</code>-like activation<a class="headerlink" href="#traditional-conda-activate-like-activation" title="Permanent link">#</a></h2>
-<p>If you prefer to use the traditional <code>conda activate</code>-like activation, you could use the <code>pixi shell-hook</code> command.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>$<span class="w"> </span>which<span class="w"> </span>python
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>python<span class="w"> </span>not<span class="w"> </span>found
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>$<span class="w"> </span><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>$<span class="w"> </span><span class="o">(</span>default<span class="o">)</span><span class="w"> </span>which<span class="w"> </span>python
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>/path/to/project/.pixi/envs/default/bin/python
-</span></code></pre></div>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>It is not encouraged to use the traditional <code>conda activate</code>-like activation, as deactivating the environment is not really possible. Use <code>pixi shell</code> instead.</p>
-</div>
-<h3 id="using-pixi-with-direnv">Using <code>pixi</code> with <code>direnv</code><a class="headerlink" href="#using-pixi-with-direnv" title="Permanent link">#</a></h3>
-<p>This allows you to use <code>pixi</code> in combination with <code>direnv</code>.
-Enter the following into your <code>.envrc</code> file:</p>
-<div class="language-shell highlight"><span class="filename">.envrc</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>watch_file<span class="w"> </span>pixi.lock<span class="w"> </span><span class="c1"># (1)!</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="c1"># (2)!</span>
-</span></code></pre></div>
-<ol>
-<li>This ensures that every time your <code>pixi.lock</code> changes, <code>direnv</code> invokes the shell-hook again.</li>
-<li>This installs if needed, and activates the environment. <code>direnv</code> ensures that the environment is deactivated when you leave the directory.</li>
-</ol>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>my-project
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>direnv:<span class="w"> </span>error<span class="w"> </span>/my-project/.envrc<span class="w"> </span>is<span class="w"> </span>blocked.<span class="w"> </span>Run<span class="w"> </span><span class="sb">`</span>direnv<span class="w"> </span>allow<span class="sb">`</span><span class="w"> </span>to<span class="w"> </span>approve<span class="w"> </span>its<span class="w"> </span>content
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>$<span class="w"> </span>direnv<span class="w"> </span>allow
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>direnv:<span class="w"> </span>loading<span class="w"> </span>/my-project/.envrc
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>✔<span class="w"> </span>Project<span class="w"> </span><span class="k">in</span><span class="w"> </span>/my-project<span class="w"> </span>is<span class="w"> </span>ready<span class="w"> </span>to<span class="w"> </span>use!
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>direnv:<span class="w"> </span><span class="nb">export</span><span class="w"> </span>+CONDA_DEFAULT_ENV<span class="w"> </span>+CONDA_PREFIX<span class="w"> </span>+PIXI_ENVIRONMENT_NAME<span class="w"> </span>+PIXI_ENVIRONMENT_PLATFORMS<span class="w"> </span>+PIXI_PROJECT_MANIFEST<span class="w"> </span>+PIXI_PROJECT_NAME<span class="w"> </span>+PIXI_PROJECT_ROOT<span class="w"> </span>+PIXI_PROJECT_VERSION<span class="w"> </span>+PIXI_PROMPT<span class="w"> </span>~PATH
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>$<span class="w"> </span>which<span class="w"> </span>python
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>/my-project/.pixi/envs/default/bin/python
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>..
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>direnv:<span class="w"> </span>unloading
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>$<span class="w"> </span>which<span class="w"> </span>python
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>python<span class="w"> </span>not<span class="w"> </span>found
-</span></code></pre></div>
-<h2 id="environment-variables">Environment variables<a class="headerlink" href="#environment-variables" title="Permanent link">#</a></h2>
-<p>The following environment variables are set by pixi, when using the <code>pixi run</code>, <code>pixi shell</code>, or <code>pixi shell-hook</code> command:</p>
-<ul>
-<li><code>PIXI_PROJECT_ROOT</code>: The root directory of the project.</li>
-<li><code>PIXI_PROJECT_NAME</code>: The name of the project.</li>
-<li><code>PIXI_PROJECT_MANIFEST</code>: The path to the manifest file (<code>pixi.toml</code>).</li>
-<li><code>PIXI_PROJECT_VERSION</code>: The version of the project.</li>
-<li><code>PIXI_PROMPT</code>: The prompt to use in the shell, also used by <code>pixi shell</code> itself.</li>
-<li><code>PIXI_ENVIRONMENT_NAME</code>: The name of the environment, defaults to <code>default</code>.</li>
-<li><code>PIXI_ENVIRONMENT_PLATFORMS</code>: The path to the environment.</li>
-<li><code>CONDA_PREFIX</code>: The path to the environment. (Used by multiple tools that already understand conda environments)</li>
-<li><code>CONDA_DEFAULT_ENV</code>: The name of the environment. (Used by multiple tools that already understand conda environments)</li>
-<li><code>PATH</code>: We prepend the <code>bin</code> directory of the environment to the <code>PATH</code> variable, so you can use the tools installed in the environment directly.</li>
-</ul>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting <code>PIXI_PROJECT_ROOT</code> in the environment.</p>
-</div>
-<h2 id="solving-environments">Solving environments<a class="headerlink" href="#solving-environments" title="Permanent link">#</a></h2>
-<p>When you run a command that uses the environment, pixi will check if the environment is in sync with the <code>pixi.lock</code> file.
-If it is not, pixi will solve the environment and update it.
-This means that pixi will retrieve the best set of packages for the dependency requirements that you specified in the <code>pixi.toml</code> and will put the output of the solve step into the <code>pixi.lock</code> file.
-Solving is a mathematical problem and can take some time, but we take pride in the way we solve environments, and we are confident that we can solve your environment in a reasonable time.
-If you want to learn more about the solving process, you can read these:</p>
-<ul>
-<li><a href="https://prefix.dev/blog/the_new_rattler_resolver">Rattler(conda) resolver blog</a></li>
-<li><a href="https://prefix.dev/blog/introducing_rip">Rip(PyPI) resolver blog</a></li>
-</ul>
-<p>Pixi solves both the <code>conda</code> and <code>PyPI</code> dependencies, where the <code>PyPI</code> dependencies use the conda packages as a base, so you can be sure that the packages are compatible with each other.
-These solvers are split between the <a href="https://github.com/mamba-org/rattler"><code>rattler</code></a> and <a href="https://github.com/prefix-dev/rip"><code>rip</code></a> library, these control the heavy lifting of the solving process, which is executed by our custom SAT solver: <a href="https://github.com/mamba-org/resolvo"><code>resolvo</code></a>.
-<code>resolve</code> is able to solve multiple ecosystem like <code>conda</code> and <code>PyPI</code>. It implements the lazy solving process for <code>PyPI</code> packages, which means that it only downloads the metadata of the packages that are needed to solve the environment.
-It also supports the <code>conda</code> way of solving, which means that it downloads the metadata of all the packages at once and then solves in one go.</p>
-<p>For the <code>[pypi-dependencies]</code>, <code>rip</code> implements <code>sdist</code> building to retrieve the metadata of the packages, and <code>wheel</code> building to install the packages.
-For this building step, <code>pixi</code> requires to first install <code>python</code> in the (conda)<code>[dependencies]</code> section of the <code>pixi.toml</code> file.
-This will always be slower than the pure conda solves. So for the best pixi experience you should stay within the <code>[dependencies]</code> section of the <code>pixi.toml</code> file.</p>
-<h2 id="caching">Caching<a class="headerlink" href="#caching" title="Permanent link">#</a></h2>
-<p>Pixi caches the packages used in the environment.
-So if you have multiple projects that use the same packages, pixi will only download the packages once.</p>
-<p>The cache is located in the <code>~/.cache/rattler/cache</code> directory by default.
-This location is configurable by setting the <code>PIXI_CACHE_DIR</code> or <code>RATTLER_CACHE_DIR</code> environment variable.</p>
-<p>When you want to clean the cache, you can simply delete the cache directory, and pixi will re-create the cache when needed.</p>
+<p>This will start JupyterLab and open it in your browser.</p>
+<p><img alt="JupyterLab launcher screen showing Pixi
+Kernel" src="https://raw.githubusercontent.com/renan-r-santos/pixi-kernel/main/assets/launch-light.png#only-light" />
+<img alt="JupyterLab launcher screen showing Pixi
+Kernel" src="https://raw.githubusercontent.com/renan-r-santos/pixi-kernel/main/assets/launch-dark.png#only-dark" /></p>
+<p><code>pixi-kernel</code> searches for a manifest file, either <code>pixi.toml</code> or <code>pyproject.toml</code>, in the same directory of your
+notebook or in any parent directory. When it finds one, it will use the environment specified in the manifest file to
+start the kernel and run your notebooks.</p>
+<h3 id="binder">Binder<a class="headerlink" href="#binder" title="Permanent link">#</a></h3>
+<p>If you just want to check a JupyterLab environment running in the cloud using <code>pixi-kernel</code>, you can visit
+<a href="https://mybinder.org/v2/gh/renan-r-santos/pixi-kernel-binder/main?labpath=example.ipynb">Binder</a>.</p>
 
 
 
@@ -1685,9 +1532,9 @@ This location is configurable by setting the <code>PIXI_CACHE_DIR</code> or <cod
           
             
             <a
-              href="../../examples/ros2-nav2/"
+              href="../../basic_usage/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: ROS 2"
+              aria-label="Previous: Basic Usage"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1698,7 +1545,7 @@ This location is configurable by setting the <code>PIXI_CACHE_DIR</code> or <cod
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  ROS 2
+                  Basic Usage
                 </div>
               </div>
             </a>
@@ -1708,16 +1555,16 @@ This location is configurable by setting the <code>PIXI_CACHE_DIR</code> or <cod
           
             
             <a
-              href="../advanced_tasks/"
+              href="../pycharm/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Tasks"
+              aria-label="Next: PyCharm"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Tasks
+                  PyCharm
                 </div>
               </div>
               <div class="md-footer__button md-icon">
