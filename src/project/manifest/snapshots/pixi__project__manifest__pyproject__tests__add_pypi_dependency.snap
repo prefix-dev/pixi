@@ -10,7 +10,7 @@ expression: manifest.document.to_string()
         homepage = "https://github.com/prefix/pixi"
         readme = "README.md"
         requires-python = ">=3.11"
-        dependencies = ["flask==2.*", "numpy >=3.12"]
+        dependencies = ["flask==2.*", "numpy>=3.12"]
 
         [tool.pixi.project]
         name = "flask-hello-world-pyproject"

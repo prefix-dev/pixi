@@ -21,17 +21,18 @@ use crate::{
 };
 
 use distribution_types::{
-    BuiltDist, DirectUrlSourceDist, Dist, IndexLocations, Name, PrioritizedDist, Resolution,
-    SourceDist,
+    BuiltDist, DirectUrlSourceDist, Dist, HashPolicy, IndexLocations, Name, PrioritizedDist,
+    Resolution, ResolvedDist, SourceDist,
 };
 use distribution_types::{FileLocation, SourceDistCompatibility};
 use futures::FutureExt;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
+use install_wheel_rs::linker::LinkMode;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::{Requirement, VerbatimUrl};
-use pypi_types::Metadata23;
+use pypi_types::{HashAlgorithm, HashDigest, Metadata23};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
@@ -41,19 +42,23 @@ use rattler_solve::{resolvo, SolverImpl};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use uv_configuration::{
+    ConfigSettings, Constraints, NoBinary, NoBuild, Overrides, SetupPyStrategy,
+};
 
 use url::Url;
 use uv_cache::Cache;
-use uv_client::{Connectivity, FlatIndex, FlatIndexClient, RegistryClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
-use uv_distribution::{DistributionDatabase, Reporter};
+use uv_distribution::{ArchiveMetadata, DistributionDatabase, Reporter};
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
-    AllowedYanks, DefaultResolverProvider, DistFinder, InMemoryIndex, Manifest, Options,
-    PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
+    AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, MetadataResponse,
+    Options, PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
+    WheelMetadataResult,
 };
-use uv_traits::{BuildContext, ConfigSettings, InFlight, NoBinary, NoBuild, SetupPyStrategy};
+use uv_types::{BuildContext, EmptyInstalledPackages, HashStrategy, InFlight};
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
@@ -64,6 +69,7 @@ pub struct UvResolutionContext {
     pub index_locations: Arc<IndexLocations>,
     pub no_build: NoBuild,
     pub no_binary: NoBinary,
+    pub hash_strategy: HashStrategy,
 }
 
 impl UvResolutionContext {
@@ -90,27 +96,39 @@ impl UvResolutionContext {
             index_locations,
             no_build: NoBuild::None,
             no_binary: NoBinary::None,
+            hash_strategy: HashStrategy::None,
         })
     }
 }
 
-/// This function takes as input a set of dependencies and system requirements and returns a set of
-/// locked packages.
+fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes> {
+    let mut sha256 = None;
+    let mut md5 = None;
 
-fn parse_hashes_from_hex(
-    sha256: &Option<Box<str>>,
-    md5: &Option<Box<str>>,
-) -> Option<PackageHashes> {
+    for hash in hashes {
+        match hash.algorithm() {
+            HashAlgorithm::Sha256 => {
+                sha256 = Some(hash.digest.to_string());
+            }
+            HashAlgorithm::Md5 => {
+                md5 = Some(hash.digest.to_string());
+            }
+            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 => {
+                // We do not support these algorithms
+            }
+        }
+    }
+
     match (sha256, md5) {
         (Some(sha256), None) => Some(PackageHashes::Sha256(
-            parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),
+            parse_digest_from_hex::<Sha256>(&sha256).expect("invalid sha256"),
         )),
         (None, Some(md5)) => Some(PackageHashes::Md5(
-            parse_digest_from_hex::<Md5>(md5).expect("invalid md5"),
+            parse_digest_from_hex::<Md5>(&md5).expect("invalid md5"),
         )),
         (Some(sha256), Some(md5)) => Some(PackageHashes::Md5Sha256(
-            parse_digest_from_hex::<Md5>(md5).expect("invalid md5"),
-            parse_digest_from_hex::<Sha256>(sha256).expect("invalid sha256"),
+            parse_digest_from_hex::<Md5>(&md5).expect("invalid md5"),
+            parse_digest_from_hex::<Sha256>(&sha256).expect("invalid sha256"),
         )),
         (None, None) => None,
     }
@@ -140,12 +158,15 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
                 url: VerbatimUrl::unknown(repodata_record.url.clone()),
             }));
 
-            let prioritized_dist =
-                PrioritizedDist::from_source(dist, None, SourceDistCompatibility::Compatible);
+            let prioritized_dist = PrioritizedDist::from_source(
+                dist,
+                Vec::new(),
+                SourceDistCompatibility::Compatible(distribution_types::Hash::Matched),
+            );
 
-            return ready(Ok(VersionsResponse::Found(VersionMap::from(
+            return ready(Ok(VersionsResponse::Found(vec![VersionMap::from(
                 BTreeMap::from_iter([(identifier.version.clone(), prioritized_dist)]),
-            ))))
+            )])))
             .right_future();
         }
 
@@ -158,24 +179,22 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
     fn get_or_build_wheel_metadata<'io>(
         &'io self,
         dist: &'io Dist,
-    ) -> impl Future<Output = uv_resolver::WheelMetadataResult> + Send + 'io {
-        if let Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist { url, name })) = dist {
+    ) -> impl Future<Output = WheelMetadataResult> + Send + 'io {
+        if let Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist { name, .. })) = dist {
             if let Some((_, iden)) = self.conda_python_identifiers.get(name) {
                 // If this is a Source dist and the package is actually installed by conda we
                 // create fake metadata with no dependencies. We assume that all conda installed
                 // packages are properly installed including its dependencies.
-                return ready(Ok((
-                    Metadata23 {
-                        metadata_version: "1.0".to_string(),
-                        name: name.clone(),
+                return ready(Ok(MetadataResponse::Found(ArchiveMetadata {
+                    metadata: Metadata23 {
+                        name: iden.name.as_normalized().clone(),
                         version: iden.version.clone(),
                         requires_dist: vec![],
                         requires_python: None,
-                        // TODO: This field is not actually properly used.
                         provides_extras: iden.extras.iter().cloned().collect(),
                     },
-                    Some(url.to_url()),
-                )))
+                    hashes: vec![],
+                })))
                 .left_future();
             }
         }
@@ -302,7 +321,13 @@ pub async fn resolve_pypi(
             .fetch(context.index_locations.flat_index())
             .await
             .into_diagnostic()?;
-        FlatIndex::from_entries(entries, &tags)
+        FlatIndex::from_entries(
+            entries,
+            &tags,
+            &context.hash_strategy,
+            &context.no_build,
+            &context.no_binary,
+        )
     };
 
     let in_memory_index = InMemoryIndex::default();
@@ -320,7 +345,8 @@ pub async fn resolve_pypi(
         &context.in_flight,
         SetupPyStrategy::default(),
         &config_settings,
-        uv_traits::BuildIsolation::Isolated,
+        uv_types::BuildIsolation::Isolated,
+        LinkMode::default(),
         &context.no_build,
         &context.no_binary,
     )
@@ -337,7 +363,7 @@ pub async fn resolve_pypi(
             ))),
             marker: None,
         })
-        .collect();
+        .collect::<Vec<_>>();
 
     // Build any editables
     let built_editables = build_editables(&editables, &context.cache, &build_dispatch)
@@ -348,25 +374,23 @@ pub async fn resolve_pypi(
 
     let manifest = Manifest::new(
         requirements,
-        constraints,
-        Vec::new(),
+        Constraints::from_requirements(constraints),
+        Overrides::default(),
         Vec::new(),
         None,
         built_editables.clone(),
+        uv_resolver::Exclusions::None,
+        Vec::new(),
     );
 
     let fallback_provider = DefaultResolverProvider::new(
         &context.registry_client,
-        DistributionDatabase::new(
-            &context.cache,
-            &tags,
-            &context.registry_client,
-            &build_dispatch,
-        ),
+        DistributionDatabase::new(&context.registry_client, &build_dispatch),
         &flat_index,
         &tags,
         PythonRequirement::new(&interpreter, &marker_environment),
         AllowedYanks::default(),
+        &context.hash_strategy,
         options.exclude_newer,
         build_dispatch.no_binary(),
         &NoBuild::None,
@@ -379,10 +403,12 @@ pub async fn resolve_pypi(
     let resolution = Resolver::new_custom_io(
         manifest,
         options,
+        &context.hash_strategy,
         &marker_environment,
         PythonRequirement::new(&interpreter, &marker_environment),
         &in_memory_index,
         provider,
+        &EmptyInstalledPackages,
     )
     .into_diagnostic()
     .context("failed to resolve pypi dependencies")?
@@ -396,25 +422,7 @@ pub async fn resolve_pypi(
 
     let resolution = Resolution::from(resolution);
 
-    let database = DistributionDatabase::new(
-        &context.cache,
-        &tags,
-        &context.registry_client,
-        &build_dispatch,
-    );
-
-    let resolution = DistFinder::new(
-        &tags,
-        &context.registry_client,
-        &interpreter,
-        &flat_index,
-        build_dispatch.no_binary(),
-        &NoBuild::None,
-    )
-    .resolve(&resolution.requirements())
-    .await
-    .into_diagnostic()
-    .context("failed to find matching pypi distributions for the resolution")?;
+    let database = DistributionDatabase::new(&context.registry_client, &build_dispatch);
 
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     for dist in resolution.into_distributions() {
@@ -424,7 +432,11 @@ pub async fn resolve_pypi(
         }
 
         let pypi_package_data = match dist {
-            Dist::Built(dist) => {
+            ResolvedDist::Installed(_) => {
+                // TODO handle installed distributions
+                continue;
+            }
+            ResolvedDist::Installable(Dist::Built(dist)) => {
                 let (url_or_path, hash) = match &dist {
                     BuiltDist::Registry(dist) => {
                         let url = match &dist.file.url {
@@ -435,9 +447,7 @@ pub async fn resolve_pypi(
                             _ => todo!("unsupported URL"),
                         };
 
-                        let hash =
-                            parse_hashes_from_hex(&dist.file.hashes.sha256, &dist.file.hashes.md5);
-
+                        let hash = parse_hashes_from_hash_vec(&dist.file.hashes);
                         (url, hash)
                     }
                     BuiltDist::DirectUrl(dist) => {
@@ -470,30 +480,28 @@ pub async fn resolve_pypi(
                     hash,
                 }
             }
-            Dist::Source(source) => {
+            ResolvedDist::Installable(Dist::Source(source)) => {
+                // Handle new hash stuff
                 let hash = source
                     .file()
-                    .and_then(|file| parse_hashes_from_hex(&file.hashes.sha256, &file.hashes.md5));
+                    .and_then(|file| parse_hashes_from_hash_vec(&file.hashes));
 
-                let (metadata, url) = database
-                    .get_or_build_wheel_metadata(&Dist::Source(source.clone()))
+                let metadata_response = database
+                    .get_or_build_wheel_metadata(&Dist::Source(source.clone()), HashPolicy::None)
                     .await
                     .into_diagnostic()?;
+                let metadata = metadata_response.metadata;
 
                 // Use the precise url if we got it back
                 // otherwise try to construct it from the source
                 let (url_or_path, hash, editable) = match source {
                     SourceDist::Registry(reg) => {
-                        let url_or_path = if let Some(url) = url {
-                            UrlOrPath::Url(url)
-                        } else {
-                            match &reg.file.url {
-                                FileLocation::AbsoluteUrl(url) => UrlOrPath::Url(
-                                    Url::from_str(url).expect("invalid absolute url"),
-                                ),
-                                FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
-                                _ => todo!("unsupported URL"),
+                        let url_or_path = match &reg.file.url {
+                            FileLocation::AbsoluteUrl(url) => {
+                                UrlOrPath::Url(Url::from_str(url).expect("invalid absolute url"))
                             }
+                            FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
+                            _ => todo!("unsupported URL"),
                         };
                         (url_or_path, hash, false)
                     }

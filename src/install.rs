@@ -29,7 +29,7 @@ pub async fn execute_transaction(
     top_level_progress: ProgressBar,
 ) -> miette::Result<()> {
     // Create an install driver which helps limit the number of concurrent filesystem operations
-    let install_driver = InstallDriver::new(100, Some(prefix_records));
+    let install_driver = InstallDriver::new(100, Some(prefix_records), true);
 
     // Define default installation options.
     let install_options = InstallOptions {

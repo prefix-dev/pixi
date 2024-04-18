@@ -23,7 +23,7 @@ bump = "tbump --only-patch"
 pre-commit = "~=3.3.0"
 
 # Needed for building rattler
-rust = "~=1.76.0"
+rust = "~=1.77.0"
 openssl = "3.*"
 pkg-config = "0.29.*"
 git = "2.42.0.*"

@@ -5,12 +5,13 @@ use distribution_types::LocalEditable;
 use futures::StreamExt;
 use install_wheel_rs::metadata::read_archive_metadata;
 use itertools::Itertools;
-use pypi_types::Metadata23;
+use pypi_types::{Metadata23, MetadataError};
 use requirements_txt::EditableRequirement;
 use uv_cache::Cache;
+use uv_configuration::BuildKind;
 use uv_dispatch::BuildDispatch;
 use uv_installer::DownloadReporter;
-use uv_traits::{BuildContext, BuildKind, SourceBuildTrait};
+use uv_types::{BuildContext, SourceBuildTrait};
 use zip::ZipArchive;
 
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
@@ -37,7 +38,7 @@ pub enum BuildEditablesError {
     #[error("error during parsing of editable metadata")]
     MetadataParse {
         #[from]
-        source: pypi_types::Error,
+        source: MetadataError,
     },
 
     #[error("error creating temporary dir for editable wheel build")]
@@ -107,7 +108,7 @@ async fn build_editable(
     } else {
         let temp_dir = tempfile::tempdir_in(cache.root())?;
         let wheel = source_build
-            .build(temp_dir.path())
+            .build_wheel(temp_dir.path())
             .await
             .map_err(|e| BuildEditablesError::Build { source: e })?;
         Ok(read_wheel_metadata(

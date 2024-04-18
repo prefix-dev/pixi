@@ -5,4 +5,4 @@ input_file: tests/non-satisfiability/solve-groups-pypi/pixi.toml
 ---
 environment 'default' does not satisfy the requirements of the project for platform 'win-64
     Diagnostic severity: error
-    Caused by: the requirement 'packaging >=20.0' could not be satisfied (required by 'matplotlib')
+    Caused by: the requirement 'packaging>=20.0' could not be satisfied (required by 'matplotlib')
