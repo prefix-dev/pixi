@@ -316,27 +316,17 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
                     ),
                     UrlOrPath::Path(path) => UrlOrPath::Path(path),
                 };
-                match spec_path_or_url {
-                    UrlOrPath::Url(spec_url) => match locked_path_or_url {
-                        UrlOrPath::Url(locked_url) => spec_url == locked_url,
-                        UrlOrPath::Path(path) => {
-                            if spec_url.scheme() == "file" {
-                                PathBuf::from(spec_url.path()) == path
-                            } else {
-                                false
-                            }
-                        }
-                    },
-                    UrlOrPath::Path(spec_path) => match locked_path_or_url {
-                        UrlOrPath::Url(url) => {
-                            if url.scheme() == "file" {
-                                PathBuf::from(url.path()) == spec_path
-                            } else {
-                                false
-                            }
-                        }
-                        UrlOrPath::Path(locked_path) => spec_path == locked_path,
-                    },
+                // Compare the spec and the locked data even when they differ in type.
+                match (spec_path_or_url, locked_path_or_url) {
+                    (UrlOrPath::Url(spec), UrlOrPath::Url(locked)) => spec == locked,
+                    (UrlOrPath::Path(spec), UrlOrPath::Path(locked)) => spec == locked,
+                    (UrlOrPath::Url(url), UrlOrPath::Path(path))
+                    | (UrlOrPath::Path(path), UrlOrPath::Url(url))
+                        if url.scheme() == "file" =>
+                    {
+                        PathBuf::from(url.path()) == *path
+                    }
+                    _ => false,
                 }
             }
         }
@@ -807,7 +797,7 @@ mod tests {
 
     #[test]
     fn test_pypi_git_check_with_rev() {
-        // Mock locked datga
+        // Mock locked data
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
             version: Version::from_str("0.1.0").unwrap(),
@@ -831,6 +821,21 @@ mod tests {
         ));
         // Removing the rev from the Requirement should satisfy any revision
         let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap();
+        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
+
+        // Mock locked data with path
+        let locked_data = PypiPackageData {
+            name: "mypkg".parse().unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            url_or_path: "/path/to/my_pkg".parse().expect("failed to parse url"),
+            hash: None,
+            requires_dist: vec![],
+            requires_python: None,
+            editable: false,
+        };
+
+        let spec = Requirement::from_str("mypkg @ file:///path/to/my_pkg").unwrap();
+        // This should satisfy:
         assert!(pypi_satifisfies_requirement(&locked_data, &spec));
     }
 }
