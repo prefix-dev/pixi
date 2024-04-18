@@ -220,7 +220,10 @@ async fn test_task_with_env() {
     pixi.tasks()
         .add("env-test".into(), None, FeatureName::Default)
         .with_commands(["echo From a $HELLO"])
-        .with_env(vec![(String::from("HELLO"), String::from("world with spaces"))])
+        .with_env(vec![(
+            String::from("HELLO"),
+            String::from("world with spaces"),
+        )])
         .execute()
         .unwrap();
 
