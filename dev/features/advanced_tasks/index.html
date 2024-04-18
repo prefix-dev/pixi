@@ -844,6 +844,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment variables
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#our-task-runner-deno_task_shell" class="md-nav__link">
     <span class="md-ellipsis">
       Our task runner: deno_task_shell
@@ -1358,6 +1367,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment variables
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#our-task-runner-deno_task_shell" class="md-nav__link">
     <span class="md-ellipsis">
       Our task runner: deno_task_shell
@@ -1530,6 +1548,28 @@ The directory is relative to the pixi package root, where the <code>pixi.toml</c
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># shows info logs of all files that were selected by the globs</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>-v<span class="w"> </span>start
 </span></code></pre></div>
+<h2 id="environment-variables">Environment variables<a class="headerlink" href="#environment-variables" title="Permanent link">#</a></h2>
+<p>You can set environment variables for a task.
+These are seen as "default" values for the variables as you can overwrite them from the shell.</p>
+<p><div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">echo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo $ARGUMENT&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ARGUMENT</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+If you run <code>pixi run echo</code> it will output <code>hello</code>.
+When you set the environment variable <code>ARGUMENT</code> before running the task, it will use that value instead.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nv">ARGUMENT</span><span class="o">=</span>world<span class="w"> </span>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">echo</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>✨<span class="w"> </span>Pixi<span class="w"> </span>task<span class="w"> </span><span class="o">(</span><span class="nb">echo</span><span class="w"> </span><span class="k">in</span><span class="w"> </span>default<span class="o">)</span>:<span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="nv">$ARGUMENT</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>world
+</span></code></pre></div>
+<p>These variables are not shared over tasks, so you need to define these for every task you want to use them in.</p>
+<div class="admonition note">
+<p class="admonition-title">Extend instead of overwrite</p>
+<p>If you use the same environment variable in the value as in the key of the map you will also overwrite the variable.
+For example overwriting a <code>PATH</code>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">echo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo $PATH&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">PATH</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;/tmp/path:$PATH&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+This will output <code>/tmp/path:/usr/bin:/bin</code> instead of the original <code>/usr/bin:/bin</code>.</p>
+</div>
 <h2 id="our-task-runner-deno_task_shell">Our task runner: deno_task_shell<a class="headerlink" href="#our-task-runner-deno_task_shell" title="Permanent link">#</a></h2>
 <p>To support the different OS's (Windows, OSX and Linux), pixi integrates a shell that can run on all of them.
 This is <a href="https://deno.land/manual@v1.35.0/tools/task_runner#built-in-commands"><code>deno_task_shell</code></a>.
