@@ -385,6 +385,7 @@ impl TasksControl<'_> {
                 platform,
                 feature,
                 cwd: None,
+                env: Default::default(),
             },
         }
     }

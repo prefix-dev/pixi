@@ -47,6 +47,7 @@ test3 = { cmd = "pytest", depends_on = ["test2"] }
 test4 = { cmd = "pytest", cwd = "tests", depends_on = ["test2"] }
 test5 = { cmd = "pytest" }
 test6 = { depends_on = ["test5"] }
+test7 = { cmd = "pytest", cwd = "tests", depends_on = ["test5"], env = {PYTHONPATH = "bla", "WEIRD_STRING" = "blu"}}
 
 [system-requirements]
 linux = "5.10"

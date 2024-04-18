@@ -173,6 +173,9 @@ simple = "echo This is a simple task"
 cmd = { cmd="echo Same as a simple task but now more verbose"}
 depending = { cmd="echo run after simple", depends_on="simple"}
 alias = { depends_on=["depending"]}
+download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
+build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
+run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
 ```
 
 You can modify this table using [`pixi task`](cli.md#task).
