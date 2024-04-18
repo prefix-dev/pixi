@@ -202,7 +202,7 @@ This can be useful if you want to run commands inside of the pixi environment, b
 ```yaml
 - run: | # (1)!
     python --version
-    pip install -e --no-deps .
+    pip install --no-deps -e .
   shell: pixi run bash -e {0}
 ```
 
