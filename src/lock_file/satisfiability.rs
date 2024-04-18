@@ -316,7 +316,28 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
                     ),
                     UrlOrPath::Path(path) => UrlOrPath::Path(path),
                 };
-                spec_path_or_url == locked_path_or_url
+                match spec_path_or_url {
+                    UrlOrPath::Url(spec_url) => match locked_path_or_url {
+                        UrlOrPath::Url(locked_url) => spec_url == locked_url,
+                        UrlOrPath::Path(path) => {
+                            if spec_url.scheme() == "file" {
+                                PathBuf::from(spec_url.path()) == path
+                            } else {
+                                false
+                            }
+                        }
+                    },
+                    UrlOrPath::Path(spec_path) => match locked_path_or_url {
+                        UrlOrPath::Url(url) => {
+                            if url.scheme() == "file" {
+                                PathBuf::from(url.path()) == spec_path
+                            } else {
+                                false
+                            }
+                        }
+                        UrlOrPath::Path(locked_path) => spec_path == locked_path,
+                    },
+                }
             }
         }
     }
