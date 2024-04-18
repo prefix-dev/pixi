@@ -81,6 +81,11 @@
          <changefreq>daily</changefreq>
     </url>
     <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/features/lockfile/</loc>
+         <lastmod>2024-04-18</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/features/multi_environment/</loc>
          <lastmod>2024-04-18</lastmod>
          <changefreq>daily</changefreq>

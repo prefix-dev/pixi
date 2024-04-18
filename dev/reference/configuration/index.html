@@ -829,6 +829,27 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/lockfile/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Lockfile
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1851,7 +1872,7 @@ If you want to use channels hosted on <code>anaconda.org</code> you only need to
 </span></code></pre></div>
 <h3 id="platforms"><code>platforms</code><a class="headerlink" href="#platforms" title="Permanent link">#</a></h3>
 <p>Defines the list of platforms that the project supports.
-Pixi solves the dependencies for all these platforms and puts them in the lockfile (<code>pixi.lock</code>).</p>
+Pixi solves the dependencies for all these platforms and puts them in the lock file (<code>pixi.lock</code>).</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>The available platforms are listed here: <a href="https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html">link</a></p>
@@ -1970,7 +1991,7 @@ To fix this, add the following table to your configuration:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="k">[system-requirements]</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="n">cuda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;11&quot;</span><span class="w"> </span><span class="c1"># or any other version of cuda you want to use</span>
 </span></code></pre></div>
-<p>This informs the solver that cuda is going to be available, so it can lock it into the lockfile if needed.</p>
+<p>This informs the solver that cuda is going to be available, so it can lock it into the lock file if needed.</p>
 <h2 id="the-dependencies-tables">The <code>dependencies</code> table(s)<a class="headerlink" href="#the-dependencies-tables" title="Permanent link">#</a></h2>
 <p>This section defines what dependencies you would like to use for your project.</p>
 <p>There are multiple dependencies tables.

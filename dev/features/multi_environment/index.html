@@ -14,7 +14,7 @@
         <link rel="prev" href="../multi_platform_configuration/">
       
       
-        <link rel="next" href="../../advanced/authentication/">
+        <link rel="next" href="../lockfile/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -889,9 +889,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#lockfile-structure" class="md-nav__link">
+  <a href="#lock-file-structure" class="md-nav__link">
     <span class="md-ellipsis">
-      Lockfile Structure
+      lock file Structure
     </span>
   </a>
   
@@ -933,6 +933,27 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lockfile/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Lockfile
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -1372,9 +1393,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#lockfile-structure" class="md-nav__link">
+  <a href="#lock-file-structure" class="md-nav__link">
     <span class="md-ellipsis">
-      Lockfile Structure
+      lock file Structure
     </span>
   </a>
   
@@ -1454,7 +1475,7 @@
 <li><strong>Keep it simple</strong>: Not understanding the multiple environments feature shouldn't limit a user to use pixi. The feature should be "invisible" to the non-multi env use-cases.</li>
 <li><strong>No Automatic Combinatorial</strong>: To ensure the dependency resolution process remains manageable, the solution should avoid a combinatorial explosion of dependency sets. By making the environments user defined and not automatically inferred by testing a matrix of the features.</li>
 <li><strong>Single environment Activation</strong>: The design should allow only one environment to be active at any given time, simplifying the resolution process and preventing conflicts.</li>
-<li><strong>Fixed Lockfiles</strong>: It's crucial to preserve fixed lockfiles for consistency and predictability. Solutions must ensure reliability not just for authors but also for end-users, particularly at the time of lockfile creation.</li>
+<li><strong>Fixed lock files</strong>: It's crucial to preserve fixed lock files for consistency and predictability. Solutions must ensure reliability not just for authors but also for end-users, particularly at the time of lock file creation.</li>
 </ol>
 <h3 id="feature-environment-set-definitions">Feature &amp; Environment Set Definitions<a class="headerlink" href="#feature-environment-set-definitions" title="Permanent link">#</a></h3>
 <p>Introduce environment sets into the <code>pixi.toml</code> this describes environments based on <code>feature</code>'s. Introduce features into the <code>pixi.toml</code> that can describe parts of environments.
@@ -1547,9 +1568,9 @@ As an environment goes beyond just <code>dependencies</code> the <code>features<
 </span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Create a custom environment which only has the `lint` feature as the default feature is empty.</span>
 </span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">lint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;lint&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-<h3 id="lockfile-structure">Lockfile Structure<a class="headerlink" href="#lockfile-structure" title="Permanent link">#</a></h3>
+<h3 id="lock-file-structure">lock file Structure<a class="headerlink" href="#lock-file-structure" title="Permanent link">#</a></h3>
 <p>Within the <code>pixi.lock</code> file, a package may now include an additional <code>environments</code> field, specifying the environment to which it belongs.
-To avoid duplication the packages <code>environments</code> field may contain multiple environments so the lockfile is of minimal size.</p>
+To avoid duplication the packages <code>environments</code> field may contain multiple environments so the lock file is of minimal size.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">platform</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux-64</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pre-commit</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3.3.3</span>
@@ -1898,16 +1919,16 @@ Locally you would run the following command:
           
             
             <a
-              href="../../advanced/authentication/"
+              href="../lockfile/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Authentication"
+              aria-label="Next: Lockfile"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Authentication
+                  Lockfile
                 </div>
               </div>
               <div class="md-footer__button md-icon">

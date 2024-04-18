@@ -829,6 +829,27 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/lockfile/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Lockfile
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2119,7 +2140,7 @@ It will only add if the package with its version constraint is able to work with
   Parses dependencies as <a href="https://peps.python.org/pep-0508/">PEP508</a> requirements, supporting extras and versions.
   See <a href="../configuration/">configuration</a> for details.</li>
 <li><code>--no-install</code>: Don't install the package to the environment, only add the package to the lock-file.</li>
-<li><code>--no-lockfile-update</code>: Don't update the lock-file, implies the <code>--no-install</code> flag.</li>
+<li><code>--no-lock file-update</code>: Don't update the lock-file, implies the <code>--no-install</code> flag.</li>
 <li><code>--platform &lt;PLATFORM&gt; (-p)</code>: The platform for which the dependency should be added. (Allowed to be used more than once)</li>
 <li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the dependency should be added.</li>
 </ul>
@@ -2132,18 +2153,18 @@ It will only add if the package with its version constraint is able to work with
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span>requests<span class="o">[</span>security<span class="o">]</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>pixi<span class="w"> </span>add<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>--build<span class="w"> </span>clang
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>pixi<span class="w"> </span>add<span class="w"> </span>--no-install<span class="w"> </span>numpy
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>pixi<span class="w"> </span>add<span class="w"> </span>--no-lockfile-update<span class="w"> </span>numpy
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>pixi<span class="w"> </span>add<span class="w"> </span>--no-lock<span class="w"> </span>file-update<span class="w"> </span>numpy
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>featurex<span class="w"> </span>numpy
 </span></code></pre></div>
 <h2 id="install"><code>install</code><a class="headerlink" href="#install" title="Permanent link">#</a></h2>
-<p>Installs all dependencies specified in the lockfile <code>pixi.lock</code>.
+<p>Installs all dependencies specified in the lock file <code>pixi.lock</code>.
 Which gets generated on <code>pixi add</code> or when you manually change the <a href="../configuration/">manifest file</a> file and run <code>pixi install</code>.</p>
 <h5 id="options_2">Options<a class="headerlink" href="#options_2" title="Permanent link">#</a></h5>
-<div class="language-text highlight"><pre><span></span><code>/// Install the environment as defined in the lockfile, doesn&#39;t abort when lockfile isn&#39;t up-to-date with the manifest file.
+<div class="language-text highlight"><pre><span></span><code>/// Install the environment as defined in the lock file, doesn&#39;t abort when lock file isn&#39;t up-to-date with the manifest file.
 </code></pre></div>
 <ul>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
-<li><code>--frozen</code>: install the environment as defined in the lockfile, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
+<li><code>--frozen</code>: install the environment as defined in the lock file, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
 <li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref6:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>install
@@ -2151,13 +2172,13 @@ Which gets generated on <code>pixi add</code> or when you manually change the <a
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>pixi<span class="w"> </span>install<span class="w"> </span>--frozen
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>pixi<span class="w"> </span>install<span class="w"> </span>--locked
 </span></code></pre></div>
-<p>To reinitialize the lockfile in your project, you can remove the existing <code>pixi.lock</code> file and run <code>pixi install</code>.
-This process will regenerate the lockfile based on the dependencies defined in your manifest file:</p>
+<p>To reinitialize the lock file in your project, you can remove the existing <code>pixi.lock</code> file and run <code>pixi install</code>.
+This process will regenerate the lock file based on the dependencies defined in your manifest file:</p>
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>rm<span class="w"> </span>pixi.lock<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>pixi<span class="w"> </span>install
 </span></code></pre></div>
 <p>This action ensures that your project's dependencies are reset and updated according to the current specifications in manifest file.</p>
 <p>In a future version of <code>pixi</code>, we will introduce the <code>pixi update</code> command, see <a href="https://github.com/prefix-dev/pixi/issues/73">#73</a>.
-This command will allow you to update the lockfile directly, without manually deleting the <code>pixi.lock</code> file, making the dependency management process even smoother.</p>
+This command will allow you to update the lock file directly, without manually deleting the <code>pixi.lock</code> file, making the dependency management process even smoother.</p>
 <h2 id="run"><code>run</code><a class="headerlink" href="#run" title="Permanent link">#</a></h2>
 <p>The <code>run</code> commands first checks if the environment is ready to use.
 When you didn't run <code>pixi install</code> the run command will do that for you.
@@ -2170,7 +2191,7 @@ The custom tasks defined in the <a href="../configuration/">manifest file</a> ar
 <h5 id="options_3">Options<a class="headerlink" href="#options_3" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
-<li><code>--frozen</code>: install the environment as defined in the lockfile, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
+<li><code>--frozen</code>: install the environment as defined in the lock file, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
 <li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref5:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.</li>
 </ul>
@@ -2341,7 +2362,7 @@ If you want to use <code>$</code> in the task you need to escape it with a <code
 <li><code>--sort-by &lt;SORT_BY&gt;</code>: Sorting strategy [default: name] [possible values: size, name, type]</li>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: The path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--environment (-e)</code>: The environment's packages to list, if non is provided the default environment's packages will be listed.</li>
-<li><code>--frozen</code>: install the environment as defined in the lockfile, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
+<li><code>--frozen</code>: install the environment as defined in the lock file, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
 <li><code>--locked</code>: Only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref4:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--no-install</code>: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by <code>--frozen</code> and <code>--locked</code>)</li>
 </ul>
@@ -2392,7 +2413,7 @@ If you want to use <code>$</code> in the task you need to escape it with a <code
 <li><code>--platform &lt;PLATFORM&gt; (-p)</code>: The platform to list packages for. Defaults to the current platform</li>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: The path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--environment (-e)</code>: The environment's packages to list, if non is provided the default environment's packages will be listed.</li>
-<li><code>--frozen</code>: install the environment as defined in the lockfile, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
+<li><code>--frozen</code>: install the environment as defined in the lock file, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
 <li><code>--locked</code>: Only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref3:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--no-install</code>: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by <code>--frozen</code> and <code>--locked</code>)</li>
 </ul>
@@ -2489,7 +2510,7 @@ To exit the pixi shell, simply run <code>exit</code>.</p>
 <h5 id="options_12">Options<a class="headerlink" href="#options_12" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
-<li><code>--frozen</code>: install the environment as defined in the lockfile, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
+<li><code>--frozen</code>: install the environment as defined in the lock file, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
 <li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref2:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to activate the shell in, if none are provided the default environment will be used or a selector will be given to select the right environment.</li>
 </ul>
@@ -2511,7 +2532,7 @@ To exit the pixi shell, simply run <code>exit</code>.</p>
 <li><code>--shell &lt;SHELL&gt; (-s)</code>: The shell for which the activation script should be printed. Defaults to the current shell.
   Currently supported variants: [<code>bash</code>, <code>zsh</code>, <code>xonsh</code>, <code>cmd</code>, <code>powershell</code>, <code>fish</code>, <code>nushell</code>]</li>
 <li><code>--manifest-path</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
-<li><code>--frozen</code>: install the environment as defined in the lockfile, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
+<li><code>--frozen</code>: install the environment as defined in the lock file, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
 <li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.</li>
 </ul>
@@ -2718,7 +2739,7 @@ they will be listed out in the command output. Here is an example of a few insta
 </ul>
 <h3 id="project-channel-add"><code>project channel add</code><a class="headerlink" href="#project-channel-add" title="Permanent link">#</a></h3>
 <p>Add channels to the channel list in the project configuration.
-When you add channels, the channels are tested for existence, added to the lockfile and the environment is reinstalled.</p>
+When you add channels, the channels are tested for existence, added to the lock file and the environment is reinstalled.</p>
 <h5 id="arguments_15">Arguments<a class="headerlink" href="#arguments_15" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;CHANNEL&gt;</code>: The channels to add, name or URL.</li>
@@ -2779,7 +2800,7 @@ When you add channels, the channels are tested for existence, added to the lockf
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>description<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="s2">&quot;my new description&quot;</span>
 </span></code></pre></div>
 <h3 id="project-platform-add"><code>project platform add</code><a class="headerlink" href="#project-platform-add" title="Permanent link">#</a></h3>
-<p>Adds a platform(s) to the project file and updates the lockfile.</p>
+<p>Adds a platform(s) to the project file and updates the lock file.</p>
 <h5 id="arguments_18">Arguments<a class="headerlink" href="#arguments_18" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PLATFORM&gt;...</code>: The platforms to add.</li>
@@ -2801,7 +2822,7 @@ When you add channels, the channels are tested for existence, added to the lockf
 </span><span id="__span-40-5"><a id="__codelineno-40-5" name="__codelineno-40-5" href="#__codelineno-40-5"></a>osx-arm64
 </span></code></pre></div>
 <h3 id="project-platform-remove"><code>project platform remove</code><a class="headerlink" href="#project-platform-remove" title="Permanent link">#</a></h3>
-<p>Remove platform(s) from the project file and updates the lockfile.</p>
+<p>Remove platform(s) from the project file and updates the lock file.</p>
 <h5 id="arguments_19">Arguments<a class="headerlink" href="#arguments_19" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PLATFORM&gt;...</code>: The platforms to remove.</li>
@@ -2837,13 +2858,13 @@ When you add channels, the channels are tested for existence, added to the lockf
 <hr />
 <ol>
 <li id="fn:1">
-<p>An <strong>up-to-date</strong> lockfile means that the dependencies in the lockfile are allowed by the dependencies in the manifest file.
+<p>An <strong>up-to-date</strong> lock file means that the dependencies in the lock file are allowed by the dependencies in the manifest file.
 For example</p>
 <ul>
 <li>a manifest with <code>python = "&gt;= 3.11"</code> is up-to-date with a <code>name: python, version: 3.11.0</code> in the <code>pixi.lock</code>.</li>
 <li>a manifest with <code>python = "&gt;= 3.12"</code> is <strong>not</strong> up-to-date with a <code>name: python, version: 3.11.0</code> in the <code>pixi.lock</code>.</li>
 </ul>
-<p>Being up-to-date does <strong>not</strong> mean that the lockfile holds the latest version available on the channel for the given dependency.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref2:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref3:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref4:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref5:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref6:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
+<p>Being up-to-date does <strong>not</strong> mean that the lock file holds the latest version available on the channel for the given dependency.&#160;<a class="footnote-backref" href="#fnref:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref2:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref3:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref4:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref5:1" title="Jump back to footnote 1 in the text">&#8617;</a><a class="footnote-backref" href="#fnref6:1" title="Jump back to footnote 1 in the text">&#8617;</a></p>
 </li>
 </ol>
 </div>
