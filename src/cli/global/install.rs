@@ -44,6 +44,9 @@ pub struct Args {
     #[clap(short, long)]
     channel: Vec<String>,
 
+    #[clap(short, long, default_value_t = Platform::current())]
+    platform: Platform,
+
     #[clap(flatten)]
     config: ConfigCli,
 }
@@ -262,8 +265,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let package_name = package_name(&package_matchspec)?;
         let records = load_package_records(package_matchspec, &sparse_repodata)?;
 
-        let (prefix_package, scripts, _) =
-            globally_install_package(&package_name, records, authenticated_client.clone()).await?;
+        let (prefix_package, scripts, _) = globally_install_package(
+            &package_name,
+            records,
+            authenticated_client.clone(),
+            &args.platform,
+        )
+        .await?;
         let channel_name = channel_name_from_prefix(&prefix_package, config.channel_config());
         let record = &prefix_package.repodata_record.package_record;
 
@@ -328,6 +336,7 @@ pub(super) async fn globally_install_package(
     package_name: &PackageName,
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
+    platform: &Platform,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
     // Create the binary environment prefix where we install or update the package
     let BinEnvDir(bin_prefix) = BinEnvDir::create(package_name).await?;
@@ -336,7 +345,7 @@ pub(super) async fn globally_install_package(
 
     // Create the transaction that we need
     let transaction =
-        Transaction::from_current_and_desired(prefix_records.clone(), records, Platform::current())
+        Transaction::from_current_and_desired(prefix_records.clone(), records, platform.clone())
             .into_diagnostic()?;
 
     let has_transactions = !transaction.operations.is_empty();

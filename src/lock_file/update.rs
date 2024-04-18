@@ -132,6 +132,7 @@ impl<'p> LockFileDerivedData<'p> {
             uv_context,
             env_variables,
             self.project.root(),
+            environment.best_platform(),
         )
         .await?;
 
@@ -734,7 +735,7 @@ pub async fn ensure_up_to_date_lock_file(
         // Construct a future that will resolve when we have the repodata available for the current
         // platform for this group.
         let records_future = context
-            .get_latest_group_repodata_records(&group, environment.best_platform)
+            .get_latest_group_repodata_records(&group, environment.best_platform())
             .ok_or_else(|| make_unsupported_pypi_platform_error(environment, current_platform))?;
 
         // Spawn a task to instantiate the environment

@@ -81,7 +81,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ..UpdateLockFileOptions::default()
         })
         .await?;
-    let platform = args.platform.unwrap_or_else(Platform::current);
+    let platform = args.platform.unwrap_or_else(|| environment.best_platform());
     let locked_deps = lock_file
         .lock_file
         .environment(environment.name().as_str())

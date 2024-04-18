@@ -4,7 +4,7 @@ use clap::Parser;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, MatchSpec, PackageName, Version};
+use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, Version};
 use rattler_conda_types::{ParseStrictness, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
 
@@ -35,6 +35,10 @@ pub struct Args {
     /// the package was installed from will always be used.
     #[clap(short, long)]
     channel: Vec<String>,
+
+    /// The platform to install the package for.
+    #[clap(long, default_value_t = Platform::current())]
+    platform: Platform,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -115,6 +119,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         toinstall_version,
         records,
         authenticated_client,
+        &args.platform,
     )
     .await
 }
@@ -125,6 +130,7 @@ pub(super) async fn upgrade_package(
     toinstall_version: Version,
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
+    platform: &Platform,
 ) -> miette::Result<()> {
     let message = format!(
         "{} v{} -> v{}",
@@ -141,7 +147,7 @@ pub(super) async fn upgrade_package(
         console::style("Updating").green(),
         message
     ));
-    globally_install_package(package_name, records, authenticated_client).await?;
+    globally_install_package(package_name, records, authenticated_client, &platform).await?;
     pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));
     Ok(())
 }

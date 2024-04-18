@@ -207,7 +207,7 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
     let available_tasks: HashSet<TaskName> =
         if let Some(explicit_environment) = explicit_environment {
             explicit_environment
-                .tasks(Some(Platform::current()), true)
+                .tasks(Some(explicit_environment.best_platform()), true)
                 .into_iter()
                 .flat_map(|tasks| tasks.into_keys())
                 .map(ToOwned::to_owned)
@@ -218,7 +218,7 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
                 .into_iter()
                 .filter(|env| verify_current_platform_has_required_virtual_packages(env).is_ok())
                 .flat_map(|env| {
-                    env.tasks(Some(Platform::current()), true)
+                    env.tasks(Some(env.best_platform()), true)
                         .into_iter()
                         .flat_map(|tasks| tasks.into_keys())
                         .map(ToOwned::to_owned)

@@ -252,6 +252,7 @@ pub async fn update_prefix_pypi(
     uv_context: UvResolutionContext,
     environment_variables: &HashMap<String, String>,
     lock_file_dir: &Path,
+    platform: Platform,
 ) -> miette::Result<()> {
     // Remove python packages from a previous python distribution if the python version changed.
 
@@ -271,6 +272,7 @@ pub async fn update_prefix_pypi(
                 system_requirements,
                 uv_context,
                 environment_variables,
+                platform,
             )
         },
     )

@@ -692,6 +692,7 @@ pub async fn update_python_distributions(
     system_requirements: &SystemRequirements,
     uv_context: UvResolutionContext,
     environment_variables: &HashMap<String, String>,
+    platform: Platform,
 ) -> miette::Result<()> {
     let start = std::time::Instant::now();
     let Some(python_info) = status.current_info() else {
@@ -712,11 +713,7 @@ pub async fn update_python_distributions(
         .iter()
         .find(|r| is_python_record(r))
         .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {PROJECT_MANIFEST}, or run:\n\n\tpixi add python"))?;
-    let tags = get_pypi_tags(
-        Platform::current(),
-        system_requirements,
-        &python_record.package_record,
-    )?;
+    let tags = get_pypi_tags(platform, system_requirements, &python_record.package_record)?;
 
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {

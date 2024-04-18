@@ -9,7 +9,7 @@ use crate::task::TaskName;
 use crate::{task::Task, Project};
 use indexmap::{IndexMap, IndexSet};
 use itertools::{Either, Itertools};
-use rattler_conda_types::{Channel, Platform};
+use rattler_conda_types::{Arch, Channel, Platform};
 use std::hash::{Hash, Hasher};
 use std::{
     borrow::Cow,
@@ -197,7 +197,23 @@ impl<'p> Environment<'p> {
         }
 
         if current.is_osx() && self.platforms().contains(&Platform::Osx64) {
+            if !self.project.pixi_dir().join("osx-warn").exists() {
+                tracing::warn!(
+                    "macOS ARM64 is not supported by the pixi.toml, falling back to osx-64 (emulated with Rosetta)"
+                );
+                // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
+                std::fs::File::create(self.project.pixi_dir().join("osx-emulation-warn")).ok();
+            }
             return Platform::Osx64;
+        }
+
+        if self.platforms().len() == 1 {
+            // Take the first platform and see if it is a WASM one.
+            if let Some(platform) = self.platforms().iter().next() {
+                if platform.arch() == Some(Arch::Wasm32) {
+                    return *platform;
+                }
+            }
         }
 
         current

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, MatchSpec, ParseStrictness};
+use rattler_conda_types::{Channel, MatchSpec, ParseStrictness, Platform};
 
 use crate::config::{Config, ConfigCli};
 
@@ -30,6 +30,10 @@ pub struct Args {
 
     #[clap(flatten)]
     config: ConfigCli,
+
+    /// The platform to install the package for.
+    #[clap(long, default_value_t = Platform::current())]
+    platform: Platform,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -93,6 +97,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 toinstall_version,
                 records,
                 authenticated_client.clone(),
+                &args.platform,
             )
             .await?;
             upgraded = true;

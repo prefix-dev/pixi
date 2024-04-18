@@ -275,10 +275,11 @@ pub fn execute(args: Args) -> miette::Result<()> {
         }
         Operation::List(args) => {
             let env = EnvironmentName::from_arg_or_env_var(args.environment);
-            let tasks = project
+            let env = project
                 .environment(&env)
-                .ok_or(miette!("Environment `{}` not found in project", env))?
-                .tasks(Some(Platform::current()), true)?
+                .ok_or(miette!("Environment `{}` not found in project", env))?;
+            let tasks = env
+                .tasks(Some(env.best_platform()), true)?
                 .into_keys()
                 .collect_vec();
             if tasks.is_empty() {
