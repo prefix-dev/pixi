@@ -68,8 +68,6 @@ pub enum RequirementConversionError {
     InvalidPackageNameError(#[from] InvalidPackageNameError),
     #[error("Failed to parse specification")]
     ParseError(#[from] ParseMatchSpecError),
-    #[error("Error converting requirement from pypi to conda")]
-    Unimplemented,
 }
 
 #[derive(Error, Debug, Clone)]
