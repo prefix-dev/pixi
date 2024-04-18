@@ -58,7 +58,7 @@ Here is an example manifest file that highlights some of the features:
 
 The `project.platforms` defines which platforms your project supports.
 When multiple platforms are defined, pixi determines which dependencies to install for each platform individually.
-All of this is stored in a lockfile.
+All of this is stored in a lock file.
 
 Running `pixi install` on a platform that is not configured will warn the user that it is not setup for that platform:
 
