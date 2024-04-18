@@ -1,5 +1,4 @@
 use crate::common::PixiControl;
-use indexmap::IndexMap;
 use pixi::cli::run::Args;
 use pixi::task::TaskName;
 use pixi::FeatureName;
@@ -218,13 +217,10 @@ async fn test_task_with_env() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
 
-    let mut env = IndexMap::new();
-    env.insert("HELLO".to_string(), "world".to_string());
-
     pixi.tasks()
         .add("env-test".into(), None, FeatureName::Default)
-        .with_commands(["echo $HELLO"])
-        .with_env(vec![(String::from("HELLO"), String::from("world"))])
+        .with_commands(["echo From a $HELLO"])
+        .with_env(vec![(String::from("HELLO"), String::from("world with spaces"))])
         .execute()
         .unwrap();
 
@@ -238,5 +234,5 @@ async fn test_task_with_env() {
         .unwrap();
 
     assert_eq!(result.exit_code, 0);
-    assert_eq!(result.stdout, "world\n");
+    assert_eq!(result.stdout, "From a world with spaces\n");
 }
