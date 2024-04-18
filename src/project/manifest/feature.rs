@@ -1,3 +1,4 @@
+use super::pypi_options::PypiOptions;
 use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelector};
 use crate::consts;
 use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
@@ -127,6 +128,9 @@ pub struct Feature {
     /// Additional system requirements
     pub system_requirements: SystemRequirements,
 
+    /// Pypi-related options
+    pub pypi_options: Option<PypiOptions>,
+
     /// Target specific configuration.
     pub targets: Targets,
 }
@@ -139,6 +143,7 @@ impl Feature {
             platforms: None,
             channels: None,
             system_requirements: SystemRequirements::default(),
+            pypi_options: None,
             targets: <Targets as Default>::default(),
         }
     }
