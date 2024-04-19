@@ -3041,7 +3041,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.19.1"
+version = "0.20.0"
 dependencies = [
  "assert_matches",
  "async-once-cell",
