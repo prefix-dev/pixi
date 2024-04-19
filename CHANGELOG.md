@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.20.0] - 2024-04-19
 ### ✨ Highlights
 
-- We now support `env` variables in the `task` definition to specify environment variables for a specific task.
+- We now support `env` variables in the `task` definition, these can also be used as default values for parameters in your task which you can overwrite with your shell's env variables.
 e.g. `task = { cmd = "task to run", env = { VAR="value1", PATH="my/path:$PATH" } }`
 - We made a big effort on fixing issues and improving documentation!
 
