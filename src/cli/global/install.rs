@@ -62,18 +62,9 @@ fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result
 
     // Add a shebang on unix based platforms
     let script = if cfg!(unix) {
-        format!(
-            "#!/bin/sh\n{}",
-            result
-                .script
-                .contents()
-                .expect("Could not format the script")
-        )
+        format!("#!/bin/sh\n{}", result.script.contents().into_diagnostic()?)
     } else {
-        result
-            .script
-            .contents()
-            .expect("Could not format the script")
+        result.script.contents().into_diagnostic()?
     };
 
     Ok(script)
