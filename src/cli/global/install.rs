@@ -345,7 +345,7 @@ pub(super) async fn globally_install_package(
 
     // Create the transaction that we need
     let transaction =
-        Transaction::from_current_and_desired(prefix_records.clone(), records, platform.clone())
+        Transaction::from_current_and_desired(prefix_records.clone(), records, *platform)
             .into_diagnostic()?;
 
     let has_transactions = !transaction.operations.is_empty();
