@@ -33,7 +33,7 @@ impl<'a> MakeWriter<'a> for IndicatifWriter {
 }
 
 pub fn default_channel_config() -> ChannelConfig {
-    return ChannelConfig::default_with_root_dir(
+    ChannelConfig::default_with_root_dir(
         std::env::current_dir().expect("Could not retrieve the current directory"),
-    );
+    )
 }
