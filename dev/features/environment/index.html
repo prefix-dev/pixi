@@ -1572,6 +1572,12 @@ Thus, just adding the <code>bin</code> directory to the <code>PATH</code> is not
 <p>It is not encouraged to use the traditional <code>conda activate</code>-like activation, as deactivating the environment is not really possible. Use <code>pixi shell</code> instead.</p>
 </div>
 <h3 id="using-pixi-with-direnv">Using <code>pixi</code> with <code>direnv</code><a class="headerlink" href="#using-pixi-with-direnv" title="Permanent link">#</a></h3>
+<details class="note">
+<summary>Installing direnv</summary>
+<p>Of course you can use <code>pixi</code> to install <code>direnv</code> globally. We recommend to run</p>
+<p><code>pixi global install direnv</code></p>
+<p>to install the latest version of <code>direnv</code> on your computer.</p>
+</details>
 <p>This allows you to use <code>pixi</code> in combination with <code>direnv</code>.
 Enter the following into your <code>.envrc</code> file:</p>
 <div class="language-shell highlight"><span class="filename">.envrc</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>watch_file<span class="w"> </span>pixi.lock<span class="w"> </span><span class="c1"># (1)!</span>
