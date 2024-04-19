@@ -1349,6 +1349,89 @@ Like the <code>cuda-cudart</code> package, which will now only be retrieved from
 <p>We don't define the <code>pytorch</code> channel before <code>conda-forge</code> because we want to get as much as possible from the <code>conda-forge</code> as the pytorch channel is not always shipping the best versions of all packages.</p>
 <p>For example, it also ships the <code>ffmpeg</code> package, but only an old version which doesn't work with the newer pytorch versions.
 Thus breaking the installation if we would skip the <code>conda-forge</code> channel for <code>ffmpeg</code> with the priority logic.</p>
+<h2 id="force-a-specific-channel-priority">Force a specific channel priority<a class="headerlink" href="#force-a-specific-channel-priority" title="Permanent link">#</a></h2>
+<p>If you want to force a specific priority for a channel, you can use the <code>priority</code> (int) key in the channel definition.
+The higher the number, the higher the priority.
+Non specified priorities are set to 0 but the index in the array still counts as a priority, where the first in the list has the highest priority.</p>
+<p>This priority definition is mostly important for <a href="../../features/multi_environment/">multiple environments</a> with different channel priorities, as by default feature channels are prepended to the project channels.</p>
+<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[project]</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;test_channel_priority&quot;</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="k">[feature.a]</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;nvidia&quot;</span><span class="p">]</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="k">[feature.b]</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;nvidia&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">priority</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">1</span><span class="p">}]</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="k">[feature.c]</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;nvidia&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">priority</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">-1</span><span class="p">}]</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="k">[environments]</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;a&quot;</span><span class="p">]</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;b&quot;</span><span class="p">]</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;c&quot;</span><span class="p">]</span>
+</span></code></pre></div>
+This example creates 4 environments, <code>a</code>, <code>b</code>, <code>c</code>, and the default environment.
+Which will have the following channel order:</p>
+<table>
+<thead>
+<tr>
+<th>Environment</th>
+<th>Resulting Channels order</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>default</td>
+<td><code>conda-forge</code></td>
+</tr>
+<tr>
+<td>a</td>
+<td><code>nvidia</code>, <code>conda-forge</code></td>
+</tr>
+<tr>
+<td>b</td>
+<td><code>nvidia</code>, <code>pytorch</code>, <code>conda-forge</code></td>
+</tr>
+<tr>
+<td>c</td>
+<td><code>pytorch</code>, <code>conda-forge</code>, <code>nvidia</code></td>
+</tr>
+</tbody>
+</table>
+<details class="tip">
+<summary>Check priority result with <code>pixi info</code></summary>
+<p>Using <code>pixi info</code> you can check the priority of the channels in the environment.
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>info
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>Environments
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>------------
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">       </span>Environment:<span class="w"> </span>default
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">          </span>Features:<span class="w"> </span>default
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">          </span>Channels:<span class="w"> </span>conda-forge
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>Dependency<span class="w"> </span>count:<span class="w"> </span><span class="m">0</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>Target<span class="w"> </span>platforms:<span class="w"> </span>linux-64
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">       </span>Environment:<span class="w"> </span>a
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">          </span>Features:<span class="w"> </span>a,<span class="w"> </span>default
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">          </span>Channels:<span class="w"> </span>nvidia,<span class="w"> </span>conda-forge
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>Dependency<span class="w"> </span>count:<span class="w"> </span><span class="m">0</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>Target<span class="w"> </span>platforms:<span class="w"> </span>linux-64
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">       </span>Environment:<span class="w"> </span>b
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">          </span>Features:<span class="w"> </span>b,<span class="w"> </span>default
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">          </span>Channels:<span class="w"> </span>nvidia,<span class="w"> </span>pytorch,<span class="w"> </span>conda-forge
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>Dependency<span class="w"> </span>count:<span class="w"> </span><span class="m">0</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>Target<span class="w"> </span>platforms:<span class="w"> </span>linux-64
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">       </span>Environment:<span class="w"> </span>c
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">          </span>Features:<span class="w"> </span>c,<span class="w"> </span>default
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">          </span>Channels:<span class="w"> </span>pytorch,<span class="w"> </span>conda-forge,<span class="w"> </span>nvidia
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>Dependency<span class="w"> </span>count:<span class="w"> </span><span class="m">0</span>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>Target<span class="w"> </span>platforms:<span class="w"> </span>linux-64
+</span></code></pre></div></p>
+</details>
 
 
 
