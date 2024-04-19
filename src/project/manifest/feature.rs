@@ -236,6 +236,11 @@ impl Feature {
             .targets()
             .any(|t| t.pypi_dependencies.iter().flatten().next().is_some())
     }
+
+    /// Returns any pypi_options if they are set.
+    pub fn pypi_options(&self) -> Option<&PypiOptions> {
+        self.pypi_options.as_ref()
+    }
 }
 
 impl<'de> Deserialize<'de> for Feature {
