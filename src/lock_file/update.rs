@@ -110,6 +110,10 @@ impl<'p> LockFileDerivedData<'p> {
             .unwrap_or_default();
         let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
 
+        if pypi_records.is_empty() && !environment.has_pypi_dependencies() {
+            return Ok(prefix);
+        }
+
         let uv_context = match &self.uv_context {
             None => {
                 let context = UvResolutionContext::from_project(self.project)?;
