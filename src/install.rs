@@ -12,6 +12,7 @@ use rattler::install::{
     link_package, unlink_package, InstallDriver, InstallOptions, Transaction, TransactionOperation,
 };
 use rattler::package_cache::PackageCache;
+use rattler_conda_types::prefix_record::{Link, LinkType};
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
 use std::cmp::Ordering;
@@ -285,7 +286,7 @@ async fn install_package_to_environment(
     let prefix_record = PrefixRecord {
         repodata_record,
         package_tarball_full_path: None,
-        extracted_package_dir: Some(package_dir),
+        extracted_package_dir: Some(package_dir.clone()),
         files: paths
             .iter()
             .map(|entry| entry.relative_path.clone())
@@ -293,8 +294,10 @@ async fn install_package_to_environment(
         paths_data: paths.into(),
         // TODO: Retrieve the requested spec for this package from the request
         requested_spec: None,
-        // TODO: What to do with this?
-        link: None,
+        link: Some(Link {
+            source: package_dir,
+            link_type: Some(LinkType::HardLink),
+        }),
     };
 
     // Create the conda-meta directory if it doesn't exist yet.

@@ -315,7 +315,7 @@ checksum = "30c5ef0ede93efbf733c1a727f3b6b5a1060bbedd5600183e66f6e4be4af0ec5"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -350,7 +350,7 @@ checksum = "c6fa2087f2753a7da8cc1c0dbfcf89579dd57458e36769de5ac750b4671737ca"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -818,7 +818,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -981,7 +981,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim 0.10.0",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -992,7 +992,7 @@ checksum = "a668eda54683121533a393014d8692171709ff57a7d61f187b6e782719f8933f"
 dependencies = [
  "darling_core",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -1202,7 +1202,7 @@ dependencies = [
  "heck 0.4.1",
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -1214,7 +1214,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -1235,7 +1235,7 @@ checksum = "5c785274071b1b420972453b306eeca06acf4633829db4223b58a2a8c5953bc4"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -1515,7 +1515,7 @@ checksum = "87750cf4b7a4c0625b1529e4c543c2182106e4dedc60a2a6455e00d212c489ac"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -2180,7 +2180,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -2423,7 +2423,7 @@ checksum = "49e7bc1560b95a3c4a25d03de42fe76ca718ab92d1a22a55b9b4cf67b3ae635c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -2434,7 +2434,7 @@ checksum = "dcf09caffaac8068c346b6df2a7fc27a177fd20b39421a39ce0a211bde679a6c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -2729,7 +2729,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -2808,7 +2808,7 @@ dependencies = [
  "proc-macro2",
  "proc-macro2-diagnostics",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -2982,7 +2982,7 @@ dependencies = [
  "phf_shared",
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
  "unicase",
 ]
 
@@ -3013,7 +3013,7 @@ checksum = "2f38a4412a78282e09a2cf38d195ea5420d15ba0602cb375210efbc877243965"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -3114,7 +3114,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "toml",
- "toml_edit 0.22.9",
+ "toml_edit 0.22.11",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -3261,7 +3261,7 @@ checksum = "af066a9c399a26e020ada66a034357a868728e72cd426f3adcd35f80d88d88c8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
  "version_check",
  "yansi",
 ]
@@ -3409,8 +3409,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.21.0"
-source = "git+https://github.com/mamba-org/rattler?branch=main#e47528f4ca6eea1885ba7632e3ec976dbb0d056e"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c954c00bfef8915def6b043db4d61d4d61a4436c89382915839c4360424a02e"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3447,8 +3448,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.20.5"
-source = "git+https://github.com/mamba-org/rattler?branch=main#e47528f4ca6eea1885ba7632e3ec976dbb0d056e"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15c4109edd67464a8f43c3a68b031df0f92c8efe89b3d1cf09fdc407cd90abae"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3474,8 +3476,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_digest"
-version = "0.19.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#e47528f4ca6eea1885ba7632e3ec976dbb0d056e"
+version = "0.19.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe7143db952a9256f187ec5f69d6289c87d51b73e591cb21c653034b06fb0de7"
 dependencies = [
  "blake2",
  "digest",
@@ -3489,8 +3492,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.1"
-source = "git+https://github.com/mamba-org/rattler?branch=main#e47528f4ca6eea1885ba7632e3ec976dbb0d056e"
+version = "0.22.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b6c653f0af03d910a09e8c2d2938da6462c1218518760d3c88eddb776221d57"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3511,17 +3515,19 @@ dependencies = [
 
 [[package]]
 name = "rattler_macros"
-version = "0.19.2"
-source = "git+https://github.com/mamba-org/rattler?branch=main#e47528f4ca6eea1885ba7632e3ec976dbb0d056e"
+version = "0.19.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10cef20e8356ea6840294e5754c6a8663b0eb1b97f29d517642f0f99215a2483"
 dependencies = [
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
 name = "rattler_networking"
-version = "0.20.1"
-source = "git+https://github.com/mamba-org/rattler?branch=main#e47528f4ca6eea1885ba7632e3ec976dbb0d056e"
+version = "0.20.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4586c089e479cfb541d81db67cd8b43e0036507ffbf536e1d393e8147aa685c6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3546,8 +3552,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.20.3"
-source = "git+https://github.com/mamba-org/rattler?branch=main#e47528f4ca6eea1885ba7632e3ec976dbb0d056e"
+version = "0.20.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4761292a1fb0346ad20a76c81da1261454bf87a4993935506b220429d8e2b63c"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3571,8 +3578,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.19.6"
-source = "git+https://github.com/mamba-org/rattler?branch=main#e47528f4ca6eea1885ba7632e3ec976dbb0d056e"
+version = "0.19.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f450d02a301c9da95b6f48d8fe29a921af036bb43553eee0b58b390dba70219"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3609,8 +3617,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.19.6"
-source = "git+https://github.com/mamba-org/rattler?branch=main#e47528f4ca6eea1885ba7632e3ec976dbb0d056e"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df3d2cc94dc0b26d871688be08bc72d8d24a69cafdf408adf7a1c4dab9dc32e4"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.6",
@@ -3626,8 +3635,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "0.20.5"
-source = "git+https://github.com/mamba-org/rattler?branch=main#e47528f4ca6eea1885ba7632e3ec976dbb0d056e"
+version = "0.20.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ecc29d71862c0b9307a18c8dc8dcddb6042715f26d44085f950426e8b2ef65b"
 dependencies = [
  "chrono",
  "futures",
@@ -3643,8 +3653,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "0.19.6"
-source = "git+https://github.com/mamba-org/rattler?branch=main#e47528f4ca6eea1885ba7632e3ec976dbb0d056e"
+version = "0.19.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a0ce73b5939df90e9f968d3d3751e97314bc030bc35ee084e6e292a1e27690a"
 dependencies = [
  "archspec",
  "libloading",
@@ -3963,9 +3974,9 @@ dependencies = [
 
 [[package]]
 name = "rmp"
-version = "0.8.13"
+version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bddb316f4b9cae1a3e89c02f1926d557d1142d0d2e684b038c11c1b77705229a"
+checksum = "228ed7c16fa39782c3b3468e974aec2795e9089153cd08ee2e9aefb3613334c4"
 dependencies = [
  "byteorder",
  "num-traits",
@@ -3985,9 +3996,9 @@ dependencies = [
 
 [[package]]
 name = "rstest"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97eeab2f3c0a199bc4be135c36c924b6590b88c377d416494288c14f2db30199"
+checksum = "9d5316d2a1479eeef1ea21e7f9ddc67c191d497abc8fc3ba2467857abbb68330"
 dependencies = [
  "futures",
  "futures-timer",
@@ -3997,9 +4008,9 @@ dependencies = [
 
 [[package]]
 name = "rstest_macros"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d428f8247852f894ee1be110b375111b586d4fa431f6c46e64ba5a0dcccbe605"
+checksum = "04a9df72cc1f67020b0d63ad9bfe4a323e459ea7eb68e03bd9824db49f9a4c25"
 dependencies = [
  "cfg-if",
  "glob",
@@ -4008,7 +4019,7 @@ dependencies = [
  "regex",
  "relative-path",
  "rustc_version",
- "syn 2.0.59",
+ "syn 2.0.60",
  "unicode-ident",
 ]
 
@@ -4251,7 +4262,7 @@ checksum = "e88edab869b01783ba905e7d0153f9fc1a6505a96e4ad3018011eedb838566d9"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -4274,7 +4285,7 @@ checksum = "6c64451ba24fc7a6a2d60fc75dd9c83c90903b19028d4eff35e88fc1e86564e9"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -4325,7 +4336,7 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -4363,7 +4374,7 @@ checksum = "b93fb4adc70021ac1b47f7d45e8cc4169baaa7ea58483bc5b721d19a26202212"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -4593,7 +4604,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -4642,9 +4653,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.59"
+version = "2.0.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a6531ffc7b071655e4ce2e04bd464c4830bb585a61cabb96cf808f05172615a"
+checksum = "909518bc7b1c9b779f1bbf07f2929d35af9f0f37e47c6e9ef7f9dddc1e1821f3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4683,9 +4694,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.30.10"
+version = "0.30.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26d7c217777061d5a2d652aea771fb9ba98b6dade657204b08c4b9604d11555b"
+checksum = "87341a165d73787554941cd5ef55ad728011566fe714e987d1b976c15dbc3a83"
 dependencies = [
  "cfg-if",
  "core-foundation-sys",
@@ -4772,7 +4783,7 @@ checksum = "c61f3ba182994efc43764a46c018c347bc492c79f024e705f46567b418f6d4f7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -4863,7 +4874,7 @@ checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -4938,7 +4949,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "toml_edit 0.22.9",
+ "toml_edit 0.22.11",
 ]
 
 [[package]]
@@ -4963,9 +4974,9 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.22.9"
+version = "0.22.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e40bb779c5187258fd7aad0eb68cb8706a0a81fa712fbea808ab43c4b8374c4"
+checksum = "fb686a972ccef8537b39eead3968b0e8616cb5040dbb9bba93007c8e07c9215f"
 dependencies = [
  "indexmap 2.2.6",
  "serde",
@@ -5022,7 +5033,7 @@ checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -5732,7 +5743,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
  "wasm-bindgen-shared",
 ]
 
@@ -5766,7 +5777,7 @@ checksum = "e94f17b526d0a461a191c78ea52bbce64071ed5c04c9ffe424dcb38f74171bb7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -5916,7 +5927,7 @@ checksum = "f6fc35f58ecd95a9b71c4f2329b911016e6bec66b3f2e6a4aad86bd2e99e2f9b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]
@@ -5927,7 +5938,7 @@ checksum = "08990546bf4edef8f431fa6326e032865f27138718c587dc21bc0265bbcb57cc"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.59",
+ "syn 2.0.60",
 ]
 
 [[package]]

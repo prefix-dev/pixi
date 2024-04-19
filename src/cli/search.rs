@@ -6,7 +6,7 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, ChannelConfig, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
 
@@ -14,6 +14,7 @@ use strsim::jaro;
 use tokio::task::spawn_blocking;
 
 use crate::config::Config;
+use crate::util::default_channel_config;
 use crate::utils::reqwest::build_reqwest_clients;
 use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata, Project};
 
@@ -402,7 +403,7 @@ fn print_matching_packages<W: Write>(
         (packages, &[][..])
     };
 
-    let channel_config = ChannelConfig::default();
+    let channel_config = default_channel_config();
     for package in packages {
         // TODO: change channel fetch logic to be more robust
         // currently it relies on channel field being a url with trailing slash

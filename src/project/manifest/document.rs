@@ -1,9 +1,9 @@
 use miette::{miette, Report};
-use rattler_conda_types::{ChannelConfig, NamelessMatchSpec, PackageName, Platform};
+use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use std::{fmt, path::Path};
 use toml_edit::{value, Array, InlineTable, Item, Table, Value};
 
-use crate::{consts, FeatureName, SpecType, Task};
+use crate::{consts, util::default_channel_config, FeatureName, SpecType, Task};
 
 use super::{python::PyPiPackageName, PyPiRequirement};
 
@@ -380,7 +380,7 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
             if let Some(channel) = channel {
                 table.insert(
                     "channel",
-                    ChannelConfig::default()
+                    default_channel_config()
                         .canonical_name(channel.base_url())
                         .as_str()
                         .into(),
