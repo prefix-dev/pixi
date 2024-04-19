@@ -5,7 +5,7 @@ use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
 use rattler_shell::activation::PathModificationBehavior;
-use rattler_shell::shell::{PowerShell, Shell, ShellEnum, ShellScript};
+use rattler_shell::shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
@@ -16,8 +16,6 @@ use crate::unix::PtySession;
 use crate::cli::LockFileUsageArgs;
 use crate::project::manifest::EnvironmentName;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
-#[cfg(target_family = "windows")]
-use rattler_shell::shell::CmdExe;
 
 /// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]
@@ -71,7 +69,8 @@ fn start_powershell(
     Ok(process.wait().into_diagnostic()?.code())
 }
 
-#[cfg(target_family = "windows")]
+// allowing dead code so that we test this on unix compilation as well
+#[allow(dead_code)]
 fn start_cmdexe(
     cmdexe: CmdExe,
     env: &HashMap<String, String>,
@@ -86,10 +85,10 @@ fn start_cmdexe(
     // TODO: Should we just execute the activation scripts directly for cmd.exe?
     let mut shell_script = ShellScript::new(cmdexe, Platform::current());
     for (key, value) in env {
-        shell_script.set_env_var(key, value);
+        shell_script.set_env_var(key, value).into_diagnostic()?;
     }
     temp_file
-        .write_all(shell_script.contents().as_bytes())
+        .write_all(shell_script.contents().into_diagnostic()?.as_bytes())
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
