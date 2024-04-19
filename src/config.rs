@@ -269,8 +269,8 @@ impl Config {
                 .or(self.authentication_override_file),
             mirrors: self.mirrors,
             loaded_from: self.loaded_from,
-            // currently this is always the default so just use the current value
-            channel_config: self.channel_config,
+            // currently this is always the default so just use the other value
+            channel_config: other.channel_config,
             repodata_config: other.repodata_config.or(self.repodata_config),
         }
     }
@@ -369,6 +369,7 @@ mod tests {
         let mut config = Config::default();
         let other = Config {
             default_channels: vec!["conda-forge".to_string()],
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             ..Default::default()
         };
@@ -382,6 +383,10 @@ mod tests {
 
         let config_1 = Config::from_path(&d.join("config_1.toml")).unwrap();
         let config_2 = Config::from_path(&d.join("config_2.toml")).unwrap();
+        let config_2 = Config {
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
+            ..config_2
+        };
 
         let mut merged = config_1.clone();
         merged = merged.merge_config(config_2);

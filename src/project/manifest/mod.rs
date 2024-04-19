@@ -1176,7 +1176,7 @@ mod tests {
         "#;
 
     fn channel_config() -> ChannelConfig {
-        ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        default_channel_config()
     }
 
     #[test]
