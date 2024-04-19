@@ -49,10 +49,10 @@ fn start_powershell(
 
     let mut shell_script = ShellScript::new(pwsh.clone(), Platform::current());
     for (key, value) in env {
-        shell_script.set_env_var(key, value);
+        shell_script.set_env_var(key, value).into_diagnostic()?;
     }
     temp_file
-        .write_all(shell_script.contents.as_bytes())
+        .write_all(shell_script.contents().into_diagnostic()?.as_bytes())
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
@@ -89,7 +89,7 @@ fn start_cmdexe(
         shell_script.set_env_var(key, value);
     }
     temp_file
-        .write_all(shell_script.contents.as_bytes())
+        .write_all(shell_script.contents().as_bytes())
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
@@ -109,7 +109,7 @@ fn start_cmdexe(
 /// - `args`: A vector of arguments to pass to the shell.
 /// - `env`: A HashMap containing environment variables to set in the shell.
 #[cfg(target_family = "unix")]
-async fn start_unix_shell<T: Shell + Copy>(
+async fn start_unix_shell<T: Shell + Copy + 'static>(
     shell: T,
     args: Vec<&str>,
     env: &HashMap<String, String>,
@@ -125,11 +125,11 @@ async fn start_unix_shell<T: Shell + Copy>(
 
     let mut shell_script = ShellScript::new(shell, Platform::current());
     for (key, value) in env {
-        shell_script.set_env_var(key, value);
+        shell_script.set_env_var(key, value).into_diagnostic()?;
     }
 
     temp_file
-        .write_all(shell_script.contents.as_bytes())
+        .write_all(shell_script.contents().into_diagnostic()?.as_bytes())
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
@@ -178,14 +178,16 @@ async fn start_nu_shell(
         if key == "PATH" {
             // split path with PATHSEP
             let paths = std::env::split_paths(value).collect::<Vec<_>>();
-            shell_script.set_path(&paths, PathModificationBehavior::Replace);
+            shell_script
+                .set_path(&paths, PathModificationBehavior::Replace)
+                .into_diagnostic()?;
         } else {
-            shell_script.set_env_var(key, value);
+            shell_script.set_env_var(key, value).into_diagnostic()?;
         }
     }
 
     temp_file
-        .write_all(shell_script.contents.as_bytes())
+        .write_all(shell_script.contents().into_diagnostic()?.as_bytes())
         .into_diagnostic()?;
 
     // Write custom prompt to the env file

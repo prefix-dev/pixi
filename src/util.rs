@@ -1,4 +1,5 @@
 use indicatif::MultiProgress;
+use rattler_conda_types::ChannelConfig;
 use std::io;
 use tracing_subscriber::fmt::MakeWriter;
 
@@ -29,4 +30,10 @@ impl<'a> MakeWriter<'a> for IndicatifWriter {
     fn make_writer(&'a self) -> Self::Writer {
         self.clone()
     }
+}
+
+pub fn default_channel_config() -> ChannelConfig {
+    return ChannelConfig::default_with_root_dir(
+        std::env::current_dir().expect("Could not retrieve the current directory"),
+    );
 }

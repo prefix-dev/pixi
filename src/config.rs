@@ -9,6 +9,7 @@ use std::process::{Command, Stdio};
 use url::Url;
 
 use crate::consts;
+use crate::util::default_channel_config;
 
 /// Determines the default author based on the default git author. Both the name and the email
 /// address of the author are returned.
@@ -112,7 +113,7 @@ pub struct RepodataConfig {
     pub disable_zstd: Option<bool>,
 }
 
-#[derive(Clone, Default, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub default_channels: Vec<String>,
@@ -135,11 +136,26 @@ pub struct Config {
     #[serde(skip)]
     pub loaded_from: Vec<PathBuf>,
 
-    #[serde(skip)]
+    #[serde(skip, default = "default_channel_config")]
     pub channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
     pub repodata_config: Option<RepodataConfig>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            default_channels: Vec::new(),
+            change_ps1: None,
+            authentication_override_file: None,
+            tls_no_verify: None,
+            mirrors: HashMap::new(),
+            loaded_from: Vec::new(),
+            channel_config: default_channel_config(),
+            repodata_config: None,
+        }
+    }
 }
 
 impl From<ConfigCli> for Config {

@@ -61,7 +61,10 @@ async fn generate_activation_script(
         })
         .into_diagnostic()?;
 
-    Ok(result.script)
+    Ok(result
+        .script
+        .contents()
+        .expect("Could not format the script"))
 }
 
 /// Prints the activation script to the stdout.

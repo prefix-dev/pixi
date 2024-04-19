@@ -185,7 +185,7 @@ rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branc
 # rattler = { path = "../rattler/crates/rattler" }
 
 # Change these lines if you want a patched version of uv
-[patch.'https://github.com/astral-sh/uv']
+# [patch.'https://github.com/astral-sh/uv']
 # pep440_rs = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
 # pep508_rs = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
 # uv-build = { git = "https://github.com/wolfv/uv", tag = "expose-yanks" }
