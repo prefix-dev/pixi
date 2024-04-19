@@ -275,6 +275,10 @@ impl<'de> Deserialize<'de> for Feature {
             /// Target specific tasks to run in the environment
             #[serde(default)]
             tasks: HashMap<TaskName, Task>,
+
+            /// Additional options for PyPi dependencies.
+            #[serde(default)]
+            pypi_options: Option<PypiOptions>,
         }
 
         let inner = FeatureInner::deserialize(deserializer)?;
@@ -303,6 +307,7 @@ impl<'de> Deserialize<'de> for Feature {
                     .collect()
             }),
             system_requirements: inner.system_requirements,
+            pypi_options: inner.pypi_options,
             targets: Targets::from_default_and_user_defined(default_target, inner.target),
         })
     }

@@ -1,0 +1,10 @@
+---
+source: src/project/manifest/mod.rs
+expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\").default_feature().pypi_options.clone().unwrap()"
+---
+index: "https://pypi.org/simple"
+extra-indexes:
+  - "https://pypi.org/simple2"
+flat-indexes:
+  - path: "../foo"
+  - url: "https://example.com/bar"

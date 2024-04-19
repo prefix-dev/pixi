@@ -15,6 +15,7 @@ mod validation;
 use crate::config::Config;
 use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
+use crate::project::manifest::pypi_options::PypiOptions;
 use crate::project::manifest::python::PyPiPackageName;
 use crate::pypi_mapping::{ChannelName, MappingLocation, MappingSource};
 use crate::task::TaskName;
@@ -295,6 +296,7 @@ impl Manifest {
                                 system_requirements: Default::default(),
                                 targets: Default::default(),
                                 channels: None,
+                                pypi_options: Default::default(),
                             });
                         }
                     }
@@ -600,6 +602,7 @@ impl Manifest {
                                 channels: Some(vec![channel.clone()]),
                                 system_requirements: Default::default(),
                                 targets: Default::default(),
+                                pypi_options: Default::default(),
                             });
                         }
                     }
@@ -1061,6 +1064,9 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             #[serde(default)]
             environments: IndexMap<EnvironmentName, TomlEnvironmentMapOrSeq>,
 
+            #[serde(default)]
+            pypi_options: Option<PypiOptions>,
+
             /// The tool configuration which is unused by pixi
             #[serde(rename = "tool")]
             _tool: Option<serde_json::Value>,
@@ -1092,6 +1098,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             channels: None,
 
             system_requirements: toml_manifest.system_requirements,
+            pypi_options: toml_manifest.pypi_options,
 
             // Combine the default target with all user specified targets
             targets: Targets::from_default_and_user_defined(default_target, toml_manifest.target),
@@ -1161,7 +1168,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 mod tests {
     use super::*;
     use crate::project::manifest::channel::PrioritizedChannel;
-    use insta::assert_snapshot;
+    use insta::{assert_snapshot, assert_yaml_snapshot};
     use rattler_conda_types::{Channel, ChannelConfig, ParseStrictness};
     use rstest::*;
     use std::str::FromStr;
@@ -1484,6 +1491,29 @@ mod tests {
             .flat_map(|d| d.into_iter())
             .map(|(name, spec)| format!("{} = {}", name.as_source(), toml_edit::Value::from(spec)))
             .join("\n"));
+    }
+
+    #[test]
+    fn test_pypi_options_default_feature() {
+        let contents = format!(
+            r#"
+            {PROJECT_BOILERPLATE}
+            [pypi-options]
+            index = "https://pypi.org/simple"
+            extra-indexes = ["https://pypi.org/simple2"]
+            [[pypi-options.flat-indexes]]
+            path = "../foo"
+            [[pypi-options.flat-indexes]]
+            url = "https://example.com/bar"
+            "#
+        );
+
+        assert_yaml_snapshot!(toml_edit::de::from_str::<ProjectManifest>(&contents)
+            .expect("parsing should succeed!")
+            .default_feature()
+            .pypi_options
+            .clone()
+            .unwrap());
     }
 
     fn test_remove(
