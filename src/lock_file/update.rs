@@ -1099,10 +1099,10 @@ fn make_unsupported_pypi_platform_error(
     }
 
     // Find all the features that are excluding the current platform.
-    // The default feature is included if its pypi dependencies are included in grouped_environment
+    // The default feature is included if its platforms are included in grouped_environment
     let include_default = grouped_environment
         .environments()
-        .any(|e| e.manifest().from_default_feature.pypi_dependencies);
+        .any(|e| e.manifest().from_default_feature.platforms);
     let features_without_platform =
         grouped_environment
             .features(include_default)
