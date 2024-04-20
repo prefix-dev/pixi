@@ -282,6 +282,7 @@ fn create_uv_url(
     url: &Url,
     rev: Option<&str>,
     subdir: Option<&str>,
+    branch: Option<&str>,
 ) -> Result<Url, url::ParseError> {
     // Create the url.
     let url = format!("git+{url}");
@@ -295,6 +296,11 @@ fn create_uv_url(
         || url.clone(),
         |subdir| format!("{url}#subdirectory={subdir}"),
     );
+
+    let url = branch
+        .as_ref()
+        .map_or_else(|| url.clone(), |branch| format!("{url}@{branch}"));
+
     url.parse()
 }
 
@@ -448,7 +454,7 @@ impl PyPiRequirement {
                     tracing::warn!("branch/tag are not supported *yet*, will use the `main`/`master` branch, please specify a revision using `rev` = `sha`");
                 }
                 let uv_url =
-                    create_uv_url(git, rev.as_deref(), subdir.as_deref()).map_err(|e| {
+                    create_uv_url(git, rev.as_deref(), subdir.as_deref(), branch.as_deref()).map_err(|e| {
                         AsPep508Error::UrlParseError {
                             source: e,
                             url: git.to_string(),
