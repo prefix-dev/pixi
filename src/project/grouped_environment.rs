@@ -167,11 +167,18 @@ impl<'p> GroupedEnvironment<'p> {
         }
     }
 
-    /// Returns the features of the group
-    pub fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
+    /// Returns all features that are part of the group.
+    ///
+    /// If `include_default` is `true` the default feature is also included.
+    ///
+    /// All features of all environments are combined and deduplicated.
+    pub fn features(
+        &self,
+        include_default: bool,
+    ) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         match self {
-            GroupedEnvironment::Group(group) => Either::Left(group.features()),
-            GroupedEnvironment::Environment(env) => Either::Right(env.features(true)),
+            GroupedEnvironment::Group(group) => Either::Left(group.features(include_default)),
+            GroupedEnvironment::Environment(env) => Either::Right(env.features(include_default)),
         }
     }
 }

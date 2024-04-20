@@ -1110,14 +1110,21 @@ fn make_unsupported_pypi_platform_error(
     }
 
     // Find all the features that are excluding the current platform.
-    let features_without_platform = grouped_environment.features().filter_map(|feature| {
-        let platforms = feature.platforms.as_ref()?;
-        if !platforms.value.contains(&current_platform) {
-            Some((feature, platforms))
-        } else {
-            None
-        }
-    });
+    // The default feature is included if its pypi dependencies are included in grouped_environment
+    let include_default = grouped_environment
+        .environments()
+        .any(|e| e.manifest().from_default_feature.pypi_dependencies);
+    let features_without_platform =
+        grouped_environment
+            .features(include_default)
+            .filter_map(|feature| {
+                let platforms = feature.platforms.as_ref()?;
+                if !platforms.value.contains(&current_platform) {
+                    Some((feature, platforms))
+                } else {
+                    None
+                }
+            });
 
     for (feature, platforms) in features_without_platform {
         let Some(span) = platforms.span.as_ref() else {
