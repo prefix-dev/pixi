@@ -183,9 +183,59 @@ impl Default for FromDefaultFeature {
     }
 }
 
+/// Deserialisation conversion helper to get a FromDefaultFeature from TOML environment data
+impl From<Option<FromDefaultToml>> for FromDefaultFeature {
+    fn from(opt: Option<FromDefaultToml>) -> Self {
+        match opt {
+            None => FromDefaultFeature::default(),
+            Some(FromDefaultToml::IncludeFromDefault(included)) => {
+                let mut f = FromDefaultFeature {
+                    system_requirements: false,
+                    channels: false,
+                    platforms: false,
+                    dependencies: false,
+                    pypi_dependencies: false,
+                    activation: false,
+                    tasks: false,
+                };
+
+                for component in &included {
+                    match component {
+                        FeatureComponentToml::SystemRequirements => f.system_requirements = true,
+                        FeatureComponentToml::Channels => f.channels = true,
+                        FeatureComponentToml::Platforms => f.platforms = true,
+                        FeatureComponentToml::Dependencies => f.dependencies = true,
+                        FeatureComponentToml::PypiDependencies => f.pypi_dependencies = true,
+                        FeatureComponentToml::Activation => f.activation = true,
+                        FeatureComponentToml::Tasks => f.tasks = true,
+                    }
+                }
+
+                f
+            }
+            Some(FromDefaultToml::ExcludeFromDefault(excluded)) => {
+                let mut f = FromDefaultFeature::default();
+                for component in &excluded {
+                    match component {
+                        FeatureComponentToml::SystemRequirements => f.system_requirements = false,
+                        FeatureComponentToml::Channels => f.channels = false,
+                        FeatureComponentToml::Platforms => f.platforms = false,
+                        FeatureComponentToml::Dependencies => f.dependencies = false,
+                        FeatureComponentToml::PypiDependencies => f.pypi_dependencies = false,
+                        FeatureComponentToml::Activation => f.activation = false,
+                        FeatureComponentToml::Tasks => f.tasks = false,
+                    }
+                }
+
+                f
+            }
+        }
+    }
+}
+
 /// Helper struct to deserialize the environment from TOML.
 /// The environment description can only hold these values.
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(super) struct TomlEnvironment {
     #[serde(default)]
@@ -195,14 +245,14 @@ pub(super) struct TomlEnvironment {
     pub from_default: Option<FromDefaultToml>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub(super) enum FromDefaultToml {
     IncludeFromDefault(Vec<FeatureComponentToml>),
     ExcludeFromDefault(Vec<FeatureComponentToml>),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub(super) enum FeatureComponentToml {
     SystemRequirements,
@@ -214,6 +264,7 @@ pub(super) enum FeatureComponentToml {
     Tasks,
 }
 
+#[derive(Debug)]
 pub(super) enum TomlEnvironmentMapOrSeq {
     Map(TomlEnvironment),
     Seq(Vec<String>),
@@ -234,6 +285,8 @@ impl<'de> Deserialize<'de> for TomlEnvironmentMapOrSeq {
 
 #[cfg(test)]
 mod tests {
+    use indexmap::IndexMap;
+
     use super::*;
 
     #[test]
@@ -292,5 +345,42 @@ mod tests {
             serde_json::from_str::<EnvironmentName>("\"foo\"").unwrap(),
             EnvironmentName::Named("foo".to_string())
         );
+    }
+
+    fn from_default(source: &str) -> FromDefaultFeature {
+        let env =
+            toml_edit::de::from_str::<IndexMap<EnvironmentName, TomlEnvironmentMapOrSeq>>(source)
+                .unwrap();
+        match env.values().next().unwrap() {
+            TomlEnvironmentMapOrSeq::Map(env) => env.from_default.clone().into(),
+            TomlEnvironmentMapOrSeq::Seq(_) => FromDefaultFeature::default(),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_exclude_from_default() {
+        let source = r#"test = { exclude-from-default=["channels"]}"#;
+        assert_eq!(false, from_default(source).channels);
+        assert_eq!(true, from_default(source).platforms);
+    }
+    #[test]
+    fn test_deserialize_include_from_default() {
+        let source = r#"test = { include-from-default=["channels"]}"#;
+        assert_eq!(true, from_default(source).channels);
+        assert_eq!(false, from_default(source).platforms);
+    }
+    #[test]
+    fn test_deserialize_no_from_default() {
+        let source = r#"test = ["bla"]"#;
+        assert_eq!(true, from_default(source).channels);
+        assert_eq!(true, from_default(source).platforms);
+    }
+    #[test]
+    #[should_panic(expected = "unknown field `exclude-from-default`")]
+    fn test_deserialize_from_default_conflict() {
+        let source =
+            r#"test = { include-from-default=["channels"], exclude-from-default=["platform"]}"#;
+        from_default(source);
+        ()
     }
 }

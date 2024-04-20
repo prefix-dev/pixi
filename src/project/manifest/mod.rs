@@ -13,7 +13,7 @@ mod validation;
 
 use crate::config::Config;
 use crate::project::manifest::channel::PrioritizedChannel;
-use crate::project::manifest::environment::{FromDefaultFeature, TomlEnvironmentMapOrSeq};
+use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
 use crate::project::manifest::python::PyPiPackageName;
 use crate::pypi_mapping::{ChannelName, MappingLocation, MappingSource};
 use crate::task::TaskName;
@@ -1126,7 +1126,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
         // Add all named environments
         for (name, env) in toml_manifest.environments {
             // Decompose the TOML
-            let (features, features_source_loc, solve_group, from_default) = match env {
+            let (features, features_source_loc, solve_group, from_default_feature) = match env {
                 TomlEnvironmentMapOrSeq::Map(env) => (
                     env.features.value,
                     env.features.span,
@@ -1143,8 +1143,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
                 features,
                 features_source_loc,
                 solve_group: solve_group.map(|sg| solve_groups.add(&sg, environment_idx)),
-                // FIXME: need to build from_default_feature from from_default
-                from_default_feature: FromDefaultFeature::default(),
+                from_default_feature: from_default_feature.into(),
             });
         }
 
