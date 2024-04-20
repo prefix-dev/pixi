@@ -100,18 +100,81 @@
           "description": "The group name for environments that should be solved together",
           "title": "Solve-Group"
         },
-        "no-default-feature": {
+        "include-from-default": {
           "anyOf": [
             {
-              "type": "boolean"
+              "items": {
+                "anyOf": [
+                  {
+                    "const": "system-requirements"
+                  },
+                  {
+                    "const": "channels"
+                  },
+                  {
+                    "const": "platforms"
+                  },
+                  {
+                    "const": "dependencies"
+                  },
+                  {
+                    "const": "pypi-dependencies"
+                  },
+                  {
+                    "const": "activation"
+                  },
+                  {
+                    "const": "tasks"
+                  }
+                ]
+              },
+              "type": "array"
             },
             {
               "type": "null"
             }
           ],
           "default": false,
-          "description": "Whether to add the default feature automatically",
-          "title": "No-Default-Feature"
+          "description": "Components of the default feature to include",
+          "title": "Include-From-Default"
+        },
+        "exclude-from-default": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "const": "system-requirements"
+                  },
+                  {
+                    "const": "channels"
+                  },
+                  {
+                    "const": "platforms"
+                  },
+                  {
+                    "const": "dependencies"
+                  },
+                  {
+                    "const": "pypi-dependencies"
+                  },
+                  {
+                    "const": "activation"
+                  },
+                  {
+                    "const": "tasks"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": false,
+          "description": "Components of the default feature to exclude",
+          "title": "Exclude-From-Default"
         }
       },
       "title": "Environment",
