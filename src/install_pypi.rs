@@ -440,7 +440,7 @@ fn whats_the_plan<'a>(
     let installed = site_packages.iter().filter(|dist| {
         dist.installer()
             .unwrap_or_default()
-            .is_some_and(|installer| installer == "uv")
+            .is_some_and(|installer| installer == "uv-pixi")
     });
 
     // Walk over all installed packages and check if they are required
@@ -939,6 +939,7 @@ pub async fn update_python_distributions(
         uv_installer::Installer::new(&venv)
             .with_link_mode(LinkMode::default())
             .with_reporter(UvReporter::new(options))
+            .with_installer_name(Some("uv-pixi".to_string()))
             .install(&wheels)
             .unwrap();
 
