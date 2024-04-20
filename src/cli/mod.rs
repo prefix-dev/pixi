@@ -89,10 +89,10 @@ pub enum Command {
 #[group(multiple = false)]
 /// Lock file usage from the CLI
 pub struct LockFileUsageArgs {
-    /// Don't check or update the lockfile, continue with previously installed environment.
+    // Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file.
     #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
     pub frozen: bool,
-    /// Check if lockfile is up to date, aborts when lockfile isn't up to date with the manifest file.
+    /// Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file.
     #[clap(long, conflicts_with = "frozen", env = "PIXI_LOCKED")]
     pub locked: bool,
 }
@@ -113,7 +113,7 @@ pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
     let use_colors = use_color_output(&args);
 
-    // Setup the default miette handler based on whether or not we want colors or not.
+    // Set up the default miette handler based on whether we want colors or not.
     miette::set_hook(Box::new(move |_| {
         Box::new(
             miette::MietteHandlerOpts::default()
@@ -196,7 +196,7 @@ pub async fn execute() -> miette::Result<()> {
             .into_diagnostic()?,
         );
 
-    // Setup the tracing subscriber
+    // Set up the tracing subscriber
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(use_colors)
         .with_writer(IndicatifWriter::new(progress::global_multi_progress()))

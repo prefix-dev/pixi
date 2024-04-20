@@ -11,10 +11,13 @@ mod system_requirements;
 mod target;
 mod validation;
 
+use crate::config::Config;
 use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::{FromDefaultFeature, TomlEnvironmentMapOrSeq};
 use crate::project::manifest::python::PyPiPackageName;
+use crate::pypi_mapping::{ChannelName, MappingLocation, MappingSource};
 use crate::task::TaskName;
+use crate::util::default_channel_config;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 pub use activation::Activation;
 use document::ManifestSource;
@@ -25,16 +28,19 @@ use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
 use miette::{miette, Diagnostic, IntoDiagnostic, NamedSource, WrapErr};
+use once_cell::sync::OnceCell;
 use pyproject::PyProjectManifest;
 pub use python::PyPiRequirement;
+use rattler_conda_types::Channel;
 use rattler_conda_types::{
-    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName,
+    MatchSpec, NamelessMatchSpec, PackageName,
     ParseStrictness::{Lenient, Strict},
     Platform, Version,
 };
 use serde::de::{DeserializeSeed, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_with::serde_as;
+use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::fmt;
 use std::hash::Hash;
@@ -50,6 +56,8 @@ use thiserror::Error;
 use toml_edit::DocumentMut;
 
 use self::error::TomlError;
+use url::ParseError;
+use url::Url;
 
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -141,21 +149,6 @@ impl Manifest {
 
         // Validate the contents of the manifest
         manifest.validate(NamedSource::new(file_name, contents.to_owned()), root)?;
-
-        // Notify the user that pypi-dependencies are still experimental
-        if manifest
-            .features
-            .values()
-            .flat_map(|f| f.targets.targets())
-            .any(|f| f.pypi_dependencies.is_some())
-        {
-            match std::env::var("PIXI_BETA_WARNING_OFF") {
-                Ok(var) if var == *"true" => {}
-                _ => {
-                    tracing::warn!("BETA feature `[pypi-dependencies]` enabled!\n\nPlease report any and all issues here:\n\n\thttps://github.com/prefix-dev/pixi.\n\nTurn this warning off by setting the environment variable `PIXI_BETA_WARNING_OFF` to `true`.\n");
-                }
-            }
-        }
 
         let source = match manifest_kind {
             ManifestKind::Pixi => ManifestSource::PixiToml(document),
@@ -406,17 +399,23 @@ impl Manifest {
         name: &PyPiPackageName,
         requirement: &PyPiRequirement,
         platform: Option<Platform>,
+        feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Add the pypi dependency to the TOML document
         let project_root = self
             .path
             .parent()
             .expect("Path should always have a parent");
-        self.document
-            .add_pypi_dependency(name, requirement, platform, project_root)?;
+        self.document.add_pypi_dependency(
+            name,
+            requirement,
+            platform,
+            project_root,
+            feature_name,
+        )?;
 
         // Add the dependency to the manifest as well
-        self.target_mut(platform, None)
+        self.target_mut(platform, Some(feature_name))
             .add_pypi_dependency(name.clone(), requirement.clone());
 
         Ok(())
@@ -483,6 +482,70 @@ impl Manifest {
             .any(|f| f.pypi_dependencies.is_some())
     }
 
+    /// Returns what pypi mapping configuration we should use.
+    /// It can be a custom one  in following format : conda_name: pypi_name
+    /// Or we can use our self-hosted
+    pub fn pypi_name_mapping_source(&self) -> miette::Result<&'static MappingSource> {
+        static MAPPING_SOURCE: OnceCell<MappingSource> = OnceCell::new();
+
+        MAPPING_SOURCE.get_or_try_init(||
+            match self.parsed.project.conda_pypi_map.clone() {
+                Some(url) => {
+                    let config = Config::load_global();
+
+                    // transform user defined channels into rattler::Channel
+                    let channels = url
+                        .keys()
+                        .map(|channel_str| {
+                            Channel::from_str(channel_str, config.channel_config())
+                                .map(|channel| (channel_str, channel.canonical_name()))
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                        .into_diagnostic()?;
+
+                    let project_channels = self.parsed.project.channels
+                    .iter()
+                    .map(|pc| pc.channel.canonical_name())
+                    .collect::<HashSet<_>>();
+
+
+                    // Throw a warning for each missing channel from project table
+                    channels
+                    .iter()
+                    .for_each(|(_, channel_canonical_name)| {
+                        if !project_channels.contains(channel_canonical_name){
+                            tracing::warn!("Defined custom mapping channel {} is missing from project channels", channel_canonical_name);
+                        }
+                    });
+
+                    let mapping = channels
+                            .iter()
+                            .map(|(channel_str, channel)| {
+
+                                let mapping_location = url.get(*channel_str).unwrap();
+
+                                let url_or_path = match Url::parse(mapping_location) {
+                                    Ok(url) => MappingLocation::Url(url),
+                                    Err(err) => {
+                                        if let ParseError::RelativeUrlWithoutBase = err {
+                                            MappingLocation::Path(PathBuf::from(mapping_location))
+                                        } else {
+                                            miette::bail!("Could not convert {mapping_location} to neither URL or Path")
+                                        }
+                                    }
+                                };
+
+                                Ok((channel.clone(), url_or_path))
+                            })
+                            .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
+
+                    Ok(MappingSource::Custom { mapping })
+                },
+                None => Ok(MappingSource::Prefix),
+            }
+        )
+    }
+
     /// Adds the specified channels to the manifest.
     pub fn add_channels(
         &mut self,
@@ -505,7 +568,7 @@ impl Manifest {
                         .channel
                         .base_url
                         .as_str()
-                        .contains(ChannelConfig::default().channel_alias.as_str())
+                        .contains(default_channel_config().channel_alias.as_str())
                     {
                         stored_channels.insert(channel.channel.name().to_string());
                     } else {
@@ -636,7 +699,11 @@ impl Manifest {
         name: Option<&FeatureName>,
     ) -> &mut Target {
         let feature = match name {
-            Some(feature) => self.parsed.features.entry(feature.clone()).or_default(),
+            Some(feature) => self
+                .parsed
+                .features
+                .entry(feature.clone())
+                .or_insert_with(|| Feature::new(feature.clone())),
             None => self.default_feature_mut(),
         };
         feature
@@ -1099,7 +1166,6 @@ mod tests {
     use rstest::*;
     use std::str::FromStr;
     use tempfile::tempdir;
-    use toml_edit::Item;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -1108,6 +1174,10 @@ mod tests {
         channels = []
         platforms = ["linux-64", "win-64", "osx-64"]
         "#;
+
+    fn channel_config() -> ChannelConfig {
+        default_channel_config()
+    }
 
     #[test]
     fn test_from_path() {
@@ -1416,7 +1486,7 @@ mod tests {
             .clone()
             .into_iter()
             .flat_map(|d| d.into_iter())
-            .map(|(name, spec)| format!("{} = {}", name.as_source(), Item::from(spec)))
+            .map(|(name, spec)| format!("{} = {}", name.as_source(), toml_edit::Value::from(spec)))
             .join("\n"));
     }
 
@@ -1876,7 +1946,7 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(manifest.parsed.project.channels, vec![]);
 
         let conda_forge = PrioritizedChannel::from_channel(
-            Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
+            Channel::from_str("conda-forge", &channel_config()).unwrap(),
         );
         manifest
             .add_channels([conda_forge.clone()], &FeatureName::Default)
@@ -1884,7 +1954,7 @@ platforms = ["linux-64", "win-64"]
 
         let cuda_feature = FeatureName::Named("cuda".to_string());
         let nvidia = PrioritizedChannel::from_channel(
-            Channel::from_str("nvidia", &ChannelConfig::default()).unwrap(),
+            Channel::from_str("nvidia", &channel_config()).unwrap(),
         );
         manifest
             .add_channels([nvidia.clone()], &cuda_feature)
@@ -1895,10 +1965,10 @@ platforms = ["linux-64", "win-64"]
             .add_channels(
                 [
                     PrioritizedChannel::from_channel(
-                        Channel::from_str("test", &ChannelConfig::default()).unwrap(),
+                        Channel::from_str("test", &channel_config()).unwrap(),
                     ),
                     PrioritizedChannel::from_channel(
-                        Channel::from_str("test2", &ChannelConfig::default()).unwrap(),
+                        Channel::from_str("test2", &channel_config()).unwrap(),
                     ),
                 ],
                 &test_feature,
@@ -1908,7 +1978,7 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             manifest.parsed.project.channels,
             vec![PrioritizedChannel {
-                channel: Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
+                channel: Channel::from_str("conda-forge", &channel_config()).unwrap(),
                 priority: None
             }]
         );
@@ -1921,7 +1991,7 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             manifest.parsed.project.channels,
             vec![PrioritizedChannel {
-                channel: Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
+                channel: Channel::from_str("conda-forge", &channel_config()).unwrap(),
                 priority: None
             }]
         );
@@ -1936,7 +2006,7 @@ platforms = ["linux-64", "win-64"]
                 .clone()
                 .unwrap(),
             vec![PrioritizedChannel {
-                channel: Channel::from_str("nvidia", &ChannelConfig::default()).unwrap(),
+                channel: Channel::from_str("nvidia", &channel_config()).unwrap(),
                 priority: None
             }]
         );
@@ -1954,7 +2024,7 @@ platforms = ["linux-64", "win-64"]
                 .clone()
                 .unwrap(),
             vec![PrioritizedChannel {
-                channel: Channel::from_str("nvidia", &ChannelConfig::default()).unwrap(),
+                channel: Channel::from_str("nvidia", &channel_config()).unwrap(),
                 priority: None
             }]
         );
@@ -1970,11 +2040,11 @@ platforms = ["linux-64", "win-64"]
                 .unwrap(),
             vec![
                 PrioritizedChannel {
-                    channel: Channel::from_str("test", &ChannelConfig::default()).unwrap(),
+                    channel: Channel::from_str("test", &channel_config()).unwrap(),
                     priority: None
                 },
                 PrioritizedChannel {
-                    channel: Channel::from_str("test2", &ChannelConfig::default()).unwrap(),
+                    channel: Channel::from_str("test2", &channel_config()).unwrap(),
                     priority: None
                 }
             ]
@@ -1982,8 +2052,7 @@ platforms = ["linux-64", "win-64"]
 
         // Test custom channel urls
         let custom_channel = PrioritizedChannel {
-            channel: Channel::from_str("https://custom.com/channel", &ChannelConfig::default())
-                .unwrap(),
+            channel: Channel::from_str("https://custom.com/channel", &channel_config()).unwrap(),
             priority: None,
         };
         manifest
@@ -2019,14 +2088,14 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             manifest.parsed.project.channels,
             vec![PrioritizedChannel::from_channel(
-                Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap()
+                Channel::from_str("conda-forge", &channel_config()).unwrap()
             )]
         );
 
         manifest
             .remove_channels(
                 [PrioritizedChannel {
-                    channel: Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
+                    channel: Channel::from_str("conda-forge", &channel_config()).unwrap(),
                     priority: None,
                 }],
                 &FeatureName::Default,
@@ -2038,7 +2107,7 @@ platforms = ["linux-64", "win-64"]
         manifest
             .remove_channels(
                 [PrioritizedChannel {
-                    channel: Channel::from_str("test_channel", &ChannelConfig::default()).unwrap(),
+                    channel: Channel::from_str("test_channel", &channel_config()).unwrap(),
                     priority: None,
                 }],
                 &FeatureName::Named("test".to_string()),
@@ -2228,11 +2297,11 @@ platforms = ["linux-64", "win-64"]
                 .collect::<Vec<_>>(),
             vec![
                 &PrioritizedChannel {
-                    channel: Channel::from_str("pytorch", &ChannelConfig::default()).unwrap(),
+                    channel: Channel::from_str("pytorch", &channel_config()).unwrap(),
                     priority: None
                 },
                 &PrioritizedChannel {
-                    channel: Channel::from_str("nvidia", &ChannelConfig::default()).unwrap(),
+                    channel: Channel::from_str("nvidia", &channel_config()).unwrap(),
                     priority: Some(-1)
                 }
             ]

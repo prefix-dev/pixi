@@ -34,6 +34,8 @@ When you want to show your users and contributors that they can use pixi in your
   - [HydroMT](https://github.com/Deltares/hydromt): Automated and reproducible model building and analysis
   - [HydroMT SFINCS](https://github.com/Deltares/hydromt_sfincs): SFINCS plugin for HydroMT
   - [PyFlwDir](https://github.com/Deltares/pyflwdir): Fast methods to work with hydro- and topography data in pure Python.
+- USGS:
+  - [MODFLOW 6](https://github.com/MODFLOW-USGS/modflow6): USGS modular hydrological model
 
 - [jiaxiyang/cpp_project_guideline](https://github.com/jiaxiyang/cpp_project_guideline): Guide the way beginners make their c++ projects.
 - [karelze/tclf](https://github.com/KarelZe/tclf): A python library for trade classification⚡

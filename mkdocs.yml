@@ -95,36 +95,53 @@ extra:
   version:
     provider: mike
 
-
 nav:
-  - Getting Started : index.md
-  - Basic Usage: basic_usage.md
-  - Reference (CLI): cli.md
-  - Configuration: configuration.md
-  - Environment: environment.md
-  - Vision: vision.md
-  - IDE Integration:
-    - PyCharm: ide_integration/pycharm.md
-  - In-depth:
-    - Authentication: advanced/authentication.md
-    - Tasks: advanced/advanced_tasks.md
-    - Multi Platform: advanced/multi_platform_configuration.md
-    - Info Command: advanced/explain_info_command.md
-    - Channel Logic: advanced/channel_priority.md
-    - GitHub Actions: advanced/github_actions.md
-    - Global Configuration: advanced/global_configuration.md
-    - Pyproject.toml: advanced/pyproject_toml.md
+  - Getting Started:
+      - Installation: index.md
+      - Basic Usage: basic_usage.md
+      - IDE Integration:
+          - JupyterLab: ide_integration/jupyterlab.md
+          - PyCharm: ide_integration/pycharm.md
+          - RStudio: ide_integration/r_studio.md
+  - Tutorials:
+      - Python: tutorials/python.md
+      - ROS 2: tutorials/ros2.md
+      - Rust: tutorials/rust.md
   - Examples:
       - C++/Cmake: examples/cpp-sdl.md
       - OpenCV: examples/opencv.md
-      - ROS2: examples/ros2-nav2.md
-  - Design Proposals:
-      - Multi Env: design_proposals/multi_environment_proposal.md
-  - Community: Community.md
-  - FAQ: FAQ.md
-
+      - ROS 2: examples/ros2-nav2.md
+  - Features:
+      - Environments: features/environment.md
+      - Tasks: features/advanced_tasks.md
+      - Multi Platform: features/multi_platform_configuration.md
+      - Multi Environment: features/multi_environment.md
+      - Lockfile: features/lockfile.md
+  - Advanced:
+      - Authentication: advanced/authentication.md
+      - Info Command: advanced/explain_info_command.md
+      - Channel Logic: advanced/channel_priority.md
+      - GitHub Actions: advanced/github_actions.md
+      - Global Configuration: advanced/global_configuration.md
+      - Pyproject.toml: advanced/pyproject_toml.md
+  - Reference:
+      - Project Configuration: reference/configuration.md
+      - CLI: reference/cli.md
+  - Misc:
+      - Pixi vision: vision.md
+      - Community: Community.md
+      - FAQ: FAQ.md
 
 plugins:
+  - redirects:
+      redirect_maps:
+        "advanced/advanced_tasks.md": "features/advanced_tasks.md"
+        "environment.md": "features/environment.md"
+        "design_proposals/multi_environment_proposal.md": "features/multi_environment.md"
+        "advanced/multi_platform_configuration.md": "features/multi_platform_configuration.md"
+        "cli.md": "reference/cli.md"
+        "configuration.md": "reference/configuration.md"
+
   - search
   - social
   - mike:

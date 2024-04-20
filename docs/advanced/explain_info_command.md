@@ -36,7 +36,6 @@ default
              Tasks: docs, test-all, test, build, lint, install, build-docs
 ```
 
-
 ## Global info
 
 The first part of the info output is information that is always available and tells you what pixi can read on your machine.
@@ -84,15 +83,15 @@ The size of the previously mentioned "Cache dir" in Mebibytes.
 ## Project info
 
 Everything below `Project` is info about the project you're currently in.
-This info is only available if your path has a [manifest file](../configuration.md).
+This info is only available if your path has a [manifest file](../reference/configuration.md).
 
 ### Manifest file
 
-The path to the [manifest file](../configuration.md) that describes the project.
+The path to the [manifest file](../reference/configuration.md) that describes the project.
 
 ### Last updated
 
-The last time the lockfile was updated, either manually or by pixi itself.
+The last time the lock file was updated, either manually or by pixi itself.
 
 ## Environment info
 

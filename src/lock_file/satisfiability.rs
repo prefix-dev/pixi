@@ -20,6 +20,7 @@ use std::{
 };
 use thiserror::Error;
 use url::Url;
+use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
 
 #[derive(Debug, Error, Diagnostic)]
@@ -47,6 +48,9 @@ pub enum PlatformUnsat {
 
     #[error("there are more conda packages in the lock-file than are used by the environment")]
     TooManyCondaPackages,
+
+    #[error("missing purls")]
+    MissingPurls,
 
     #[error("corrupted lock-file entry for '{0}'")]
     CorruptedEntry(String, ConversionError),
@@ -167,6 +171,20 @@ pub fn verify_platform_satisfiability(
         }
     }
 
+    // to reflect new purls for pypi packages
+    // we need to invalidate the locked environment
+    // if all conda packages have empty purls
+    if environment.has_pypi_dependencies()
+        && pypi_packages.is_empty()
+        && !conda_packages
+            .iter()
+            .any(|record| !record.package_record.purls.is_empty())
+    {
+        {
+            return Err(PlatformUnsat::MissingPurls);
+        }
+    }
+
     // Create a lookup table from package name to package record. Returns an error if we find a
     // duplicate entry for a record
     let repodata_records_by_name = match RepoDataRecordsByName::from_unique_iter(conda_packages) {
@@ -221,12 +239,11 @@ pub fn pypi_satifisfies_editable(
 
         // If the spec does not specify a revision than any will do
         // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-        if spec_git_url.url.reference().is_none() {
-            base_is_same
-        } else {
-            // If the spec does specify a revision than the revision must match
-            base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
+        if *spec_git_url.url.reference() == GitReference::DefaultBranch {
+            return base_is_same;
         }
+        // If the spec does specify a revision than the revision must match
+        base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
     } else {
         let spec_path_or_url = spec_url
             .given()
@@ -276,12 +293,11 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
 
                 // If the spec does not specify a revision than any will do
                 // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-                if spec_git_url.url.reference().is_none() {
-                    base_is_same
-                } else {
-                    // If the spec does specify a revision than the revision must match
-                    base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
+                if *spec_git_url.url.reference() == GitReference::DefaultBranch {
+                    return base_is_same;
                 }
+                // If the spec does specify a revision than the revision must match
+                base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
             } else {
                 let spec_path_or_url = spec_url
                     .given()

@@ -13,7 +13,6 @@ use miette::{IntoDiagnostic, NamedSource};
 
 use rattler_conda_types::{Channel, Platform, Version};
 use reqwest_middleware::ClientWithMiddleware;
-use std::fs;
 use std::hash::Hash;
 
 use rattler_virtual_packages::VirtualPackage;
@@ -28,6 +27,7 @@ use std::{
 use crate::activation::{get_environment_variables, run_activation};
 use crate::config::Config;
 use crate::project::grouped_environment::GroupedEnvironment;
+use crate::pypi_mapping::MappingSource;
 use crate::task::TaskName;
 use crate::utils::reqwest::build_reqwest_clients;
 use crate::{
@@ -41,7 +41,7 @@ pub use dependencies::Dependencies;
 pub use environment::Environment;
 pub use solve_group::SolveGroup;
 
-use self::manifest::Environments;
+use self::manifest::{pyproject::PyProjectToml, Environments};
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -164,7 +164,7 @@ impl Project {
                 if let Some(project_toml) = project_toml {
                     if env_manifest_path != project_toml.to_string_lossy() {
                         tracing::warn!(
-                            "Using mainfest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
+                            "Using manifest {} from `PIXI_PROJECT_MANIFEST` rather than local {}",
                             env_manifest_path,
                             project_toml.to_string_lossy()
                         );
@@ -450,6 +450,13 @@ impl Project {
         self.manifest.has_pypi_dependencies()
     }
 
+    /// Returns the custom location of pypi-name-mapping
+    pub fn pypi_name_mapping_source(&self) -> &'static MappingSource {
+        self.manifest
+            .pypi_name_mapping_source()
+            .expect("mapping source should be ok")
+    }
+
     /// Returns the Python index locations to use for this project.
     pub fn pypi_index_locations(&self) -> IndexLocations {
         // TODO: Currently we just default to Pypi always.
@@ -515,7 +522,7 @@ pub fn find_project_manifest() -> Option<PathBuf> {
                 if path.is_file() {
                     match *manifest {
                         PROJECT_MANIFEST => Some(path.to_path_buf()),
-                        PYPROJECT_MANIFEST if is_valid_pixi_pyproject_toml(&path) => {
+                        PYPROJECT_MANIFEST if PyProjectToml::is_pixi(&path) => {
                             Some(path.to_path_buf())
                         }
                         _ => None,
@@ -525,14 +532,6 @@ pub fn find_project_manifest() -> Option<PathBuf> {
                 }
             })
     })
-}
-
-/// Checks whether a path is a valid `pyproject.toml` for use with pixi file by checking if it
-/// contains the `[tool.pixi.project]` section.
-fn is_valid_pixi_pyproject_toml(path: &Path) -> bool {
-    fs::read_to_string(path)
-        .map(|content| content.contains("[tool.pixi.project]"))
-        .unwrap_or(false)
 }
 
 #[cfg(test)]

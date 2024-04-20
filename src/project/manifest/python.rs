@@ -6,7 +6,6 @@ use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::{fmt, fmt::Formatter, str::FromStr};
 use thiserror::Error;
-use toml_edit::Item;
 use url::Url;
 
 use uv_normalize::{ExtraName, InvalidNameError, PackageName};
@@ -174,14 +173,14 @@ pub enum ParsePyPiRequirementError {
 
 impl fmt::Display for PyPiRequirement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let item: Item = self.clone().into();
-        write!(f, "{item}")
+        let toml = toml_edit::Value::from(self.clone());
+        write!(f, "{toml}")
     }
 }
 
-impl From<PyPiRequirement> for Item {
+impl From<PyPiRequirement> for toml_edit::Value {
     /// PyPiRequirement to a toml_edit item, to put in the manifest file.
-    fn from(val: PyPiRequirement) -> Item {
+    fn from(val: PyPiRequirement) -> toml_edit::Value {
         fn insert_extras(table: &mut toml_edit::InlineTable, extras: &[ExtraName]) {
             if !extras.is_empty() {
                 table.insert(
@@ -207,7 +206,7 @@ impl From<PyPiRequirement> for Item {
                     toml_edit::Value::String(toml_edit::Formatted::new(version.to_string())),
                 );
                 insert_extras(&mut table, extras);
-                Item::Value(toml_edit::Value::InlineTable(table.to_owned()))
+                toml_edit::Value::InlineTable(table.to_owned())
             }
             PyPiRequirement::Git {
                 git: _,
@@ -229,9 +228,9 @@ impl From<PyPiRequirement> for Item {
             PyPiRequirement::Url { url: _, extras: _ } => {
                 unimplemented!("url")
             }
-            PyPiRequirement::RawVersion(version) => Item::Value(toml_edit::Value::String(
-                toml_edit::Formatted::new(version.to_string()),
-            )),
+            PyPiRequirement::RawVersion(version) => {
+                toml_edit::Value::String(toml_edit::Formatted::new(version.to_string()))
+            }
         }
     }
 }
@@ -245,10 +244,27 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
                     version: VersionOrStar::Version(v),
                     extras: req.extras,
                 },
-                pep508_rs::VersionOrUrl::Url(u) => PyPiRequirement::Url {
-                    url: u.to_url(),
-                    extras: req.extras,
-                },
+                pep508_rs::VersionOrUrl::Url(u) => {
+                    let url = u.to_url();
+                    // Have a different code path when the url is a file.
+                    // i.e. package @ file:///path/to/package
+                    if url.scheme() == "file" {
+                        // Convert the file url to a path.
+                        let file = url
+                            .to_file_path()
+                            .expect("could not convert to file url to path");
+                        PyPiRequirement::Path {
+                            path: file,
+                            editable: None,
+                            extras: req.extras,
+                        }
+                    } else {
+                        PyPiRequirement::Url {
+                            url,
+                            extras: req.extras,
+                        }
+                    }
+                }
             }
         } else if !req.extras.is_empty() {
             PyPiRequirement::Version {

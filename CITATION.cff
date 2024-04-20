@@ -24,8 +24,8 @@ authors:
     name-particle: de
     family-names: Jager
     email: tdejager89@gmail.com
-repository-code: 'https://github.com/prefix-dev/pixi/releases/tag/v0.18.0'
-url: 'https://pixi.sh/v0.18.0'
+repository-code: 'https://github.com/prefix-dev/pixi/releases/tag/v0.20.0'
+url: 'https://pixi.sh/v0.20.0'
 abstract: >-
   A cross-platform, language agnostic, package/project
   management tool for development in virtual environments.

@@ -1,10 +1,7 @@
-# Proposal Design: Multi Environment Support
-## Objective
-The aim is to introduce an environment set mechanism in the `pixi` package manager.
-This mechanism will enable clear, conflict-free management of dependencies tailored to specific environments, while also maintaining the integrity of fixed lockfiles.
-
+# Multi Environment Support
 
 ### Motivating Example
+
 There are multiple scenarios where multiple environments are useful.
 
 - **Testing of multiple package versions**, e.g. `py39` and `py310` or polars `0.12` and `0.13`.
@@ -17,17 +14,17 @@ There are multiple scenarios where multiple environments are useful.
 This prepares `pixi` for use in large projects with multiple use-cases, multiple developers and different CI needs.
 
 ## Design Considerations
+
+There are a few things we wanted to keep in mind in the design:
+
 1. **User-friendliness**: Pixi is a user focussed tool that goes beyond developers. The feature should have good error reporting and helpful documentation from the start.
 2. **Keep it simple**: Not understanding the multiple environments feature shouldn't limit a user to use pixi. The feature should be "invisible" to the non-multi env use-cases.
 3. **No Automatic Combinatorial**: To ensure the dependency resolution process remains manageable, the solution should avoid a combinatorial explosion of dependency sets. By making the environments user defined and not automatically inferred by testing a matrix of the features.
 4. **Single environment Activation**: The design should allow only one environment to be active at any given time, simplifying the resolution process and preventing conflicts.
-5. **Fixed Lockfiles**: It's crucial to preserve fixed lockfiles for consistency and predictability. Solutions must ensure reliability not just for authors but also for end-users, particularly at the time of lockfile creation.
-
-## Proposed Solution
-!!! important
-    This is a proposal, not a final design. The proposal is open for discussion and will be updated based on the feedback.
+5. **Fixed lock files**: It's crucial to preserve fixed lock files for consistency and predictability. Solutions must ensure reliability not just for authors but also for end-users, particularly at the time of lock file creation.
 
 ### Feature & Environment Set Definitions
+
 Introduce environment sets into the `pixi.toml` this describes environments based on `feature`'s. Introduce features into the `pixi.toml` that can describe parts of environments.
 As an environment goes beyond just `dependencies` the `features` should be described including the following fields:
 
@@ -39,7 +36,6 @@ As an environment goes beyond just `dependencies` the `features` should be descr
 - `channels`: The channels used to create the environment. Adding the `priority` field to the channels to allow concatenation of channels instead of overwriting.
 - `target`: All the above features but also separated by targets.
 - `tasks`: Feature specific tasks, tasks in one environment are selected as default tasks for the environment.
-
 
 ```toml title="Default features"
 [dependencies] # short for [feature.default.dependencies]
@@ -75,7 +71,7 @@ system-requirements = {cuda = "12"}
 # Channels concatenate using a priority instead of overwrite, so the default channels are still used.
 # Using the priority the concatenation is controlled, default is 0, the default channels are used last.
 # Highest priority comes first.
-channels = ["nvidia", {channel = "pytorch", priority = "-1"}] # Results in:  ["nvidia", "conda-forge", "pytorch"] when the default is `conda-forge`
+channels = ["nvidia", {channel = "pytorch", priority = -1}] # Results in:  ["nvidia", "conda-forge", "pytorch"] when the default is `conda-forge`
 tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
@@ -94,8 +90,8 @@ The environment definition should contain the following fields:
 
 - `features: Vec<Feature>`: The features that are included in the environment set, which is also the default field in the environments.
 - `solve-group: String`: The solve group is used to group environments together at the solve stage.
-This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
-For instance when testing a production environment with additional test dependencies.
+  This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
+  For instance when testing a production environment with additional test dependencies.
 
 ```toml title="Creating environments from features"
 [environments]
@@ -133,9 +129,11 @@ default = ["base"]
 lint = ["lint"]
 ```
 
-### Lockfile Structure
+### lock file Structure
+
 Within the `pixi.lock` file, a package may now include an additional `environments` field, specifying the environment to which it belongs.
-To avoid duplication the packages `environments` field may contain multiple environments so the lockfile is of minimal size.
+To avoid duplication the packages `environments` field may contain multiple environments so the lock file is of minimal size.
+
 ```yaml
 - platform: linux-64
   name: pre-commit
@@ -159,8 +157,8 @@ To avoid duplication the packages `environments` field may contain multiple envi
   ...:
 ```
 
-
 ### User Interface Environment Activation
+
 Users can manually activate the desired environment via command line or configuration.
 This approach guarantees a conflict-free environment by allowing only one feature set to be active at a time.
 For the user the cli would look like this:
@@ -181,6 +179,7 @@ pixi shell -e cuda
 pixi shell --environment cuda
 # Starts a shell in the `cuda` environment
 ```
+
 ```shell title="Running any command in an environment"
 pixi run -e test any_command
 # Runs any_command in the `test` environment which doesn't require to be predefined as a task.
@@ -200,7 +199,9 @@ pixi run test
 - GitHub project: [#10](https://github.com/orgs/prefix-dev/projects/10)
 
 ## Real world example use cases
+
 ??? tip "Polarify test setup"
+
     In `polarify` they want to test multiple versions combined with multiple versions of polars.
     This is currently done by using a matrix in GitHub actions.
     This can be replaced by using multiple environments.
@@ -289,6 +290,7 @@ pixi run test
     ```
 
 ??? tip "Test vs Production example"
+
     This is an example of a project that has a `test` feature and `prod` environment.
     The `prod` environment is a production environment that contains the run dependencies.
     The `test` feature is a set of dependencies and tasks that we want to put on top of the previously solved `prod` environment.
@@ -349,6 +351,7 @@ pixi run test
 
 ??? tip "Multiple machines from one project"
     This is an example for an ML project that should be executable on a machine that supports `cuda` and `mlx`. It should also be executable on machines that don't support `cuda` or `mlx`, we use the `cpu` feature for this.
+
     ```toml title="pixi.toml"
     [project]
     name = "my-ml-project"
@@ -372,7 +375,7 @@ pixi run test
 
     [feature.cuda]
     platforms = ["win-64", "linux-64"]
-    channels = ["nvidia", {channel = "pytorch", priority = "-1"}]
+    channels = ["nvidia", {channel = "pytorch", priority = -1}]
     system-requirements = {cuda = "12.1"}
 
     [feature.cuda.tasks]

@@ -9,6 +9,7 @@ use std::process::{Command, Stdio};
 use url::Url;
 
 use crate::consts;
+use crate::util::default_channel_config;
 
 /// Determines the default author based on the default git author. Both the name and the email
 /// address of the author are returned.
@@ -112,7 +113,7 @@ pub struct RepodataConfig {
     pub disable_zstd: Option<bool>,
 }
 
-#[derive(Clone, Default, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub default_channels: Vec<String>,
@@ -135,11 +136,26 @@ pub struct Config {
     #[serde(skip)]
     pub loaded_from: Vec<PathBuf>,
 
-    #[serde(skip)]
+    #[serde(skip, default = "default_channel_config")]
     pub channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
     pub repodata_config: Option<RepodataConfig>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            default_channels: Vec::new(),
+            change_ps1: None,
+            authentication_override_file: None,
+            tls_no_verify: None,
+            mirrors: HashMap::new(),
+            loaded_from: Vec::new(),
+            channel_config: default_channel_config(),
+            repodata_config: None,
+        }
+    }
 }
 
 impl From<ConfigCli> for Config {
@@ -253,8 +269,8 @@ impl Config {
                 .or(self.authentication_override_file),
             mirrors: self.mirrors,
             loaded_from: self.loaded_from,
-            // currently this is always the default so just use the current value
-            channel_config: self.channel_config,
+            // currently this is always the default so just use the other value
+            channel_config: other.channel_config,
             repodata_config: other.repodata_config.or(self.repodata_config),
         }
     }
@@ -353,6 +369,7 @@ mod tests {
         let mut config = Config::default();
         let other = Config {
             default_channels: vec!["conda-forge".to_string()],
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             ..Default::default()
         };
@@ -366,6 +383,10 @@ mod tests {
 
         let config_1 = Config::from_path(&d.join("config_1.toml")).unwrap();
         let config_2 = Config::from_path(&d.join("config_2.toml")).unwrap();
+        let config_2 = Config {
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
+            ..config_2
+        };
 
         let mut merged = config_1.clone();
         merged = merged.merge_config(config_2);

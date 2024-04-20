@@ -87,3 +87,20 @@ To sync the colors of the different parts of the ui, we use the following rules:
 - `style("task").blue()`: The task name
 
 These styles are put in the `consts` module or are a `.fancy_display()` on the names. If you want to add a new generic color, please add it there.
+
+
+## Comment for Breaking Change
+If you have a work-around for a potential breaking change, please add a comment in the code where you think the breaking change will happen. And what needs to be done when we **actually** want to break it. Use `BREAK:` in the comment to denote this.
+
+For example:
+```rust
+// an enum to sort by size or name
+#[derive(clap::ValueEnum, Clone, Debug, Serialize)]
+pub enum SortBy {
+    Size,
+    Name,
+    // BREAK: remove the alias
+    #[value(alias = "type")]
+    Kind,
+}
+```

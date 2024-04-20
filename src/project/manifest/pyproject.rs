@@ -1,26 +1,28 @@
 use miette::Report;
-use pep508_rs::VersionOrUrl;
-use pyproject_toml::PyProjectToml;
+use pep440_rs::VersionSpecifiers;
+use pyproject_toml::{self, Project};
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
+use std::fs;
+use std::path::PathBuf;
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
 };
-use toml_edit;
+use toml_edit::DocumentMut;
 
 use crate::FeatureName;
 
 use super::{
     error::{RequirementConversionError, TomlError},
     python::PyPiPackageName,
-    ProjectManifest, PyPiRequirement, SpecType,
+    Feature, ProjectManifest, PyPiRequirement, SpecType,
 };
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct PyProjectManifest {
     #[serde(flatten)]
-    inner: PyProjectToml,
+    inner: pyproject_toml::PyProjectToml,
     tool: Tool,
 }
 
@@ -30,7 +32,7 @@ struct Tool {
 }
 
 impl std::ops::Deref for PyProjectManifest {
-    type Target = PyProjectToml;
+    type Target = pyproject_toml::PyProjectToml;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -69,16 +71,24 @@ impl From<PyProjectManifest> for ProjectManifest {
         manifest.project.name = Some(pyproject.name.clone());
 
         // Add python as dependency based on the project.requires_python property (if any)
-        let pythonspec = pyproject
-            .requires_python
-            .clone()
-            .map(VersionOrUrl::VersionSpecifier);
+        let python_spec = pyproject.requires_python.clone();
+
         let target = manifest.default_feature_mut().targets.default_mut();
-        target.add_dependency(
-            PackageName::from_str("python").unwrap(),
-            version_or_url_to_nameless_matchspec(&pythonspec).unwrap(),
-            SpecType::Run,
-        );
+        // If the target doesn't have any python dependency, we add it from the `requires-python`
+        if !target.has_dependency("python", Some(SpecType::Run)) {
+            target.add_dependency(
+                PackageName::from_str("python").unwrap(),
+                version_or_url_to_nameless_matchspec(&python_spec).unwrap(),
+                SpecType::Run,
+            );
+        } else if let Some(_spec) = python_spec {
+            if target.has_dependency("python", Some(SpecType::Run)) {
+                // TODO: implement some comparison or spec merging logic here
+                tracing::info!(
+                    "Overriding the requires-python with the one defined in pixi dependencies"
+                )
+            }
+        }
 
         // Add pyproject dependencies as pypi dependencies
         if let Some(deps) = pyproject.dependencies.clone() {
@@ -104,10 +114,11 @@ impl From<PyProjectManifest> for ProjectManifest {
             for (extra, reqs) in extras {
                 // Filter out unused features
                 if features_used.contains(extra) {
+                    let feature_name = FeatureName::Named(extra.to_string());
                     let target = manifest
                         .features
-                        .entry(FeatureName::Named(extra.to_string()))
-                        .or_default()
+                        .entry(feature_name.clone())
+                        .or_insert_with(move || Feature::new(feature_name))
                         .targets
                         .default_mut();
                     for req in reqs.iter() {
@@ -131,15 +142,17 @@ impl From<PyProjectManifest> for ProjectManifest {
 /// This will only work if it is not URL and the VersionSpecifier can successfully
 /// be interpreted as a NamelessMatchSpec.version
 fn version_or_url_to_nameless_matchspec(
-    version: &Option<VersionOrUrl>,
+    version: &Option<VersionSpecifiers>,
 ) -> Result<NamelessMatchSpec, RequirementConversionError> {
     match version {
         // TODO: avoid going through string representation for conversion
-        Some(VersionOrUrl::VersionSpecifier(v)) => Ok(NamelessMatchSpec::from_str(
-            v.to_string().as_str(),
-            Lenient,
-        )?),
-        Some(VersionOrUrl::Url(_)) => Err(RequirementConversionError::Unimplemented),
+        Some(v) => {
+            let version_string = v.to_string();
+            // Double equals works a bit different in conda vs. python
+            let version_string = version_string.strip_prefix("==").unwrap_or(&version_string);
+
+            Ok(NamelessMatchSpec::from_str(version_string, Lenient)?)
+        }
         None => Ok(NamelessMatchSpec {
             version: Some(VersionSpec::Any),
             ..Default::default()
@@ -147,45 +160,83 @@ fn version_or_url_to_nameless_matchspec(
     }
 }
 
-/// Builds a list of pixi environments from pyproject groups of extra dependencies:
-///  - one environment is created per group of extra, with the same name as the group of extra
-///  - each environment includes the feature of the same name as the group of extra
-///  - it will also include other features inferred from any self references to other groups of extras
-pub fn environments_from_extras(pyproject: &PyProjectToml) -> HashMap<String, Vec<String>> {
-    let mut environments = HashMap::new();
-    if let Some(Some(extras)) = &pyproject.project.as_ref().map(|p| &p.optional_dependencies) {
-        let pname = &pyproject
-            .project
-            .as_ref()
-            .map(|p| pep508_rs::PackageName::new(p.name.clone()).unwrap());
-        for (extra, reqs) in extras {
-            let mut features = vec![extra.to_string()];
-            // Add any references to other groups of extra dependencies
-            for req in reqs.iter() {
-                if pname.as_ref().is_some_and(|n| n == &req.name) {
-                    for extra in &req.extras {
-                        features.push(extra.to_string())
-                    }
-                }
-            }
-            environments.insert(extra.clone(), features);
-        }
-    }
-    environments
+/// A struct wrapping pyproject_toml::PyProjectToml
+/// ensuring it has a project table
+///
+/// This is used during 'pixi init' to parse a potentially non-pixi 'pyproject.toml'
+pub struct PyProjectToml {
+    inner: pyproject_toml::PyProjectToml,
 }
 
-/// Parses a non-pixi pyproject.toml string.
-pub fn pyproject(source: &str) -> Result<PyProjectToml, Report> {
-    match toml_edit::de::from_str::<PyProjectToml>(source).map_err(TomlError::from) {
-        Err(e) => e.to_fancy("pyproject.toml", source),
-        Ok(pyproject) => {
-            // Make sure [project] exists in pyproject.toml,
-            // This will ensure project.name is defined
-            if pyproject.project.is_none() {
-                TomlError::NoProjectTable.to_fancy("pyproject.toml", source)
-            } else {
-                Ok(pyproject)
+impl PyProjectToml {
+    /// Parses a non-pixi pyproject.toml string into a PyProjectToml struct
+    /// making sure it contains a 'project' table
+    pub fn from(source: &str) -> Result<PyProjectToml, Report> {
+        match toml_edit::de::from_str::<pyproject_toml::PyProjectToml>(source)
+            .map_err(TomlError::from)
+        {
+            Err(e) => e.to_fancy("pyproject.toml", source),
+            Ok(pyproject) => {
+                // Make sure [project] exists in pyproject.toml,
+                // This will ensure project.name is defined
+                if pyproject.project.is_none() {
+                    TomlError::NoProjectTable.to_fancy("pyproject.toml", source)
+                } else {
+                    Ok(PyProjectToml { inner: pyproject })
+                }
             }
+        }
+    }
+
+    pub fn name(&self) -> String {
+        self.project().name.clone()
+    }
+
+    pub fn project(&self) -> &Project {
+        self.inner.project.as_ref().unwrap()
+    }
+
+    /// Builds a list of pixi environments from pyproject groups of extra dependencies:
+    ///  - one environment is created per group of extra, with the same name as the group of extra
+    ///  - each environment includes the feature of the same name as the group of extra
+    ///  - it will also include other features inferred from any self references to other groups of extras
+    pub fn environments_from_extras(&self) -> HashMap<String, Vec<String>> {
+        let mut environments = HashMap::new();
+        if let Some(extras) = &self.project().optional_dependencies {
+            let pname = pep508_rs::PackageName::new(self.name()).unwrap();
+            for (extra, reqs) in extras {
+                let mut features = vec![extra.to_string()];
+                // Add any references to other groups of extra dependencies
+                for req in reqs.iter() {
+                    if pname == req.name {
+                        for extra in &req.extras {
+                            features.push(extra.to_string())
+                        }
+                    }
+                }
+                // Environments can only contain number, strings and dashes
+                environments.insert(extra.replace('_', "-").clone(), features);
+            }
+        }
+        environments
+    }
+
+    /// Checks whether a path is a valid `pyproject.toml` for use with pixi by checking if it
+    /// contains a `[tool.pixi.project]` item.
+    pub fn is_pixi(path: &PathBuf) -> bool {
+        let source = fs::read_to_string(path).unwrap();
+        Self::is_pixi_str(&source).unwrap_or(false)
+    }
+    /// Checks whether a string is a valid `pyproject.toml` for use with pixi by checking if it
+    /// contains a `[tool.pixi.project]` item.
+    pub fn is_pixi_str(source: &str) -> Result<bool, Report> {
+        match source.parse::<DocumentMut>().map_err(TomlError::from) {
+            Err(e) => e.to_fancy("pyproject.toml", source),
+            Ok(doc) => Ok(doc
+                .get("tool")
+                .and_then(|t| t.get("pixi"))
+                .and_then(|p| p.get("project"))
+                .is_some()),
         }
     }
 }
@@ -196,6 +247,8 @@ mod tests {
     use std::str::FromStr;
 
     use insta::assert_snapshot;
+    use pep440_rs::VersionSpecifiers;
+    use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use crate::{
         project::manifest::{python::PyPiPackageName, Manifest, PyPiRequirement},
@@ -376,11 +429,34 @@ mod tests {
         let name = PyPiPackageName::from_str("numpy").unwrap();
         let requirement = PyPiRequirement::RawVersion(">=3.12".parse().unwrap());
         manifest
-            .add_pypi_dependency(&name, &requirement, None)
+            .add_pypi_dependency(&name, &requirement, None, &FeatureName::Default)
             .unwrap();
 
         assert!(manifest
             .default_feature_mut()
+            .targets
+            .for_opt_target(None)
+            .unwrap()
+            .pypi_dependencies
+            .as_ref()
+            .unwrap()
+            .get(&name)
+            .is_some());
+
+        // Add numpy to feature in pyproject
+        let name = PyPiPackageName::from_str("pytest").unwrap();
+        let requirement = PyPiRequirement::RawVersion(">=3.12".parse().unwrap());
+        manifest
+            .add_pypi_dependency(
+                &name,
+                &requirement,
+                None,
+                &FeatureName::Named("test".to_string()),
+            )
+            .unwrap();
+        assert!(manifest
+            .feature(&FeatureName::Named("test".to_string()))
+            .unwrap()
             .targets
             .for_opt_target(None)
             .unwrap()
@@ -416,5 +492,23 @@ mod tests {
             .is_none());
 
         assert_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_version_url_to_matchspec() {
+        fn cmp(v1: &str, v2: &str) {
+            let v = VersionSpecifiers::from_str(v1).unwrap();
+            let matchspec = super::version_or_url_to_nameless_matchspec(&Some(v)).unwrap();
+            let vspec = VersionSpec::from_str(v2, ParseStrictness::Strict).unwrap();
+            assert_eq!(matchspec.version, Some(vspec));
+        }
+
+        // Check that we remove leading `==` for the conda version spec
+        cmp("==3.12", "3.12");
+        cmp("==3.12.*", "3.12.*");
+        // rest should work just fine
+        cmp(">=3.12", ">=3.12");
+        cmp(">=3.10,<3.12", ">=3.10,<3.12");
+        cmp("~=3.12", "~=3.12");
     }
 }

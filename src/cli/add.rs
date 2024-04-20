@@ -176,6 +176,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             add_pypi_specs_to_project(
                 &mut project,
+                &feature_name,
                 specs,
                 spec_platforms,
                 args.no_lockfile_update,
@@ -218,6 +219,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 pub async fn add_pypi_specs_to_project(
     project: &mut Project,
+    feature_name: &FeatureName,
     specs: Vec<(PyPiPackageName, PyPiRequirement)>,
     specs_platforms: &[Platform],
     no_update_lockfile: bool,
@@ -227,12 +229,14 @@ pub async fn add_pypi_specs_to_project(
         // TODO: Get best version
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.manifest.add_pypi_dependency(name, spec, None)?;
+            project
+                .manifest
+                .add_pypi_dependency(name, spec, None, feature_name)?;
         } else {
             for platform in specs_platforms.iter() {
                 project
                     .manifest
-                    .add_pypi_dependency(name, spec, Some(*platform))?;
+                    .add_pypi_dependency(name, spec, Some(*platform), feature_name)?;
             }
         }
     }

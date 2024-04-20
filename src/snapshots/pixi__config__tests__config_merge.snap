@@ -36,6 +36,7 @@ Config {
             query: None,
             fragment: None,
         },
+        root_dir: "/root/dir",
     },
     repodata_config: Some(
         RepodataConfig {

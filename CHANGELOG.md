@@ -5,6 +5,108 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2024-04-19
+### ✨ Highlights
+
+- We now support `env` variables in the `task` definition, these can also be used as default values for parameters in your task which you can overwrite with your shell's env variables.
+e.g. `task = { cmd = "task to run", env = { VAR="value1", PATH="my/path:$PATH" } }`
+- We made a big effort on fixing issues and improving documentation!
+
+### 📃 Details
+#### Added
+- Add `env` to the tasks to specify tasks specific environment variables by @wolfv in https://github.com/prefix-dev/pixi/pull/972
+
+#### Changed
+- Add `--pyproject` option to `pixi init` with a pyproject.toml by @olivier-lacroix in [#1188](https://github.com/prefix-dev/pixi/pull/1188)
+- Upgrade to new uv version 0.1.32 by @tdejager in [#1208](https://github.com/prefix-dev/pixi/pull/1208)
+
+#### Documentation
+- Document `pixi.lock` by @ruben-arts in [#1209](https://github.com/prefix-dev/pixi/pull/1209)
+- Document channel `priority` definition by @ruben-arts in [#1234](https://github.com/prefix-dev/pixi/pull/1234)
+- Add rust tutorial including openssl example by @ruben-arts in [#1155](https://github.com/prefix-dev/pixi/pull/1155)
+- Add python tutorial to documentation by @tdejager in [#1179](https://github.com/prefix-dev/pixi/pull/1179)
+- Add JupyterLab integration docs by @renan-r-santos in [#1147](https://github.com/prefix-dev/pixi/pull/1147)
+
+- Add Windows support for PyCharm integration by @pavelzw in [#1192](https://github.com/prefix-dev/pixi/pull/1192)
+- Setup_pixi for local pixi installation by @ytausch in [#1181](https://github.com/prefix-dev/pixi/pull/1181)
+- Update pypi docs by @Hofer-Julian in [#1215](https://github.com/prefix-dev/pixi/pull/1215)
+- Fix order of `--no-deps` when pip installing in editable mode by @glemaitre in [#1220](https://github.com/prefix-dev/pixi/pull/1220)
+- Fix frozen documentation by @ruben-arts in [#1167](https://github.com/prefix-dev/pixi/pull/1167)
+
+#### Fixed
+- Small typo in list cli by @tdejager in [#1169](https://github.com/prefix-dev/pixi/pull/1169)
+- Issue with invalid solve group by @baszalmstra in [#1190](https://github.com/prefix-dev/pixi/pull/1190)
+- Improve error on parsing lockfile by @ruben-arts in [#1180](https://github.com/prefix-dev/pixi/pull/1180)
+- Replace `_` with `-` when creating environments from features by @wolfv in [#1203](https://github.com/prefix-dev/pixi/pull/1203)
+- Prevent duplicate direct dependencies in tree by @abkfenris in [#1184](https://github.com/prefix-dev/pixi/pull/1184)
+- Use project root directory instead of task.working_directory for base dir when hashing by @wolfv in [#1202](https://github.com/prefix-dev/pixi/pull/1202)
+- Do not leak env vars from bat scripts in cmd.exe by @wolfv in [#1205](https://github.com/prefix-dev/pixi/pull/1205)
+- Make file globbing behave more as expected by @wolfv in [#1204](https://github.com/prefix-dev/pixi/pull/1204)
+- Fix for using file::// in pyproject.toml dependencies by @tdejager in [#1196](https://github.com/prefix-dev/pixi/pull/1196)
+- Improve pypi version conversion in pyproject.toml dependencies by @wolfv in [#1201](https://github.com/prefix-dev/pixi/pull/1201)
+- Update to the latest rattler by @wolfv in [#1235](https://github.com/prefix-dev/pixi/pull/1235)
+
+#### **BREAKING**
+- `task = { cmd = "task to run", cwd = "folder", inputs = "input.txt", output = "output.txt"}` Where `input.txt` and `output.txt` where previously in `folder` they are now relative the project root. This changed in: [#1202](https://github.com/prefix-dev/pixi/pull/1202)
+- `task = { cmd = "task to run", inputs = "input.txt"}` previously searched for all `input.txt` files now only for the ones in the project root. This changed in:  [#1204](https://github.com/prefix-dev/pixi/pull/1204)
+
+## New Contributors
+* @glemaitre made their first contribution in [#1220](https://github.com/prefix-dev/pixi/pull/1220)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.19.1..v0.20.0)
+
+
+## [0.19.1] - 2024-04-11
+### ✨ Highlights
+This fixes the issue where pixi would generate broken environments/lockfiles when a mapping for a brand-new version of a package is missing.
+
+### 📃 Details
+- Add fallback mechanism for missing mapping by @nichmor in [#1166](https://github.com/prefix-dev/pixi/pull/1166)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.19.0..v0.19.1)
+
+## [0.19.0] - 2024-04-10
+### ✨ Highlights
+- This release adds a new `pixi tree` command to show the dependency tree of the project.
+- Pixi now persists the manifest and environment when activating a shell, so you can use pixi as if you are in that folder while in the shell.
+
+### 📃 Details
+#### Added
+- `pixi tree` command to show dependency tree by @abkfenris in [#1069](https://github.com/prefix-dev/pixi/pull/1069)
+- Persistent shell manifests by @abkfenris in [#1080](https://github.com/prefix-dev/pixi/pull/1080)
+- Add to pypi in feature (`pixi add --feature test --pypi package`) by @ruben-arts in [#1135](https://github.com/prefix-dev/pixi/pull/1135)
+- Use new mapping by @nichmor in [#888](https://github.com/prefix-dev/pixi/pull/888)
+- `--no-progress` to disable all progress bars by @baszalmstra in [#1105](https://github.com/prefix-dev/pixi/pull/1105)
+- Create a table if channel is specified (`pixi add conda-forge::rattler-build`) by @baszalmstra in [#1079](https://github.com/prefix-dev/pixi/pull/1079)
+
+#### Changed
+- Add the project itself as an editable dependency by @olivier-lacroix in [#1084](https://github.com/prefix-dev/pixi/pull/1084)
+- Get `tool.pixi.project.name` from `project.name` by @olivier-lacroix in [#1112](https://github.com/prefix-dev/pixi/pull/1112)
+- Create `features` and `environments` from extras by @olivier-lacroix in [#1077](https://github.com/prefix-dev/pixi/pull/1077)
+- Pypi supports come out of Beta by @olivier-lacroix in [#1120](https://github.com/prefix-dev/pixi/pull/1120)
+- Enable to force `PIXI_ARCH` for pixi installation by @beenje in [#1129](https://github.com/prefix-dev/pixi/pull/1129)
+- Improve tool.pixi.project detection logic by @olivier-lacroix in [#1127](https://github.com/prefix-dev/pixi/pull/1127)
+- Add purls for packages if adding pypi dependencies by @nichmor in [#1148](https://github.com/prefix-dev/pixi/pull/1148)
+- Add env name if not default to `tree` and `list` commands by @ruben-arts in [#1145](https://github.com/prefix-dev/pixi/pull/1145)
+
+#### Documentation
+- Add MODFLOW 6 to community docs by @Hofer-Julian in [#1125](https://github.com/prefix-dev/pixi/pull/1125)
+- Addition of ros2 tutorial by @ruben-arts in [#1116](https://github.com/prefix-dev/pixi/pull/1116)
+- Improve install script docs by @ruben-arts in [#1136](https://github.com/prefix-dev/pixi/pull/1136)
+- More structured table of content by @tdejager in [#1142](https://github.com/prefix-dev/pixi/pull/1142)
+
+#### Fixed
+- Amend syntax in `conda-meta/history` to prevent `conda.history.History.parse()` error by @jaimergp in [#1117](https://github.com/prefix-dev/pixi/pull/1117)
+- Fix docker example and include `pyproject.toml` by @tdejager in [#1121](https://github.com/prefix-dev/pixi/pull/1121)
+
+## New Contributors
+* @abkfenris made their first contribution in [#1069](https://github.com/prefix-dev/pixi/pull/1069)
+* @beenje made their first contribution in [#1129](https://github.com/prefix-dev/pixi/pull/1129)
+* @jaimergp made their first contribution in [#1117](https://github.com/prefix-dev/pixi/pull/1117)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.18.0..v0.19.0)
+
+
 ## [0.18.0] - 2024-04-02
 ### ✨ Highlights
 - This release adds support for `pyproject.toml`, now pixi reads from the `[tool.pixi]` table.
@@ -31,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add lockfile update description in preparation for pixi update by @ruben-arts in [#1073](https://github.com/prefix-dev/pixi/pull/1073)
 - `zsh` may be used for installation on macOS by @pya in [#1091](https://github.com/prefix-dev/pixi/pull/1091)
 - Fix typo in `pixi auth` documentation by @ytausch in [#1076](https://github.com/prefix-dev/pixi/pull/1076)
+- Add `rstudio` to the IDE integration docs by @wolfv in [#1144](https://github.com/prefix-dev/pixi/pull/1144)
 
 #### Fixed
 - Test failure on riscv64 by @hack3ric in [#1045](https://github.com/prefix-dev/pixi/pull/1045)

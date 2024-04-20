@@ -105,12 +105,14 @@ pixi run style
 ```
 
 ## Working directory
+
 Pixi tasks support the definition of a working directory.
 
 `cwd`" stands for Current Working Directory.
 The directory is relative to the pixi package root, where the `pixi.toml` file is located.
 
 Consider a pixi project structured as follows:
+
 ```shell
 ├── pixi.toml
 └── scripts
@@ -118,11 +120,13 @@ Consider a pixi project structured as follows:
 ```
 
 To add a task to run the `bar.py` file, use:
+
 ```shell
 pixi task add bar "python bar.py" --cwd scripts
 ```
 
-This will add the following line to [manifest file](../configuration.md):
+This will add the following line to [manifest file](../reference/configuration.md):
+
 ```toml title="pixi.toml"
 [tasks]
 bar = { cmd = "python bar.py", cwd = "scripts" }
@@ -163,6 +167,34 @@ Note: if you want to debug the globs you can use the `--verbose` flag to see whi
 pixi run -v start
 ```
 
+## Environment variables
+You can set environment variables for a task.
+These are seen as "default" values for the variables as you can overwrite them from the shell.
+
+```toml title="pixi.toml"
+[tasks]
+echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
+```
+If you run `pixi run echo` it will output `hello`.
+When you set the environment variable `ARGUMENT` before running the task, it will use that value instead.
+
+```shell
+ARGUMENT=world pixi run echo
+✨ Pixi task (echo in default): echo $ARGUMENT
+world
+```
+
+These variables are not shared over tasks, so you need to define these for every task you want to use them in.
+
+!!! note "Extend instead of overwrite"
+    If you use the same environment variable in the value as in the key of the map you will also overwrite the variable.
+    For example overwriting a `PATH`
+    ```toml title="pixi.toml"
+    [tasks]
+    echo = { cmd = "echo $PATH", env = { PATH = "/tmp/path:$PATH" } }
+    ```
+    This will output `/tmp/path:/usr/bin:/bin` instead of the original `/usr/bin:/bin`.
+
 ## Our task runner: deno_task_shell
 
 To support the different OS's (Windows, OSX and Linux), pixi integrates a shell that can run on all of them.
@@ -170,6 +202,7 @@ This is [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#b
 The task shell is a limited implementation of a bourne-shell interface.
 
 ### Built-in commands
+
 Next to running actual executable like `./myprogram`, `cmake` or `python` the shell has some built-in commandos.
 
 - `cp`: Copies files.
@@ -190,30 +223,30 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
 ### Syntax
 
 - **Boolean list:** use `&&` or `||` to separate two commands.
-    - `&&`: if the command before `&&` succeeds continue with the next command.
-    - `||`: if the command before `||` fails continue with the next command.
+  - `&&`: if the command before `&&` succeeds continue with the next command.
+  - `||`: if the command before `||` fails continue with the next command.
 - **Sequential lists:** use `;` to run two commands without checking if the first command failed or succeeded.
 - **Environment variables:**
-    - Set env variable using: `export ENV_VAR=value`
-    - Use env variable using: `$ENV_VAR`
-    - unset env variable using `unset ENV_VAR`
+  - Set env variable using: `export ENV_VAR=value`
+  - Use env variable using: `$ENV_VAR`
+  - unset env variable using `unset ENV_VAR`
 - **Shell variables:** Shell variables are similar to environment variables, but won’t be exported to spawned commands.
-    - Set them: `VAR=value`
-    - use them: `VAR=value && echo $VAR`
+  - Set them: `VAR=value`
+  - use them: `VAR=value && echo $VAR`
 - **Pipelines:** Use the stdout output of a command into the stdin a following command
-    - `|`: `echo Hello | python receiving_app.py`
-    - `|&`: use this to also get the stderr as input.
+  - `|`: `echo Hello | python receiving_app.py`
+  - `|&`: use this to also get the stderr as input.
 - **Command substitution:** `$()` to use the output of a command as input for another command.
-    - `python main.py $(git rev-parse HEAD)`
+  - `python main.py $(git rev-parse HEAD)`
 - **Negate exit code:** `! ` before any command will negate the exit code from 1 to 0 or visa-versa.
 - **Redirects:** `>` to redirect the stdout to a file.
-    - `echo hello > file.txt` will put `hello` in `file.txt` and overwrite existing text.
-    - `python main.py 2> file.txt` will put the `stderr` output in `file.txt`.
-    - `python main.py &> file.txt` will put the `stderr` **and** `stdout` in `file.txt`.
-    - `echo hello > file.txt` will append `hello` to the existing `file.txt`.
+  - `echo hello > file.txt` will put `hello` in `file.txt` and overwrite existing text.
+  - `python main.py 2> file.txt` will put the `stderr` output in `file.txt`.
+  - `python main.py &> file.txt` will put the `stderr` **and** `stdout` in `file.txt`.
+  - `echo hello > file.txt` will append `hello` to the existing `file.txt`.
 - **Glob expansion:** `*` to expand all options.
-    - `echo *.py` will echo all filenames that end with `.py`
-    - `echo **/*.py` will echo all filenames that end with `.py` in this directory and all descendant directories.
-    - `echo data[0-9].csv` will echo all filenames that have a single number after `data` and before `.csv`
+  - `echo *.py` will echo all filenames that end with `.py`
+  - `echo **/*.py` will echo all filenames that end with `.py` in this directory and all descendant directories.
+  - `echo data[0-9].csv` will echo all filenames that have a single number after `data` and before `.csv`
 
 More info in [`deno_task_shell` documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner).

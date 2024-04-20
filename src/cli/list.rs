@@ -21,7 +21,9 @@ use crate::Project;
 pub enum SortBy {
     Size,
     Name,
-    Type,
+    // BREAK: remove the alias
+    #[value(alias = "type")]
+    Kind,
 }
 
 /// List project's packages. Highlighted packages are explicit dependencies.
@@ -146,6 +148,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &uv_context.cache,
             &tags,
             &uv_context.index_locations,
+            &uv_types::HashStrategy::None,
         ))
     } else {
         None
@@ -187,7 +190,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         SortBy::Name => {
             packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
         }
-        SortBy::Type => {
+        SortBy::Kind => {
             packages_to_output.sort_by(|a, b| a.kind.cmp(&b.kind));
         }
     }
@@ -206,6 +209,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // print packages as json
         json_packages(&packages_to_output, args.json_pretty);
     } else {
+        if !environment_name.is_default() {
+            eprintln!("Environment: {}", environment_name.fancy_display());
+        }
+
         // print packages as table
         print_packages_as_table(&packages_to_output).expect("an io error occurred");
     }

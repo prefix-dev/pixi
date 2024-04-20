@@ -62,9 +62,9 @@ fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result
 
     // Add a shebang on unix based platforms
     let script = if cfg!(unix) {
-        format!("#!/bin/sh\n{}", result.script)
+        format!("#!/bin/sh\n{}", result.script.contents().into_diagnostic()?)
     } else {
-        result.script
+        result.script.contents().into_diagnostic()?
     };
 
     Ok(script)
@@ -209,11 +209,18 @@ pub(super) async fn create_executable_scripts(
             .run_command(
                 &mut script,
                 [
-                    format!(r###""{}""###, prefix.root().join(exec).to_string_lossy()).as_str(),
+                    format!("\"{}\"", prefix.root().join(exec).to_string_lossy()).as_str(),
                     get_catch_all_arg(shell),
                 ],
             )
             .expect("should never fail");
+
+        if matches!(shell, ShellEnum::CmdExe(_)) {
+            // wrap the script contents in `@echo off` and `setlocal` to prevent echoing the script
+            // and to prevent leaking environment variables into the parent shell (e.g. PATH would grow longer and longer)
+            script = format!("@echo off\nsetlocal\n{}\nendlocal", script);
+        }
+
         tokio::fs::write(&executable_script_path, script)
             .await
             .into_diagnostic()?;
@@ -365,6 +372,7 @@ pub(super) async fn globally_install_package(
     // Construct the reusable activation script for the shell and generate an invocation script
     // for each executable added by the package to the environment.
     let activation_script = create_activation_script(&prefix, shell.clone())?;
+
     let bin_dir = BinDir::create().await?;
     let script_mapping =
         find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;

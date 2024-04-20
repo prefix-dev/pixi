@@ -9,7 +9,7 @@ mod satisfiability;
 mod update;
 
 use crate::Project;
-use miette::IntoDiagnostic;
+use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::RepoDataRecord;
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 
@@ -35,9 +35,18 @@ pub async fn load_lock_file(project: &Project) -> miette::Result<LockFile> {
     let lock_file_path = project.lock_file_path();
     if lock_file_path.is_file() {
         // Spawn a background task because loading the file might be IO bound.
-        tokio::task::spawn_blocking(move || LockFile::from_path(&lock_file_path).into_diagnostic())
-            .await
-            .unwrap_or_else(|e| Err(e).into_diagnostic())
+        tokio::task::spawn_blocking(move || {
+            LockFile::from_path(&lock_file_path)
+                .into_diagnostic()
+                .wrap_err_with(|| {
+                    format!(
+                        "Failed to load lock file from `{}`",
+                        lock_file_path.display()
+                    )
+                })
+        })
+        .await
+        .unwrap_or_else(|e| Err(e).into_diagnostic())
     } else {
         Ok(LockFile::default())
     }
