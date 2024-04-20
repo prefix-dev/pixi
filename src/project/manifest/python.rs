@@ -209,24 +209,63 @@ impl From<PyPiRequirement> for toml_edit::Value {
                 toml_edit::Value::InlineTable(table.to_owned())
             }
             PyPiRequirement::Git {
-                git: _,
-                branch: _,
-                tag: _,
-                rev: _,
+                git,
+                branch,
+                tag,
+                rev,
                 subdirectory: _,
-                extras: _,
+                extras,
             } => {
-                todo!("git")
+                let mut table = toml_edit::Table::new().into_inline_table();
+                table.insert("git", toml_edit::Value::String(toml_edit::Formatted::new(git.to_string())));
+                if let Some(branch) = branch {
+                    table.insert(
+                        "branch",
+                        toml_edit::Value::String(toml_edit::Formatted::new(branch.clone())),
+                    );
+                }
+                if let Some(tag) = tag {
+                    table.insert(
+                        "tag",
+                        toml_edit::Value::String(toml_edit::Formatted::new(tag.clone())),
+                    );
+                }
+                if let Some(rev) = rev {
+                    table.insert(
+                        "rev",
+                        toml_edit::Value::String(toml_edit::Formatted::new(rev.clone())),
+                    );
+                }
+                insert_extras(&mut table, extras);
+                toml_edit::Value::InlineTable(table.to_owned())
             }
             PyPiRequirement::Path {
-                path: _,
-                editable: _,
-                extras: _,
+                path,
+                editable,
+                extras,
             } => {
-                todo!("path")
+                let mut table = toml_edit::Table::new().into_inline_table();
+                table.insert(
+                    "path",
+                    toml_edit::Value::String(toml_edit::Formatted::new(path.to_string_lossy().to_string())),
+                );
+                if editable == &Some(true) {
+                    table.insert(
+                        "editable",
+                        toml_edit::Value::Boolean(toml_edit::Formatted::new(true)),
+                    );
+                }
+                insert_extras(&mut table, extras);
+                toml_edit::Value::InlineTable(table.to_owned())
             }
-            PyPiRequirement::Url { url: _, extras: _ } => {
-                unimplemented!("url")
+            PyPiRequirement::Url { url, extras } => {
+                let mut table = toml_edit::Table::new().into_inline_table();
+                table.insert(
+                    "url",
+                    toml_edit::Value::String(toml_edit::Formatted::new(url.to_string())),
+                );
+                insert_extras(&mut table, extras);
+                toml_edit::Value::InlineTable(table.to_owned())
             }
             PyPiRequirement::RawVersion(version) => {
                 toml_edit::Value::String(toml_edit::Formatted::new(version.to_string()))
