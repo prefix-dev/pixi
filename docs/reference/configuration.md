@@ -619,13 +619,16 @@ The `environments` table allows you to define environments that are created usin
 
 The environments table is defined using the following fields:
 
-- `features`: The features that are included in the environment, which is also the default field in the environments. Unless `no-default-feature` is set to `true`; the default feature is always included.
+- `features`: The features that are included in the environment, which is also the default field in the environments. Unless `include-from-default` or `exclude-from-default` are set, all components of the default feature are included.
 - `solve-group`: The solve group is used to group environments together at the solve stage.
   This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
   For instance when testing a production environment with additional test dependencies.
   These dependencies will then be the same version in all environments that have the same solve group.
   But the different environments contain different subsets of the solve-groups dependencies set.
-- `no-default-feature`: Whether to include the default feature in that environment. The default is to include the default feature.
+- `include-from-default`: It is used to list the components of the default feature to include in that environment. Other components of the default feature are excluded.
+- `exclude-from-default`: It is used to list the components of the default feature to exclude from that environment. Other components of the default feature are included.
+
+Note that only one of `include-from-default` and `exclude-from-default` can be specified for a given environment. Valid components are: "system-requirements", "channels", "platforms", "dependencies", "pypi-dependencies", "activation", "tasks".
 
 ```toml title="Simplest example"
 [environments]
@@ -636,7 +639,7 @@ test = ["test"]
 [environments]
 test = {features = ["test"], solve-group = "test"}
 prod = {features = ["prod"], solve-group = "test"}
-lint = ["lint"]
+lint = {features = ["lint"], include-from-default = ["channels", "platforms"]}
 ```
 
 ## Global configuration

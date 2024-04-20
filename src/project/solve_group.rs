@@ -228,7 +228,7 @@ mod tests {
         [environments]
         foo = { features=["foo"], solve-group="group1" }
         bar = { features=["bar"], solve-group="group1" }
-        baz = { features=["bar"], solve-group="group2", no-default-feature=true }
+        baz = { features=["bar"], solve-group="group2", exclude-from-default=["dependencies"] }
         "#,
         )
         .unwrap();
