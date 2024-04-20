@@ -1,7 +1,10 @@
 use super::{
     dependencies::Dependencies,
     errors::{UnknownTask, UnsupportedPlatformError},
-    manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
+    manifest::{
+        self, channel::PrioritizedChannel, EnvironmentName, Feature, FeatureName,
+        SystemRequirements,
+    },
     PyPiRequirement, SolveGroup, SpecType,
 };
 use crate::project::manifest::python::PyPiPackageName;
@@ -127,7 +130,7 @@ impl<'p> Environment<'p> {
         }
     }
 
-    /// Returns the channels associated with this environment.
+    /// Returns the prioritized channels associated with this environment.
     ///
     /// Users can specify custom channels on a per feature basis. This method collects and
     /// deduplicates all the channels from all the features in the order they are defined in the
@@ -136,7 +139,7 @@ impl<'p> Environment<'p> {
     /// If a feature does not specify any channel the default channels from the project metadata are
     /// used instead. However, these are not considered during deduplication. This means the default
     /// channels are always added to the end of the list.
-    pub fn channels(&self) -> IndexSet<&'p Channel> {
+    pub fn prioritized_channels(&self) -> IndexSet<&'p PrioritizedChannel> {
         self.features(self.environment.from_default_feature.channels)
             .filter_map(|feature| match feature.name {
                 // Use the user-specified channels of each feature if the feature defines them. Only
@@ -157,6 +160,21 @@ impl<'p> Environment<'p> {
                 let b = b.priority.unwrap_or(0);
                 b.cmp(&a)
             })
+            .collect()
+    }
+
+    /// Returns the channels associated with this environment.
+    ///
+    /// Users can specify custom channels on a per feature basis. This method collects and
+    /// deduplicates all the channels from all the features in the order they are defined in the
+    /// manifest.
+    ///
+    /// If a feature does not specify any channel the default channels from the project metadata are
+    /// used instead. However, these are not considered during deduplication. This means the default
+    /// channels are always added to the end of the list.
+    pub fn channels(&self) -> IndexSet<&'p Channel> {
+        self.prioritized_channels()
+            .iter()
             .map(|prioritized_channel| &prioritized_channel.channel)
             .collect()
     }

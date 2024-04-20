@@ -1,11 +1,10 @@
 use super::{manifest, Dependencies, Environment, Project};
 use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::{PyPiRequirement, SystemRequirements};
-use crate::{FeatureName, SpecType};
+use crate::SpecType;
 use indexmap::{IndexMap, IndexSet};
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 use rattler_conda_types::{Channel, Platform};
-use std::borrow::Cow;
 use std::hash::Hash;
 use std::path::PathBuf;
 
@@ -65,50 +64,27 @@ impl<'p> SolveGroup<'p> {
         })
     }
 
-    /// Returns all features that are part of the solve group.
-    ///
-    /// If `include_default` is `true` the default feature is also included.
-    ///
-    /// All features of all environments are combined and deduplicated.
-    pub fn features(
-        &self,
-        include_default: bool,
-    ) -> impl DoubleEndedIterator<Item = &'p manifest::Feature> + 'p {
-        self.environments()
-            .flat_map(move |env| env.features(include_default))
-            .unique_by(|feat| &feat.name)
-    }
-
     /// Returns the system requirements for this solve group.
     ///
     /// The system requirements of the solve group are the union of the system requirements of all
     /// the environments that share the same solve group. If multiple environments specify a
     /// requirement for the same system package, the highest is chosen.
     pub fn system_requirements(&self) -> SystemRequirements {
-        let include_default = self
-            .environments()
-            .any(|e| e.manifest().from_default_feature.system_requirements);
-        self.features(include_default)
-            .map(|feature| &feature.system_requirements)
-            .fold(SystemRequirements::default(), |acc, req| {
-                acc.union(req)
-                    .expect("system requirements should have been validated upfront")
-            })
+        self.environments()
+            .map(|e| e.local_system_requirements())
+            .reduce(|acc, req| acc.union(&req).unwrap())
+            .unwrap_or_default()
     }
 
     /// Returns all the dependencies of the solve group.
     ///
     /// The dependencies of all features of all environments are combined. This means that if two
     /// features define a requirement for the same package that both requirements are returned. The
-    /// different requirements per package are sorted in the same order as the features they came
+    /// different requirements per package are sorted in the same order as the environment they came
     /// from.
     pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
-        let include_default = self
-            .environments()
-            .any(|e| e.manifest().from_default_feature.dependencies);
-        self.features(include_default)
-            .filter_map(|feat| feat.dependencies(kind, platform))
-            .map(|deps| Dependencies::from(deps.into_owned()))
+        self.environments()
+            .map(|e| e.dependencies(kind, platform))
             .reduce(|acc, deps| acc.union(&deps))
             .unwrap_or_default()
     }
@@ -118,62 +94,34 @@ impl<'p> SolveGroup<'p> {
     /// The dependencies of all features of all environments in the solve group are combined. This
     /// means that if two features define a requirement for the same package that both requirements
     /// are returned. The different requirements per package are sorted in the same order as the
-    /// features they came from.
+    /// environments they came from.
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
     ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
-        let include_default = self
-            .environments()
-            .any(|e| e.manifest().from_default_feature.pypi_dependencies);
-        self.features(include_default)
-            .filter_map(|f| f.pypi_dependencies(platform))
-            .fold(IndexMap::default(), |mut acc, deps| {
-                // Either clone the values from the Cow or move the values from the owned map.
-                let deps_iter = match deps {
-                    Cow::Borrowed(borrowed) => Either::Left(
-                        borrowed
-                            .into_iter()
-                            .map(|(name, spec)| (name.clone(), spec.clone())),
-                    ),
-                    Cow::Owned(owned) => Either::Right(owned.into_iter()),
-                };
-
-                // Add the requirements to the accumulator.
-                for (name, spec) in deps_iter {
-                    acc.entry(name).or_default().push(spec);
+        self.environments()
+            .map(|e| e.pypi_dependencies(platform))
+            .reduce(|mut acc, deps| {
+                for (name, spec) in deps {
+                    let entry = acc.entry(name).or_default();
+                    for item in spec {
+                        if !entry.contains(&item) {
+                            entry.push(item);
+                        }
+                    }
                 }
-
                 acc
             })
+            .unwrap_or_default()
     }
 
     /// Returns the channels associated with this solve group.
     ///
     /// Users can specify custom channels on a per-feature basis. This method collects and
-    /// deduplicates all the channels from all the features in the order they are defined in the
-    /// manifest.
-    ///
-    /// If a feature does not specify any channel the default channels from the project metadata are
-    /// used instead. However, these are not considered during deduplication. This means the default
-    /// channels are always added to the end of the list.
+    /// deduplicates all the channels from all the environments and returns them by priority.
     pub fn channels(&self) -> IndexSet<&'p Channel> {
-        let include_default = self
-            .environments()
-            .any(|e| e.manifest().from_default_feature.channels);
-        self.features(include_default)
-            .filter_map(|feature| match feature.name {
-                // Use the user-specified channels of each feature if the feature defines them. Only
-                // for the default feature do we use the default channels from the project metadata
-                // if the feature itself does not specify any channels. This guarantees that the
-                // channels from the default feature are always added to the end of the list.
-                FeatureName::Named(_) => feature.channels.as_deref(),
-                FeatureName::Default => feature
-                    .channels
-                    .as_deref()
-                    .or(Some(&self.project.manifest.parsed.project.channels)),
-            })
-            .flatten()
+        self.environments()
+            .flat_map(|e| e.prioritized_channels())
             // The prioritized channels contain a priority, sort on this priority.
             // Higher priority comes first. [-10, 1, 0 ,2] -> [2, 1, 0, -10]
             .sorted_by(|a, b| {
@@ -182,16 +130,13 @@ impl<'p> SolveGroup<'p> {
                 b.cmp(&a)
             })
             .map(|prioritized_channel| &prioritized_channel.channel)
+            .unique()
             .collect()
     }
 
     /// Returns true if any of the environments contain a feature with any reference to a pypi dependency.
     pub fn has_pypi_dependencies(&self) -> bool {
-        let include_default = self
-            .environments()
-            .any(|e| e.manifest().from_default_feature.pypi_dependencies);
-        self.features(include_default)
-            .any(|f| f.has_pypi_dependencies())
+        self.environments().any(|e| e.has_pypi_dependencies())
     }
 }
 
