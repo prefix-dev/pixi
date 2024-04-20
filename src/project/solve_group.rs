@@ -67,10 +67,15 @@ impl<'p> SolveGroup<'p> {
 
     /// Returns all features that are part of the solve group.
     ///
+    /// If `include_default` is `true` the default feature is also included.
+    ///
     /// All features of all environments are combined and deduplicated.
-    pub fn features(&self) -> impl DoubleEndedIterator<Item = &'p manifest::Feature> + 'p {
+    pub fn features(
+        &self,
+        include_default: bool,
+    ) -> impl DoubleEndedIterator<Item = &'p manifest::Feature> + 'p {
         self.environments()
-            .flat_map(move |env| env.features(true))
+            .flat_map(move |env| env.features(include_default))
             .unique_by(|feat| &feat.name)
     }
 
@@ -80,7 +85,10 @@ impl<'p> SolveGroup<'p> {
     /// the environments that share the same solve group. If multiple environments specify a
     /// requirement for the same system package, the highest is chosen.
     pub fn system_requirements(&self) -> SystemRequirements {
-        self.features()
+        let include_default = self
+            .environments()
+            .any(|e| e.manifest().from_default_feature.system_requirements);
+        self.features(include_default)
             .map(|feature| &feature.system_requirements)
             .fold(SystemRequirements::default(), |acc, req| {
                 acc.union(req)
@@ -95,7 +103,10 @@ impl<'p> SolveGroup<'p> {
     /// different requirements per package are sorted in the same order as the features they came
     /// from.
     pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
-        self.features()
+        let include_default = self
+            .environments()
+            .any(|e| e.manifest().from_default_feature.dependencies);
+        self.features(include_default)
             .filter_map(|feat| feat.dependencies(kind, platform))
             .map(|deps| Dependencies::from(deps.into_owned()))
             .reduce(|acc, deps| acc.union(&deps))
@@ -112,7 +123,10 @@ impl<'p> SolveGroup<'p> {
         &self,
         platform: Option<Platform>,
     ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
-        self.features()
+        let include_default = self
+            .environments()
+            .any(|e| e.manifest().from_default_feature.pypi_dependencies);
+        self.features(include_default)
             .filter_map(|f| f.pypi_dependencies(platform))
             .fold(IndexMap::default(), |mut acc, deps| {
                 // Either clone the values from the Cow or move the values from the owned map.
@@ -144,7 +158,10 @@ impl<'p> SolveGroup<'p> {
     /// used instead. However, these are not considered during deduplication. This means the default
     /// channels are always added to the end of the list.
     pub fn channels(&self) -> IndexSet<&'p Channel> {
-        self.features()
+        let include_default = self
+            .environments()
+            .any(|e| e.manifest().from_default_feature.channels);
+        self.features(include_default)
             .filter_map(|feature| match feature.name {
                 // Use the user-specified channels of each feature if the feature defines them. Only
                 // for the default feature do we use the default channels from the project metadata
@@ -170,7 +187,11 @@ impl<'p> SolveGroup<'p> {
 
     /// Returns true if any of the environments contain a feature with any reference to a pypi dependency.
     pub fn has_pypi_dependencies(&self) -> bool {
-        self.features().any(|f| f.has_pypi_dependencies())
+        let include_default = self
+            .environments()
+            .any(|e| e.manifest().from_default_feature.pypi_dependencies);
+        self.features(include_default)
+            .any(|f| f.has_pypi_dependencies())
     }
 }
 
