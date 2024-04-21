@@ -12,6 +12,9 @@ expression: manifest.document.to_string()
         requires-python = ">=3.11"
         dependencies = ["flask==2.*", "numpy>=3.12"]
 
+[project.optional-dependencies]
+test = ["pytest>=3.12"]
+
         [tool.pixi.project]
         name = "flask-hello-world-pyproject"
         channels = ["conda-forge"]
@@ -19,6 +22,3 @@ expression: manifest.document.to_string()
 
         [tool.pixi.tasks]
         start = "python -m flask run --port=5050"
-
-[tool.pixi.feature.test.pypi-dependencies]
-pytest = ">=3.12"
