@@ -1,6 +1,6 @@
 use miette::{miette, Report};
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
-use std::{fmt, path::Path};
+use std::fmt;
 use toml_edit::{value, Array, InlineTable, Item, Table, Value};
 
 use crate::{consts, util::default_channel_config, FeatureName, SpecType, Task};
@@ -219,43 +219,52 @@ impl ManifestSource {
     /// Add a pypi requirement to the manifest
     pub fn add_pypi_dependency(
         &mut self,
-        name: &PyPiPackageName,
-        requirement: &PyPiRequirement,
+        requirement: &pep508_rs::Requirement,
         platform: Option<Platform>,
-        project_root: &Path,
         feature_name: &FeatureName,
     ) -> Result<(), Report> {
         match self {
-            ManifestSource::PyProjectToml(_) if feature_name.is_default() => {
-                let dep = requirement
-                    .as_pep508(name.as_normalized(), project_root)
-                    .map_err(|_| {
-                        miette!("Failed to convert '{}' to pep508", &name.as_normalized())
-                    })?;
-                match self.as_table_mut()["project"]["dependencies"].as_array_mut() {
-                    Some(array) => {
-                        // Check for duplicates
-                        if array
-                            .iter()
-                            .any(|x| x.as_str() == Some(dep.to_string().as_str()))
-                        {
-                            return Err(miette!(
-                                "{} is already added.",
-                                console::style(name.as_normalized()).bold(),
-                            ));
-                        }
-                        array.push(dep.to_string());
-                    }
-                    None => {
-                        self.as_table_mut()["project"]["dependencies"] =
-                            Item::Value(Value::Array(Array::from_iter(vec![dep.to_string()])));
-                    }
-                }
+            ManifestSource::PyProjectToml(doc) if feature_name.is_default() => {
+                let dependencies = doc
+                    .get_mut("project")
+                    .expect("project should exist")
+                    .as_table_mut()
+                    .unwrap()
+                    .entry("dependencies")
+                    .or_insert(Item::Value(Value::Array(Array::new())))
+                    .as_array_mut()
+                    .ok_or_else(|| miette!("Could not access '[project.dependencies]'"))?;
+
+                dependencies.push(requirement.to_string());
                 Ok(())
             }
+            ManifestSource::PyProjectToml(doc) => {
+                let opt_dependencies = doc
+                    .get_mut("project")
+                    .expect("project should exist")
+                    .as_table_mut()
+                    .unwrap()
+                    .entry("optional-dependencies")
+                    .or_insert(Item::Table(Table::new()))
+                    .as_table_mut()
+                    .ok_or_else(|| miette!("Could not access '[project.optional-dependencies]'"))?;
+                let extra = opt_dependencies
+                    .entry(feature_name.to_string().as_str())
+                    .or_insert(Item::Value(Value::Array(Array::new())))
+                    .as_array_mut()
+                    .ok_or_else(|| {
+                        miette!(
+                            "Could not access '{}' in '[project.optional-dependencies]'",
+                            feature_name.to_string().as_str()
+                        )
+                    })?;
+                extra.push(requirement.to_string());
+                Ok(())
+            }
+
             _ => self.add_dependency_helper(
-                name.as_source(),
-                requirement.clone().into(),
+                requirement.name.to_string().as_str(),
+                PyPiRequirement::from(requirement.clone()).into(),
                 consts::PYPI_DEPENDENCIES,
                 platform,
                 feature_name,
