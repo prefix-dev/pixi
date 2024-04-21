@@ -26,9 +26,11 @@ impl fmt::Display for ManifestSource {
 }
 
 impl ManifestSource {
-    /// Returns the name of a nested TOML table.
-    /// If `platform` and `feature_name` are `None`, the table name is returned as-is.
-    /// Otherwise, the table name is prefixed with the feature, platform, or both.
+    /// Returns the a nested path. It is composed of
+    /// - the 'tool.pixi' prefix if the manifest is a 'pyproject.toml' file
+    /// - the feature if it is not the default feature
+    /// - the platform if it is not `None`
+    /// - the name of a nested TOML table if it is not `None`
     fn get_nested_toml_table_name(
         &self,
         feature_name: &FeatureName,
@@ -36,45 +38,41 @@ impl ManifestSource {
         table: Option<&str>,
     ) -> String {
         let mut parts = Vec::new();
-
         if let ManifestSource::PyProjectToml(_) = self {
             parts.push(PYPROJECT_PIXI_PREFIX);
         }
-
-        if let FeatureName::Named(name) = feature_name {
+        if !feature_name.is_default() {
             parts.push("feature");
-            parts.push(name.as_str());
+            parts.push(feature_name.as_str());
         }
-
         if let Some(platform) = platform {
             parts.push("target");
             parts.push(platform.as_str());
         }
-
         if let Some(table) = table {
             parts.push(table);
         }
-
         parts.join(".")
     }
 
     /// Retrieve a mutable reference to a target table `table_name`
     /// for a specific platform and feature.
     /// If the table is not found, it is inserted into the document.
-    fn get_or_insert_pixi_table<'a>(
+    fn get_or_insert_toml_table<'a>(
         &'a mut self,
         platform: Option<Platform>,
         feature: &FeatureName,
         table_name: &str,
     ) -> miette::Result<&'a mut Table> {
-        let table_name = self.get_nested_toml_table_name(feature, platform, Some(table_name));
-        self.get_or_insert_toml_table(&table_name)
+        let table_name: String =
+            self.get_nested_toml_table_name(feature, platform, Some(table_name));
+        self.get_or_insert_nested_table(&table_name)
     }
 
     /// Retrieve a mutable reference to a target table `table_name`
     /// in dotted form (e.g. `table1.table2`) from the root of the document.
     /// If the table is not found, it is inserted into the document.
-    fn get_or_insert_toml_table<'a>(
+    fn get_or_insert_nested_table<'a>(
         &'a mut self,
         table_name: &str,
     ) -> miette::Result<&'a mut Table> {
@@ -109,7 +107,7 @@ impl ManifestSource {
         table_name: &str,
         array_name: &str,
     ) -> miette::Result<&'a mut Array> {
-        self.get_or_insert_toml_table(table_name)?
+        self.get_or_insert_nested_table(table_name)?
             .entry(array_name)
             .or_insert(Item::Value(Value::Array(Array::new())))
             .as_array_mut()
@@ -174,7 +172,7 @@ impl ManifestSource {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Result<toml_edit::Item, Report> {
-        self.get_or_insert_pixi_table(platform, feature_name, table)?
+        self.get_or_insert_toml_table(platform, feature_name, table)?
             .remove(dep)
             .ok_or_else(|| {
                 let table_name =
@@ -247,7 +245,7 @@ impl ManifestSource {
         feature_name: &FeatureName,
     ) -> Result<(), Report> {
         // Find the TOML table to add the dependency to.
-        let dependency_table = self.get_or_insert_pixi_table(platform, feature_name, table)?;
+        let dependency_table = self.get_or_insert_toml_table(platform, feature_name, table)?;
 
         // Check for duplicates
         if let Some(table_spec) = dependency_table.get(name) {
@@ -270,7 +268,7 @@ impl ManifestSource {
     ) -> Result<(), Report> {
         // Get the task table either from the target platform or the default tasks.
         // If it does not exist in TOML, consider this ok as we want to remove it anyways
-        self.get_or_insert_pixi_table(platform, feature_name, "tasks")?
+        self.get_or_insert_toml_table(platform, feature_name, "tasks")?
             .remove(name);
 
         Ok(())
@@ -285,7 +283,7 @@ impl ManifestSource {
         feature_name: &FeatureName,
     ) -> Result<(), Report> {
         // Get the task table either from the target platform or the default tasks.
-        self.get_or_insert_pixi_table(platform, feature_name, "tasks")?
+        self.get_or_insert_toml_table(platform, feature_name, "tasks")?
             .insert(name, task.into());
 
         Ok(())
@@ -420,18 +418,18 @@ mod tests {
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), PROJECT_BOILERPLATE).unwrap();
         let _ = manifest
             .document
-            .get_or_insert_pixi_table(None, &FeatureName::Default, "tasks");
-        let _ = manifest.document.get_or_insert_pixi_table(
+            .get_or_insert_toml_table(None, &FeatureName::Default, "tasks");
+        let _ = manifest.document.get_or_insert_toml_table(
             Some(Platform::Linux64),
             &FeatureName::Default,
             "tasks",
         );
-        let _ = manifest.document.get_or_insert_pixi_table(
+        let _ = manifest.document.get_or_insert_toml_table(
             None,
             &FeatureName::Named("test".to_string()),
             "tasks",
         );
-        let _ = manifest.document.get_or_insert_pixi_table(
+        let _ = manifest.document.get_or_insert_toml_table(
             Some(Platform::Linux64),
             &FeatureName::Named("test".to_string()),
             "tasks",
