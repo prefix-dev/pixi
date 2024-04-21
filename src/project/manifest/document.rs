@@ -93,8 +93,8 @@ impl ManifestSource {
                         table_name
                     )
                 })?;
-            if i < parts.len() - 1 && i > 0 {
-                current_table.set_dotted(true);
+            if i < parts.len() - 1 {
+                current_table.set_implicit(true);
             }
         }
         Ok(current_table)
