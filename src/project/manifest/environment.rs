@@ -46,18 +46,20 @@ impl EnvironmentName {
 
     /// Tries to read the environment name from an argument, then it will try
     /// to read from an environment variable, otherwise it will fall back to default
-    pub fn from_arg_or_env_var(arg_name: Option<String>) -> Self {
+    pub fn from_arg_or_env_var(
+        arg_name: Option<String>,
+    ) -> Result<Self, ParseEnvironmentNameError> {
         if let Some(arg_name) = arg_name {
-            return EnvironmentName::from_str(&arg_name).unwrap();
+            return EnvironmentName::from_str(&arg_name);
         } else if std::env::var("PIXI_IN_SHELL").is_ok() {
             if let Ok(env_var_name) = std::env::var("PIXI_ENVIRONMENT_NAME") {
                 if env_var_name == consts::DEFAULT_ENVIRONMENT_NAME {
-                    return EnvironmentName::Default;
+                    return Ok(EnvironmentName::Default);
                 }
-                return EnvironmentName::Named(env_var_name);
+                return Ok(EnvironmentName::Named(env_var_name));
             }
         }
-        EnvironmentName::Default
+        Ok(EnvironmentName::Default)
     }
 }
 

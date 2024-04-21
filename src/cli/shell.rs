@@ -203,14 +203,11 @@ async fn start_nu_shell(
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project =
         Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
-    let environment_name = EnvironmentName::from_arg_or_env_var(args.environment);
-    let environment = project
-        .environment(&environment_name)
-        .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
+    let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     verify_current_platform_has_required_virtual_packages(&environment).into_diagnostic()?;
 
-    let prompt_name = match environment_name {
+    let prompt_name = match environment.name() {
         EnvironmentName::Default => project.name().to_string(),
         EnvironmentName::Named(name) => format!("{}:{}", project.name(), name),
     };
