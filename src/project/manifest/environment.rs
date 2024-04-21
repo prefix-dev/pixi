@@ -48,7 +48,7 @@ impl EnvironmentName {
     /// to read from an environment variable, otherwise it will fall back to default
     pub fn from_arg_or_env_var(arg_name: Option<String>) -> Self {
         if let Some(arg_name) = arg_name {
-            return EnvironmentName::Named(arg_name);
+            return EnvironmentName::from_str(&arg_name).unwrap();
         } else if std::env::var("PIXI_IN_SHELL").is_ok() {
             if let Ok(env_var_name) = std::env::var("PIXI_ENVIRONMENT_NAME") {
                 if env_var_name == consts::DEFAULT_ENVIRONMENT_NAME {
