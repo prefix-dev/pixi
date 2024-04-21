@@ -194,13 +194,28 @@ impl ManifestSource {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Result<(), Report> {
-        self.add_dependency_helper(
+        // Find the TOML table to add the dependency to.
+        let dependency_table =
+            self.get_or_insert_toml_table(platform, feature_name, spec_type.name())?;
+
+        // Check for duplicates
+        if let Some(table_spec) = dependency_table.get(name.as_normalized()) {
+            if table_spec.as_value().and_then(|v| v.as_str())
+                == Some(nameless_match_spec_to_toml(spec).to_string().as_str())
+            {
+                return Err(miette!(
+                    "{} is already added.",
+                    console::style(name.as_normalized()).bold(),
+                ));
+            }
+        }
+
+        // Store (or replace) in the TOML document
+        dependency_table.insert(
             name.as_normalized(),
-            nameless_match_spec_to_toml(spec),
-            spec_type.name(),
-            platform,
-            feature_name,
-        )
+            Item::Value(nameless_match_spec_to_toml(spec)),
+        );
+        Ok(())
     }
 
     /// Add a pypi requirement to the manifest
@@ -212,50 +227,24 @@ impl ManifestSource {
     ) -> Result<(), Report> {
         match self {
             ManifestSource::PyProjectToml(_) if feature_name.is_default() => {
-                let dependencies = self.get_or_insert_toml_array("project", "dependencies")?;
-                dependencies.push(requirement.to_string());
-                Ok(())
+                self.get_or_insert_toml_array("project", "dependencies")?
+                    .push(requirement.to_string());
             }
             ManifestSource::PyProjectToml(_) => {
-                let extra = self.get_or_insert_toml_array(
+                self.get_or_insert_toml_array(
                     "project.optional-dependencies",
                     feature_name.to_string().as_str(),
-                )?;
-                extra.push(requirement.to_string());
-                Ok(())
+                )?
+                .push(requirement.to_string());
             }
-
-            _ => self.add_dependency_helper(
-                requirement.name.to_string().as_str(),
-                PyPiRequirement::from(requirement.clone()).into(),
-                consts::PYPI_DEPENDENCIES,
-                platform,
-                feature_name,
-            ),
-        }
-    }
-
-    /// Adds a conda or pypi dependency to the TOML manifest
-    fn add_dependency_helper(
-        &mut self,
-        name: &str,
-        dep: Value,
-        table: &str,
-        platform: Option<Platform>,
-        feature_name: &FeatureName,
-    ) -> Result<(), Report> {
-        // Find the TOML table to add the dependency to.
-        let dependency_table = self.get_or_insert_toml_table(platform, feature_name, table)?;
-
-        // Check for duplicates
-        if let Some(table_spec) = dependency_table.get(name) {
-            if table_spec.as_value().and_then(|v| v.as_str()) == Some(dep.to_string().as_str()) {
-                return Err(miette!("{} is already added.", console::style(name).bold(),));
+            ManifestSource::PixiToml(_) => {
+                self.get_or_insert_toml_table(platform, feature_name, consts::PYPI_DEPENDENCIES)?
+                    .insert(
+                        requirement.name.to_string().as_str(),
+                        Item::Value(PyPiRequirement::from(requirement.clone()).into()),
+                    );
             }
-        }
-
-        // Store (or replace) in the TOML document
-        dependency_table.insert(name, Item::Value(dep));
+        };
         Ok(())
     }
 
