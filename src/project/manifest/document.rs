@@ -33,28 +33,29 @@ impl ManifestSource {
         &self,
         feature_name: &FeatureName,
         platform: Option<Platform>,
-        table: &str,
+        table: Option<&str>,
     ) -> String {
-        let table_name = match (platform, feature_name) {
-            (Some(platform), FeatureName::Named(_)) => format!(
-                "feature.{}.target.{}.{}",
-                feature_name.as_str(),
-                platform.as_str(),
-                table
-            ),
-            (Some(platform), FeatureName::Default) => {
-                format!("target.{}.{}", platform.as_str(), table)
-            }
-            (None, FeatureName::Named(_)) => {
-                format!("feature.{}.{}", feature_name.as_str(), table)
-            }
-            (None, FeatureName::Default) => table.to_string(),
-        };
+        let mut parts = Vec::new();
 
-        match self {
-            ManifestSource::PyProjectToml(_) => format!("{}.{}", PYPROJECT_PIXI_PREFIX, table_name),
-            ManifestSource::PixiToml(_) => table_name,
+        if let ManifestSource::PyProjectToml(_) = self {
+            parts.push(PYPROJECT_PIXI_PREFIX);
         }
+
+        if let FeatureName::Named(name) = feature_name {
+            parts.push("feature");
+            parts.push(name.as_str());
+        }
+
+        if let Some(platform) = platform {
+            parts.push("target");
+            parts.push(platform.as_str());
+        }
+
+        if let Some(table) = table {
+            parts.push(table);
+        }
+
+        parts.join(".")
     }
 
     /// Retrieve a mutable reference to a target table `table_name`
@@ -66,7 +67,7 @@ impl ManifestSource {
         feature: &FeatureName,
         table_name: &str,
     ) -> miette::Result<&'a mut Table> {
-        let table_name = self.get_nested_toml_table_name(feature, platform, table_name);
+        let table_name = self.get_nested_toml_table_name(feature, platform, Some(table_name));
         self.get_or_insert_toml_table(&table_name)
     }
 
@@ -123,52 +124,12 @@ impl ManifestSource {
         array_name: &str,
         feature_name: &FeatureName,
     ) -> miette::Result<&mut Array> {
-        match feature_name {
-            FeatureName::Default => {
-                let project = self.get_root_table_mut("project");
-                if project.is_none() {
-                    *project = Item::Table(Table::new());
-                }
-
-                let channels = &mut project[array_name];
-                if channels.is_none() {
-                    *channels = Item::Value(Value::Array(Array::new()))
-                }
-
-                channels
-                    .as_array_mut()
-                    .ok_or_else(|| miette::miette!("malformed {array_name} array"))
-            }
-            FeatureName::Named(_) => {
-                let feature = self.get_root_table_mut("feature");
-                if feature.is_none() {
-                    *feature = Item::Table(Table::new());
-                }
-                let table = feature.as_table_mut().expect("feature should be a table");
-                table.set_dotted(true);
-
-                let feature = &mut table[feature_name.as_str()];
-                if feature.is_none() {
-                    *feature = Item::Table(Table::new());
-                }
-
-                let channels = &mut feature[array_name];
-                if channels.is_none() {
-                    *channels = Item::Value(Value::Array(Array::new()))
-                }
-
-                channels
-                    .as_array_mut()
-                    .ok_or_else(|| miette::miette!("malformed {array_name} array"))
-            }
-        }
-    }
-
-    fn get_root_table_mut(&mut self, table: &str) -> &mut Item {
-        match self {
-            ManifestSource::PyProjectToml(document) => &mut document["tool"]["pixi"][table],
-            ManifestSource::PixiToml(document) => &mut document[table],
-        }
+        let table = match feature_name {
+            FeatureName::Default => Some("project"),
+            FeatureName::Named(_) => None,
+        };
+        let table_name = self.get_nested_toml_table_name(feature_name, None, table);
+        self.get_or_insert_toml_array(&table_name, array_name)
     }
 
     fn as_table_mut(&mut self) -> &mut Table {
@@ -216,7 +177,8 @@ impl ManifestSource {
         self.get_or_insert_pixi_table(platform, feature_name, table)?
             .remove(dep)
             .ok_or_else(|| {
-                let table_name = self.get_nested_toml_table_name(feature_name, platform, table);
+                let table_name =
+                    self.get_nested_toml_table_name(feature_name, platform, Some(table));
                 miette::miette!(
                     "Couldn't find {} in [{}]",
                     console::style(dep).bold(),
@@ -496,7 +458,7 @@ platforms = ["linux-64", "win-64"]
             manifest.document.get_nested_toml_table_name(
                 &FeatureName::Default,
                 None,
-                "dependencies"
+                Some("dependencies")
             )
         );
         assert_eq!(
@@ -504,7 +466,7 @@ platforms = ["linux-64", "win-64"]
             manifest.document.get_nested_toml_table_name(
                 &FeatureName::Default,
                 Some(Platform::Linux64),
-                "dependencies"
+                Some("dependencies")
             )
         );
         assert_eq!(
@@ -512,7 +474,7 @@ platforms = ["linux-64", "win-64"]
             manifest.document.get_nested_toml_table_name(
                 &FeatureName::Named("test".to_string()),
                 None,
-                "dependencies"
+                Some("dependencies")
             )
         );
         assert_eq!(
@@ -520,7 +482,7 @@ platforms = ["linux-64", "win-64"]
             manifest.document.get_nested_toml_table_name(
                 &FeatureName::Named("test".to_string()),
                 Some(Platform::Linux64),
-                "dependencies"
+                Some("dependencies")
             )
         );
     }
