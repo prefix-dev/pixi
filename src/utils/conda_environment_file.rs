@@ -219,7 +219,6 @@ mod tests {
                 MatchSpec::from_str("conda-forge::pytest", Strict).unwrap(),
                 MatchSpec::from_str("wheel=0.31.1", Strict).unwrap(),
                 MatchSpec::from_str("foo >=1.2.3", Strict).unwrap(),
-                MatchSpec::from_str("pip", Strict).unwrap(),
             ]
         );
 
@@ -227,7 +226,7 @@ mod tests {
             pip_deps,
             vec![
                 pep508_rs::Requirement::from_str("requests").unwrap(),
-                pep508_rs::Requirement::from_str("deepobs").unwrap(),
+                pep508_rs::Requirement::from_str("deepobs @ git+https://git@github.com/fsschneider/DeepOBS.git@develop#egg=deepobs").unwrap(),
                 pep508_rs::Requirement::from_str("torch==1.8.1").unwrap(),
             ]
         );
