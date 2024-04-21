@@ -388,7 +388,6 @@ mod tests {
         dependencies = ["flask==2.*"]
 
         [tool.pixi.project]
-        name = "flask-hello-world-pyproject"
         channels = ["conda-forge"]
         platforms = ["linux-64"]
 
