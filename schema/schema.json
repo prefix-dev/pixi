@@ -100,7 +100,7 @@
           "description": "The group name for environments that should be solved together",
           "title": "Solve-Group"
         },
-        "include-from-default": {
+        "include-default": {
           "anyOf": [
             {
               "items": {
@@ -136,9 +136,9 @@
           ],
           "default": false,
           "description": "Components of the default feature to include",
-          "title": "Include-From-Default"
+          "title": "Include-Default"
         },
-        "exclude-from-default": {
+        "exclude-default": {
           "anyOf": [
             {
               "items": {
@@ -174,7 +174,7 @@
           ],
           "default": false,
           "description": "Components of the default feature to exclude",
-          "title": "Exclude-From-Default"
+          "title": "Exclude-Default"
         }
       },
       "title": "Environment",

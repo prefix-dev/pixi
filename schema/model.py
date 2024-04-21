@@ -273,14 +273,14 @@ class Environment(StrictBaseModel):
         alias="solve-group",
         description="The group name for environments that should be solved together",
     )
-    include_from_default: list[Component] | None = Field(
+    include_default: list[Component] | None = Field(
         False,
-        alias="include-from-default",
+        alias="include-default",
         description="Components of the default feature to include",
     )
-    exclude_from_default: list[Component] | None = Field(
+    exclude_default: list[Component] | None = Field(
         False,
-        alias="exclude-from-default",
+        alias="exclude-default",
         description="Components of the default feature to exclude",
     )
 

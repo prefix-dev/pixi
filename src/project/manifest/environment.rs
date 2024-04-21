@@ -188,7 +188,7 @@ impl From<Option<FromDefaultToml>> for FromDefaultFeature {
     fn from(opt: Option<FromDefaultToml>) -> Self {
         match opt {
             None => FromDefaultFeature::default(),
-            Some(FromDefaultToml::IncludeFromDefault(included)) => {
+            Some(FromDefaultToml::IncludeDefault(included)) => {
                 let mut f = FromDefaultFeature {
                     system_requirements: false,
                     channels: false,
@@ -213,7 +213,7 @@ impl From<Option<FromDefaultToml>> for FromDefaultFeature {
 
                 f
             }
-            Some(FromDefaultToml::ExcludeFromDefault(excluded)) => {
+            Some(FromDefaultToml::ExcludeDefault(excluded)) => {
                 let mut f = FromDefaultFeature::default();
                 for component in &excluded {
                     match component {
@@ -248,8 +248,8 @@ pub(super) struct TomlEnvironment {
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub(super) enum FromDefaultToml {
-    IncludeFromDefault(Vec<FeatureComponentToml>),
-    ExcludeFromDefault(Vec<FeatureComponentToml>),
+    IncludeDefault(Vec<FeatureComponentToml>),
+    ExcludeDefault(Vec<FeatureComponentToml>),
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -359,13 +359,13 @@ mod tests {
 
     #[test]
     fn test_deserialize_exclude_from_default() {
-        let source = r#"test = { exclude-from-default=["channels"]}"#;
+        let source = r#"test = { exclude-default=["channels"]}"#;
         assert_eq!(false, from_default(source).channels);
         assert_eq!(true, from_default(source).platforms);
     }
     #[test]
     fn test_deserialize_include_from_default() {
-        let source = r#"test = { include-from-default=["channels"]}"#;
+        let source = r#"test = { include-default=["channels"]}"#;
         assert_eq!(true, from_default(source).channels);
         assert_eq!(false, from_default(source).platforms);
     }
@@ -376,10 +376,9 @@ mod tests {
         assert_eq!(true, from_default(source).platforms);
     }
     #[test]
-    #[should_panic(expected = "unknown field `exclude-from-default`")]
+    #[should_panic(expected = "unknown field `exclude-default`")]
     fn test_deserialize_from_default_conflict() {
-        let source =
-            r#"test = { include-from-default=["channels"], exclude-from-default=["platform"]}"#;
+        let source = r#"test = { include-default=["channels"], exclude-default=["platform"]}"#;
         from_default(source);
         ()
     }
