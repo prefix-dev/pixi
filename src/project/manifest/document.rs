@@ -416,7 +416,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_or_insert_pixi_table() {
+    fn test_get_or_insert_toml_table() {
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), PROJECT_BOILERPLATE).unwrap();
         let _ = manifest
             .document
