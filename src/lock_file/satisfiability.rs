@@ -827,12 +827,27 @@ mod tests {
     }
 
     #[test]
-    pub fn test_absolute_file_path() {
-        let file_path = if cfg!(windows) {
-            "C:/path/to/my_pkg"
-        } else {
-            "/path/to/my_pkg"
+    pub fn test_absolute_file_path_win() {
+        let file_path = "C:\\path\\to\\my_pkg";
+
+        // Mock locked data with path
+        let locked_data = PypiPackageData {
+            name: "mypkg".parse().unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            url_or_path: UrlOrPath::Path(PathBuf::from(file_path)),
+            hash: None,
+            requires_dist: vec![],
+            requires_python: None,
+            editable: false,
         };
+
+        let spec = Requirement::from_str(&format!("mypkg @ file://{}", file_path)).unwrap();
+        // This should satisfy:
+        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
+    }
+    #[test]
+    pub fn test_absolute_file_path_unix() {
+        let file_path = "/tmp/bla/my_pkg";
 
         // Mock locked data with path
         let locked_data = PypiPackageData {
