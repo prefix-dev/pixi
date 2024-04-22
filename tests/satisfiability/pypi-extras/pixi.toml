@@ -1,0 +1,17 @@
+# This project shows that extras are properly checked by the satisfiability algorithm. The main
+# project (this file) depends on two pypi projects without any extras. The project "has-extras" has
+# an extra called "pinject" which controls whether it depends on pinject or not. The pyproject
+# "use-with-extras" also depends on "has-extras" but with the "pinject" extra enabled. Because of
+# this, the "pinject" package should be part of the solution.
+
+[project]
+name = "pypi-extras"
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+[dependencies]
+python = "*"
+
+[pypi-dependencies]
+use-with-extras = { path = "use-with-extras" }
+has-extras = { path = "has-extras" }
