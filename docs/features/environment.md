@@ -111,6 +111,15 @@ $ (default) which python
 
 ### Using `pixi` with `direnv`
 
+??? note "Installing direnv"
+
+    Of course you can use `pixi` to install `direnv` globally. We recommend to run
+
+    ```
+    pixi global install direnv```
+
+    to install the latest version of `direnv` on your computer.
+
 This allows you to use `pixi` in combination with `direnv`.
 Enter the following into your `.envrc` file:
 

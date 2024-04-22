@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use crate::{common::package_database::PackageDatabase, common::PixiControl};
 use insta::assert_debug_snapshot;
-use pixi::Project;
-use rattler_conda_types::{Channel, ChannelConfig, Platform};
+use pixi::{util::default_channel_config, Project};
+use rattler_conda_types::{Channel, Platform};
 use tempfile::TempDir;
 use url::Url;
 
@@ -44,7 +44,7 @@ async fn add_channel() {
     // Our channel should be in the list of channels
     let local_channel = Channel::from_str(
         Url::from_directory_path(additional_channel_dir.path()).unwrap(),
-        &ChannelConfig::default(),
+        &default_channel_config(),
     )
     .unwrap();
     assert!(project.channels().contains(&local_channel));
