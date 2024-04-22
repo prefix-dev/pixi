@@ -612,12 +612,13 @@ pub fn verify_package_platform_satisfiability(
 
                 // Add all the requirements of the package to the queue.
                 for requirement in &record.0.requires_dist {
-                    if !pypi_requirements_visited.insert(requirement.clone()) {
+                    // Skip this requirement if it does not apply.
+                    if !requirement.evaluate_markers(marker_environment, &extras) {
                         continue;
                     }
 
-                    // Skip this requirement if it does not apply.
-                    if !requirement.evaluate_markers(marker_environment, &extras) {
+                    // Skip this requirement if it has already been visited.
+                    if !pypi_requirements_visited.insert(requirement.clone()) {
                         continue;
                     }
 
