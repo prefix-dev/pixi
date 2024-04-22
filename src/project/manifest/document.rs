@@ -233,14 +233,14 @@ impl ManifestSource {
             ManifestSource::PyProjectToml(_) => {
                 self.get_or_insert_toml_array(
                     "project.optional-dependencies",
-                    feature_name.to_string().as_str(),
+                    &feature_name.to_string(),
                 )?
                 .push(requirement.to_string());
             }
             ManifestSource::PixiToml(_) => {
                 self.get_or_insert_toml_table(platform, feature_name, consts::PYPI_DEPENDENCIES)?
                     .insert(
-                        requirement.name.to_string().as_str(),
+                        requirement.name.as_ref(),
                         Item::Value(PyPiRequirement::from(requirement.clone()).into()),
                     );
             }

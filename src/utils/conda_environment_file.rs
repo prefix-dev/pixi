@@ -2,7 +2,6 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{Channel, MatchSpec};
-use regex::Regex;
 use serde::Deserialize;
 use std::str::FromStr;
 use std::{io::BufRead, path::Path, sync::Arc};
@@ -116,17 +115,8 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
                 conda_deps.push(match_spec);
             }
             CondaEnvDep::Pip { pip } => pip_deps.extend(
-                pip.into_iter()
-                    .map(|mut dep| {
-                        // FIXME: newer versions of uv should be able to deal with git URL directly
-                        let re = Regex::new(r"/([^/]+)\.git").unwrap();
-                        if let Some(caps) = re.captures(dep.as_str()) {
-                            let name= caps.get(1).unwrap().as_str().to_string();
-                            tracing::warn!("The dependency '{}' is a git repository, as that is not available in pixi we'll try to install it as a package with the name: {}", dep, name);
-                            dep = format!("{name} @ {dep}");
-                        }
-                        pep508_rs::Requirement::from_str(&dep).into_diagnostic()
-                    })
+                pip.iter()
+                    .map(|dep| pep508_rs::Requirement::from_str(dep).into_diagnostic())
                     .collect::<miette::Result<Vec<_>>>()?,
             ),
         }
@@ -179,7 +169,7 @@ mod tests {
           - foo >=1.2.3.*  # only valid when parsing in lenient mode
           - pip:
             - requests
-            - git+https://git@github.com/fsschneider/DeepOBS.git@develop#egg=deepobs
+            - deepobs @ git+https://git@github.com/fsschneider/DeepOBS.git@develop
             - torch==1.8.1
         "#;
 
@@ -226,7 +216,10 @@ mod tests {
             pip_deps,
             vec![
                 pep508_rs::Requirement::from_str("requests").unwrap(),
-                pep508_rs::Requirement::from_str("deepobs @ git+https://git@github.com/fsschneider/DeepOBS.git@develop#egg=deepobs").unwrap(),
+                pep508_rs::Requirement::from_str(
+                    "deepobs @ git+https://git@github.com/fsschneider/DeepOBS.git@develop"
+                )
+                .unwrap(),
                 pep508_rs::Requirement::from_str("torch==1.8.1").unwrap(),
             ]
         );

@@ -845,12 +845,10 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                                 port: None,
                                 path: "/fsschneider/DeepOBS.git@develop",
                                 query: None,
-                                fragment: Some(
-                                    "egg=deepobs",
-                                ),
+                                fragment: None,
                             },
                             given: Some(
-                                "git+https://git@github.com/fsschneider/DeepOBS.git@develop#egg=deepobs",
+                                "git+https://git@github.com/fsschneider/DeepOBS.git@develop",
                             ),
                         },
                     ),
