@@ -324,7 +324,9 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
                     | (UrlOrPath::Path(path), UrlOrPath::Url(url))
                         if url.scheme() == "file" =>
                     {
-                        PathBuf::from(url.path()) == *path
+                        url.to_file_path()
+                            .unwrap_or_else(|_| panic!("should be a valid file path"))
+                            == *path
                     }
                     _ => false,
                 }
@@ -822,19 +824,28 @@ mod tests {
         // Removing the rev from the Requirement should satisfy any revision
         let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap();
         assert!(pypi_satifisfies_requirement(&locked_data, &spec));
+    }
+
+    #[test]
+    pub fn test_absolute_file_path() {
+        let file_path = if cfg!(windows) {
+            "C:/path/to/my_pkg"
+        } else {
+            "/path/to/my_pkg"
+        };
 
         // Mock locked data with path
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
             version: Version::from_str("0.1.0").unwrap(),
-            url_or_path: "/path/to/my_pkg".parse().expect("failed to parse url"),
+            url_or_path: UrlOrPath::Path(PathBuf::from(file_path)),
             hash: None,
             requires_dist: vec![],
             requires_python: None,
             editable: false,
         };
 
-        let spec = Requirement::from_str("mypkg @ file:///path/to/my_pkg").unwrap();
+        let spec = Requirement::from_str(&format!("mypkg @ file://{}", file_path)).unwrap();
         // This should satisfy:
         assert!(pypi_satifisfies_requirement(&locked_data, &spec));
     }
