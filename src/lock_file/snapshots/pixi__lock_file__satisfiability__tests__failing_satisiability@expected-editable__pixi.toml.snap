@@ -1,0 +1,9 @@
+---
+source: src/lock_file/satisfiability.rs
+assertion_line: 874
+expression: s
+input_file: tests/non-satisfiability/expected-editable/pixi.toml
+---
+environment 'default' does not satisfy the requirements of the project for platform 'win-64
+    Diagnostic severity: error
+    Caused by: expected foo to be editable but in the lock-file it is not

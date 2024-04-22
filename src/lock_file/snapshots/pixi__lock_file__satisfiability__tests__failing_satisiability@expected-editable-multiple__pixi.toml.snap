@@ -1,0 +1,9 @@
+---
+source: src/lock_file/satisfiability.rs
+assertion_line: 874
+expression: s
+input_file: tests/non-satisfiability/expected-editable-multiple/pixi.toml
+---
+environment 'default' does not satisfy the requirements of the project for platform 'win-64
+    Diagnostic severity: error
+    Caused by: expected bar, and foo to be editable but in the lock-file they are not, whereas baz is NOT expected to be editable which in the lock-file it is
