@@ -373,7 +373,7 @@ pub async fn resolve_pypi(
         .collect_vec();
 
     let manifest = Manifest::new(
-        requirements,
+        requirements.clone(),
         Constraints::from_requirements(constraints),
         Overrides::default(),
         Vec::new(),
@@ -511,7 +511,17 @@ pub async fn resolve_pypi(
                             .expect("could not create direct-url");
                         (direct_url.into(), hash, false)
                     }
-                    SourceDist::Git(git) => (git.url.to_url().into(), hash, false),
+                    SourceDist::Git(git) => {
+                        println!("Verbatim URL: {:?}", git.url);
+                        // match git url to original spec
+                        println!("Git: {:?}", git);
+                        println!("Original requirements: {:?}", requirements);
+                        let name = metadata.name.clone();
+                        let req = requirements.iter().find(|req| req.name == name).unwrap();
+                        println!("Found reqs: {:?}", req);
+                        git_url_with_original_spec(&git.url, req);
+                        (git_url_with_original_spec(&git.url, req), hash, false)
+                    }
                     SourceDist::Path(path) => {
                         // Compute the hash of the package based on the source tree.
                         let hash = if path.path.is_dir() {
@@ -601,6 +611,21 @@ pub async fn resolve_pypi(
     }
 
     Ok(locked_packages)
+}
+
+fn git_url_with_original_spec(url: &VerbatimUrl, reqs: &Requirement) -> UrlOrPath {
+    // figure out what we were requesting, and if it's different, add it to the URL
+    let mut url = url.to_url();
+    let query = match &reqs.version_or_url {
+        Some(pep508_rs::VersionOrUrl::Url(url)) => {
+            let path = url.path();
+            path.split_once('@').unwrap().1
+        }
+        _ => panic!("This should be a URL"),
+    };
+    url.set_query(Some(&format!("requested={query}")));
+    UrlOrPath::Url(url)
+
 }
 
 /// Solves the conda package environment for the given input. This function is async because it
