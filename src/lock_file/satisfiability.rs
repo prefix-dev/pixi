@@ -663,8 +663,8 @@ pub fn verify_package_platform_satisfiability(
     if !expected_editable.is_empty() || !unexpected_editable.is_empty() {
         return Err(PlatformUnsat::EditablePackageMismatch(
             EditablePackagesMismatch {
-                expected_editable: expected_editable.into_iter().collect(),
-                unexpected_editable: unexpected_editable.into_iter().collect(),
+                expected_editable: expected_editable.into_iter().sorted().collect(),
+                unexpected_editable: unexpected_editable.into_iter().sorted().collect(),
             },
         ));
     }
