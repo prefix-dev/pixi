@@ -321,7 +321,6 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
                     ),
                     UrlOrPath::Path(path) => UrlOrPath::Path(path),
                 };
-                dbg!(&spec_path_or_url, &locked_path_or_url);
                 spec_path_or_url == locked_path_or_url
             }
         }
