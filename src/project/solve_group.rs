@@ -1,3 +1,4 @@
+use super::manifest::pypi_options::{PypiOptions, PypiOptionsMergeError};
 use super::{manifest, Dependencies, Environment, Project};
 use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::{PyPiRequirement, SystemRequirements};
@@ -176,6 +177,13 @@ impl<'p> SolveGroup<'p> {
     /// Returns true if any of the environments contain a feature with any reference to a pypi dependency.
     pub fn has_pypi_dependencies(&self) -> bool {
         self.features(true).any(|f| f.has_pypi_dependencies())
+    }
+
+    /// Returns the pypi options for this solve group.
+    pub fn pypi_options(&self) -> Result<PypiOptions, PypiOptionsMergeError> {
+        self.features(true)
+            .filter_map(|f| f.pypi_options())
+            .try_fold(PypiOptions::default(), |acc, opt| acc.union(opt))
     }
 }
 
