@@ -3410,7 +3410,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.22.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/url_or_path_comparison#92ae1007767cb1ea9b28509a464722abacd2c651"
+source = "git+https://github.com/baszalmstra/rattler?branch=main#6020da5dd153d8d198574efd36e47b8c59c6b3ab"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3448,7 +3448,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.21.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/url_or_path_comparison#92ae1007767cb1ea9b28509a464722abacd2c651"
+source = "git+https://github.com/baszalmstra/rattler?branch=main#6020da5dd153d8d198574efd36e47b8c59c6b3ab"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3475,7 +3475,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.19.3"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/url_or_path_comparison#92ae1007767cb1ea9b28509a464722abacd2c651"
+source = "git+https://github.com/baszalmstra/rattler?branch=main#6020da5dd153d8d198574efd36e47b8c59c6b3ab"
 dependencies = [
  "blake2",
  "digest",
@@ -3490,7 +3490,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.22.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/url_or_path_comparison#92ae1007767cb1ea9b28509a464722abacd2c651"
+source = "git+https://github.com/baszalmstra/rattler?branch=main#6020da5dd153d8d198574efd36e47b8c59c6b3ab"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3513,7 +3513,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.19.3"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/url_or_path_comparison#92ae1007767cb1ea9b28509a464722abacd2c651"
+source = "git+https://github.com/baszalmstra/rattler?branch=main#6020da5dd153d8d198574efd36e47b8c59c6b3ab"
 dependencies = [
  "quote",
  "syn 2.0.60",
@@ -3522,7 +3522,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.20.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/url_or_path_comparison#92ae1007767cb1ea9b28509a464722abacd2c651"
+source = "git+https://github.com/baszalmstra/rattler?branch=main#6020da5dd153d8d198574efd36e47b8c59c6b3ab"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3548,7 +3548,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.20.4"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/url_or_path_comparison#92ae1007767cb1ea9b28509a464722abacd2c651"
+source = "git+https://github.com/baszalmstra/rattler?branch=main#6020da5dd153d8d198574efd36e47b8c59c6b3ab"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3573,7 +3573,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.19.7"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/url_or_path_comparison#92ae1007767cb1ea9b28509a464722abacd2c651"
+source = "git+https://github.com/baszalmstra/rattler?branch=main#6020da5dd153d8d198574efd36e47b8c59c6b3ab"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3611,7 +3611,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.20.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/url_or_path_comparison#92ae1007767cb1ea9b28509a464722abacd2c651"
+source = "git+https://github.com/baszalmstra/rattler?branch=main#6020da5dd153d8d198574efd36e47b8c59c6b3ab"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.6",
@@ -3628,7 +3628,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.20.6"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/url_or_path_comparison#92ae1007767cb1ea9b28509a464722abacd2c651"
+source = "git+https://github.com/baszalmstra/rattler?branch=main#6020da5dd153d8d198574efd36e47b8c59c6b3ab"
 dependencies = [
  "chrono",
  "futures",
@@ -3645,7 +3645,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.19.7"
-source = "git+https://github.com/baszalmstra/rattler?branch=fix/url_or_path_comparison#92ae1007767cb1ea9b28509a464722abacd2c651"
+source = "git+https://github.com/baszalmstra/rattler?branch=main#6020da5dd153d8d198574efd36e47b8c59c6b3ab"
 dependencies = [
  "archspec",
  "libloading",

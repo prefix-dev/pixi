@@ -321,6 +321,7 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
                     ),
                     UrlOrPath::Path(path) => UrlOrPath::Path(path),
                 };
+                dbg!(&spec_path_or_url, &locked_path_or_url);
                 spec_path_or_url == locked_path_or_url
             }
         }
@@ -573,10 +574,11 @@ pub fn verify_package_platform_satisfiability(
                     // If this is path based package we need to check if the source tree hash still matches.
                     // and if it is a directory
                     if let UrlOrPath::Path(path) = &record.0.url_or_path {
-                        let path = dunce::canonicalize(project_root.join(path)).map_err(|e| {
-                            PlatformUnsat::FailedToCanonicalizePath(path.clone(), e)
-                        })?;
                         if path.is_dir() {
+                            let path =
+                                dunce::canonicalize(project_root.join(path)).map_err(|e| {
+                                    PlatformUnsat::FailedToCanonicalizePath(path.clone(), e)
+                                })?;
                             let hashable = PypiSourceTreeHashable::from_directory(path)
                                 .map_err(|e| {
                                     PlatformUnsat::FailedToDetermineSourceTreeHash(
