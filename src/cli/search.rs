@@ -7,7 +7,6 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, PackageName, Platform, RepoDataRecord};
-use rattler_networking::AuthenticationMiddleware;
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use regex::Regex;
 
@@ -15,6 +14,8 @@ use strsim::jaro;
 use tokio::task::spawn_blocking;
 
 use crate::config::Config;
+use crate::util::default_channel_config;
+use crate::utils::reqwest::build_reqwest_clients;
 use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata, Project};
 
 /// Search a package, output will list the latest version of package
@@ -30,7 +31,7 @@ pub struct Args {
     #[clap(short, long)]
     channel: Option<Vec<String>>,
 
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
@@ -137,11 +138,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let package_name_filter = args.package;
 
-    let authenticated_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-        .with_arc(Arc::new(AuthenticationMiddleware::default()))
-        .build();
+    let client = if let Some(project) = project.as_ref() {
+        project.authenticated_client().clone()
+    } else {
+        build_reqwest_clients(None).1
+    };
+
     let repo_data = Arc::new(
-        fetch_sparse_repodata(channels.iter(), [args.platform], &authenticated_client).await?,
+        fetch_sparse_repodata(
+            channels.iter(),
+            [args.platform],
+            &client,
+            project.as_ref().map(|p| p.config()),
+        )
+        .await?,
     );
 
     // When package name filter contains * (wildcard), it will search and display a list of packages matching this filter
@@ -164,6 +174,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         search_exact_package(package_name, repo_data, stdout).await?;
     }
 
+    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
 }
 
@@ -392,16 +403,19 @@ fn print_matching_packages<W: Write>(
         (packages, &[][..])
     };
 
+    let channel_config = default_channel_config();
     for package in packages {
         // TODO: change channel fetch logic to be more robust
         // currently it relies on channel field being a url with trailing slash
         // https://github.com/mamba-org/rattler/issues/146
-        let channel_name =
-            if let Some(channel) = package.channel.strip_prefix("https://conda.anaconda.org/") {
-                channel.trim_end_matches('/')
-            } else {
-                package.channel.as_str()
-            };
+        let channel_name = if let Some(channel) = package
+            .channel
+            .strip_prefix(channel_config.channel_alias.as_str())
+        {
+            channel.trim_end_matches('/')
+        } else {
+            package.channel.as_str()
+        };
 
         let channel_name = format!("{}/{}", channel_name, package.package_record.subdir);
 

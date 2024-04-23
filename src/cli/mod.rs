@@ -1,8 +1,10 @@
 use super::util::IndicatifWriter;
 use crate::progress;
+use crate::progress::global_multi_progress;
 use clap::Parser;
 use clap_complete;
 use clap_verbosity_flag::Verbosity;
+use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
 use std::{env, io::IsTerminal};
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
@@ -23,6 +25,7 @@ pub mod self_update;
 pub mod shell;
 pub mod shell_hook;
 pub mod task;
+pub mod tree;
 pub mod upload;
 
 #[derive(Parser, Debug)]
@@ -40,6 +43,10 @@ struct Args {
     /// Whether the log needs to be colored.
     #[clap(long, default_value = "auto", global = true, env = "PIXI_COLOR")]
     color: ColorOutput,
+
+    /// Hide all progress bars
+    #[clap(long, default_value = "false", global = true, env = "PIXI_NO_PROGRESS")]
+    no_progress: bool,
 }
 
 /// Generates a completion script for a shell.
@@ -75,16 +82,17 @@ pub enum Command {
     Remove(remove::Args),
     SelfUpdate(self_update::Args),
     List(list::Args),
+    Tree(tree::Args),
 }
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
 #[group(multiple = false)]
 /// Lock file usage from the CLI
 pub struct LockFileUsageArgs {
-    /// Don't check or update the lockfile, continue with previously installed environment.
+    // Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file.
     #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
     pub frozen: bool,
-    /// Check if lockfile is up to date, aborts when lockfile isn't up to date with the manifest file.
+    /// Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file.
     #[clap(long, conflicts_with = "frozen", env = "PIXI_LOCKED")]
     pub locked: bool,
 }
@@ -105,7 +113,7 @@ pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
     let use_colors = use_color_output(&args);
 
-    // Setup the default miette handler based on whether or not we want colors or not.
+    // Set up the default miette handler based on whether we want colors or not.
     miette::set_hook(Box::new(move |_| {
         Box::new(
             miette::MietteHandlerOpts::default()
@@ -127,6 +135,11 @@ pub async fn execute() -> miette::Result<()> {
     // Enable disable colors for the colors crate
     console::set_colors_enabled(use_colors);
     console::set_colors_enabled_stderr(use_colors);
+
+    // Hide all progress bars if the user requested it.
+    if args.no_progress {
+        global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
+    }
 
     let (low_level_filter, level_filter, pixi_level) = match args.verbose.log_level_filter() {
         clap_verbosity_flag::LevelFilter::Off => {
@@ -183,7 +196,7 @@ pub async fn execute() -> miette::Result<()> {
             .into_diagnostic()?,
         );
 
-    // Setup the tracing subscriber
+    // Set up the tracing subscriber
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(use_colors)
         .with_writer(IndicatifWriter::new(progress::global_multi_progress()))
@@ -230,6 +243,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Remove(cmd) => remove::execute(cmd).await,
         Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
         Command::List(cmd) => list::execute(cmd).await,
+        Command::Tree(cmd) => tree::execute(cmd).await,
     }
 }
 

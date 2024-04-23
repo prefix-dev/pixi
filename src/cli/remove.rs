@@ -19,7 +19,7 @@ pub struct Args {
     #[arg(required = true)]
     pub deps: Vec<String>,
 
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
@@ -60,8 +60,8 @@ where
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let mut project = Project::load_or_else_discover(args.manifest_path.as_deref())?
-        .with_cli_config(args.config.clone());
+    let mut project =
+        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
     let deps = args.deps;
     let spec_type = if args.host {
         SpecType::Host
@@ -134,5 +134,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await?;
 
+    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
 }

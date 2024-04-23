@@ -2,11 +2,14 @@ use clap::{ArgAction, Parser};
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use url::Url;
 
 use crate::consts;
+use crate::util::default_channel_config;
 
 /// Determines the default author based on the default git author. Both the name and the email
 /// address of the author are returned.
@@ -54,12 +57,26 @@ pub fn home_path() -> Option<PathBuf> {
 
 /// Returns the default cache directory.
 /// Most important is the `PIXI_CACHE_DIR` environment variable.
-/// If that is not set, the `RATTLER_CACHE_DIR` environment variable is used.
-/// If that is not set, the default cache directory of [`rattler::default_cache_dir`] is used.
+/// - If that is not set, the `RATTLER_CACHE_DIR` environment variable is used.
+/// - If that is not set, `XDG_CACHE_HOME/pixi` is used when the directory exists.
+/// - If that is not set, the default cache directory of [`rattler::default_cache_dir`] is used.
 pub fn get_cache_dir() -> miette::Result<PathBuf> {
     std::env::var("PIXI_CACHE_DIR")
         .map(PathBuf::from)
         .or_else(|_| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from))
+        .or_else(|_| {
+            let xdg_cache_pixi_dir = std::env::var_os("XDG_CACHE_HOME")
+                .map_or_else(
+                    || dirs::home_dir().map(|d| d.join(".cache")),
+                    |p| Some(PathBuf::from(p)),
+                )
+                .map(|d| d.join("pixi"));
+
+            // Only use the xdg cache pixi directory when it exists
+            xdg_cache_pixi_dir
+                .and_then(|d| d.exists().then_some(d))
+                .ok_or_else(|| miette::miette!("could not determine xdg cache directory"))
+        })
         .or_else(|_| {
             rattler::default_cache_dir()
                 .map_err(|_| miette::miette!("could not determine default cache directory"))
@@ -70,6 +87,10 @@ pub struct ConfigCli {
     /// Do not verify the TLS certificate of the server.
     #[arg(long, action = ArgAction::SetTrue)]
     tls_no_verify: bool,
+
+    /// Path to the file containing the authentication token.
+    #[arg(long, env = "RATTLER_AUTH_FILE")]
+    auth_file: Option<PathBuf>,
 }
 
 #[derive(Parser, Debug, Default, Clone)]
@@ -83,6 +104,16 @@ pub struct ConfigCliPrompt {
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]
+pub struct RepodataConfig {
+    /// Disable JLAP compression for repodata.
+    pub disable_jlap: Option<bool>,
+    /// Disable bzip2 compression for repodata.
+    pub disable_bzip2: Option<bool>,
+    /// Disable zstd compression for repodata.
+    pub disable_zstd: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub default_channels: Vec<String>,
@@ -91,21 +122,47 @@ pub struct Config {
     #[serde(default)]
     change_ps1: Option<bool>,
 
+    /// Path to the file containing the authentication token.
+    #[serde(default)]
+    authentication_override_file: Option<PathBuf>,
+
     /// If set to true, pixi will not verify the TLS certificate of the server.
     #[serde(default)]
     tls_no_verify: Option<bool>,
 
+    #[serde(default)]
+    mirrors: HashMap<Url, Vec<Url>>,
+
     #[serde(skip)]
     pub loaded_from: Vec<PathBuf>,
 
-    #[serde(skip)]
+    #[serde(skip, default = "default_channel_config")]
     pub channel_config: ChannelConfig,
+
+    /// Configuration for repodata fetching.
+    pub repodata_config: Option<RepodataConfig>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            default_channels: Vec::new(),
+            change_ps1: None,
+            authentication_override_file: None,
+            tls_no_verify: None,
+            mirrors: HashMap::new(),
+            loaded_from: Vec::new(),
+            channel_config: default_channel_config(),
+            repodata_config: None,
+        }
+    }
 }
 
 impl From<ConfigCli> for Config {
     fn from(cli: ConfigCli) -> Self {
         Self {
             tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
+            authentication_override_file: cli.auth_file,
             ..Default::default()
         }
     }
@@ -133,7 +190,13 @@ impl Config {
 
     /// Load the global config file from the home directory (~/.pixi/config.toml)
     pub fn load_global() -> Config {
+        let xdg_config_home = std::env::var_os("XDG_CONFIG_HOME").map_or_else(
+            || dirs::home_dir().map(|d| d.join(".config")),
+            |p| Some(PathBuf::from(p)),
+        );
+
         let global_locations = vec![
+            xdg_config_home.map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
             dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
             home_path().map(|d| d.join(consts::CONFIG_FILE)),
         ];
@@ -143,7 +206,7 @@ impl Config {
                 tracing::info!("Loading global config from {}", location.display());
                 let global_config = fs::read_to_string(&location).unwrap_or_default();
                 if let Ok(config) = Config::from_toml(&global_config, &location) {
-                    merged_config.merge_config(&config);
+                    merged_config = merged_config.merge_config(config);
                 } else {
                     tracing::warn!(
                         "Could not load global config (invalid toml): {}",
@@ -154,7 +217,18 @@ impl Config {
                 tracing::info!("Global config not found at {}", location.display());
             }
         }
-        merged_config
+
+        // Load the default CLI config and layer it on top of the global config
+        // This will add any environment variables defined in the `clap` attributes to the config
+        let mut default_cli = ConfigCli::default();
+        default_cli.update_from(std::env::args().take(0));
+        merged_config.merge_config(default_cli.into())
+    }
+
+    /// Load the global config and layer the given cli config on top of it.
+    pub fn with_cli_config(cli: &ConfigCli) -> Config {
+        let config = Config::load_global();
+        config.merge_config(cli.clone().into())
     }
 
     /// Load the config from the given path pixi folder and merge it with the global config.
@@ -165,7 +239,7 @@ impl Config {
         if local_config.exists() {
             let s = fs::read_to_string(&local_config).into_diagnostic()?;
             let local = Config::from_toml(&s, &local_config)?;
-            config.merge_config(&local);
+            config = config.merge_config(local);
         }
 
         Ok(config)
@@ -177,20 +251,28 @@ impl Config {
     }
 
     /// Merge the given config into the current one.
-    pub fn merge_config(&mut self, other: &Config) {
-        if !other.default_channels.is_empty() {
-            self.default_channels = other.default_channels.clone();
-        }
+    #[must_use]
+    pub fn merge_config(mut self, other: Config) -> Self {
+        self.mirrors.extend(other.mirrors);
+        self.loaded_from.extend(other.loaded_from);
 
-        if other.change_ps1.is_some() {
-            self.change_ps1 = other.change_ps1;
+        Self {
+            default_channels: if other.default_channels.is_empty() {
+                self.default_channels
+            } else {
+                other.default_channels
+            },
+            tls_no_verify: other.tls_no_verify.or(self.tls_no_verify),
+            change_ps1: other.change_ps1.or(self.change_ps1),
+            authentication_override_file: other
+                .authentication_override_file
+                .or(self.authentication_override_file),
+            mirrors: self.mirrors,
+            loaded_from: self.loaded_from,
+            // currently this is always the default so just use the other value
+            channel_config: other.channel_config,
+            repodata_config: other.repodata_config.or(self.repodata_config),
         }
-
-        if other.tls_no_verify.is_some() {
-            self.tls_no_verify = other.tls_no_verify;
-        }
-
-        self.loaded_from.extend(other.loaded_from.iter().cloned());
     }
 
     /// Retrieve the value for the default_channels field (defaults to the ["conda-forge"]).
@@ -215,6 +297,11 @@ impl Config {
         self.change_ps1.unwrap_or(true)
     }
 
+    /// Retrieve the value for the auth_file field.
+    pub fn authentication_override_file(&self) -> Option<&PathBuf> {
+        self.authentication_override_file.as_ref()
+    }
+
     pub fn channel_config(&self) -> &ChannelConfig {
         &self.channel_config
     }
@@ -233,6 +320,10 @@ impl Config {
             .iter()
             .map(|c| Channel::from_str(c, &self.channel_config))
             .collect::<Result<Vec<Channel>, _>>()
+    }
+
+    pub fn mirror_map(&self) -> &std::collections::HashMap<Url, Vec<Url>> {
+        &self.mirrors
     }
 }
 
@@ -255,16 +346,22 @@ mod tests {
     fn test_config_from_cli() {
         let cli = ConfigCli {
             tls_no_verify: true,
+            auth_file: None,
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
 
         let cli = ConfigCli {
             tls_no_verify: false,
+            auth_file: Some(PathBuf::from("path.json")),
         };
 
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, None);
+        assert_eq!(
+            config.authentication_override_file,
+            Some(PathBuf::from("path.json"))
+        );
     }
 
     #[test]
@@ -272,10 +369,11 @@ mod tests {
         let mut config = Config::default();
         let other = Config {
             default_channels: vec!["conda-forge".to_string()],
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             ..Default::default()
         };
-        config.merge_config(&other);
+        config = config.merge_config(other);
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(true));
 
@@ -285,9 +383,13 @@ mod tests {
 
         let config_1 = Config::from_path(&d.join("config_1.toml")).unwrap();
         let config_2 = Config::from_path(&d.join("config_2.toml")).unwrap();
+        let config_2 = Config {
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
+            ..config_2
+        };
 
         let mut merged = config_1.clone();
-        merged.merge_config(&config_2);
+        merged = merged.merge_config(config_2);
 
         let debug = format!("{:#?}", merged);
         let debug = debug.replace("\\\\", "/");

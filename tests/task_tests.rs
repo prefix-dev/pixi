@@ -82,7 +82,7 @@ pub async fn add_command_types() {
     let project = pixi.project().unwrap();
     let tasks = project.default_environment().tasks(None, true).unwrap();
     let task = tasks.get(&<TaskName>::from("testing")).unwrap();
-    assert!(matches!(task, Task::Alias(a) if a.depends_on.get(0).unwrap().as_str() == "test"));
+    assert!(matches!(task, Task::Alias(a) if a.depends_on.first().unwrap().as_str() == "test"));
 }
 
 #[tokio::test]
@@ -210,4 +210,32 @@ async fn test_cwd() {
         })
         .await
         .is_err());
+}
+
+#[tokio::test]
+async fn test_task_with_env() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().without_channels().await.unwrap();
+
+    pixi.tasks()
+        .add("env-test".into(), None, FeatureName::Default)
+        .with_commands(["echo From a $HELLO"])
+        .with_env(vec![(
+            String::from("HELLO"),
+            String::from("world with spaces"),
+        )])
+        .execute()
+        .unwrap();
+
+    let result = pixi
+        .run(Args {
+            task: vec!["env-test".to_string()],
+            manifest_path: None,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.stdout, "From a world with spaces\n");
 }

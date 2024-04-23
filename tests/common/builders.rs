@@ -215,6 +215,12 @@ impl TaskAddBuilder {
         self
     }
 
+    /// With this environment variable
+    pub fn with_env(mut self, env: Vec<(String, String)>) -> Self {
+        self.args.env = env;
+        self
+    }
+
     /// Execute the CLI command
     pub fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {

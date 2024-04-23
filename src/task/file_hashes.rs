@@ -75,14 +75,27 @@ impl FileHashes {
         let mut ignore_builder = OverrideBuilder::new(root);
         for ignore_line in filters {
             let path = root.join(ignore_line.as_ref());
-            if ignore_line.as_ref().ends_with('/') {
-                ignore_builder.add(&format!("{}**", ignore_line.as_ref()))?;
+            let mut pat = if ignore_line.as_ref().ends_with('/') {
+                format!("{}**", ignore_line.as_ref())
             } else if path.exists() && path.is_dir() {
-                ignore_builder.add(&format!("{}/**", ignore_line.as_ref()))?;
+                format!("{}/**", ignore_line.as_ref())
             } else {
-                ignore_builder.add(ignore_line.as_ref())?;
+                ignore_line.as_ref().to_owned()
+            };
+
+            if pat.starts_with('!') && !pat.starts_with("!/") {
+                // make sure there is a `/` at the 2nd place so that the pattern reads
+                // `!/**/lib.rs` instead of `!**/lib.rs`
+                pat.insert(1, '/');
+            } else {
+                // Same for the others, make sure they start in the right folder
+                if !pat.starts_with('/') {
+                    pat.insert(0, '/');
+                }
             }
+            ignore_builder.add(&pat)?;
         }
+
         let filter = ignore_builder.build()?;
 
         // Spawn a thread that will collect the results from a channel.
@@ -231,5 +244,17 @@ mod test {
         assert!(hashes.files.contains_key(Path::new("src/lib.rs")));
         assert!(hashes.files.contains_key(Path::new("src/bla/lib.rs")));
         assert!(!hashes.files.contains_key(Path::new("Cargo.toml")));
+
+        let hashes = FileHashes::from_files(target_dir.path(), vec!["main.rs"])
+            .await
+            .unwrap();
+
+        assert!(!hashes.files.contains_key(Path::new("src/main.rs")));
+
+        let hashes = FileHashes::from_files(target_dir.path(), vec!["src/lib.rs", "src/*.rs"])
+            .await
+            .unwrap();
+
+        assert!(hashes.files.contains_key(Path::new("src/lib.rs")));
     }
 }

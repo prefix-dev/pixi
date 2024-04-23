@@ -1,5 +1,5 @@
 use crate::progress::{self, ProgressBarMessageFormatter, ScopedTask};
-use distribution_types::{CachedDist, Name, VersionOrUrl};
+use distribution_types::{BuildableSource, CachedDist, Name, VersionOrUrl};
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -150,17 +150,11 @@ impl uv_installer::DownloadReporter for UvReporter {
         self.finish_all();
     }
 
-    fn on_build_start(&self, dist: &distribution_types::SourceDist) -> usize {
-        self.start_sync(format!(
-            "building {}=={}",
-            dist.name().as_ref(),
-            dist.version()
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| "unknown".to_string())
-        ))
+    fn on_build_start(&self, dist: &BuildableSource) -> usize {
+        self.start_sync(format!("building {}", dist))
     }
 
-    fn on_build_complete(&self, _dist: &distribution_types::SourceDist, id: usize) {
+    fn on_build_complete(&self, _dist: &BuildableSource, id: usize) {
         self.finish(id);
     }
 
@@ -203,22 +197,16 @@ impl uv_installer::InstallReporter for UvReporter {
 }
 
 impl uv_resolver::ResolverReporter for UvReporter {
-    fn on_progress(&self, name: &PackageName, version: VersionOrUrl) {
+    fn on_progress(&self, name: &PackageName, version: &VersionOrUrl) {
         self.pb
             .set_message(format!("resolving {}{}", name, version));
     }
 
-    fn on_build_start(&self, dist: &distribution_types::SourceDist) -> usize {
-        self.start_sync(format!(
-            "building {}=={}",
-            dist.name().as_ref(),
-            dist.version()
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| "unknown".to_string())
-        ))
+    fn on_build_start(&self, dist: &BuildableSource) -> usize {
+        self.start_sync(format!("building {}", dist,))
     }
 
-    fn on_build_complete(&self, _dist: &distribution_types::SourceDist, id: usize) {
+    fn on_build_complete(&self, _dist: &BuildableSource, id: usize) {
         self.finish(id);
     }
 

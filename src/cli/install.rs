@@ -9,7 +9,7 @@ use std::path::PathBuf;
 /// Install all dependencies
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
@@ -24,10 +24,9 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment_name = args
-        .environment
-        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
+    let project =
+        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
+    let environment_name = EnvironmentName::from_arg_or_env_var(args.environment);
     let environment = project
         .environment(&environment_name)
         .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
@@ -46,5 +45,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         console::style(console::Emoji("✔ ", "")).green(),
         project.root().display()
     );
+    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
 }

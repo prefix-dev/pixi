@@ -5,7 +5,7 @@ use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
 use rattler_shell::activation::PathModificationBehavior;
-use rattler_shell::shell::{PowerShell, Shell, ShellEnum, ShellScript};
+use rattler_shell::shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
@@ -15,13 +15,12 @@ use crate::unix::PtySession;
 
 use crate::cli::LockFileUsageArgs;
 use crate::project::manifest::EnvironmentName;
-#[cfg(target_family = "windows")]
-use rattler_shell::shell::CmdExe;
+use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 
 /// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     manifest_path: Option<PathBuf>,
 
@@ -48,10 +47,10 @@ fn start_powershell(
 
     let mut shell_script = ShellScript::new(pwsh.clone(), Platform::current());
     for (key, value) in env {
-        shell_script.set_env_var(key, value);
+        shell_script.set_env_var(key, value).into_diagnostic()?;
     }
     temp_file
-        .write_all(shell_script.contents.as_bytes())
+        .write_all(shell_script.contents().into_diagnostic()?.as_bytes())
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
@@ -70,7 +69,8 @@ fn start_powershell(
     Ok(process.wait().into_diagnostic()?.code())
 }
 
-#[cfg(target_family = "windows")]
+// allowing dead code so that we test this on unix compilation as well
+#[allow(dead_code)]
 fn start_cmdexe(
     cmdexe: CmdExe,
     env: &HashMap<String, String>,
@@ -85,10 +85,10 @@ fn start_cmdexe(
     // TODO: Should we just execute the activation scripts directly for cmd.exe?
     let mut shell_script = ShellScript::new(cmdexe, Platform::current());
     for (key, value) in env {
-        shell_script.set_env_var(key, value);
+        shell_script.set_env_var(key, value).into_diagnostic()?;
     }
     temp_file
-        .write_all(shell_script.contents.as_bytes())
+        .write_all(shell_script.contents().into_diagnostic()?.as_bytes())
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
@@ -108,7 +108,7 @@ fn start_cmdexe(
 /// - `args`: A vector of arguments to pass to the shell.
 /// - `env`: A HashMap containing environment variables to set in the shell.
 #[cfg(target_family = "unix")]
-async fn start_unix_shell<T: Shell + Copy>(
+async fn start_unix_shell<T: Shell + Copy + 'static>(
     shell: T,
     args: Vec<&str>,
     env: &HashMap<String, String>,
@@ -124,11 +124,11 @@ async fn start_unix_shell<T: Shell + Copy>(
 
     let mut shell_script = ShellScript::new(shell, Platform::current());
     for (key, value) in env {
-        shell_script.set_env_var(key, value);
+        shell_script.set_env_var(key, value).into_diagnostic()?;
     }
 
     temp_file
-        .write_all(shell_script.contents.as_bytes())
+        .write_all(shell_script.contents().into_diagnostic()?.as_bytes())
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
@@ -177,14 +177,16 @@ async fn start_nu_shell(
         if key == "PATH" {
             // split path with PATHSEP
             let paths = std::env::split_paths(value).collect::<Vec<_>>();
-            shell_script.set_path(&paths, PathModificationBehavior::Replace);
+            shell_script
+                .set_path(&paths, PathModificationBehavior::Replace)
+                .into_diagnostic()?;
         } else {
-            shell_script.set_env_var(key, value);
+            shell_script.set_env_var(key, value).into_diagnostic()?;
         }
     }
 
     temp_file
-        .write_all(shell_script.contents.as_bytes())
+        .write_all(shell_script.contents().into_diagnostic()?.as_bytes())
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
@@ -199,14 +201,14 @@ async fn start_nu_shell(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?
-        .with_cli_config(args.config.clone());
-    let environment_name = args
-        .environment
-        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
+    let project =
+        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
+    let environment_name = EnvironmentName::from_arg_or_env_var(args.environment);
     let environment = project
         .environment(&environment_name)
         .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
+
+    verify_current_platform_has_required_virtual_packages(&environment).into_diagnostic()?;
 
     let prompt_name = match environment_name {
         EnvironmentName::Default => project.name().to_string(),
@@ -226,8 +228,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         match interactive_shell {
             ShellEnum::NuShell(_) => prompt::get_nu_prompt(prompt_name.as_str()),
             ShellEnum::PowerShell(_) => prompt::get_powershell_prompt(prompt_name.as_str()),
-            ShellEnum::Bash(_) => prompt::get_bash_prompt(prompt_name.as_str()),
-            ShellEnum::Zsh(_) => prompt::get_zsh_prompt(prompt_name.as_str()),
+            ShellEnum::Bash(_) => prompt::get_bash_hook(prompt_name.as_str()),
+            ShellEnum::Zsh(_) => prompt::get_zsh_hook(prompt_name.as_str()),
             ShellEnum::Fish(_) => prompt::get_fish_prompt(prompt_name.as_str()),
             ShellEnum::Xonsh(_) => prompt::get_xonsh_prompt(),
             ShellEnum::CmdExe(_) => prompt::get_cmd_prompt(prompt_name.as_str()),

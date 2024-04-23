@@ -3,15 +3,13 @@ part: pixi/ide_integration
 title: PyCharm Integration
 description: Use PyCharm with pixi environments
 ---
+
 <!--
 Modifications to this file are related to the README.md in https://github.com/pavelzw/pixi-pycharm,
 please keep these two in sync by making a PR in both
 -->
 
 You can use PyCharm with pixi environments by using the `conda` shim provided by the [pixi-pycharm](https://github.com/pavelzw/pixi-pycharm) package.
-
-!!!warning "Windows support"
-    Windows is currently not supported, see [pavelzw/pixi-pycharm #5](https://github.com/pavelzw/pixi-pycharm/issues/5). Only Linux and macOS are supported.
 
 ## How to use
 
@@ -23,26 +21,20 @@ pixi add pixi-pycharm
 
 This will ensure that the conda shim is installed in your project's environment.
 
-!!!tip "could not determine any available versions for pixi-pycharm on win-64"
-    If you get the error `could not determine any available versions for pixi-pycharm on win-64` when running `pixi add pixi-pycharm` (even when you're not on Windows),
-    this is because the package is not available on Windows and pixi tries to solve the environment for all platforms.
-    If you still want to use it in your pixi project (and are on Linux/macOS), you can add the following to your `pixi.toml`:
-
-    ```toml
-    [target.unix.dependencies]
-    pixi-pycharm = "*"
-    ```
-
-    This will tell pixi to only use this dependency on unix platforms.
-
 Having `pixi-pycharm` installed, you can now configure PyCharm to use your pixi environments.
-Go to the *Add Python Interpreter* dialog (bottom right corner of the PyCharm window) and select *Conda Environment*.
-Set *Conda Executable* to the full path of the `conda` file in your pixi environment.
+Go to the _Add Python Interpreter_ dialog (bottom right corner of the PyCharm window) and select _Conda Environment_.
+Set _Conda Executable_ to the full path of the `conda` file (on Windows: `conda.bat`) which is located in `.pixi/envs/default/libexec`.
 You can get the path using the following command:
 
-```bash
-pixi run 'echo $CONDA_PREFIX/libexec/conda'
-```
+=== "Linux & macOS"
+    ```bash
+    pixi run 'echo $CONDA_PREFIX/libexec/conda'
+    ```
+
+=== "Windows"
+    ```bash
+    pixi run 'echo $CONDA_PREFIX\\libexec\\conda.bat'
+    ```
 
 This is an executable that tricks PyCharm into thinking it's the proper `conda` executable.
 Under the hood it redirects all calls to the corresponding `pixi` equivalent.
@@ -68,8 +60,8 @@ You can now run your programs and tests as usual.
 
 ### Multiple environments
 
-If your project uses [multiple environments](../environment.md) to tests different Python versions or dependencies, you can add multiple environments to PyCharm
-by specifying *Use existing environment* in the *Add Python Interpreter* dialog.
+If your project uses [multiple environments](../features/multi_environment.md) to tests different Python versions or dependencies, you can add multiple environments to PyCharm
+by specifying _Use existing environment_ in the _Add Python Interpreter_ dialog.
 
 ![Multiple pixi environments](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/python-interpreters-multi-env-light.png#only-light)
 ![Multiple pixi environments](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/python-interpreters-multi-env-dark.png#only-dark)
@@ -81,7 +73,7 @@ You can then specify the corresponding environment in the bottom right corner of
 
 ### Multiple pixi projects
 
-When using multiple pixi projects, remember to select the correct *Conda Executable* for each project as mentioned above.
+When using multiple pixi projects, remember to select the correct _Conda Executable_ for each project as mentioned above.
 It also might come up that you have multiple environments it might come up that you have multiple environments with the same name.
 
 ![Multiple default environments](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/multiple-default-envs-light.png#only-light)

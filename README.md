@@ -39,7 +39,7 @@ Developed with ❤️ at [prefix.dev](https://prefix.dev).
 
 - Supports **multiple languages** including Python, C++, and R using Conda packages. You can find available packages on [prefix.dev](https://prefix.dev).
 - Compatible with all major operating systems: Linux, Windows, macOS (including Apple Silicon).
-- Always includes an up-to-date **lockfile**.
+- Always includes an up-to-date **lock file**.
 - Provides a clean and simple Cargo-like **command-line interface**.
 - Allows you to install tools **per-project** or **system-wide**.
 - Entirely written in **Rust** and built on top of the **[rattler](https://github.com/mamba-org/rattler)** library.
@@ -80,6 +80,14 @@ brew install pixi
 
 The script will also update your ~/.bash_profile to include ~/.pixi/bin in your PATH, allowing you to invoke the pixi command from anywhere.
 You might need to restart your terminal or source your shell for the changes to take effect.
+
+Starting with macOS Catalina [zsh is the default login shell and interactive shell](https://support.apple.com/en-us/102360). Therefore, you might want to use `zsh` instead of `bash` in the install command:
+
+```zsh
+curl -fsSL https://pixi.sh/install.sh | zsh
+```
+
+The script will also update your ~/.zshrc to include ~/.pixi/bin in your PATH, allowing you to invoke the pixi command from anywhere.
 
 ### Windows
 
@@ -256,7 +264,7 @@ You can use pixi in GitHub Actions to install dependencies and run commands.
 It supports automatic caching of your environments.
 
 ```yml
-- uses: prefix-dev/setup-pixi@v0.5.1
+- uses: prefix-dev/setup-pixi@v0.6.0
 - run: pixi run cowpy "Thanks for using pixi"
 ```
 

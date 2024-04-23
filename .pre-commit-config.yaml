@@ -8,7 +8,7 @@ repos:
   # Use ruff for python examples
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.3.1
+    rev: v0.3.4
     hooks:
       - id: ruff
         args: [ --fix, --exit-non-zero-on-fix ]

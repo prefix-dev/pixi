@@ -61,7 +61,7 @@ pub struct Args {
     #[arg(required = true)]
     pub specs: Vec<String>,
 
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
@@ -118,7 +118,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let spec_platforms = &args.platform;
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.default_environment().dir().as_path())?;
+    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
 
     // Add the platform if it is not already present
     let platforms_to_add = spec_platforms
@@ -176,6 +176,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             add_pypi_specs_to_project(
                 &mut project,
+                &feature_name,
                 specs,
                 spec_platforms,
                 args.no_lockfile_update,
@@ -212,13 +213,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
     }
 
+    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
 }
 
 pub async fn add_pypi_specs_to_project(
     project: &mut Project,
+    feature_name: &FeatureName,
     specs: Vec<(PyPiPackageName, PyPiRequirement)>,
-    specs_platforms: &Vec<Platform>,
+    specs_platforms: &[Platform],
     no_update_lockfile: bool,
     no_install: bool,
 ) -> miette::Result<()> {
@@ -226,12 +229,14 @@ pub async fn add_pypi_specs_to_project(
         // TODO: Get best version
         // Add the dependency to the project
         if specs_platforms.is_empty() {
-            project.manifest.add_pypi_dependency(name, spec, None)?;
+            project
+                .manifest
+                .add_pypi_dependency(name, spec, None, feature_name)?;
         } else {
             for platform in specs_platforms.iter() {
                 project
                     .manifest
-                    .add_pypi_dependency(name, spec, Some(*platform))?;
+                    .add_pypi_dependency(name, spec, Some(*platform), feature_name)?;
             }
         }
     }
@@ -261,7 +266,7 @@ pub async fn add_conda_specs_to_project(
     spec_type: SpecType,
     no_install: bool,
     no_update_lockfile: bool,
-    specs_platforms: &Vec<Platform>,
+    specs_platforms: &[Platform],
 ) -> miette::Result<()> {
     // Split the specs into package name and version specifier
     let new_specs = specs
@@ -381,7 +386,7 @@ pub async fn add_conda_specs_to_project(
 /// Get all the latest versions found in the platforms repodata.
 fn determine_latest_versions(
     project: &Project,
-    platforms: &Vec<Platform>,
+    platforms: &[Platform],
     sparse_repo_data: &IndexMap<(Channel, Platform), SparseRepoData>,
     name: &PackageName,
 ) -> miette::Result<Vec<Version>> {
@@ -394,7 +399,7 @@ fn determine_latest_versions(
         temp.push(Platform::NoArch);
         temp
     } else {
-        let mut temp = platforms.clone();
+        let mut temp = platforms.to_vec();
         temp.push(Platform::NoArch);
         temp
     };

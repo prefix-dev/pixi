@@ -1,5 +1,6 @@
 use crate::lock_file::{PypiRecord, UvResolutionContext};
 use crate::project::grouped_environment::GroupedEnvironmentName;
+use crate::pypi_mapping::{self, Reporter};
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::is_python_record;
 use crate::{
@@ -12,7 +13,6 @@ use crate::{
     prefix::Prefix,
     progress::global_multi_progress,
     project::{grouped_environment::GroupedEnvironment, Environment},
-    pypi_name_mapping,
     repodata::fetch_sparse_repodata_targets,
     utils::BarrierCell,
     EnvironmentName, Project,
@@ -21,11 +21,13 @@ use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, Tr
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, WrapErr};
+use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -129,6 +131,7 @@ impl<'p> LockFileDerivedData<'p> {
             &environment.system_requirements(),
             uv_context,
             env_variables,
+            self.project.root(),
         )
         .await?;
 
@@ -390,6 +393,25 @@ fn default_max_concurrent_solves() -> usize {
     (available_parallelism.saturating_sub(2)).min(4).max(1)
 }
 
+/// If the project has any source dependencies, like `git` or `path` dependencies.
+/// for pypi dependencies, we need to limit the solve to 1,
+/// because of uv internals
+fn determine_pypi_solve_permits(project: &Project) -> usize {
+    // Get all environments
+    let environments = project.environments();
+    for environment in environments {
+        for (_, req) in environment.pypi_dependencies(None).iter() {
+            for dep in req {
+                if dep.is_direct_dependency() {
+                    return 1;
+                }
+            }
+        }
+    }
+
+    default_max_concurrent_solves()
+}
+
 /// Ensures that the lock-file is up-to-date with the project.
 ///
 /// This function will return a [`LockFileDerivedData`] struct that contains the lock-file and any
@@ -410,7 +432,11 @@ pub async fn ensure_up_to_date_lock_file(
     let max_concurrent_solves = options
         .max_concurrent_solves
         .unwrap_or_else(default_max_concurrent_solves);
+
     let solve_semaphore = Arc::new(Semaphore::new(max_concurrent_solves));
+
+    // TODO(tim): we need this semaphore, to limit the number of concurrent solves. This is a problem when using source dependencies
+    let pypi_solve_semaphore = Arc::new(Semaphore::new(determine_pypi_solve_permits(project)));
 
     // should we check the lock-file in the first place?
     if !options.lock_file_usage.should_check_if_out_of_date() {
@@ -470,6 +496,7 @@ pub async fn ensure_up_to_date_lock_file(
             .into_iter()
             .filter(|target| !options.existing_repo_data.contains_key(target)),
         project.authenticated_client(),
+        Some(project.config()),
     )
     .await?;
 
@@ -652,6 +679,7 @@ pub async fn ensure_up_to_date_lock_file(
                 context.repo_data.clone(),
                 platform,
                 solve_semaphore.clone(),
+                project.client().clone(),
             )
             .boxed_local();
 
@@ -705,7 +733,7 @@ pub async fn ensure_up_to_date_lock_file(
         // platform for this group.
         let records_future = context
             .get_latest_group_repodata_records(&group, current_platform)
-            .expect("conda records should be available now or in the future");
+            .ok_or_else(|| make_unsupported_pypi_platform_error(environment, current_platform))?;
 
         // Spawn a task to instantiate the environment
         let environment_name = environment.name().clone();
@@ -784,6 +812,8 @@ pub async fn ensure_up_to_date_lock_file(
             repodata_future,
             prefix_future,
             env_variables,
+            pypi_solve_semaphore.clone(),
+            project.root().to_path_buf(),
         );
 
         pending_futures.push(pypi_solve_future.boxed_local());
@@ -1044,6 +1074,60 @@ pub async fn ensure_up_to_date_lock_file(
     })
 }
 
+/// Constructs an error that indicates that the current platform cannot solve pypi dependencies because there is no python interpreter available for the current platform.
+fn make_unsupported_pypi_platform_error(
+    environment: &Environment<'_>,
+    current_platform: Platform,
+) -> miette::Report {
+    let grouped_environment = GroupedEnvironment::from(environment.clone());
+
+    // Construct a diagnostic that explains that the current platform is not supported.
+    let mut diag = MietteDiagnostic::new(format!("Unable to solve pypi dependencies for the {} {} because no compatible python interpreter can be installed for the current platform", grouped_environment.name().fancy_display(), match &grouped_environment {
+        GroupedEnvironment::Group(_) => "solve group",
+        GroupedEnvironment::Environment(_) => "environment"
+    }));
+
+    let mut labels = Vec::new();
+
+    // Add a reference to the set of platforms that are supported by the project.
+    let project_platforms = &environment.project().manifest.parsed.project.platforms;
+    if let Some(span) = project_platforms.span.clone() {
+        labels.push(LabeledSpan::at(
+            span,
+            format!("even though the projects does include support for '{current_platform}'"),
+        ));
+    }
+
+    // Find all the features that are excluding the current platform.
+    let features_without_platform = grouped_environment.features().filter_map(|feature| {
+        let platforms = feature.platforms.as_ref()?;
+        if !platforms.value.contains(&current_platform) {
+            Some((feature, platforms))
+        } else {
+            None
+        }
+    });
+
+    for (feature, platforms) in features_without_platform {
+        let Some(span) = platforms.span.as_ref() else {
+            continue;
+        };
+
+        labels.push(LabeledSpan::at(
+            span.clone(),
+            format!(
+                "feature '{}' does not support '{current_platform}'",
+                feature.name
+            ),
+        ));
+    }
+
+    diag.labels = Some(labels);
+    diag.help = Some("Try converting your [pypi-dependencies] to conda [dependencies]".to_string());
+
+    miette::Report::new(diag).with_source_code(environment.project().manifest.contents.clone())
+}
+
 /// Represents data that is sent back from a task. This is used to communicate the result of a task
 /// back to the main task which will forward the information to other tasks waiting for results.
 enum TaskResult {
@@ -1082,6 +1166,7 @@ async fn spawn_solve_conda_environment_task(
     sparse_repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
     platform: Platform,
     concurrency_semaphore: Arc<Semaphore>,
+    client: reqwest::Client,
 ) -> miette::Result<TaskResult> {
     // Get the dependencies for this platform
     let dependencies = group.dependencies(None, Some(platform));
@@ -1101,6 +1186,9 @@ async fn spawn_solve_conda_environment_task(
     // Whether there are pypi dependencies, and we should fetch purls.
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
+    // Whether we should use custom mapping location
+    let pypi_name_mapping_location = group.project().pypi_name_mapping_source();
+
     tokio::spawn(
         async move {
             let _permit = concurrency_semaphore
@@ -1108,11 +1196,11 @@ async fn spawn_solve_conda_environment_task(
                 .await
                 .expect("the semaphore is never closed");
 
-            let pb = SolveProgressBar::new(
+            let pb = Arc::new(SolveProgressBar::new(
                 global_multi_progress().add(ProgressBar::hidden()),
                 platform,
                 group_name.clone(),
-            );
+            ));
             pb.start();
 
             let start = Instant::now();
@@ -1157,7 +1245,14 @@ async fn spawn_solve_conda_environment_task(
 
             // Add purl's for the conda packages that are also available as pypi packages if we need them.
             if has_pypi_dependencies {
-                pypi_name_mapping::amend_pypi_purls(&mut records).await?;
+                pb.set_message("extracting pypi packages");
+                pypi_mapping::amend_pypi_purls(
+                    client,
+                    pypi_name_mapping_location,
+                    &mut records,
+                    Some(pb.purl_amend_reporter()),
+                )
+                .await?;
             }
 
             // Turn the records into a map by name
@@ -1240,8 +1335,8 @@ async fn spawn_extract_environment_task(
     for (name, reqs) in pypi_dependencies {
         let name = name.as_normalized().clone();
         for req in reqs {
-            for extra in req.extras.into_iter().flatten() {
-                pypi_package_names.insert(PackageName::Pypi((name.clone(), Some(extra))));
+            for extra in req.extras().iter() {
+                pypi_package_names.insert(PackageName::Pypi((name.clone(), Some(extra.clone()))));
             }
         }
         pypi_package_names.insert(PackageName::Pypi((name, None)));
@@ -1345,6 +1440,7 @@ async fn spawn_extract_environment_task(
 }
 
 /// A task that solves the pypi dependencies for a given environment.
+#[allow(clippy::too_many_arguments)]
 async fn spawn_solve_pypi_task(
     resolution_context: UvResolutionContext,
     environment: GroupedEnvironment<'_>,
@@ -1352,6 +1448,8 @@ async fn spawn_solve_pypi_task(
     repodata_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
     prefix: impl Future<Output = (Prefix, PythonStatus)>,
     env_variables: &HashMap<String, String>,
+    semaphore: Arc<Semaphore>,
+    project_root: PathBuf,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1368,9 +1466,23 @@ async fn spawn_solve_pypi_task(
     let system_requirements = environment.system_requirements();
 
     // Wait until the conda records and prefix are available.
-    let (repodata_records, (prefix, python_status)) = tokio::join!(repodata_records, prefix);
+    let (repodata_records, (prefix, python_status), _guard) =
+        tokio::join!(repodata_records, prefix, semaphore.acquire_owned());
 
     let environment_name = environment.name().clone();
+
+    let pypi_name_mapping_location = environment.project().pypi_name_mapping_source();
+
+    let mut conda_records = repodata_records.records.clone();
+
+    pypi_mapping::amend_pypi_purls(
+        environment.project().client().clone(),
+        pypi_name_mapping_location,
+        &mut conda_records,
+        None,
+    )
+    .await?;
+
     // let (pypi_packages, duration) = tokio::spawn(
     let (pypi_packages, duration) = async move {
         let pb = SolveProgressBar::new(
@@ -1394,12 +1506,12 @@ async fn spawn_solve_pypi_task(
                 .map(|(name, requirement)| (name.as_normalized().clone(), requirement))
                 .collect(),
             system_requirements,
-            &repodata_records.records,
-            &[],
+            &conda_records,
             platform,
             &pb.pb,
             &python_path,
             env_variables,
+            &project_root,
         )
         .await
         .with_context(|| {
@@ -1527,8 +1639,6 @@ pub async fn load_sparse_repo_data_async(
 #[derive(Clone)]
 pub(crate) struct SolveProgressBar {
     pb: ProgressBar,
-    platform: Platform,
-    environment_name: GroupedEnvironmentName,
 }
 
 impl SolveProgressBar {
@@ -1537,48 +1647,87 @@ impl SolveProgressBar {
         platform: Platform,
         environment_name: GroupedEnvironmentName,
     ) -> Self {
-        pb.set_style(
-            indicatif::ProgressStyle::with_template(&format!(
-                "   ({:>12}) {:<9} ..",
-                environment_name.fancy_display(),
-                consts::PLATFORM_STYLE.apply_to(platform),
-            ))
-            .unwrap(),
+        let name_and_platform = format!(
+            "{}:{}",
+            environment_name.fancy_display(),
+            consts::PLATFORM_STYLE.apply_to(platform)
         );
+
+        pb.set_style(indicatif::ProgressStyle::with_template("    {prefix:20!} ..").unwrap());
         pb.enable_steady_tick(Duration::from_millis(100));
-        Self {
-            pb,
-            platform,
-            environment_name,
-        }
+        pb.set_prefix(name_and_platform);
+        Self { pb }
     }
 
     pub fn start(&self) {
         self.pb.reset_elapsed();
-        self.pb.set_style(
-            indicatif::ProgressStyle::with_template(&format!(
-                "  {{spinner:.dim}} {:>12}: {:<9} [{{elapsed_precise}}] {{msg:.dim}}",
-                self.environment_name.fancy_display(),
-                consts::PLATFORM_STYLE.apply_to(self.platform),
-            ))
-            .unwrap(),
-        );
+        self.reset_style()
     }
 
     pub fn set_message(&self, msg: impl Into<Cow<'static, str>>) {
         self.pb.set_message(msg);
     }
 
+    pub fn inc(&self, n: u64) {
+        self.pb.inc(n);
+    }
+
+    pub fn set_update_style(&self, total: usize) {
+        self.pb.set_length(total as u64);
+        self.pb.set_position(0);
+        self.pb.set_style(
+            indicatif::ProgressStyle::with_template(
+                "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {pos:>4}/{len:4} {msg:.dim}")
+                .unwrap()
+                .progress_chars("━━╾─"),
+        );
+    }
+
+    pub fn reset_style(&self) {
+        self.pb.set_style(
+            indicatif::ProgressStyle::with_template(
+                "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] {msg:.dim}",
+            )
+            .unwrap(),
+        );
+    }
+
     pub fn finish(&self) {
         self.pb.set_style(
             indicatif::ProgressStyle::with_template(&format!(
-                "  {} ({:>12}) {:<9} [{{elapsed_precise}}]",
+                "  {} {{prefix:20!}} [{{elapsed_precise}}]",
                 console::style(console::Emoji("✔", "↳")).green(),
-                self.environment_name.fancy_display(),
-                consts::PLATFORM_STYLE.apply_to(self.platform),
             ))
             .unwrap(),
         );
         self.pb.finish_and_clear();
+    }
+
+    fn purl_amend_reporter(self: &Arc<Self>) -> Arc<dyn Reporter> {
+        Arc::new(PurlAmendReporter {
+            pb: self.clone(),
+            style_set: AtomicBool::new(false),
+        })
+    }
+}
+
+struct PurlAmendReporter {
+    pb: Arc<SolveProgressBar>,
+    style_set: AtomicBool,
+}
+
+impl pypi_mapping::Reporter for PurlAmendReporter {
+    fn download_started(&self, _package: &RepoDataRecord, total: usize) {
+        if !self.style_set.swap(true, Ordering::Relaxed) {
+            self.pb.set_update_style(total);
+        }
+    }
+
+    fn download_finished(&self, _package: &RepoDataRecord, _total: usize) {
+        self.pb.inc(1);
+    }
+
+    fn download_failed(&self, package: &RepoDataRecord, total: usize) {
+        self.download_finished(package, total);
     }
 }

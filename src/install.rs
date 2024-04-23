@@ -1,8 +1,8 @@
-use crate::default_retry_policy;
 use crate::progress::{
     default_progress_style, finished_progress_style, global_multi_progress,
     ProgressBarMessageFormatter,
 };
+use crate::utils::reqwest::default_retry_policy;
 use futures::future::ready;
 use futures::{stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use indicatif::ProgressBar;
@@ -12,6 +12,7 @@ use rattler::install::{
     link_package, unlink_package, InstallDriver, InstallOptions, Transaction, TransactionOperation,
 };
 use rattler::package_cache::PackageCache;
+use rattler_conda_types::prefix_record::{Link, LinkType};
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
 use std::cmp::Ordering;
@@ -29,7 +30,7 @@ pub async fn execute_transaction(
     top_level_progress: ProgressBar,
 ) -> miette::Result<()> {
     // Create an install driver which helps limit the number of concurrent filesystem operations
-    let install_driver = InstallDriver::new(100, Some(prefix_records));
+    let install_driver = InstallDriver::new(100, Some(prefix_records), true);
 
     // Define default installation options.
     let install_options = InstallOptions {
@@ -285,7 +286,7 @@ async fn install_package_to_environment(
     let prefix_record = PrefixRecord {
         repodata_record,
         package_tarball_full_path: None,
-        extracted_package_dir: Some(package_dir),
+        extracted_package_dir: Some(package_dir.clone()),
         files: paths
             .iter()
             .map(|entry| entry.relative_path.clone())
@@ -293,12 +294,15 @@ async fn install_package_to_environment(
         paths_data: paths.into(),
         // TODO: Retrieve the requested spec for this package from the request
         requested_spec: None,
-        // TODO: What to do with this?
-        link: None,
+        link: Some(Link {
+            source: package_dir,
+            link_type: Some(LinkType::HardLink),
+        }),
     };
 
     // Create the conda-meta directory if it doesn't exist yet.
     let target_prefix = target_prefix.to_path_buf();
+    #[allow(clippy::blocks_in_conditions)]
     match tokio::task::spawn_blocking(move || {
         let conda_meta_path = target_prefix.join("conda-meta");
         std::fs::create_dir_all(&conda_meta_path)?;

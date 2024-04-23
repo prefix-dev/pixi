@@ -6,8 +6,9 @@ authors = ["Ruben Arts <ruben@prefix.dev>"]
 channels = ["conda-forge", "robostack-staging"]
 platforms = ["linux-64", "osx-arm64", "osx-64"]
 
-[tasks]
-start = {cmd="export GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:$PIXI_PROJECT_ROOT/.pixi/env/share/turtlebot3_gazebo/models && export TURTLEBOT3_MODEL=waffle && ros2 launch nav2_bringup tb3_simulation_launch.py headless:=False"}
+[tasks.start]
+env = { GAZEBO_MODEL_PATH = "$GAZEBO_MODEL_PATH:$PIXI_PROJECT_ROOT/.pixi/env/share/turtlebot3_gazebo/models", TURTLEBOT3_MODEL = "waffle" }
+cmd="ros2 launch nav2_bringup tb3_simulation_launch.py headless:=False"
 
 [dependencies]
 ros-humble-desktop = "*"
