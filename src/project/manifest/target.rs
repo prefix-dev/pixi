@@ -117,20 +117,19 @@ impl Target {
     /// Removes a dependency from this target.
     pub fn remove_dependency(
         &mut self,
-        dep_str: &str,
+        dep_name: &PackageName,
         spec_type: SpecType,
     ) -> Result<(PackageName, NamelessMatchSpec), SpecIsMissing> {
         let Some(dependencies) = self.dependencies.get_mut(&spec_type) else {
-            return Err(SpecIsMissing::spec_type_is_missing(dep_str, spec_type));
+            return Err(SpecIsMissing::spec_type_is_missing(
+                dep_name.as_source(),
+                spec_type,
+            ));
         };
 
-        PackageName::from_str(dep_str)
-            .map_err(|_| SpecIsMissing::dep_is_missing(dep_str, spec_type))
-            .and_then(|dep| {
-                dependencies
-                    .shift_remove_entry(&dep)
-                    .ok_or_else(|| SpecIsMissing::dep_is_missing(dep_str, spec_type))
-            })
+        dependencies
+            .shift_remove_entry(dep_name)
+            .ok_or_else(|| SpecIsMissing::dep_is_missing(dep_name.as_source(), spec_type))
     }
 
     /// Adds a dependency to a target
@@ -153,7 +152,7 @@ impl Target {
         spec: &NamelessMatchSpec,
         spec_type: SpecType,
     ) -> Result<(), DependencyError> {
-        if self.has_dependency(&dep_name, Some(spec_type)) {
+        if self.has_dependency(dep_name, Some(spec_type)) {
             return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
         }
         self.add_dependency(dep_name, spec, spec_type);

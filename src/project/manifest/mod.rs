@@ -211,7 +211,7 @@ impl Manifest {
             .add_task(name.as_str(), task.clone(), platform, feature_name)?;
 
         // Add the task to the manifest
-        self.target_mut(platform, Some(feature_name))
+        self.get_or_insert_target_mut(platform, Some(feature_name))
             .tasks
             .insert(name, task);
 
@@ -383,7 +383,7 @@ impl Manifest {
         };
 
         // Add the dependency to the manifest
-        self.target_mut(platform, Some(feature_name))
+        self.get_or_insert_target_mut(platform, Some(feature_name))
             .try_add_dependency(&name, &spec, spec_type)
             .into_diagnostic()?;
         // and to the TOML document
@@ -400,7 +400,7 @@ impl Manifest {
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Add the pypi dependency to the manifest
-        self.target_mut(platform, Some(feature_name))
+        self.get_or_insert_target_mut(platform, Some(feature_name))
             .try_add_pypi_dependency(requirement)
             .into_diagnostic()?;
         // and to the TOML document
@@ -427,12 +427,8 @@ impl Manifest {
         )?;
 
         Ok(self
-            .feature_mut(feature_name)
-            .expect("feature should exist")
-            .targets
-            .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
-            .expect("target should exist")
-            .remove_dependency(dep.as_source(), spec_type)
+            .target_mut(platform, feature_name)
+            .remove_dependency(dep, spec_type)
             .expect("dependency should exist"))
     }
 
@@ -448,11 +444,7 @@ impl Manifest {
             .remove_pypi_dependency(dep, platform, feature_name)?;
 
         Ok(self
-            .feature_mut(feature_name)
-            .expect("feature should exist")
-            .targets
-            .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
-            .expect("target should exist")
+            .target_mut(platform, feature_name)
             .pypi_dependencies
             .as_mut()
             .expect("pypi-dependencies should exist")
@@ -682,7 +674,7 @@ impl Manifest {
     }
 
     /// Returns a mutable reference to a target, creating it if needed
-    pub fn target_mut(
+    pub fn get_or_insert_target_mut(
         &mut self,
         platform: Option<Platform>,
         name: Option<&FeatureName>,
@@ -698,6 +690,15 @@ impl Manifest {
         feature
             .targets
             .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
+    }
+
+    /// Returns a mutable reference to a target
+    pub fn target_mut(&mut self, platform: Option<Platform>, name: &FeatureName) -> &mut Target {
+        self.feature_mut(name)
+            .expect("feature should exist")
+            .targets
+            .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
+            .expect("target should exist")
     }
 
     /// Returns the default feature.

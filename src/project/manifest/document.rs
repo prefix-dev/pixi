@@ -142,25 +142,29 @@ impl ManifestSource {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Result<(), Report> {
-        match self {
-            ManifestSource::PixiToml(_) => self
-                .remove_dependency_helper(
-                    dep.as_source(),
-                    consts::PYPI_DEPENDENCIES,
-                    platform,
-                    feature_name,
-                )
-                .map(|_| ()),
-            ManifestSource::PyProjectToml(_) => {
-                match self.as_table_mut()["project"]["dependencies"].as_array_mut() {
-                    Some(array) => {
-                        array.retain(|x| !x.as_str().unwrap().contains(dep.as_source()));
-                        Ok(())
-                    }
-                    None => Ok(()), // No dependencies array, nothing to remove.
-                }
+        // For 'pyproject.toml' manifest, try and remove the dependency from native arrays
+        let array = match self {
+            ManifestSource::PyProjectToml(_) if feature_name.is_default() => {
+                self.as_table_mut()["project"]["dependencies"].as_array_mut()
             }
+            ManifestSource::PyProjectToml(_) => self.as_table_mut()["project"]
+                ["optional-dependencies"][&feature_name.to_string()]
+                .as_array_mut(),
+            _ => None,
+        };
+        if let Some(array) = array {
+            array.retain(|x| !x.as_str().unwrap().contains(dep.as_source()));
         }
+
+        // For both 'pyproject.toml' and 'pixi.toml' manifest,
+        // try and remove the dependency from pixi native tables
+        self.remove_dependency_helper(
+            dep.as_source(),
+            consts::PYPI_DEPENDENCIES,
+            platform,
+            feature_name,
+        )
+        .map(|_| ())
     }
 
     /// Removes a conda or pypi dependency from the TOML manifest
