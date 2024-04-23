@@ -5,7 +5,7 @@ description = "Add a short description here"
 authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
 requires-python = ">= 3.11"
 dependencies = [
-    "bar @ file:///Users/tdejager/development/prefix/pixi/tests/satisfiability/absolute-paths/projects/bar",
+    "requests @ file:///Users/tdejager/development/prefix/pixi/tests/satisfiability/absolute-paths/projects/requests-2.31.0-py3-none-any.whl",
 ]
 
 [build-system]

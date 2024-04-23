@@ -18,15 +18,13 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tk-8.6.13-h5083fa2_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2024a-h0c530f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/xz-5.2.6-h57fd34a_0.tar.bz2
-      - pypi: /Users/tdejager/development/prefix/pixi/tests/satisfiability/absolute-paths/projects/bar
+      - pypi: https://files.pythonhosted.org/packages/ba/06/a07f096c664aeb9f01624f858c3add0a4e913d6c96257acb4fce61e7de14/certifi-2024.2.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/3a/52/9f9d17c3b54dc238de384c4cb5a2ef0e27985b42a0e5cc8e8a31d918d48d/charset_normalizer-3.3.2-cp312-cp312-macosx_11_0_arm64.whl
+      - pypi: https://files.pythonhosted.org/packages/e5/3e/741d8c82801c347547f8a2a06aa57dbb1992be9e948df2ea0eda2c8b79e8/idna-3.7-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a2/73/a68704750a7679d0b6d3ad7aa8d4da8e14e151ae82e6fee774e6e0d05ec8/urllib3-2.2.1-py3-none-any.whl
+      - pypi: /Users/tdejager/development/prefix/pixi/tests/satisfiability/absolute-paths/projects/requests-2.31.0-py3-none-any.whl
       - pypi: ./projects/foo
 packages:
-- kind: pypi
-  name: bar
-  version: 0.1.0
-  path: /Users/tdejager/development/prefix/pixi/tests/satisfiability/absolute-paths/projects/bar
-  sha256: 8be728107fc136b1a9aa2d17ac90e81d651c4c17554f5765985b5fc1ad12990f
-  requires_python: '>=3.11'
 - kind: conda
   name: bzip2
   version: 1.0.8
@@ -52,14 +50,32 @@ packages:
   size: 155725
   timestamp: 1706844034242
 - kind: pypi
+  name: certifi
+  version: 2024.2.2
+  url: https://files.pythonhosted.org/packages/ba/06/a07f096c664aeb9f01624f858c3add0a4e913d6c96257acb4fce61e7de14/certifi-2024.2.2-py3-none-any.whl
+  sha256: dc383c07b76109f368f6106eee2b593b04a011ea4d55f652c6ca24a754d1cdd1
+  requires_python: '>=3.6'
+- kind: pypi
+  name: charset-normalizer
+  version: 3.3.2
+  url: https://files.pythonhosted.org/packages/3a/52/9f9d17c3b54dc238de384c4cb5a2ef0e27985b42a0e5cc8e8a31d918d48d/charset_normalizer-3.3.2-cp312-cp312-macosx_11_0_arm64.whl
+  sha256: 55086ee1064215781fff39a1af09518bc9255b50d6333f2e4c74ca09fac6a8f6
+  requires_python: '>=3.7.0'
+- kind: pypi
   name: foo
   version: 0.1.0
   path: ./projects/foo
-  sha256: c3848a67328d58ab46efed91174a068125408a0756bc38ebaed95abdb128203d
+  sha256: 4c7329c4617e93d0bb49490a455a924edbb83b61807cf74183d67c13cb80b2b8
   requires_dist:
-  - bar @ file:///Users/tdejager/development/prefix/pixi/tests/satisfiability/absolute-paths/projects/bar
+  - requests @ file:///Users/tdejager/development/prefix/pixi/tests/satisfiability/absolute-paths/projects/requests-2.31.0-py3-none-any.whl
   requires_python: '>=3.11'
   editable: true
+- kind: pypi
+  name: idna
+  version: '3.7'
+  url: https://files.pythonhosted.org/packages/e5/3e/741d8c82801c347547f8a2a06aa57dbb1992be9e948df2ea0eda2c8b79e8/idna-3.7-py3-none-any.whl
+  sha256: 82fee1fc78add43492d3a1898bfa6d8a904cc97d8427f683ed8e798d07761aa0
+  requires_python: '>=3.5'
 - kind: conda
   name: libexpat
   version: 2.6.2
@@ -183,6 +199,18 @@ packages:
   license_family: GPL
   size: 250351
   timestamp: 1679532511311
+- kind: pypi
+  name: requests
+  version: 2.31.0
+  path: /Users/tdejager/development/prefix/pixi/tests/satisfiability/absolute-paths/projects/requests-2.31.0-py3-none-any.whl
+  requires_dist:
+  - charset-normalizer<4,>=2
+  - idna<4,>=2.5
+  - urllib3<3,>=1.21.1
+  - certifi>=2017.4.17
+  - pysocks!=1.5.7,>=1.5.6 ; extra == 'socks'
+  - chardet<6,>=3.0.2 ; extra == 'use_chardet_on_py3'
+  requires_python: '>=3.7'
 - kind: conda
   name: tk
   version: 8.6.13
@@ -210,6 +238,18 @@ packages:
   license: LicenseRef-Public-Domain
   size: 119815
   timestamp: 1706886945727
+- kind: pypi
+  name: urllib3
+  version: 2.2.1
+  url: https://files.pythonhosted.org/packages/a2/73/a68704750a7679d0b6d3ad7aa8d4da8e14e151ae82e6fee774e6e0d05ec8/urllib3-2.2.1-py3-none-any.whl
+  sha256: 450b20ec296a467077128bff42b73080516e71b56ff59a60a02bef2232c4fa9d
+  requires_dist:
+  - brotli>=1.0.9 ; platform_python_implementation == 'CPython' and extra == 'brotli'
+  - brotlicffi>=0.8.0 ; platform_python_implementation != 'CPython' and extra == 'brotli'
+  - h2<5,>=4 ; extra == 'h2'
+  - pysocks!=1.5.7,<2.0,>=1.5.6 ; extra == 'socks'
+  - zstandard>=0.18.0 ; extra == 'zstd'
+  requires_python: '>=3.8'
 - kind: conda
   name: xz
   version: 5.2.6
