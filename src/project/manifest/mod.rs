@@ -382,14 +382,13 @@ impl Manifest {
             miette::bail!("pixi does not support wildcard dependencies")
         };
 
-        // Add the dependency to the TOML document
+        // Add the dependency to the manifest
+        self.target_mut(platform, Some(feature_name))
+            .try_add_dependency(&name, &spec, spec_type)
+            .into_diagnostic()?;
+        // and to the TOML document
         self.document
             .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
-
-        // Add the dependency to the manifest  as well
-        self.target_mut(platform, Some(feature_name))
-            .add_dependency(name, spec, spec_type);
-
         Ok(())
     }
 
@@ -400,19 +399,11 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        let target = self.target_mut(platform, Some(feature_name));
-        let name = requirement.name.to_string();
-
-        // Check for duplicates
-        if target.has_pypi_dependency(&name) {
-            return Err(miette!(
-                "{} is already a dependency.",
-                console::style(name).bold()
-            ));
-        }
-        // Add the dependency to the manifest
-        target.add_pypi_dependency(requirement);
-        // Add the pypi dependency to the TOML document as well
+        // Add the pypi dependency to the manifest
+        self.target_mut(platform, Some(feature_name))
+            .try_add_pypi_dependency(requirement)
+            .into_diagnostic()?;
+        // and to the TOML document
         self.document
             .add_pypi_dependency(requirement, platform, feature_name)?;
 

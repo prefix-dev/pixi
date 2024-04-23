@@ -193,23 +193,8 @@ impl ManifestSource {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Result<(), Report> {
-        // Find the TOML table to add the dependency to.
         let dependency_table =
             self.get_or_insert_toml_table(platform, feature_name, spec_type.name())?;
-
-        // Check for duplicates
-        if let Some(table_spec) = dependency_table.get(name.as_normalized()) {
-            if table_spec.as_value().and_then(|v| v.as_str())
-                == Some(nameless_match_spec_to_toml(spec).to_string().as_str())
-            {
-                return Err(miette!(
-                    "{} is already added.",
-                    console::style(name.as_normalized()).bold(),
-                ));
-            }
-        }
-
-        // Store (or replace) in the TOML document
         dependency_table.insert(
             name.as_normalized(),
             Item::Value(nameless_match_spec_to_toml(spec)),

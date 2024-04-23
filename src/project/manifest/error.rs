@@ -113,3 +113,9 @@ impl From<toml_edit::de::Error> for TomlError {
         TomlError::Error(e.into())
     }
 }
+
+#[derive(Error, Debug, Clone)]
+pub enum DependencyError {
+    #[error("{} is already a dependency.", console::style(0).bold())]
+    Duplicate(String),
+}

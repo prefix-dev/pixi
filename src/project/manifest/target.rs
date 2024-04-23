@@ -16,6 +16,8 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use super::error::DependencyError;
+
 /// A target describes the dependencies, activations and task available to a specific feature, in
 /// a specific environment, and optionally for a specific platform.
 #[derive(Default, Debug, Clone)]
@@ -107,13 +109,9 @@ impl Target {
     }
 
     /// Checks if this target contains a dependency
-    pub fn has_dependency(&self, dep_str: &str, spec_type: Option<SpecType>) -> bool {
-        match PackageName::from_str(dep_str) {
-            Ok(pkg) => self
-                .dependencies(spec_type)
-                .is_some_and(|deps| deps.contains_key(&pkg)),
-            Err(_) => false, // an invalid package name cannot be a dependency
-        }
+    pub fn has_dependency(&self, dep_name: &PackageName, spec_type: Option<SpecType>) -> bool {
+        self.dependencies(spec_type)
+            .is_some_and(|deps| deps.contains_key(dep_name))
     }
 
     /// Removes a dependency from this target.
@@ -138,25 +136,35 @@ impl Target {
     /// Adds a dependency to a target
     pub fn add_dependency(
         &mut self,
-        dep_name: PackageName,
-        spec: NamelessMatchSpec,
+        dep_name: &PackageName,
+        spec: &NamelessMatchSpec,
         spec_type: SpecType,
     ) {
         self.dependencies
             .entry(spec_type)
             .or_default()
-            .insert(dep_name, spec);
+            .insert(dep_name.clone(), spec.clone());
+    }
+
+    /// Adds a dependency to a target, returning an error if it is a duplicate
+    pub fn try_add_dependency(
+        &mut self,
+        dep_name: &PackageName,
+        spec: &NamelessMatchSpec,
+        spec_type: SpecType,
+    ) -> Result<(), DependencyError> {
+        if self.has_dependency(&dep_name, Some(spec_type)) {
+            return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
+        }
+        self.add_dependency(dep_name, spec, spec_type);
+        Ok(())
     }
 
     /// Checks if this target contains a pypi dependency
-    pub fn has_pypi_dependency(&self, dep_str: &str) -> bool {
-        match PyPiPackageName::from_str(dep_str) {
-            Ok(pkg) => self
-                .pypi_dependencies
-                .as_ref()
-                .is_some_and(|deps| deps.contains_key(&pkg)),
-            Err(_) => false, // an invalid package name cannot be a dependency
-        }
+    pub fn has_pypi_dependency(&self, requirement: &pep508_rs::Requirement) -> bool {
+        self.pypi_dependencies.as_ref().is_some_and(|deps| {
+            deps.contains_key(&PyPiPackageName::from_normalized(requirement.name.clone()))
+        })
     }
 
     /// Adds a pypi dependency to a target
@@ -167,6 +175,18 @@ impl Target {
                 PyPiPackageName::from_normalized(requirement.name.clone()),
                 PyPiRequirement::from(requirement.clone()),
             );
+    }
+
+    /// Adds a pypi dependency to a target, returning an error if it is a duplicate
+    pub fn try_add_pypi_dependency(
+        &mut self,
+        requirement: &pep508_rs::Requirement,
+    ) -> Result<(), DependencyError> {
+        if self.has_pypi_dependency(requirement) {
+            return Err(DependencyError::Duplicate(requirement.name.to_string()));
+        }
+        self.add_pypi_dependency(requirement);
+        Ok(())
     }
 }
 

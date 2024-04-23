@@ -70,15 +70,16 @@ impl From<PyProjectManifest> for ProjectManifest {
         let python_spec = pyproject.requires_python.clone();
 
         let target = manifest.default_feature_mut().targets.default_mut();
+        let python = PackageName::from_str("python").unwrap();
         // If the target doesn't have any python dependency, we add it from the `requires-python`
-        if !target.has_dependency("python", Some(SpecType::Run)) {
+        if !target.has_dependency(&python, Some(SpecType::Run)) {
             target.add_dependency(
-                PackageName::from_str("python").unwrap(),
-                version_or_url_to_nameless_matchspec(&python_spec).unwrap(),
+                &python,
+                &version_or_url_to_nameless_matchspec(&python_spec).unwrap(),
                 SpecType::Run,
             );
         } else if let Some(_spec) = python_spec {
-            if target.has_dependency("python", Some(SpecType::Run)) {
+            if target.has_dependency(&python, Some(SpecType::Run)) {
                 // TODO: implement some comparison or spec merging logic here
                 tracing::info!(
                     "Overriding the requires-python with the one defined in pixi dependencies"
@@ -89,7 +90,7 @@ impl From<PyProjectManifest> for ProjectManifest {
         // Add pyproject dependencies as pypi dependencies
         if let Some(deps) = &pyproject.dependencies {
             for requirement in deps.iter() {
-                target.add_pypi_dependency(requirement)
+                target.add_pypi_dependency(requirement);
             }
         }
 
@@ -109,7 +110,7 @@ impl From<PyProjectManifest> for ProjectManifest {
                 for requirement in reqs.iter() {
                     // filter out any self references in groups of extra dependencies
                     if project_name != requirement.name {
-                        target.add_pypi_dependency(requirement)
+                        target.add_pypi_dependency(requirement);
                     }
                 }
             }
