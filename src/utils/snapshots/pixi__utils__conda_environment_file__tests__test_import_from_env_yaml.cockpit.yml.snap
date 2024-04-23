@@ -792,61 +792,69 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
             },
         ],
         [
-            (
-                PyPiPackageName {
-                    source: "memory-profiler",
-                    normalized: PackageName(
-                        "memory-profiler",
-                    ),
-                },
-                RawVersion(
-                    Star,
+            Requirement {
+                name: PackageName(
+                    "memory-profiler",
                 ),
-            ),
-            (
-                PyPiPackageName {
-                    source: "pre-commit",
-                    normalized: PackageName(
-                        "pre-commit",
-                    ),
-                },
-                RawVersion(
-                    Star,
+                extras: [],
+                version_or_url: None,
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "pre-commit",
                 ),
-            ),
-            (
-                PyPiPackageName {
-                    source: "graphviz",
-                    normalized: PackageName(
-                        "graphviz",
-                    ),
-                },
-                RawVersion(
-                    Star,
+                extras: [],
+                version_or_url: None,
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "graphviz",
                 ),
-            ),
-            (
-                PyPiPackageName {
-                    source: "sphinx-notfound-page",
-                    normalized: PackageName(
-                        "sphinx-notfound-page",
-                    ),
-                },
-                RawVersion(
-                    Star,
+                extras: [],
+                version_or_url: None,
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "sphinx-notfound-page",
                 ),
-            ),
-            (
-                PyPiPackageName {
-                    source: "deepobs",
-                    normalized: PackageName(
-                        "deepobs",
-                    ),
-                },
-                RawVersion(
-                    Star,
+                extras: [],
+                version_or_url: None,
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "deepobs",
                 ),
-            ),
+                extras: [],
+                version_or_url: Some(
+                    Url(
+                        VerbatimUrl {
+                            url: Url {
+                                scheme: "git+https",
+                                cannot_be_a_base: false,
+                                username: "git",
+                                password: None,
+                                host: Some(
+                                    Domain(
+                                        "github.com",
+                                    ),
+                                ),
+                                port: None,
+                                path: "/fsschneider/DeepOBS.git@develop",
+                                query: None,
+                                fragment: None,
+                            },
+                            given: Some(
+                                "git+https://git@github.com/fsschneider/DeepOBS.git@develop",
+                            ),
+                        },
+                    ),
+                ),
+                marker: None,
+            },
         ],
         [
             Channel {

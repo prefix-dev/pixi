@@ -230,7 +230,7 @@ pub(super) async fn create_executable_scripts(
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(
                 executable_script_path,
-                std::fs::Permissions::from_mode(0o744),
+                std::fs::Permissions::from_mode(0o755),
             )
             .into_diagnostic()?;
         }
