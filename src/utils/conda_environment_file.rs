@@ -1,16 +1,12 @@
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::ParseStrictness::{Lenient, Strict};
+use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{Channel, MatchSpec};
-use regex::Regex;
 use serde::Deserialize;
 use std::str::FromStr;
 use std::{io::BufRead, path::Path, sync::Arc};
 
-use crate::{
-    config::Config,
-    project::manifest::{python::PyPiPackageName, PyPiRequirement},
-};
+use crate::config::Config;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct CondaEnvFile {
@@ -28,8 +24,11 @@ pub enum CondaEnvDep {
     Pip { pip: Vec<String> },
 }
 
-type PipReq = (PyPiPackageName, PyPiRequirement);
-type ParsedDependencies = (Vec<MatchSpec>, Vec<PipReq>, Vec<Arc<Channel>>);
+type ParsedDependencies = (
+    Vec<MatchSpec>,
+    Vec<pep508_rs::Requirement>,
+    Vec<Arc<Channel>>,
+);
 
 impl CondaEnvFile {
     pub fn name(&self) -> Option<&str> {
@@ -70,7 +69,7 @@ impl CondaEnvFile {
     pub fn to_manifest(
         self: CondaEnvFile,
         config: &Config,
-    ) -> miette::Result<(Vec<MatchSpec>, Vec<PipReq>, Vec<String>)> {
+    ) -> miette::Result<(Vec<MatchSpec>, Vec<pep508_rs::Requirement>, Vec<String>)> {
         let channels = parse_channels(self.channels().clone());
         let (conda_deps, pip_deps, mut extra_channels) =
             parse_dependencies(self.dependencies().clone())?;
@@ -116,33 +115,11 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
                 conda_deps.push(match_spec);
             }
             CondaEnvDep::Pip { pip } => pip_deps.extend(
-                pip.into_iter()
-                    .map(|mut dep| {
-                        let re = Regex::new(r"/([^/]+)\.git").unwrap();
-                        if let Some(caps) = re.captures(dep.as_str()) {
-                            let name= caps.get(1).unwrap().as_str().to_string();
-                            tracing::warn!("The dependency '{}' is a git repository, as that is not available in pixi we'll try to install it as a package with the name: {}", dep, name);
-                            dep = name;
-                        }
-                        let req = pep508_rs::Requirement::from_str(&dep).into_diagnostic()?;
-                        let name = PyPiPackageName::from_normalized(req.name.clone());
-                        let requirement = PyPiRequirement::from(req);
-                        Ok((name, requirement))
-                    })
+                pip.iter()
+                    .map(|dep| pep508_rs::Requirement::from_str(dep).into_diagnostic())
                     .collect::<miette::Result<Vec<_>>>()?,
             ),
         }
-    }
-
-    if !pip_deps.is_empty()
-        && !conda_deps.iter().any(|spec| {
-            spec.name
-                .as_ref()
-                .filter(|name| name.as_normalized() == "pip")
-                .is_some()
-        })
-    {
-        conda_deps.push(MatchSpec::from_str("pip", Strict).into_diagnostic()?);
     }
 
     Ok((conda_deps, pip_deps, picked_up_channels))
@@ -169,8 +146,6 @@ fn parse_channels(channels: Vec<String>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::project::manifest::python::PyPiPackageName;
-    use crate::project::manifest::PyPiRequirement;
     use rattler_conda_types::MatchSpec;
     use rattler_conda_types::ParseStrictness::Strict;
     use std::fs;
@@ -194,7 +169,7 @@ mod tests {
           - foo >=1.2.3.*  # only valid when parsing in lenient mode
           - pip:
             - requests
-            - git+https://git@github.com/fsschneider/DeepOBS.git@develop#egg=deepobs
+            - deepobs @ git+https://git@github.com/fsschneider/DeepOBS.git@develop
             - torch==1.8.1
         "#;
 
@@ -234,28 +209,18 @@ mod tests {
                 MatchSpec::from_str("conda-forge::pytest", Strict).unwrap(),
                 MatchSpec::from_str("wheel=0.31.1", Strict).unwrap(),
                 MatchSpec::from_str("foo >=1.2.3", Strict).unwrap(),
-                MatchSpec::from_str("pip", Strict).unwrap(),
             ]
         );
 
         assert_eq!(
             pip_deps,
             vec![
-                (
-                    PyPiPackageName::from_str("requests").unwrap(),
-                    PyPiRequirement::default()
-                ),
-                (
-                    PyPiPackageName::from_str("deepobs").unwrap(),
-                    PyPiRequirement::default()
-                ),
-                (
-                    PyPiPackageName::from_str("torch").unwrap(),
-                    PyPiRequirement::Version {
-                        version: "==1.8.1".parse().unwrap(),
-                        extras: vec![],
-                    }
-                ),
+                pep508_rs::Requirement::from_str("requests").unwrap(),
+                pep508_rs::Requirement::from_str(
+                    "deepobs @ git+https://git@github.com/fsschneider/DeepOBS.git@develop"
+                )
+                .unwrap(),
+                pep508_rs::Requirement::from_str("torch==1.8.1").unwrap(),
             ]
         );
     }
@@ -326,10 +291,7 @@ mod tests {
 
         assert_eq!(
             pip_deps,
-            vec![(
-                PyPiPackageName::from_str("requests").unwrap(),
-                PyPiRequirement::default()
-            ),]
+            vec![pep508_rs::Requirement::from_str("requests").unwrap()]
         );
     }
 }
