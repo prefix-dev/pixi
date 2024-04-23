@@ -82,34 +82,15 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 md5: None,
                 sha256: None,
             },
-            MatchSpec {
-                name: Some(
-                    PackageName {
-                        normalized: None,
-                        source: "pip",
-                    },
-                ),
-                version: None,
-                build: None,
-                build_number: None,
-                file_name: None,
-                channel: None,
-                subdir: None,
-                namespace: None,
-                md5: None,
-                sha256: None,
-            },
         ],
         [
-            (
-                PyPiPackageName {
-                    source: "package1",
-                    normalized: PackageName(
-                        "package1",
-                    ),
-                },
-                Version {
-                    version: Version(
+            Requirement {
+                name: PackageName(
+                    "package1",
+                ),
+                extras: [],
+                version_or_url: Some(
+                    VersionSpecifier(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
@@ -119,18 +100,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    extras: [],
-                },
-            ),
-            (
-                PyPiPackageName {
-                    source: "package2",
-                    normalized: PackageName(
-                        "package2",
-                    ),
-                },
-                Version {
-                    version: Version(
+                ),
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "package2",
+                ),
+                extras: [],
+                version_or_url: Some(
+                    VersionSpecifier(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
@@ -140,18 +119,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    extras: [],
-                },
-            ),
-            (
-                PyPiPackageName {
-                    source: "package3",
-                    normalized: PackageName(
-                        "package3",
-                    ),
-                },
-                Version {
-                    version: Version(
+                ),
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "package3",
+                ),
+                extras: [],
+                version_or_url: Some(
+                    VersionSpecifier(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
@@ -161,18 +138,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    extras: [],
-                },
-            ),
-            (
-                PyPiPackageName {
-                    source: "package4",
-                    normalized: PackageName(
-                        "package4",
-                    ),
-                },
-                Version {
-                    version: Version(
+                ),
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "package4",
+                ),
+                extras: [],
+                version_or_url: Some(
+                    VersionSpecifier(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
@@ -182,18 +157,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    extras: [],
-                },
-            ),
-            (
-                PyPiPackageName {
-                    source: "package5",
-                    normalized: PackageName(
-                        "package5",
-                    ),
-                },
-                Version {
-                    version: Version(
+                ),
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "package5",
+                ),
+                extras: [],
+                version_or_url: Some(
+                    VersionSpecifier(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
@@ -203,18 +176,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    extras: [],
-                },
-            ),
-            (
-                PyPiPackageName {
-                    source: "package6",
-                    normalized: PackageName(
-                        "package6",
-                    ),
-                },
-                Version {
-                    version: Version(
+                ),
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "package6",
+                ),
+                extras: [],
+                version_or_url: Some(
+                    VersionSpecifier(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
@@ -224,18 +195,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    extras: [],
-                },
-            ),
-            (
-                PyPiPackageName {
-                    source: "package7",
-                    normalized: PackageName(
-                        "package7",
-                    ),
-                },
-                Version {
-                    version: Version(
+                ),
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "package7",
+                ),
+                extras: [],
+                version_or_url: Some(
+                    VersionSpecifier(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
@@ -245,18 +214,16 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    extras: [],
-                },
-            ),
-            (
-                PyPiPackageName {
-                    source: "package8",
-                    normalized: PackageName(
-                        "package8",
-                    ),
-                },
-                Version {
-                    version: Version(
+                ),
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "package8",
+                ),
+                extras: [],
+                version_or_url: Some(
+                    VersionSpecifier(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
@@ -266,64 +233,58 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    extras: [],
-                },
-            ),
-            (
-                PyPiPackageName {
-                    source: "package9",
-                    normalized: PackageName(
-                        "package9",
-                    ),
-                },
-                RawVersion(
-                    Star,
                 ),
-            ),
-            (
-                PyPiPackageName {
-                    source: "package10",
-                    normalized: PackageName(
-                        "package10",
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "package9",
+                ),
+                extras: [],
+                version_or_url: None,
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "package10",
+                ),
+                extras: [
+                    ExtraName(
+                        "extra",
                     ),
-                },
-                Version {
-                    version: Star,
-                    extras: [
-                        ExtraName(
-                            "extra",
-                        ),
-                    ],
-                },
-            ),
-            (
-                PyPiPackageName {
-                    source: "package11",
-                    normalized: PackageName(
-                        "package11",
+                ],
+                version_or_url: None,
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "package11",
+                ),
+                extras: [
+                    ExtraName(
+                        "extra1",
                     ),
-                },
-                Version {
-                    version: Star,
-                    extras: [
-                        ExtraName(
-                            "extra1",
-                        ),
-                        ExtraName(
-                            "extra2",
-                        ),
-                    ],
-                },
-            ),
-            (
-                PyPiPackageName {
-                    source: "package12",
-                    normalized: PackageName(
-                        "package12",
+                    ExtraName(
+                        "extra2",
                     ),
-                },
-                Version {
-                    version: Version(
+                ],
+                version_or_url: None,
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "package12",
+                ),
+                extras: [
+                    ExtraName(
+                        "extra1",
+                    ),
+                    ExtraName(
+                        "extra2",
+                    ),
+                ],
+                version_or_url: Some(
+                    VersionSpecifier(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
@@ -333,25 +294,23 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    extras: [
-                        ExtraName(
-                            "extra1",
-                        ),
-                        ExtraName(
-                            "extra2",
-                        ),
-                    ],
-                },
-            ),
-            (
-                PyPiPackageName {
-                    source: "package13",
-                    normalized: PackageName(
-                        "package13",
+                ),
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "package13",
+                ),
+                extras: [
+                    ExtraName(
+                        "extra1",
                     ),
-                },
-                Version {
-                    version: Version(
+                    ExtraName(
+                        "extra2",
+                    ),
+                ],
+                version_or_url: Some(
+                    VersionSpecifier(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
@@ -361,25 +320,23 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    extras: [
-                        ExtraName(
-                            "extra1",
-                        ),
-                        ExtraName(
-                            "extra2",
-                        ),
-                    ],
-                },
-            ),
-            (
-                PyPiPackageName {
-                    source: "package14",
-                    normalized: PackageName(
-                        "package14",
+                ),
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "package14",
+                ),
+                extras: [
+                    ExtraName(
+                        "extra1",
                     ),
-                },
-                Version {
-                    version: Version(
+                    ExtraName(
+                        "extra2",
+                    ),
+                ],
+                version_or_url: Some(
+                    VersionSpecifier(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
@@ -389,16 +346,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    extras: [
-                        ExtraName(
-                            "extra1",
-                        ),
-                        ExtraName(
-                            "extra2",
-                        ),
-                    ],
-                },
-            ),
+                ),
+                marker: None,
+            },
         ],
         [],
     ),

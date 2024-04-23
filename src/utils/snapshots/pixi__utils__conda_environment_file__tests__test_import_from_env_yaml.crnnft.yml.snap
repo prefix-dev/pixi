@@ -115,15 +115,13 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
             },
         ],
         [
-            (
-                PyPiPackageName {
-                    source: "tensorflow-gpu",
-                    normalized: PackageName(
-                        "tensorflow-gpu",
-                    ),
-                },
-                Version {
-                    version: Version(
+            Requirement {
+                name: PackageName(
+                    "tensorflow-gpu",
+                ),
+                extras: [],
+                version_or_url: Some(
+                    VersionSpecifier(
                         VersionSpecifiers(
                             [
                                 VersionSpecifier {
@@ -133,53 +131,41 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                             ],
                         ),
                     ),
-                    extras: [],
-                },
-            ),
-            (
-                PyPiPackageName {
-                    source: "numpy",
-                    normalized: PackageName(
-                        "numpy",
-                    ),
-                },
-                RawVersion(
-                    Star,
                 ),
-            ),
-            (
-                PyPiPackageName {
-                    source: "opencv-python",
-                    normalized: PackageName(
-                        "opencv-python",
-                    ),
-                },
-                RawVersion(
-                    Star,
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "numpy",
                 ),
-            ),
-            (
-                PyPiPackageName {
-                    source: "matplotlib",
-                    normalized: PackageName(
-                        "matplotlib",
-                    ),
-                },
-                RawVersion(
-                    Star,
+                extras: [],
+                version_or_url: None,
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "opencv-python",
                 ),
-            ),
-            (
-                PyPiPackageName {
-                    source: "easydict",
-                    normalized: PackageName(
-                        "easydict",
-                    ),
-                },
-                RawVersion(
-                    Star,
+                extras: [],
+                version_or_url: None,
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "matplotlib",
                 ),
-            ),
+                extras: [],
+                version_or_url: None,
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "easydict",
+                ),
+                extras: [],
+                version_or_url: None,
+                marker: None,
+            },
         ],
         [],
     ),
