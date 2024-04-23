@@ -1,0 +1,13 @@
+---
+source: src/project/manifest/pypi_options.rs
+expression: merged_opts
+---
+index: "https://example.com/pypi"
+extra-indexes:
+  - "https://example.com/extra"
+  - "https://example.com/extra2"
+flat-indexes:
+  - path: /path/to/flat/index
+  - url: "https://flat.index/"
+  - path: /path/to/flat/index2
+  - url: "https://flat.index2/"

@@ -425,4 +425,23 @@ mod tests {
             "should have selected the activation from the [linux-64] section"
         );
     }
+
+    #[test]
+    pub fn test_pypi_options_manifest() {
+        let manifest = Manifest::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foo"
+        platforms = ["linux-64", "osx-64", "win-64"]
+        channels = []
+
+        [pypi-options]
+        index = "https://pypi.org/simple"
+        "#,
+        )
+        .unwrap();
+
+        manifest.default_feature().pypi_options().unwrap();
+    }
 }

@@ -1,9 +1,7 @@
 use super::{
     dependencies::Dependencies,
     errors::{UnknownTask, UnsupportedPlatformError},
-    manifest::{
-        self, pypi_options::PypiOptions, EnvironmentName, Feature, FeatureName, SystemRequirements,
-    },
+    manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
     PyPiRequirement, SolveGroup, SpecType,
 };
 use crate::project::manifest::python::PyPiPackageName;
@@ -348,11 +346,11 @@ impl<'p> Environment<'p> {
         self.features(true).any(|f| f.has_pypi_dependencies())
     }
 
-    /// Returns the merged pypi options for this environment.
-    pub fn pypi_options(&self) -> Option<PypiOptions> {
-        let all_options = self.features(true).filter_map(|f| f.pypi_options());
-        all_options
-    }
+    // Returns the merged pypi options for this environment.
+    // pub fn pypi_options(&self) -> Option<PypiOptions> {
+    //     let all_options = self.features(true).filter_map(|f| f.pypi_options());
+    //     all_options
+    // }
 }
 
 impl<'p> Hash for Environment<'p> {
