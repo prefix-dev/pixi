@@ -3,7 +3,7 @@ use crate::project::manifest::python::PyPiPackageName;
 use crate::task::TaskName;
 use crate::utils::spanned::PixiSpanned;
 use crate::{
-    project::{manifest::error::SpecIsMissing, manifest::PyPiRequirement, SpecType},
+    project::{manifest::PyPiRequirement, SpecType},
     task::Task,
 };
 use indexmap::map::Entry;
@@ -119,17 +119,14 @@ impl Target {
         &mut self,
         dep_name: &PackageName,
         spec_type: SpecType,
-    ) -> Result<(PackageName, NamelessMatchSpec), SpecIsMissing> {
+    ) -> Result<(PackageName, NamelessMatchSpec), DependencyError> {
         let Some(dependencies) = self.dependencies.get_mut(&spec_type) else {
-            return Err(SpecIsMissing::spec_type_is_missing(
-                dep_name.as_source(),
-                spec_type,
-            ));
+            return Err(DependencyError::NoSpecType(spec_type.name().into()));
         };
 
         dependencies
             .shift_remove_entry(dep_name)
-            .ok_or_else(|| SpecIsMissing::dep_is_missing(dep_name.as_source(), spec_type))
+            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_normalized().into()))
     }
 
     /// Adds a dependency to a target
