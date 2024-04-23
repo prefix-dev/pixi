@@ -61,7 +61,7 @@ async fn generate_activation_script(
         })
         .into_diagnostic()?;
 
-    Ok(result.script)
+    result.script.contents().into_diagnostic()
 }
 
 /// Prints the activation script to the stdout.

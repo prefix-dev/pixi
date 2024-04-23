@@ -71,7 +71,7 @@ system-requirements = {cuda = "12"}
 # Channels concatenate using a priority instead of overwrite, so the default channels are still used.
 # Using the priority the concatenation is controlled, default is 0, the default channels are used last.
 # Highest priority comes first.
-channels = ["nvidia", {channel = "pytorch", priority = "-1"}] # Results in:  ["nvidia", "conda-forge", "pytorch"] when the default is `conda-forge`
+channels = ["nvidia", {channel = "pytorch", priority = -1}] # Results in:  ["nvidia", "conda-forge", "pytorch"] when the default is `conda-forge`
 tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
@@ -375,7 +375,7 @@ pixi run test
 
     [feature.cuda]
     platforms = ["win-64", "linux-64"]
-    channels = ["nvidia", {channel = "pytorch", priority = "-1"}]
+    channels = ["nvidia", {channel = "pytorch", priority = -1}]
     system-requirements = {cuda = "12.1"}
 
     [feature.cuda.tasks]

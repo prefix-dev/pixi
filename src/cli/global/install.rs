@@ -62,9 +62,9 @@ fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result
 
     // Add a shebang on unix based platforms
     let script = if cfg!(unix) {
-        format!("#!/bin/sh\n{}", result.script)
+        format!("#!/bin/sh\n{}", result.script.contents().into_diagnostic()?)
     } else {
-        result.script
+        result.script.contents().into_diagnostic()?
     };
 
     Ok(script)
@@ -230,7 +230,7 @@ pub(super) async fn create_executable_scripts(
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(
                 executable_script_path,
-                std::fs::Permissions::from_mode(0o744),
+                std::fs::Permissions::from_mode(0o755),
             )
             .into_diagnostic()?;
         }

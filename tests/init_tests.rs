@@ -1,7 +1,8 @@
 mod common;
 
 use crate::common::PixiControl;
-use rattler_conda_types::{Channel, ChannelConfig, Version};
+use pixi::util::default_channel_config;
+use rattler_conda_types::{Channel, Version};
 use std::str::FromStr;
 
 #[tokio::test]
@@ -50,8 +51,8 @@ async fn specific_channel() {
     assert_eq!(
         channels,
         [
-            &Channel::from_str("random", &ChannelConfig::default()).unwrap(),
-            &Channel::from_str("foobar", &ChannelConfig::default()).unwrap()
+            &Channel::from_str("random", &default_channel_config()).unwrap(),
+            &Channel::from_str("foobar", &default_channel_config()).unwrap()
         ]
     )
 }
@@ -71,6 +72,6 @@ async fn default_channel() {
     let channels = Vec::from_iter(project.channels());
     assert_eq!(
         channels,
-        [&Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap()]
+        [&Channel::from_str("conda-forge", &default_channel_config()).unwrap()]
     )
 }
