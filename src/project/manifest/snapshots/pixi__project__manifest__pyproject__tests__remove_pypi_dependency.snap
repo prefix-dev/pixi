@@ -13,7 +13,6 @@ expression: manifest.document.to_string()
         dependencies = []
 
         [tool.pixi.project]
-        name = "flask-hello-world-pyproject"
         channels = ["conda-forge"]
         platforms = ["linux-64"]
 
