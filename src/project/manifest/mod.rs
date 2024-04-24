@@ -366,8 +366,7 @@ impl Manifest {
         // remove the channels from the toml
         let platforms_array = self
             .document
-            .specific_array_mut("platforms", feature_name)
-            .into_diagnostic()?;
+            .specific_array_mut("platforms", feature_name)?;
         platforms_array.retain(|x| !removed_platforms.contains(&x.as_str().unwrap().to_string()));
 
         Ok(())
@@ -388,12 +387,10 @@ impl Manifest {
 
         // Add the dependency to the manifest
         self.get_or_insert_target_mut(platform, Some(feature_name))
-            .try_add_dependency(&name, &spec, spec_type)
-            .into_diagnostic()?;
+            .try_add_dependency(&name, &spec, spec_type)?;
         // and to the TOML document
         self.document
-            .add_dependency(&name, &spec, spec_type, platform, feature_name)
-            .into_diagnostic()?;
+            .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
         Ok(())
     }
 
@@ -406,13 +403,10 @@ impl Manifest {
     ) -> miette::Result<()> {
         // Add the pypi dependency to the manifest
         self.get_or_insert_target_mut(platform, Some(feature_name))
-            .try_add_pypi_dependency(requirement)
-            .into_diagnostic()?;
+            .try_add_pypi_dependency(requirement)?;
         // and to the TOML document
         self.document
-            .add_pypi_dependency(requirement, platform, feature_name)
-            .into_diagnostic()?;
-
+            .add_pypi_dependency(requirement, platform, feature_name)?;
         Ok(())
     }
 
@@ -425,9 +419,12 @@ impl Manifest {
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
         // Remove the dependency from the TOML document
-        self.document
-            .remove_dependency_helper(dep.as_source(), spec_type.name(), platform, feature_name)
-            .into_diagnostic()?;
+        self.document.remove_dependency_helper(
+            dep.as_source(),
+            spec_type.name(),
+            platform,
+            feature_name,
+        )?;
 
         Ok(self
             .target_mut(platform, feature_name)
@@ -592,10 +589,7 @@ impl Manifest {
             }
         }
         // Then add the channels to the toml document
-        let channels_array = self
-            .document
-            .specific_array_mut("channels", feature_name)
-            .into_diagnostic()?;
+        let channels_array = self.document.specific_array_mut("channels", feature_name)?;
         for channel in stored_channels {
             channels_array.push(channel);
         }
@@ -652,10 +646,7 @@ impl Manifest {
         }
 
         // remove the channels from the toml
-        let channels_array = self
-            .document
-            .specific_array_mut("channels", feature_name)
-            .into_diagnostic()?;
+        let channels_array = self.document.specific_array_mut("channels", feature_name)?;
         channels_array.retain(|x| !removed_channels.contains(&x.as_str().unwrap().to_string()));
 
         Ok(())

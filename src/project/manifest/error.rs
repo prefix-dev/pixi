@@ -1,8 +1,8 @@
-use miette::{IntoDiagnostic, LabeledSpan, NamedSource, Report};
+use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use rattler_conda_types::{InvalidPackageNameError, ParseMatchSpecError};
 use thiserror::Error;
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, Diagnostic)]
 pub enum DependencyError {
     #[error("{} is already a dependency.", console::style(.0).bold())]
     Duplicate(String),
@@ -20,7 +20,7 @@ pub enum RequirementConversionError {
     ParseError(#[from] ParseMatchSpecError),
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, Diagnostic)]
 pub enum TomlError {
     #[error("{0}")]
     Error(#[from] toml_edit::TomlError),
