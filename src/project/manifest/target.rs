@@ -160,10 +160,13 @@ impl Target {
     }
 
     /// Adds a pypi dependency to a target
-    pub fn add_pypi_dependency(&mut self, name: PyPiPackageName, requirement: PyPiRequirement) {
+    pub fn add_pypi_dependency(&mut self, requirement: &pep508_rs::Requirement) {
         self.pypi_dependencies
             .get_or_insert_with(Default::default)
-            .insert(name, requirement);
+            .insert(
+                PyPiPackageName::from_normalized(requirement.name.clone()),
+                PyPiRequirement::from(requirement.clone()),
+            );
     }
 }
 
