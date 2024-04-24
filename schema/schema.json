@@ -266,7 +266,7 @@
       "properties": {
         "activation": {
           "$ref": "#/$defs/Activation",
-          "description": "The scripts used on the activation of enviroments using this feature"
+          "description": "The scripts used on the activation of environments using this feature"
         },
         "build-dependencies": {
           "title": "Build-Dependencies",

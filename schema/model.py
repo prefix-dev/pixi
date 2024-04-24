@@ -337,7 +337,7 @@ class Feature(StrictBaseModel):
         None, description="The tasks provided by this feature"
     )
     activation: Activation | None = Field(
-        None, description="The scripts used on the activation of enviroments using this feature"
+        None, description="The scripts used on the activation of environments using this feature"
     )
     system_requirements: SystemRequirements | None = Field(
         None, alias="system-requirements", description="The system requirements of this feature"
