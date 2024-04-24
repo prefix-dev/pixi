@@ -28,6 +28,13 @@ pub enum TomlError {
     NoProjectTable,
     #[error("Missing field `name`")]
     NoProjectName(Option<std::ops::Range<usize>>),
+    #[error("Could not find or access the part '{part}' in the path '[{table_name}]'")]
+    TableError { part: String, table_name: String },
+    #[error("Could not find or access array '{array_name}' in '[{table_name}]'")]
+    ArrayError {
+        array_name: String,
+        table_name: String,
+    },
 }
 
 impl TomlError {
@@ -48,6 +55,7 @@ impl TomlError {
             TomlError::Error(e) => e.span(),
             TomlError::NoProjectTable => Some(0..1),
             TomlError::NoProjectName(span) => span.clone(),
+            _ => None,
         }
     }
     fn message(&self) -> &str {
@@ -55,6 +63,21 @@ impl TomlError {
             TomlError::Error(e) => e.message(),
             TomlError::NoProjectTable => "Missing field `project`",
             TomlError::NoProjectName(_) => "Missing field `name`",
+            _ => "",
+        }
+    }
+
+    pub fn table_error(part: &str, table_name: &str) -> Self {
+        Self::TableError {
+            part: part.into(),
+            table_name: table_name.into(),
+        }
+    }
+
+    pub fn array_error(array_name: &str, table_name: &str) -> Self {
+        Self::ArrayError {
+            array_name: array_name.into(),
+            table_name: table_name.into(),
         }
     }
 }

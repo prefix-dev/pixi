@@ -109,9 +109,21 @@ impl Target {
     }
 
     /// Checks if this target contains a dependency
-    pub fn has_dependency(&self, dep_name: &PackageName, spec_type: Option<SpecType>) -> bool {
-        self.dependencies(spec_type)
-            .is_some_and(|deps| deps.contains_key(dep_name))
+    pub fn has_dependency(
+        &self,
+        dep_name: &PackageName,
+        spec_type: Option<SpecType>,
+        exact: Option<&NamelessMatchSpec>,
+    ) -> bool {
+        let current_dependency = self
+            .dependencies(spec_type)
+            .and_then(|deps| deps.get(dep_name).cloned());
+
+        match (current_dependency, exact) {
+            (Some(current_spec), Some(spec)) => current_spec == *spec,
+            (Some(_), None) => true,
+            (None, _) => false,
+        }
     }
 
     /// Removes a dependency from this target.
@@ -130,6 +142,8 @@ impl Target {
     }
 
     /// Adds a dependency to a target
+    ///
+    /// This will overwrite any existing dependency of the same name
     pub fn add_dependency(
         &mut self,
         dep_name: &PackageName,
@@ -142,28 +156,40 @@ impl Target {
             .insert(dep_name.clone(), spec.clone());
     }
 
-    /// Adds a dependency to a target, returning an error if it is a duplicate
+    /// Adds a dependency to a target
+    ///
+    /// This will return an error if the exact same dependency already exist
+    /// This will overwrite any existing dependency of the same name
     pub fn try_add_dependency(
         &mut self,
         dep_name: &PackageName,
         spec: &NamelessMatchSpec,
         spec_type: SpecType,
     ) -> Result<(), DependencyError> {
-        if self.has_dependency(dep_name, Some(spec_type)) {
+        if self.has_dependency(dep_name, Some(spec_type), Some(spec)) {
             return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
         }
         self.add_dependency(dep_name, spec, spec_type);
         Ok(())
     }
 
-    /// Checks if this target contains a pypi dependency
-    pub fn has_pypi_dependency(&self, requirement: &pep508_rs::Requirement) -> bool {
-        self.pypi_dependencies.as_ref().is_some_and(|deps| {
-            deps.contains_key(&PyPiPackageName::from_normalized(requirement.name.clone()))
-        })
+    /// Checks if this target contains a specific pypi dependency
+    pub fn has_pypi_dependency(&self, requirement: &pep508_rs::Requirement, exact: bool) -> bool {
+        let current_requirement = self
+            .pypi_dependencies
+            .as_ref()
+            .and_then(|deps| deps.get(&PyPiPackageName::from_normalized(requirement.name.clone())));
+
+        match (current_requirement, exact) {
+            (Some(r), true) => *r == PyPiRequirement::from(requirement.clone()),
+            (Some(_), false) => true,
+            (None, _) => false,
+        }
     }
 
     /// Adds a pypi dependency to a target
+    ///
+    /// This will overwrite any existing dependency of the same name
     pub fn add_pypi_dependency(&mut self, requirement: &pep508_rs::Requirement) {
         self.pypi_dependencies
             .get_or_insert_with(Default::default)
@@ -173,12 +199,15 @@ impl Target {
             );
     }
 
-    /// Adds a pypi dependency to a target, returning an error if it is a duplicate
+    /// Adds a pypi dependency to a target
+    ///
+    /// This will return an error if the exact same dependency already exist
+    /// This will overwrite any existing dependency of the same name
     pub fn try_add_pypi_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
     ) -> Result<(), DependencyError> {
-        if self.has_pypi_dependency(requirement) {
+        if self.has_pypi_dependency(requirement, true) {
             return Err(DependencyError::Duplicate(requirement.name.to_string()));
         }
         self.add_pypi_dependency(requirement);

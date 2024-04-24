@@ -1,11 +1,11 @@
-use miette::{miette, Report};
+use miette::{IntoDiagnostic, Report};
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
-use std::fmt;
+use std::{fmt, str::FromStr};
 use toml_edit::{value, Array, InlineTable, Item, Table, Value};
 
 use crate::{consts, util::default_channel_config, FeatureName, SpecType, Task};
 
-use super::{python::PyPiPackageName, PyPiRequirement};
+use super::{error::TomlError, python::PyPiPackageName, PyPiRequirement};
 
 const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";
 
@@ -63,7 +63,7 @@ impl ManifestSource {
         platform: Option<Platform>,
         feature: &FeatureName,
         table_name: &str,
-    ) -> miette::Result<&'a mut Table> {
+    ) -> Result<&'a mut Table, TomlError> {
         let table_name: String =
             self.get_nested_toml_table_name(feature, platform, Some(table_name));
         self.get_or_insert_nested_table(&table_name)
@@ -75,7 +75,7 @@ impl ManifestSource {
     fn get_or_insert_nested_table<'a>(
         &'a mut self,
         table_name: &str,
-    ) -> miette::Result<&'a mut Table> {
+    ) -> Result<&'a mut Table, TomlError> {
         let parts: Vec<&str> = table_name.split('.').collect();
 
         let mut current_table = self.as_table_mut();
@@ -85,13 +85,7 @@ impl ManifestSource {
                 .entry(part)
                 .or_insert(Item::Table(Table::new()))
                 .as_table_mut()
-                .ok_or_else(|| {
-                    miette!(
-                        "Could not find or access the part '{}' in the path '[{}]'",
-                        part,
-                        table_name
-                    )
-                })?;
+                .ok_or_else(|| TomlError::table_error(part, table_name))?;
             // Avoid creating empty tables
             current_table.set_implicit(true);
         }
@@ -105,14 +99,12 @@ impl ManifestSource {
         &'a mut self,
         table_name: &str,
         array_name: &str,
-    ) -> miette::Result<&'a mut Array> {
+    ) -> Result<&'a mut Array, TomlError> {
         self.get_or_insert_nested_table(table_name)?
             .entry(array_name)
             .or_insert(Item::Value(Value::Array(Array::new())))
             .as_array_mut()
-            .ok_or_else(|| {
-                miette!("Could not find or access array '{array_name}' in '[{table_name}]'")
-            })
+            .ok_or_else(|| TomlError::array_error(array_name, table_name))
     }
 
     /// Returns a mutable reference to the specified array either in project or feature.
@@ -120,7 +112,7 @@ impl ManifestSource {
         &mut self,
         array_name: &str,
         feature_name: &FeatureName,
-    ) -> miette::Result<&mut Array> {
+    ) -> Result<&mut Array, TomlError> {
         let table = match feature_name {
             FeatureName::Default => Some("project"),
             FeatureName::Named(_) => None,
@@ -153,7 +145,14 @@ impl ManifestSource {
             _ => None,
         };
         if let Some(array) = array {
-            array.retain(|x| !x.as_str().unwrap().contains(dep.as_source()));
+            array.retain(|x| {
+                let name = PyPiPackageName::from_normalized(
+                    pep508_rs::Requirement::from_str(x.as_str().unwrap_or(""))
+                        .expect("should be a valid pep508 dependency")
+                        .name,
+                );
+                name != *dep
+            });
         }
 
         // For both 'pyproject.toml' and 'pixi.toml' manifest,
@@ -164,7 +163,7 @@ impl ManifestSource {
             platform,
             feature_name,
         )
-        .map(|_| ())
+        .into_diagnostic()
     }
 
     /// Removes a conda or pypi dependency from the TOML manifest
@@ -174,21 +173,18 @@ impl ManifestSource {
         table: &str,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-    ) -> Result<toml_edit::Item, Report> {
-        self.get_or_insert_toml_table(platform, feature_name, table)?
-            .remove(dep)
-            .ok_or_else(|| {
-                let table_name =
-                    self.get_nested_toml_table_name(feature_name, platform, Some(table));
-                miette::miette!(
-                    "Couldn't find {} in [{}]",
-                    console::style(dep).bold(),
-                    console::style(table_name).bold(),
-                )
-            })
+    ) -> Result<(), TomlError> {
+        self.get_or_insert_toml_table(platform, feature_name, table)
+            .map(|t| {
+                t.set_implicit(true); // to avoid inserting an empty table
+                t.remove(dep)
+            })?;
+        Ok(())
     }
 
     /// Adds a conda dependency to the TOML manifest
+    ///
+    /// If a dependency with the same name already exists, it will be replaced.
     pub fn add_dependency(
         &mut self,
         name: &PackageName,
@@ -196,7 +192,7 @@ impl ManifestSource {
         spec_type: SpecType,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-    ) -> Result<(), Report> {
+    ) -> Result<(), TomlError> {
         let dependency_table =
             self.get_or_insert_toml_table(platform, feature_name, spec_type.name())?;
         dependency_table.insert(
@@ -206,14 +202,17 @@ impl ManifestSource {
         Ok(())
     }
 
-    /// Add a pypi requirement to the manifest
+    /// Adds a pypi dependency to the TOML manifest
+    ///
+    /// If a pypi dependency with the same name already exists, it will be replaced.
     pub fn add_pypi_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-    ) -> Result<(), Report> {
+    ) -> Result<(), TomlError> {
         match self {
+            // FIXME: need to remove any dep with same name before adding
             ManifestSource::PyProjectToml(_) if feature_name.is_default() => {
                 self.get_or_insert_toml_array("project", "dependencies")?
                     .push(requirement.to_string());
@@ -242,7 +241,7 @@ impl ManifestSource {
         name: &str,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-    ) -> Result<(), Report> {
+    ) -> Result<(), TomlError> {
         // Get the task table either from the target platform or the default tasks.
         // If it does not exist in TOML, consider this ok as we want to remove it anyways
         self.get_or_insert_toml_table(platform, feature_name, "tasks")?
@@ -258,7 +257,7 @@ impl ManifestSource {
         task: Task,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-    ) -> Result<(), Report> {
+    ) -> Result<(), TomlError> {
         // Get the task table either from the target platform or the default tasks.
         self.get_or_insert_toml_table(platform, feature_name, "tasks")?
             .insert(name, task.into());

@@ -208,7 +208,8 @@ impl Manifest {
 
         // Add the task to the Toml manifest
         self.document
-            .add_task(name.as_str(), task.clone(), platform, feature_name)?;
+            .add_task(name.as_str(), task.clone(), platform, feature_name)
+            .into_diagnostic()?;
 
         // Add the task to the manifest
         self.get_or_insert_target_mut(platform, Some(feature_name))
@@ -232,7 +233,8 @@ impl Manifest {
 
         // Remove the task from the Toml manifest
         self.document
-            .remove_task(name.as_str(), platform, feature_name)?;
+            .remove_task(name.as_str(), platform, feature_name)
+            .into_diagnostic()?;
 
         // Remove the task from the internal manifest
         self.feature_mut(feature_name)
@@ -305,7 +307,8 @@ impl Manifest {
         // Then add the platforms to the toml document
         let platforms_array = self
             .document
-            .specific_array_mut("platforms", feature_name)?;
+            .specific_array_mut("platforms", feature_name)
+            .into_diagnostic()?;
         for platform in stored_platforms {
             platforms_array.push(platform.to_string());
         }
@@ -363,7 +366,8 @@ impl Manifest {
         // remove the channels from the toml
         let platforms_array = self
             .document
-            .specific_array_mut("platforms", feature_name)?;
+            .specific_array_mut("platforms", feature_name)
+            .into_diagnostic()?;
         platforms_array.retain(|x| !removed_platforms.contains(&x.as_str().unwrap().to_string()));
 
         Ok(())
@@ -388,7 +392,8 @@ impl Manifest {
             .into_diagnostic()?;
         // and to the TOML document
         self.document
-            .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
+            .add_dependency(&name, &spec, spec_type, platform, feature_name)
+            .into_diagnostic()?;
         Ok(())
     }
 
@@ -405,7 +410,8 @@ impl Manifest {
             .into_diagnostic()?;
         // and to the TOML document
         self.document
-            .add_pypi_dependency(requirement, platform, feature_name)?;
+            .add_pypi_dependency(requirement, platform, feature_name)
+            .into_diagnostic()?;
 
         Ok(())
     }
@@ -419,12 +425,9 @@ impl Manifest {
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
         // Remove the dependency from the TOML document
-        self.document.remove_dependency_helper(
-            dep.as_source(),
-            spec_type.name(),
-            platform,
-            feature_name,
-        )?;
+        self.document
+            .remove_dependency_helper(dep.as_source(), spec_type.name(), platform, feature_name)
+            .into_diagnostic()?;
 
         Ok(self
             .target_mut(platform, feature_name)
@@ -589,7 +592,10 @@ impl Manifest {
             }
         }
         // Then add the channels to the toml document
-        let channels_array = self.document.specific_array_mut("channels", feature_name)?;
+        let channels_array = self
+            .document
+            .specific_array_mut("channels", feature_name)
+            .into_diagnostic()?;
         for channel in stored_channels {
             channels_array.push(channel);
         }
@@ -646,7 +652,10 @@ impl Manifest {
         }
 
         // remove the channels from the toml
-        let channels_array = self.document.specific_array_mut("channels", feature_name)?;
+        let channels_array = self
+            .document
+            .specific_array_mut("channels", feature_name)
+            .into_diagnostic()?;
         channels_array.retain(|x| !removed_channels.contains(&x.as_str().unwrap().to_string()));
 
         Ok(())
