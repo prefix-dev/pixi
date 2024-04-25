@@ -1,4 +1,3 @@
-use miette::{IntoDiagnostic, Report};
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use std::{fmt, str::FromStr};
 use toml_edit::{value, Array, InlineTable, Item, Table, Value};
@@ -133,7 +132,7 @@ impl ManifestSource {
         dep: &PyPiPackageName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-    ) -> Result<(), Report> {
+    ) -> Result<(), TomlError> {
         // For 'pyproject.toml' manifest, try and remove the dependency from native arrays
         let array = match self {
             ManifestSource::PyProjectToml(_) if feature_name.is_default() => {
@@ -157,17 +156,18 @@ impl ManifestSource {
 
         // For both 'pyproject.toml' and 'pixi.toml' manifest,
         // try and remove the dependency from pixi native tables
-        self.remove_dependency_helper(
+        self.remove_pixi_dependency(
             dep.as_source(),
             consts::PYPI_DEPENDENCIES,
             platform,
             feature_name,
-        )
-        .into_diagnostic()
+        )?;
+        Ok(())
     }
 
-    /// Removes a conda or pypi dependency from the TOML manifest
-    pub fn remove_dependency_helper(
+    /// Removes a conda or pypi dependency from the TOML manifest's pixi table
+    /// for either a 'pyproject.toml' and 'pixi.toml'
+    pub fn remove_pixi_dependency(
         &mut self,
         dep: &str,
         table: &str,
@@ -175,10 +175,7 @@ impl ManifestSource {
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
         self.get_or_insert_toml_table(platform, feature_name, table)
-            .map(|t| {
-                t.set_implicit(true); // to avoid inserting an empty table
-                t.remove(dep)
-            })?;
+            .map(|t| t.remove(dep))?;
         Ok(())
     }
 
@@ -212,17 +209,24 @@ impl ManifestSource {
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
         match self {
-            // FIXME: need to remove any dep with same name before adding
-            ManifestSource::PyProjectToml(_) if feature_name.is_default() => {
-                self.get_or_insert_toml_array("project", "dependencies")?
-                    .push(requirement.to_string());
-            }
             ManifestSource::PyProjectToml(_) => {
-                self.get_or_insert_toml_array(
-                    "project.optional-dependencies",
-                    &feature_name.to_string(),
-                )?
-                .push(requirement.to_string());
+                // Pypi dependencies can be stored in different places
+                // so we remove any potential dependency of the same name before adding it back
+                self.remove_pypi_dependency(
+                    &PyPiPackageName::from_normalized(requirement.name.clone()),
+                    platform,
+                    feature_name,
+                )?;
+                if feature_name.is_default() {
+                    self.get_or_insert_toml_array("project", "dependencies")?
+                        .push(requirement.to_string())
+                } else {
+                    self.get_or_insert_toml_array(
+                        "project.optional-dependencies",
+                        &feature_name.to_string(),
+                    )?
+                    .push(requirement.to_string())
+                }
             }
             ManifestSource::PixiToml(_) => {
                 self.get_or_insert_toml_table(platform, feature_name, consts::PYPI_DEPENDENCIES)?

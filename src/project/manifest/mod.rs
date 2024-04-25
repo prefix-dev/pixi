@@ -307,8 +307,7 @@ impl Manifest {
         // Then add the platforms to the toml document
         let platforms_array = self
             .document
-            .specific_array_mut("platforms", feature_name)
-            .into_diagnostic()?;
+            .specific_array_mut("platforms", feature_name)?;
         for platform in stored_platforms {
             platforms_array.push(platform.to_string());
         }
@@ -419,7 +418,7 @@ impl Manifest {
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
         // Remove the dependency from the TOML document
-        self.document.remove_dependency_helper(
+        self.document.remove_pixi_dependency(
             dep.as_source(),
             spec_type.name(),
             platform,
