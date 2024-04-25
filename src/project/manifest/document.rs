@@ -156,26 +156,22 @@ impl ManifestSource {
 
         // For both 'pyproject.toml' and 'pixi.toml' manifest,
         // try and remove the dependency from pixi native tables
-        self.remove_pixi_dependency(
-            dep.as_source(),
-            consts::PYPI_DEPENDENCIES,
-            platform,
-            feature_name,
-        )?;
+        self.get_or_insert_toml_table(platform, feature_name, consts::PYPI_DEPENDENCIES)
+            .map(|t| t.remove(dep.as_source()))?;
         Ok(())
     }
 
     /// Removes a conda or pypi dependency from the TOML manifest's pixi table
     /// for either a 'pyproject.toml' and 'pixi.toml'
-    pub fn remove_pixi_dependency(
+    pub fn remove_dependency(
         &mut self,
-        dep: &str,
-        table: &str,
+        dep: &PackageName,
+        spec_type: SpecType,
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
-        self.get_or_insert_toml_table(platform, feature_name, table)
-            .map(|t| t.remove(dep))?;
+        self.get_or_insert_toml_table(platform, feature_name, spec_type.name())
+            .map(|t| t.remove(dep.as_source()))?;
         Ok(())
     }
 

@@ -418,12 +418,8 @@ impl Manifest {
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
         // Remove the dependency from the TOML document
-        self.document.remove_pixi_dependency(
-            dep.as_source(),
-            spec_type.name(),
-            platform,
-            feature_name,
-        )?;
+        self.document
+            .remove_dependency(dep, spec_type, platform, feature_name)?;
 
         Ok(self
             .target_mut(platform, feature_name)
