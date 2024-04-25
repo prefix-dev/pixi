@@ -203,28 +203,22 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
             },
         ],
         [
-            (
-                PyPiPackageName {
-                    source: "pypng",
-                    normalized: PackageName(
-                        "pypng",
-                    ),
-                },
-                RawVersion(
-                    Star,
+            Requirement {
+                name: PackageName(
+                    "pypng",
                 ),
-            ),
-            (
-                PyPiPackageName {
-                    source: "palettable",
-                    normalized: PackageName(
-                        "palettable",
-                    ),
-                },
-                RawVersion(
-                    Star,
+                extras: [],
+                version_or_url: None,
+                marker: None,
+            },
+            Requirement {
+                name: PackageName(
+                    "palettable",
                 ),
-            ),
+                extras: [],
+                version_or_url: None,
+                marker: None,
+            },
         ],
         [],
     ),

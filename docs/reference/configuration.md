@@ -58,7 +58,7 @@ channels = ["conda-forge", "https://repo.prefix.dev/channel-name"]
 ### `platforms`
 
 Defines the list of platforms that the project supports.
-Pixi solves the dependencies for all these platforms and puts them in the lockfile (`pixi.lock`).
+Pixi solves the dependencies for all these platforms and puts them in the lock file (`pixi.lock`).
 
 ```toml
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
@@ -173,6 +173,9 @@ simple = "echo This is a simple task"
 cmd = { cmd="echo Same as a simple task but now more verbose"}
 depending = { cmd="echo run after simple", depends_on="simple"}
 alias = { depends_on=["depending"]}
+download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
+build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
+run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
 ```
 
 You can modify this table using [`pixi task`](cli.md#task).
@@ -238,7 +241,7 @@ If you want to use `cuda` in your project you need to add the following to your 
 cuda = "11" # or any other version of cuda you want to use
 ```
 
-This informs the solver that cuda is going to be available, so it can lock it into the lockfile if needed.
+This informs the solver that cuda is going to be available, so it can lock it into the lock file if needed.
 
 ## The `dependencies` table(s)
 
@@ -290,7 +293,7 @@ rust = "1.72"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 ```
 
-### `pypi-dependencies` (Beta feature)
+### `pypi-dependencies`
 
 ??? info "Details regarding the PyPI integration"
     We use [`uv`](https://github.com/astral-sh/uv), which is a new fast pip replacement written in Rust.
@@ -309,7 +312,7 @@ PyPI packages are not indexed on [prefix.dev](https://prefix.dev/channels) but c
 
 !!! warning "Important considerations"
     - **Stability**: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the `dependencies` table where possible.
-    - **Compatibility limitations**: Currently, pixi doesn't support: Private PyPI repositories
+    - **Compatibility limitation**: Currently, pixi doesn't support private PyPI repositories
 
 #### Version specification:
 

@@ -1,0 +1,12 @@
+[project]
+name = "foo"
+version = "0.1.0"
+dependencies = [ "bar" ]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["win-64"]

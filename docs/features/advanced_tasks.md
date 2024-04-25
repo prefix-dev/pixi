@@ -167,6 +167,34 @@ Note: if you want to debug the globs you can use the `--verbose` flag to see whi
 pixi run -v start
 ```
 
+## Environment variables
+You can set environment variables for a task.
+These are seen as "default" values for the variables as you can overwrite them from the shell.
+
+```toml title="pixi.toml"
+[tasks]
+echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
+```
+If you run `pixi run echo` it will output `hello`.
+When you set the environment variable `ARGUMENT` before running the task, it will use that value instead.
+
+```shell
+ARGUMENT=world pixi run echo
+✨ Pixi task (echo in default): echo $ARGUMENT
+world
+```
+
+These variables are not shared over tasks, so you need to define these for every task you want to use them in.
+
+!!! note "Extend instead of overwrite"
+    If you use the same environment variable in the value as in the key of the map you will also overwrite the variable.
+    For example overwriting a `PATH`
+    ```toml title="pixi.toml"
+    [tasks]
+    echo = { cmd = "echo $PATH", env = { PATH = "/tmp/path:$PATH" } }
+    ```
+    This will output `/tmp/path:/usr/bin:/bin` instead of the original `/usr/bin:/bin`.
+
 ## Our task runner: deno_task_shell
 
 To support the different OS's (Windows, OSX and Linux), pixi integrates a shell that can run on all of them.

@@ -21,7 +21,7 @@ There are a few things we wanted to keep in mind in the design:
 2. **Keep it simple**: Not understanding the multiple environments feature shouldn't limit a user to use pixi. The feature should be "invisible" to the non-multi env use-cases.
 3. **No Automatic Combinatorial**: To ensure the dependency resolution process remains manageable, the solution should avoid a combinatorial explosion of dependency sets. By making the environments user defined and not automatically inferred by testing a matrix of the features.
 4. **Single environment Activation**: The design should allow only one environment to be active at any given time, simplifying the resolution process and preventing conflicts.
-5. **Fixed Lockfiles**: It's crucial to preserve fixed lockfiles for consistency and predictability. Solutions must ensure reliability not just for authors but also for end-users, particularly at the time of lockfile creation.
+5. **Fixed lock files**: It's crucial to preserve fixed lock files for consistency and predictability. Solutions must ensure reliability not just for authors but also for end-users, particularly at the time of lock file creation.
 
 ### Feature & Environment Set Definitions
 
@@ -71,7 +71,7 @@ system-requirements = {cuda = "12"}
 # Channels concatenate using a priority instead of overwrite, so the default channels are still used.
 # Using the priority the concatenation is controlled, default is 0, the default channels are used last.
 # Highest priority comes first.
-channels = ["nvidia", {channel = "pytorch", priority = "-1"}] # Results in:  ["nvidia", "conda-forge", "pytorch"] when the default is `conda-forge`
+channels = ["nvidia", {channel = "pytorch", priority = -1}] # Results in:  ["nvidia", "conda-forge", "pytorch"] when the default is `conda-forge`
 tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
@@ -129,10 +129,10 @@ default = ["base"]
 lint = ["lint"]
 ```
 
-### Lockfile Structure
+### lock file Structure
 
 Within the `pixi.lock` file, a package may now include an additional `environments` field, specifying the environment to which it belongs.
-To avoid duplication the packages `environments` field may contain multiple environments so the lockfile is of minimal size.
+To avoid duplication the packages `environments` field may contain multiple environments so the lock file is of minimal size.
 
 ```yaml
 - platform: linux-64
@@ -375,7 +375,7 @@ pixi run test
 
     [feature.cuda]
     platforms = ["win-64", "linux-64"]
-    channels = ["nvidia", {channel = "pytorch", priority = "-1"}]
+    channels = ["nvidia", {channel = "pytorch", priority = -1}]
     system-requirements = {cuda = "12.1"}
 
     [feature.cuda.tasks]

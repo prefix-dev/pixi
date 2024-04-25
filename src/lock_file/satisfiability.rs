@@ -12,6 +12,8 @@ use rattler_conda_types::{
 };
 use rattler_lock::{ConversionError, Package, PypiPackageData, PypiSourceTreeHashable, UrlOrPath};
 use requirements_txt::EditableRequirement;
+use std::fmt::Display;
+use std::ops::Sub;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{
@@ -20,12 +22,19 @@ use std::{
 };
 use thiserror::Error;
 use url::Url;
+use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
     #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
+}
+
+#[derive(Debug, Error)]
+pub struct EditablePackagesMismatch {
+    pub expected_editable: Vec<PackageName>,
+    pub unexpected_editable: Vec<PackageName>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -77,11 +86,8 @@ pub enum PlatformUnsat {
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
     DirectUrlDependencyOnCondaInstalledPackage(PackageName),
 
-    #[error("locked package {0} should be editable")]
-    ExpectedEditablePackage(PackageName),
-
-    #[error("locked package {0} should not be editable")]
-    UnexpectedEditablePackage(PackageName),
+    #[error(transparent)]
+    EditablePackageMismatch(EditablePackagesMismatch),
 
     #[error("failed to determine pypi source tree hash for {0}")]
     FailedToDetermineSourceTreeHash(PackageName, std::io::Error),
@@ -104,7 +110,7 @@ impl PlatformUnsat {
                 | PlatformUnsat::AsPep508Error(_, _)
                 | PlatformUnsat::FailedToDetermineSourceTreeHash(_, _)
                 | PlatformUnsat::PythonVersionMismatch(_, _, _)
-                | PlatformUnsat::UnexpectedEditablePackage(_)
+                | PlatformUnsat::EditablePackageMismatch(_)
                 | PlatformUnsat::SourceTreeHashMismatch(_),
         )
     }
@@ -238,12 +244,11 @@ pub fn pypi_satifisfies_editable(
 
         // If the spec does not specify a revision than any will do
         // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-        if spec_git_url.url.reference().is_none() {
-            base_is_same
-        } else {
-            // If the spec does specify a revision than the revision must match
-            base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
+        if *spec_git_url.url.reference() == GitReference::DefaultBranch {
+            return base_is_same;
         }
+        // If the spec does specify a revision than the revision must match
+        base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
     } else {
         let spec_path_or_url = spec_url
             .given()
@@ -293,12 +298,11 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
 
                 // If the spec does not specify a revision than any will do
                 // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-                if spec_git_url.url.reference().is_none() {
-                    base_is_same
-                } else {
-                    // If the spec does specify a revision than the revision must match
-                    base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
+                if *spec_git_url.url.reference() == GitReference::DefaultBranch {
+                    return base_is_same;
                 }
+                // If the spec does specify a revision than the revision must match
+                base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
             } else {
                 let spec_path_or_url = spec_url
                     .given()
@@ -400,6 +404,7 @@ pub fn verify_package_platform_satisfiability(
     // requirements. We want to ensure we always check the conda packages first.
     let mut conda_queue = conda_specs;
     let mut pypi_queue = pypi_requirements;
+    let mut expected_editable_pypi_packages = HashSet::new();
     while let Some(package) = conda_queue.pop().or_else(|| pypi_queue.pop()) {
         enum FoundPackage {
             Conda(usize),
@@ -503,12 +508,6 @@ pub fn verify_package_platform_satisfiability(
                     let record = &locked_pypi_environment.records[idx];
                     match requirement {
                         RequirementOrEditable::Editable(package_name, requirement) => {
-                            if !record.0.editable {
-                                return Err(PlatformUnsat::ExpectedEditablePackage(
-                                    record.0.name.clone(),
-                                ));
-                            }
-
                             if !pypi_satifisfies_editable(&record.0, &requirement) {
                                 return Err(PlatformUnsat::UnsatisfiableRequirement(
                                     RequirementOrEditable::Editable(package_name, requirement),
@@ -516,15 +515,14 @@ pub fn verify_package_platform_satisfiability(
                                 ));
                             }
 
+                            // Record that we want this package to be editable. This is used to
+                            // check at the end if packages that should be editable are actually
+                            // editable and vice versa.
+                            expected_editable_pypi_packages.insert(package_name.clone());
+
                             FoundPackage::PyPi(idx, requirement.extras)
                         }
                         RequirementOrEditable::Pep508Requirement(requirement) => {
-                            if record.0.editable {
-                                return Err(PlatformUnsat::UnexpectedEditablePackage(
-                                    record.0.name.clone(),
-                                ));
-                            }
-
                             if !pypi_satifisfies_requirement(&record.0, &requirement) {
                                 return Err(PlatformUnsat::UnsatisfiableRequirement(
                                     RequirementOrEditable::Pep508Requirement(requirement),
@@ -614,12 +612,13 @@ pub fn verify_package_platform_satisfiability(
 
                 // Add all the requirements of the package to the queue.
                 for requirement in &record.0.requires_dist {
-                    if !pypi_requirements_visited.insert(requirement.clone()) {
+                    // Skip this requirement if it does not apply.
+                    if !requirement.evaluate_markers(marker_environment, &extras) {
                         continue;
                     }
 
-                    // Skip this requirement if it does not apply.
-                    if !requirement.evaluate_markers(marker_environment, &extras) {
+                    // Skip this requirement if it has already been visited.
+                    if !pypi_requirements_visited.insert(requirement.clone()) {
                         continue;
                     }
 
@@ -650,6 +649,24 @@ pub fn verify_package_platform_satisfiability(
                     }
                 })
                 .collect(),
+        ));
+    }
+
+    // Check if all packages that should be editable are actually editable and vice versa.
+    let locked_editable_packages = locked_pypi_environment
+        .records
+        .iter()
+        .filter(|record| record.0.editable)
+        .map(|record| record.0.name.clone())
+        .collect::<HashSet<_>>();
+    let expected_editable = expected_editable_pypi_packages.sub(&locked_editable_packages);
+    let unexpected_editable = locked_editable_packages.sub(&expected_editable_pypi_packages);
+    if !expected_editable.is_empty() || !unexpected_editable.is_empty() {
+        return Err(PlatformUnsat::EditablePackageMismatch(
+            EditablePackagesMismatch {
+                expected_editable: expected_editable.into_iter().sorted().collect(),
+                unexpected_editable: unexpected_editable.into_iter().sorted().collect(),
+            },
         ));
     }
 
@@ -699,6 +716,80 @@ impl MatchesMatchspec for GenericVirtualPackage {
         }
 
         true
+    }
+}
+
+impl Display for EditablePackagesMismatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.expected_editable.is_empty() && self.unexpected_editable.is_empty() {
+            write!(f, "expected ")?;
+            format_package_list(f, &self.expected_editable)?;
+            write!(
+                f,
+                " to be editable but in the lock-file {they} {are} not",
+                they = it_they(self.expected_editable.len()),
+                are = is_are(self.expected_editable.len())
+            )?
+        } else if self.expected_editable.is_empty() && !self.unexpected_editable.is_empty() {
+            write!(f, "expected ")?;
+            format_package_list(f, &self.unexpected_editable)?;
+            write!(
+                f,
+                "NOT to be editable but in the lock-file {they} {are}",
+                they = it_they(self.unexpected_editable.len()),
+                are = is_are(self.unexpected_editable.len())
+            )?
+        } else {
+            write!(f, "expected ")?;
+            format_package_list(f, &self.expected_editable)?;
+            write!(
+                f,
+                " to be editable but in the lock-file but {they} {are} not, whereas ",
+                they = it_they(self.expected_editable.len()),
+                are = is_are(self.expected_editable.len())
+            )?;
+            format_package_list(f, &self.unexpected_editable)?;
+            write!(
+                f,
+                " {are} NOT expected to be editable which in the lock-file {they} {are}",
+                they = it_they(self.unexpected_editable.len()),
+                are = is_are(self.unexpected_editable.len())
+            )?
+        }
+
+        return Ok(());
+
+        fn format_package_list(
+            f: &mut std::fmt::Formatter<'_>,
+            packages: &[PackageName],
+        ) -> std::fmt::Result {
+            for (idx, package) in packages.iter().enumerate() {
+                if idx == packages.len() - 1 && idx > 0 {
+                    write!(f, " and ")?;
+                } else if idx > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}", package)?;
+            }
+
+            Ok(())
+        }
+
+        fn is_are(count: usize) -> &'static str {
+            if count == 1 {
+                "is"
+            } else {
+                "are"
+            }
+        }
+
+        fn it_they(count: usize) -> &'static str {
+            if count == 1 {
+                "it"
+            } else {
+                "they"
+            }
+        }
     }
 }
 

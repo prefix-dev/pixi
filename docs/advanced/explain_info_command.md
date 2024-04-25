@@ -91,7 +91,7 @@ The path to the [manifest file](../reference/configuration.md) that describes th
 
 ### Last updated
 
-The last time the lockfile was updated, either manually or by pixi itself.
+The last time the lock file was updated, either manually or by pixi itself.
 
 ## Environment info
 

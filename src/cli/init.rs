@@ -31,6 +31,10 @@ pub struct Args {
     /// Environment.yml file to bootstrap the project.
     #[arg(short = 'i', long = "import")]
     pub env_file: Option<PathBuf>,
+
+    /// Create a pyproject.toml manifest instead of a pixi.toml manifest
+    #[arg(long, conflicts_with = "env_file")]
+    pub pyproject: bool,
 }
 
 /// The pixi.toml template
@@ -53,6 +57,8 @@ platforms = {{ platforms }}
 "#;
 
 /// The pyproject.toml template
+///
+/// This is injected into an existing pyproject.toml
 const PYROJECT_TEMPLATE: &str = r#"
 [tool.pixi.project]
 channels = {{ channels }}
@@ -68,6 +74,36 @@ default = { solve-group = "default" }
 {%- endif %}
 {{env}} = { features = {{ features }}, solve-group = "default" }
 {%- endfor %}
+
+[tool.pixi.tasks]
+
+"#;
+
+/// The pyproject.toml template
+///
+/// This is used to create a pyproject.toml from scratch
+const NEW_PYROJECT_TEMPLATE: &str = r#"[project]
+name = "{{ name }}"
+version = "{{ version }}"
+description = "Add a short description here"
+{%- if author %}
+authors = [{name = "{{ author[0] }}", email = "{{ author[1] }}"}]
+{%- endif %}
+requires-python = ">= 3.11"
+dependencies = []
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.pixi.project]
+channels = {{ channels }}
+platforms = {{ platforms }}
+
+[tool.pixi.pypi-dependencies]
+{{ name }} = { path = ".", editable = true }
+
+[tool.pixi.tasks]
 
 "#;
 
@@ -130,11 +166,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 )?;
             }
         }
-        for spec in pypi_deps {
+        for requirement in pypi_deps {
             for platform in platforms.iter() {
                 project.manifest.add_pypi_dependency(
-                    &spec.0,
-                    &spec.1,
+                    &requirement,
                     Some(platform.parse().into_diagnostic()?),
                     &FeatureName::default(),
                 )?;
@@ -214,6 +249,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }
             }
 
+        // Create a 'pyproject.toml' manifest
+        } else if args.pyproject {
+            let rv = env
+                .render_named_str(
+                    consts::PYPROJECT_MANIFEST,
+                    NEW_PYROJECT_TEMPLATE,
+                    context! {
+                        name => default_name,
+                        version,
+                        author,
+                        channels,
+                        platforms
+                    },
+                )
+                .unwrap();
+            fs::write(&pyproject_manifest_path, rv).into_diagnostic()?;
         // Create a 'pixi.toml' manifest
         } else {
             // Check if the 'pixi.toml' file doesn't already exist. We don't want to overwrite it.

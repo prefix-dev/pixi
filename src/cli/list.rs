@@ -162,6 +162,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &uv_context.cache,
             &tags,
             &uv_context.index_locations,
+            &uv_types::HashStrategy::None,
         ))
     } else {
         None

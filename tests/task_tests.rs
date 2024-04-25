@@ -211,3 +211,31 @@ async fn test_cwd() {
         .await
         .is_err());
 }
+
+#[tokio::test]
+async fn test_task_with_env() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().without_channels().await.unwrap();
+
+    pixi.tasks()
+        .add("env-test".into(), None, FeatureName::Default)
+        .with_commands(["echo From a $HELLO"])
+        .with_env(vec![(
+            String::from("HELLO"),
+            String::from("world with spaces"),
+        )])
+        .execute()
+        .unwrap();
+
+    let result = pixi
+        .run(Args {
+            task: vec!["env-test".to_string()],
+            manifest_path: None,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.stdout, "From a world with spaces\n");
+}

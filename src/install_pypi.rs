@@ -9,12 +9,15 @@ use miette::{miette, IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
 use pep508_rs::VerbatimUrl;
 use platform_tags::Tags;
+use pypi_types::{HashAlgorithm, HashDigest};
 use requirements_txt::EditableRequirement;
 use tempfile::{tempdir, TempDir};
 use url::Url;
 
 use uv_cache::{ArchiveTarget, ArchiveTimestamp, Cache};
+use uv_configuration::{ConfigSettings, SetupPyStrategy};
 use uv_resolver::InMemoryIndex;
+use uv_types::HashStrategy;
 
 use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::UvResolutionContext;
@@ -22,7 +25,7 @@ use crate::project::manifest::SystemRequirements;
 
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use distribution_types::{
-    CachedDist, DirectGitUrl, Dist, IndexUrl, InstalledDist, LocalEditable, Name,
+    CachedDist, DirectGitUrl, Dist, IndexUrl, InstalledDist, LocalEditable, LocalEditables, Name,
 };
 use install_wheel_rs::linker::LinkMode;
 
@@ -34,14 +37,13 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
-use uv_client::{FlatIndex, FlatIndexClient};
+use uv_client::FlatIndexClient;
 use uv_dispatch::BuildDispatch;
 use uv_distribution::RegistryWheelIndex;
 use uv_installer::{Downloader, ResolvedEditable, SitePackages};
 use uv_interpreter::{Interpreter, PythonEnvironment};
 use uv_normalize::PackageName;
-
-use uv_traits::{ConfigSettings, SetupPyStrategy};
+use uv_resolver::FlatIndex;
 
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
 
@@ -91,37 +93,32 @@ fn locked_data_to_file(pkg: &PypiPackageData, filename: &str) -> distribution_ty
     // Convert PackageHashes to uv hashes
     let hashes = if let Some(ref hash) = pkg.hash {
         match hash {
-            rattler_lock::PackageHashes::Md5(md5) => pypi_types::Hashes {
-                md5: Some(format!("{:x}", md5).into()),
-                sha256: None,
-                sha384: None,
-                sha512: None,
-            },
-            rattler_lock::PackageHashes::Sha256(sha256) => pypi_types::Hashes {
-                md5: None,
-                sha256: Some(format!("{:x}", sha256).into()),
-                sha384: None,
-                sha512: None,
-            },
-            rattler_lock::PackageHashes::Md5Sha256(md5, sha256) => pypi_types::Hashes {
-                md5: Some(format!("{:x}", md5).into()),
-                sha256: Some(format!("{:x}", sha256).into()),
-                sha384: None,
-                sha512: None,
-            },
+            rattler_lock::PackageHashes::Md5(md5) => vec![HashDigest {
+                algorithm: HashAlgorithm::Md5,
+                digest: format!("{:x}", md5).into(),
+            }],
+            rattler_lock::PackageHashes::Sha256(sha256) => vec![HashDigest {
+                algorithm: HashAlgorithm::Sha256,
+                digest: format!("{:x}", sha256).into(),
+            }],
+            rattler_lock::PackageHashes::Md5Sha256(md5, sha256) => vec![
+                HashDigest {
+                    algorithm: HashAlgorithm::Md5,
+                    digest: format!("{:x}", md5).into(),
+                },
+                HashDigest {
+                    algorithm: HashAlgorithm::Sha256,
+                    digest: format!("{:x}", sha256).into(),
+                },
+            ],
         }
     } else {
-        pypi_types::Hashes {
-            md5: None,
-            sha256: None,
-            sha384: None,
-            sha512: None,
-        }
+        vec![]
     };
 
     distribution_types::File {
         filename: filename.to_string(),
-        dist_info_metadata: None,
+        dist_info_metadata: false,
         hashes,
         requires_python: pkg.requires_python.clone(),
         upload_time_utc_ms: None,
@@ -655,11 +652,15 @@ async fn resolve_editables(
         let built_editables = Downloader::new(
             &uv_context.cache,
             tags,
+            &uv_types::HashStrategy::None,
             &uv_context.registry_client,
             build_dispatch,
         )
         .with_reporter(UvReporter::new(options))
-        .build_editables(to_build, temp.path())
+        .build_editables(
+            LocalEditables::from_editables(to_build.into_iter()),
+            temp.path(),
+        )
         .await
         .into_diagnostic()?;
         (built_editables, Some(temp))
@@ -724,7 +725,13 @@ pub async fn update_python_distributions(
             .fetch(uv_context.index_locations.flat_index())
             .await
             .into_diagnostic()?;
-        FlatIndex::from_entries(entries, &tags)
+        FlatIndex::from_entries(
+            entries,
+            &tags,
+            &uv_types::HashStrategy::None,
+            &uv_context.no_build,
+            &uv_context.no_binary,
+        )
     };
 
     let in_memory_index = InMemoryIndex::default();
@@ -747,7 +754,8 @@ pub async fn update_python_distributions(
         &uv_context.in_flight,
         SetupPyStrategy::default(),
         &config_settings,
-        uv_traits::BuildIsolation::Isolated,
+        uv_types::BuildIsolation::Isolated,
+        LinkMode::default(),
         &uv_context.no_build,
         &uv_context.no_binary,
     )
@@ -776,8 +784,12 @@ pub async fn update_python_distributions(
     .await?;
 
     // This is used to find wheels that are available from the registry
-    let mut registry_index =
-        RegistryWheelIndex::new(&uv_context.cache, &tags, &uv_context.index_locations);
+    let mut registry_index = RegistryWheelIndex::new(
+        &uv_context.cache,
+        &tags,
+        &uv_context.index_locations,
+        &HashStrategy::None,
+    );
 
     // Partition into those that should be linked from the cache (`local`), those that need to be
     // downloaded (`remote`), and those that should be removed (`extraneous`).
@@ -857,6 +869,7 @@ pub async fn update_python_distributions(
         let downloader = Downloader::new(
             &uv_context.cache,
             &tags,
+            &uv_types::HashStrategy::None,
             &uv_context.registry_client,
             &build_dispatch,
         )
