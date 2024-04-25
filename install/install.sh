@@ -111,7 +111,7 @@ update_shell() {
 
 case "$(basename "$SHELL")" in
     bash)
-        if [ -f ~/.bash_profile ]; then
+        if [ -w ~/.bash_profile ]; then
             BASH_FILE=~/.bash_profile
         else
             # Default to bashrc as that is used in non login shells instead of the profile.
