@@ -1020,6 +1020,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/six-1.16.0-pyh6c4a22f_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/sysroot_linux-64-2.12-he073ed8_17.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tabulate-0.9.0-pyhd8ed1ab_1.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/taplo-0.9.1-h1ff36dd_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tbump-6.9.0-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_h4845f30_101.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tomli-2.0.1-pyhd8ed1ab_0.tar.bz2
@@ -1106,6 +1107,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/setuptools-69.2.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/six-1.16.0-pyh6c4a22f_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/tabulate-0.9.0-pyhd8ed1ab_1.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/taplo-0.9.1-h236d3af_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tbump-6.9.0-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/osx-64/tk-8.6.13-h1abcd95_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tomli-2.0.1-pyhd8ed1ab_0.tar.bz2
@@ -1193,6 +1195,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/setuptools-69.2.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/six-1.16.0-pyh6c4a22f_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/tabulate-0.9.0-pyhd8ed1ab_1.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/taplo-0.9.1-h16c8c8b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tbump-6.9.0-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/tk-8.6.13-h5083fa2_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tomli-2.0.1-pyhd8ed1ab_0.tar.bz2
@@ -1239,6 +1242,12 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/libiconv-1.17-hcfcfb64_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/libsqlite-3.45.2-hcfcfb64_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/libzlib-1.2.13-hcfcfb64_5.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/m2w64-gcc-libgfortran-5.3.0-6.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/win-64/m2w64-gcc-libs-5.3.0-7.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/win-64/m2w64-gcc-libs-core-5.3.0-7.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/win-64/m2w64-gmp-6.1.0-2.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/win-64/m2w64-libwinpthread-git-5.0.0.4634.697f757-2.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/win-64/msys2-conda-epoch-20160418-1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/nodeenv-1.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/openssl-3.2.1-hcfcfb64_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-24.0-pyhd8ed1ab_0.conda
@@ -1267,6 +1276,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/setuptools-69.2.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/six-1.16.0-pyh6c4a22f_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/tabulate-0.9.0-pyhd8ed1ab_1.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/win-64/taplo-0.9.1-h7f3b576_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tbump-6.9.0-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/win-64/tk-8.6.13-h5226925_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tomli-2.0.1-pyhd8ed1ab_0.tar.bz2
@@ -6407,6 +6417,68 @@ packages:
   license_family: MIT
   size: 35912
   timestamp: 1665138565317
+- kind: conda
+  name: taplo
+  version: 0.9.1
+  build: h16c8c8b_0
+  subdir: osx-arm64
+  url: https://conda.anaconda.org/conda-forge/osx-arm64/taplo-0.9.1-h16c8c8b_0.conda
+  sha256: 3a387ea7779d061d28af0426d1249fe81f798f35a2d0cb979a6ff84525187667
+  md5: 8171587b7a366dbbaab309ae1c45bd93
+  depends:
+  - openssl >=3.2.1,<4.0a0
+  constrains:
+  - __osx >=11.0
+  license: MIT
+  license_family: MIT
+  size: 3560280
+  timestamp: 1710793219601
+- kind: conda
+  name: taplo
+  version: 0.9.1
+  build: h1ff36dd_0
+  subdir: linux-64
+  url: https://conda.anaconda.org/conda-forge/linux-64/taplo-0.9.1-h1ff36dd_0.conda
+  sha256: 82b3528f63ae71e0158fdbf8b66e66f619cb70584c471f3d89a2ee6fd44ef20b
+  md5: 29207c9b716932300221e5acd0b310f7
+  depends:
+  - libgcc-ng >=12
+  - openssl >=3.2.1,<4.0a0
+  license: MIT
+  license_family: MIT
+  size: 3877123
+  timestamp: 1710792099600
+- kind: conda
+  name: taplo
+  version: 0.9.1
+  build: h236d3af_0
+  subdir: osx-64
+  url: https://conda.anaconda.org/conda-forge/osx-64/taplo-0.9.1-h236d3af_0.conda
+  sha256: 3e9032084b3f8d686b15f67500323ae2cae5637dc427b309b661a30026d8f00c
+  md5: 02c8d9c54b2887c5456fb7a0ecec62f3
+  depends:
+  - openssl >=3.2.1,<4.0a0
+  constrains:
+  - __osx >=10.12
+  license: MIT
+  license_family: MIT
+  size: 3773670
+  timestamp: 1710793055293
+- kind: conda
+  name: taplo
+  version: 0.9.1
+  build: h7f3b576_0
+  subdir: win-64
+  url: https://conda.anaconda.org/conda-forge/win-64/taplo-0.9.1-h7f3b576_0.conda
+  sha256: 7ef6b5f23fd749fde17628793e4e76e36395b9645a3d3b8b0fa5a4d9b2b9ccfb
+  md5: 0a798b7bf999885c00e40fcb0cfe7136
+  depends:
+  - m2w64-gcc-libs
+  - m2w64-gcc-libs-core
+  license: MIT
+  license_family: MIT
+  size: 3924159
+  timestamp: 1710794002174
 - kind: conda
   name: tbump
   version: 6.9.0

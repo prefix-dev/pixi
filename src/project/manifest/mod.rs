@@ -1044,6 +1044,11 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             /// The tool configuration which is unused by pixi
             #[serde(rename = "tool")]
             _tool: Option<serde_json::Value>,
+
+            /// The URI for the manifest schema which is unused by pixi
+            #[allow(dead_code)]
+            #[serde(rename = "$schema")]
+            schema: Option<String>,
         }
 
         let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
