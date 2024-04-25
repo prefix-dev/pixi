@@ -22,8 +22,5 @@ requests = "*"
 xpackage = "==1.2.3"
 ypackage = {version = ">=1.2.3"}
 
-[feature.test.pypi-dependencies]
-
 [feature.test.target.linux-64.pypi-dependencies]
 feature_target_dep = "*"
-

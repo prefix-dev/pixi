@@ -80,7 +80,7 @@ impl ManifestSource {
 
         let mut current_table = self.as_table_mut();
 
-        for (i, part) in parts.iter().enumerate() {
+        for part in parts {
             current_table = current_table
                 .entry(part)
                 .or_insert(Item::Table(Table::new()))
@@ -92,9 +92,8 @@ impl ManifestSource {
                         table_name
                     )
                 })?;
-            if i < parts.len() - 1 {
-                current_table.set_implicit(true);
-            }
+            // Avoid creating empty tables
+            current_table.set_implicit(true);
         }
         Ok(current_table)
     }
@@ -407,22 +406,24 @@ mod tests {
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), PROJECT_BOILERPLATE).unwrap();
         let _ = manifest
             .document
-            .get_or_insert_toml_table(None, &FeatureName::Default, "tasks");
-        let _ = manifest.document.get_or_insert_toml_table(
-            Some(Platform::Linux64),
-            &FeatureName::Default,
-            "tasks",
-        );
-        let _ = manifest.document.get_or_insert_toml_table(
-            None,
-            &FeatureName::Named("test".to_string()),
-            "tasks",
-        );
-        let _ = manifest.document.get_or_insert_toml_table(
-            Some(Platform::Linux64),
-            &FeatureName::Named("test".to_string()),
-            "tasks",
-        );
+            .get_or_insert_toml_table(None, &FeatureName::Default, "tasks")
+            .map(|t| t.set_implicit(false));
+        let _ = manifest
+            .document
+            .get_or_insert_toml_table(Some(Platform::Linux64), &FeatureName::Default, "tasks")
+            .map(|t| t.set_implicit(false));
+        let _ = manifest
+            .document
+            .get_or_insert_toml_table(None, &FeatureName::Named("test".to_string()), "tasks")
+            .map(|t| t.set_implicit(false));
+        let _ = manifest
+            .document
+            .get_or_insert_toml_table(
+                Some(Platform::Linux64),
+                &FeatureName::Named("test".to_string()),
+                "tasks",
+            )
+            .map(|t| t.set_implicit(false));
         assert_snapshot!(manifest.document.to_string());
     }
 
