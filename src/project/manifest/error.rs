@@ -10,6 +10,8 @@ pub enum DependencyError {
     NoSpecType(String),
     #[error("Dependency {} is missing.", console::style(.0).bold())]
     NoDependency(String),
+    #[error("No Pypi dependencies.")]
+    NoPyPiDependencies,
 }
 
 #[derive(Error, Debug)]

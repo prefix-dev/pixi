@@ -415,14 +415,14 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
+        // Remove the dependency from the manifest
+        let res = self
+            .target_mut(platform, feature_name)
+            .remove_dependency(dep, spec_type);
         // Remove the dependency from the TOML document
         self.document
             .remove_dependency(dep, spec_type, platform, feature_name)?;
-
-        Ok(self
-            .target_mut(platform, feature_name)
-            .remove_dependency(dep, spec_type)
-            .expect("dependency should exist"))
+        res.into_diagnostic()
     }
 
     /// Removes a pypi dependency.
@@ -432,17 +432,14 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(PyPiPackageName, PyPiRequirement)> {
+        // Remove the dependency from the manifest
+        let res = self
+            .target_mut(platform, feature_name)
+            .remove_pypi_dependency(dep);
         // Remove the dependency from the TOML document
         self.document
             .remove_pypi_dependency(dep, platform, feature_name)?;
-
-        Ok(self
-            .target_mut(platform, feature_name)
-            .pypi_dependencies
-            .as_mut()
-            .expect("pypi-dependencies should exist")
-            .shift_remove_entry(dep)
-            .expect("dependency should exist"))
+        res.into_diagnostic()
     }
 
     /// Returns true if any of the features has pypi dependencies defined.

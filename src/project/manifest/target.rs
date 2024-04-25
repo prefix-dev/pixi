@@ -126,7 +126,9 @@ impl Target {
         }
     }
 
-    /// Removes a dependency from this target.
+    /// Removes a dependency from this target
+    ///
+    /// it will Err if the dependency is not found
     pub fn remove_dependency(
         &mut self,
         dep_name: &PackageName,
@@ -135,7 +137,6 @@ impl Target {
         let Some(dependencies) = self.dependencies.get_mut(&spec_type) else {
             return Err(DependencyError::NoSpecType(spec_type.name().into()));
         };
-
         dependencies
             .shift_remove_entry(dep_name)
             .ok_or_else(|| DependencyError::NoDependency(dep_name.as_normalized().into()))
@@ -185,6 +186,21 @@ impl Target {
             (Some(_), false) => true,
             (None, _) => false,
         }
+    }
+
+    /// Removes a pypi dependency from this target
+    ///
+    /// it will Err if the dependency is not found
+    pub fn remove_pypi_dependency(
+        &mut self,
+        dep_name: &PyPiPackageName,
+    ) -> Result<(PyPiPackageName, PyPiRequirement), DependencyError> {
+        let Some(pypi_dependencies) = self.pypi_dependencies.as_mut() else {
+            return Err(DependencyError::NoPyPiDependencies);
+        };
+        pypi_dependencies
+            .shift_remove_entry(dep_name)
+            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_source().into()))
     }
 
     /// Adds a pypi dependency to a target

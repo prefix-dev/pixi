@@ -144,6 +144,10 @@ impl ManifestSource {
         }
     }
 
+    /// Removes a pypi dependency from the TOML manifest from
+    /// native pyproject arrays and/or pixi tables as required
+    ///
+    /// If will be a no-op if the dependency is not found
     pub fn remove_pypi_dependency(
         &mut self,
         dep: &PyPiPackageName,
@@ -180,6 +184,8 @@ impl ManifestSource {
 
     /// Removes a conda or pypi dependency from the TOML manifest's pixi table
     /// for either a 'pyproject.toml' and 'pixi.toml'
+    ///
+    /// If will be a no-op if the dependency is not found
     pub fn remove_dependency(
         &mut self,
         dep: &PackageName,
