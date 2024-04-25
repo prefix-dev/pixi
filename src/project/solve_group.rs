@@ -211,6 +211,9 @@ mod tests {
         [feature.foo.dependencies]
         b = "*"
 
+        [feature.foo.pypi-options]
+        index = "https://my-index.com/simple"
+
         [feature.bar.dependencies]
         c = "*"
 
@@ -253,6 +256,12 @@ mod tests {
         assert_eq!(foo_system_requirements.cuda, "12.0".parse().ok());
         assert_eq!(bar_system_requirements.cuda, "12.0".parse().ok());
         assert_eq!(default_system_requirements.cuda, None);
+
+        // Check that the solve group has the pypi dependencies
+        assert_eq!(
+            solve_group.pypi_options().unwrap().index.unwrap(),
+            "https://my-index.com/simple".parse().unwrap()
+        );
 
         // Check that the solve group contains all the dependencies of its environments
         let package_names: HashSet<_> = solve_group
