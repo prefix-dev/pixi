@@ -134,7 +134,7 @@ fn find_unsatisfiable_targets<'p>(
                 .extend(platforms);
 
             match unsat {
-                EnvironmentUnsat::ChannelsMismatch => {
+                EnvironmentUnsat::ChannelsMismatch | EnvironmentUnsat::IndexesMismatch => {
                     // If the channels mismatched we also cannot trust any of the locked content.
                     disregard_locked_content.insert(environment.clone());
                 }

@@ -1,3 +1,4 @@
+use crate::project::manifest::pypi_options::PypiOptions;
 use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::Feature;
 use crate::{
@@ -15,8 +16,6 @@ use itertools::Either;
 use rattler_conda_types::{Channel, GenericVirtualPackage, Platform};
 use std::collections::HashSet;
 use std::path::PathBuf;
-
-use super::manifest::pypi_options::PypiOptions;
 
 /// Either a solve group or an individual environment without a solve group.
 ///

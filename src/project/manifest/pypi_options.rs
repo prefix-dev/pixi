@@ -1,8 +1,10 @@
 use std::{
     hash::Hash,
+    iter,
     path::{Path, PathBuf},
 };
 
+use crate::consts;
 use distribution_types::{FlatIndexLocation, IndexLocations, IndexUrl};
 use indexmap::IndexSet;
 use pep508_rs::VerbatimUrl;
@@ -185,6 +187,34 @@ pub enum PypiOptionsMergeError {
         "multiple primary pypi indexes are not supported, found both {first} and {second} across multiple pypi options"
     )]
     MultiplePrimaryIndexes { first: String, second: String },
+}
+
+impl From<PypiOptions> for rattler_lock::PypiIndexes {
+    fn from(value: PypiOptions) -> Self {
+        let primary_index = value
+            .index
+            .unwrap_or(Url::parse(consts::DEFAULT_PYPI_INDEX_URL).unwrap());
+        Self {
+            indexes: iter::once(primary_index)
+                .chain(value.extra_indexes.into_iter().flatten())
+                .collect(),
+            flat_indexes: value
+                .flat_indexes
+                .into_iter()
+                .flatten()
+                .map(Into::into)
+                .collect(),
+        }
+    }
+}
+
+impl From<FlatIndexUrlOrPath> for rattler_lock::FlatIndexUrlOrPath {
+    fn from(value: FlatIndexUrlOrPath) -> Self {
+        match value {
+            FlatIndexUrlOrPath::Path(path) => Self::Path(path),
+            FlatIndexUrlOrPath::Url(url) => Self::Url(url),
+        }
+    }
 }
 
 #[cfg(test)]

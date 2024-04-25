@@ -17,6 +17,8 @@ pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
 /// The default channels to use for a new project.
 pub const DEFAULT_CHANNELS: &[&str] = &["conda-forge"];
 
+pub const DEFAULT_PYPI_INDEX_URL: &str = "https://pypi.org/simple";
+
 pub const DEFAULT_FEATURE_NAME: &str = DEFAULT_ENVIRONMENT_NAME;
 
 lazy_static! {
