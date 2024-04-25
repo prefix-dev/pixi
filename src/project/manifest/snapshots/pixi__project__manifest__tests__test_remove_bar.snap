@@ -2,7 +2,6 @@
 source: src/project/manifest/mod.rs
 expression: manifest.document.to_string()
 ---
-
             [project]
             name = "foo"
             version = "0.1.0"
@@ -12,8 +11,5 @@ expression: manifest.document.to_string()
             [dependencies]
             fooz = "*"
 
-            [target.win-64.dependencies]
-
             [target.linux-64.build-dependencies]
             baz = "*"
-        

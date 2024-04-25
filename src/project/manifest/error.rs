@@ -1,65 +1,17 @@
-use crate::project::manifest::{FeatureName, TargetSelector};
-use crate::project::SpecType;
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use rattler_conda_types::{InvalidPackageNameError, ParseMatchSpecError};
 use thiserror::Error;
 
-/// An error that is returned when a certain spec is missing.
-#[derive(Debug, Error, Diagnostic)]
-#[error("{name} is missing")]
-pub struct SpecIsMissing {
-    // The name of the dependency that is missing,
-    pub name: String,
-
-    // The type of the dependency that is missing.
-    pub spec_type: SpecType,
-
-    /// Whether the dependency itself is missing or the entire dependency spec type is missing
-    pub spec_type_is_missing: bool,
-
-    // The target from which the dependency is missing.
-    pub target: Option<TargetSelector>,
-
-    // The feature from which the dependency is missing.
-    pub feature: Option<FeatureName>,
-}
-
-impl SpecIsMissing {
-    /// Constructs a new `SpecIsMissing` error that indicates that a spec type is missing.
-    ///
-    /// This is constructed for instance when the `[build-dependencies]` section is missing.
-    pub fn spec_type_is_missing(name: impl Into<String>, spec_type: SpecType) -> Self {
-        Self {
-            name: name.into(),
-            spec_type,
-            spec_type_is_missing: true,
-            target: None,
-            feature: None,
-        }
-    }
-
-    /// Constructs a new `SpecIsMissing` error that indicates that a spec is missing
-    pub fn dep_is_missing(name: impl Into<String>, spec_type: SpecType) -> Self {
-        Self {
-            name: name.into(),
-            spec_type,
-            spec_type_is_missing: false,
-            target: None,
-            feature: None,
-        }
-    }
-
-    /// Set the target from which the spec is missing.
-    pub fn with_target(mut self, target: TargetSelector) -> Self {
-        self.target = Some(target);
-        self
-    }
-
-    /// Sets the feature from which the spec is missing.
-    pub fn with_feature(mut self, feature: FeatureName) -> Self {
-        self.feature = Some(feature);
-        self
-    }
+#[derive(Error, Debug, Clone, Diagnostic)]
+pub enum DependencyError {
+    #[error("{} is already a dependency.", console::style(.0).bold())]
+    Duplicate(String),
+    #[error("Spec type {} is missing.", console::style(.0).bold())]
+    NoSpecType(String),
+    #[error("Dependency {} is missing.", console::style(.0).bold())]
+    NoDependency(String),
+    #[error("No Pypi dependencies.")]
+    NoPyPiDependencies,
 }
 
 #[derive(Error, Debug)]
@@ -70,7 +22,7 @@ pub enum RequirementConversionError {
     ParseError(#[from] ParseMatchSpecError),
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, Diagnostic)]
 pub enum TomlError {
     #[error("{0}")]
     Error(#[from] toml_edit::TomlError),
@@ -78,6 +30,13 @@ pub enum TomlError {
     NoProjectTable,
     #[error("Missing field `name`")]
     NoProjectName(Option<std::ops::Range<usize>>),
+    #[error("Could not find or access the part '{part}' in the path '[{table_name}]'")]
+    TableError { part: String, table_name: String },
+    #[error("Could not find or access array '{array_name}' in '[{table_name}]'")]
+    ArrayError {
+        array_name: String,
+        table_name: String,
+    },
 }
 
 impl TomlError {
@@ -98,6 +57,7 @@ impl TomlError {
             TomlError::Error(e) => e.span(),
             TomlError::NoProjectTable => Some(0..1),
             TomlError::NoProjectName(span) => span.clone(),
+            _ => None,
         }
     }
     fn message(&self) -> &str {
@@ -105,6 +65,21 @@ impl TomlError {
             TomlError::Error(e) => e.message(),
             TomlError::NoProjectTable => "Missing field `project`",
             TomlError::NoProjectName(_) => "Missing field `name`",
+            _ => "",
+        }
+    }
+
+    pub fn table_error(part: &str, table_name: &str) -> Self {
+        Self::TableError {
+            part: part.into(),
+            table_name: table_name.into(),
+        }
+    }
+
+    pub fn array_error(array_name: &str, table_name: &str) -> Self {
+        Self::ArrayError {
+            array_name: array_name.into(),
+            table_name: table_name.into(),
         }
     }
 }
