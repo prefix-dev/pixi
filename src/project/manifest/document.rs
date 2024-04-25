@@ -213,15 +213,12 @@ impl ManifestSource {
                     platform,
                     feature_name,
                 )?;
-                if feature_name.is_default() {
-                    self.get_or_insert_toml_array("project", "dependencies")?
+                if let FeatureName::Named(name) = feature_name {
+                    self.get_or_insert_toml_array("project.optional-dependencies", name)?
                         .push(requirement.to_string())
                 } else {
-                    self.get_or_insert_toml_array(
-                        "project.optional-dependencies",
-                        &feature_name.to_string(),
-                    )?
-                    .push(requirement.to_string())
+                    self.get_or_insert_toml_array("project", "dependencies")?
+                        .push(requirement.to_string())
                 }
             }
             ManifestSource::PixiToml(_) => {

@@ -208,8 +208,7 @@ impl Manifest {
 
         // Add the task to the Toml manifest
         self.document
-            .add_task(name.as_str(), task.clone(), platform, feature_name)
-            .into_diagnostic()?;
+            .add_task(name.as_str(), task.clone(), platform, feature_name)?;
 
         // Add the task to the manifest
         self.get_or_insert_target_mut(platform, Some(feature_name))
@@ -233,8 +232,7 @@ impl Manifest {
 
         // Remove the task from the Toml manifest
         self.document
-            .remove_task(name.as_str(), platform, feature_name)
-            .into_diagnostic()?;
+            .remove_task(name.as_str(), platform, feature_name)?;
 
         // Remove the task from the internal manifest
         self.feature_mut(feature_name)
