@@ -16,7 +16,7 @@ use rattler_conda_types::{Channel, GenericVirtualPackage, Platform};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use super::manifest::pypi_options::{PypiOptions, PypiOptionsMergeError};
+use super::manifest::pypi_options::PypiOptions;
 
 /// Either a solve group or an individual environment without a solve group.
 ///
@@ -177,7 +177,7 @@ impl<'p> GroupedEnvironment<'p> {
         }
     }
 
-    pub fn pypi_options(&self) -> Result<PypiOptions, PypiOptionsMergeError> {
+    pub fn pypi_options(&self) -> PypiOptions {
         match self {
             GroupedEnvironment::Group(group) => group.pypi_options(),
             GroupedEnvironment::Environment(env) => env.pypi_options(),

@@ -1,4 +1,4 @@
-use super::manifest::pypi_options::{PypiOptions, PypiOptionsMergeError};
+use super::manifest::pypi_options::PypiOptions;
 use super::{manifest, Dependencies, Environment, Project};
 use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::{PyPiRequirement, SystemRequirements};
@@ -180,10 +180,14 @@ impl<'p> SolveGroup<'p> {
     }
 
     /// Returns the pypi options for this solve group.
-    pub fn pypi_options(&self) -> Result<PypiOptions, PypiOptionsMergeError> {
-        self.features(true)
-            .filter_map(|f| f.pypi_options())
-            .try_fold(PypiOptions::default(), |acc, opt| acc.union(opt))
+    pub fn pypi_options(&self) -> PypiOptions {
+        self.features(true).filter_map(|f| f.pypi_options()).fold(
+            PypiOptions::default(),
+            |acc, opt| {
+                acc.union(opt)
+                    .expect("pypi-options should have been validated upfront")
+            },
+        )
     }
 }
 
@@ -259,7 +263,7 @@ mod tests {
 
         // Check that the solve group has the pypi dependencies
         assert_eq!(
-            solve_group.pypi_options().unwrap().index.unwrap(),
+            solve_group.pypi_options().index.unwrap(),
             "https://my-index.com/simple".parse().unwrap()
         );
 

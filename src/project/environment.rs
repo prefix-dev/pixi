@@ -2,9 +2,7 @@ use super::{
     dependencies::Dependencies,
     errors::{UnknownTask, UnsupportedPlatformError},
     manifest::{
-        self,
-        pypi_options::{PypiOptions, PypiOptionsMergeError},
-        EnvironmentName, Feature, FeatureName, SystemRequirements,
+        self, pypi_options::PypiOptions, EnvironmentName, Feature, FeatureName, SystemRequirements,
     },
     PyPiRequirement, SolveGroup, SpecType,
 };
@@ -351,13 +349,17 @@ impl<'p> Environment<'p> {
     }
 
     /// Returns the pypi optiosn for this environment.
-    pub fn pypi_options(&self) -> Result<PypiOptions, PypiOptionsMergeError> {
+    pub fn pypi_options(&self) -> PypiOptions {
         if let Some(group) = self.solve_group() {
             group.pypi_options()
         } else {
-            self.features(true)
-                .filter_map(|f| f.pypi_options())
-                .try_fold(PypiOptions::default(), |acc, opt| acc.union(opt))
+            self.features(true).filter_map(|f| f.pypi_options()).fold(
+                PypiOptions::default(),
+                |acc, opt| {
+                    acc.union(opt)
+                        .expect("pypi-options should have been validated up-front")
+                },
+            )
         }
     }
 }
@@ -625,7 +627,7 @@ mod tests {
         )
         .unwrap();
 
-        let foo_opts = manifest.environment("foo").unwrap().pypi_options().unwrap();
+        let foo_opts = manifest.environment("foo").unwrap().pypi_options();
         assert_eq!(
             foo_opts.index.unwrap().to_string(),
             "https://mypypi.org/simple"
@@ -640,7 +642,7 @@ mod tests {
             vec!["https://1.com/"]
         );
 
-        let bar_opts = manifest.environment("bar").unwrap().pypi_options().unwrap();
+        let bar_opts = manifest.environment("bar").unwrap().pypi_options();
         assert_eq!(
             bar_opts
                 .extra_indexes
@@ -651,11 +653,7 @@ mod tests {
             vec!["https://2.com/"]
         );
 
-        let foo_bar_opts = manifest
-            .environment("foobar")
-            .unwrap()
-            .pypi_options()
-            .unwrap();
+        let foo_bar_opts = manifest.environment("foobar").unwrap().pypi_options();
 
         assert_eq!(
             foo_bar_opts.index.unwrap().to_string(),

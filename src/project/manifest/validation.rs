@@ -9,6 +9,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use super::pypi_options::PypiOptions;
+
 impl ProjectManifest {
     /// Validate the project manifest.
     pub fn validate(&self, source: NamedSource<String>, root_folder: &Path) -> miette::Result<()> {
@@ -179,6 +181,21 @@ impl ProjectManifest {
                 labels = vec![LabeledSpan::at(
                     env.features_source_loc.clone().unwrap_or_default(),
                     "while resolving system requirements of features defined here"
+                )],
+                "{e}",
+            ));
+        }
+
+        // Check if there are no conflicts in pypi options between features
+        if let Err(e) = features
+            .iter()
+            .filter_map(|feature| feature.pypi_options())
+            .try_fold(PypiOptions::default(), |acc, opts| acc.union(opts))
+        {
+            return Err(miette::miette!(
+                labels = vec![LabeledSpan::at(
+                    env.features_source_loc.clone().unwrap_or_default(),
+                    "while resolving pypi-options of features defined here"
                 )],
                 "{e}",
             ));
