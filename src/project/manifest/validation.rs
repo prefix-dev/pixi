@@ -126,7 +126,7 @@ impl ProjectManifest {
 
         // Validate the environments defined in the project
         for env in self.environments.environments.iter() {
-            if let Err(report) = self.validate_environment(env) {
+            if let Err(report) = self.validate_environment(env, self.default_feature()) {
                 return Err(report.with_source_code(source));
             }
         }
@@ -135,7 +135,11 @@ impl ProjectManifest {
     }
 
     /// Validates that the given environment is valid.
-    fn validate_environment(&self, env: &Environment) -> Result<(), Report> {
+    fn validate_environment(
+        &self,
+        env: &Environment,
+        default_feature: &Feature,
+    ) -> Result<(), Report> {
         let mut features_seen = HashSet::new();
         let mut features = Vec::with_capacity(env.features.len());
         for feature in env.features.iter() {
@@ -174,6 +178,7 @@ impl ProjectManifest {
         // Check if there are conflicts in system requirements between features
         if let Err(e) = features
             .iter()
+            .chain(std::iter::once(&default_feature))
             .map(|feature| &feature.system_requirements)
             .try_fold(SystemRequirements::default(), |acc, req| acc.union(req))
         {
@@ -187,19 +192,12 @@ impl ProjectManifest {
         }
 
         // Check if there are no conflicts in pypi options between features
-        if let Err(e) = features
+        features
             .iter()
+            .chain(std::iter::once(&default_feature))
             .filter_map(|feature| feature.pypi_options())
             .try_fold(PypiOptions::default(), |acc, opts| acc.union(opts))
-        {
-            return Err(miette::miette!(
-                labels = vec![LabeledSpan::at(
-                    env.features_source_loc.clone().unwrap_or_default(),
-                    "while resolving pypi-options of features defined here"
-                )],
-                "{e}",
-            ));
-        }
+            .into_diagnostic()?;
 
         Ok(())
     }
