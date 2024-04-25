@@ -600,4 +600,76 @@ mod tests {
             vec!["barry", "conda-forge", "bar"]
         );
     }
+
+    #[test]
+    fn test_pypi_options_per_environment() {
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "osx-64"]
+
+        [feature.foo]
+        pypi-options = { index = "https://mypypi.org/simple", extra-indexes = ["https://1.com"] }
+
+        [feature.bar]
+        pypi-options = { extra-indexes = ["https://2.com"] }
+
+        [environments]
+        foo = ["foo"]
+        bar = ["bar"]
+        foobar = ["foo", "bar"]
+        "#,
+        )
+        .unwrap();
+
+        let foo_opts = manifest.environment("foo").unwrap().pypi_options().unwrap();
+        assert_eq!(
+            foo_opts.index.unwrap().to_string(),
+            "https://mypypi.org/simple"
+        );
+        assert_eq!(
+            foo_opts
+                .extra_indexes
+                .unwrap()
+                .iter()
+                .map(|i| i.to_string())
+                .collect_vec(),
+            vec!["https://1.com/"]
+        );
+
+        let bar_opts = manifest.environment("bar").unwrap().pypi_options().unwrap();
+        assert_eq!(
+            bar_opts
+                .extra_indexes
+                .unwrap()
+                .iter()
+                .map(|i| i.to_string())
+                .collect_vec(),
+            vec!["https://2.com/"]
+        );
+
+        let foo_bar_opts = manifest
+            .environment("foobar")
+            .unwrap()
+            .pypi_options()
+            .unwrap();
+
+        assert_eq!(
+            foo_bar_opts.index.unwrap().to_string(),
+            "https://mypypi.org/simple"
+        );
+
+        assert_eq!(
+            foo_bar_opts
+                .extra_indexes
+                .unwrap()
+                .iter()
+                .map(|i| i.to_string())
+                .collect_vec(),
+            vec!["https://1.com/", "https://2.com/"]
+        )
+    }
 }
