@@ -61,6 +61,19 @@ impl FlatIndexUrlOrPath {
     }
 }
 
+/// Clones and deduplicates two iterators of values
+fn clone_and_deduplicate<'a, I: Iterator<Item = &'a T>, T: Clone + Eq + Hash + 'a>(
+    values: I,
+    other: I,
+) -> Vec<T> {
+    values
+        .cloned()
+        .chain(other.cloned())
+        .collect::<IndexSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>()
+}
+
 impl PypiOptions {
     pub fn new(
         index: Option<Url>,
@@ -112,32 +125,24 @@ impl PypiOptions {
         IndexLocations::new(index, extra_indexes, flat_indexes, false)
     }
 
-    /// Clones and deduplicates two iterators of values
-    fn clone_and_deduplicate<'a, I: Iterator<Item = &'a T>, T: Clone + Eq + Hash + 'a>(
-        values: I,
-        other: I,
-    ) -> Vec<T> {
-        values
-            .cloned()
-            .chain(other.cloned())
-            .collect::<IndexSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>()
-    }
-
     /// Merges two `PypiOptions` together, according to the following rules
     /// - There can only be one primary index
     /// - Extra indexes are merged and deduplicated, in the order they are provided
     /// - Flat indexes are merged and deduplicated, in the order they are provided
     pub fn union(&self, other: &PypiOptions) -> Result<PypiOptions, PypiOptionsMergeError> {
-        // Allow only one index
-        let index = if other.index.is_some() {
-            if self.index.is_some() {
-                return Err(PypiOptionsMergeError::MultiplePrimaryIndexes);
+        let index = if let Some(other_index) = other.index.clone() {
+            // Allow only one index
+            if let Some(own_index) = self.index.clone() {
+                return Err(PypiOptionsMergeError::MultiplePrimaryIndexes {
+                    first: own_index.to_string(),
+                    second: other_index.to_string(),
+                });
             } else {
-                other.index.clone()
+                // Use the other index, because we don't have one
+                Some(other_index)
             }
         } else {
+            // Use our index, because the other doesn't have one
             self.index.clone()
         };
 
@@ -147,7 +152,7 @@ impl PypiOptions {
             .as_ref()
             // Map for value
             .map(|extra_indexes| {
-                Self::clone_and_deduplicate(
+                clone_and_deduplicate(
                     extra_indexes.iter(),
                     other.extra_indexes.clone().unwrap_or_default().iter(),
                 )
@@ -159,7 +164,7 @@ impl PypiOptions {
             .flat_indexes
             .as_ref()
             .map(|flat_indexes| {
-                Self::clone_and_deduplicate(
+                clone_and_deduplicate(
                     flat_indexes.iter(),
                     other.flat_indexes.clone().unwrap_or_default().iter(),
                 )
@@ -176,8 +181,10 @@ impl PypiOptions {
 
 #[derive(Error, Debug)]
 pub enum PypiOptionsMergeError {
-    #[error("Multiple primary pypi indexes are not supported")]
-    MultiplePrimaryIndexes,
+    #[error(
+        "multiple primary pypi indexes are not supported, found both {first} and {second} across multiple pypi options"
+    )]
+    MultiplePrimaryIndexes { first: String, second: String },
 }
 
 #[cfg(test)]
@@ -256,6 +263,6 @@ mod tests {
 
         // Merge the two options
         let merged_opts = opts.union(&opts2);
-        assert!(merged_opts.is_err());
+        insta::assert_snapshot!(merged_opts.err().unwrap());
     }
 }
