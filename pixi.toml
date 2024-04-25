@@ -1,5 +1,3 @@
-"$schema" = "./schema/schema.json"
-
 [project]
 name = "pixi"
 description = "Package management made easy!"
