@@ -5,6 +5,7 @@
 use crate::config::get_cache_dir;
 use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::pypi_editables::build_editables;
+use crate::project::manifest::pypi_options::PypiOptions;
 use crate::project::manifest::python::RequirementOrEditable;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::collections::{BTreeMap, HashMap};
@@ -66,7 +67,6 @@ pub struct UvResolutionContext {
     pub cache: Cache,
     pub registry_client: Arc<RegistryClient>,
     pub in_flight: Arc<InFlight>,
-    pub index_locations: Arc<IndexLocations>,
     pub no_build: NoBuild,
     pub no_binary: NoBinary,
     pub hash_strategy: HashStrategy,
@@ -88,12 +88,10 @@ impl UvResolutionContext {
                 .build(),
         );
         let in_flight = Arc::new(InFlight::default());
-        let index_locations = Arc::new(project.pypi_index_locations());
         Ok(Self {
             cache,
             registry_client,
             in_flight,
-            index_locations,
             no_build: NoBuild::None,
             no_binary: NoBinary::None,
             hash_strategy: HashStrategy::None,
@@ -220,6 +218,7 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
     context: UvResolutionContext,
+    pypi_options: &PypiOptions,
     dependencies: IndexMap<PackageName, Vec<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
@@ -314,11 +313,12 @@ pub async fn resolve_pypi(
 
     tracing::debug!("[Resolve] Using Python Interpreter: {:?}", interpreter);
 
+    let index_locations = pypi_options.to_index_locations();
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
         let client = FlatIndexClient::new(&context.registry_client, &context.cache);
         let entries = client
-            .fetch(context.index_locations.flat_index())
+            .fetch(index_locations.flat_index())
             .await
             .into_diagnostic()?;
         FlatIndex::from_entries(
@@ -339,7 +339,7 @@ pub async fn resolve_pypi(
         &context.registry_client,
         &context.cache,
         &interpreter,
-        &context.index_locations,
+        &index_locations,
         &flat_index,
         &in_memory_index,
         &context.in_flight,

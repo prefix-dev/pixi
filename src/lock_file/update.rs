@@ -130,6 +130,7 @@ impl<'p> LockFileDerivedData<'p> {
             &python_status,
             &environment.system_requirements(),
             uv_context,
+            &environment.pypi_options().into_diagnostic()?,
             env_variables,
             self.project.root(),
         )
@@ -1483,6 +1484,7 @@ async fn spawn_solve_pypi_task(
     )
     .await?;
 
+    let pypi_options = environment.pypi_options().into_diagnostic()?;
     // let (pypi_packages, duration) = tokio::spawn(
     let (pypi_packages, duration) = async move {
         let pb = SolveProgressBar::new(
@@ -1501,6 +1503,7 @@ async fn spawn_solve_pypi_task(
 
         let records = lock_file::resolve_pypi(
             resolution_context,
+            &pypi_options,
             dependencies
                 .into_iter()
                 .map(|(name, requirement)| (name.as_normalized().clone(), requirement))

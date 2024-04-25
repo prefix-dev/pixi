@@ -1,5 +1,6 @@
 use crate::environment::PythonStatus;
 use crate::prefix::Prefix;
+use crate::project::manifest::pypi_options::PypiOptions;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::borrow::Cow;
 
@@ -691,6 +692,7 @@ pub async fn update_python_distributions(
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
     uv_context: UvResolutionContext,
+    pypi_options: &PypiOptions,
     environment_variables: &HashMap<String, String>,
 ) -> miette::Result<()> {
     let start = std::time::Instant::now();
@@ -718,11 +720,13 @@ pub async fn update_python_distributions(
         &python_record.package_record,
     )?;
 
+    let index_locations = pypi_options.to_index_locations();
+
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
         let client = FlatIndexClient::new(&uv_context.registry_client, &uv_context.cache);
         let entries = client
-            .fetch(uv_context.index_locations.flat_index())
+            .fetch(index_locations.flat_index())
             .await
             .into_diagnostic()?;
         FlatIndex::from_entries(
@@ -748,7 +752,7 @@ pub async fn update_python_distributions(
         &uv_context.registry_client,
         &uv_context.cache,
         venv.interpreter(),
-        &uv_context.index_locations,
+        &index_locations,
         &flat_index,
         &in_memory_index,
         &uv_context.in_flight,
@@ -787,7 +791,7 @@ pub async fn update_python_distributions(
     let mut registry_index = RegistryWheelIndex::new(
         &uv_context.cache,
         &tags,
-        &uv_context.index_locations,
+        &index_locations,
         &HashStrategy::None,
     );
 

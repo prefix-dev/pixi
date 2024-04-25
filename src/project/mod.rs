@@ -7,7 +7,7 @@ mod solve_group;
 pub mod virtual_packages;
 
 use async_once_cell::OnceCell as AsyncCell;
-use distribution_types::IndexLocations;
+
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use miette::{IntoDiagnostic, NamedSource};
 
@@ -455,12 +455,6 @@ impl Project {
         self.manifest
             .pypi_name_mapping_source()
             .expect("mapping source should be ok")
-    }
-
-    /// Returns the Python index locations to use for this project.
-    pub fn pypi_index_locations(&self) -> IndexLocations {
-        // TODO: Currently we just default to Pypi always.
-        IndexLocations::default()
     }
 
     /// Returns the reqwest client used for http networking
