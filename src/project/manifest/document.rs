@@ -80,9 +80,9 @@ impl ManifestSource {
         let mut current_table = self.as_table_mut();
 
         for part in parts {
-            current_table = current_table
-                .entry(part)
-                .or_insert(Item::Table(Table::new()))
+            let entry = current_table.entry(part);
+            let item = entry.or_insert(Item::Table(Table::new()));
+            current_table = item
                 .as_table_mut()
                 .ok_or_else(|| TomlError::table_error(part, table_name))?;
             // Avoid creating empty tables
@@ -91,8 +91,9 @@ impl ManifestSource {
         Ok(current_table)
     }
 
-    /// Retrieve a mutable reference to a target array `array_name`
+    /// Retrieves a mutable reference to a target array `array_name`
     /// in table `table_name` in dotted form (e.g. `table1.table2.array`).
+    ///
     /// If the array is not found, it is inserted into the document.
     fn get_or_insert_toml_array<'a>(
         &'a mut self,
@@ -104,6 +105,22 @@ impl ManifestSource {
             .or_insert(Item::Value(Value::Array(Array::new())))
             .as_array_mut()
             .ok_or_else(|| TomlError::array_error(array_name, table_name))
+    }
+
+    /// Retrieves a mutable reference to a target array `array_name`
+    /// in table `table_name` in dotted form (e.g. `table1.table2.array`).
+    ///
+    /// If the array is not found, returns None.
+    fn get_toml_array<'a>(
+        &'a mut self,
+        table_name: &str,
+        array_name: &str,
+    ) -> Result<Option<&'a mut Array>, TomlError> {
+        let array = self
+            .get_or_insert_nested_table(table_name)?
+            .get_mut(array_name)
+            .and_then(|a| a.as_array_mut());
+        Ok(array)
     }
 
     /// Returns a mutable reference to the specified array either in project or feature.
@@ -136,11 +153,11 @@ impl ManifestSource {
         // For 'pyproject.toml' manifest, try and remove the dependency from native arrays
         let array = match self {
             ManifestSource::PyProjectToml(_) if feature_name.is_default() => {
-                self.as_table_mut()["project"]["dependencies"].as_array_mut()
+                self.get_toml_array("project", "dependencies")?
             }
-            ManifestSource::PyProjectToml(_) => self.as_table_mut()["project"]
-                ["optional-dependencies"][&feature_name.to_string()]
-                .as_array_mut(),
+            ManifestSource::PyProjectToml(_) => {
+                self.get_toml_array("project.optional-dependencies", &feature_name.to_string())?
+            }
             _ => None,
         };
         if let Some(array) = array {
