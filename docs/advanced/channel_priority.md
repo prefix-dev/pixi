@@ -86,3 +86,71 @@ We don't define the `pytorch` channel before `conda-forge` because we want to ge
 
 For example, it also ships the `ffmpeg` package, but only an old version which doesn't work with the newer pytorch versions.
 Thus breaking the installation if we would skip the `conda-forge` channel for `ffmpeg` with the priority logic.
+
+## Force a specific channel priority
+If you want to force a specific priority for a channel, you can use the `priority` (int) key in the channel definition.
+The higher the number, the higher the priority.
+Non specified priorities are set to 0 but the index in the array still counts as a priority, where the first in the list has the highest priority.
+
+This priority definition is mostly important for [multiple environments](../features/multi_environment.md) with different channel priorities, as by default feature channels are prepended to the project channels.
+
+```toml
+[project]
+name = "test_channel_priority"
+platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+channels = ["conda-forge"]
+
+[feature.a]
+channels = ["nvidia"]
+
+[feature.b]
+channels = [ "pytorch", {channel = "nvidia", priority = 1}]
+
+[feature.c]
+channels = [ "pytorch", {channel = "nvidia", priority = -1}]
+
+[environments]
+a = ["a"]
+b = ["b"]
+c = ["c"]
+```
+This example creates 4 environments, `a`, `b`, `c`, and the default environment.
+Which will have the following channel order:
+
+| Environment | Resulting Channels order           |
+|-------------|------------------------------------|
+| default     | `conda-forge`                      |
+| a           | `nvidia`, `conda-forge`            |
+| b           | `nvidia`, `pytorch`, `conda-forge` |
+| c           | `pytorch`, `conda-forge`, `nvidia` |
+
+??? tip "Check priority result with `pixi info`"
+    Using `pixi info` you can check the priority of the channels in the environment.
+    ```bash
+    pixi info
+    Environments
+    ------------
+           Environment: default
+              Features: default
+              Channels: conda-forge
+    Dependency count: 0
+    Target platforms: linux-64
+
+           Environment: a
+              Features: a, default
+              Channels: nvidia, conda-forge
+    Dependency count: 0
+    Target platforms: linux-64
+
+           Environment: b
+              Features: b, default
+              Channels: nvidia, pytorch, conda-forge
+    Dependency count: 0
+    Target platforms: linux-64
+
+           Environment: c
+              Features: c, default
+              Channels: pytorch, conda-forge, nvidia
+    Dependency count: 0
+    Target platforms: linux-64
+    ```

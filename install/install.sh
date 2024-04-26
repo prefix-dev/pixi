@@ -9,7 +9,7 @@ BIN_DIR="$PIXI_HOME/bin"
 
 REPO=prefix-dev/pixi
 PLATFORM=$(uname -s)
-ARCH=$(uname -m)
+ARCH=${PIXI_ARCH:-$(uname -m)}
 
 if [[ $PLATFORM == "Darwin" ]]; then
   PLATFORM="apple-darwin"
@@ -111,7 +111,7 @@ update_shell() {
 
 case "$(basename "$SHELL")" in
     bash)
-        if [ -f ~/.bash_profile ]; then
+        if [ -w ~/.bash_profile ]; then
             BASH_FILE=~/.bash_profile
         else
             # Default to bashrc as that is used in non login shells instead of the profile.

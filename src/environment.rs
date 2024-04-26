@@ -1,4 +1,5 @@
 use crate::lock_file::UvResolutionContext;
+use crate::progress::await_in_progress;
 use crate::project::grouped_environment::GroupedEnvironmentName;
 use crate::{
     consts, install, install_pypi,
@@ -8,13 +9,13 @@ use crate::{
     project::{
         grouped_environment::GroupedEnvironment,
         manifest::{EnvironmentName, SystemRequirements},
-        virtual_packages::verify_current_platform_has_required_virtual_packages,
         Environment,
     },
     Project,
 };
+use dialoguer::theme::ColorfulTheme;
 use indexmap::IndexMap;
-use miette::IntoDiagnostic;
+use miette::{IntoDiagnostic, WrapErr};
 use rattler::{
     install::{PythonInfo, Transaction},
     package_cache::PackageCache,
@@ -23,12 +24,13 @@ use rattler_conda_types::{Channel, Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use reqwest_middleware::ClientWithMiddleware;
+use std::convert::identity;
 use std::{collections::HashMap, io::ErrorKind, path::Path, sync::Arc};
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
 /// Errors when there is a file system error or the path does not align with the defined prefix.
 /// Returns false when the file is not present.
-pub fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette::Result<()> {
+pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette::Result<()> {
     let prefix_file = environment_dir
         .join("conda-meta")
         .join(consts::PREFIX_FILE_NAME);
@@ -48,16 +50,49 @@ pub fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette::Resul
         }
         // Check if the path in the file aligns with the current path.
         Ok(p) if prefix_file.starts_with(&p) => Ok(()),
-        Ok(p) => Err(miette::miette!(
-            "the project location seems to be change from `{}` to `{}`, this is not allowed.\
-            \nPlease remove the `{}` folder and run again",
-            p,
-            prefix_file
-                .parent()
-                .expect("prefix_file should always be a file")
-                .display(),
-            consts::PIXI_DIR
-        )),
+        Ok(p) => {
+            let path = Path::new(&p);
+            prefix_location_changed(environment_dir, path.parent().unwrap_or(path)).await
+        }
+    }
+}
+
+/// Called when the prefix has moved to a new location.
+///
+/// Allows interactive users to delete the location and continue.
+async fn prefix_location_changed(
+    environment_dir: &Path,
+    previous_dir: &Path,
+) -> miette::Result<()> {
+    let theme = ColorfulTheme {
+        active_item_style: console::Style::new().for_stderr().magenta(),
+        ..ColorfulTheme::default()
+    };
+
+    let user_value = dialoguer::Confirm::with_theme(&theme)
+        .with_prompt(format!(
+            "The environment directory seems have to moved! Environments are non-relocatable, moving them can cause issues.\n\n\t{} -> {}\n\nThis can be fixed by reinstall the environment from the lock-file in the new location.\n\nDo you want to automatically recreate the environment?",
+            previous_dir.display(),
+            environment_dir.display()
+        ))
+        .report(false)
+        .default(true)
+        .interact_opt()
+        .map_or(None, identity);
+    if user_value == Some(true) {
+        await_in_progress("removing old environment", |_| {
+            tokio::fs::remove_dir_all(environment_dir)
+        })
+        .await
+        .into_diagnostic()
+        .context("failed to remove old environment directory")?;
+        Ok(())
+    } else {
+        Err(miette::diagnostic!(
+            help = "Remove the environment directory, pixi will recreate it on the next run.",
+            "The environment directory has moved from `{}` to `{}`. Environments are non-relocatable, moving them can cause issues.", previous_dir.display(), environment_dir.display()
+        )
+        .into())
     }
 }
 
@@ -102,7 +137,7 @@ fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
         tracing::info!("Creating history file: {}", history_file.display());
         std::fs::write(
             history_file,
-            "# not relevant for pixi but for `conda run -p`",
+            "// not relevant for pixi but for `conda run -p`",
         )
         .into_diagnostic()?;
     }
@@ -113,13 +148,9 @@ fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
 ///     1. It verifies that the prefix location is unchanged.
 ///     2. It verifies that the system requirements are met.
 ///     3. It verifies the absence of the `env` folder.
-pub fn sanity_check_project(project: &Project) -> miette::Result<()> {
+pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.default_environment().dir().as_path())?;
-
-    // Make sure the system requirements are met
-    verify_current_platform_has_required_virtual_packages(&project.default_environment())
-        .into_diagnostic()?;
+    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
 
     // TODO: remove on a 1.0 release
     // Check for old `env` folder as we moved to `envs` in 0.13.0
@@ -188,7 +219,7 @@ pub async fn get_up_to_date_prefix(
     }
 
     // Make sure the project is in a sane state
-    sanity_check_project(project)?;
+    sanity_check_project(project).await?;
 
     // Ensure that the lock-file is up-to-date
     let mut lock_file = project

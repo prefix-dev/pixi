@@ -40,6 +40,7 @@ impl Project {
                         version.to_string()
                     }),
             ),
+            (String::from("PIXI_IN_SHELL"), String::from("1")),
         ]);
 
         if let Ok(exe_path) = std::env::current_exe() {
@@ -243,7 +244,7 @@ mod tests {
         [environments]
         test = ["test"]
         "#;
-        let project = Project::from_str(Path::new(""), multi_env_project).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), multi_env_project).unwrap();
 
         let default_env = project.default_environment();
         let env = default_env.get_metadata_env();
@@ -270,7 +271,7 @@ mod tests {
         channels = ["conda-forge"]
         platforms = ["linux-64", "osx-64", "win-64"]
         "#;
-        let project = Project::from_str(Path::new(""), project).unwrap();
+        let project = Project::from_str(Path::new("pixi.toml"), project).unwrap();
         let env = project.get_metadata_env();
 
         assert_eq!(env.get("PIXI_PROJECT_NAME").unwrap(), project.name());

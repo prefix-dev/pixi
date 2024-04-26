@@ -1,0 +1,14 @@
+[project]
+name = "has-extras"
+version = "0.1.0"
+dependencies = [
+    "pinject; extra == 'pinject'",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["win-64"]

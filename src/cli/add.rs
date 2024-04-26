@@ -1,14 +1,13 @@
 use crate::{
     config::ConfigCli,
     environment::{get_up_to_date_prefix, verify_prefix_location_unchanged, LockFileUsage},
-    project::{manifest::PyPiRequirement, DependencyType, Project, SpecType},
+    project::{DependencyType, Project, SpecType},
     FeatureName,
 };
 use clap::Parser;
 use itertools::{Either, Itertools};
 
 use crate::project::grouped_environment::GroupedEnvironment;
-use crate::project::manifest::python::PyPiPackageName;
 use indexmap::IndexMap;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{
@@ -21,7 +20,6 @@ use rattler_solve::{resolvo, SolverImpl};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
-    str::FromStr,
 };
 
 /// Adds a dependency to the project
@@ -61,7 +59,7 @@ pub struct Args {
     #[arg(required = true)]
     pub specs: Vec<String>,
 
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
@@ -118,7 +116,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let spec_platforms = &args.platform;
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.default_environment().dir().as_path())?;
+    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
 
     // Add the platform if it is not already present
     let platforms_to_add = spec_platforms
@@ -160,23 +158,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .specs
                 .clone()
                 .into_iter()
-                .map(|input| pep508_rs::Requirement::from_str(input.as_ref()).into_diagnostic())
+                .map(|input| {
+                    pep508_rs::Requirement::parse(input.as_ref(), project.root()).into_diagnostic()
+                })
                 .collect::<miette::Result<Vec<_>>>()?;
 
-            // Move those requirements into our custom PyPiRequirement
-            let specs = pep508_requirements
-                .into_iter()
-                .map(|req| {
-                    let name = PyPiPackageName::from_normalized(req.name.clone());
-                    let requirement = PyPiRequirement::from(req);
-                    Ok((name, requirement))
-                })
-                .collect::<Result<Vec<_>, uv_normalize::InvalidNameError>>()
-                .into_diagnostic()?;
-
-            add_pypi_specs_to_project(
+            add_pypi_requirements_to_project(
                 &mut project,
-                specs,
+                &feature_name,
+                pep508_requirements,
                 spec_platforms,
                 args.no_lockfile_update,
                 args.no_install,
@@ -212,26 +202,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
     }
 
+    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
 }
 
-pub async fn add_pypi_specs_to_project(
+pub async fn add_pypi_requirements_to_project(
     project: &mut Project,
-    specs: Vec<(PyPiPackageName, PyPiRequirement)>,
-    specs_platforms: &[Platform],
+    feature_name: &FeatureName,
+    requirements: Vec<pep508_rs::Requirement>,
+    platforms: &[Platform],
     no_update_lockfile: bool,
     no_install: bool,
 ) -> miette::Result<()> {
-    for (name, spec) in &specs {
+    for requirement in &requirements {
         // TODO: Get best version
         // Add the dependency to the project
-        if specs_platforms.is_empty() {
-            project.manifest.add_pypi_dependency(name, spec, None)?;
+        if platforms.is_empty() {
+            project
+                .manifest
+                .add_pypi_dependency(requirement, None, feature_name)?;
         } else {
-            for platform in specs_platforms.iter() {
+            for platform in platforms.iter() {
                 project
                     .manifest
-                    .add_pypi_dependency(name, spec, Some(*platform))?;
+                    .add_pypi_dependency(requirement, Some(*platform), feature_name)?;
             }
         }
     }

@@ -363,7 +363,7 @@ mod tests {
     #[test]
     fn test_default_channels() {
         let manifest = Project::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "foobar"
@@ -393,7 +393,7 @@ mod tests {
     #[test]
     fn test_default_platforms() {
         let manifest = Project::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "foobar"
@@ -413,7 +413,7 @@ mod tests {
     #[test]
     fn test_default_tasks() {
         let manifest = Project::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "foobar"
@@ -463,7 +463,7 @@ mod tests {
     #[test]
     fn test_dependencies() {
         let manifest = Project::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "foobar"
@@ -502,7 +502,7 @@ mod tests {
     #[test]
     fn test_activation() {
         let manifest = Project::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "foobar"
@@ -538,7 +538,7 @@ mod tests {
     #[test]
     fn test_channel_priorities() {
         let manifest = Project::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "foobar"

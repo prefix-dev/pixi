@@ -43,6 +43,7 @@ To install `pixi` you can run the following command in your terminal:
 
     You might need to restart your terminal or source your shell for the changes to take effect.
 
+You can find more options for the installation script [here](#installer-script-options).
 
 ## Autocompletion
 
@@ -106,31 +107,59 @@ cargo test
 If you have any issues building because of the dependency on `rattler` checkout
 its [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try).
 
+### Installer script options
+
+=== "Linux & macOS"
+
+    The installation script has several options that can be manipulated through environment variables.
+
+    | Variable             | Description                                                                        | Default Value         |
+    |----------------------|------------------------------------------------------------------------------------|-----------------------|
+    | `VERSION`            | The version of pixi getting installed, can be used to up- or down-grade.           | `latest`              |
+    | `PIXI_HOME`          | The location of the binary folder.                                                 | `$HOME/.pixi`         |
+    | `PIXI_ARCH`          | The architecture the pixi version was built for.                                   | `uname -m`            |
+    | `PIXI_NO_PATH_UPDATE`| If set the `$PATH` will not be updated to add `pixi` to it.                        |                       |
+    | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from. | `/tmp`                |
+
+    For example, on Apple Silicon, you can force the installation of the x86 version:
+    ```shell
+    PIXI_ARCH=x86_64 curl -fsSL https://pixi.sh/install.sh | bash
+    ```
+    Or set the version
+    ```shell
+    PIXI_VERSION=v0.18.0 curl -fsSL https://pixi.sh/install.sh | bash
+    ```
+
+=== "Windows"
+
+    The installation script has several options that can be manipulated through environment variables.
+
+    | Variable         | Environment variable | Description                                                                       | Default Value               |
+    |------------------|----------------------|-----------------------------------------------------------------------------------|-----------------------------|
+    | `PixiVersion`    | `PIXI_VERSION`       |The version of pixi getting installed, can be used to up- or down-grade.           | `latest`                    |
+    | `PixiHome`       | `PIXI_HOME`          | The location of the installation.                                                 | `$Env:USERPROFILE\.pixi`    |
+    | `NoPathUpdate`   |                      | If set, the `$PATH` will not be updated to add `pixi` to it.                      |                             |
+
+    For example, set the version using:
+
+    ```powershell
+    iwr -useb https://pixi.sh/install.ps1 | iex -Args "-PixiVersion v0.18.0"
+    ```
 ## Update
 
 Updating is as simple as installing, rerunning the installation script gets you the latest version.
 
-=== "Linux & macOS"
-    ```shell
-    curl -fsSL https://pixi.sh/install.sh | bash
-    ```
-    Or get a specific pixi version using:
-    ```shell
-    export PIXI_VERSION=vX.Y.Z && curl -fsSL https://pixi.sh/install.sh | bash
-    ```
-=== "Windows"
-    PowerShell:
-    ```powershell
-    iwr -useb https://pixi.sh/install.ps1 | iex
-    ```
-    Or get a specific pixi version using:
-    PowerShell:
-    ```powershell
-    $Env:PIXI_VERSION="vX.Y.Z"; iwr -useb https://pixi.sh/install.ps1 | iex
-    ```
+```shell
+pixi self-update
+```
+Or get a specific pixi version using:
+```shell
+pixi self-update --version x.y.z
+```
+
 !!! note
-    If you used a package manager like `brew`, `mamba`, `conda`, `paru` to install `pixi`.
-    Then use their builtin update mechanism. e.g. `brew upgrade pixi`.
+    If you've used a package manager like `brew`, `mamba`, `conda`, `paru` etc. to install `pixi`.
+    It's preferable to use the built-in update mechanism. e.g. `brew upgrade pixi`.
 
 ## Uninstall
 

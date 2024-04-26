@@ -60,6 +60,11 @@ impl FeatureName {
         self.name().unwrap_or(consts::DEFAULT_FEATURE_NAME)
     }
 
+    /// Returns true if the feature is the default feature.
+    pub fn is_default(&self) -> bool {
+        matches!(self, FeatureName::Default)
+    }
+
     /// Returns a styled version of the feature name for display in the console.
     pub fn fancy_display(&self) -> console::StyledObject<&str> {
         console::style(self.as_str()).cyan()
@@ -102,7 +107,7 @@ impl fmt::Display for FeatureName {
 ///
 /// Individual features cannot be used directly, instead they are grouped together into
 /// environments. Environments are then locked and installed.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Feature {
     /// The name of the feature or `None` if the feature is the default feature.
     pub name: FeatureName,
@@ -127,6 +132,17 @@ pub struct Feature {
 }
 
 impl Feature {
+    /// Construct a new feature with the given name.
+    pub fn new(name: FeatureName) -> Self {
+        Feature {
+            name,
+            platforms: None,
+            channels: None,
+            system_requirements: SystemRequirements::default(),
+            targets: <Targets as Default>::default(),
+        }
+    }
+
     /// Returns true if this feature is the default feature.
     pub fn is_default(&self) -> bool {
         self.name == FeatureName::Default
@@ -297,7 +313,7 @@ mod tests {
     #[test]
     fn test_dependencies_borrowed() {
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "foo"
@@ -364,7 +380,7 @@ mod tests {
     #[test]
     fn test_activation() {
         let manifest = Manifest::from_str(
-            Path::new(""),
+            Path::new("pixi.toml"),
             r#"
         [project]
         name = "foo"

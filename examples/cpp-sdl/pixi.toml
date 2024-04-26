@@ -6,9 +6,10 @@ authors = ["Bas Zalmstra <bas@prefix.dev>"]
 channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
-[tasks]
+[tasks.start]
 # Start the built executable
-start = { cmd = ".build/bin/sdl_example", depends_on = ["build"] }
+cmd = ".build/bin/sdl_example"
+depends_on = ["build"]
 
 [dependencies]
 sdl2 = "2.26.5.*"
@@ -18,32 +19,26 @@ cmake = "3.26.4.*"
 cxx-compiler = "1.5.2.*"
 ninja = "1.11.1.*"
 
-[feature.build.tasks]
+[feature.build.tasks.configure]
 # Configures CMake
-configure = { cmd = [
-    "cmake",
-    # Use the cross-platform Ninja generator
-    "-G",
-    "Ninja",
-    # The source is in the root directory
-    "-S",
-    ".",
-    # We wanna build in the .build directory
-    "-B",
-    ".build",
-], inputs = ["CMakeLists.txt"], outputs = [".build/CMakeFiles/"] }
+cmd = [
+  "cmake",
+  # Use the cross-platform Ninja generator
+  "-GNinja",
+  # The source is in the root directory
+  "-S.",
+  # We wanna build in the .build directory
+  "-B.build",
+]
+inputs = ["CMakeLists.txt"]
+outputs = [".build/CMakeFiles/"]
 
 # Build the executable but make sure CMake is configured first.
 [feature.build.tasks.build]
-cmd = ["ninja", "-C", ".build"]
+cmd = ["cmake", "--build", ".build"]
 depends_on = ["configure"]
-inputs = [
-    "CMakeLists.txt",
-    "src/*"
-]
-outputs = [
-    ".build/bin/sdl_example"
-]
+inputs = ["CMakeLists.txt", "src/*"]
+outputs = [".build/bin/sdl_example"]
 
 [environments]
 build = ["build"]

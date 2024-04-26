@@ -24,6 +24,3 @@ ypackage = {version = ">=1.2.3"}
 
 [feature.test.pypi-dependencies]
 feature_dep = "*"
-
-[feature.test.target.linux-64.pypi-dependencies]
-

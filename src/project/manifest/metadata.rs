@@ -2,7 +2,7 @@ use crate::utils::spanned::PixiSpanned;
 use rattler_conda_types::{Platform, Version};
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 use url::Url;
 
 /// Describes the contents of the `[package]` section of the project manifest.
@@ -11,7 +11,7 @@ use url::Url;
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ProjectMetadata {
     /// The name of the project
-    pub name: String,
+    pub name: Option<String>, // set as optional to handle conversion from pyproject.toml
 
     /// The version of the project
     #[serde_as(as = "Option<DisplayFromStr>")]
@@ -50,4 +50,7 @@ pub struct ProjectMetadata {
 
     /// URL of the project documentation
     pub documentation: Option<Url>,
+
+    /// URL or Path of the conda to pypi name mapping
+    pub conda_pypi_map: Option<HashMap<String, String>>,
 }

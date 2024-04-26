@@ -8,31 +8,31 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 [tasks]
 train = "python train.py"
 test = "python test.py"
-start = {depends_on = ["train", "test"]}
+start = { depends_on = ["train", "test"] }
 
 [dependencies]
 python = "3.11.*"
-pytorch = {version = ">=2.0.1", channel = "pytorch"}
-torchvision = {version = ">=0.15", channel = "pytorch"}
+pytorch = { version = ">=2.0.1", channel = "pytorch" }
+torchvision = { version = ">=0.15", channel = "pytorch" }
 polars = ">=0.20,<0.21"
 matplotlib-base = ">=3.8.2,<3.9"
 ipykernel = ">=6.28.0,<6.29"
 
 [feature.cuda]
 platforms = ["win-64", "linux-64"]
-channels = ["nvidia", {channel = "pytorch", priority = -1}]
-system-requirements = {cuda = "12.1"}
+channels = ["nvidia", { channel = "pytorch", priority = -1 }]
+system-requirements = { cuda = "12.1" }
 
 [feature.cuda.tasks]
 train = "python train.py --cuda"
 test = "python test.py --cuda"
 
 [feature.cuda.dependencies]
-pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
+pytorch-cuda = { version = "12.1.*", channel = "pytorch" }
 
 [feature.mlx]
 platforms = ["osx-arm64"]
-system-requirements = {macos = "13.3"}
+system-requirements = { macos = "13.3" }
 
 [feature.mlx.tasks]
 train = "python train.py --mlx"
@@ -40,7 +40,6 @@ test = "python test.py --mlx"
 
 [feature.mlx.dependencies]
 mlx = "*"
-
 
 [environments]
 cuda = ["cuda"]

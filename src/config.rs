@@ -9,6 +9,7 @@ use std::process::{Command, Stdio};
 use url::Url;
 
 use crate::consts;
+use crate::util::default_channel_config;
 
 /// Determines the default author based on the default git author. Both the name and the email
 /// address of the author are returned.
@@ -56,12 +57,26 @@ pub fn home_path() -> Option<PathBuf> {
 
 /// Returns the default cache directory.
 /// Most important is the `PIXI_CACHE_DIR` environment variable.
-/// If that is not set, the `RATTLER_CACHE_DIR` environment variable is used.
-/// If that is not set, the default cache directory of [`rattler::default_cache_dir`] is used.
+/// - If that is not set, the `RATTLER_CACHE_DIR` environment variable is used.
+/// - If that is not set, `XDG_CACHE_HOME/pixi` is used when the directory exists.
+/// - If that is not set, the default cache directory of [`rattler::default_cache_dir`] is used.
 pub fn get_cache_dir() -> miette::Result<PathBuf> {
     std::env::var("PIXI_CACHE_DIR")
         .map(PathBuf::from)
         .or_else(|_| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from))
+        .or_else(|_| {
+            let xdg_cache_pixi_dir = std::env::var_os("XDG_CACHE_HOME")
+                .map_or_else(
+                    || dirs::home_dir().map(|d| d.join(".cache")),
+                    |p| Some(PathBuf::from(p)),
+                )
+                .map(|d| d.join("pixi"));
+
+            // Only use the xdg cache pixi directory when it exists
+            xdg_cache_pixi_dir
+                .and_then(|d| d.exists().then_some(d))
+                .ok_or_else(|| miette::miette!("could not determine xdg cache directory"))
+        })
         .or_else(|_| {
             rattler::default_cache_dir()
                 .map_err(|_| miette::miette!("could not determine default cache directory"))
@@ -98,7 +113,7 @@ pub struct RepodataConfig {
     pub disable_zstd: Option<bool>,
 }
 
-#[derive(Clone, Default, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub default_channels: Vec<String>,
@@ -121,11 +136,26 @@ pub struct Config {
     #[serde(skip)]
     pub loaded_from: Vec<PathBuf>,
 
-    #[serde(skip)]
+    #[serde(skip, default = "default_channel_config")]
     pub channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
     pub repodata_config: Option<RepodataConfig>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            default_channels: Vec::new(),
+            change_ps1: None,
+            authentication_override_file: None,
+            tls_no_verify: None,
+            mirrors: HashMap::new(),
+            loaded_from: Vec::new(),
+            channel_config: default_channel_config(),
+            repodata_config: None,
+        }
+    }
 }
 
 impl From<ConfigCli> for Config {
@@ -160,7 +190,13 @@ impl Config {
 
     /// Load the global config file from the home directory (~/.pixi/config.toml)
     pub fn load_global() -> Config {
+        let xdg_config_home = std::env::var_os("XDG_CONFIG_HOME").map_or_else(
+            || dirs::home_dir().map(|d| d.join(".config")),
+            |p| Some(PathBuf::from(p)),
+        );
+
         let global_locations = vec![
+            xdg_config_home.map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
             dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
             home_path().map(|d| d.join(consts::CONFIG_FILE)),
         ];
@@ -233,8 +269,8 @@ impl Config {
                 .or(self.authentication_override_file),
             mirrors: self.mirrors,
             loaded_from: self.loaded_from,
-            // currently this is always the default so just use the current value
-            channel_config: self.channel_config,
+            // currently this is always the default so just use the other value
+            channel_config: other.channel_config,
             repodata_config: other.repodata_config.or(self.repodata_config),
         }
     }
@@ -333,6 +369,7 @@ mod tests {
         let mut config = Config::default();
         let other = Config {
             default_channels: vec!["conda-forge".to_string()],
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             ..Default::default()
         };
@@ -346,6 +383,10 @@ mod tests {
 
         let config_1 = Config::from_path(&d.join("config_1.toml")).unwrap();
         let config_2 = Config::from_path(&d.join("config_2.toml")).unwrap();
+        let config_2 = Config {
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
+            ..config_2
+        };
 
         let mut merged = config_1.clone();
         merged = merged.merge_config(config_2);

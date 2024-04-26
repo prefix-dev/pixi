@@ -4,6 +4,8 @@ use serde::{Deserialize, Deserializer};
 use serde_with::serde_as;
 use std::borrow::Cow;
 
+use crate::util::default_channel_config;
+
 /// A channel with an optional priority.
 /// If the priority is not specified, it is assumed to be 0.
 /// The higher the priority, the more important the channel is.
@@ -48,7 +50,7 @@ impl<'de> Deserialize<'de> for TomlPrioritizedChannelStrOrMap {
         serde_untagged::UntaggedEnumVisitor::new()
             .map(|map| map.deserialize().map(TomlPrioritizedChannelStrOrMap::Map))
             .string(|str| {
-                Channel::from_str(str, &ChannelConfig::default())
+                Channel::from_str(str, &default_channel_config())
                     .map(TomlPrioritizedChannelStrOrMap::Str)
                     .map_err(serde::de::Error::custom)
             })
@@ -77,7 +79,10 @@ impl<'de> serde_with::DeserializeAs<'de, Channel> for ChannelStr {
         D: Deserializer<'de>,
     {
         let channel_str = Cow::<str>::deserialize(deserializer)?;
-        let channel_config = ChannelConfig::default();
+        // TODO find a way to insert the root dir here (based on the `pixi.toml` file location)
+        let channel_config = ChannelConfig::default_with_root_dir(
+            std::env::current_dir().expect("Could not retrieve the current directory"),
+        );
         Channel::from_str(channel_str, &channel_config).map_err(D::Error::custom)
     }
 }

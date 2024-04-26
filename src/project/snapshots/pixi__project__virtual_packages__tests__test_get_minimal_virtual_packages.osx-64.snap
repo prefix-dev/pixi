@@ -3,18 +3,37 @@ source: src/project/virtual_packages.rs
 expression: packages
 ---
 [
-    Unix,
-    Archspec(
-        Archspec {
-            spec: "x86_64",
+    GenericVirtualPackage {
+        name: PackageName {
+            normalized: None,
+            source: "__unix",
         },
-    ),
-    Osx(
-        Osx {
-            version: Version {
-                version: [[0], [10], [15]],
-                local: [],
-            },
+        version: Version {
+            version: [[0], [0]],
+            local: [],
         },
-    ),
+        build_string: "0",
+    },
+    GenericVirtualPackage {
+        name: PackageName {
+            normalized: None,
+            source: "__osx",
+        },
+        version: Version {
+            version: [[0], [10], [15]],
+            local: [],
+        },
+        build_string: "0",
+    },
+    GenericVirtualPackage {
+        name: PackageName {
+            normalized: None,
+            source: "__archspec",
+        },
+        version: Version {
+            version: [[0], [1]],
+            local: [],
+        },
+        build_string: "x86_64",
+    },
 ]

@@ -23,7 +23,7 @@ Run the `start` command
 pixi run start
 ```
 
-Using the [`depends_on`](../advanced/advanced_tasks.md#depends-on) feature you only needed to run the `start` task but under water it is running the following tasks.
+Using the [`depends_on`](../features/advanced_tasks.md#depends-on) feature you only needed to run the `start` task but under water it is running the following tasks.
 
 ```shell
 # Configure the CMake project

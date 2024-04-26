@@ -7,12 +7,11 @@ use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
 use rattler_conda_types::Platform;
-use rattler_lock::Package;
+use rattler_lock::{Package, UrlOrPath};
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
-use crate::project::manifest::EnvironmentName;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::Project;
 
@@ -21,7 +20,9 @@ use crate::Project;
 pub enum SortBy {
     Size,
     Name,
-    Type,
+    // BREAK: remove the alias
+    #[value(alias = "type")]
+    Kind,
 }
 
 /// List project's packages. Highlighted packages are explicit dependencies.
@@ -48,7 +49,7 @@ pub struct Args {
     #[arg(long, default_value = "name", value_enum)]
     pub sort_by: SortBy,
 
-    /// The path to 'pixi.toml'
+    /// The path to 'pixi.toml' or 'pyproject.toml'
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
@@ -64,6 +65,10 @@ pub struct Args {
     pub no_install: bool,
 }
 
+fn serde_skip_is_editable(editable: &bool) -> bool {
+    !(*editable)
+}
+
 #[derive(Serialize)]
 struct PackageToOutput {
     name: String,
@@ -73,6 +78,8 @@ struct PackageToOutput {
     kind: String,
     source: Option<String>,
     is_explicit: bool,
+    #[serde(skip_serializing_if = "serde_skip_is_editable")]
+    is_editable: bool,
 }
 
 /// Get directory size
@@ -99,12 +106,7 @@ where
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment_name = args
-        .environment
-        .map_or_else(|| EnvironmentName::Default, EnvironmentName::Named);
-    let environment = project
-        .environment(&environment_name)
-        .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
+    let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     let lock_file = project
         .up_to_date_lock_file(UpdateLockFileOptions {
@@ -142,6 +144,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &uv_context.cache,
             &tags,
             &uv_context.index_locations,
+            &uv_types::HashStrategy::None,
         ))
     } else {
         None
@@ -157,7 +160,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         environment
             .pypi_dependencies(Some(platform))
             .into_iter()
-            .map(|(name, _)| name.as_source().to_string()),
+            .map(|(name, _)| name.as_normalized().as_dist_info_name().into_owned()),
     );
     // Convert the list of package record to specific output format
     let mut packages_to_output = locked_deps
@@ -183,7 +186,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         SortBy::Name => {
             packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
         }
-        SortBy::Type => {
+        SortBy::Kind => {
             packages_to_output.sort_by(|a, b| a.kind.cmp(&b.kind));
         }
     }
@@ -193,6 +196,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             "{}No packages found.",
             console::style(console::Emoji("✘ ", "")).red(),
         );
+        Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
         return Ok(());
     }
 
@@ -201,10 +205,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // print packages as json
         json_packages(&packages_to_output, args.json_pretty);
     } else {
+        if !environment.is_default() {
+            eprintln!("Environment: {}", environment.name().fancy_display());
+        }
+
         // print packages as table
         print_packages_as_table(&packages_to_output).expect("an io error occurred");
     }
 
+    Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
 }
 
@@ -242,12 +251,17 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
 
         writeln!(
             writer,
-            "\t{}\t{}\t{}\t{}\t{}",
+            "\t{}\t{}\t{}\t{}\t{}{}",
             &package.version,
             package.build.as_deref().unwrap_or(""),
             size_human,
             &package.kind,
-            package.source.as_deref().unwrap_or("")
+            package.source.as_deref().unwrap_or(""),
+            if package.is_editable {
+                format!(" {}", console::style("(editable)").fg(Color::Yellow))
+            } else {
+                "".to_string()
+            }
         )?;
     }
 
@@ -297,14 +311,25 @@ fn create_package_to_output<'a, 'b>(
         Package::Conda(pkg) => pkg.file_name().map(ToOwned::to_owned),
         Package::Pypi(p) => {
             let package_data = p.data().package;
-            registry_index.as_mut().and_then(|registry| {
-                let version = registry.get_version(&package_data.name, &package_data.version)?;
-                Some(version.filename.to_string())
-            })
+            registry_index
+                .as_mut()
+                .and_then(|registry| {
+                    let version =
+                        registry.get_version(&package_data.name, &package_data.version)?;
+                    Some(version.filename.to_string())
+                })
+                .or_else(|| match &package_data.url_or_path {
+                    UrlOrPath::Url(url) => Some(url.to_string()),
+                    UrlOrPath::Path(path) => Some(path.to_string_lossy().into_owned()),
+                })
         }
     };
 
     let is_explicit = project_dependency_names.contains(&name);
+    let is_editable = match p {
+        Package::Conda(_) => false,
+        Package::Pypi(p) => p.data().package.editable,
+    };
 
     PackageToOutput {
         name,
@@ -314,5 +339,6 @@ fn create_package_to_output<'a, 'b>(
         kind,
         source,
         is_explicit,
+        is_editable,
     }
 }
