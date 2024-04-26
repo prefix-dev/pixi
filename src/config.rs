@@ -114,21 +114,31 @@ pub struct RepodataConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum KeyringProvider {
+    Disabled,
+    Subprocess,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct PyPIConfig {
     /// The default index URL for PyPI packages.
-    pub index_url: Url,
+    #[serde(default)]
+    pub index_url: Option<Url>,
     /// A list of extra index URLs for PyPI packages
+    #[serde(default)]
     pub extra_index_urls: Vec<Url>,
     /// Wether to use the `keyring` executable to look up credentials.
-    use_keyring: Option<bool>,
+    #[serde(default)]
+    keyring_provider: Option<KeyringProvider>,
 }
 
 impl Default for PyPIConfig {
     fn default() -> Self {
         Self {
-            index_url: Url::parse("https://pypi.org/simple").unwrap(),
+            index_url: None,
             extra_index_urls: Vec::new(),
-            use_keyring: None,
+            keyring_provider: None,
         }
     }
 }
@@ -143,16 +153,18 @@ impl PyPIConfig {
             .collect();
 
         Self {
-            index_url: other.index_url,
+            index_url: other.index_url.or(self.index_url),
             extra_index_urls,
-            use_keyring: other.use_keyring.or(self.use_keyring),
+            keyring_provider: other.keyring_provider.or(self.keyring_provider),
         }
     }
 
     /// Wether to use the `keyring` executable to look up credentials.
     /// Defaults to false.
-    pub fn use_keyring(&self) -> bool {
-        self.use_keyring.unwrap_or(false)
+    pub fn use_keyring(&self) -> KeyringProvider {
+        self.keyring_provider
+            .clone()
+            .unwrap_or(KeyringProvider::Disabled)
     }
 }
 
@@ -186,7 +198,7 @@ pub struct Config {
     pub repodata_config: Option<RepodataConfig>,
 
     /// Configuration for PyPI packages.
-    #[serde(default)]
+    // #[serde(default)]
     pub pypi_config: PyPIConfig,
 }
 
@@ -253,13 +265,15 @@ impl Config {
             if location.exists() {
                 tracing::info!("Loading global config from {}", location.display());
                 let global_config = fs::read_to_string(&location).unwrap_or_default();
-                if let Ok(config) = Config::from_toml(&global_config, &location) {
-                    merged_config = merged_config.merge_config(config);
-                } else {
-                    tracing::warn!(
-                        "Could not load global config (invalid toml): {}",
-                        location.display()
-                    );
+                match Config::from_toml(&global_config, &location) {
+                    Ok(config) => merged_config = merged_config.merge_config(config),
+                    Err(e) => {
+                        tracing::warn!(
+                            "Could not load global config (invalid toml): {}",
+                            location.display()
+                        );
+                        tracing::warn!("Error: {}", e);
+                    }
                 }
             } else {
                 tracing::info!("Global config not found at {}", location.display());

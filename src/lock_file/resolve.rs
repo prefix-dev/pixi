@@ -2,7 +2,7 @@
 //!
 //! See [`resolve_pypi`] and [`resolve_conda`] for more information.
 
-use crate::config::get_cache_dir;
+use crate::config::{get_cache_dir, KeyringProvider};
 use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::pypi_editables::build_editables;
 use crate::project::manifest::pypi_options::PypiOptions;
