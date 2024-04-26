@@ -25,7 +25,7 @@ use crate::project::manifest::SystemRequirements;
 
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use distribution_types::{
-    CachedDist, DirectGitUrl, Dist, IndexUrl, InstalledDist, LocalEditable, LocalEditables, Name,
+    CachedDist, Dist, IndexUrl, InstalledDist, LocalEditable, LocalEditables, Name, ParsedGitUrl,
 };
 use install_wheel_rs::linker::LinkMode;
 
@@ -331,7 +331,7 @@ fn need_reinstall(
                 } => {
                     let url = Url::parse(&url).into_diagnostic()?;
                     let git_url = match &locked.url_or_path {
-                        UrlOrPath::Url(url) => DirectGitUrl::try_from(url),
+                        UrlOrPath::Url(url) => ParsedGitUrl::try_from(url),
                         UrlOrPath::Path(_path) => {
                             // Previously
                             return Ok(ValidateInstall::Reinstall);

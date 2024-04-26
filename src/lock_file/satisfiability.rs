@@ -1,7 +1,7 @@
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
 use crate::project::manifest::python::{AsPep508Error, RequirementOrEditable};
 use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
-use distribution_types::DirectGitUrl;
+use distribution_types::ParsedGitUrl;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
@@ -232,11 +232,11 @@ pub fn pypi_satifisfies_editable(
 
     // In the case that both the spec and the locked data are direct git urls
     // we need to compare the urls to see if they are the same
-    let spec_git_url = DirectGitUrl::try_from(&spec_url.to_url()).ok();
+    let spec_git_url = ParsedGitUrl::try_from(&spec_url.to_url()).ok();
     let locked_git_url = locked_data
         .url_or_path
         .as_url()
-        .and_then(|url| DirectGitUrl::try_from(url).ok());
+        .and_then(|url| ParsedGitUrl::try_from(url).ok());
 
     // Both are git url's
     if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
@@ -285,11 +285,11 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
         Some(VersionOrUrl::Url(spec_url)) => {
             // In the case that both the spec and the locked data are direct git urls
             // we need to compare the urls to see if they are the same
-            let spec_git_url = DirectGitUrl::try_from(&spec_url.to_url()).ok();
+            let spec_git_url = ParsedGitUrl::try_from(&spec_url.to_url()).ok();
             let locked_git_url = locked_data
                 .url_or_path
                 .as_url()
-                .and_then(|url| DirectGitUrl::try_from(url).ok());
+                .and_then(|url| ParsedGitUrl::try_from(url).ok());
 
             // Both are git url's
             if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
