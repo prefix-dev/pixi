@@ -22,13 +22,13 @@ ninja = "1.11.1.*"
 [feature.build.tasks.configure]
 # Configures CMake
 cmd = [
-    "cmake",
-    # Use the cross-platform Ninja generator
-    "-GNinja",
-    # The source is in the root directory
-    "-S.",
-    # We wanna build in the .build directory
-    "-B.build",
+  "cmake",
+  # Use the cross-platform Ninja generator
+  "-GNinja",
+  # The source is in the root directory
+  "-S.",
+  # We wanna build in the .build directory
+  "-B.build",
 ]
 inputs = ["CMakeLists.txt"]
 outputs = [".build/CMakeFiles/"]
@@ -37,13 +37,8 @@ outputs = [".build/CMakeFiles/"]
 [feature.build.tasks.build]
 cmd = ["cmake", "--build", ".build"]
 depends_on = ["configure"]
-inputs = [
-    "CMakeLists.txt",
-    "src/*"
-]
-outputs = [
-    ".build/bin/sdl_example"
-]
+inputs = ["CMakeLists.txt", "src/*"]
+outputs = [".build/bin/sdl_example"]
 
 [environments]
 build = ["build"]

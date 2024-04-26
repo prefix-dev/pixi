@@ -1,10 +1,9 @@
-use crate::project::manifest::{EnvironmentName, FeatureName};
+use crate::project::manifest::FeatureName;
 use crate::task::{quote, Alias, CmdArgs, Execute, Task, TaskName};
 use crate::Project;
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::miette;
 use rattler_conda_types::Platform;
 use std::error::Error;
 use std::path::PathBuf;
@@ -274,10 +273,8 @@ pub fn execute(args: Args) -> miette::Result<()> {
             );
         }
         Operation::List(args) => {
-            let env = EnvironmentName::from_arg_or_env_var(args.environment);
-            let tasks = project
-                .environment(&env)
-                .ok_or(miette!("Environment `{}` not found in project", env))?
+            let environment = project.environment_from_name_or_env_var(args.environment)?;
+            let tasks = environment
                 .tasks(Some(Platform::current()), true)?
                 .into_keys()
                 .collect_vec();

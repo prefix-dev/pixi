@@ -333,6 +333,16 @@ impl Project {
             .collect()
     }
 
+    /// Returns an environment in this project based on a name or an environment variable.
+    pub fn environment_from_name_or_env_var(
+        &self,
+        name: Option<String>,
+    ) -> miette::Result<Environment> {
+        let environment_name = EnvironmentName::from_arg_or_env_var(name).into_diagnostic()?;
+        self.environment(&environment_name)
+            .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
+    }
+
     /// Returns all the solve groups in the project.
     pub fn solve_groups(&self) -> Vec<SolveGroup> {
         self.manifest
