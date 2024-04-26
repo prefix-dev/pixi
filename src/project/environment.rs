@@ -137,22 +137,13 @@ impl<'p> Environment<'p> {
     /// manifest.
     ///
     /// If a feature does not specify any channel the default channels from the project metadata are
-    /// used instead. However, these are not considered during deduplication. This means the default
-    /// channels are always added to the end of the list.
+    /// used instead.
     pub fn prioritized_channels(&self) -> IndexSet<&'p PrioritizedChannel> {
         self.features(self.environment.from_default_feature.channels)
-            .filter_map(|feature| match feature.name {
-                // Use the user-specified channels of each feature if the feature defines them. Only
-                // for the default feature do we use the default channels from the project metadata
-                // if the feature itself does not specify any channels. This guarantees that the
-                // channels from the default feature are always added to the end of the list.
-                FeatureName::Named(_) => feature.channels.as_deref(),
-                FeatureName::Default => feature
-                    .channels
-                    .as_deref()
-                    .or(Some(&self.project.manifest.parsed.project.channels)),
+            .flat_map(|feature| match &feature.channels {
+                Some(channels) => channels,
+                None => &self.project.manifest.parsed.project.channels,
             })
-            .flatten()
             // The prioritized channels contain a priority, sort on this priority.
             // Higher priority comes first. [-10, 1, 0 ,2] -> [2, 1, 0, -10]
             .sorted_by(|a, b| {
@@ -170,8 +161,7 @@ impl<'p> Environment<'p> {
     /// manifest.
     ///
     /// If a feature does not specify any channel the default channels from the project metadata are
-    /// used instead. However, these are not considered during deduplication. This means the default
-    /// channels are always added to the end of the list.
+    /// used instead.
     pub fn channels(&self) -> IndexSet<&'p Channel> {
         self.prioritized_channels()
             .iter()

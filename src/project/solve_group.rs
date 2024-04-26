@@ -130,7 +130,6 @@ impl<'p> SolveGroup<'p> {
                 b.cmp(&a)
             })
             .map(|prioritized_channel| &prioritized_channel.channel)
-            .unique()
             .collect()
     }
 

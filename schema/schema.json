@@ -241,6 +241,37 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "exclude-default": {
+          "title": "Exclude-Default",
+          "description": "Components of the default feature to exclude",
+          "type": "array",
+          "default": false,
+          "items": {
+            "anyOf": [
+              {
+                "const": "system-requirements"
+              },
+              {
+                "const": "channels"
+              },
+              {
+                "const": "platforms"
+              },
+              {
+                "const": "dependencies"
+              },
+              {
+                "const": "pypi-dependencies"
+              },
+              {
+                "const": "activation"
+              },
+              {
+                "const": "tasks"
+              }
+            ]
+          }
+        },
         "features": {
           "title": "Features",
           "description": "The features that define the environment",
@@ -250,87 +281,42 @@
             "minLength": 1
           }
         },
+        "include-default": {
+          "title": "Include-Default",
+          "description": "Components of the default feature to include",
+          "type": "array",
+          "default": false,
+          "items": {
+            "anyOf": [
+              {
+                "const": "system-requirements"
+              },
+              {
+                "const": "channels"
+              },
+              {
+                "const": "platforms"
+              },
+              {
+                "const": "dependencies"
+              },
+              {
+                "const": "pypi-dependencies"
+              },
+              {
+                "const": "activation"
+              },
+              {
+                "const": "tasks"
+              }
+            ]
+          }
+        },
         "solve-group": {
-          "description": "The group name for environments that should be solved together",
           "title": "Solve-Group",
+          "description": "The group name for environments that should be solved together",
           "type": "string",
           "minLength": 1
-        },
-        "include-default": {
-          "anyOf": [
-            {
-              "items": {
-                "anyOf": [
-                  {
-                    "const": "system-requirements"
-                  },
-                  {
-                    "const": "channels"
-                  },
-                  {
-                    "const": "platforms"
-                  },
-                  {
-                    "const": "dependencies"
-                  },
-                  {
-                    "const": "pypi-dependencies"
-                  },
-                  {
-                    "const": "activation"
-                  },
-                  {
-                    "const": "tasks"
-                  }
-                ]
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": false,
-          "description": "Components of the default feature to include",
-          "title": "Include-Default"
-        },
-        "exclude-default": {
-          "anyOf": [
-            {
-              "items": {
-                "anyOf": [
-                  {
-                    "const": "system-requirements"
-                  },
-                  {
-                    "const": "channels"
-                  },
-                  {
-                    "const": "platforms"
-                  },
-                  {
-                    "const": "dependencies"
-                  },
-                  {
-                    "const": "pypi-dependencies"
-                  },
-                  {
-                    "const": "activation"
-                  },
-                  {
-                    "const": "tasks"
-                  }
-                ]
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": false,
-          "description": "Components of the default feature to exclude",
-          "title": "Exclude-Default"
         }
       }
     },
