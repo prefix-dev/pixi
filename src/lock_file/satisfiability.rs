@@ -573,10 +573,11 @@ pub fn verify_package_platform_satisfiability(
                     // If this is path based package we need to check if the source tree hash still matches.
                     // and if it is a directory
                     if let UrlOrPath::Path(path) = &record.0.url_or_path {
-                        let path = dunce::canonicalize(project_root.join(path)).map_err(|e| {
-                            PlatformUnsat::FailedToCanonicalizePath(path.clone(), e)
-                        })?;
                         if path.is_dir() {
+                            let path =
+                                dunce::canonicalize(project_root.join(path)).map_err(|e| {
+                                    PlatformUnsat::FailedToCanonicalizePath(path.clone(), e)
+                                })?;
                             let hashable = PypiSourceTreeHashable::from_directory(path)
                                 .map_err(|e| {
                                     PlatformUnsat::FailedToDetermineSourceTreeHash(
@@ -801,7 +802,8 @@ mod tests {
     use pep440_rs::Version;
     use rattler_lock::LockFile;
     use rstest::rstest;
-    use std::{path::PathBuf, str::FromStr};
+    use std::ffi::OsStr;
+    use std::{path::Component, path::PathBuf, str::FromStr};
 
     #[derive(Error, Debug, Diagnostic)]
     enum LockfileUnsat {
@@ -842,6 +844,16 @@ mod tests {
     fn test_good_satisfiability(
         #[files("tests/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
+        // TODO: skip this test on windows
+        // Until we can figure out how to handle unix file paths with pep508_rs url parsing correctly
+        if manifest_path
+            .components()
+            .contains(&Component::Normal(OsStr::new("absolute-paths")))
+            && cfg!(windows)
+        {
+            return;
+        }
+
         let project = Project::load(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file).into_diagnostic() {
@@ -902,6 +914,25 @@ mod tests {
         ));
         // Removing the rev from the Requirement should satisfy any revision
         let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap();
+        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
+    }
+
+    // Currently this test is missing from `good_satisfiability`, so we test the specific windows case here
+    // this should work an all supported platforms
+    #[test]
+    fn test_windows_absolute_path_handling() {
+        // Mock locked data
+        let locked_data = PypiPackageData {
+            name: "mypkg".parse().unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            url_or_path: UrlOrPath::Path(PathBuf::from_str("C:\\Users\\username\\mypkg").unwrap()),
+            hash: None,
+            requires_dist: vec![],
+            requires_python: None,
+            editable: false,
+        };
+        let spec = Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg").unwrap();
+        // This should satisfy:
         assert!(pypi_satifisfies_requirement(&locked_data, &spec));
     }
 }
