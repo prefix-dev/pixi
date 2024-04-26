@@ -921,7 +921,7 @@ mod tests {
     // this should work an all supported platforms
     #[test]
     fn test_windows_absolute_path_handling() {
-        // Mock locked datga
+        // Mock locked data
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
             version: Version::from_str("0.1.0").unwrap(),
