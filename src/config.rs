@@ -320,7 +320,6 @@ impl Config {
             // currently this is always the default so just use the other value
             channel_config: other.channel_config,
             repodata_config: other.repodata_config.or(self.repodata_config),
-            // Todo merge pypi_config
             pypi_config: other.pypi_config.merge(self.pypi_config),
         }
     }
