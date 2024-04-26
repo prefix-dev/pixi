@@ -165,15 +165,15 @@ pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
 # deno_task_shell = { path = "../deno_task_shell" }
 
-rattler = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
-rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
-rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
-rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
-rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
-rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
-rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
-rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
-rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
+# rattler = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
+# rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
+# rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
+# rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
+# rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
+# rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
+# rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
+# rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
+# rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
 
 #rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
 #rattler_digest = { path = "../rattler/crates/rattler_digest" }
