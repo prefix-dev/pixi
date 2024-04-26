@@ -45,8 +45,8 @@ crossbeam-channel = "0.5.12"
 deno_task_shell = "0.16.0"
 dialoguer = "0.11.0"
 dirs = "5.0.1"
-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
+distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 dunce = "1.0.4"
 flate2 = "1.0.28"
 futures = "0.3.30"
@@ -57,7 +57,7 @@ ignore = "0.4.22"
 indexmap = { version = "2.2.6", features = ["serde"] }
 indicatif = "0.17.8"
 
-install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
+install-wheel-rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 is_executable = "1.0.1"
 itertools = "0.12.1"
 lazy_static = "1.4.0"
@@ -71,10 +71,10 @@ miette = { version = "7.2.0", features = [
 ] }
 minijinja = { version = "1.0.20", features = ["builtins"] }
 once_cell = "1.19.0"
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
+pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 pyproject-toml = "0.10.0"
 rattler = { version = "0.23.0", default-features = false, features = [
     "cli-tools",
@@ -94,8 +94,8 @@ rattler_solve = { version = "0.20.7", default-features = false, features = [
 ] }
 rattler_virtual_packages = { version = "0.19.8", default-features = false }
 regex = "1.10.4"
-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-reqwest = { version = "0.12.3", default-features = false }
+requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+reqwest = { version = "0.12.4", default-features = false }
 reqwest-middleware = "0.3.0"
 reqwest-retry = "0.5.0"
 self-replace = "1.3.7"
@@ -121,20 +121,20 @@ toml_edit = { version = "0.22.11", features = ["serde"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
-uv-build = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-interpreter = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
+uv-build = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+uv-interpreter = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 xxhash-rust = "0.8.10"
-zip = { version = "0.6.6", default-features = false, features = [
+zip = { version = "1.1.1", default-features = false, features = [
     "deflate",
     "time",
 ] }
@@ -161,8 +161,8 @@ toml = "0.8.12"
 [patch.crates-io]
 # For pyproject-toml
 # If you change this also change the versions in the the patch section for uv
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
+pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
+pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 # deno_task_shell = { path = "../deno_task_shell" }
 
 # rattler = { git = "https://github.com/baszalmstra/rattler", branch = "main" }
