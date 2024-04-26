@@ -3,6 +3,7 @@ use crate::prefix::Prefix;
 use crate::project::manifest::pypi_options::PypiOptions;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use distribution_filename::DistFilename;
 
@@ -38,7 +39,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
-use uv_client::FlatIndexClient;
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::RegistryWheelIndex;
 use uv_installer::{Downloader, ResolvedEditable, SitePackages};
@@ -568,6 +569,7 @@ async fn resolve_editables(
     site_packages: &SitePackages<'_>,
     uv_context: &UvResolutionContext,
     tags: &Tags,
+    registry_client: &RegistryClient,
     build_dispatch: &BuildDispatch<'_>,
 ) -> miette::Result<EditablesWithTemp> {
     let mut to_build = vec![];
@@ -654,7 +656,7 @@ async fn resolve_editables(
             &uv_context.cache,
             tags,
             &uv_types::HashStrategy::None,
-            &uv_context.registry_client,
+            registry_client,
             build_dispatch,
         )
         .with_reporter(UvReporter::new(options))
@@ -721,10 +723,17 @@ pub async fn update_python_distributions(
     )?;
 
     let index_locations = pypi_options.to_index_locations();
+    let registry_client = Arc::new(
+        RegistryClientBuilder::new(uv_context.cache.clone())
+            .client(uv_context.client.clone())
+            .index_urls(index_locations.index_urls())
+            .connectivity(Connectivity::Online)
+            .build(),
+    );
 
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
-        let client = FlatIndexClient::new(&uv_context.registry_client, &uv_context.cache);
+        let client = FlatIndexClient::new(&registry_client, &uv_context.cache);
         let entries = client
             .fetch(index_locations.flat_index())
             .await
@@ -749,7 +758,7 @@ pub async fn update_python_distributions(
     let venv = PythonEnvironment::from_interpreter(interpreter);
     // Prep the build context.
     let build_dispatch = BuildDispatch::new(
-        &uv_context.registry_client,
+        &registry_client,
         &uv_context.cache,
         venv.interpreter(),
         &index_locations,
@@ -783,6 +792,7 @@ pub async fn update_python_distributions(
         &site_packages,
         &uv_context,
         &tags,
+        &registry_client,
         &build_dispatch,
     )
     .await?;
@@ -874,7 +884,7 @@ pub async fn update_python_distributions(
             &uv_context.cache,
             &tags,
             &uv_types::HashStrategy::None,
-            &uv_context.registry_client,
+            &registry_client,
             &build_dispatch,
         )
         .with_reporter(UvReporter::new(options));

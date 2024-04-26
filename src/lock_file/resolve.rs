@@ -49,7 +49,7 @@ use uv_configuration::{
 
 use url::Url;
 use uv_cache::Cache;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{ArchiveMetadata, DistributionDatabase, Reporter};
 use uv_interpreter::Interpreter;
@@ -65,11 +65,11 @@ use uv_types::{BuildContext, EmptyInstalledPackages, HashStrategy, InFlight};
 #[derive(Clone)]
 pub struct UvResolutionContext {
     pub cache: Cache,
-    pub registry_client: Arc<RegistryClient>,
     pub in_flight: Arc<InFlight>,
     pub no_build: NoBuild,
     pub no_binary: NoBinary,
     pub hash_strategy: HashStrategy,
+    pub client: reqwest::Client,
 }
 
 impl UvResolutionContext {
@@ -81,20 +81,14 @@ impl UvResolutionContext {
         )
         .into_diagnostic()
         .context("failed to create uv cache")?;
-        let registry_client = Arc::new(
-            RegistryClientBuilder::new(cache.clone())
-                .client(project.client().clone())
-                .connectivity(Connectivity::Online)
-                .build(),
-        );
         let in_flight = Arc::new(InFlight::default());
         Ok(Self {
             cache,
-            registry_client,
             in_flight,
             no_build: NoBuild::None,
             no_binary: NoBinary::None,
             hash_strategy: HashStrategy::None,
+            client: project.client().clone(),
         })
     }
 }
@@ -338,9 +332,18 @@ pub async fn resolve_pypi(
     tracing::debug!("[Resolve] Using Python Interpreter: {:?}", interpreter);
 
     let index_locations = pypi_options.to_index_locations();
+
+    // TODO: create a cached registry client per index_url set?
+    let registry_client = Arc::new(
+        RegistryClientBuilder::new(context.cache.clone())
+            .client(context.client.clone())
+            .index_urls(index_locations.index_urls())
+            .connectivity(Connectivity::Online)
+            .build(),
+    );
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
-        let client = FlatIndexClient::new(&context.registry_client, &context.cache);
+        let client = FlatIndexClient::new(&registry_client, &context.cache);
         let entries = client
             .fetch(index_locations.flat_index())
             .await
@@ -360,7 +363,7 @@ pub async fn resolve_pypi(
     // Create a shared in-memory index.
     let options = Options::default();
     let build_dispatch = BuildDispatch::new(
-        &context.registry_client,
+        &registry_client,
         &context.cache,
         &interpreter,
         &index_locations,
@@ -408,8 +411,8 @@ pub async fn resolve_pypi(
     );
 
     let fallback_provider = DefaultResolverProvider::new(
-        &context.registry_client,
-        DistributionDatabase::new(&context.registry_client, &build_dispatch),
+        &registry_client,
+        DistributionDatabase::new(&registry_client, &build_dispatch),
         &flat_index,
         &tags,
         PythonRequirement::new(&interpreter, &marker_environment),
@@ -446,7 +449,7 @@ pub async fn resolve_pypi(
 
     let resolution = Resolution::from(resolution);
 
-    let database = DistributionDatabase::new(&context.registry_client, &build_dispatch);
+    let database = DistributionDatabase::new(&registry_client, &build_dispatch);
 
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     for dist in resolution.into_distributions() {
@@ -468,7 +471,12 @@ pub async fn resolve_pypi(
                                 UrlOrPath::Url(Url::from_str(url).expect("invalid absolute url"))
                             }
                             FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
-                            _ => todo!("unsupported URL"),
+                            // This happens when it is relative to the non-standard index
+                            FileLocation::RelativeUrl(base, relative) => {
+                                let base = Url::from_str(base).expect("invalid base url");
+                                let url = base.join(relative).expect("could not join urls");
+                                UrlOrPath::Url(url)
+                            }
                         };
 
                         let hash = parse_hashes_from_hash_vec(&dist.file.hashes);
@@ -485,8 +493,7 @@ pub async fn resolve_pypi(
                     }
                 };
 
-                let metadata = context
-                    .registry_client
+                let metadata = registry_client
                     .wheel_metadata(&dist)
                     .await
                     .expect("failed to get wheel metadata");
