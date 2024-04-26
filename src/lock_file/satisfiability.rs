@@ -917,7 +917,7 @@ mod tests {
         assert!(pypi_satifisfies_requirement(&locked_data, &spec));
     }
 
-    // Currently this test is missing from `good_satisiability`, so we test the specific windows case here
+    // Currently this test is missing from `good_satisfiability`, so we test the specific windows case here
     // this should work an all supported platforms
     #[test]
     fn test_windows_absolute_path_handling() {
