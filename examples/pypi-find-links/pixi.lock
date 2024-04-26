@@ -6,7 +6,7 @@ environments:
     indexes:
     - https://pypi.org/simple
     flat-indexes:
-    - !path ./links
+    - path: ./links
     packages:
       osx-arm64:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/bzip2-1.0.8-h93a5062_5.conda
