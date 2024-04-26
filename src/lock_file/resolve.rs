@@ -81,6 +81,7 @@ impl UvResolutionContext {
         )
         .into_diagnostic()
         .context("failed to create uv cache")?;
+
         let in_flight = Arc::new(InFlight::default());
         Ok(Self {
             cache,

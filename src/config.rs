@@ -114,6 +114,49 @@ pub struct RepodataConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct PyPIConfig {
+    /// The default index URL for PyPI packages.
+    pub index_url: Url,
+    /// A list of extra index URLs for PyPI packages
+    pub extra_index_urls: Vec<Url>,
+    /// Wether to use the `keyring` executable to look up credentials.
+    use_keyring: Option<bool>,
+}
+
+impl Default for PyPIConfig {
+    fn default() -> Self {
+        Self {
+            index_url: Url::parse("https://pypi.org/simple").unwrap(),
+            extra_index_urls: Vec::new(),
+            use_keyring: None,
+        }
+    }
+}
+
+impl PyPIConfig {
+    /// Merge the given PyPIConfig into the current one.
+    pub fn merge(self, other: Self) -> Self {
+        let extra_index_urls = self
+            .extra_index_urls
+            .into_iter()
+            .chain(other.extra_index_urls.into_iter())
+            .collect();
+
+        Self {
+            index_url: other.index_url,
+            extra_index_urls,
+            use_keyring: other.use_keyring.or(self.use_keyring),
+        }
+    }
+
+    /// Wether to use the `keyring` executable to look up credentials.
+    /// Defaults to false.
+    pub fn use_keyring(&self) -> bool {
+        self.use_keyring.unwrap_or(false)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub default_channels: Vec<String>,
@@ -141,6 +184,10 @@ pub struct Config {
 
     /// Configuration for repodata fetching.
     pub repodata_config: Option<RepodataConfig>,
+
+    /// Configuration for PyPI packages.
+    #[serde(default)]
+    pub pypi_config: PyPIConfig,
 }
 
 impl Default for Config {
@@ -154,6 +201,7 @@ impl Default for Config {
             loaded_from: Vec::new(),
             channel_config: default_channel_config(),
             repodata_config: None,
+            pypi_config: PyPIConfig::default(),
         }
     }
 }
@@ -272,6 +320,8 @@ impl Config {
             // currently this is always the default so just use the other value
             channel_config: other.channel_config,
             repodata_config: other.repodata_config.or(self.repodata_config),
+            // Todo merge pypi_config
+            pypi_config: other.pypi_config.merge(self.pypi_config),
         }
     }
 
@@ -304,6 +354,10 @@ impl Config {
 
     pub fn channel_config(&self) -> &ChannelConfig {
         &self.channel_config
+    }
+
+    pub fn pypi_config(&self) -> &PyPIConfig {
+        &self.pypi_config
     }
 
     pub fn compute_channels(
