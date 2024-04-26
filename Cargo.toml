@@ -89,7 +89,7 @@ rattler_repodata_gateway = { version = "0.19.8", default-features = false, featu
 rattler_shell = { version = "0.20.1", default-features = false, features = [
     "sysinfo",
 ] }
-rattler_solve = { version = "0.20.7", default-features = false, features = [
+rattler_solve = { version = "0.21.0", default-features = false, features = [
     "resolvo",
 ] }
 rattler_virtual_packages = { version = "0.19.8", default-features = false }

@@ -39,7 +39,7 @@ use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
 };
-use rattler_solve::{resolvo, SolverImpl};
+use rattler_solve::{resolvo, ChannelPriority, SolverImpl};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -631,6 +631,7 @@ pub async fn resolve_conda(
             pinned_packages: vec![],
             virtual_packages,
             timeout: None,
+            channel_priority: ChannelPriority::Strict,
         };
 
         // Solve the task
