@@ -22,8 +22,8 @@ use crate::{
 };
 
 use distribution_types::{
-    BuiltDist, DirectUrlSourceDist, Dist, HashPolicy, IndexLocations, Name, PrioritizedDist,
-    Resolution, ResolvedDist, SourceDist,
+    BuiltDist, DirectUrlSourceDist, Dist, HashPolicy, IndexLocations, IndexUrl, Name,
+    PrioritizedDist, Resolution, ResolvedDist, SourceDist,
 };
 use distribution_types::{FileLocation, SourceDistCompatibility};
 use futures::FutureExt;
@@ -231,6 +231,26 @@ fn process_uv_path_url(path_url: &VerbatimUrl) -> PathBuf {
     } else {
         PathBuf::from(given)
     }
+}
+
+/// Convert an absolute path to a path relative to the flat index url.
+/// which is assumed to be a file:// url.
+fn convert_flat_index_path(flat_index_url: &IndexUrl, absolute_path: &Path) -> PathBuf {
+    assert!(
+        absolute_path.is_absolute(),
+        "flat index package does not have an absolute path"
+    );
+    // We should have the index so we create a relative path
+    let base = flat_index_url
+        .url()
+        .to_file_path()
+        .expect("invalid path-based index");
+    // Strip the index from the path
+    // This is safe because we know the index is a prefix of the path
+    let path = absolute_path
+        .strip_prefix(&base)
+        .expect("base was not a prefix of the flat index path");
+    path.to_owned()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -470,7 +490,10 @@ pub async fn resolve_pypi(
                             FileLocation::AbsoluteUrl(url) => {
                                 UrlOrPath::Url(Url::from_str(url).expect("invalid absolute url"))
                             }
-                            FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
+                            // I (tim) thinks this only happens for flat path based indexes
+                            FileLocation::Path(path) => {
+                                UrlOrPath::Path(convert_flat_index_path(&dist.index, path))
+                            }
                             // This happens when it is relative to the non-standard index
                             FileLocation::RelativeUrl(base, relative) => {
                                 let base = Url::from_str(base).expect("invalid base url");
@@ -527,8 +550,16 @@ pub async fn resolve_pypi(
                             FileLocation::AbsoluteUrl(url) => {
                                 UrlOrPath::Url(Url::from_str(url).expect("invalid absolute url"))
                             }
-                            FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
-                            _ => todo!("unsupported URL"),
+                            // I (tim) thinks this only happens for flat path based indexes
+                            FileLocation::Path(path) => {
+                                UrlOrPath::Path(convert_flat_index_path(&reg.index, path))
+                            }
+                            // This happens when it is relative to the non-standard index
+                            FileLocation::RelativeUrl(base, relative) => {
+                                let base = Url::from_str(base).expect("invalid base url");
+                                let url = base.join(relative).expect("could not join urls");
+                                UrlOrPath::Url(url)
+                            }
                         };
                         (url_or_path, hash, false)
                     }

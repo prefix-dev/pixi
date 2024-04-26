@@ -9,10 +9,13 @@ platforms = ["osx-arm64"]
 [tasks]
 
 [pypi-options]
+# This is similar to the --find-links option in pip
 flat-indexes = [{ path = "./links" }]
 
+# We need python to resolve pypi dependencies
 [dependencies]
 python = "3.12"
 
 [pypi-dependencies]
+# We should get this from the flat index
 requests = "==2.31.0"

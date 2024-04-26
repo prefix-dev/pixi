@@ -26,7 +26,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/3a/52/9f9d17c3b54dc238de384c4cb5a2ef0e27985b42a0e5cc8e8a31d918d48d/charset_normalizer-3.3.2-cp312-cp312-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/e5/3e/741d8c82801c347547f8a2a06aa57dbb1992be9e948df2ea0eda2c8b79e8/idna-3.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a2/73/a68704750a7679d0b6d3ad7aa8d4da8e14e151ae82e6fee774e6e0d05ec8/urllib3-2.2.1-py3-none-any.whl
-      - pypi: /Users/tdejager/development/prefix/pixi/examples/pypi-find-links/links/requests-2.31.0-py3-none-any.whl
+      - pypi: requests-2.31.0-py3-none-any.whl
 packages:
 - kind: conda
   name: bzip2
@@ -196,7 +196,7 @@ packages:
 - kind: pypi
   name: requests
   version: 2.31.0
-  path: /Users/tdejager/development/prefix/pixi/examples/pypi-find-links/links/requests-2.31.0-py3-none-any.whl
+  path: requests-2.31.0-py3-none-any.whl
   requires_dist:
   - charset-normalizer<4,>=2
   - idna<4,>=2.5
