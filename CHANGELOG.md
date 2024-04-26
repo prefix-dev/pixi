@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.1] - 2024-04-26
+### ✨ Highlights
+- Big improvements on the pypi-editable installs.
+
+
+### 📃 Details
+#### Fixed
+- Editable non-satisfiable by @baszalmstra in [#1251](https://github.com/prefix-dev/pixi/pull/1251)
+- Satisfiability with pypi extras by @baszalmstra in [#1253](https://github.com/prefix-dev/pixi/pull/1253)
+- Change global install activation script permission from 0o744 -> 0o755 by @zen-xu in [#1250](https://github.com/prefix-dev/pixi/pull/1250)
+- Avoid creating Empty TOML tables by @olivier-lacroix in [#1270](https://github.com/prefix-dev/pixi/pull/1270)
+- Uses the special-case uv path handling for both built and source by @tdejager in [#1263](https://github.com/prefix-dev/pixi/pull/1263)
+- Modify test before attempting to write to .bash_profile in install.sh by @bruchim-cisco in [#1267](https://github.com/prefix-dev/pixi/pull/1267)
+- Parse properly 'default' as environment Cli argument by @olivier-lacroix in [#1247](https://github.com/prefix-dev/pixi/pull/1247)
+- Apply `schema.json` normalization, add to docs by @bollwyvl in [#1265](https://github.com/prefix-dev/pixi/pull/1265)
+- Improve absolute path satisfiability by @tdejager in [#1252](https://github.com/prefix-dev/pixi/pull/1252)
+- Improve parse deno error and make task a required field in the cli by @ruben-arts in [#1260](https://github.com/prefix-dev/pixi/pull/1260)
+
+## New Contributors
+* @bollwyvl made their first contribution in [#1265](https://github.com/prefix-dev/pixi/pull/1265)
+* @bruchim-cisco made their first contribution in [#1267](https://github.com/prefix-dev/pixi/pull/1267)
+* @zen-xu made their first contribution in [#1250](https://github.com/prefix-dev/pixi/pull/1250)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.20.0..v0.20.1)
+
+
 ## [0.20.0] - 2024-04-19
 ### ✨ Highlights
 
