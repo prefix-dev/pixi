@@ -1,0 +1,11 @@
+[project]
+name = "absolute-paths"
+version = "0.1.0"
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[dependencies]
+python = "3.12"
+
+[pypi-dependencies]
+foo = { path = "./projects/foo", editable = true }
