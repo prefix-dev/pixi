@@ -12,4 +12,7 @@ platforms = ["osx-arm64", "linux-64", "win-64"]
 python = "3.12"
 
 [pypi-dependencies]
-package_with_extras = { path = "./package_with_extras", editable = true, extras = ["cli", "color"]}
+package_with_extras = { path = "./package_with_extras", editable = true, extras = [
+  "cli",
+  "color",
+] }

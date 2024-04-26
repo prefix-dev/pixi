@@ -8,7 +8,7 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
 [tasks]
 get-data = "python get_data.py"
-start = { cmd = "qgis earthquakes_example.qgz", depends_on = "get-data"}
+start = { cmd = "qgis earthquakes_example.qgz", depends_on = "get-data" }
 
 [dependencies]
 qgis = "3.32.1.*"

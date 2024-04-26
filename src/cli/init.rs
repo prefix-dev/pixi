@@ -166,11 +166,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 )?;
             }
         }
-        for spec in pypi_deps {
+        for requirement in pypi_deps {
             for platform in platforms.iter() {
                 project.manifest.add_pypi_dependency(
-                    &spec.0,
-                    &spec.1,
+                    &requirement,
                     Some(platform.parse().into_diagnostic()?),
                     &FeatureName::default(),
                 )?;

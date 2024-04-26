@@ -132,6 +132,9 @@ nav:
       - Community: Community.md
       - FAQ: FAQ.md
 
+hooks:
+  - schema/docs_hooks.py
+
 plugins:
   - redirects:
       redirect_maps:
