@@ -288,7 +288,7 @@ impl<'p> Environment<'p> {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
+    ) -> IndexMap<PyPiPackageName, HashSet<PyPiRequirement>> {
         self.features(true)
             .filter_map(|f| f.pypi_dependencies(platform))
             .fold(IndexMap::default(), |mut acc, deps| {
@@ -304,7 +304,7 @@ impl<'p> Environment<'p> {
 
                 // Add the requirements to the accumulator.
                 for (name, spec) in deps_iter {
-                    acc.entry(name).or_default().push(spec);
+                    acc.entry(name).or_default().insert(spec);
                 }
 
                 acc

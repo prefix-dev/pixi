@@ -118,7 +118,7 @@ impl<'p> GroupedEnvironment<'p> {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
+    ) -> IndexMap<PyPiPackageName, HashSet<PyPiRequirement>> {
         match self {
             GroupedEnvironment::Group(group) => group.pypi_dependencies(platform),
             GroupedEnvironment::Environment(env) => env.pypi_dependencies(platform),

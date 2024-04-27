@@ -7,7 +7,7 @@ use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::pypi_editables::build_editables;
 use crate::project::manifest::python::RequirementOrEditable;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::future::{ready, Future};
 use std::iter::once;
 
@@ -244,7 +244,7 @@ fn process_uv_path_url(path_url: &VerbatimUrl) -> PathBuf {
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
     context: UvResolutionContext,
-    dependencies: IndexMap<PackageName, Vec<PyPiRequirement>>,
+    dependencies: IndexMap<PackageName, HashSet<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
     platform: rattler_conda_types::Platform,
