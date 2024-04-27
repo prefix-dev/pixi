@@ -150,6 +150,7 @@ impl From<AddArgs> for Task {
                 outputs: None,
                 cwd,
                 env: Some(env),
+                hidden: None,
             })
         }
     }
@@ -305,8 +306,15 @@ pub fn execute(args: Args) -> miette::Result<()> {
                         .flat_map(|env| {
                             env.tasks(Some(Platform::current()), true)
                                 .into_iter()
-                                // filter hidden
-                                .flat_map(|tasks| tasks.into_keys())
+                                .flat_map(|tasks| {
+                                    tasks
+                                        .into_iter()
+                                        .filter(|(_, value)| match value {
+                                            Task::Execute(process) => Some(true) != process.hidden,
+                                            _ => true,
+                                        })
+                                        .map(|(key, _)| key)
+                                })
                                 .map(ToOwned::to_owned)
                         })
                         .collect()
