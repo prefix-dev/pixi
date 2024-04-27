@@ -259,10 +259,8 @@ impl Manifest {
         current.extend(new.clone());
 
         // Then to the TOML document
-        let platforms = self
-            .document
-            .specific_array_mut("platforms", feature_name)?;
-        for platform in new {
+        let platforms = self.document.get_array_mut("platforms", feature_name)?;
+        for platform in new.iter() {
             platforms.push(platform.to_string());
         }
 
@@ -275,24 +273,21 @@ impl Manifest {
         platforms: impl IntoIterator<Item = Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        let to_remove: IndexSet<Platform> = platforms.into_iter().collect();
+        // Get current platforms and platform to remove for the feature
         let current = match feature_name {
             FeatureName::Default => self.parsed.project.platforms.get_mut(),
             FeatureName::Named(_) => self.feature_mut(feature_name)?.platforms_mut(),
         };
+        let to_remove: IndexSet<_> = platforms.into_iter().collect();
+        let retained: IndexSet<_> = current.difference(&to_remove).cloned().collect();
 
         // Remove platforms from the manifest
-        current.retain(|p| !to_remove.contains(p));
+        current.retain(|p| retained.contains(p));
 
-        // Then from the TOML document
-        let to_retain = current
-            .difference(&to_remove)
-            .map(|p| p.to_string())
-            .collect_vec();
-        let platforms = self
-            .document
-            .specific_array_mut("platforms", feature_name)?;
-        platforms.retain(|x| to_retain.contains(&x.to_string()));
+        // And from the TOML document
+        let retained = retained.iter().map(|p| p.to_string()).collect_vec();
+        let platforms = self.document.get_array_mut("platforms", feature_name)?;
+        platforms.retain(|x| retained.contains(&x.to_string()));
 
         Ok(())
     }
@@ -463,8 +458,8 @@ impl Manifest {
         current.extend(new.clone());
 
         // Then to the TOML document
-        let channels = self.document.specific_array_mut("channels", feature_name)?;
-        for channel in new {
+        let channels = self.document.get_array_mut("channels", feature_name)?;
+        for channel in new.iter() {
             match feature_name {
                 FeatureName::Default => channels.push(channel.to_name_or_url()),
                 FeatureName::Named(_) => channels.push(channel.channel.name().to_string()),
@@ -480,22 +475,21 @@ impl Manifest {
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
+        // Get current channels and channels to remove for the feature
         let current = match feature_name {
             FeatureName::Default => &mut self.parsed.project.channels,
             FeatureName::Named(_) => self.feature_mut(feature_name)?.channels_mut(),
         };
         let to_remove: IndexSet<_> = channels.into_iter().collect();
+        let retained: IndexSet<_> = current.difference(&to_remove).cloned().collect();
 
         // Remove channels from the manifest
-        current.retain(|c| !to_remove.contains(c));
+        current.retain(|c| retained.contains(c));
 
         // And from the TOML document
-        let to_retain = current
-            .difference(&to_remove)
-            .map(|c| c.channel.name().to_string())
-            .collect_vec();
-        let channels = self.document.specific_array_mut("channels", feature_name)?;
-        channels.retain(|x| to_retain.contains(&x.to_string()));
+        let retained = retained.iter().map(|c| c.channel.name()).collect_vec();
+        let channels = self.document.get_array_mut("channels", feature_name)?;
+        channels.retain(|x| retained.contains(&x.as_str().unwrap()));
 
         Ok(())
     }
