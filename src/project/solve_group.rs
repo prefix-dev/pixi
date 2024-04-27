@@ -64,6 +64,15 @@ impl<'p> SolveGroup<'p> {
         })
     }
 
+    /// Returns all features that are part of the solve group.
+    ///
+    /// All features of all environments are combined and deduplicated.
+    pub fn features(&self) -> impl DoubleEndedIterator<Item = &'p manifest::Feature> + 'p {
+        self.environments()
+            .flat_map(move |env| env.features())
+            .unique_by(|feat| &feat.name)
+    }
+
     /// Returns the system requirements for this solve group.
     ///
     /// The system requirements of the solve group are the union of the system requirements of all
@@ -172,7 +181,7 @@ mod tests {
         [environments]
         foo = { features=["foo"], solve-group="group1" }
         bar = { features=["bar"], solve-group="group1" }
-        baz = { features=["bar"], solve-group="group2", exclude-default=["dependencies"] }
+        baz = { features=["bar"], solve-group="group2", no-default-feature=true }
         "#,
         )
         .unwrap();

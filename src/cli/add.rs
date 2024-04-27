@@ -277,9 +277,7 @@ pub async fn add_conda_specs_to_project(
         .grouped_environments()
         .iter()
         .filter(|env| {
-            // The default feature is included if its dependencies are included in the GroupedEnvironment
-            env.environments()
-                .flat_map(|e| e.features(e.manifest().from_default_feature.dependencies))
+            env.features()
                 .map(|feat| &feat.name)
                 .contains(&feature_name)
         })

@@ -65,6 +65,7 @@ impl Dependencies {
         for (name, specs) in &other.map {
             let entry = map.entry(name.clone()).or_default();
             for spec in specs {
+                // TODO entry should be a set to avoid duplicates
                 if !entry.contains(spec) {
                     entry.push(spec.clone());
                 }

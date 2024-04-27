@@ -1,4 +1,5 @@
 use crate::project::manifest::python::PyPiPackageName;
+use crate::project::manifest::Feature;
 use crate::{
     consts,
     prefix::Prefix,
@@ -163,6 +164,14 @@ impl<'p> GroupedEnvironment<'p> {
         match self {
             GroupedEnvironment::Group(group) => group.has_pypi_dependencies(),
             GroupedEnvironment::Environment(env) => env.has_pypi_dependencies(),
+        }
+    }
+
+    /// Returns the features of the group
+    pub fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
+        match self {
+            GroupedEnvironment::Group(group) => Either::Left(group.features()),
+            GroupedEnvironment::Environment(env) => Either::Right(env.features()),
         }
     }
 }

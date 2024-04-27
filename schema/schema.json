@@ -241,37 +241,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "exclude-default": {
-          "title": "Exclude-Default",
-          "description": "Components of the default feature to exclude",
-          "type": "array",
-          "default": false,
-          "items": {
-            "anyOf": [
-              {
-                "const": "system-requirements"
-              },
-              {
-                "const": "channels"
-              },
-              {
-                "const": "platforms"
-              },
-              {
-                "const": "dependencies"
-              },
-              {
-                "const": "pypi-dependencies"
-              },
-              {
-                "const": "activation"
-              },
-              {
-                "const": "tasks"
-              }
-            ]
-          }
-        },
         "features": {
           "title": "Features",
           "description": "The features that define the environment",
@@ -281,36 +250,11 @@
             "minLength": 1
           }
         },
-        "include-default": {
-          "title": "Include-Default",
-          "description": "Components of the default feature to include",
-          "type": "array",
-          "default": false,
-          "items": {
-            "anyOf": [
-              {
-                "const": "system-requirements"
-              },
-              {
-                "const": "channels"
-              },
-              {
-                "const": "platforms"
-              },
-              {
-                "const": "dependencies"
-              },
-              {
-                "const": "pypi-dependencies"
-              },
-              {
-                "const": "activation"
-              },
-              {
-                "const": "tasks"
-              }
-            ]
-          }
+        "no-default-feature": {
+          "title": "No-Default-Feature",
+          "description": "Whether to add the default feature to this environment",
+          "type": "boolean",
+          "default": false
         },
         "solve-group": {
           "title": "Solve-Group",

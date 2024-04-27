@@ -617,29 +617,23 @@ platforms = ["linux-64", "osx-arm64"]
 
 The `environments` table allows you to define environments that are created using the features defined in the `feature` tables.
 
-Each environment is defined using the following fields:
+The environments table is defined using the following fields:
 
-- `features`: The features that are included in the environment. Unless `include-default` or `exclude-default` are set, all components of the default feature are included by default.
+- `features`: The features that are included in the environment. Unless `no-default-feature` is set to `true`; the default feature is always included.
 - `solve-group`: The solve group is used to group environments together at the solve stage.
   This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
   For instance when testing a production environment with additional test dependencies.
   These dependencies will then be the same version in all environments that have the same solve group.
   But the different environments contain different subsets of the solve-groups dependencies set.
-- `include-default`: It is used to list the components of the default feature to include in that environment. Other components of the default feature are excluded.
-- `exclude-default`: It is used to list the components of the default feature to exclude from that environment. Other components of the default feature are included.
-
-Note that fields `include-default` and `exclude-default`:
- - are mutually exclusive; only one of them can be specified for a given environment.
- - can contain any of "system-requirements", "channels", "platforms", "dependencies", "pypi-dependencies", "activation", "tasks".
+- `no-default-feature`: Whether to include the default feature in that environment. The default is to include the default feature.
 
 ```toml title="Full environments table specification"
 [environments]
 test = {features = ["test"], solve-group = "test"}
 prod = {features = ["prod"], solve-group = "test"}
-lint = {features = ["lint"], include-default = ["channels", "platforms"]}
+prod = ["lint"]
 ```
-
-In the simplest of cases, it is possible to define an environment only by listing its features:
+As shown in the example above, in the simplest of cases, it is possible to define an environment only by listing its features:
 
 ```toml title="Simplest example"
 [environments]
@@ -648,7 +642,7 @@ test = ["test"]
 
 Which is equivalent to
 
-```toml title="Simplest example"
+```toml title="Simplest example expanded"
 [environments]
 test = {features = ["test"]}
 ```
