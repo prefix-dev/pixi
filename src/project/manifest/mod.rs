@@ -248,8 +248,11 @@ impl Manifest {
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Get current and new platforms for the feature
-        let current = self.get_or_insert_platforms_mut(feature_name);
-        let to_add: IndexSet<_> = platforms.cloned().into_iter().collect();
+        let current = match feature_name {
+            FeatureName::Default => self.parsed.project.platforms.get_mut(),
+            FeatureName::Named(_) => self.get_or_insert_feature_mut(feature_name).platforms_mut(),
+        };
+        let to_add: IndexSet<_> = platforms.cloned().collect();
         let new: IndexSet<_> = to_add.difference(current).cloned().collect();
 
         // Add the platforms to the manifest
@@ -273,7 +276,10 @@ impl Manifest {
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         let to_remove: IndexSet<Platform> = platforms.into_iter().collect();
-        let current = self.get_platforms_mut(feature_name)?;
+        let current = match feature_name {
+            FeatureName::Default => self.parsed.project.platforms.get_mut(),
+            FeatureName::Named(_) => self.feature_mut(feature_name)?.platforms_mut(),
+        };
 
         // Remove platforms from the manifest
         current.retain(|p| !to_remove.contains(p));
@@ -281,7 +287,6 @@ impl Manifest {
         // Then from the TOML document
         let to_retain = current
             .difference(&to_remove)
-            .into_iter()
             .map(|p| p.to_string())
             .collect_vec();
         let platforms = self
@@ -447,7 +452,10 @@ impl Manifest {
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Get current and new platforms for the feature
-        let current = self.get_or_insert_channels_mut(feature_name);
+        let current = match feature_name {
+            FeatureName::Default => &mut self.parsed.project.channels,
+            FeatureName::Named(_) => self.get_or_insert_feature_mut(feature_name).channels_mut(),
+        };
         let to_add: IndexSet<_> = channels.into_iter().collect();
         let new: IndexSet<_> = to_add.difference(current).cloned().collect();
 
@@ -472,8 +480,11 @@ impl Manifest {
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
+        let current = match feature_name {
+            FeatureName::Default => &mut self.parsed.project.channels,
+            FeatureName::Named(_) => self.feature_mut(feature_name)?.channels_mut(),
+        };
         let to_remove: IndexSet<_> = channels.into_iter().collect();
-        let current = self.get_channels_mut(feature_name)?;
 
         // Remove channels from the manifest
         current.retain(|c| !to_remove.contains(c));
@@ -481,7 +492,6 @@ impl Manifest {
         // And from the TOML document
         let to_retain = current
             .difference(&to_remove)
-            .into_iter()
             .map(|c| c.channel.name().to_string())
             .collect_vec();
         let channels = self.document.specific_array_mut("channels", feature_name)?;
@@ -509,66 +519,6 @@ impl Manifest {
         );
         self.document.set_version(version);
         Ok(())
-    }
-
-    /// Returns a mutable reference to a feature's platforms
-    fn get_platforms_mut(
-        &mut self,
-        feature_name: &FeatureName,
-    ) -> miette::Result<&mut IndexSet<Platform>> {
-        match feature_name {
-            FeatureName::Default => Ok(&mut self.parsed.project.platforms.value),
-            FeatureName::Named(_) => Ok(&mut self
-                .feature_mut(feature_name)?
-                .platforms
-                .get_or_insert_with(Default::default)
-                .value),
-        }
-    }
-
-    /// Returns a mutable reference to a feature's platforms, creating the feature if needed
-    fn get_or_insert_platforms_mut(
-        &mut self,
-        feature_name: &FeatureName,
-    ) -> &mut IndexSet<Platform> {
-        match feature_name {
-            FeatureName::Default => &mut self.parsed.project.platforms.value,
-            FeatureName::Named(_) => {
-                &mut self
-                    .get_or_insert_feature_mut(feature_name)
-                    .platforms
-                    .get_or_insert_with(Default::default)
-                    .value
-            }
-        }
-    }
-
-    /// Returns a mutable reference to a feature's channels
-    fn get_channels_mut(
-        &mut self,
-        feature_name: &FeatureName,
-    ) -> miette::Result<&mut IndexSet<PrioritizedChannel>> {
-        match feature_name {
-            FeatureName::Default => Ok(&mut self.parsed.project.channels),
-            FeatureName::Named(_) => Ok(self
-                .feature_mut(feature_name)?
-                .channels
-                .get_or_insert_with(IndexSet::new)),
-        }
-    }
-
-    /// Returns a mutable reference to a feature's channels, creating the feature if needed
-    fn get_or_insert_channels_mut(
-        &mut self,
-        feature_name: &FeatureName,
-    ) -> &mut IndexSet<PrioritizedChannel> {
-        match feature_name {
-            FeatureName::Default => &mut self.parsed.project.channels,
-            FeatureName::Named(_) => self
-                .get_or_insert_feature_mut(feature_name)
-                .channels
-                .get_or_insert_with(IndexSet::new),
-        }
     }
 
     /// Returns a mutable reference to a target, creating it if needed

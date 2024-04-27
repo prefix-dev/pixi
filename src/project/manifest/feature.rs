@@ -148,6 +148,18 @@ impl Feature {
         self.name == FeatureName::Default
     }
 
+    /// Returns a mutable reference to the platforms of the feature. Create them if needed
+    pub fn platforms_mut(&mut self) -> &mut IndexSet<Platform> {
+        self.platforms
+            .get_or_insert_with(Default::default)
+            .get_mut()
+    }
+
+    /// Returns a mutable reference to the channels of the feature. Create them if needed
+    pub fn channels_mut(&mut self) -> &mut IndexSet<PrioritizedChannel> {
+        self.channels.get_or_insert_with(Default::default)
+    }
+
     /// Returns the dependencies of the feature for a given `spec_type` and `platform`.
     ///
     /// This function returns a [`Cow`]. If the dependencies are not combined or overwritten by
