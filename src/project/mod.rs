@@ -443,7 +443,7 @@ impl Project {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<PyPiPackageName, HashSet<PyPiRequirement>> {
+    ) -> IndexMap<PyPiPackageName, IndexSet<PyPiRequirement>> {
         self.default_environment().pypi_dependencies(platform)
     }
 

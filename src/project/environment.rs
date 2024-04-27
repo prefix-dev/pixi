@@ -288,7 +288,7 @@ impl<'p> Environment<'p> {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<PyPiPackageName, HashSet<PyPiRequirement>> {
+    ) -> IndexMap<PyPiPackageName, IndexSet<PyPiRequirement>> {
         self.features(true)
             .filter_map(|f| f.pypi_dependencies(platform))
             .fold(IndexMap::default(), |mut acc, deps| {

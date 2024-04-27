@@ -6,7 +6,6 @@ use indexmap::{IndexMap, IndexSet};
 use itertools::{Either, Itertools};
 use rattler_conda_types::{Channel, Platform};
 use std::borrow::Cow;
-use std::collections::HashSet;
 use std::hash::Hash;
 use std::path::PathBuf;
 
@@ -117,7 +116,7 @@ impl<'p> SolveGroup<'p> {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<PyPiPackageName, HashSet<PyPiRequirement>> {
+    ) -> IndexMap<PyPiPackageName, IndexSet<PyPiRequirement>> {
         self.features(true)
             .filter_map(|f| f.pypi_dependencies(platform))
             .fold(IndexMap::default(), |mut acc, deps| {
