@@ -17,13 +17,11 @@ use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
 use crate::project::manifest::python::PyPiPackageName;
 use crate::pypi_mapping::{ChannelName, MappingLocation, MappingSource};
 use crate::task::TaskName;
-use crate::util::default_channel_config;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 pub use activation::Activation;
 use document::ManifestSource;
 pub use environment::{Environment, EnvironmentName};
 pub use feature::{Feature, FeatureName};
-use indexmap::map::Entry;
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 pub use metadata::ProjectMetadata;
@@ -42,7 +40,7 @@ use serde::{Deserialize, Deserializer};
 use serde_with::serde_as;
 use std::collections::HashSet;
 use std::ffi::OsStr;
-use std::fmt;
+use std::fmt::{self, Display};
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::{
@@ -235,8 +233,7 @@ impl Manifest {
             .remove_task(name.as_str(), platform, feature_name)?;
 
         // Remove the task from the internal manifest
-        self.feature_mut(feature_name)
-            .expect("feature should exist")
+        self.feature_mut(feature_name)?
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::from).as_ref())
             .map(|target| target.tasks.remove(&name));
@@ -250,64 +247,20 @@ impl Manifest {
         platforms: impl Iterator<Item = &'a Platform> + Clone,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        let mut stored_platforms = IndexSet::new();
-        match feature_name {
-            FeatureName::Default => {
-                for platform in platforms {
-                    // TODO: Make platforms a IndexSet to avoid duplicates.
-                    if self
-                        .parsed
-                        .project
-                        .platforms
-                        .value
-                        .iter()
-                        .any(|x| x == platform)
-                    {
-                        continue;
-                    }
-                    self.parsed.project.platforms.value.push(*platform);
+        // Get current and new platforms for the feature
+        let current = self.get_or_insert_platforms_mut(feature_name);
+        let to_add: IndexSet<_> = platforms.cloned().into_iter().collect();
+        let new: IndexSet<_> = to_add.difference(current).cloned().collect();
 
-                    stored_platforms.insert(platform);
-                }
-            }
-            FeatureName::Named(_) => {
-                for platform in platforms {
-                    match self.parsed.features.entry(feature_name.clone()) {
-                        Entry::Occupied(mut entry) => {
-                            if let Some(platforms) = &mut entry.get_mut().platforms {
-                                if platforms.value.iter().any(|x| x == platform) {
-                                    continue;
-                                }
-                            }
-                            // If the feature already exists, just push the new platform
-                            entry
-                                .get_mut()
-                                .platforms
-                                .get_or_insert_with(Default::default)
-                                .value
-                                .push(*platform);
-                        }
-                        Entry::Vacant(entry) => {
-                            // If the feature does not exist, insert a new feature with the new platform
-                            entry.insert(Feature {
-                                name: feature_name.clone(),
-                                platforms: Some(PixiSpanned::from(vec![*platform])),
-                                system_requirements: Default::default(),
-                                targets: Default::default(),
-                                channels: None,
-                            });
-                        }
-                    }
-                    stored_platforms.insert(platform);
-                }
-            }
-        }
-        // Then add the platforms to the toml document
-        let platforms_array = self
+        // Add the platforms to the manifest
+        current.extend(new.clone());
+
+        // Then to the TOML document
+        let platforms = self
             .document
             .specific_array_mut("platforms", feature_name)?;
-        for platform in stored_platforms {
-            platforms_array.push(platform.to_string());
+        for platform in new {
+            platforms.push(platform.to_string());
         }
 
         Ok(())
@@ -316,55 +269,25 @@ impl Manifest {
     /// Remove the platform(s) from the project
     pub fn remove_platforms(
         &mut self,
-        platforms: &Vec<Platform>,
+        platforms: impl IntoIterator<Item = Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        let mut removed_platforms = Vec::new();
-        match feature_name {
-            FeatureName::Default => {
-                for platform in platforms {
-                    if let Some(index) = self
-                        .parsed
-                        .project
-                        .platforms
-                        .value
-                        .iter()
-                        .position(|x| x == platform)
-                    {
-                        self.parsed.project.platforms.value.remove(index);
-                        removed_platforms.push(platform.to_string());
-                    }
-                }
-            }
-            FeatureName::Named(_) => {
-                for platform in platforms {
-                    match self.parsed.features.entry(feature_name.clone()) {
-                        Entry::Occupied(mut entry) => {
-                            if let Some(platforms) = &mut entry.get_mut().platforms {
-                                if let Some(index) =
-                                    platforms.value.iter().position(|x| x == platform)
-                                {
-                                    platforms.value.remove(index);
-                                }
-                            }
-                        }
-                        Entry::Vacant(_entry) => {
-                            return Err(miette!(
-                                "Feature {} does not exist",
-                                feature_name.as_str()
-                            ));
-                        }
-                    }
-                    removed_platforms.push(platform.to_string());
-                }
-            }
-        }
+        let to_remove: IndexSet<Platform> = platforms.into_iter().collect();
+        let current = self.get_platforms_mut(feature_name)?;
 
-        // remove the channels from the toml
-        let platforms_array = self
+        // Remove platforms from the manifest
+        current.retain(|p| !to_remove.contains(p));
+
+        // Then from the TOML document
+        let to_retain = current
+            .difference(&to_remove)
+            .into_iter()
+            .map(|p| p.to_string())
+            .collect_vec();
+        let platforms = self
             .document
             .specific_array_mut("platforms", feature_name)?;
-        platforms_array.retain(|x| !removed_platforms.contains(&x.as_str().unwrap().to_string()));
+        platforms.retain(|x| to_retain.contains(&x.to_string()));
 
         Ok(())
     }
@@ -523,65 +446,21 @@ impl Manifest {
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        // First add the channels to the manifest
-        let mut stored_channels = IndexSet::new();
-        match feature_name {
-            FeatureName::Default => {
-                for channel in channels {
-                    // TODO: Make channels a IndexSet to avoid duplicates.
-                    if self.parsed.project.channels.iter().any(|x| x == &channel) {
-                        continue;
-                    }
-                    self.parsed.project.channels.push(channel.clone());
+        // Get current and new platforms for the feature
+        let current = self.get_or_insert_channels_mut(feature_name);
+        let to_add: IndexSet<_> = channels.into_iter().collect();
+        let new: IndexSet<_> = to_add.difference(current).cloned().collect();
 
-                    // If channel base is part of the default config, use the name otherwise the base url.
-                    if channel
-                        .channel
-                        .base_url
-                        .as_str()
-                        .contains(default_channel_config().channel_alias.as_str())
-                    {
-                        stored_channels.insert(channel.channel.name().to_string());
-                    } else {
-                        stored_channels.insert(channel.channel.base_url.to_string());
-                    }
-                }
+        // Add the channels to the manifest
+        current.extend(new.clone());
+
+        // Then to the TOML document
+        let channels = self.document.specific_array_mut("channels", feature_name)?;
+        for channel in new {
+            match feature_name {
+                FeatureName::Default => channels.push(channel.to_name_or_url()),
+                FeatureName::Named(_) => channels.push(channel.channel.name().to_string()),
             }
-            FeatureName::Named(_) => {
-                for channel in channels {
-                    match self.parsed.features.entry(feature_name.clone()) {
-                        Entry::Occupied(mut entry) => {
-                            if let Some(channels) = &mut entry.get_mut().channels {
-                                if channels.iter().any(|x| x == &channel) {
-                                    continue;
-                                }
-                            }
-                            // If the feature already exists, just push the new channel
-                            entry
-                                .get_mut()
-                                .channels
-                                .get_or_insert_with(Vec::new)
-                                .push(channel.clone());
-                        }
-                        Entry::Vacant(entry) => {
-                            // If the feature does not exist, insert a new feature with the new channel
-                            entry.insert(Feature {
-                                name: feature_name.clone(),
-                                platforms: None,
-                                channels: Some(vec![channel.clone()]),
-                                system_requirements: Default::default(),
-                                targets: Default::default(),
-                            });
-                        }
-                    }
-                    stored_channels.insert(channel.channel.name().to_string());
-                }
-            }
-        }
-        // Then add the channels to the toml document
-        let channels_array = self.document.specific_array_mut("channels", feature_name)?;
-        for channel in stored_channels {
-            channels_array.push(channel);
         }
 
         Ok(())
@@ -593,51 +472,20 @@ impl Manifest {
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        let mut removed_channels = Vec::new();
+        let to_remove: IndexSet<_> = channels.into_iter().collect();
+        let current = self.get_channels_mut(feature_name)?;
 
-        match feature_name {
-            FeatureName::Default => {
-                for channel in channels {
-                    // TODO: Make channels a IndexSet to simplify this.
-                    if self.parsed.project.channels.iter().any(|x| x == &channel) {
-                        if let Some(index) = self
-                            .parsed
-                            .project
-                            .channels
-                            .iter()
-                            .position(|x| *x == channel)
-                        {
-                            self.parsed.project.channels.remove(index);
-                        }
-                        removed_channels.push(channel.channel.name().to_string());
-                    }
-                }
-            }
-            FeatureName::Named(_) => {
-                for channel in channels {
-                    match self.parsed.features.entry(feature_name.clone()) {
-                        Entry::Occupied(mut entry) => {
-                            if let Some(channels) = &mut entry.get_mut().channels {
-                                if let Some(index) = channels.iter().position(|x| *x == channel) {
-                                    channels.remove(index);
-                                }
-                            }
-                        }
-                        Entry::Vacant(_entry) => {
-                            return Err(miette!(
-                                "Feature {} does not exist",
-                                feature_name.as_str()
-                            ));
-                        }
-                    }
-                    removed_channels.push(channel.channel.name().to_string());
-                }
-            }
-        }
+        // Remove channels from the manifest
+        current.retain(|c| !to_remove.contains(c));
 
-        // remove the channels from the toml
-        let channels_array = self.document.specific_array_mut("channels", feature_name)?;
-        channels_array.retain(|x| !removed_channels.contains(&x.as_str().unwrap().to_string()));
+        // And from the TOML document
+        let to_retain = current
+            .difference(&to_remove)
+            .into_iter()
+            .map(|c| c.channel.name().to_string())
+            .collect_vec();
+        let channels = self.document.specific_array_mut("channels", feature_name)?;
+        channels.retain(|x| to_retain.contains(&x.to_string()));
 
         Ok(())
     }
@@ -663,6 +511,66 @@ impl Manifest {
         Ok(())
     }
 
+    /// Returns a mutable reference to a feature's platforms
+    fn get_platforms_mut(
+        &mut self,
+        feature_name: &FeatureName,
+    ) -> miette::Result<&mut IndexSet<Platform>> {
+        match feature_name {
+            FeatureName::Default => Ok(&mut self.parsed.project.platforms.value),
+            FeatureName::Named(_) => Ok(&mut self
+                .feature_mut(feature_name)?
+                .platforms
+                .get_or_insert_with(Default::default)
+                .value),
+        }
+    }
+
+    /// Returns a mutable reference to a feature's platforms, creating the feature if needed
+    fn get_or_insert_platforms_mut(
+        &mut self,
+        feature_name: &FeatureName,
+    ) -> &mut IndexSet<Platform> {
+        match feature_name {
+            FeatureName::Default => &mut self.parsed.project.platforms.value,
+            FeatureName::Named(_) => {
+                &mut self
+                    .get_or_insert_feature_mut(feature_name)
+                    .platforms
+                    .get_or_insert_with(Default::default)
+                    .value
+            }
+        }
+    }
+
+    /// Returns a mutable reference to a feature's channels
+    fn get_channels_mut(
+        &mut self,
+        feature_name: &FeatureName,
+    ) -> miette::Result<&mut IndexSet<PrioritizedChannel>> {
+        match feature_name {
+            FeatureName::Default => Ok(&mut self.parsed.project.channels),
+            FeatureName::Named(_) => Ok(self
+                .feature_mut(feature_name)?
+                .channels
+                .get_or_insert_with(IndexSet::new)),
+        }
+    }
+
+    /// Returns a mutable reference to a feature's channels, creating the feature if needed
+    fn get_or_insert_channels_mut(
+        &mut self,
+        feature_name: &FeatureName,
+    ) -> &mut IndexSet<PrioritizedChannel> {
+        match feature_name {
+            FeatureName::Default => &mut self.parsed.project.channels,
+            FeatureName::Named(_) => self
+                .get_or_insert_feature_mut(feature_name)
+                .channels
+                .get_or_insert_with(IndexSet::new),
+        }
+    }
+
     /// Returns a mutable reference to a target, creating it if needed
     pub fn get_or_insert_target_mut(
         &mut self,
@@ -670,11 +578,7 @@ impl Manifest {
         name: Option<&FeatureName>,
     ) -> &mut Target {
         let feature = match name {
-            Some(feature) => self
-                .parsed
-                .features
-                .entry(feature.clone())
-                .or_insert_with(|| Feature::new(feature.clone())),
+            Some(feature) => self.get_or_insert_feature_mut(feature),
             None => self.default_feature_mut(),
         };
         feature
@@ -685,7 +589,7 @@ impl Manifest {
     /// Returns a mutable reference to a target
     pub fn target_mut(&mut self, platform: Option<Platform>, name: &FeatureName) -> &mut Target {
         self.feature_mut(name)
-            .expect("feature should exist")
+            .unwrap()
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
             .expect("target should exist")
@@ -705,11 +609,22 @@ impl Manifest {
     }
 
     /// Returns the mutable feature with the given name or `None` if it does not exist.
-    pub fn feature_mut<Q: ?Sized>(&mut self, name: &Q) -> Option<&mut Feature>
+    pub fn feature_mut<Q: ?Sized>(&mut self, name: &Q) -> miette::Result<&mut Feature>
     where
-        Q: Hash + Equivalent<FeatureName>,
+        Q: Hash + Equivalent<FeatureName> + Display,
     {
-        self.parsed.features.get_mut(name)
+        self.parsed
+            .features
+            .get_mut(name)
+            .ok_or_else(|| miette!("Feature `{name}` does not exist"))
+    }
+
+    /// Returns the mutable feature with the given name or `None` if it does not exist.
+    pub fn get_or_insert_feature_mut(&mut self, name: &FeatureName) -> &mut Feature {
+        self.parsed
+            .features
+            .entry(name.clone())
+            .or_insert_with(|| Feature::new(name.clone()))
     }
 
     /// Returns the feature with the given name or `None` if it does not exist.
@@ -1145,7 +1060,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::project::manifest::channel::PrioritizedChannel;
+    use crate::{project::manifest::channel::PrioritizedChannel, util::default_channel_config};
     use insta::assert_snapshot;
     use rattler_conda_types::{Channel, ChannelConfig, ParseStrictness};
     use rstest::*;
@@ -1487,7 +1402,7 @@ mod tests {
         // Initially the dependency should exist
         assert!(manifest
             .feature_mut(feature_name)
-            .unwrap_or_else(|| panic!("feature `{}` should exist", feature_name.as_str()))
+            .unwrap()
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1510,7 +1425,7 @@ mod tests {
         // The dependency should no longer exist
         assert!(manifest
             .feature_mut(feature_name)
-            .unwrap_or_else(|| panic!("feature `{}` should exist", feature_name.as_str()))
+            .unwrap()
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1540,7 +1455,7 @@ mod tests {
         // Initially the dependency should exist
         assert!(manifest
             .feature_mut(feature_name)
-            .unwrap_or_else(|| panic!("feature `{}` should exist", feature_name.as_str()))
+            .unwrap()
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1558,7 +1473,7 @@ mod tests {
         // The dependency should no longer exist
         assert!(manifest
             .feature_mut(feature_name)
-            .unwrap_or_else(|| panic!("feature `{}` should exist", feature_name.as_str()))
+            .unwrap()
             .targets
             .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
             .unwrap()
@@ -1800,6 +1715,8 @@ feature_target_dep = "*"
         assert_eq!(
             manifest.parsed.project.platforms.value,
             vec![Platform::Linux64, Platform::Win64]
+                .into_iter()
+                .collect::<IndexSet<_>>()
         );
 
         manifest
@@ -1809,6 +1726,8 @@ feature_target_dep = "*"
         assert_eq!(
             manifest.parsed.project.platforms.value,
             vec![Platform::Linux64, Platform::Win64, Platform::OsxArm64]
+                .into_iter()
+                .collect::<IndexSet<_>>()
         );
 
         manifest
@@ -1827,6 +1746,8 @@ feature_target_dep = "*"
                 .unwrap()
                 .value,
             vec![Platform::LinuxAarch64, Platform::Osx64]
+                .into_iter()
+                .collect::<IndexSet<_>>()
         );
 
         manifest
@@ -1845,6 +1766,8 @@ feature_target_dep = "*"
                 .unwrap()
                 .value,
             vec![Platform::LinuxAarch64, Platform::Osx64, Platform::Win64]
+                .into_iter()
+                .collect::<IndexSet<_>>()
         );
     }
 
@@ -1871,15 +1794,17 @@ feature_target_dep = "*"
         assert_eq!(
             manifest.parsed.project.platforms.value,
             vec![Platform::Linux64, Platform::Win64]
+                .into_iter()
+                .collect::<IndexSet<_>>()
         );
 
         manifest
-            .remove_platforms(&vec![Platform::Linux64], &FeatureName::Default)
+            .remove_platforms(vec![Platform::Linux64], &FeatureName::Default)
             .unwrap();
 
         assert_eq!(
             manifest.parsed.project.platforms.value,
-            vec![Platform::Win64]
+            vec![Platform::Win64].into_iter().collect::<IndexSet<_>>()
         );
 
         assert_eq!(
@@ -1891,11 +1816,13 @@ feature_target_dep = "*"
                 .unwrap()
                 .value,
             vec![Platform::Linux64, Platform::Win64, Platform::Osx64]
+                .into_iter()
+                .collect::<IndexSet<_>>()
         );
 
         manifest
             .remove_platforms(
-                &vec![Platform::Linux64, Platform::Osx64],
+                vec![Platform::Linux64, Platform::Osx64],
                 &FeatureName::Named("test".to_string()),
             )
             .unwrap();
@@ -1908,7 +1835,7 @@ feature_target_dep = "*"
                 .clone()
                 .unwrap()
                 .value,
-            vec![Platform::Win64]
+            vec![Platform::Win64].into_iter().collect::<IndexSet<_>>()
         );
     }
 
@@ -1928,7 +1855,7 @@ platforms = ["linux-64", "win-64"]
 
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        assert_eq!(manifest.parsed.project.channels, vec![]);
+        assert_eq!(manifest.parsed.project.channels, IndexSet::new());
 
         let conda_forge = PrioritizedChannel::from_channel(
             Channel::from_str("conda-forge", &channel_config()).unwrap(),
@@ -1966,6 +1893,8 @@ platforms = ["linux-64", "win-64"]
                 channel: Channel::from_str("conda-forge", &channel_config()).unwrap(),
                 priority: None
             }]
+            .into_iter()
+            .collect::<IndexSet<_>>()
         );
 
         // Try to add again, should not add more channels
@@ -1979,6 +1908,8 @@ platforms = ["linux-64", "win-64"]
                 channel: Channel::from_str("conda-forge", &channel_config()).unwrap(),
                 priority: None
             }]
+            .into_iter()
+            .collect::<IndexSet<_>>()
         );
 
         assert_eq!(
@@ -1994,6 +1925,8 @@ platforms = ["linux-64", "win-64"]
                 channel: Channel::from_str("nvidia", &channel_config()).unwrap(),
                 priority: None
             }]
+            .into_iter()
+            .collect::<IndexSet<_>>()
         );
         // Try to add again, should not add more channels
         manifest
@@ -2012,6 +1945,8 @@ platforms = ["linux-64", "win-64"]
                 channel: Channel::from_str("nvidia", &channel_config()).unwrap(),
                 priority: None
             }]
+            .into_iter()
+            .collect::<IndexSet<_>>()
         );
 
         assert_eq!(
@@ -2033,6 +1968,8 @@ platforms = ["linux-64", "win-64"]
                     priority: None
                 }
             ]
+            .into_iter()
+            .collect::<IndexSet<_>>()
         );
 
         // Test custom channel urls
@@ -2075,6 +2012,8 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel::from_channel(
                 Channel::from_str("conda-forge", &channel_config()).unwrap()
             )]
+            .into_iter()
+            .collect::<IndexSet<_>>()
         );
 
         manifest
@@ -2087,7 +2026,7 @@ platforms = ["linux-64", "win-64"]
             )
             .unwrap();
 
-        assert_eq!(manifest.parsed.project.channels, vec![]);
+        assert_eq!(manifest.parsed.project.channels, IndexSet::new());
 
         manifest
             .remove_channels(
@@ -2105,7 +2044,7 @@ platforms = ["linux-64", "win-64"]
             .channels
             .clone()
             .unwrap();
-        assert_eq!(feature_channels, vec![]);
+        assert_eq!(feature_channels, IndexSet::new());
     }
 
     #[test]

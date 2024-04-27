@@ -7,7 +7,7 @@ use crate::project::manifest::{deserialize_opt_package_map, deserialize_package_
 use crate::project::SpecType;
 use crate::task::{Task, TaskName};
 use crate::utils::spanned::PixiSpanned;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use itertools::Either;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use serde::de::Error;
@@ -116,13 +116,13 @@ pub struct Feature {
     ///
     /// This value is `None` if this feature does not specify any platforms and the default
     /// platforms from the project should be used.
-    pub platforms: Option<PixiSpanned<Vec<Platform>>>,
+    pub platforms: Option<PixiSpanned<IndexSet<Platform>>>,
 
     /// Channels specific to this feature.
     ///
     /// This value is `None` if this feature does not specify any channels and the default
     /// channels from the project should be used.
-    pub channels: Option<Vec<PrioritizedChannel>>,
+    pub channels: Option<IndexSet<PrioritizedChannel>>,
 
     /// Additional system requirements
     pub system_requirements: SystemRequirements,
@@ -243,7 +243,7 @@ impl<'de> Deserialize<'de> for Feature {
         #[serde(deny_unknown_fields, rename_all = "kebab-case")]
         struct FeatureInner {
             #[serde(default)]
-            platforms: Option<PixiSpanned<Vec<Platform>>>,
+            platforms: Option<PixiSpanned<IndexSet<Platform>>>,
             #[serde(default)]
             channels: Option<Vec<TomlPrioritizedChannelStrOrMap>>,
             #[serde(default)]

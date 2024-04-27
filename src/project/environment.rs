@@ -144,10 +144,10 @@ impl<'p> Environment<'p> {
                 // for the default feature do we use the default channels from the project metadata
                 // if the feature itself does not specify any channels. This guarantees that the
                 // channels from the default feature are always added to the end of the list.
-                FeatureName::Named(_) => feature.channels.as_deref(),
+                FeatureName::Named(_) => feature.channels.as_ref(),
                 FeatureName::Default => feature
                     .channels
-                    .as_deref()
+                    .as_ref()
                     .or(Some(&self.project.manifest.parsed.project.channels)),
             })
             .flatten()
