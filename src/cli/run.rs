@@ -34,6 +34,7 @@ use tracing::Level;
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
     /// The task you want to run in the projects environment.
+    #[arg(required = true)]
     pub task: Vec<String>,
 
     /// The path to 'pixi.toml' or 'pyproject.toml'
