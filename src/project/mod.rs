@@ -1,3 +1,4 @@
+pub(crate) mod combine_feature;
 mod dependencies;
 mod environment;
 pub mod errors;
@@ -41,7 +42,10 @@ pub use dependencies::Dependencies;
 pub use environment::Environment;
 pub use solve_group::SolveGroup;
 
-use self::manifest::{pyproject::PyProjectToml, Environments};
+use self::{
+    combine_feature::CombineFeature,
+    manifest::{pyproject::PyProjectToml, Environments},
+};
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]

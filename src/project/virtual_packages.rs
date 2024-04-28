@@ -1,4 +1,7 @@
-use super::manifest::{LibCSystemRequirement, SystemRequirements};
+use super::{
+    combine_feature::CombineFeature,
+    manifest::{LibCSystemRequirement, SystemRequirements},
+};
 use crate::project::errors::UnsupportedPlatformError;
 use crate::project::Environment;
 use itertools::Itertools;

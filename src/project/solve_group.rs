@@ -1,10 +1,8 @@
-use super::{manifest, Dependencies, Environment, Project};
-use crate::project::manifest::python::PyPiPackageName;
-use crate::project::manifest::{PyPiRequirement, SystemRequirements};
-use crate::SpecType;
-use indexmap::{IndexMap, IndexSet};
+use super::combine_feature::CombineFeature;
+use super::manifest::SystemRequirements;
+use super::{manifest, Environment, Project};
+
 use itertools::Itertools;
-use rattler_conda_types::{Channel, Platform};
 use std::hash::Hash;
 use std::path::PathBuf;
 
@@ -35,11 +33,6 @@ impl Hash for SolveGroup<'_> {
 }
 
 impl<'p> SolveGroup<'p> {
-    /// Returns the project to which the group belongs.
-    pub fn project(&self) -> &'p Project {
-        self.project
-    }
-
     /// The name of the group
     pub fn name(&self) -> &str {
         &self.solve_group.name
@@ -63,93 +56,35 @@ impl<'p> SolveGroup<'p> {
             )
         })
     }
-
-    /// Returns all features that are part of the solve group.
-    ///
-    /// All features of all environments are combined and deduplicated.
-    pub fn features(&self) -> impl DoubleEndedIterator<Item = &'p manifest::Feature> + 'p {
-        self.environments()
-            .flat_map(move |env| env.features())
-            .unique_by(|feat| &feat.name)
-    }
-
     /// Returns the system requirements for this solve group.
     ///
     /// The system requirements of the solve group are the union of the system requirements of all
     /// the environments that share the same solve group. If multiple environments specify a
     /// requirement for the same system package, the highest is chosen.
     pub fn system_requirements(&self) -> SystemRequirements {
-        self.environments()
-            .map(|e| e.local_system_requirements())
-            .reduce(|acc, req| acc.union(&req).unwrap())
-            .unwrap_or_default()
+        self.local_system_requirements()
     }
+}
 
-    /// Returns all the dependencies of the solve group.
+impl<'p> CombineFeature<'p> for SolveGroup<'p> {
+    /// Returns all features that are part of the solve group.
     ///
-    /// The dependencies of all features of all environments are combined. This means that if two
-    /// features define a requirement for the same package that both requirements are returned. The
-    /// different requirements per package are sorted in the same order as the environment they came
-    /// from.
-    pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
+    /// All features of all environments are combined and deduplicated.
+    fn features(&self) -> impl DoubleEndedIterator<Item = &'p manifest::Feature> + 'p {
         self.environments()
-            .map(|e| e.dependencies(kind, platform))
-            .reduce(|acc, deps| acc.union(&deps))
-            .unwrap_or_default()
+            .flat_map(|env: Environment<'p>| env.features().collect_vec().into_iter())
+            .unique_by(|feat| &feat.name)
     }
 
-    /// Returns all the pypi dependencies of the solve group.
-    ///
-    /// The dependencies of all features of all environments in the solve group are combined. This
-    /// means that if two features define a requirement for the same package that both requirements
-    /// are returned. The different requirements per package are sorted in the same order as the
-    /// environments they came from.
-    pub fn pypi_dependencies(
-        &self,
-        platform: Option<Platform>,
-    ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
-        self.environments()
-            .map(|e| e.pypi_dependencies(platform))
-            .reduce(|mut acc, deps| {
-                for (name, spec) in deps {
-                    let entry = acc.entry(name).or_default();
-                    for item in spec {
-                        if !entry.contains(&item) {
-                            entry.push(item);
-                        }
-                    }
-                }
-                acc
-            })
-            .unwrap_or_default()
-    }
-
-    /// Returns the channels associated with this solve group.
-    ///
-    /// Users can specify custom channels on a per-feature basis. This method collects and
-    /// deduplicates all the channels from all the environments and returns them by priority.
-    pub fn channels(&self) -> IndexSet<&'p Channel> {
-        self.environments()
-            .flat_map(|e| e.prioritized_channels())
-            // The prioritized channels contain a priority, sort on this priority.
-            // Higher priority comes first. [-10, 1, 0 ,2] -> [2, 1, 0, -10]
-            .sorted_by(|a, b| {
-                let a = a.priority.unwrap_or(0);
-                let b = b.priority.unwrap_or(0);
-                b.cmp(&a)
-            })
-            .map(|prioritized_channel| &prioritized_channel.channel)
-            .collect()
-    }
-
-    /// Returns true if any of the environments contain a feature with any reference to a pypi dependency.
-    pub fn has_pypi_dependencies(&self) -> bool {
-        self.environments().any(|e| e.has_pypi_dependencies())
+    /// Returns the project to which the group belongs.
+    fn project(&self) -> &'p Project {
+        self.project
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::project::combine_feature::CombineFeature;
     use crate::Project;
     use itertools::Itertools;
     use rattler_conda_types::PackageName;
