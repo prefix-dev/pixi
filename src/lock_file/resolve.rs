@@ -22,8 +22,8 @@ use crate::{
 };
 
 use distribution_types::{
-    BuiltDist, DirectUrlSourceDist, Dist, HashPolicy, IndexLocations, IndexUrl, Name,
-    PrioritizedDist, Resolution, ResolvedDist, SourceDist,
+    BuiltDist, DirectUrlSourceDist, Dist, FlatIndexLocation, HashPolicy, IndexLocations, IndexUrl,
+    Name, PrioritizedDist, Resolution, ResolvedDist, SourceDist,
 };
 use distribution_types::{FileLocation, SourceDistCompatibility};
 use futures::FutureExt;
@@ -233,14 +233,47 @@ fn process_uv_path_url(path_url: &VerbatimUrl) -> PathBuf {
     }
 }
 
+// Store a reference to the flat index
+#[derive(Clone)]
+struct PathFlatIndexLocation {
+    /// Canocialized path to the flat index.
+    canonicalized_path: PathBuf,
+    /// Manifest path to flat index.
+    given_path: PathBuf,
+}
+
+/// Given a flat index url and a list of flat indexes, return the path to the flat index.
+/// for that specific index.
+fn flat_index_for(
+    flat_index_url: &IndexUrl,
+    flat_indexes_paths: &[PathFlatIndexLocation],
+) -> Option<PathFlatIndexLocation> {
+    // Convert to file path
+    let flat_index_url_path = flat_index_url
+        .url()
+        .to_file_path()
+        .expect("invalid path-based index");
+
+    // Find the flat index in the list of flat indexes
+    // Compare with the path that we got from the `IndexUrl`
+    // which is absolute
+    flat_indexes_paths
+        .iter()
+        .find(|path| path.canonicalized_path == flat_index_url_path)
+        .cloned()
+}
+
 /// Convert an absolute path to a path relative to the flat index url.
 /// which is assumed to be a file:// url.
-fn convert_flat_index_path(flat_index_url: &IndexUrl, absolute_path: &Path) -> PathBuf {
+fn convert_flat_index_path(
+    flat_index_url: &IndexUrl,
+    absolute_path: &Path,
+    given_flat_index_path: &Path,
+) -> PathBuf {
     assert!(
         absolute_path.is_absolute(),
         "flat index package does not have an absolute path"
     );
-    // We should have the index so we create a relative path
     let base = flat_index_url
         .url()
         .to_file_path()
@@ -250,7 +283,8 @@ fn convert_flat_index_path(flat_index_url: &IndexUrl, absolute_path: &Path) -> P
     let path = absolute_path
         .strip_prefix(&base)
         .expect("base was not a prefix of the flat index path");
-    path.to_owned()
+    // Join with the given flat index path
+    given_flat_index_path.join(path)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -469,6 +503,25 @@ pub async fn resolve_pypi(
 
     let resolution = Resolution::from(resolution);
 
+    // Create a list of canocialized flat indexes.
+    let flat_index_locations = index_locations
+        .flat_index()
+        // Take only path based flat indexes
+        .filter_map(|i| match i {
+            FlatIndexLocation::Path(path) => Some(path),
+            FlatIndexLocation::Url(_) => None,
+        })
+        // Canonicalize the path
+        .map(|path| {
+            let canonicalized_path = path.canonicalize()?;
+            Ok::<_, std::io::Error>(PathFlatIndexLocation {
+                canonicalized_path,
+                given_path: path.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
+
     let database = DistributionDatabase::new(&registry_client, &build_dispatch);
 
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
@@ -492,7 +545,13 @@ pub async fn resolve_pypi(
                             }
                             // I (tim) thinks this only happens for flat path based indexes
                             FileLocation::Path(path) => {
-                                UrlOrPath::Path(convert_flat_index_path(&dist.index, path))
+                                let flat_index = flat_index_for(&dist.index, &flat_index_locations)
+                                    .expect("flat index does not exist for resolved ids");
+                                UrlOrPath::Path(convert_flat_index_path(
+                                    &dist.index,
+                                    path,
+                                    &flat_index.given_path,
+                                ))
                             }
                             // This happens when it is relative to the non-standard index
                             FileLocation::RelativeUrl(base, relative) => {
@@ -552,7 +611,13 @@ pub async fn resolve_pypi(
                             }
                             // I (tim) thinks this only happens for flat path based indexes
                             FileLocation::Path(path) => {
-                                UrlOrPath::Path(convert_flat_index_path(&reg.index, path))
+                                let flat_index = flat_index_for(&reg.index, &flat_index_locations)
+                                    .expect("flat index does not exist for resolved ids");
+                                UrlOrPath::Path(convert_flat_index_path(
+                                    &reg.index,
+                                    path,
+                                    &flat_index.given_path,
+                                ))
                             }
                             // This happens when it is relative to the non-standard index
                             FileLocation::RelativeUrl(base, relative) => {
