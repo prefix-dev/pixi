@@ -1,5 +1,5 @@
 use super::{
-    combine_feature::CombineFeature,
+    combine_feature::HasFeatures,
     manifest::{LibCSystemRequirement, SystemRequirements},
 };
 use crate::project::errors::UnsupportedPlatformError;

@@ -10,7 +10,7 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 
-use crate::project::combine_feature::CombineFeature;
+use crate::project::combine_feature::HasFeatures;
 use crate::{
     environment::{get_up_to_date_prefix, LockFileUsage},
     project::{manifest::EnvironmentName, Environment},

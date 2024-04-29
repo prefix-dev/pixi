@@ -12,7 +12,7 @@ use itertools::Either;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use std::path::PathBuf;
 
-use super::combine_feature::CombineFeature;
+use super::combine_feature::HasFeatures;
 
 /// Either a solve group or an individual environment without a solve group.
 ///
@@ -52,7 +52,7 @@ impl<'p> From<Environment<'p>> for GroupedEnvironment<'p> {
 
 impl<'p> GroupedEnvironment<'p> {
     /// Returns an iterator over all the environments in the group.
-    pub fn environments(&self) -> impl Iterator<Item = Environment<'p>> {
+    pub fn environments(&self) -> impl Iterator<Item = Environment<'p>> + '_ {
         match self {
             GroupedEnvironment::Group(group) => Either::Left(group.environments()),
             GroupedEnvironment::Environment(env) => Either::Right(std::iter::once(env.clone())),
@@ -112,7 +112,7 @@ impl<'p> GroupedEnvironment<'p> {
     }
 }
 
-impl<'p> CombineFeature<'p> for GroupedEnvironment<'p> {
+impl<'p> HasFeatures<'p> for GroupedEnvironment<'p> {
     /// Returns the features of the group
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         match self {

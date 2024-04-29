@@ -1,4 +1,4 @@
-use crate::{project::combine_feature::CombineFeature, Project};
+use crate::{project::combine_feature::HasFeatures, Project};
 use clap::Parser;
 
 #[derive(Parser, Debug, Default)]

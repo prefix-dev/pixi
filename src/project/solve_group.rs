@@ -1,4 +1,4 @@
-use super::combine_feature::CombineFeature;
+use super::combine_feature::HasFeatures;
 use super::manifest::SystemRequirements;
 use super::{manifest, Environment, Project};
 
@@ -66,7 +66,7 @@ impl<'p> SolveGroup<'p> {
     }
 }
 
-impl<'p> CombineFeature<'p> for SolveGroup<'p> {
+impl<'p> HasFeatures<'p> for SolveGroup<'p> {
     /// Returns all features that are part of the solve group.
     ///
     /// All features of all environments are combined and deduplicated.
@@ -84,7 +84,7 @@ impl<'p> CombineFeature<'p> for SolveGroup<'p> {
 
 #[cfg(test)]
 mod tests {
-    use crate::project::combine_feature::CombineFeature;
+    use crate::project::combine_feature::HasFeatures;
     use crate::Project;
     use itertools::Itertools;
     use rattler_conda_types::PackageName;

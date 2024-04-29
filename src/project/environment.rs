@@ -3,7 +3,7 @@ use super::{
     manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
     SolveGroup,
 };
-use crate::project::combine_feature::CombineFeature;
+use crate::project::combine_feature::HasFeatures;
 
 use crate::task::TaskName;
 use crate::{task::Task, Project};
@@ -188,7 +188,7 @@ impl<'p> Environment<'p> {
     }
 }
 
-impl<'p> CombineFeature<'p> for Environment<'p> {
+impl<'p> HasFeatures<'p> for Environment<'p> {
     /// Returns references to the features that make up this environment.
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         let environment_features = self.environment.features.iter().map(|feature_name| {

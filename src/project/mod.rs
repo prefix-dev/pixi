@@ -43,7 +43,7 @@ pub use environment::Environment;
 pub use solve_group::SolveGroup;
 
 use self::{
-    combine_feature::CombineFeature,
+    combine_feature::HasFeatures,
     manifest::{pyproject::PyProjectToml, Environments},
 };
 

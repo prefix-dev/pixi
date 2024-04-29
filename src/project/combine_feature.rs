@@ -13,7 +13,7 @@ use super::{
 
 /// A trait that implement various methods for collections that combine attributes of Features
 /// It is implemented by Environment, GroupedEnvironment and SolveGroup
-pub trait CombineFeature<'p> {
+pub trait HasFeatures<'p> {
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p;
     fn project(&self) -> &'p Project;
 
