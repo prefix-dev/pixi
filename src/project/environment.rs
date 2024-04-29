@@ -7,9 +7,8 @@ use crate::project::has_features::HasFeatures;
 
 use crate::task::TaskName;
 use crate::{task::Task, Project};
-use indexmap::{IndexMap, IndexSet};
-use itertools::{Either, Itertools};
-use rattler_conda_types::{Arch, Channel, Platform};
+use itertools::Either;
+use rattler_conda_types::{Arch, Platform};
 use std::hash::{Hash, Hasher};
 use std::{collections::HashMap, fmt::Debug};
 
@@ -128,7 +127,7 @@ impl<'p> Environment<'p> {
 
         current
     }
- 
+
     /// Returns the tasks defined for this environment.
     ///
     /// Tasks are defined on a per-target per-feature per-environment basis.

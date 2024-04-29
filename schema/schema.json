@@ -629,6 +629,12 @@
               },
               {
                 "const": "win-arm64"
+              },
+              {
+                "const": "emscripten-wasm32"
+              },
+              {
+                "const": "wasi-wasm32"
               }
             ]
           }

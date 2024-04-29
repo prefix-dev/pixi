@@ -275,7 +275,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
         Operation::List(args) => {
             let environment = project.environment_from_name_or_env_var(args.environment)?;
             let tasks = environment
-                .tasks(Some(environment.best_platform()), true)?
+                .tasks(Some(environment.best_platform()))?
                 .into_keys()
                 .collect_vec();
             if tasks.is_empty() {
