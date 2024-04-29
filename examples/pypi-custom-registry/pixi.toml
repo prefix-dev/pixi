@@ -9,15 +9,11 @@ platforms = ["osx-arm64"]
 [dependencies]
 python = "3.12"
 
+[pypi-dependencies]
+flask = "*"
+
 [feature.alternative.pypi-options]
 index-url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
-[feature.alternative.pypi-dependencies]
-flask = "*"
-
-[feature.regular.pypi-dependencies]
-flask = "*"
-
 
 [environments]
 alternative = ["alternative"]
-regular = ["regular"]
