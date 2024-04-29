@@ -250,6 +250,12 @@
             "minLength": 1
           }
         },
+        "no-default-feature": {
+          "title": "No-Default-Feature",
+          "description": "Whether to add the default feature to this environment",
+          "type": "boolean",
+          "default": false
+        },
         "solve-group": {
           "title": "Solve-Group",
           "description": "The group name for environments that should be solved together",

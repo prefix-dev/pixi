@@ -7,6 +7,7 @@ use itertools::Itertools;
 use rattler_conda_types::Platform;
 
 use crate::lock_file::UpdateLockFileOptions;
+use crate::project::has_features::HasFeatures;
 use crate::Project;
 
 /// Show a tree of project dependencies
