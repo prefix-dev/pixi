@@ -1078,6 +1078,11 @@
             }
           ]
         },
+        "hidden": {
+          "title": "Hidden",
+          "description": "Whether the task should be hidden from the user when running `pixi run list`",
+          "type": "boolean"
+        },
         "inputs": {
           "title": "Inputs",
           "description": "A list of `.gitignore`-style glob patterns that should be watched for changes before this command is run. Environment variables _will_ be expanded.",
