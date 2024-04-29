@@ -137,6 +137,10 @@
         ]
       }
     },
+    "pypi-options": {
+      "$ref": "#/$defs/PyPIOptions",
+      "description": "Options related to PyPI indexes"
+    },
     "system-requirements": {
       "$ref": "#/$defs/SystemRequirements",
       "description": "The system requirements of the project"
@@ -377,6 +381,10 @@
             ]
           }
         },
+        "pypi-options": {
+          "$ref": "#/$defs/PyPIOptions",
+          "description": "Options related to PyPI indexes for this feature"
+        },
         "system-requirements": {
           "$ref": "#/$defs/SystemRequirements",
           "description": "The system requirements of this feature"
@@ -415,6 +423,40 @@
               ]
             }
           }
+        }
+      }
+    },
+    "FindLinksPath": {
+      "title": "FindLinksPath",
+      "description": "The path to the directory containing packages",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "description": "Path to the directory of packages",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "./links"
+          ]
+        }
+      }
+    },
+    "FindLinksURL": {
+      "title": "FindLinksURL",
+      "description": "The URL to the html file containing href-links to packages",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "title": "Url",
+          "description": "URL to html file with href-links to packages",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "https://simple-index-is-here.com"
+          ]
         }
       }
     },
@@ -732,6 +774,57 @@
           "description": "A `git` tag to use",
           "type": "string",
           "minLength": 1
+        }
+      }
+    },
+    "PyPIOptions": {
+      "title": "PyPIOptions",
+      "description": "Options related to PyPI indexes",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "extra-index-urls": {
+          "title": "Extra-Index-Urls",
+          "description": "Additional PyPI registries that should be used as extra indexes",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            [
+              "https://pypi.org/simple"
+            ]
+          ]
+        },
+        "find-links": {
+          "title": "Find-Links",
+          "description": "Paths to directory containing",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/FindLinksPath"
+              },
+              {
+                "$ref": "#/$defs/FindLinksURL"
+              }
+            ]
+          },
+          "examples": [
+            [
+              "https://pypi.org/simple"
+            ]
+          ]
+        },
+        "index-url": {
+          "title": "Index-Url",
+          "description": "Alternative PyPI registry that should be used as the main index",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "https://pypi.org/simple"
+          ]
         }
       }
     },
