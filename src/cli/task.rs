@@ -291,7 +291,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
             let available_tasks: HashSet<TaskName> =
                 if let Some(explicit_environment) = explicit_environment {
                     explicit_environment
-                        .tasks(Some(Platform::current()), true)
+                        .tasks(Some(Platform::current()))
                         .into_iter()
                         .flat_map(|tasks| tasks.into_keys())
                         .map(ToOwned::to_owned)
@@ -304,7 +304,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                             verify_current_platform_has_required_virtual_packages(env).is_ok()
                         })
                         .flat_map(|env| {
-                            env.tasks(Some(Platform::current()), true)
+                            env.tasks(Some(Platform::current()))
                                 .into_iter()
                                 .flat_map(|tasks| {
                                     tasks
