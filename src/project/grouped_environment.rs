@@ -1,21 +1,18 @@
-use crate::project::manifest::pypi_options::PypiOptions;
-use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::Feature;
 use crate::{
     consts,
     prefix::Prefix,
     project::{
-        manifest::{PyPiRequirement, SystemRequirements},
-        virtual_packages::get_minimal_virtual_packages,
-        Dependencies, Environment, SolveGroup,
+        manifest::SystemRequirements, virtual_packages::get_minimal_virtual_packages, Environment,
+        SolveGroup,
     },
-    EnvironmentName, Project, SpecType,
+    EnvironmentName, Project,
 };
-use indexmap::{IndexMap, IndexSet};
 use itertools::Either;
-use rattler_conda_types::{Channel, GenericVirtualPackage, Platform};
-use std::collections::HashSet;
+use rattler_conda_types::{GenericVirtualPackage, Platform};
 use std::path::PathBuf;
+
+use super::has_features::HasFeatures;
 
 /// Either a solve group or an individual environment without a solve group.
 ///
@@ -55,7 +52,7 @@ impl<'p> From<Environment<'p>> for GroupedEnvironment<'p> {
 
 impl<'p> GroupedEnvironment<'p> {
     /// Returns an iterator over all the environments in the group.
-    pub fn environments(&self) -> impl Iterator<Item = Environment<'p>> {
+    pub fn environments(&self) -> impl Iterator<Item = Environment<'p>> + '_ {
         match self {
             GroupedEnvironment::Group(group) => Either::Left(group.environments()),
             GroupedEnvironment::Environment(env) => Either::Right(std::iter::once(env.clone())),
@@ -71,14 +68,6 @@ impl<'p> GroupedEnvironment<'p> {
             GroupedEnvironmentName::Environment(env) => {
                 Some(GroupedEnvironment::Environment(project.environment(env)?))
             }
-        }
-    }
-
-    /// Returns the project to which the group belongs.
-    pub fn project(&self) -> &'p Project {
-        match self {
-            GroupedEnvironment::Group(group) => group.project(),
-            GroupedEnvironment::Environment(env) => env.project(),
         }
     }
 
@@ -106,26 +95,6 @@ impl<'p> GroupedEnvironment<'p> {
             }
         }
     }
-
-    /// Returns the dependencies of the group.
-    pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
-        match self {
-            GroupedEnvironment::Group(group) => group.dependencies(kind, platform),
-            GroupedEnvironment::Environment(env) => env.dependencies(kind, platform),
-        }
-    }
-
-    /// Returns the pypi dependencies of the group.
-    pub fn pypi_dependencies(
-        &self,
-        platform: Option<Platform>,
-    ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
-        match self {
-            GroupedEnvironment::Group(group) => group.pypi_dependencies(platform),
-            GroupedEnvironment::Environment(env) => env.pypi_dependencies(platform),
-        }
-    }
-
     /// Returns the system requirements of the group.
     pub fn system_requirements(&self) -> SystemRequirements {
         match self {
@@ -141,45 +110,22 @@ impl<'p> GroupedEnvironment<'p> {
             .map(GenericVirtualPackage::from)
             .collect()
     }
+}
 
-    /// Returns the channels used for the group.
-    pub fn channels(&self) -> IndexSet<&'p Channel> {
-        match self {
-            GroupedEnvironment::Group(group) => group.channels(),
-            GroupedEnvironment::Environment(env) => env.channels(),
-        }
-    }
-
-    pub fn platforms(&self) -> HashSet<Platform> {
-        match self {
-            GroupedEnvironment::Group(group) => group
-                .environments()
-                .flat_map(|env| env.platforms())
-                .collect(),
-            GroupedEnvironment::Environment(env) => env.platforms(),
-        }
-    }
-
-    /// Returns true if the group has any Pypi dependencies.
-    pub fn has_pypi_dependencies(&self) -> bool {
-        match self {
-            GroupedEnvironment::Group(group) => group.has_pypi_dependencies(),
-            GroupedEnvironment::Environment(env) => env.has_pypi_dependencies(),
-        }
-    }
-
+impl<'p> HasFeatures<'p> for GroupedEnvironment<'p> {
     /// Returns the features of the group
-    pub fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
+    fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
         match self {
-            GroupedEnvironment::Group(group) => Either::Left(group.features(true)),
-            GroupedEnvironment::Environment(env) => Either::Right(env.features(true)),
+            GroupedEnvironment::Group(group) => Either::Left(group.features()),
+            GroupedEnvironment::Environment(env) => Either::Right(env.features()),
         }
     }
 
-    pub fn pypi_options(&self) -> PypiOptions {
+    /// Returns the project to which the group belongs.
+    fn project(&self) -> &'p Project {
         match self {
-            GroupedEnvironment::Group(group) => group.pypi_options(),
-            GroupedEnvironment::Environment(env) => env.pypi_options(),
+            GroupedEnvironment::Group(group) => group.project(),
+            GroupedEnvironment::Environment(env) => env.project(),
         }
     }
 }

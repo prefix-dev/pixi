@@ -1,7 +1,7 @@
 use crate::{
     config::ConfigCli,
     environment::{get_up_to_date_prefix, verify_prefix_location_unchanged, LockFileUsage},
-    project::{DependencyType, Project, SpecType},
+    project::{has_features::HasFeatures, DependencyType, Project, SpecType},
     FeatureName,
 };
 use clap::Parser;

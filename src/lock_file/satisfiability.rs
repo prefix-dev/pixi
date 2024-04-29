@@ -1,5 +1,6 @@
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
 use crate::project::grouped_environment::GroupedEnvironment;
+use crate::project::has_features::HasFeatures;
 use crate::project::manifest::python::{AsPep508Error, RequirementOrEditable};
 use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
 use distribution_types::ParsedGitUrl;

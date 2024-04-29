@@ -1,6 +1,7 @@
 use crate::lock_file::UvResolutionContext;
 use crate::progress::await_in_progress;
 use crate::project::grouped_environment::GroupedEnvironmentName;
+use crate::project::has_features::HasFeatures;
 use crate::project::manifest::pypi_options::PypiOptions;
 use crate::{
     consts, install, install_pypi,

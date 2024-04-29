@@ -13,6 +13,7 @@ use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
+use crate::project::has_features::HasFeatures;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::Project;
 

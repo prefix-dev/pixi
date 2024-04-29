@@ -225,7 +225,7 @@ mod tests {
     #[test]
     fn test_deserialize_pypi_options() {
         let toml_str = r#"
-                 index_url = "https://example.com/pypi"
+                 index-url = "https://example.com/pypi"
                  extra-index-urls = ["https://example.com/extra"]
 
                  [[find-links]]

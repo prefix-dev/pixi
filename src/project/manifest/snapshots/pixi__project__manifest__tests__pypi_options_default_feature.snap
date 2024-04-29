@@ -2,9 +2,9 @@
 source: src/project/manifest/mod.rs
 expression: "toml_edit::de::from_str::<ProjectManifest>(&contents).expect(\"parsing should succeed!\").default_feature().pypi_options.clone().unwrap()"
 ---
-index: "https://pypi.org/simple"
-extra-indexes:
+index-url: "https://pypi.org/simple"
+extra-index-urls:
   - "https://pypi.org/simple2"
-flat-indexes:
+find-links:
   - path: "../foo"
   - url: "https://example.com/bar"

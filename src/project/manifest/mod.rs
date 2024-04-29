@@ -1112,23 +1112,21 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             .environments
             .contains_key(&EnvironmentName::Default)
         {
-            environments.environments.push(Environment {
-                name: EnvironmentName::Default,
-                features: Vec::new(),
-                features_source_loc: None,
-                solve_group: None,
-            });
+            environments.environments.push(Environment::default());
             environments.by_name.insert(EnvironmentName::Default, 0);
         }
 
         // Add all named environments
         for (name, env) in toml_manifest.environments {
             // Decompose the TOML
-            let (features, features_source_loc, solve_group) = match env {
-                TomlEnvironmentMapOrSeq::Map(env) => {
-                    (env.features.value, env.features.span, env.solve_group)
-                }
-                TomlEnvironmentMapOrSeq::Seq(features) => (features, None, None),
+            let (features, features_source_loc, solve_group, no_default_feature) = match env {
+                TomlEnvironmentMapOrSeq::Map(env) => (
+                    env.features.value,
+                    env.features.span,
+                    env.solve_group,
+                    env.no_default_feature,
+                ),
+                TomlEnvironmentMapOrSeq::Seq(features) => (features, None, None, false),
             };
 
             let environment_idx = environments.environments.len();
@@ -1138,6 +1136,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
                 features,
                 features_source_loc,
                 solve_group: solve_group.map(|sg| solve_groups.add(&sg, environment_idx)),
+                no_default_feature,
             });
         }
 
@@ -1489,11 +1488,11 @@ mod tests {
             r#"
             {PROJECT_BOILERPLATE}
             [pypi-options]
-            index = "https://pypi.org/simple"
-            extra-indexes = ["https://pypi.org/simple2"]
-            [[pypi-options.flat-indexes]]
+            index-url = "https://pypi.org/simple"
+            extra-index-urls = ["https://pypi.org/simple2"]
+            [[pypi-options.find-links]]
             path = "../foo"
-            [[pypi-options.flat-indexes]]
+            [[pypi-options.find-links]]
             url = "https://example.com/bar"
             "#
         );
