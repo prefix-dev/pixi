@@ -2,10 +2,10 @@
 name = "pixi"
 description = "Package management made easy!"
 authors = [
-    "Wolf Vollprecht <wolf@prefix.dev>",
-    "Bas Zalmstra <bas@prefix.dev>",
-    "Tim de Jager <tim@prefix.dev>",
-    "Ruben Arts <ruben@prefix.dev>",
+  "Wolf Vollprecht <wolf@prefix.dev>",
+  "Bas Zalmstra <bas@prefix.dev>",
+  "Tim de Jager <tim@prefix.dev>",
+  "Ruben Arts <ruben@prefix.dev>",
 ]
 channels = ["conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
@@ -34,6 +34,7 @@ tbump = ">=6.9.0,<6.10"
 
 [target.linux-64.dependencies]
 compilers = ">=1.6.0"
+sysroot_linux-64 = ">2.19"
 
 [feature.docs.dependencies]
 mkdocs = "1.5.3.*"
@@ -53,6 +54,8 @@ deploy-dev = "mike deploy --push dev devel"
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
 test-schema = { cmd = "pytest -s", depends_on = "generate-schema", cwd = "schema" }
+toml-lint = "taplo lint --verbose **/pixi.toml"
+toml-format = "taplo fmt **/pixi.toml"
 
 [feature.schema.dependencies]
 python = ">=3.11"
@@ -60,7 +63,11 @@ pytest = ">=8.0.2,<8.1"
 jsonschema = "*"
 pydantic = ">=2.6.3,<2.7"
 pyyaml = ">=6.0.1,<6.1"
+taplo = ">=0.9.1,<0.10"
 
 [environments]
 docs = ["docs"]
 schema = ["schema"]
+# Enable these after merge to avoid conflicts in ci.
+#docs = { features = ["docs"], no-default-feature = true }
+#schema = { features = ["schema"], no-default-feature = true }

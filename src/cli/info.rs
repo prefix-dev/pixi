@@ -13,6 +13,7 @@ use serde_with::DisplayFromStr;
 use tokio::task::spawn_blocking;
 
 use crate::progress::await_in_progress;
+use crate::project::has_features::HasFeatures;
 use crate::task::TaskName;
 use crate::{config, EnvironmentName, FeatureName, Project};
 
@@ -307,17 +308,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .iter()
                 .map(|env| {
                     let tasks = env
-                        .tasks(None, true)
+                        .tasks(None)
                         .ok()
                         .map(|t| t.into_keys().cloned().collect())
                         .unwrap_or_default();
 
                     EnvironmentInfo {
                         name: env.name().clone(),
-                        features: env
-                            .features(true)
-                            .map(|feature| feature.name.clone())
-                            .collect(),
+                        features: env.features().map(|feature| feature.name.clone()).collect(),
                         solve_group: env
                             .solve_group()
                             .map(|solve_group| solve_group.name().to_string()),

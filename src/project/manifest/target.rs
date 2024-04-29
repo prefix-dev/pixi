@@ -3,7 +3,7 @@ use crate::project::manifest::python::PyPiPackageName;
 use crate::task::TaskName;
 use crate::utils::spanned::PixiSpanned;
 use crate::{
-    project::{manifest::error::SpecIsMissing, manifest::PyPiRequirement, SpecType},
+    project::{manifest::PyPiRequirement, SpecType},
     task::Task,
 };
 use indexmap::map::Entry;
@@ -15,6 +15,8 @@ use serde_with::{serde_as, DisplayFromStr, PickFirst};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::str::FromStr;
+
+use super::error::DependencyError;
 
 /// A target describes the dependencies, activations and task available to a specific feature, in
 /// a specific environment, and optionally for a specific platform.
@@ -107,63 +109,125 @@ impl Target {
     }
 
     /// Checks if this target contains a dependency
-    pub fn has_dependency(&self, dep_str: &str, spec_type: Option<SpecType>) -> bool {
-        match PackageName::from_str(dep_str) {
-            Ok(pkg) => self
-                .dependencies(spec_type)
-                .is_some_and(|deps| deps.contains_key(&pkg)),
-            Err(_) => false, // an invalid package name cannot be a dependency
+    pub fn has_dependency(
+        &self,
+        dep_name: &PackageName,
+        spec_type: Option<SpecType>,
+        exact: Option<&NamelessMatchSpec>,
+    ) -> bool {
+        let current_dependency = self
+            .dependencies(spec_type)
+            .and_then(|deps| deps.get(dep_name).cloned());
+
+        match (current_dependency, exact) {
+            (Some(current_spec), Some(spec)) => current_spec == *spec,
+            (Some(_), None) => true,
+            (None, _) => false,
         }
     }
 
-    /// Removes a dependency from this target.
+    /// Removes a dependency from this target
+    ///
+    /// it will Err if the dependency is not found
     pub fn remove_dependency(
         &mut self,
-        dep_str: &str,
+        dep_name: &PackageName,
         spec_type: SpecType,
-    ) -> Result<(PackageName, NamelessMatchSpec), SpecIsMissing> {
+    ) -> Result<(PackageName, NamelessMatchSpec), DependencyError> {
         let Some(dependencies) = self.dependencies.get_mut(&spec_type) else {
-            return Err(SpecIsMissing::spec_type_is_missing(dep_str, spec_type));
+            return Err(DependencyError::NoSpecType(spec_type.name().into()));
         };
-
-        PackageName::from_str(dep_str)
-            .map_err(|_| SpecIsMissing::dep_is_missing(dep_str, spec_type))
-            .and_then(|dep| {
-                dependencies
-                    .shift_remove_entry(&dep)
-                    .ok_or_else(|| SpecIsMissing::dep_is_missing(dep_str, spec_type))
-            })
+        dependencies
+            .shift_remove_entry(dep_name)
+            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_normalized().into()))
     }
 
     /// Adds a dependency to a target
+    ///
+    /// This will overwrite any existing dependency of the same name
     pub fn add_dependency(
         &mut self,
-        dep_name: PackageName,
-        spec: NamelessMatchSpec,
+        dep_name: &PackageName,
+        spec: &NamelessMatchSpec,
         spec_type: SpecType,
     ) {
         self.dependencies
             .entry(spec_type)
             .or_default()
-            .insert(dep_name, spec);
+            .insert(dep_name.clone(), spec.clone());
     }
 
-    /// Checks if this target contains a pypi dependency
-    pub fn has_pypi_dependency(&self, dep_str: &str) -> bool {
-        match PyPiPackageName::from_str(dep_str) {
-            Ok(pkg) => self
-                .pypi_dependencies
-                .as_ref()
-                .is_some_and(|deps| deps.contains_key(&pkg)),
-            Err(_) => false, // an invalid package name cannot be a dependency
+    /// Adds a dependency to a target
+    ///
+    /// This will return an error if the exact same dependency already exist
+    /// This will overwrite any existing dependency of the same name
+    pub fn try_add_dependency(
+        &mut self,
+        dep_name: &PackageName,
+        spec: &NamelessMatchSpec,
+        spec_type: SpecType,
+    ) -> Result<(), DependencyError> {
+        if self.has_dependency(dep_name, Some(spec_type), Some(spec)) {
+            return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
+        }
+        self.add_dependency(dep_name, spec, spec_type);
+        Ok(())
+    }
+
+    /// Checks if this target contains a specific pypi dependency
+    pub fn has_pypi_dependency(&self, requirement: &pep508_rs::Requirement, exact: bool) -> bool {
+        let current_requirement = self
+            .pypi_dependencies
+            .as_ref()
+            .and_then(|deps| deps.get(&PyPiPackageName::from_normalized(requirement.name.clone())));
+
+        match (current_requirement, exact) {
+            (Some(r), true) => *r == PyPiRequirement::from(requirement.clone()),
+            (Some(_), false) => true,
+            (None, _) => false,
         }
     }
 
+    /// Removes a pypi dependency from this target
+    ///
+    /// it will Err if the dependency is not found
+    pub fn remove_pypi_dependency(
+        &mut self,
+        dep_name: &PyPiPackageName,
+    ) -> Result<(PyPiPackageName, PyPiRequirement), DependencyError> {
+        let Some(pypi_dependencies) = self.pypi_dependencies.as_mut() else {
+            return Err(DependencyError::NoPyPiDependencies);
+        };
+        pypi_dependencies
+            .shift_remove_entry(dep_name)
+            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_source().into()))
+    }
+
     /// Adds a pypi dependency to a target
-    pub fn add_pypi_dependency(&mut self, name: PyPiPackageName, requirement: PyPiRequirement) {
+    ///
+    /// This will overwrite any existing dependency of the same name
+    pub fn add_pypi_dependency(&mut self, requirement: &pep508_rs::Requirement) {
         self.pypi_dependencies
             .get_or_insert_with(Default::default)
-            .insert(name, requirement);
+            .insert(
+                PyPiPackageName::from_normalized(requirement.name.clone()),
+                PyPiRequirement::from(requirement.clone()),
+            );
+    }
+
+    /// Adds a pypi dependency to a target
+    ///
+    /// This will return an error if the exact same dependency already exist
+    /// This will overwrite any existing dependency of the same name
+    pub fn try_add_pypi_dependency(
+        &mut self,
+        requirement: &pep508_rs::Requirement,
+    ) -> Result<(), DependencyError> {
+        if self.has_pypi_dependency(requirement, true) {
+            return Err(DependencyError::Duplicate(requirement.name.to_string()));
+        }
+        self.add_pypi_dependency(requirement);
+        Ok(())
     }
 }
 

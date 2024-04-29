@@ -7,7 +7,7 @@ use itertools::Itertools;
 use rattler_conda_types::Platform;
 
 use crate::lock_file::UpdateLockFileOptions;
-use crate::project::manifest::EnvironmentName;
+use crate::project::has_features::HasFeatures;
 use crate::Project;
 
 /// Show a tree of project dependencies
@@ -70,10 +70,7 @@ static UTF8_SYMBOLS: Symbols = Symbols {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment_name = EnvironmentName::from_arg_or_env_var(args.environment);
-    let environment = project
-        .environment(&environment_name)
-        .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
+    let environment = project.environment_from_name_or_env_var(args.environment)?;
     let lock_file = project
         .up_to_date_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.lock_file_usage.into(),
@@ -92,8 +89,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let direct_deps = direct_dependencies(&environment, &platform, &dep_map);
 
-    if !environment_name.is_default() {
-        eprintln!("Environment: {}", environment_name.fancy_display());
+    if !environment.is_default() {
+        eprintln!("Environment: {}", environment.name().fancy_display());
     }
 
     if args.invert {

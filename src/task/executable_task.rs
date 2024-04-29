@@ -32,7 +32,7 @@ pub struct RunOutput {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("deno task shell failed to parse '{script}': {error}")]
+#[error("The task failed to parse. task: '{script}' error: '{error}'")]
 pub struct FailedToParseShellScript {
     pub script: String,
     pub error: String,
@@ -139,7 +139,13 @@ impl<'p> ExecutableTask<'p> {
 
         // Append the command line arguments
         let cli_args = quote_arguments(self.additional_args.iter().map(|arg| arg.as_str()));
-        let full_script = format!("{export}\n{task} {cli_args}");
+
+        // Skip the export if it's empty, to avoid newlines
+        let full_script = if export.is_empty() {
+            format!("{task} {cli_args}")
+        } else {
+            format!("{export}\n{task} {cli_args}")
+        };
 
         // Parse the shell command
         deno_task_shell::parser::parse(full_script.trim())

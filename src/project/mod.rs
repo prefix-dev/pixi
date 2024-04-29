@@ -2,6 +2,7 @@ mod dependencies;
 mod environment;
 pub mod errors;
 pub mod grouped_environment;
+pub(crate) mod has_features;
 pub mod manifest;
 mod solve_group;
 pub mod virtual_packages;
@@ -41,7 +42,10 @@ pub use dependencies::Dependencies;
 pub use environment::Environment;
 pub use solve_group::SolveGroup;
 
-use self::manifest::{pyproject::PyProjectToml, Environments};
+use self::{
+    has_features::HasFeatures,
+    manifest::{pyproject::PyProjectToml, Environments},
+};
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -333,6 +337,16 @@ impl Project {
             .collect()
     }
 
+    /// Returns an environment in this project based on a name or an environment variable.
+    pub fn environment_from_name_or_env_var(
+        &self,
+        name: Option<String>,
+    ) -> miette::Result<Environment> {
+        let environment_name = EnvironmentName::from_arg_or_env_var(name).into_diagnostic()?;
+        self.environment(&environment_name)
+            .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
+    }
+
     /// Returns all the solve groups in the project.
     pub fn solve_groups(&self) -> Vec<SolveGroup> {
         self.manifest
@@ -394,7 +408,7 @@ impl Project {
     /// TODO: Remove this function and use the tasks from the default environment instead.
     pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&TaskName, &Task> {
         self.default_environment()
-            .tasks(platform, true)
+            .tasks(platform)
             .unwrap_or_default()
     }
 

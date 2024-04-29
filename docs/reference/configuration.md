@@ -566,8 +566,8 @@ The `feature` table allows you to define the following fields per feature.
 - `pypi-dependencies`: Same as the [pypi-dependencies](#pypi-dependencies-beta-feature).
 - `system-requirements`: Same as the [system-requirements](#the-system-requirements-table).
 - `activation`: Same as the [activation](#the-activation-table).
-- `platforms`: Same as the [platforms](#platforms). When adding features together the intersection of the platforms is taken. Be aware that the `default` feature is always implied thus this must contain all platforms the project can support.
-- `channels`: Same as the [channels](#channels). Adding the `priority` field to the channels to allow concatenation of channels instead of overwriting.
+- `platforms`: Same as the [platforms](#platforms). Unless overridden, the `platforms` of the feature will be those defined at project level.
+- `channels`: Same as the [channels](#channels). Unless overridden, the `channels` of the feature will be those defined at project level.
 - `target`: Same as the [target](#the-target-table).
 - `tasks`: Same as the [tasks](#the-tasks-table).
 
@@ -615,32 +615,44 @@ platforms = ["linux-64", "osx-arm64"]
 
 ### The `environments` table
 
-The `environments` table allows you to define environments that are created using the features defined in the `feature` tables.
-
-!!! important
-    `default` is always implied when creating environments.
-    If you don't want to use the `default` feature you can keep all the non feature tables empty.
+The `[environments]` table allows you to define environments that are created using the features defined in the `[feature]` tables.
 
 The environments table is defined using the following fields:
 
-- `features: Vec<Feature>`: The features that are included in the environment set, which is also the default field in the environments.
-- `solve-group: String`: The solve group is used to group environments together at the solve stage.
+- `features`: The features that are included in the environment. Unless `no-default-feature` is set to `true`, the default feature is implicitly included in the environment.
+- `solve-group`: The solve group is used to group environments together at the solve stage.
   This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
   For instance when testing a production environment with additional test dependencies.
   These dependencies will then be the same version in all environments that have the same solve group.
   But the different environments contain different subsets of the solve-groups dependencies set.
+- `no-default-feature`: Whether to include the default feature in that environment. The default is `false`, to include the default feature.
+
+```toml title="Full environments table specification"
+[environments]
+test = {features = ["test"], solve-group = "test"}
+prod = {features = ["prod"], solve-group = "test"}
+lint = {features = ["lint"], no-default-feature = true}
+```
+As shown in the example above, in the simplest of cases, it is possible to define an environment only by listing its features:
 
 ```toml title="Simplest example"
 [environments]
 test = ["test"]
 ```
 
-```toml title="Full environments table specification"
+is equivalent to
+
+```toml title="Simplest example expanded"
 [environments]
-test = {features = ["test"], solve-group = "test"}
-prod = {features = ["prod"], solve-group = "test"}
-lint = ["lint"]
+test = {features = ["test"]}
 ```
+
+When an environment comprises several features (including the default feature):
+- The `activation` and `tasks` of the environment are the union of the `activation` and `tasks` of all its features.
+- The `dependencies` and `pypi-dependencies` of the environment are the union of the `dependencies` and `pypi-dependencies` of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
+- The `system-requirements` of the environment is the union of the `system-requirements` of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.
+- The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
+- The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project `platforms` to all platforms it can support across its environments.
 
 ## Global configuration
 

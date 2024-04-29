@@ -17,6 +17,7 @@ use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
 use crate::project::manifest::python::PyPiPackageName;
 use crate::pypi_mapping::{ChannelName, MappingLocation, MappingSource};
 use crate::task::TaskName;
+use crate::util::default_channel_config;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 pub use activation::Activation;
 use document::ManifestSource;
@@ -32,7 +33,7 @@ use pyproject::PyProjectManifest;
 pub use python::PyPiRequirement;
 use rattler_conda_types::Channel;
 use rattler_conda_types::{
-    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName,
+    MatchSpec, NamelessMatchSpec, PackageName,
     ParseStrictness::{Lenient, Strict},
     Platform, Version,
 };
@@ -210,7 +211,7 @@ impl Manifest {
             .add_task(name.as_str(), task.clone(), platform, feature_name)?;
 
         // Add the task to the manifest
-        self.target_mut(platform, Some(feature_name))
+        self.get_or_insert_target_mut(platform, Some(feature_name))
             .tasks
             .insert(name, task);
 
@@ -381,42 +382,28 @@ impl Manifest {
             miette::bail!("pixi does not support wildcard dependencies")
         };
 
-        // Add the dependency to the TOML document
+        // Add the dependency to the manifest
+        self.get_or_insert_target_mut(platform, Some(feature_name))
+            .try_add_dependency(&name, &spec, spec_type)?;
+        // and to the TOML document
         self.document
             .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
-
-        // Add the dependency to the manifest  as well
-        self.target_mut(platform, Some(feature_name))
-            .add_dependency(name, spec, spec_type);
-
         Ok(())
     }
 
     /// Add a pypi requirement to the manifest
     pub fn add_pypi_dependency(
         &mut self,
-        name: &PyPiPackageName,
-        requirement: &PyPiRequirement,
+        requirement: &pep508_rs::Requirement,
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        // Add the pypi dependency to the TOML document
-        let project_root = self
-            .path
-            .parent()
-            .expect("Path should always have a parent");
-        self.document.add_pypi_dependency(
-            name,
-            requirement,
-            platform,
-            project_root,
-            feature_name,
-        )?;
-
-        // Add the dependency to the manifest as well
-        self.target_mut(platform, Some(feature_name))
-            .add_pypi_dependency(name.clone(), requirement.clone());
-
+        // Add the pypi dependency to the manifest
+        self.get_or_insert_target_mut(platform, Some(feature_name))
+            .try_add_pypi_dependency(requirement)?;
+        // and to the TOML document
+        self.document
+            .add_pypi_dependency(requirement, platform, feature_name)?;
         Ok(())
     }
 
@@ -428,22 +415,14 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
+        // Remove the dependency from the manifest
+        let res = self
+            .target_mut(platform, feature_name)
+            .remove_dependency(dep, spec_type);
         // Remove the dependency from the TOML document
-        self.document.remove_dependency_helper(
-            dep.as_source(),
-            spec_type.name(),
-            platform,
-            feature_name,
-        )?;
-
-        Ok(self
-            .feature_mut(feature_name)
-            .expect("feature should exist")
-            .targets
-            .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
-            .expect("target should exist")
-            .remove_dependency(dep.as_source(), spec_type)
-            .expect("dependency should exist"))
+        self.document
+            .remove_dependency(dep, spec_type, platform, feature_name)?;
+        res.into_diagnostic()
     }
 
     /// Removes a pypi dependency.
@@ -453,21 +432,14 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(PyPiPackageName, PyPiRequirement)> {
+        // Remove the dependency from the manifest
+        let res = self
+            .target_mut(platform, feature_name)
+            .remove_pypi_dependency(dep);
         // Remove the dependency from the TOML document
         self.document
             .remove_pypi_dependency(dep, platform, feature_name)?;
-
-        Ok(self
-            .feature_mut(feature_name)
-            .expect("feature should exist")
-            .targets
-            .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
-            .expect("target should exist")
-            .pypi_dependencies
-            .as_mut()
-            .expect("pypi-dependencies should exist")
-            .shift_remove_entry(dep)
-            .expect("dependency should exist"))
+        res.into_diagnostic()
     }
 
     /// Returns true if any of the features has pypi dependencies defined.
@@ -567,7 +539,7 @@ impl Manifest {
                         .channel
                         .base_url
                         .as_str()
-                        .contains(ChannelConfig::default().channel_alias.as_str())
+                        .contains(default_channel_config().channel_alias.as_str())
                     {
                         stored_channels.insert(channel.channel.name().to_string());
                     } else {
@@ -692,7 +664,7 @@ impl Manifest {
     }
 
     /// Returns a mutable reference to a target, creating it if needed
-    pub fn target_mut(
+    pub fn get_or_insert_target_mut(
         &mut self,
         platform: Option<Platform>,
         name: Option<&FeatureName>,
@@ -708,6 +680,15 @@ impl Manifest {
         feature
             .targets
             .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
+    }
+
+    /// Returns a mutable reference to a target
+    pub fn target_mut(&mut self, platform: Option<Platform>, name: &FeatureName) -> &mut Target {
+        self.feature_mut(name)
+            .expect("feature should exist")
+            .targets
+            .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
+            .expect("target should exist")
     }
 
     /// Returns the default feature.
@@ -1063,6 +1044,11 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             /// The tool configuration which is unused by pixi
             #[serde(rename = "tool")]
             _tool: Option<serde_json::Value>,
+
+            /// The URI for the manifest schema which is unused by pixi
+            #[allow(dead_code)]
+            #[serde(rename = "$schema")]
+            schema: Option<String>,
         }
 
         let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
@@ -1118,23 +1104,21 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             .environments
             .contains_key(&EnvironmentName::Default)
         {
-            environments.environments.push(Environment {
-                name: EnvironmentName::Default,
-                features: Vec::new(),
-                features_source_loc: None,
-                solve_group: None,
-            });
+            environments.environments.push(Environment::default());
             environments.by_name.insert(EnvironmentName::Default, 0);
         }
 
         // Add all named environments
         for (name, env) in toml_manifest.environments {
             // Decompose the TOML
-            let (features, features_source_loc, solve_group) = match env {
-                TomlEnvironmentMapOrSeq::Map(env) => {
-                    (env.features.value, env.features.span, env.solve_group)
-                }
-                TomlEnvironmentMapOrSeq::Seq(features) => (features, None, None),
+            let (features, features_source_loc, solve_group, no_default_feature) = match env {
+                TomlEnvironmentMapOrSeq::Map(env) => (
+                    env.features.value,
+                    env.features.span,
+                    env.solve_group,
+                    env.no_default_feature,
+                ),
+                TomlEnvironmentMapOrSeq::Seq(features) => (features, None, None, false),
             };
 
             let environment_idx = environments.environments.len();
@@ -1144,6 +1128,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
                 features,
                 features_source_loc,
                 solve_group: solve_group.map(|sg| solve_groups.add(&sg, environment_idx)),
+                no_default_feature,
             });
         }
 
@@ -1173,6 +1158,10 @@ mod tests {
         channels = []
         platforms = ["linux-64", "win-64", "osx-64"]
         "#;
+
+    fn channel_config() -> ChannelConfig {
+        default_channel_config()
+    }
 
     #[test]
     fn test_from_path() {
@@ -1941,7 +1930,7 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(manifest.parsed.project.channels, vec![]);
 
         let conda_forge = PrioritizedChannel::from_channel(
-            Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
+            Channel::from_str("conda-forge", &channel_config()).unwrap(),
         );
         manifest
             .add_channels([conda_forge.clone()], &FeatureName::Default)
@@ -1949,7 +1938,7 @@ platforms = ["linux-64", "win-64"]
 
         let cuda_feature = FeatureName::Named("cuda".to_string());
         let nvidia = PrioritizedChannel::from_channel(
-            Channel::from_str("nvidia", &ChannelConfig::default()).unwrap(),
+            Channel::from_str("nvidia", &channel_config()).unwrap(),
         );
         manifest
             .add_channels([nvidia.clone()], &cuda_feature)
@@ -1960,10 +1949,10 @@ platforms = ["linux-64", "win-64"]
             .add_channels(
                 [
                     PrioritizedChannel::from_channel(
-                        Channel::from_str("test", &ChannelConfig::default()).unwrap(),
+                        Channel::from_str("test", &channel_config()).unwrap(),
                     ),
                     PrioritizedChannel::from_channel(
-                        Channel::from_str("test2", &ChannelConfig::default()).unwrap(),
+                        Channel::from_str("test2", &channel_config()).unwrap(),
                     ),
                 ],
                 &test_feature,
@@ -1973,7 +1962,7 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             manifest.parsed.project.channels,
             vec![PrioritizedChannel {
-                channel: Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
+                channel: Channel::from_str("conda-forge", &channel_config()).unwrap(),
                 priority: None
             }]
         );
@@ -1986,7 +1975,7 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             manifest.parsed.project.channels,
             vec![PrioritizedChannel {
-                channel: Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
+                channel: Channel::from_str("conda-forge", &channel_config()).unwrap(),
                 priority: None
             }]
         );
@@ -2001,7 +1990,7 @@ platforms = ["linux-64", "win-64"]
                 .clone()
                 .unwrap(),
             vec![PrioritizedChannel {
-                channel: Channel::from_str("nvidia", &ChannelConfig::default()).unwrap(),
+                channel: Channel::from_str("nvidia", &channel_config()).unwrap(),
                 priority: None
             }]
         );
@@ -2019,7 +2008,7 @@ platforms = ["linux-64", "win-64"]
                 .clone()
                 .unwrap(),
             vec![PrioritizedChannel {
-                channel: Channel::from_str("nvidia", &ChannelConfig::default()).unwrap(),
+                channel: Channel::from_str("nvidia", &channel_config()).unwrap(),
                 priority: None
             }]
         );
@@ -2035,11 +2024,11 @@ platforms = ["linux-64", "win-64"]
                 .unwrap(),
             vec![
                 PrioritizedChannel {
-                    channel: Channel::from_str("test", &ChannelConfig::default()).unwrap(),
+                    channel: Channel::from_str("test", &channel_config()).unwrap(),
                     priority: None
                 },
                 PrioritizedChannel {
-                    channel: Channel::from_str("test2", &ChannelConfig::default()).unwrap(),
+                    channel: Channel::from_str("test2", &channel_config()).unwrap(),
                     priority: None
                 }
             ]
@@ -2047,8 +2036,7 @@ platforms = ["linux-64", "win-64"]
 
         // Test custom channel urls
         let custom_channel = PrioritizedChannel {
-            channel: Channel::from_str("https://custom.com/channel", &ChannelConfig::default())
-                .unwrap(),
+            channel: Channel::from_str("https://custom.com/channel", &channel_config()).unwrap(),
             priority: None,
         };
         manifest
@@ -2084,14 +2072,14 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             manifest.parsed.project.channels,
             vec![PrioritizedChannel::from_channel(
-                Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap()
+                Channel::from_str("conda-forge", &channel_config()).unwrap()
             )]
         );
 
         manifest
             .remove_channels(
                 [PrioritizedChannel {
-                    channel: Channel::from_str("conda-forge", &ChannelConfig::default()).unwrap(),
+                    channel: Channel::from_str("conda-forge", &channel_config()).unwrap(),
                     priority: None,
                 }],
                 &FeatureName::Default,
@@ -2103,7 +2091,7 @@ platforms = ["linux-64", "win-64"]
         manifest
             .remove_channels(
                 [PrioritizedChannel {
-                    channel: Channel::from_str("test_channel", &ChannelConfig::default()).unwrap(),
+                    channel: Channel::from_str("test_channel", &channel_config()).unwrap(),
                     priority: None,
                 }],
                 &FeatureName::Named("test".to_string()),
@@ -2293,11 +2281,11 @@ platforms = ["linux-64", "win-64"]
                 .collect::<Vec<_>>(),
             vec![
                 &PrioritizedChannel {
-                    channel: Channel::from_str("pytorch", &ChannelConfig::default()).unwrap(),
+                    channel: Channel::from_str("pytorch", &channel_config()).unwrap(),
                     priority: None
                 },
                 &PrioritizedChannel {
-                    channel: Channel::from_str("nvidia", &ChannelConfig::default()).unwrap(),
+                    channel: Channel::from_str("nvidia", &channel_config()).unwrap(),
                     priority: Some(-1)
                 }
             ]
