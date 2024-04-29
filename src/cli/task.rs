@@ -77,6 +77,10 @@ pub struct AddArgs {
     /// The environment variable to set, use --env key=value multiple times for more than one variable
     #[arg(long, value_parser = parse_key_val)]
     pub env: Vec<(String, String)>,
+
+    /// If the task should be hidden from the `pixi task list`
+    #[arg(long)]
+    pub hidden: Option<bool>,
 }
 
 /// Parse a single key-value pair
@@ -135,10 +139,15 @@ impl From<AddArgs> for Task {
         // complex, or alias command.
         if cmd_args.trim().is_empty() && !depends_on.is_empty() {
             Self::Alias(Alias { depends_on })
-        } else if depends_on.is_empty() && value.cwd.is_none() && value.env.is_empty() {
+        } else if depends_on.is_empty()
+            && value.cwd.is_none()
+            && value.env.is_empty()
+            && value.hidden.is_none()
+        {
             Self::Plain(cmd_args)
         } else {
             let cwd = value.cwd;
+            let hidden = value.hidden;
             let mut env = IndexMap::new();
             for (key, value) in value.env {
                 env.insert(key, value);
@@ -149,8 +158,8 @@ impl From<AddArgs> for Task {
                 inputs: None,
                 outputs: None,
                 cwd,
-                env: Some(env),
-                hidden: None,
+                env: Some(env), // FIXME: This will show up as empty if not set
+                hidden,
             })
         }
     }
@@ -375,6 +384,9 @@ impl From<Task> for Item {
                 }
                 if let Some(env) = process.env {
                     table.insert("env", Value::InlineTable(env.into_iter().collect()));
+                }
+                if let Some(hidden) = process.hidden {
+                    table.insert("hidden", hidden.into());
                 }
                 Item::Value(Value::InlineTable(table))
             }

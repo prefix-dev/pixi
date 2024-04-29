@@ -386,6 +386,7 @@ impl TasksControl<'_> {
                 feature,
                 cwd: None,
                 env: Default::default(),
+                hidden: None,
             },
         }
     }
