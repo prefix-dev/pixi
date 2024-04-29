@@ -1,6 +1,6 @@
 use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::lock_file::satisfiability::EnvironmentUnsat;
-use crate::project::combine_feature::HasFeatures;
+use crate::project::has_features::HasFeatures;
 use crate::{consts, project::Environment, project::SolveGroup, Project};
 use itertools::Itertools;
 use rattler_conda_types::Platform;

@@ -12,7 +12,7 @@ use itertools::Either;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use std::path::PathBuf;
 
-use super::combine_feature::HasFeatures;
+use super::has_features::HasFeatures;
 
 /// Either a solve group or an individual environment without a solve group.
 ///

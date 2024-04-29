@@ -3,7 +3,7 @@ use super::{
     manifest::{self, EnvironmentName, Feature, FeatureName, SystemRequirements},
     SolveGroup,
 };
-use crate::project::combine_feature::HasFeatures;
+use crate::project::has_features::HasFeatures;
 
 use crate::task::TaskName;
 use crate::{task::Task, Project};

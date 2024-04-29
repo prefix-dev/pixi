@@ -1,8 +1,8 @@
-pub(crate) mod combine_feature;
 mod dependencies;
 mod environment;
 pub mod errors;
 pub mod grouped_environment;
+pub(crate) mod has_features;
 pub mod manifest;
 mod solve_group;
 pub mod virtual_packages;
@@ -43,7 +43,7 @@ pub use environment::Environment;
 pub use solve_group::SolveGroup;
 
 use self::{
-    combine_feature::HasFeatures,
+    has_features::HasFeatures,
     manifest::{pyproject::PyProjectToml, Environments},
 };
 

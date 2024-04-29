@@ -1,6 +1,6 @@
 use crate::lock_file::{PypiRecord, UvResolutionContext};
-use crate::project::combine_feature::HasFeatures;
 use crate::project::grouped_environment::GroupedEnvironmentName;
+use crate::project::has_features::HasFeatures;
 use crate::pypi_mapping::{self, Reporter};
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::is_python_record;

@@ -1,4 +1,4 @@
-use super::combine_feature::HasFeatures;
+use super::has_features::HasFeatures;
 use super::manifest::SystemRequirements;
 use super::{manifest, Environment, Project};
 
@@ -84,7 +84,7 @@ impl<'p> HasFeatures<'p> for SolveGroup<'p> {
 
 #[cfg(test)]
 mod tests {
-    use crate::project::combine_feature::HasFeatures;
+    use crate::project::has_features::HasFeatures;
     use crate::Project;
     use itertools::Itertools;
     use rattler_conda_types::PackageName;

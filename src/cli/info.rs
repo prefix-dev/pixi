@@ -13,7 +13,7 @@ use serde_with::DisplayFromStr;
 use tokio::task::spawn_blocking;
 
 use crate::progress::await_in_progress;
-use crate::project::combine_feature::HasFeatures;
+use crate::project::has_features::HasFeatures;
 use crate::task::TaskName;
 use crate::{config, EnvironmentName, FeatureName, Project};
 
