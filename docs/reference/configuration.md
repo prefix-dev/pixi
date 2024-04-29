@@ -631,7 +631,7 @@ The environments table is defined using the following fields:
 [environments]
 test = {features = ["test"], solve-group = "test"}
 prod = {features = ["prod"], solve-group = "test"}
-lint = ["lint"]
+lint = {features = ["lint"], no-default-feature = true}
 ```
 As shown in the example above, in the simplest of cases, it is possible to define an environment only by listing its features:
 
