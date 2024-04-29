@@ -2246,8 +2246,8 @@ The <code>[environments]</code> table allows you to define different environment
 <li><code>pypi-dependencies</code>: Same as the <a href="#pypi-dependencies-beta-feature">pypi-dependencies</a>.</li>
 <li><code>system-requirements</code>: Same as the <a href="#the-system-requirements-table">system-requirements</a>.</li>
 <li><code>activation</code>: Same as the <a href="#the-activation-table">activation</a>.</li>
-<li><code>platforms</code>: Same as the <a href="#platforms">platforms</a>. When adding features together the intersection of the platforms is taken. Be aware that the <code>default</code> feature is always implied thus this must contain all platforms the project can support.</li>
-<li><code>channels</code>: Same as the <a href="#channels">channels</a>. Adding the <code>priority</code> field to the channels to allow concatenation of channels instead of overwriting.</li>
+<li><code>platforms</code>: Same as the <a href="#platforms">platforms</a>. Unless overridden, the <code>platforms</code> of the feature will be those defined at project level.</li>
+<li><code>channels</code>: Same as the <a href="#channels">channels</a>. Unless overridden, the <code>channels</code> of the feature will be those defined at project level.</li>
 <li><code>target</code>: Same as the <a href="#the-target-table">target</a>.</li>
 <li><code>tasks</code>: Same as the <a href="#the-tasks-table">tasks</a>.</li>
 </ul>
@@ -2289,29 +2289,36 @@ When those are used we call them the <code>default</code> feature. This is a pro
 </span><span id="__span-41-23"><a id="__codelineno-41-23" name="__codelineno-41-23" href="#__codelineno-41-23"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h3 id="the-environments-table">The <code>environments</code> table<a class="headerlink" href="#the-environments-table" title="Permanent link">#</a></h3>
-<p>The <code>environments</code> table allows you to define environments that are created using the features defined in the <code>feature</code> tables.</p>
-<div class="admonition important">
-<p class="admonition-title">Important</p>
-<p><code>default</code> is always implied when creating environments.
-If you don't want to use the <code>default</code> feature you can keep all the non feature tables empty.</p>
-</div>
+<p>The <code>[environments]</code> table allows you to define environments that are created using the features defined in the <code>[feature]</code> tables.</p>
 <p>The environments table is defined using the following fields:</p>
 <ul>
-<li><code>features: Vec&lt;Feature&gt;</code>: The features that are included in the environment set, which is also the default field in the environments.</li>
-<li><code>solve-group: String</code>: The solve group is used to group environments together at the solve stage.
+<li><code>features</code>: The features that are included in the environment. Unless <code>no-default-feature</code> is set to <code>true</code>, the default feature is implicitly included in the environment.</li>
+<li><code>solve-group</code>: The solve group is used to group environments together at the solve stage.
   This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
   For instance when testing a production environment with additional test dependencies.
   These dependencies will then be the same version in all environments that have the same solve group.
   But the different environments contain different subsets of the solve-groups dependencies set.</li>
+<li><code>no-default-feature</code>: Whether to include the default feature in that environment. The default is <code>false</code>, to include the default feature.</li>
 </ul>
-<div class="language-toml highlight"><span class="filename">Simplest example</span><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="k">[environments]</span>
-</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">]</span>
+<p><div class="language-toml highlight"><span class="filename">Full environments table specification</span><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="k">[environments]</span>
+</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="p">}</span>
+</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="n">prod</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;prod&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="p">}</span>
+</span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="n">lint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;lint&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">no-default-feature</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="p">}</span>
 </span></code></pre></div>
-<div class="language-toml highlight"><span class="filename">Full environments table specification</span><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="k">[environments]</span>
-</span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="p">}</span>
-</span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="n">prod</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;prod&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="p">}</span>
-</span><span id="__span-43-4"><a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a><span class="n">lint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;lint&quot;</span><span class="p">]</span>
+As shown in the example above, in the simplest of cases, it is possible to define an environment only by listing its features:</p>
+<div class="language-toml highlight"><span class="filename">Simplest example</span><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="k">[environments]</span>
+</span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">]</span>
 </span></code></pre></div>
+<p>is equivalent to</p>
+<div class="language-toml highlight"><span class="filename">Simplest example expanded</span><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="k">[environments]</span>
+</span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">]}</span>
+</span></code></pre></div>
+<p>When an environment comprises several features (including the default feature):
+- The <code>activation</code> and <code>tasks</code> of the environment are the union of the <code>activation</code> and <code>tasks</code> of all its features.
+- The <code>dependencies</code> and <code>pypi-dependencies</code> of the environment are the union of the <code>dependencies</code> and <code>pypi-dependencies</code> of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
+- The <code>system-requirements</code> of the environment is the union of the <code>system-requirements</code> of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.
+- The <code>channels</code> of the environment is the union of the <code>channels</code> of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
+- The <code>platforms</code> of the environment is the intersection of the <code>platforms</code> of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the <code>platforms</code> defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project <code>platforms</code> to all platforms it can support across its environments.</p>
 <h2 id="global-configuration">Global configuration<a class="headerlink" href="#global-configuration" title="Permanent link">#</a></h2>
 <p>The global configuration options are documented in the <a href="../../advanced/global_configuration/">global configuration</a> section.</p>
 
