@@ -10,7 +10,7 @@ platforms = ["osx-arm64"]
 python = "3.12"
 
 [feature.alternative.pypi-options]
-index = "https://pypi.tuna.tsinghua.edu.cn/simple/"
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
 [feature.alternative.pypi-dependencies]
 flask = "*"
 

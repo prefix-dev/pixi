@@ -216,7 +216,7 @@ mod tests {
         b = "*"
 
         [feature.foo.pypi-options]
-        index = "https://my-index.com/simple"
+        index-url = "https://my-index.com/simple"
 
         [feature.bar.dependencies]
         c = "*"
@@ -263,7 +263,7 @@ mod tests {
 
         // Check that the solve group has the pypi dependencies
         assert_eq!(
-            solve_group.pypi_options().index.unwrap(),
+            solve_group.pypi_options().index_url.unwrap(),
             "https://my-index.com/simple".parse().unwrap()
         );
 

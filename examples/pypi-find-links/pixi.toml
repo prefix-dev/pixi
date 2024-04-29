@@ -10,7 +10,7 @@ platforms = ["osx-arm64"]
 
 [pypi-options]
 # This is similar to the --find-links option in pip
-flat-indexes = [{ path = "./links" }]
+find-links = [{ path = "./links" }]
 
 # We need python to resolve pypi dependencies
 [dependencies]

@@ -614,10 +614,10 @@ mod tests {
         platforms = ["linux-64", "osx-64"]
 
         [feature.foo]
-        pypi-options = { index = "https://mypypi.org/simple", extra-indexes = ["https://1.com"] }
+        pypi-options = { index-url = "https://mypypi.org/simple", extra-index-urls = ["https://1.com"] }
 
         [feature.bar]
-        pypi-options = { extra-indexes = ["https://2.com"] }
+        pypi-options = { extra-index-urls = ["https://2.com"] }
 
         [environments]
         foo = ["foo"]
@@ -629,12 +629,12 @@ mod tests {
 
         let foo_opts = manifest.environment("foo").unwrap().pypi_options();
         assert_eq!(
-            foo_opts.index.unwrap().to_string(),
+            foo_opts.index_url.unwrap().to_string(),
             "https://mypypi.org/simple"
         );
         assert_eq!(
             foo_opts
-                .extra_indexes
+                .extra_index_urls
                 .unwrap()
                 .iter()
                 .map(|i| i.to_string())
@@ -645,7 +645,7 @@ mod tests {
         let bar_opts = manifest.environment("bar").unwrap().pypi_options();
         assert_eq!(
             bar_opts
-                .extra_indexes
+                .extra_index_urls
                 .unwrap()
                 .iter()
                 .map(|i| i.to_string())
@@ -656,13 +656,13 @@ mod tests {
         let foo_bar_opts = manifest.environment("foobar").unwrap().pypi_options();
 
         assert_eq!(
-            foo_bar_opts.index.unwrap().to_string(),
+            foo_bar_opts.index_url.unwrap().to_string(),
             "https://mypypi.org/simple"
         );
 
         assert_eq!(
             foo_bar_opts
-                .extra_indexes
+                .extra_index_urls
                 .unwrap()
                 .iter()
                 .map(|i| i.to_string())

@@ -437,7 +437,7 @@ mod tests {
         channels = []
 
         [pypi-options]
-        index = "https://pypi.org/simple"
+        index-url = "https://pypi.org/simple"
         "#,
         )
         .unwrap();

@@ -2,11 +2,11 @@
 source: src/project/manifest/pypi_options.rs
 expression: merged_opts
 ---
-index: "https://example.com/pypi"
-extra-indexes:
+index-url: "https://example.com/pypi"
+extra-index-urls:
   - "https://example.com/extra"
   - "https://example.com/extra2"
-flat-indexes:
+find-links:
   - path: /path/to/flat/index
   - url: "https://flat.index/"
   - path: /path/to/flat/index2

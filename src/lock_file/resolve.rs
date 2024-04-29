@@ -235,7 +235,7 @@ fn process_uv_path_url(path_url: &VerbatimUrl) -> PathBuf {
 
 // Store a reference to the flat index
 #[derive(Clone)]
-struct PathFlatIndexLocation {
+struct FindLinksLocation {
     /// Canocialized path to the flat index.
     canonicalized_path: PathBuf,
     /// Manifest path to flat index.
@@ -244,10 +244,10 @@ struct PathFlatIndexLocation {
 
 /// Given a flat index url and a list of flat indexes, return the path to the flat index.
 /// for that specific index.
-fn flat_index_for(
+fn find_links_for(
     flat_index_url: &IndexUrl,
-    flat_indexes_paths: &[PathFlatIndexLocation],
-) -> Option<PathFlatIndexLocation> {
+    flat_indexes_paths: &[FindLinksLocation],
+) -> Option<FindLinksLocation> {
     // Convert to file path
     let flat_index_url_path = flat_index_url
         .url()
@@ -514,7 +514,7 @@ pub async fn resolve_pypi(
         // Canonicalize the path
         .map(|path| {
             let canonicalized_path = path.canonicalize()?;
-            Ok::<_, std::io::Error>(PathFlatIndexLocation {
+            Ok::<_, std::io::Error>(FindLinksLocation {
                 canonicalized_path,
                 given_path: path.clone(),
             })
@@ -545,7 +545,7 @@ pub async fn resolve_pypi(
                             }
                             // I (tim) thinks this only happens for flat path based indexes
                             FileLocation::Path(path) => {
-                                let flat_index = flat_index_for(&dist.index, &flat_index_locations)
+                                let flat_index = find_links_for(&dist.index, &flat_index_locations)
                                     .expect("flat index does not exist for resolved ids");
                                 UrlOrPath::Path(convert_flat_index_path(
                                     &dist.index,
@@ -611,7 +611,7 @@ pub async fn resolve_pypi(
                             }
                             // I (tim) thinks this only happens for flat path based indexes
                             FileLocation::Path(path) => {
-                                let flat_index = flat_index_for(&reg.index, &flat_index_locations)
+                                let flat_index = find_links_for(&reg.index, &flat_index_locations)
                                     .expect("flat index does not exist for resolved ids");
                                 UrlOrPath::Path(convert_flat_index_path(
                                     &reg.index,
