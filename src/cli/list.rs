@@ -13,7 +13,6 @@ use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
-use crate::project::manifest::EnvironmentName;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::Project;
 
@@ -108,10 +107,7 @@ where
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment_name = EnvironmentName::from_arg_or_env_var(args.environment);
-    let environment = project
-        .environment(&environment_name)
-        .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
+    let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     let lock_file = project
         .up_to_date_lock_file(UpdateLockFileOptions {
@@ -212,8 +208,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // print packages as json
         json_packages(&packages_to_output, args.json_pretty);
     } else {
-        if !environment_name.is_default() {
-            eprintln!("Environment: {}", environment_name.fancy_display());
+        if !environment.is_default() {
+            eprintln!("Environment: {}", environment.name().fancy_display());
         }
 
         // print packages as table

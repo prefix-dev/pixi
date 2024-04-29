@@ -213,7 +213,7 @@ impl Manifest {
             .add_task(name.as_str(), task.clone(), platform, feature_name)?;
 
         // Add the task to the manifest
-        self.target_mut(platform, Some(feature_name))
+        self.get_or_insert_target_mut(platform, Some(feature_name))
             .tasks
             .insert(name, task);
 
@@ -385,14 +385,12 @@ impl Manifest {
             miette::bail!("pixi does not support wildcard dependencies")
         };
 
-        // Add the dependency to the TOML document
+        // Add the dependency to the manifest
+        self.get_or_insert_target_mut(platform, Some(feature_name))
+            .try_add_dependency(&name, &spec, spec_type)?;
+        // and to the TOML document
         self.document
             .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
-
-        // Add the dependency to the manifest  as well
-        self.target_mut(platform, Some(feature_name))
-            .add_dependency(name, spec, spec_type);
-
         Ok(())
     }
 
@@ -403,22 +401,12 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        let target = self.target_mut(platform, Some(feature_name));
-        let name = requirement.name.to_string();
-
-        // Check for duplicates
-        if target.has_pypi_dependency(&name) {
-            return Err(miette!(
-                "{} is already a dependency.",
-                console::style(name).bold()
-            ));
-        }
-        // Add the dependency to the manifest
-        target.add_pypi_dependency(requirement);
-        // Add the pypi dependency to the TOML document as well
+        // Add the pypi dependency to the manifest
+        self.get_or_insert_target_mut(platform, Some(feature_name))
+            .try_add_pypi_dependency(requirement)?;
+        // and to the TOML document
         self.document
             .add_pypi_dependency(requirement, platform, feature_name)?;
-
         Ok(())
     }
 
@@ -430,22 +418,14 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
+        // Remove the dependency from the manifest
+        let res = self
+            .target_mut(platform, feature_name)
+            .remove_dependency(dep, spec_type);
         // Remove the dependency from the TOML document
-        self.document.remove_dependency_helper(
-            dep.as_source(),
-            spec_type.name(),
-            platform,
-            feature_name,
-        )?;
-
-        Ok(self
-            .feature_mut(feature_name)
-            .expect("feature should exist")
-            .targets
-            .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
-            .expect("target should exist")
-            .remove_dependency(dep.as_source(), spec_type)
-            .expect("dependency should exist"))
+        self.document
+            .remove_dependency(dep, spec_type, platform, feature_name)?;
+        res.into_diagnostic()
     }
 
     /// Removes a pypi dependency.
@@ -455,21 +435,14 @@ impl Manifest {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> miette::Result<(PyPiPackageName, PyPiRequirement)> {
+        // Remove the dependency from the manifest
+        let res = self
+            .target_mut(platform, feature_name)
+            .remove_pypi_dependency(dep);
         // Remove the dependency from the TOML document
         self.document
             .remove_pypi_dependency(dep, platform, feature_name)?;
-
-        Ok(self
-            .feature_mut(feature_name)
-            .expect("feature should exist")
-            .targets
-            .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
-            .expect("target should exist")
-            .pypi_dependencies
-            .as_mut()
-            .expect("pypi-dependencies should exist")
-            .shift_remove_entry(dep)
-            .expect("dependency should exist"))
+        res.into_diagnostic()
     }
 
     /// Returns true if any of the features has pypi dependencies defined.
@@ -695,7 +668,7 @@ impl Manifest {
     }
 
     /// Returns a mutable reference to a target, creating it if needed
-    pub fn target_mut(
+    pub fn get_or_insert_target_mut(
         &mut self,
         platform: Option<Platform>,
         name: Option<&FeatureName>,
@@ -711,6 +684,15 @@ impl Manifest {
         feature
             .targets
             .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
+    }
+
+    /// Returns a mutable reference to a target
+    pub fn target_mut(&mut self, platform: Option<Platform>, name: &FeatureName) -> &mut Target {
+        self.feature_mut(name)
+            .expect("feature should exist")
+            .targets
+            .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
+            .expect("target should exist")
     }
 
     /// Returns the default feature.
@@ -1069,6 +1051,11 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             /// The tool configuration which is unused by pixi
             #[serde(rename = "tool")]
             _tool: Option<serde_json::Value>,
+
+            /// The URI for the manifest schema which is unused by pixi
+            #[allow(dead_code)]
+            #[serde(rename = "$schema")]
+            schema: Option<String>,
         }
 
         let toml_manifest = TomlProjectManifest::deserialize(deserializer)?;
