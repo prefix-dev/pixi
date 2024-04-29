@@ -148,17 +148,22 @@ impl From<AddArgs> for Task {
         } else {
             let cwd = value.cwd;
             let hidden = value.hidden;
-            let mut env = IndexMap::new();
-            for (key, value) in value.env {
-                env.insert(key, value);
-            }
+            let env = if value.env.is_empty() {
+                None
+            } else {
+                let mut env = IndexMap::new();
+                for (key, value) in value.env {
+                    env.insert(key, value);
+                }
+                Some(env)
+            };
             Self::Execute(Execute {
                 cmd: CmdArgs::Single(cmd_args),
                 depends_on,
                 inputs: None,
                 outputs: None,
                 cwd,
-                env: Some(env), // FIXME: This will show up as empty if not set
+                env,
                 hidden,
             })
         }
