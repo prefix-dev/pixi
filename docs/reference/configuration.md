@@ -176,6 +176,7 @@ alias = { depends_on=["depending"]}
 download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
 build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
+hidden = { cmd="echo task is hidden with pixi task list", hidden=true}
 ```
 
 You can modify this table using [`pixi task`](cli.md#task).
