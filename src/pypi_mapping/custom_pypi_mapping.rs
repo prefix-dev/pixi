@@ -8,7 +8,10 @@ use async_once_cell::OnceCell;
 
 use crate::pypi_mapping::MappingLocation;
 
-use super::{prefix_pypi_name_mapping, MappingMap, Reporter};
+use super::{
+    prefix_pypi_name_mapping::{self},
+    MappingMap, Reporter,
+};
 
 pub async fn fetch_mapping_from_url(
     client: &ClientWithMiddleware,
@@ -108,26 +111,34 @@ pub async fn amend_pypi_purls(
         .cloned()
         .collect();
 
-    let prefix_mapping = prefix_pypi_name_mapping::conda_pypi_name_mapping(
-        client,
-        &packages_for_prefix_mapping,
-        reporter,
-    )
-    .await?;
-    let compressed_mapping =
-        prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client).await?;
-
     let custom_mapping = fetch_custom_mapping(client, mapping_url).await?;
 
-    for record in conda_packages.iter_mut() {
-        if !mapping_url.contains_key(&record.channel) {
-            prefix_pypi_name_mapping::amend_pypi_purls_for_record(
-                record,
-                &prefix_mapping,
-                &compressed_mapping,
-            )?;
-        } else {
-            amend_pypi_purls_for_record(record, custom_mapping)?;
+    // we have only packages that are contained in custom mapping
+    // so we don't requests our prefix.mapping
+    // this will allow us to not fail in case of running
+    // under corporates firewalls
+    if packages_for_prefix_mapping.is_empty() {
+        _amend_only_custom_pypi_purls(conda_packages, custom_mapping)?;
+    } else {
+        let prefix_mapping = prefix_pypi_name_mapping::conda_pypi_name_mapping(
+            client,
+            &packages_for_prefix_mapping,
+            reporter,
+        )
+        .await?;
+        let compressed_mapping =
+            prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client).await?;
+
+        for record in conda_packages.iter_mut() {
+            if !mapping_url.contains_key(&record.channel) {
+                prefix_pypi_name_mapping::amend_pypi_purls_for_record(
+                    record,
+                    &prefix_mapping,
+                    &compressed_mapping,
+                )?;
+            } else {
+                amend_pypi_purls_for_record(record, custom_mapping)?;
+            }
         }
     }
 
@@ -167,5 +178,15 @@ fn amend_pypi_purls_for_record(
         }
     }
 
+    Ok(())
+}
+
+pub fn _amend_only_custom_pypi_purls(
+    conda_packages: &mut [RepoDataRecord],
+    custom_mapping: &'static HashMap<String, HashMap<String, String>>,
+) -> miette::Result<()> {
+    for record in conda_packages.iter_mut() {
+        amend_pypi_purls_for_record(record, custom_mapping)?;
+    }
     Ok(())
 }
