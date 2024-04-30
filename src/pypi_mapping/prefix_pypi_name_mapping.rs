@@ -16,10 +16,10 @@ use url::Url;
 
 use super::{custom_pypi_mapping, Reporter};
 
-const STORAGE_URL: &str = "https://conda-non-existing-mapping.prefix.dev";
+const STORAGE_URL: &str = "https://conda-mapping.prefix.dev";
 const HASH_DIR: &str = "hash-v0";
 const COMPRESSED_MAPPING: &str =
-    "https://raw.wronggithubusercontent.com/prefix-dev/parselmouth/main/files/mapping_as_grayskull.json";
+    "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/mapping_as_grayskull.json";
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Package {
