@@ -24,7 +24,7 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{Arch, Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use std::path::PathBuf;
@@ -111,7 +111,9 @@ impl<'p> LockFileDerivedData<'p> {
             .unwrap_or_default();
         let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
 
-        if pypi_records.is_empty() && !environment.has_pypi_dependencies() {
+        // No `uv` support for WASM right now
+        // TODO - figure out if we can create the `uv` context more lazily
+        if platform.arch() == Some(Arch::Wasm32) {
             return Ok(prefix);
         }
 
