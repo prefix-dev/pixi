@@ -188,7 +188,7 @@ pub struct Config {
     pub repodata_config: Option<RepodataConfig>,
 
     /// Configuration for PyPI packages.
-    // #[serde(default)]
+    #[serde(default)]
     pub pypi_config: PyPIConfig,
 }
 
