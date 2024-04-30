@@ -22,28 +22,41 @@ loaded in the following order:
 
 ## Reference
 
+??? info "Casing In Configuration"
+    In versions of pixi `0.20.1` and older the global configuration used snake_case
+    we've changed to `kebab-case` for consistency with the rest of the configuration.
+    But we still support the old `snake_case` configuration, for older configuration options.
+    These are:
+
+    - `default_channels`
+    - `change_ps1`
+    - `tls_no_verify`
+    - `authentication_override_file`
+    - `mirrors` and sub-options
+    - `repodata-config` and sub-options
+
 The following reference describes all available configuration options.
 
 ```toml
 # The default channels to select when running `pixi init` or `pixi global install`.
 # This defaults to only conda-forge.
-default_channels = ["conda-forge"]
+default-channels = ["conda-forge"]
 
 # When set to false, the `(pixi)` prefix in the shell prompt is removed.
 # This applies to the `pixi shell` subcommand.
 # You can override this from the CLI with `--change-ps1`.
-change_ps1 = true
+change-ps1 = true
 
 # When set to true, the TLS certificates are not verified. Note that this is a
 # security risk and should only be used for testing purposes or internal networks.
 # You can override this from the CLI with `--tls-no-verify`.
-tls_no_verify = false
+tls-no-verify = false
 
 # Override from where the authentication information is loaded.
 # Usually we try to use the keyring to load authentication data from, and only use a JSON
 # file as fallback. This option allows you to force the use of a JSON file.
 # Read more in the authentication section.
-authentication_override_file = "/path/to/your/override.json"
+authentication-override-file = "/path/to/your/override.json"
 
 # configuration for conda channel-mirrors
 [mirrors]
@@ -61,13 +74,13 @@ authentication_override_file = "/path/to/your/override.json"
     "https://prefix.dev/bioconda",
 ]
 
-[repodata_options]
+[repodata-config]
 # disable fetching of jlap, bz2 or zstd repodata files.
 # This should only be used for specific old versions of artifactory and other non-compliant
 # servers.
-disable_jlap = true  # don't try to download repodata.jlap
-disable_bzip2 = true # don't try to download repodata.json.bz2
-disable_zstd = true  # don't try to download repodata.json.zst
+disable-jlap = true  # don't try to download repodata.jlap
+disable-bzip2 = true # don't try to download repodata.json.bz2
+disable-zstd = true  # don't try to download repodata.json.zst
 ```
 
 ## Mirror configuration
