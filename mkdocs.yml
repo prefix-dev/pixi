@@ -134,6 +134,7 @@ nav:
 
 hooks:
   - schema/docs_hooks.py
+  - install/docs_hooks.py
 
 plugins:
   - redirects:
