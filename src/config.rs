@@ -106,50 +106,50 @@ pub struct ConfigCliPrompt {
 #[derive(Clone, Default, Debug, Deserialize)]
 pub struct RepodataConfig {
     /// Disable JLAP compression for repodata.
-    #[serde(alias = "disable-jlap")]
+    #[serde(alias = "disable-jlap")] // BREAK: rename instead of alias
     pub disable_jlap: Option<bool>,
     /// Disable bzip2 compression for repodata.
-    #[serde(alias = "disable-bzip2")]
+    #[serde(alias = "disable-bzip2")] // BREAK: rename instead of alias
     pub disable_bzip2: Option<bool>,
     /// Disable zstd compression for repodata.
-    #[serde(alias = "disable-zstd")]
+    #[serde(alias = "disable-zstd")] // BREAK: rename instead of alias
     pub disable_zstd: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
-    #[serde(alias = "default-channels")]
+    #[serde(alias = "default-channels")] // BREAK: rename instead of alias
     pub default_channels: Vec<String>,
 
     /// If set to true, pixi will set the PS1 environment variable to a custom value.
     #[serde(default)]
-    #[serde(alias = "change-ps1")]
+    #[serde(alias = "change-ps1")] // BREAK: rename instead of alias
     change_ps1: Option<bool>,
 
     /// Path to the file containing the authentication token.
     #[serde(default)]
-    #[serde(alias = "authentication-override-file")]
+    #[serde(alias = "authentication-override-file")] // BREAK: rename instead of alias
     authentication_override_file: Option<PathBuf>,
 
     /// If set to true, pixi will not verify the TLS certificate of the server.
     #[serde(default)]
-    #[serde(alias = "tls-no-verify")]
+    #[serde(alias = "tls-no-verify")] // BREAK: rename instead of alias
     tls_no_verify: Option<bool>,
 
     #[serde(default)]
     mirrors: HashMap<Url, Vec<Url>>,
 
     #[serde(skip)]
-    #[serde(alias = "loaded-from")]
+    #[serde(alias = "loaded-from")] // BREAK: rename instead of alias
     pub loaded_from: Vec<PathBuf>,
 
     #[serde(skip, default = "default_channel_config")]
-    #[serde(alias = "channel-config")]
+    #[serde(alias = "channel-config")] // BREAK: rename instead of alias
     pub channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
-    #[serde(alias = "repodata-config")]
+    #[serde(alias = "repodata-config")] // BREAK: rename instead of alias
     pub repodata_config: Option<RepodataConfig>,
 }
 
