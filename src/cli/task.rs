@@ -313,10 +313,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                                 .flat_map(|tasks| {
                                     tasks
                                         .into_iter()
-                                        // .filter(|(_, value)| match value {
-                                        //     Task::Execute(process) => Some(true) != process.hidden,
-                                        //     _ => true,
-                                        // })
+                                        .filter(|&(key, _)| !key.as_str().starts_with('_'))
                                         .map(|(key, _)| key)
                                 })
                                 .map(ToOwned::to_owned)
