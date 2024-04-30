@@ -252,9 +252,6 @@ class TaskInlineTable(StrictBaseModel):
         description="A map of environment variables to values, used in the task, these will be overwritten by the shell.",
         examples=[{"key": "value"}, {"ARGUMENT": "value"}],
     )
-    hidden: bool | None = Field(
-        None, description="Whether the task should be hidden from the user when running `pixi task list`"
-    )
 
 
 #######################

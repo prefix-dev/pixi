@@ -77,10 +77,6 @@ pub struct AddArgs {
     /// The environment variable to set, use --env key=value multiple times for more than one variable
     #[arg(long, value_parser = parse_key_val)]
     pub env: Vec<(String, String)>,
-
-    /// If the task should be hidden from the `pixi task list`
-    #[arg(long)]
-    pub hidden: Option<bool>,
 }
 
 /// Parse a single key-value pair
@@ -139,15 +135,10 @@ impl From<AddArgs> for Task {
         // complex, or alias command.
         if cmd_args.trim().is_empty() && !depends_on.is_empty() {
             Self::Alias(Alias { depends_on })
-        } else if depends_on.is_empty()
-            && value.cwd.is_none()
-            && value.env.is_empty()
-            && value.hidden.is_none()
-        {
+        } else if depends_on.is_empty() && value.cwd.is_none() && value.env.is_empty() {
             Self::Plain(cmd_args)
         } else {
             let cwd = value.cwd;
-            let hidden = value.hidden;
             let env = if value.env.is_empty() {
                 None
             } else {
@@ -164,7 +155,6 @@ impl From<AddArgs> for Task {
                 outputs: None,
                 cwd,
                 env,
-                hidden,
             })
         }
     }
@@ -323,10 +313,10 @@ pub fn execute(args: Args) -> miette::Result<()> {
                                 .flat_map(|tasks| {
                                     tasks
                                         .into_iter()
-                                        .filter(|(_, value)| match value {
-                                            Task::Execute(process) => Some(true) != process.hidden,
-                                            _ => true,
-                                        })
+                                        // .filter(|(_, value)| match value {
+                                        //     Task::Execute(process) => Some(true) != process.hidden,
+                                        //     _ => true,
+                                        // })
                                         .map(|(key, _)| key)
                                 })
                                 .map(ToOwned::to_owned)
@@ -389,9 +379,6 @@ impl From<Task> for Item {
                 }
                 if let Some(env) = process.env {
                     table.insert("env", Value::InlineTable(env.into_iter().collect()));
-                }
-                if let Some(hidden) = process.hidden {
-                    table.insert("hidden", hidden.into());
                 }
                 Item::Value(Value::InlineTable(table))
             }

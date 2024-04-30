@@ -181,9 +181,6 @@ pub struct Execute {
 
     /// A list of environment variables to set before running the command
     pub env: Option<IndexMap<String, String>>,
-
-    /// If the task should be hidden from pixi task list
-    pub hidden: Option<bool>,
 }
 
 impl From<Execute> for Task {
