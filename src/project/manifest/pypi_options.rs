@@ -1,15 +1,11 @@
-use std::{
-    hash::Hash,
-    iter,
-    path::{Path, PathBuf},
-};
-
 use crate::consts;
 use distribution_types::{FlatIndexLocation, IndexLocations, IndexUrl};
 use indexmap::IndexSet;
 use pep508_rs::VerbatimUrl;
+use rattler_lock::FindLinksUrlOrPath;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::{hash::Hash, iter};
 use thiserror::Error;
 use url::Url;
 
@@ -27,39 +23,11 @@ pub struct PypiOptions {
     pub find_links: Option<Vec<FindLinksUrlOrPath>>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
-pub enum FindLinksUrlOrPath {
-    /// Can be a path to a directory or a file
-    /// containinin the flat index
-    Path(PathBuf),
-    /// Can be a URL to a flat index
-    Url(Url),
-}
-
-impl FindLinksUrlOrPath {
-    /// Returns the URL if it is a URL
-    pub fn as_url(&self) -> Option<&Url> {
-        match self {
-            Self::Path(_) => None,
-            Self::Url(url) => Some(url),
-        }
-    }
-
-    /// Returns the path if it is a path
-    pub fn as_path(&self) -> Option<&Path> {
-        match self {
-            Self::Path(path) => Some(path),
-            Self::Url(_) => None,
-        }
-    }
-
-    /// Converts to the [`distribution_types::FlatIndexLocation`]
-    pub fn to_flat_index_location(&self) -> FlatIndexLocation {
-        match self {
-            Self::Path(path) => FlatIndexLocation::Path(path.clone()),
-            Self::Url(url) => FlatIndexLocation::Url(url.clone()),
-        }
+/// Converts to the [`distribution_types::FlatIndexLocation`]
+pub fn to_flat_index_location(find_links: &FindLinksUrlOrPath) -> FlatIndexLocation {
+    match find_links {
+        FindLinksUrlOrPath::Path(path) => FlatIndexLocation::Path(path.clone()),
+        FindLinksUrlOrPath::Url(url) => FlatIndexLocation::Url(url.clone()),
     }
 }
 
@@ -117,7 +85,7 @@ impl PypiOptions {
             .map(|indexes| {
                 indexes
                     .into_iter()
-                    .map(|index| index.to_flat_index_location())
+                    .map(|index| to_flat_index_location(&index))
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
@@ -181,40 +149,26 @@ impl PypiOptions {
     }
 }
 
+impl From<PypiOptions> for rattler_lock::PypiIndexes {
+    fn from(value: PypiOptions) -> Self {
+        let primary_index = value
+            .index_url
+            .unwrap_or(consts::DEFAULT_PYPI_INDEX_URL.clone());
+        Self {
+            indexes: iter::once(primary_index)
+                .chain(value.extra_index_urls.into_iter().flatten())
+                .collect(),
+            find_links: value.find_links.into_iter().flatten().collect(),
+        }
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum PypiOptionsMergeError {
     #[error(
         "multiple primary pypi indexes are not supported, found both {first} and {second} across multiple pypi options"
     )]
     MultiplePrimaryIndexes { first: String, second: String },
-}
-
-impl From<PypiOptions> for rattler_lock::PypiIndexes {
-    fn from(value: PypiOptions) -> Self {
-        let primary_index = value
-            .index_url
-            .unwrap_or(Url::parse(consts::DEFAULT_PYPI_INDEX_URL).unwrap());
-        Self {
-            indexes: iter::once(primary_index)
-                .chain(value.extra_index_urls.into_iter().flatten())
-                .collect(),
-            flat_indexes: value
-                .find_links
-                .into_iter()
-                .flatten()
-                .map(Into::into)
-                .collect(),
-        }
-    }
-}
-
-impl From<FindLinksUrlOrPath> for rattler_lock::FlatIndexUrlOrPath {
-    fn from(value: FindLinksUrlOrPath) -> Self {
-        match value {
-            FindLinksUrlOrPath::Path(path) => Self::Path(path),
-            FindLinksUrlOrPath::Url(url) => Self::Url(url),
-        }
-    }
 }
 
 #[cfg(test)]
