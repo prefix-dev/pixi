@@ -47,7 +47,7 @@ impl fmt::Display for TaskNode<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "task: {}, environment: {}, command: `{}`, additional arguments: `{}`, depends_on: `{}`",
+            "task: {}, environment: {}, command: `{}`, additional arguments: `{}`, depends-on: `{}`",
             self.name.clone().unwrap_or("CUSTOM COMMAND".into()).0,
             self.run_environment.name(),
             self.task.as_single_command().unwrap_or(Cow::Owned("".to_string())),
@@ -340,9 +340,9 @@ mod test {
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
         [tasks]
         root = "echo root"
-        task1 = {cmd="echo task1", depends_on=["root"]}
-        task2 = {cmd="echo task2", depends_on=["root"]}
-        top = {cmd="echo top", depends_on=["task1","task2"]}
+        task1 = {cmd="echo task1", depends-on=["root"]}
+        task2 = {cmd="echo task2", depends-on=["root"]}
+        top = {cmd="echo top", depends-on=["task1","task2"]}
     "#,
                 &["top", "--test"],
                 None,
@@ -362,10 +362,10 @@ mod test {
         channels = ["conda-forge"]
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
         [tasks]
-        root = {cmd="echo root", depends_on=["task1"]}
-        task1 = {cmd="echo task1", depends_on=["root"]}
-        task2 = {cmd="echo task2", depends_on=["root"]}
-        top = {cmd="echo top", depends_on=["task1","task2"]}
+        root = {cmd="echo root", depends-on=["task1"]}
+        task1 = {cmd="echo task1", depends-on=["root"]}
+        task2 = {cmd="echo task2", depends-on=["root"]}
+        top = {cmd="echo top", depends-on=["task1","task2"]}
     "#,
                 &["top"],
                 None,
@@ -386,11 +386,11 @@ mod test {
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
         [tasks]
         root = "echo root"
-        task1 = {cmd="echo task1", depends_on=["root"]}
-        task2 = {cmd="echo task2", depends_on=["root"]}
-        top = {cmd="echo top", depends_on=["task1","task2"]}
+        task1 = {cmd="echo task1", depends-on=["root"]}
+        task2 = {cmd="echo task2", depends-on=["root"]}
+        top = {cmd="echo top", depends-on=["task1","task2"]}
         [target.linux-64.tasks]
-        root = {cmd="echo linux", depends_on=["task1"]}
+        root = {cmd="echo linux", depends-on=["task1"]}
     "#,
                 &["top"],
                 Some(Platform::Linux64),
@@ -482,7 +482,7 @@ mod test {
         [tasks]
         train = "python train.py"
         test = "python test.py"
-        start = {depends_on = ["train", "test"]}
+        start = {depends-on = ["train", "test"]}
 
         [feature.cuda.tasks]
         train = "python train.py --cuda"
@@ -513,7 +513,7 @@ mod test {
 
         [tasks]
         foo = "echo foo"
-        foobar = { cmd = "echo bar", depends_on = ["foo"] }
+        foobar = { cmd = "echo bar", depends-on = ["foo"] }
 
         [feature.build.tasks]
         build = "echo build"
@@ -542,7 +542,7 @@ mod test {
 
         [tasks]
         foo = "echo foo"
-        foobar = { cmd = "echo bar", depends_on = ["foo"] }
+        foobar = { cmd = "echo bar", depends-on = ["foo"] }
 
         [feature.build.tasks]
         build = "echo build"

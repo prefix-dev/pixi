@@ -41,13 +41,13 @@ package1 = { version = ">=1.2.3", build="py34_0" }
 
 [tasks]
 build = "conda build ."
-test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
+test = { cmd = "pytest", cwd = "tests", depends-on = ["build"] }
 test2 = { cmd = "pytest", cwd = "tests"}
-test3 = { cmd = "pytest", depends_on = ["test2"] }
-test4 = { cmd = "pytest", cwd = "tests", depends_on = ["test2"] }
+test3 = { cmd = "pytest", depends-on = ["test2"] }
+test4 = { cmd = "pytest", cwd = "tests", depends-on = ["test2"] }
 test5 = { cmd = "pytest" }
-test6 = { depends_on = ["test5"] }
-test7 = { cmd = "pytest", cwd = "tests", depends_on = ["test5"], env = {PYTHONPATH = "bla", "WEIRD_STRING" = "blu"}}
+test6 = { depends-on = ["test5"] }
+test7 = { cmd = "pytest", cwd = "tests", depends-on = ["test5"], env = {PYTHONPATH = "bla", "WEIRD_STRING" = "blu"}}
 
 [system-requirements]
 linux = "5.10"
@@ -102,12 +102,12 @@ package1 = { version = ">=1.2.3", build="py34_0" }
 
 [target.linux-64.tasks]
 build = "conda build ."
-test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
+test = { cmd = "pytest", cwd = "tests", depends-on = ["build"] }
 test2 = { cmd = "pytest", cwd = "tests"}
-test3 = { cmd = "pytest", depends_on = ["test2"] }
-test4 = { cmd = "pytest", cwd = "tests", depends_on = ["test2"] }
+test3 = { cmd = "pytest", depends-on = ["test2"] }
+test4 = { cmd = "pytest", cwd = "tests", depends-on = ["test2"] }
 test5 = { cmd = "pytest" }
-test6 = { depends_on = ["test5"] }
+test6 = { depends-on = ["test5"] }
 
 [feature.test.target.linux-64.dependencies]
 test = "*"

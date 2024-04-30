@@ -168,7 +168,7 @@ pixi run hello
 ???+ tip "Advanced task usage"
     Tasks are a powerful feature in pixi.
 
-    - You can add [`depends_on`](../features/advanced_tasks.md#depends-on) to the tasks to create a task chain.
+    - You can add [`depends-on`](../features/advanced_tasks.md#depends-on) to the tasks to create a task chain.
     - You can add [`cwd`](../features/advanced_tasks.md#working-directory) to the tasks to run the task in a different directory from the root of the project.
     - You can add [`inputs` and `outputs`](../features/advanced_tasks.md#caching) to the tasks to create a task that only runs when the inputs are changed.
     - You can use the [`target`](../reference/configuration.md#the-target-table) syntax to run specific tasks on specific machines.
@@ -177,7 +177,7 @@ pixi run hello
 [tasks]
 sim = "ros2 run turtlesim turtlesim_node"
 build = {cmd = "colcon build --symlink-install", inputs = ["src"]}
-hello = { cmd = "ros2 run my_package my_node", depends_on = ["build"] }
+hello = { cmd = "ros2 run my_package my_node", depends-on = ["build"] }
 ```
 
 ## Build a C++ node

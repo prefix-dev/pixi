@@ -318,7 +318,7 @@ impl From<Task> for Item {
                 }
                 if !process.depends_on.is_empty() {
                     table.insert(
-                        "depends_on",
+                        "depends-on",
                         Value::Array(Array::from_iter(
                             process
                                 .depends_on
@@ -339,7 +339,7 @@ impl From<Task> for Item {
             Task::Alias(alias) => {
                 let mut table = Table::new().into_inline_table();
                 table.insert(
-                    "depends_on",
+                    "depends-on",
                     Value::Array(Array::from_iter(
                         alias
                             .depends_on

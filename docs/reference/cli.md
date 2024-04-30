@@ -155,12 +155,12 @@ pixi run --environment cuda python
     This is done so that the run commands can be run across all platforms.
 
 !!! tip "Cross environment tasks"
-    If you're using the `depends_on` feature of the `tasks`, the tasks will be run in the order you specified them.
-    The `depends_on` can be used cross environment, e.g. you have this `pixi.toml`:
+    If you're using the `depends-on` feature of the `tasks`, the tasks will be run in the order you specified them.
+    The `depends-on` can be used cross environment, e.g. you have this `pixi.toml`:
     ??? "pixi.toml"
         ```toml
         [tasks]
-        start = { cmd = "python start.py", depends_on = ["build"] }
+        start = { cmd = "python start.py", depends-on = ["build"] }
 
         [feature.build.tasks]
         build = "cargo build"
@@ -248,7 +248,7 @@ This adds the following to the [manifest file](configuration.md):
 [tasks]
 cow = "cowpy \"Hello User\""
 tls = { cmd = "ls", cwd = "tests" }
-test = { cmd = "cargo t", depends_on = ["build"] }
+test = { cmd = "cargo t", depends-on = ["build"] }
 
 [target.osx-64.tasks]
 build-osx = "METAL=1 cargo build"

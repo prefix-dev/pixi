@@ -27,7 +27,7 @@ configure = { cmd = [
 ] }
 
 # Depend on other tasks
-build = { cmd = ["ninja", "-C", ".build"], depends_on = ["configure"] }
+build = { cmd = ["ninja", "-C", ".build"], depends-on = ["configure"] }
 
 # Using environment variables
 run = "python main.py $PIXI_PROJECT_ROOT"
@@ -62,9 +62,9 @@ Results in the following lines added to the `pixi.toml`
 # Configures CMake
 configure = "cmake -G Ninja -S . -B .build"
 # Build the executable but make sure CMake is configured first.
-build = { cmd = "ninja -C .build", depends_on = ["configure"] }
+build = { cmd = "ninja -C .build", depends-on = ["configure"] }
 # Start the built executable
-start = { cmd = ".build/bin/sdl_example", depends_on = ["build"] }
+start = { cmd = ".build/bin/sdl_example", depends-on = ["build"] }
 ```
 
 ```shell
@@ -95,7 +95,7 @@ Results in the following `pixi.toml`.
 ```toml title="pixi.toml"
 fmt = "ruff"
 lint = "pylint"
-style = { depends_on = ["fmt", "lint"] }
+style = { depends-on = ["fmt", "lint"] }
 ```
 
 Now run both tools with one command.

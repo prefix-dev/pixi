@@ -1042,8 +1042,8 @@
           "type": "string",
           "pattern": "^[^\\\\]+$"
         },
-        "depends_on": {
-          "title": "Depends On",
+        "depends-on": {
+          "title": "Depends-On",
           "description": "The tasks that this task depends on. Environment variables will **not** be expanded.",
           "anyOf": [
             {

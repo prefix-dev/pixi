@@ -237,6 +237,7 @@ class TaskInlineTable(StrictBaseModel):
     cwd: PathNoBackslash | None = Field(None, description="The working directory to run the task")
     depends_on: list[TaskName] | TaskName | None = Field(
         None,
+        alias = "depends-on",
         description="The tasks that this task depends on. Environment variables will **not** be expanded.",
     )
     inputs: list[Glob] | None = Field(
