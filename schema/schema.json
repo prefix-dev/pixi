@@ -1080,7 +1080,7 @@
         },
         "hidden": {
           "title": "Hidden",
-          "description": "Whether the task should be hidden from the user when running `pixi run list`",
+          "description": "Whether the task should be hidden from the user when running `pixi task list`",
           "type": "boolean"
         },
         "inputs": {
