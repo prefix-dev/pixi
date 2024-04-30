@@ -297,7 +297,15 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     explicit_environment
                         .tasks(Some(Platform::current()))
                         .into_iter()
-                        .flat_map(|tasks| tasks.into_keys())
+                        .flat_map(|tasks| {
+                            tasks.into_iter().filter_map(|(key, _)| {
+                                if !key.as_str().starts_with('_') {
+                                    Some(key)
+                                } else {
+                                    None
+                                }
+                            })
+                        })
                         .map(ToOwned::to_owned)
                         .collect()
                 } else {
