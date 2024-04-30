@@ -1,4 +1,4 @@
-use crate::Project;
+use crate::{project::has_features::HasFeatures, Project};
 
 pub async fn execute(project: Project) -> miette::Result<()> {
     project

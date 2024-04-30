@@ -2,6 +2,7 @@ mod dependencies;
 mod environment;
 pub mod errors;
 pub mod grouped_environment;
+pub(crate) mod has_features;
 pub mod manifest;
 mod solve_group;
 pub mod virtual_packages;
@@ -41,7 +42,10 @@ pub use dependencies::Dependencies;
 pub use environment::Environment;
 pub use solve_group::SolveGroup;
 
-use self::manifest::{pyproject::PyProjectToml, Environments};
+use self::{
+    has_features::HasFeatures,
+    manifest::{pyproject::PyProjectToml, Environments},
+};
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -404,7 +408,7 @@ impl Project {
     /// TODO: Remove this function and use the tasks from the default environment instead.
     pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&TaskName, &Task> {
         self.default_environment()
-            .tasks(platform, true)
+            .tasks(platform)
             .unwrap_or_default()
     }
 

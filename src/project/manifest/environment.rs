@@ -142,6 +142,21 @@ pub struct Environment {
     /// An optional solver-group. Multiple environments can share the same solve-group. All the
     /// dependencies of the environment that share the same solve-group will be solved together.
     pub solve_group: Option<usize>,
+
+    /// Whether to include the default feature in that environment
+    pub no_default_feature: bool,
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Self {
+            name: EnvironmentName::Default,
+            features: Vec::new(),
+            features_source_loc: None,
+            solve_group: None,
+            no_default_feature: false,
+        }
+    }
 }
 
 /// Helper struct to deserialize the environment from TOML.
@@ -152,6 +167,8 @@ pub(super) struct TomlEnvironment {
     #[serde(default)]
     pub features: PixiSpanned<Vec<String>>,
     pub solve_group: Option<String>,
+    #[serde(default)]
+    pub no_default_feature: bool,
 }
 
 pub(super) enum TomlEnvironmentMapOrSeq {

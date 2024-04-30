@@ -68,3 +68,6 @@ taplo = ">=0.9.1,<0.10"
 [environments]
 docs = ["docs"]
 schema = ["schema"]
+# Enable these after merge to avoid conflicts in ci.
+#docs = { features = ["docs"], no-default-feature = true }
+#schema = { features = ["schema"], no-default-feature = true }
