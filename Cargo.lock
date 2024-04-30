@@ -3589,8 +3589,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.23.1"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/pypi_indexes#450190d4a8b0d632a9a9f584b29c91db6717aeaa"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f217021fa43c856d96d83a199992f969d288dfbff725aca853011a86ec3b4ba1"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3628,7 +3629,8 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.22.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/pypi_indexes#450190d4a8b0d632a9a9f584b29c91db6717aeaa"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cd0d656189850f103293abc6c3aa4554c1c0cbc7f077aa174bb91d58e5c3c92"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3655,7 +3657,8 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.19.3"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/pypi_indexes#450190d4a8b0d632a9a9f584b29c91db6717aeaa"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe7143db952a9256f187ec5f69d6289c87d51b73e591cb21c653034b06fb0de7"
 dependencies = [
  "blake2",
  "digest",
@@ -3669,8 +3672,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.3"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/pypi_indexes#450190d4a8b0d632a9a9f584b29c91db6717aeaa"
+version = "0.22.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6329506655ae7257c90ef91c9a19cadef2d157d1b096f2a54e922b13f2b95147"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3694,7 +3698,8 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.19.3"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/pypi_indexes#450190d4a8b0d632a9a9f584b29c91db6717aeaa"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10cef20e8356ea6840294e5754c6a8663b0eb1b97f29d517642f0f99215a2483"
 dependencies = [
  "quote",
  "syn 2.0.60",
@@ -3702,8 +3707,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.20.3"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/pypi_indexes#450190d4a8b0d632a9a9f584b29c91db6717aeaa"
+version = "0.20.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3892df9b0816a074020239b83a8e03f49ed5e6be3f638ebb0e410630b1e4ab0d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3729,8 +3735,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.20.6"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/pypi_indexes#450190d4a8b0d632a9a9f584b29c91db6717aeaa"
+version = "0.20.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94fbb205bdb1f33e201ea59c6aa019f232785b22883aa7dce1073f9cdbbf69b6"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3754,12 +3761,14 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.19.9"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/pypi_indexes#450190d4a8b0d632a9a9f584b29c91db6717aeaa"
+version = "0.19.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99f3252f8a58e1a991c2bff138d353ffd72fa0489b701f1aff6756bf652c6434"
 dependencies = [
  "anyhow",
  "async-compression",
  "blake2",
+ "bytes",
  "cache_control",
  "chrono",
  "futures",
@@ -3793,7 +3802,8 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.20.1"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/pypi_indexes#450190d4a8b0d632a9a9f584b29c91db6717aeaa"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a8028f088c24d44dde5f775f21b5aef78bdfcf9ef39c86a528f2b2ac72c981f"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.6",
@@ -3810,7 +3820,8 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "0.21.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/pypi_indexes#450190d4a8b0d632a9a9f584b29c91db6717aeaa"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5425aeee32412edb497b92de3b3d6e6d1ba6079f479d8d450a4a5aa58c9d8c66"
 dependencies = [
  "chrono",
  "futures",
@@ -3827,7 +3838,8 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "0.19.8"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/pypi_indexes#450190d4a8b0d632a9a9f584b29c91db6717aeaa"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a85f440519e0b884275126cfd994e312eb17da7d44f8b96b44559c9e33e9972"
 dependencies = [
  "archspec",
  "libloading",
