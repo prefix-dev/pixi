@@ -1,4 +1,5 @@
 # Run from the root of the project using `bash tests/test_examples.sh`
+set -e
 echo "Running test_examples.sh"
 
 echo "Running the polarify example:"
