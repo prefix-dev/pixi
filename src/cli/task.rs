@@ -311,10 +311,13 @@ pub fn execute(args: Args) -> miette::Result<()> {
                             env.tasks(Some(Platform::current()))
                                 .into_iter()
                                 .flat_map(|tasks| {
-                                    tasks
-                                        .into_iter()
-                                        .filter(|&(key, _)| !key.as_str().starts_with('_'))
-                                        .map(|(key, _)| key)
+                                    tasks.into_iter().filter_map(|(key, _)| {
+                                        if !key.as_str().starts_with('_') {
+                                            Some(key)
+                                        } else {
+                                            None
+                                        }
+                                    })
                                 })
                                 .map(ToOwned::to_owned)
                         })
