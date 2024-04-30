@@ -1,42 +1,17 @@
 use crate::config::Config;
-use crate::project::has_features::HasFeatures;
-use crate::project::Environment;
-use crate::{config, progress, project::Project};
+use crate::{config, progress};
 use futures::{stream, StreamExt, TryStreamExt};
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
+use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{Channel, Platform};
+use rattler_repodata_gateway::fetch;
 use rattler_repodata_gateway::fetch::FetchRepoDataOptions;
-use rattler_repodata_gateway::{fetch, sparse::SparseRepoData};
+use rattler_repodata_gateway::sparse::SparseRepoData;
 use reqwest_middleware::ClientWithMiddleware;
-use std::{path::Path, time::Duration};
-
-impl Project {
-    // TODO: Remove this function once everything is migrated to the new environment system.
-    pub async fn fetch_sparse_repodata(
-        &self,
-    ) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
-        self.default_environment().fetch_sparse_repodata().await
-    }
-}
-
-impl Environment<'_> {
-    pub async fn fetch_sparse_repodata(
-        &self,
-    ) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
-        let channels = self.channels();
-        let platforms = self.platforms();
-        fetch_sparse_repodata(
-            channels,
-            platforms,
-            self.project().authenticated_client(),
-            Some(self.project().config()),
-        )
-        .await
-    }
-}
+use std::path::Path;
+use std::time::Duration;
 
 pub async fn fetch_sparse_repodata(
     channels: impl IntoIterator<Item = &'_ Channel>,

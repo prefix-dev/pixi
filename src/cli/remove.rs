@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::Parser;
-use indexmap::IndexMap;
 use miette::miette;
 use rattler_conda_types::Platform;
 
@@ -126,13 +125,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
-    get_up_to_date_prefix(
-        &project.default_environment(),
-        LockFileUsage::Update,
-        false,
-        IndexMap::default(),
-    )
-    .await?;
+    get_up_to_date_prefix(&project.default_environment(), LockFileUsage::Update, false).await?;
 
     Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())

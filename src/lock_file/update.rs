@@ -14,27 +14,25 @@ use crate::{
     prefix::Prefix,
     progress::global_multi_progress,
     project::{grouped_environment::GroupedEnvironment, Environment},
-    repodata::fetch_sparse_repodata_targets,
     utils::BarrierCell,
     EnvironmentName, Project,
 };
 use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{MatchSpec, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_repodata_gateway::sparse::SparseRepoData;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use rattler_repodata_gateway::{Gateway, RepoData};
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    convert::identity,
     future::{ready, Future},
     iter,
+    path::PathBuf,
+    sync::atomic::{AtomicBool, Ordering},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -64,9 +62,6 @@ pub struct UpdateLockFileOptions {
     /// Don't install anything to disk.
     pub no_install: bool,
 
-    /// Existing repodata that can be used to avoid downloading it again.
-    pub existing_repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
-
     /// The maximum number of concurrent solves that are allowed to run. If this value is None
     /// a heuristic is used based on the number of cores available from the system.
     pub max_concurrent_solves: Option<usize>,
@@ -82,9 +77,6 @@ pub struct LockFileDerivedData<'p> {
 
     /// The package cache
     pub package_cache: Arc<PackageCache>,
-
-    /// Repodata that was fetched
-    pub repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
 
     /// A list of prefixes that are up-to-date with the latest conda packages.
     pub updated_conda_prefixes: HashMap<Environment<'p>, (Prefix, PythonStatus)>,
@@ -217,9 +209,6 @@ impl<'p> LockFileDerivedData<'p> {
 
 #[derive(Default)]
 struct UpdateContext<'p> {
-    /// Repodata that is available to the solve tasks.
-    repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
-
     /// Repodata records from the lock-file. This contains the records that actually exist in the
     /// lock-file. If the lock-file is missing or partially missing then the data also won't exist
     /// in this field.
@@ -390,8 +379,7 @@ impl<'p> UpdateContext<'p> {
 
 /// Returns the default number of concurrent solves.
 fn default_max_concurrent_solves() -> usize {
-    let available_parallelism = std::thread::available_parallelism().map_or(1, |n| n.get());
-    (available_parallelism.saturating_sub(2)).min(4).max(1)
+    std::thread::available_parallelism().map_or(1, |n| n.get())
 }
 
 /// If the project has any source dependencies, like `git` or `path` dependencies.
@@ -447,7 +435,6 @@ pub async fn ensure_up_to_date_lock_file(
             project,
             lock_file,
             package_cache,
-            repo_data: options.existing_repo_data,
             updated_conda_prefixes: Default::default(),
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
@@ -464,7 +451,6 @@ pub async fn ensure_up_to_date_lock_file(
             project,
             lock_file,
             package_cache,
-            repo_data: options.existing_repo_data,
             updated_conda_prefixes: Default::default(),
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
@@ -475,34 +461,6 @@ pub async fn ensure_up_to_date_lock_file(
     if !options.lock_file_usage.allows_lock_file_updates() {
         miette::bail!("lock-file not up-to-date with the project");
     }
-
-    // Determine the repodata that we're going to need to solve the environments. For all outdated
-    // conda targets we take the union of all the channels that are used by the environment.
-    //
-    // The NoArch platform is always added regardless of whether it is explicitly used by the
-    // environment.
-    let mut fetch_targets = IndexSet::new();
-    for (environment, platforms) in outdated.conda.iter() {
-        for channel in environment.channels() {
-            for platform in platforms {
-                fetch_targets.insert((channel.clone(), *platform));
-            }
-            fetch_targets.insert((channel.clone(), Platform::NoArch));
-        }
-    }
-
-    // Fetch all the repodata that we need to solve the environments.
-    let mut repo_data = fetch_sparse_repodata_targets(
-        fetch_targets
-            .into_iter()
-            .filter(|target| !options.existing_repo_data.contains_key(target)),
-        project.authenticated_client(),
-        Some(project.config()),
-    )
-    .await?;
-
-    // Add repo data that was already fetched
-    repo_data.extend(options.existing_repo_data);
 
     // Extract the current conda records from the lock-file
     // TODO: Should we parallelize this? Measure please.
@@ -623,8 +581,6 @@ pub async fn ensure_up_to_date_lock_file(
     );
 
     let mut context = UpdateContext {
-        repo_data: Arc::new(repo_data),
-
         locked_repodata_records,
         locked_grouped_repodata_records,
         locked_pypi_records,
@@ -677,7 +633,7 @@ pub async fn ensure_up_to_date_lock_file(
             let group_solve_task = spawn_solve_conda_environment_task(
                 source.clone(),
                 locked_group_records,
-                context.repo_data.clone(),
+                project.repodata_gateway().clone(),
                 platform,
                 solve_semaphore.clone(),
                 project.client().clone(),
@@ -782,6 +738,7 @@ pub async fn ensure_up_to_date_lock_file(
             // There is already a task to solve the pypi records for the group.
             continue;
         }
+
         // Construct a future that will resolve when we have the repodata available
         let repodata_future = context
             .get_latest_group_repodata_records(&group, platform)
@@ -1069,8 +1026,6 @@ pub async fn ensure_up_to_date_lock_file(
         package_cache,
         updated_conda_prefixes: context.take_instantiated_conda_prefixes(),
         updated_pypi_prefixes: HashMap::default(),
-        repo_data: Arc::into_inner(context.repo_data)
-            .expect("repo data should not be shared anymore"),
         uv_context,
     })
 }
@@ -1164,7 +1119,7 @@ enum TaskResult {
 async fn spawn_solve_conda_environment_task(
     group: GroupedEnvironment<'_>,
     existing_repodata_records: Arc<RepoDataRecordsByName>,
-    sparse_repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
+    repodata_gateway: Arc<Gateway>,
     platform: Platform,
     concurrency_semaphore: Arc<Semaphore>,
     client: reqwest::Client,
@@ -1180,9 +1135,6 @@ async fn spawn_solve_conda_environment_task(
 
     // The list of channels and platforms we need for this task
     let channels = group.channels().into_iter().cloned().collect_vec();
-
-    // Capture local variables
-    let sparse_repo_data = sparse_repo_data.clone();
 
     // Whether there are pypi dependencies, and we should fetch purls.
     let has_pypi_dependencies = group.has_pypi_dependencies();
@@ -1214,18 +1166,22 @@ async fn spawn_solve_conda_environment_task(
                 })
                 .collect_vec();
 
-            // Extract the package names from the dependencies
-            let package_names = dependencies.names().cloned().collect_vec();
-
             // Extract the repo data records needed to solve the environment.
             pb.set_message("loading repodata");
-            let available_packages = load_sparse_repo_data_async(
-                package_names.clone(),
-                sparse_repo_data,
-                channels,
-                platform,
-            )
-            .await?;
+            let fetch_repodata_start = Instant::now();
+            let available_packages = repodata_gateway
+                .load_records_recursive(
+                    channels,
+                    [platform, Platform::NoArch],
+                    dependencies.clone().into_match_specs(),
+                )
+                .await
+                .into_diagnostic()?;
+            let total_records = available_packages.iter().map(RepoData::len).sum::<usize>();
+            tracing::info!(
+                "fetched {total_records} records in {:?}",
+                fetch_repodata_start.elapsed()
+            );
 
             // Solve conda packages
             pb.set_message("resolving conda");
@@ -1604,37 +1560,37 @@ async fn spawn_create_prefix_task(
         duration,
     ))
 }
-
-/// Load the repodata records for the specified platform and package names in the background. This
-/// is a CPU and IO intensive task so we run it in a blocking task to not block the main task.
-pub async fn load_sparse_repo_data_async(
-    package_names: Vec<PackageName>,
-    sparse_repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
-    channels: Vec<Channel>,
-    platform: Platform,
-) -> miette::Result<Vec<Vec<RepoDataRecord>>> {
-    tokio::task::spawn_blocking(move || {
-        let sparse = channels
-            .into_iter()
-            .cartesian_product(vec![platform, Platform::NoArch])
-            .filter_map(|target| sparse_repo_data.get(&target));
-
-        // Load only records we need for this platform
-        SparseRepoData::load_records_recursive(sparse, package_names, None).into_diagnostic()
-    })
-    .await
-    .map_err(|e| match e.try_into_panic() {
-        Ok(panic) => std::panic::resume_unwind(panic),
-        Err(_err) => miette::miette!("the operation was cancelled"),
-    })
-    .map_or_else(Err, identity)
-    .with_context(|| {
-        format!(
-            "failed to load repodata records for platform '{}'",
-            platform.as_str()
-        )
-    })
-}
+//
+// /// Load the repodata records for the specified platform and package names in the background. This
+// /// is a CPU and IO intensive task so we run it in a blocking task to not block the main task.
+// pub async fn load_sparse_repo_data_async(
+//     package_names: Vec<PackageName>,
+//     sparse_repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
+//     channels: Vec<Channel>,
+//     platform: Platform,
+// ) -> miette::Result<Vec<Vec<RepoDataRecord>>> {
+//     tokio::task::spawn_blocking(move || {
+//         let sparse = channels
+//             .into_iter()
+//             .cartesian_product(vec![platform, Platform::NoArch])
+//             .filter_map(|target| sparse_repo_data.get(&target));
+//
+//         // Load only records we need for this platform
+//         SparseRepoData::load_records_recursive(sparse, package_names, None).into_diagnostic()
+//     })
+//     .await
+//     .map_err(|e| match e.try_into_panic() {
+//         Ok(panic) => std::panic::resume_unwind(panic),
+//         Err(_err) => miette::miette!("the operation was cancelled"),
+//     })
+//     .map_or_else(Err, identity)
+//     .with_context(|| {
+//         format!(
+//             "failed to load repodata records for platform '{}'",
+//             platform.as_str()
+//         )
+//     })
+// }
 
 /// A helper struct that manages a progress-bar for solving an environment.
 #[derive(Clone)]

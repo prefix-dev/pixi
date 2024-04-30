@@ -38,7 +38,8 @@ use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
 };
-use rattler_solve::{resolvo, SolverImpl};
+use rattler_repodata_gateway::RepoData;
+use rattler_solve::{resolvo, ChannelPriority, RepoDataIter, SolverImpl};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -613,17 +614,21 @@ pub async fn resolve_conda(
     specs: Vec<MatchSpec>,
     virtual_packages: Vec<GenericVirtualPackage>,
     locked_packages: Vec<RepoDataRecord>,
-    available_packages: Vec<Vec<RepoDataRecord>>,
+    available_packages: Vec<RepoData>,
 ) -> miette::Result<LockedCondaPackages> {
     tokio::task::spawn_blocking(move || {
         // Construct a solver task that we can start solving.
         let task = rattler_solve::SolverTask {
             specs,
-            available_packages: &available_packages,
+            available_packages: available_packages
+                .iter()
+                .map(RepoDataIter)
+                .collect::<Vec<_>>(),
             locked_packages,
             pinned_packages: vec![],
             virtual_packages,
             timeout: None,
+            channel_priority: ChannelPriority::Strict,
         };
 
         // Solve the task

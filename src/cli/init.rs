@@ -5,7 +5,6 @@ use crate::utils::conda_environment_file::CondaEnvFile;
 use crate::{config::get_default_author, consts};
 use crate::{FeatureName, Project};
 use clap::Parser;
-use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use rattler_conda_types::Platform;
@@ -177,13 +176,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         project.save()?;
 
-        get_up_to_date_prefix(
-            &project.default_environment(),
-            LockFileUsage::Update,
-            false,
-            IndexMap::default(),
-        )
-        .await?;
+        get_up_to_date_prefix(&project.default_environment(), LockFileUsage::Update, false).await?;
     } else {
         let channels = if let Some(channels) = args.channels {
             channels

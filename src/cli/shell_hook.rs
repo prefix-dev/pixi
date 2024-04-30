@@ -1,5 +1,4 @@
 use clap::Parser;
-use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
@@ -74,13 +73,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .environment(&environment_name)
         .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
 
-    get_up_to_date_prefix(
-        &environment,
-        args.lock_file_usage.into(),
-        false,
-        IndexMap::default(),
-    )
-    .await?;
+    get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;
 
     let script = generate_activation_script(args.shell, &environment).await?;
 
