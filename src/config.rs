@@ -106,40 +106,50 @@ pub struct ConfigCliPrompt {
 #[derive(Clone, Default, Debug, Deserialize)]
 pub struct RepodataConfig {
     /// Disable JLAP compression for repodata.
+    #[serde(alias = "disable-jlap")]
     pub disable_jlap: Option<bool>,
     /// Disable bzip2 compression for repodata.
+    #[serde(alias = "disable-bzip2")]
     pub disable_bzip2: Option<bool>,
     /// Disable zstd compression for repodata.
+    #[serde(alias = "disable-zstd")]
     pub disable_zstd: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
+    #[serde(alias = "default-channels")]
     pub default_channels: Vec<String>,
 
     /// If set to true, pixi will set the PS1 environment variable to a custom value.
     #[serde(default)]
+    #[serde(alias = "change-ps1")]
     change_ps1: Option<bool>,
 
     /// Path to the file containing the authentication token.
     #[serde(default)]
+    #[serde(alias = "authentication-override-file")]
     authentication_override_file: Option<PathBuf>,
 
     /// If set to true, pixi will not verify the TLS certificate of the server.
     #[serde(default)]
+    #[serde(alias = "tls-no-verify")]
     tls_no_verify: Option<bool>,
 
     #[serde(default)]
     mirrors: HashMap<Url, Vec<Url>>,
 
     #[serde(skip)]
+    #[serde(alias = "loaded-from")]
     pub loaded_from: Vec<PathBuf>,
 
     #[serde(skip, default = "default_channel_config")]
+    #[serde(alias = "channel-config")]
     pub channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
+    #[serde(alias = "repodata-config")]
     pub repodata_config: Option<RepodataConfig>,
 }
 
@@ -396,5 +406,57 @@ mod tests {
         // replace the path with a placeholder
         let debug = debug.replace(&d.to_str().unwrap().replace('\\', "/"), "path");
         insta::assert_snapshot!(debug);
+    }
+
+    #[test]
+    fn test_parse_kebab_and_snake_case() {
+        let toml = r#"
+            default_channels = ["conda-forge"]
+            change_ps1 = true
+            tls_no_verify = false
+            authentication_override_file = "/path/to/your/override.json"
+            [mirrors]
+            "https://conda.anaconda.org/conda-forge" = [
+                "https://prefix.dev/conda-forge"
+            ]
+            [repodata_config]
+            disable_jlap = true
+            disable_bzip2 = true
+            disable_zstd = true
+        "#;
+        let config = Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        assert_eq!(config.default_channels, vec!["conda-forge"]);
+        assert_eq!(config.tls_no_verify, Some(false));
+        assert_eq!(
+            config.authentication_override_file,
+            Some(PathBuf::from("/path/to/your/override.json"))
+        );
+        assert_eq!(config.change_ps1, Some(true));
+        assert_eq!(
+            config
+                .mirrors
+                .get(&Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
+            Some(&vec![Url::parse("https://prefix.dev/conda-forge").unwrap()])
+        );
+        let repodata_config = config.repodata_config.unwrap();
+        assert_eq!(repodata_config.disable_jlap, Some(true));
+        assert_eq!(repodata_config.disable_bzip2, Some(true));
+        assert_eq!(repodata_config.disable_zstd, Some(true));
+        // See if the toml parses in kebab-case
+        let toml = r#"
+            default-channels = ["conda-forge"]
+            change-ps1 = true
+            tls-no-verify = false
+            authentication-override-file = "/path/to/your/override.json"
+            [mirrors]
+            "https://conda.anaconda.org/conda-forge" = [
+                "https://prefix.dev/conda-forge"
+            ]
+            [repodata-config]
+            disable-jlap = true
+            disable-bzip2 = true
+            disable-zstd = true
+        "#;
+        Config::from_toml(toml, &PathBuf::from("")).unwrap();
     }
 }
