@@ -5,6 +5,7 @@ mod environment;
 mod error;
 mod feature;
 mod metadata;
+pub mod pypi_options;
 pub mod pyproject;
 pub mod python;
 mod system_requirements;
@@ -14,6 +15,7 @@ mod validation;
 use crate::config::Config;
 use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
+use crate::project::manifest::pypi_options::PypiOptions;
 use crate::project::manifest::python::PyPiPackageName;
 use crate::pypi_mapping::{ChannelName, MappingLocation, MappingSource};
 use crate::task::TaskName;
@@ -900,6 +902,9 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             #[serde(default)]
             environments: IndexMap<EnvironmentName, TomlEnvironmentMapOrSeq>,
 
+            #[serde(default)]
+            pypi_options: Option<PypiOptions>,
+
             /// The tool configuration which is unused by pixi
             #[serde(rename = "tool")]
             _tool: Option<serde_json::Value>,
@@ -936,6 +941,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             channels: None,
 
             system_requirements: toml_manifest.system_requirements,
+            pypi_options: toml_manifest.pypi_options,
 
             // Combine the default target with all user specified targets
             targets: Targets::from_default_and_user_defined(default_target, toml_manifest.target),
@@ -963,23 +969,21 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             .environments
             .contains_key(&EnvironmentName::Default)
         {
-            environments.environments.push(Environment {
-                name: EnvironmentName::Default,
-                features: Vec::new(),
-                features_source_loc: None,
-                solve_group: None,
-            });
+            environments.environments.push(Environment::default());
             environments.by_name.insert(EnvironmentName::Default, 0);
         }
 
         // Add all named environments
         for (name, env) in toml_manifest.environments {
             // Decompose the TOML
-            let (features, features_source_loc, solve_group) = match env {
-                TomlEnvironmentMapOrSeq::Map(env) => {
-                    (env.features.value, env.features.span, env.solve_group)
-                }
-                TomlEnvironmentMapOrSeq::Seq(features) => (features, None, None),
+            let (features, features_source_loc, solve_group, no_default_feature) = match env {
+                TomlEnvironmentMapOrSeq::Map(env) => (
+                    env.features.value,
+                    env.features.span,
+                    env.solve_group,
+                    env.no_default_feature,
+                ),
+                TomlEnvironmentMapOrSeq::Seq(features) => (features, None, None, false),
             };
 
             let environment_idx = environments.environments.len();
@@ -989,6 +993,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
                 features,
                 features_source_loc,
                 solve_group: solve_group.map(|sg| solve_groups.add(&sg, environment_idx)),
+                no_default_feature,
             });
         }
 
@@ -1005,7 +1010,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
 mod tests {
     use super::*;
     use crate::{project::manifest::channel::PrioritizedChannel, util::default_channel_config};
-    use insta::assert_snapshot;
+    use insta::{assert_snapshot, assert_yaml_snapshot};
     use rattler_conda_types::{Channel, ChannelConfig, ParseStrictness};
     use rstest::*;
     use std::str::FromStr;
@@ -1332,6 +1337,29 @@ mod tests {
             .flat_map(|d| d.into_iter())
             .map(|(name, spec)| format!("{} = {}", name.as_source(), toml_edit::Value::from(spec)))
             .join("\n"));
+    }
+
+    #[test]
+    fn test_pypi_options_default_feature() {
+        let contents = format!(
+            r#"
+            {PROJECT_BOILERPLATE}
+            [pypi-options]
+            index-url = "https://pypi.org/simple"
+            extra-index-urls = ["https://pypi.org/simple2"]
+            [[pypi-options.find-links]]
+            path = "../foo"
+            [[pypi-options.find-links]]
+            url = "https://example.com/bar"
+            "#
+        );
+
+        assert_yaml_snapshot!(toml_edit::de::from_str::<ProjectManifest>(&contents)
+            .expect("parsing should succeed!")
+            .default_feature()
+            .pypi_options
+            .clone()
+            .unwrap());
     }
 
     fn test_remove(

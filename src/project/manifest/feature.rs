@@ -1,3 +1,4 @@
+use super::pypi_options::PypiOptions;
 use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelector};
 use crate::consts;
 use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
@@ -127,6 +128,9 @@ pub struct Feature {
     /// Additional system requirements
     pub system_requirements: SystemRequirements,
 
+    /// Pypi-related options
+    pub pypi_options: Option<PypiOptions>,
+
     /// Target specific configuration.
     pub targets: Targets,
 }
@@ -139,6 +143,7 @@ impl Feature {
             platforms: None,
             channels: None,
             system_requirements: SystemRequirements::default(),
+            pypi_options: None,
             targets: <Targets as Default>::default(),
         }
     }
@@ -243,6 +248,11 @@ impl Feature {
             .targets()
             .any(|t| t.pypi_dependencies.iter().flatten().next().is_some())
     }
+
+    /// Returns any pypi_options if they are set.
+    pub fn pypi_options(&self) -> Option<&PypiOptions> {
+        self.pypi_options.as_ref()
+    }
 }
 
 impl<'de> Deserialize<'de> for Feature {
@@ -282,6 +292,10 @@ impl<'de> Deserialize<'de> for Feature {
             /// Target specific tasks to run in the environment
             #[serde(default)]
             tasks: HashMap<TaskName, Task>,
+
+            /// Additional options for PyPi dependencies.
+            #[serde(default)]
+            pypi_options: Option<PypiOptions>,
         }
 
         let inner = FeatureInner::deserialize(deserializer)?;
@@ -310,6 +324,7 @@ impl<'de> Deserialize<'de> for Feature {
                     .collect()
             }),
             system_requirements: inner.system_requirements,
+            pypi_options: inner.pypi_options,
             targets: Targets::from_default_and_user_defined(default_target, inner.target),
         })
     }
@@ -421,5 +436,24 @@ mod tests {
             &vec!["linux-64.bat".to_string()],
             "should have selected the activation from the [linux-64] section"
         );
+    }
+
+    #[test]
+    pub fn test_pypi_options_manifest() {
+        let manifest = Manifest::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foo"
+        platforms = ["linux-64", "osx-64", "win-64"]
+        channels = []
+
+        [pypi-options]
+        index-url = "https://pypi.org/simple"
+        "#,
+        )
+        .unwrap();
+
+        manifest.default_feature().pypi_options().unwrap();
     }
 }

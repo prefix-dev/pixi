@@ -68,8 +68,8 @@ impl Dependencies {
     /// the same package is also defined in `other`.
     pub fn union(&self, other: &Self) -> Self {
         let mut map = self.map.clone();
-        for (name, specs) in other.map.iter() {
-            map.entry(name.clone()).or_default().extend(specs.clone());
+        for (name, specs) in &other.map {
+            map.entry(name.clone()).or_default().extend(specs.clone())
         }
         Self { map }
     }

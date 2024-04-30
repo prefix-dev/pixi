@@ -182,7 +182,7 @@ So we are running a python interpreter installed from conda. And we are importin
 
 ## Testing this code
 
-Okay, so let add a test for this function. Let's add a `tests/test_me.py` file in root of the project.
+Okay, so let's add a test for this function. Let's add a `tests/test_me.py` file in root of the project.
 
 Giving us the following project structure:
 

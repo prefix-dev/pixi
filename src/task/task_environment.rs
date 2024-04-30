@@ -157,11 +157,10 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
         };
 
         // Find all the task and environment combinations
-        let include_default_feature = true;
         let mut tasks = Vec::new();
         for env in environments.iter() {
             if let Some(task) = env
-                .tasks(self.platform, include_default_feature)
+                .tasks(self.platform)
                 .ok()
                 .and_then(|tasks| tasks.get(&name).copied())
             {

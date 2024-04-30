@@ -1,7 +1,7 @@
 use crate::{
     config::ConfigCli,
     environment::{get_up_to_date_prefix, verify_prefix_location_unchanged, LockFileUsage},
-    project::{DependencyType, Project, SpecType},
+    project::{has_features::HasFeatures, DependencyType, Project, SpecType},
     FeatureName,
 };
 use clap::Parser;
@@ -16,7 +16,7 @@ use rattler_conda_types::{
     VersionBumpType, VersionSpec,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{resolvo, SolverImpl};
+use rattler_solve::{resolvo, ChannelPriority, SolverImpl};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -474,6 +474,7 @@ pub fn determine_best_version(
         pinned_packages: vec![],
 
         timeout: None,
+        channel_priority: ChannelPriority::Strict,
     };
 
     let records = resolvo::Solver.solve(task).into_diagnostic()?;
