@@ -6,7 +6,7 @@ authors = ["Nichita Morcotilo <nichita@prefix.dev>"]
 channels = ["conda-forge", "robostack"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
-conda-pypi-map = { "conda-forge" = "https://gist.githubusercontent.com/nichmor/fbd2d03d1ae4d8c950710a8918386211/raw/ffa191d09da63b599c733ec444dd47c123cb6c3d/custom_conda_forge_mapping.json"}
+conda-pypi-map = { "conda-forge" = "https://gist.githubusercontent.com/nichmor/fbd2d03d1ae4d8c950710a8918386211/raw/ffa191d09da63b599c733ec444dd47c123cb6c3d/custom_conda_forge_mapping.json", "robostack" = "robostack_mapping.json"}
 
 
 [tasks]
