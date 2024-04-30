@@ -1,7 +1,7 @@
 from importlib.metadata import version
 
 def test_flask():
-    assert version("flask") == "3.0.2"
+    assert version("flask") == "3.1.0.dev0"
 
 def test_rich():
     assert version("rich").split(".")[0] == "13"
