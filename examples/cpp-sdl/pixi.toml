@@ -32,6 +32,7 @@ cmd = [
 ]
 inputs = ["CMakeLists.txt"]
 outputs = [".build/CMakeFiles/"]
+hidden = true
 
 # Build the executable but make sure CMake is configured first.
 [feature.build.tasks.build]
@@ -39,6 +40,7 @@ cmd = ["cmake", "--build", ".build"]
 depends_on = ["configure"]
 inputs = ["CMakeLists.txt", "src/*"]
 outputs = [".build/bin/sdl_example"]
+hidden = true
 
 [environments]
 build = ["build"]
