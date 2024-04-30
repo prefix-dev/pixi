@@ -121,7 +121,7 @@ toml_edit = { version = "0.22.11", features = ["serde"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
-<<<<<<< HEAD
+uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 uv-build = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
@@ -134,21 +134,6 @@ uv-interpreter = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
-=======
-uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-build = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-interpreter = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
-uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.32" }
->>>>>>> edc3e6d (add pypi config for global / local config file)
 xxhash-rust = "0.8.10"
 zip = { version = "1.1.1", default-features = false, features = [
     "deflate",

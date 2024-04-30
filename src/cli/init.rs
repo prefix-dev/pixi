@@ -333,6 +333,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_project(
     env: &Environment<'_>,
     name: String,

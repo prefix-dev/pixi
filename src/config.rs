@@ -120,7 +120,7 @@ pub enum KeyringProvider {
     Subprocess,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Default)]
 pub struct PyPIConfig {
     /// The default index URL for PyPI packages.
     #[serde(default)]
@@ -128,19 +128,9 @@ pub struct PyPIConfig {
     /// A list of extra index URLs for PyPI packages
     #[serde(default)]
     pub extra_index_urls: Vec<Url>,
-    /// Wether to use the `keyring` executable to look up credentials.
+    /// Whether to use the `keyring` executable to look up credentials.
     #[serde(default)]
     keyring_provider: Option<KeyringProvider>,
-}
-
-impl Default for PyPIConfig {
-    fn default() -> Self {
-        Self {
-            index_url: None,
-            extra_index_urls: Vec::new(),
-            keyring_provider: None,
-        }
-    }
 }
 
 impl PyPIConfig {
@@ -149,7 +139,7 @@ impl PyPIConfig {
         let extra_index_urls = self
             .extra_index_urls
             .into_iter()
-            .chain(other.extra_index_urls.into_iter())
+            .chain(other.extra_index_urls)
             .collect();
 
         Self {
@@ -159,7 +149,7 @@ impl PyPIConfig {
         }
     }
 
-    /// Wether to use the `keyring` executable to look up credentials.
+    /// Whether to use the `keyring` executable to look up credentials.
     /// Defaults to false.
     pub fn use_keyring(&self) -> KeyringProvider {
         self.keyring_provider
