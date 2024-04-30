@@ -1,4 +1,5 @@
 use crate::utils::spanned::PixiSpanned;
+use indexmap::IndexSet;
 use rattler_conda_types::{Platform, Version};
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
@@ -25,13 +26,13 @@ pub struct ProjectMetadata {
     pub authors: Vec<String>,
 
     /// The channels used by the project
-    #[serde_as(as = "Vec<super::channel::TomlPrioritizedChannelStrOrMap>")]
-    pub channels: Vec<super::channel::PrioritizedChannel>,
+    #[serde_as(as = "IndexSet<super::channel::TomlPrioritizedChannelStrOrMap>")]
+    pub channels: IndexSet<super::channel::PrioritizedChannel>,
 
     /// The platforms this project supports
     // TODO: This is actually slightly different from the rattler_conda_types::Platform because it
     //     should not include noarch.
-    pub platforms: PixiSpanned<Vec<Platform>>,
+    pub platforms: PixiSpanned<IndexSet<Platform>>,
 
     /// The license as a valid SPDX string (e.g. MIT AND Apache-2.0)
     pub license: Option<String>,

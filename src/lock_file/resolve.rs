@@ -27,7 +27,7 @@ use distribution_types::{
 };
 use distribution_types::{FileLocation, SourceDistCompatibility};
 use futures::FutureExt;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use install_wheel_rs::linker::LinkMode;
 use itertools::{Either, Itertools};
@@ -291,7 +291,7 @@ fn convert_flat_index_path(
 pub async fn resolve_pypi(
     context: UvResolutionContext,
     pypi_options: &PypiOptions,
-    dependencies: IndexMap<PackageName, Vec<PyPiRequirement>>,
+    dependencies: IndexMap<PackageName, IndexSet<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
     platform: rattler_conda_types::Platform,
