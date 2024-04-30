@@ -121,6 +121,7 @@ pub enum KeyringProvider {
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct PyPIConfig {
     /// The default index URL for PyPI packages.
     #[serde(default)]
@@ -189,6 +190,7 @@ pub struct Config {
 
     /// Configuration for PyPI packages.
     #[serde(default)]
+    #[serde(rename = "pypi-config")]
     pub pypi_config: PyPIConfig,
 }
 
@@ -419,6 +421,26 @@ mod tests {
             config.authentication_override_file,
             Some(PathBuf::from("path.json"))
         );
+    }
+
+    #[test]
+    fn test_pypi_config_parse() {
+        let toml = r#"
+            [pypi-config]
+            index-url = "https://pypi.org/simple"
+            extra-index-urls = ["https://pypi.org/simple2"]
+            keyring-provider = "subprocess"
+        "#;
+        let config = Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        assert_eq!(
+            config.pypi_config().index_url,
+            Some(Url::parse("https://pypi.org/simple").unwrap())
+        );
+        assert!(config.pypi_config().extra_index_urls.len() == 1);
+        assert!(matches!(
+            config.pypi_config().keyring_provider,
+            Some(KeyringProvider::Subprocess)
+        ));
     }
 
     #[test]
