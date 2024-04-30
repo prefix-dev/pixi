@@ -1,0 +1,5 @@
+---
+source: src/project/manifest/pypi_options.rs
+expression: merged_opts.err().unwrap()
+---
+multiple primary pypi indexes are not supported, found both https://example.com/pypi and https://example.com/pypi2 across multiple pypi options
