@@ -1,7 +1,6 @@
 use super::has_features::HasFeatures;
 use super::manifest::SystemRequirements;
 use super::{manifest, Environment, Project};
-
 use itertools::Itertools;
 use std::hash::Hash;
 use std::path::PathBuf;
@@ -107,6 +106,9 @@ mod tests {
         [feature.foo.dependencies]
         b = "*"
 
+        [feature.foo.pypi-options]
+        index-url = "https://my-index.com/simple"
+
         [feature.bar.dependencies]
         c = "*"
 
@@ -150,6 +152,11 @@ mod tests {
         assert_eq!(foo_system_requirements.cuda, "12.0".parse().ok());
         assert_eq!(bar_system_requirements.cuda, "12.0".parse().ok());
         assert_eq!(default_system_requirements.cuda, None);
+
+        assert_eq!(
+            solve_group.pypi_options().index_url.unwrap(),
+            "https://my-index.com/simple".parse().unwrap()
+        );
 
         // Check that the solve group 'group1' contains all the dependencies of its environments
         let package_names: HashSet<_> = solve_group

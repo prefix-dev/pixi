@@ -1,4 +1,5 @@
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
+use crate::project::grouped_environment::GroupedEnvironment;
 use crate::project::has_features::HasFeatures;
 use crate::project::manifest::python::{AsPep508Error, RequirementOrEditable};
 use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
@@ -30,6 +31,11 @@ use uv_normalize::{ExtraName, PackageName};
 pub enum EnvironmentUnsat {
     #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
+
+    #[error(
+        "the indexes used to previously solve to lock file do not match the environments indexes"
+    )]
+    IndexesMismatch,
 }
 
 #[derive(Debug, Error)]
@@ -127,16 +133,37 @@ pub fn verify_environment_satisfiability(
     environment: &Environment<'_>,
     locked_environment: &rattler_lock::Environment,
 ) -> Result<(), EnvironmentUnsat> {
+    let grouped_env = GroupedEnvironment::from(environment.clone());
+
     // Check if the channels in the lock file match our current configuration. Note that the order
     // matters here. If channels are added in a different order, the solver might return a different
     // result.
-    let channels = environment
+    let channels = grouped_env
         .channels()
         .into_iter()
         .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()))
         .collect_vec();
     if !locked_environment.channels().eq(&channels) {
         return Err(EnvironmentUnsat::ChannelsMismatch);
+    }
+
+    // Check if the indexes in the lock file match our current configuration.
+    if !environment.pypi_dependencies(None).is_empty() {
+        match locked_environment.pypi_indexes() {
+            None => {
+                if locked_environment
+                    .version()
+                    .should_pypi_indexes_be_present()
+                {
+                    return Err(EnvironmentUnsat::IndexesMismatch);
+                }
+            }
+            Some(indexes) => {
+                if indexes != &rattler_lock::PypiIndexes::from(grouped_env.pypi_options()) {
+                    return Err(EnvironmentUnsat::IndexesMismatch);
+                }
+            }
+        }
     }
 
     Ok(())
