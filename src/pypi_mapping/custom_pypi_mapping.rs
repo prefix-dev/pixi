@@ -113,7 +113,7 @@ pub async fn amend_pypi_purls(
 
     let custom_mapping = fetch_custom_mapping(client, mapping_url).await?;
 
-    // we have only packages that are contained in custom mapping
+    // all packages channels are contained in custom mapping
     // so we don't requests our prefix.mapping
     // this will allow us to not fail in case of running
     // under corporates firewalls
