@@ -1,16 +1,18 @@
 [project]
 name = "pypi-custom-registry"
-version = "0.1.0"
-description = "Add a short description here"
 authors = ["Tim de Jager <tim@prefix.dev>"]
 channels = ["conda-forge"]
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
+
+[tasks]
+start = {depends_on = ["test"]}
+test = "python -c 'import importlib.metadata; print(importlib.metadata.version(\"flask\"))'"
 
 [dependencies]
 python = "3.12"
 
 [pypi-dependencies]
-flask = "*"
+flask = "==3.0.3"
 
 [feature.alternative.pypi-options]
 index-url = "https://pypi.tuna.tsinghua.edu.cn/simple/"

@@ -1,12 +1,12 @@
 [project]
 name = "pypi-find-links"
-version = "0.1.0"
-description = "Add a short description here"
 authors = ["Tim de Jager <tim@prefix.dev>"]
 channels = ["conda-forge"]
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
 
 [tasks]
+start = {depends_on = ["test"]}
+test = "python -c 'import requests; print(requests.__version__)'"
 
 [pypi-options]
 # This is similar to the --find-links option in pip
