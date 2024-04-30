@@ -4,16 +4,17 @@ Pixi supports some global configuration options, as well as project-scoped
 configuration (that does not belong into the project file). The configuration is
 loaded in the following order:
 
-1. XDG compliant configuration folder (`$XDG_CONFIG_HOME/pixi/config.toml` or
+1. System configuration folder (`/etc/pixi/config.toml` or `C:\ProgramData\pixi\config.toml`)
+2. XDG compliant configuration folder (`$XDG_CONFIG_HOME/pixi/config.toml` or
    `$HOME/.config/pixi/config.toml`)
-2. Global configuration folder, depending on the OS:
+3. Global configuration folder, depending on the OS:
    - Linux: `$HOME/.config/pixi/config.toml`
    - macOS: `$HOME/Library/Application Support/pixi/config.toml`
    - Windows: `%APPDATA%\pixi\config.toml`
-3. Global .pixi folder: `~/.pixi/config.toml` (or `$PIXI_HOME/config.toml` if
+4. Global .pixi folder: `~/.pixi/config.toml` (or `$PIXI_HOME/config.toml` if
    the `PIXI_HOME` environment variable is set)
-4. Project-local .pixi folder: `$PIXI_PROJECT/.pixi/config.toml`
-5. Command line arguments (`--tls-no-verify`, `--change-ps1=false` etc.)
+5. Project-local .pixi folder: `$PIXI_PROJECT/.pixi/config.toml`
+6. Command line arguments (`--tls-no-verify`, `--change-ps1=false` etc.)
 
 !!! note
     To find the locations where `pixi` looks for configuration files, run
