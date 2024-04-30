@@ -253,7 +253,7 @@ class TaskInlineTable(StrictBaseModel):
         examples=[{"key": "value"}, {"ARGUMENT": "value"}],
     )
     hidden: bool | None = Field(
-        None, description="Whether the task should be hidden from the user when running `pixi run list`"
+        None, description="Whether the task should be hidden from the user when running `pixi task list`"
     )
 
 
