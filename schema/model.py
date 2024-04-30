@@ -381,7 +381,25 @@ class Feature(StrictBaseModel):
         description="Machine-specific aspects of this feature",
         examples=[{"linux": {"dependencies": {"python": "3.8"}}}],
     )
+    pypi_options: PyPIOptions | None = Field(None, alias="pypi-options", description="Options related to PyPI indexes for this feature")
 
+###################
+# PyPI section #
+###################
+
+class FindLinksPath(StrictBaseModel):
+    """The path to the directory containing packages"""
+    path: NonEmptyStr | None = Field(None, description="Path to the directory of packages", examples=["./links"])
+
+class FindLinksURL(StrictBaseModel):
+    """The URL to the html file containing href-links to packages"""
+    url: NonEmptyStr | None = Field(None, description="URL to html file with href-links to packages", examples=["https://simple-index-is-here.com"])
+
+class PyPIOptions(StrictBaseModel):
+    """Options related to PyPI indexes"""
+    index_url: NonEmptyStr | None = Field(None, alias="index-url", description="Alternative PyPI registry that should be used as the main index", examples=["https://pypi.org/simple"])
+    extra_index_urls: list[NonEmptyStr] | None = Field(None, alias="extra-index-urls", description="Additional PyPI registries that should be used as extra indexes", examples=[["https://pypi.org/simple"]])
+    find_links: list[FindLinksPath | FindLinksURL] = Field(None, alias="find-links", description="Paths to directory containing", examples=[["https://pypi.org/simple"]])
 
 #######################
 # The Manifest itself #
@@ -413,6 +431,7 @@ class BaseManifest(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, alias="pypi-dependencies", description="The PyPI dependencies"
     )
+    pypi_options: PyPIOptions | None = Field(None, alias="pypi-options", description="Options related to PyPI indexes")
     tasks: dict[TaskName, TaskInlineTable | NonEmptyStr] | None = Field(
         None, description="The tasks of the project"
     )

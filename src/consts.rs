@@ -1,5 +1,6 @@
 use console::Style;
 use lazy_static::lazy_static;
+use url::Url;
 
 pub const PROJECT_MANIFEST: &str = "pixi.toml";
 pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
@@ -17,11 +18,11 @@ pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
 
 /// The default channels to use for a new project.
 pub const DEFAULT_CHANNELS: &[&str] = &["conda-forge"];
-
 pub const DEFAULT_FEATURE_NAME: &str = DEFAULT_ENVIRONMENT_NAME;
 
 lazy_static! {
     pub static ref TASK_STYLE: Style = Style::new().blue();
     pub static ref PLATFORM_STYLE: Style = Style::new().yellow();
     pub static ref SOLVE_GROUP_STYLE: Style = Style::new().cyan();
+    pub static ref DEFAULT_PYPI_INDEX_URL: Url = Url::parse("https://pypi.org/simple").unwrap();
 }
