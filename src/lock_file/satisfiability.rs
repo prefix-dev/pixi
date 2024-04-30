@@ -387,6 +387,8 @@ pub fn verify_package_platform_satisfiability(
         .transpose()
         .map_err(|err| PlatformUnsat::FailedToDetermineMarkerEnvironment(err.into()));
 
+    // We cannot determine the marker environment, for example if installing `wasm32` dependencies.
+    // However, it also doesn't really matter if we don't have any pypi requirements.
     let marker_environment = match marker_environment {
         Err(err) => {
             if !pypi_requirements.is_empty() {

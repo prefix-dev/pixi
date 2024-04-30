@@ -11,6 +11,7 @@ pub const ENVIRONMENTS_DIR: &str = "envs";
 pub const SOLVE_GROUP_ENVIRONMENTS_DIR: &str = "solve-group-envs";
 pub const PYPI_DEPENDENCIES: &str = "pypi-dependencies";
 pub const TASK_CACHE_DIR: &str = "task-cache-v0";
+pub const MACOS_EMULATION_WARN: &str = "macos-emulation-warn";
 
 pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
 

@@ -5,12 +5,17 @@ use super::{
 };
 use crate::project::has_features::HasFeatures;
 
+use crate::consts;
 use crate::task::TaskName;
 use crate::{task::Task, Project};
 use itertools::Either;
 use rattler_conda_types::{Arch, Platform};
-use std::hash::{Hash, Hasher};
-use std::{collections::HashMap, fmt::Debug};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    hash::{Hash, Hasher},
+    sync::Once,
+};
 
 /// Describes a single environment from a project manifest. This is used to describe environments
 /// that can be installed and activated.
@@ -105,14 +110,19 @@ impl<'p> Environment<'p> {
             return current;
         }
 
+        static INIT: Once = Once::new();
+
         if current.is_osx() && self.platforms().contains(&Platform::Osx64) {
-            if !self.project.pixi_dir().join("osx-warn").exists() {
-                tracing::warn!(
-                    "macOS ARM64 is not supported by the pixi.toml, falling back to osx-64 (emulated with Rosetta)"
-                );
-                // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                std::fs::File::create(self.project.pixi_dir().join("osx-emulation-warn")).ok();
-            }
+            INIT.call_once(|| {
+                let emulation_warn = self.project.pixi_dir().join(consts::MACOS_EMULATION_WARN);
+                if !emulation_warn.exists() {
+                    tracing::warn!(
+                        "osx-arm64 (Apple Silicon) is not supported by the pixi.toml, falling back to osx-64 (emulated with Rosetta)"
+                    );
+                    // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
+                    std::fs::File::create(emulation_warn).ok();
+                }
+            });
             return Platform::Osx64;
         }
 
