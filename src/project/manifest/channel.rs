@@ -24,6 +24,20 @@ impl PrioritizedChannel {
             priority: None,
         }
     }
+
+    /// If channel base is part of the default config, returns the name otherwise the base url
+    pub fn to_name_or_url(&self) -> String {
+        if self
+            .channel
+            .base_url
+            .as_str()
+            .contains(default_channel_config().channel_alias.as_str())
+        {
+            self.channel.name().to_string()
+        } else {
+            self.channel.base_url.to_string()
+        }
+    }
 }
 
 pub enum TomlPrioritizedChannelStrOrMap {
