@@ -3,7 +3,7 @@ set -e
 echo "Running test_examples.sh"
 
 echo "Running the polarify example:"
-pixi run -v --manifest-path examples/polarify/pixi.toml tes
+pixi run -v --manifest-path examples/polarify/pixi.toml test
 pixi run -v --manifest-path examples/polarify/pixi.toml -e pl020 test
 
 echo "Running the pypi example:"
