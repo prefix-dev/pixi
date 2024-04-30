@@ -6,6 +6,7 @@ use clap::Parser;
 use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
+
 use rattler_conda_types::Platform;
 use rattler_lock::{Package, UrlOrPath};
 use serde::Serialize;
@@ -134,8 +135,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let python_record = conda_records.find(|r| is_python_record(r));
     let tags;
     let uv_context;
+    let index_locations;
     let mut registry_index = if let Some(python_record) = python_record {
         uv_context = UvResolutionContext::from_project(&project)?;
+        index_locations = environment.pypi_options().to_index_locations();
         tags = get_pypi_tags(
             Platform::current(),
             &project.system_requirements(),
@@ -144,7 +147,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Some(RegistryWheelIndex::new(
             &uv_context.cache,
             &tags,
-            &uv_context.index_locations,
+            &index_locations,
             &uv_types::HashStrategy::None,
         ))
     } else {

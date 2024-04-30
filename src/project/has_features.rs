@@ -7,7 +7,10 @@ use rattler_conda_types::{Channel, Platform};
 use crate::{Project, SpecType};
 
 use super::{
-    manifest::{python::PyPiPackageName, Feature, PyPiRequirement, SystemRequirements},
+    manifest::{
+        pypi_options::PypiOptions, python::PyPiPackageName, Feature, PyPiRequirement,
+        SystemRequirements,
+    },
     Dependencies,
 };
 
@@ -102,7 +105,7 @@ pub trait HasFeatures<'p> {
     fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
+    ) -> IndexMap<PyPiPackageName, IndexSet<PyPiRequirement>> {
         self.features()
             .filter_map(|f| f.pypi_dependencies(platform))
             .fold(IndexMap::default(), |mut acc, deps| {
@@ -118,7 +121,7 @@ pub trait HasFeatures<'p> {
 
                 // Add the requirements to the accumulator.
                 for (name, spec) in deps_iter {
-                    acc.entry(name).or_default().push(spec);
+                    acc.entry(name).or_default().insert(spec);
                 }
 
                 acc
@@ -136,5 +139,15 @@ pub trait HasFeatures<'p> {
             .map(|deps| Dependencies::from(deps.into_owned()))
             .reduce(|acc, deps| acc.union(&deps))
             .unwrap_or_default()
+    }
+
+    /// Returns the pypi options for this solve group.
+    fn pypi_options(&self) -> PypiOptions {
+        self.features()
+            .filter_map(|f| f.pypi_options())
+            .fold(PypiOptions::default(), |acc, opt| {
+                acc.union(opt)
+                    .expect("pypi-options should have been validated upfront")
+            })
     }
 }
