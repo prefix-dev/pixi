@@ -1061,6 +1061,25 @@
             }
           ]
         },
+        "depends_on": {
+          "title": "Depends On",
+          "description": "The tasks that this task depends on. Environment variables will **not** be expanded. Deprecated in favor of `depends-on` from v0.21.0 onward.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "description": "A valid task name.",
+                "type": "string",
+                "pattern": "^[^\\s\\$]+$"
+              }
+            },
+            {
+              "description": "A valid task name.",
+              "type": "string",
+              "pattern": "^[^\\s\\$]+$"
+            }
+          ]
+        },
         "env": {
           "title": "Env",
           "description": "A map of environment variables to values, used in the task, these will be overwritten by the shell.",

@@ -41,7 +41,8 @@ package1 = { version = ">=1.2.3", build="py34_0" }
 
 [tasks]
 build = "conda build ."
-test = { cmd = "pytest", cwd = "tests", depends-on = ["build"] }
+# deprecated depends_on
+test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
 test2 = { cmd = "pytest", cwd = "tests"}
 test3 = { cmd = "pytest", depends-on = ["test2"] }
 test4 = { cmd = "pytest", cwd = "tests", depends-on = ["test2"] }
