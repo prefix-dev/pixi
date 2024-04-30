@@ -38,7 +38,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     // Remove the platform(s) from the manifest
     project
         .manifest
-        .remove_platforms(&platforms, &feature_name)?;
+        .remove_platforms(platforms.clone(), &feature_name)?;
 
     get_up_to_date_prefix(
         &project.default_environment(),
