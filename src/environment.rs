@@ -2,6 +2,7 @@ use crate::lock_file::UvResolutionContext;
 use crate::progress::await_in_progress;
 use crate::project::grouped_environment::GroupedEnvironmentName;
 use crate::project::has_features::HasFeatures;
+use crate::project::manifest::pypi_options::PypiOptions;
 use crate::{
     consts, install, install_pypi,
     lock_file::UpdateLockFileOptions,
@@ -251,6 +252,7 @@ pub async fn update_prefix_pypi(
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
     uv_context: UvResolutionContext,
+    pypi_options: &PypiOptions,
     environment_variables: &HashMap<String, String>,
     lock_file_dir: &Path,
 ) -> miette::Result<()> {
@@ -271,6 +273,7 @@ pub async fn update_prefix_pypi(
                 status,
                 system_requirements,
                 uv_context,
+                pypi_options,
                 environment_variables,
             )
         },

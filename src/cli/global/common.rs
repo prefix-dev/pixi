@@ -6,7 +6,7 @@ use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{resolvo, SolverImpl, SolverTask};
+use rattler_solve::{resolvo, ChannelPriority, SolverImpl, SolverTask};
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::{
@@ -160,6 +160,7 @@ pub fn load_package_records(
         locked_packages: vec![],
         pinned_packages: vec![],
         timeout: None,
+        channel_priority: ChannelPriority::Strict,
     };
 
     // Solve it

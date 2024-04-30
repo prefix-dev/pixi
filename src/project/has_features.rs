@@ -7,7 +7,10 @@ use rattler_conda_types::{Channel, Platform};
 use crate::{Project, SpecType};
 
 use super::{
-    manifest::{python::PyPiPackageName, Feature, PyPiRequirement, SystemRequirements},
+    manifest::{
+        pypi_options::PypiOptions, python::PyPiPackageName, Feature, PyPiRequirement,
+        SystemRequirements,
+    },
     Dependencies,
 };
 
@@ -136,5 +139,15 @@ pub trait HasFeatures<'p> {
             .map(|deps| Dependencies::from(deps.into_owned()))
             .reduce(|acc, deps| acc.union(&deps))
             .unwrap_or_default()
+    }
+
+    /// Returns the pypi options for this solve group.
+    fn pypi_options(&self) -> PypiOptions {
+        self.features()
+            .filter_map(|f| f.pypi_options())
+            .fold(PypiOptions::default(), |acc, opt| {
+                acc.union(opt)
+                    .expect("pypi-options should have been validated upfront")
+            })
     }
 }
