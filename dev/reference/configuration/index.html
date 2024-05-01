@@ -1994,6 +1994,11 @@ Pixi's tasks are run in a pixi environment using <code>pixi run</code> and are e
 <p class="admonition-title">Note</p>
 <p>Specify different tasks for different platforms using the <a href="#the-target-table">target</a> table</p>
 </div>
+<div class="admonition info">
+<p class="admonition-title">Info</p>
+<p>If you want to hide a task from showing up with <code>pixi task list</code> or <code>pixi info</code>, you can prefix the name with <code>_</code>.
+For example, if you want to hide <code>depending</code>, you can rename it to <code>_depending</code>.</p>
+</div>
 <h2 id="the-system-requirements-table">The <code>system-requirements</code> table<a class="headerlink" href="#the-system-requirements-table" title="Permanent link">#</a></h2>
 <p>The system requirements are used to define minimal system specifications used during dependency resolution.
 For example, we can define a unix system with a specific minimal libc version.
