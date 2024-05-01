@@ -61,27 +61,29 @@ pub struct CompletionCommand {
 pub enum Command {
     Completion(CompletionCommand),
     Init(init::Args),
-    #[clap(alias = "a")]
+    #[clap(visible_alias = "a")]
     Add(add::Args),
-    #[clap(alias = "r")]
+    #[clap(visible_alias = "r")]
     Run(run::Args),
-    #[clap(alias = "s")]
+    #[clap(visible_alias = "s")]
     Shell(shell::Args),
     ShellHook(shell_hook::Args),
-    #[clap(alias = "g")]
+    #[clap(visible_alias = "g")]
     Global(global::Args),
     Auth(rattler::cli::auth::Args),
-    #[clap(alias = "i")]
+    #[clap(visible_alias = "i")]
     Install(install::Args),
     Task(task::Args),
     Info(info::Args),
     Upload(upload::Args),
     Search(search::Args),
     Project(project::Args),
-    #[clap(alias = "rm")]
+    #[clap(visible_alias = "rm")]
     Remove(remove::Args),
     SelfUpdate(self_update::Args),
+    #[clap(visible_alias = "ls")]
     List(list::Args),
+    #[clap(visible_alias = "t")]
     Tree(tree::Args),
 }
 
