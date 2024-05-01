@@ -280,7 +280,18 @@ impl Manifest {
             FeatureName::Default => self.parsed.project.platforms.get_mut(),
             FeatureName::Named(_) => self.feature_mut(feature_name)?.platforms_mut(),
         };
-        let to_remove: IndexSet<_> = platforms.into_iter().collect();
+        // Get the platforms to remove, while checking if they exist
+        let to_remove: IndexSet<_> = platforms
+            .into_iter()
+            .map(|c| {
+                current
+                    .iter()
+                    .position(|x| *x == c)
+                    .ok_or_else(|| miette::miette!("platform {} does not exist", c))
+                    .map(|_| c)
+            })
+            .collect::<Result<_, _>>()?;
+
         let retained: IndexSet<_> = current.difference(&to_remove).cloned().collect();
 
         // Remove platforms from the manifest
@@ -482,7 +493,19 @@ impl Manifest {
             FeatureName::Default => &mut self.parsed.project.channels,
             FeatureName::Named(_) => self.feature_mut(feature_name)?.channels_mut(),
         };
-        let to_remove: IndexSet<_> = channels.into_iter().collect();
+
+        // Get the channels to remove, while checking if they exist
+        let to_remove: IndexSet<_> = channels
+            .into_iter()
+            .map(|c| {
+                current
+                    .iter()
+                    .position(|x| x.channel == c.channel)
+                    .ok_or_else(|| miette::miette!("channel {} does not exist", c.channel.name()))
+                    .map(|_| c)
+            })
+            .collect::<Result<_, _>>()?;
+
         let retained: IndexSet<_> = current.difference(&to_remove).cloned().collect();
 
         // Remove channels from the manifest
@@ -1809,6 +1832,14 @@ feature_target_dep = "*"
                 .value,
             vec![Platform::Win64].into_iter().collect::<IndexSet<_>>()
         );
+
+        // Test removing non-existing platforms
+        assert!(manifest
+            .remove_platforms(
+                vec![Platform::Linux64, Platform::Osx64],
+                &FeatureName::Named("test".to_string()),
+            )
+            .is_err());
     }
 
     #[test]
@@ -2017,6 +2048,17 @@ platforms = ["linux-64", "win-64"]
             .clone()
             .unwrap();
         assert_eq!(feature_channels, IndexSet::new());
+
+        // Test failing to remove a channel that does not exist
+        assert!(manifest
+            .remove_channels(
+                [PrioritizedChannel {
+                    channel: Channel::from_str("conda-forge", &channel_config()).unwrap(),
+                    priority: None,
+                }],
+                &FeatureName::Default,
+            )
+            .is_err());
     }
 
     #[test]
