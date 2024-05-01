@@ -347,7 +347,7 @@ mod tests {
         [project]
         name = "foobar"
         channels = []
-        platforms = ["linux-64"]
+        platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
         [tasks]
         foo = "echo foo"
