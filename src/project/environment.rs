@@ -339,6 +339,30 @@ mod tests {
             .tasks(Some(Platform::Osx64))
             .is_err())
     }
+    #[test]
+    fn test_filtered_tasks() {
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks]
+        foo = "echo foo"
+        _bar = "echo bar"
+        "#,
+        )
+        .unwrap();
+
+        let task = manifest
+            .default_environment()
+            .get_filtered_tasks();
+
+        assert_eq!(task.len(), 1);
+        assert_eq!(task.contains(&"foo".into()), true);
+    }
 
     fn format_dependencies(dependencies: Dependencies) -> String {
         dependencies
