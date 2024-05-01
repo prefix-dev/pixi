@@ -16,7 +16,7 @@ use toml_edit::{Array, Item, Table, Value};
 #[derive(Parser, Debug)]
 pub enum Operation {
     /// Add a command to the project
-    #[clap(alias = "a")]
+    #[clap(visible_alias = "a")]
     Add(AddArgs),
 
     /// Remove a command from the project
@@ -29,7 +29,7 @@ pub enum Operation {
     Alias(AliasArgs),
 
     /// List all tasks
-    #[clap(alias = "l")]
+    #[clap(visible_alias = "ls", alias = "l")]
     List(ListArgs),
 }
 
