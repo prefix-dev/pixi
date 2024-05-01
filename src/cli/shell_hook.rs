@@ -83,7 +83,7 @@ async fn generate_environment_json(environment: &Environment<'_>) -> miette::Res
     let shell_env = ShellEnv {
         environment_variables,
     };
-    serde_json::to_string_pretty(&shell_env).into_diagnostic()
+    serde_json::to_string(&shell_env).into_diagnostic()
 }
 
 /// Prints the activation script to the stdout.
@@ -175,7 +175,7 @@ mod tests {
         let project = Project::discover().unwrap();
         let environment = project.default_environment();
         let json_env = generate_environment_json(&environment).await.unwrap();
-        assert!(json_env.contains("\"PIXI_ENVIRONMENT_NAME\": \"default\""));
+        assert!(json_env.contains("\"PIXI_ENVIRONMENT_NAME\":\"default\""));
         assert!(json_env.contains("\"CONDA_PREFIX\":"));
         #[cfg(not(target_os = "windows"))]
         assert!(json_env.contains("\"PATH\":"));
