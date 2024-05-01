@@ -5,13 +5,16 @@ use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
     shell::ShellEnum,
 };
+use serde::Serialize;
+use serde_json;
+use std::collections::HashMap;
 use std::{default::Default, path::PathBuf};
 
 use crate::{
     activation::get_activator,
     cli::LockFileUsageArgs,
     environment::get_up_to_date_prefix,
-    project::{manifest::EnvironmentName, Environment},
+    project::{has_features::HasFeatures, manifest::EnvironmentName, Environment},
     Project,
 };
 
@@ -32,6 +35,15 @@ pub struct Args {
     /// The environment to activate in the script
     #[arg(long, short)]
     environment: Option<String>,
+
+    /// Emit the environment variables set by running the activation as JSON
+    #[clap(long, default_value = "false")]
+    json: bool,
+}
+
+#[derive(Serialize)]
+struct ShellEnv<'a> {
+    environment_variables: &'a HashMap<String, String>,
 }
 
 /// Generates the activation script.
@@ -64,6 +76,19 @@ async fn generate_activation_script(
     result.script.contents().into_diagnostic()
 }
 
+/// Generates a JSON object describing the changes to the shell environment when activating
+/// the provided pixi environment.
+async fn generate_environment_json(environment: &Environment<'_>) -> miette::Result<String> {
+    let environment_variables = environment
+        .project()
+        .get_env_variables(&environment)
+        .await?;
+    let shell_env = ShellEnv {
+        environment_variables,
+    };
+    serde_json::to_string_pretty(&shell_env).into_diagnostic()
+}
+
 /// Prints the activation script to the stdout.
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
@@ -82,10 +107,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await?;
 
-    let script = generate_activation_script(args.shell, &environment).await?;
+    let output = match args.json {
+        true => generate_environment_json(&environment).await?,
+        false => generate_activation_script(args.shell, &environment).await?,
+    };
 
-    // Print the script
-    println!("{}", script);
+    // Print the output - either a JSON object or a shell script
+    println!("{}", output);
 
     Ok(())
 }
@@ -143,5 +171,15 @@ mod tests {
             .unwrap();
         assert!(script.contains("$env.PATH = "));
         assert!(script.contains("$env.CONDA_PREFIX = "));
+    }
+
+    #[tokio::test]
+    async fn test_environment_json() {
+        let project = Project::discover().unwrap();
+        let environment = project.default_environment();
+        let json_env = generate_environment_json(&environment).await.unwrap();
+        assert!(json_env.contains("\"PIXI_ENVIRONMENT_NAME\": \"default\""));
+        assert!(json_env.contains("\"PATH\":"));
+        assert!(json_env.contains("\"CONDA_PREFIX\":"));
     }
 }

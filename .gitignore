@@ -8,3 +8,4 @@ __pycache__
 .DS_store
 site/
 .cache
+.envrc

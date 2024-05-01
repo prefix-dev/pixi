@@ -528,6 +528,8 @@ This command prints the activation script of an environment.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.
+- `--json`: Print all environment variables that are exported by running the activation script as JSON. When specifying
+  this option, `--shell` is ignored.
 
 ```shell
 pixi shell-hook
@@ -538,6 +540,7 @@ pixi shell-hook --manifest-path ~/myproject/pixi.toml
 pixi shell-hook --frozen
 pixi shell-hook --locked
 pixi shell-hook --environment cuda
+pixi shell-hook --json
 ```
 
 Example use-case, when you want to get rid of the `pixi` executable in a Docker container.
