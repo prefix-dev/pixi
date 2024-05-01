@@ -365,7 +365,8 @@ pub fn verify_package_platform_satisfiability(
     // Determine the dependencies requested by the environment
     let conda_specs = environment
         .dependencies(None, Some(platform))
-        .into_match_specs()
+        .into_specs()
+        .map(move |(name, spec)| MatchSpec::from_nameless(spec, Some(name.clone())))
         .map(|spec| Dependency::Conda(spec, "<environment>".into()))
         .collect_vec();
 
