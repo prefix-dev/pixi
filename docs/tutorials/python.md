@@ -4,9 +4,11 @@ In this tutorial, we will show you how to create a simple Python project with pi
 not a part of `pdm`, `poetry` etc.
 
 ## Why is this useful?
-Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need. This is especially useful when you are working with multiple python interpreters and bindings to C and C++ libraries. Let's give it a go! For example, GDAL from PyPI does not have binary C dependencies, but the condom package does. However, some packages are only available through PyPI, which is why we can explicitly add those as a fallback to be solved together by pixi.
+
+Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need. This is especially useful when you are working with multiple Python interpreters and bindings to C and C++ libraries. Let's give it a go! For example, GDAL from PyPI does not have binary C dependencies, but the condom package does. However, some packages are only available through PyPI, which is why we can explicitly add those as a fallback to be solved together by pixi.
 
 ## `pixi.toml` and `pyproject.toml`
+
 We support two manifest formats: `pyproject.toml` and `pixi.toml`. In this tutorial, we will use the `pyproject.toml` format because it is the most common format for Python projects.
 
 ## Let's get started
@@ -45,18 +47,18 @@ pixi_py = { path = ".", editable = true }
 Let's add the Python project to the tree:
 
 === "Linux & macOS"
-    ```shell
+`shell
     cd pixi_py # move into the project directory
     mkdir pixi_py
     touch pixi_py/__init__.py
-    ```
+    `
 
 === "Windows"
-    ```shell
+`shell
     cd pixi_py
     mkdir pixi_py
     type nul > pixi_py\__init__.py
-    ```
+    `
 
 We now have the following directory structure:
 
@@ -82,10 +84,11 @@ channels = ["conda-forge"]
 # This is your machine platform by default
 platforms = ["osx-arm64"]
 ```
+
 The `channels` and `platforms` are added to the `[tool.pixi.project]` section. Channels like `conda-forge` manage packages similar to PyPI but allow for different packages across languages. The keyword `platforms` determines what platform to generate the lock for.
 
-The `pixi_py` package itself is added as an editable dependency. 
-This means that the package is installed in editable mode, so you can make changes to the package and see the changes reflected in the environment. 
+The `pixi_py` package itself is added as an editable dependency.
+This means that the package is installed in editable mode, so you can make changes to the package and see the changes reflected in the environment.
 
 ```toml
 # Editable installs
@@ -93,7 +96,7 @@ This means that the package is installed in editable mode, so you can make chang
 pixi_py = { path = ".", editable = true }
 ```
 
-In pixi, unlike other package managers, this is explicitly stated in the `pyproject.toml` file. 
+In pixi, unlike other package managers, this is explicitly stated in the `pyproject.toml` file.
 The main reason being so that you can choose which environment this package should be included in.
 
 ### Managing both Conda and PyPI dependencies in pixi
@@ -158,7 +161,7 @@ dependencies = ["black[cli]"]
 ```
 
 ??? note "Optional dependencies in `pixi.toml`"
-    This tutorial focuses on the use of the `pyproject.toml`, but in case you're curious, the `pixi.toml` would contain the following entry after the installation of a PyPI package including an optional dependency `black = { version = "*", extras = ["cli"] }`.
+This tutorial focuses on the use of the `pyproject.toml`, but in case you're curious, the `pixi.toml` would contain the following entry after the installation of a PyPI package including an optional dependency `black = { version = "*", extras = ["cli"] }`.
 
 Luckily, `black` is available through the default channels, normally!
 
@@ -176,7 +179,6 @@ We now have a new directory called `.pixi` in the project root. This directory c
 We also have a new file called `pixi.lock` in the project root. This file contains the exact versions of the dependencies that were installed in the environment across platforms.
 
 ## What's in the environment?
-
 
 Using `pixi list`, you can see what's in the environment, this is essentially a nicer view on the lock file:
 
@@ -201,11 +203,11 @@ xz               5.2.6         h57fd34a_0          230.2 KiB  conda  xz-5.2.6-h5
 ```
 
 !!! Python interpreters
-    The Python interpreter is also installed in the environment. This is because the Python interpreter version is read from the `requires-python` field in the `pyproject.toml` file. This is used to determine the Python version to install in the environment. This way, pixi automatically manages/bootstraps the python interpreter for you, so no more `brew`, `apt` or other system install steps.
+The Python interpreter is also installed in the environment. This is because the Python interpreter version is read from the `requires-python` field in the `pyproject.toml` file. This is used to determine the Python version to install in the environment. This way, pixi automatically manages/bootstraps the Python interpreter for you, so no more `brew`, `apt` or other system install steps.
 
 Here, you can see the different Conda and Pypi packages listed. As you can see, the `pixi_py` package that we are working on is installed in editable mode. Every environment in pixi is isolated but reuses files that are hard-linked from a central cache directory. This means that you can have multiple environments with the same packages but only have the individual files stored once on disk.
 
-We can create the `default` and `test` environments based on our own `test` feature from the `optional-dependency`: 
+We can create the `default` and `test` environments based on our own `test` feature from the `optional-dependency`:
 
 ```toml
 # Environments
@@ -215,9 +217,9 @@ test = { features = ["test"], solve-group = "default" }
 ```
 
 ??? note "Solve Groups"
-    Solve groups are a way to group dependencies together. This is useful when you have multiple environments that share the same dependencies. For example, maybe `pytest` is a dependency that influences the dependencies of the `default` environment. By putting these in the same solve group, you ensure that the versions in `test` and `default` are exactly the same.
+Solve groups are a way to group dependencies together. This is useful when you have multiple environments that share the same dependencies. For example, maybe `pytest` is a dependency that influences the dependencies of the `default` environment. By putting these in the same solve group, you ensure that the versions in `test` and `default` are exactly the same.
 
-The `default` environment is created when you run `pixi install`. The `test` environment is created from the optional dependencies in the `pyproject.toml` file. 
+The `default` environment is created when you run `pixi install`. The `test` environment is created from the optional dependencies in the `pyproject.toml` file.
 You can execute commands in this environment with e.g `pixi run -e test python`
 
 ## Getting code to run
@@ -233,6 +235,7 @@ def hello():
 def say_hello():
     print(*hello())
 ```
+
 Now add the `rich` dependency from PyPI using: `pixi add --pypi rich`.
 
 Let's see if this works by running:
@@ -241,8 +244,9 @@ Let's see if this works by running:
 pixi r python -c "import pixi_py; pixi_py.say_hello()"
 Hello, World! 🧛
 ```
+
 ??? note "Slow?"
-	This might be slow the first time because pixi installs the project, but it will be near instant the second time.
+This might be slow the first time because pixi installs the project, but it will be near instant the second time.
 
 Pixi runs a Python interpreter installed from Conda. Then, we are importing the `pixi_py` package, which is installed in editable mode. The code calls the `say_hello` function that we just added. And it works! Cool!
 
@@ -278,7 +282,7 @@ $ pixi task add --feature test test "pytest"
 So pixi has a task system to make it easy to run commands. Similar to `npm` scripts or something you would specify in a `Justfile`.
 
 ??? tip "Pixi tasks"
-    Tasks are actually a pretty cool pixi feature that is powerful and runs in a cross-platform shell. You can do caching, dependencies and more. Read more about tasks in the [tasks](../features/advanced_tasks.md) section.
+Tasks are actually a pretty cool pixi feature that is powerful and runs in a cross-platform shell. You can do caching, dependencies and more. Read more about tasks in the [tasks](../features/advanced_tasks.md) section.
 
 ```shell
 $ pixi r test
@@ -297,6 +301,7 @@ test_me.py .                                                                    
 Neat! It seems to be working!
 
 ### Test vs Default environment
+
 The interesting thing is if we compare the output of the two environments.
 
 ```shell
@@ -320,6 +325,7 @@ E.g you could also have a `dev` environment that has `pytest` and `ruff` install
 There is a [docker](https://github.com/prefix-dev/pixi/tree/main/examples/docker) example that shows how to set up a minimal `prod` environment and copy from there.
 
 ## Replacing PyPI packages with Conda packages
+
 Last thing, pixi provides the ability for `pypi` packages to depend on `conda` packages.
 Let's confirm this with `pixi list`:
 
@@ -336,6 +342,7 @@ Let's explicitly add `pygments` to the `pyproject.toml` file. Which is a depende
 ```shell
 pixi add pygments
 ```
+
 This will add the following to the `pyproject.toml` file:
 
 ```toml
