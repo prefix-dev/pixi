@@ -36,6 +36,10 @@ pub struct Args {
     #[arg(long)]
     pub pypi: bool,
 
+    /// Don't install the environment, only remove the package from the lock-file and manifest.
+    #[arg(long)]
+    pub no_install: bool,
+
     /// The platform for which the dependency should be removed
     #[arg(long, short)]
     pub platform: Option<Platform>,
@@ -138,7 +142,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     get_up_to_date_prefix(
         &project.default_environment(),
         LockFileUsage::Update,
-        false,
+        args.no_install,
         IndexMap::default(),
     )
     .await?;

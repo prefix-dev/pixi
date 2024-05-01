@@ -246,6 +246,7 @@ impl PixiControl {
                 platform: Default::default(),
                 feature: None,
                 config: Default::default(),
+                no_install: true,
             },
         }
     }
