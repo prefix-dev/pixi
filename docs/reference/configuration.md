@@ -182,6 +182,10 @@ You can modify this table using [`pixi task`](cli.md#task).
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
 
+!!! info
+    If you want to hide a task from showing up with `pixi task list` or `pixi info`, you can prefix the name with `_`.
+    For example, if you want to hide `depending`, you can rename it to `_depending`.
+
 ## The `system-requirements` table
 
 The system requirements are used to define minimal system specifications used during dependency resolution.
