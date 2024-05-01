@@ -356,9 +356,7 @@ mod tests {
         )
         .unwrap();
 
-        let task = manifest
-            .default_environment()
-            .get_filtered_tasks();
+        let task = manifest.default_environment().get_filtered_tasks();
 
         assert_eq!(task.len(), 1);
         assert_eq!(task.contains(&"foo".into()), true);
