@@ -217,7 +217,10 @@ impl From<PyPiRequirement> for toml_edit::Value {
                 extras,
             } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
-                table.insert("git", toml_edit::Value::String(toml_edit::Formatted::new(git.to_string())));
+                table.insert(
+                    "git",
+                    toml_edit::Value::String(toml_edit::Formatted::new(git.to_string())),
+                );
                 if let Some(branch) = branch {
                     table.insert(
                         "branch",
@@ -247,7 +250,9 @@ impl From<PyPiRequirement> for toml_edit::Value {
                 let mut table = toml_edit::Table::new().into_inline_table();
                 table.insert(
                     "path",
-                    toml_edit::Value::String(toml_edit::Formatted::new(path.to_string_lossy().to_string())),
+                    toml_edit::Value::String(toml_edit::Formatted::new(
+                        path.to_string_lossy().to_string(),
+                    )),
                 );
                 if editable == &Some(true) {
                     table.insert(
@@ -284,23 +289,48 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
                     extras: req.extras,
                 },
                 pep508_rs::VersionOrUrl::Url(u) => {
-                    let url = u.to_url();
-                    // Have a different code path when the url is a file.
-                    // i.e. package @ file:///path/to/package
-                    if url.scheme() == "file" {
-                        // Convert the file url to a path.
-                        let file = url
-                            .to_file_path()
-                            .expect("could not convert to file url to path");
-                        PyPiRequirement::Path {
-                            path: file,
-                            editable: None,
-                            extras: req.extras,
+                    // If serialization starts with `git+` then it is a git url.
+                    if let Some(stripped_url) = u.to_string().strip_prefix("git+") {
+                        if let Some((url, version)) = stripped_url.split_once('@') {
+                            let url = Url::parse(url).unwrap();
+                            PyPiRequirement::Git {
+                                git: url,
+                                branch: None,
+                                tag: None,
+                                rev: Some(version.to_string()),
+                                subdirectory: None,
+                                extras: req.extras,
+                            }
+                        } else {
+                            let url = Url::parse(stripped_url).unwrap();
+                            PyPiRequirement::Git {
+                                git: url,
+                                branch: None,
+                                tag: None,
+                                rev: None,
+                                subdirectory: None,
+                                extras: req.extras,
+                            }
                         }
                     } else {
-                        PyPiRequirement::Url {
-                            url,
-                            extras: req.extras,
+                        let url = u.to_url();
+                        // Have a different code path when the url is a file.
+                        // i.e. package @ file:///path/to/package
+                        if url.scheme() == "file" {
+                            // Convert the file url to a path.
+                            let file = url
+                                .to_file_path()
+                                .expect("could not convert to file url to path");
+                            PyPiRequirement::Path {
+                                path: file,
+                                editable: None,
+                                extras: req.extras,
+                            }
+                        } else {
+                            PyPiRequirement::Url {
+                                url,
+                                extras: req.extras,
+                            }
                         }
                     }
                 }
@@ -830,5 +860,54 @@ mod tests {
         let as_pypi_req: PyPiRequirement = pypi.into();
         // convert to toml and snapshot
         assert_snapshot!(as_pypi_req.to_string());
+
+        let pypi: Requirement = "exchangelib @ git+https://github.com/ecederstrand/exchangelib"
+            .parse()
+            .unwrap();
+        let as_pypi_req: PyPiRequirement = pypi.into();
+        assert_eq!(
+            as_pypi_req,
+            PyPiRequirement::Git {
+                git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
+                branch: None,
+                tag: None,
+                rev: None,
+                subdirectory: None,
+                extras: vec![]
+            }
+        );
+
+        let pypi: Requirement = "exchangelib @ git+https://github.com/ecederstrand/exchangelib@b283011c6df4a9e034baca9aea19aa8e5a70e3ab".parse().unwrap();
+        let as_pypi_req: PyPiRequirement = pypi.into();
+        assert_eq!(
+            as_pypi_req,
+            PyPiRequirement::Git {
+                git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
+                branch: None,
+                tag: None,
+                rev: Some("b283011c6df4a9e034baca9aea19aa8e5a70e3ab".to_string()),
+                subdirectory: None,
+                extras: vec![]
+            }
+        );
+
+        let pypi: Requirement = "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
+        let as_pypi_req: PyPiRequirement = pypi.into();
+        assert_eq!(as_pypi_req, PyPiRequirement::Url{url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![] });
+
+        let pypi: Requirement = "boltons[nichita] @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl".parse().unwrap();
+        let as_pypi_req: PyPiRequirement = pypi.into();
+        assert_eq!(as_pypi_req, PyPiRequirement::Url{url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![ExtraName::new("nichita".to_string()).unwrap()] });
+
+        let pypi: Requirement = "boltons @ file:///path/to/boltons".parse().unwrap();
+        let as_pypi_req: PyPiRequirement = pypi.into();
+        assert_eq!(
+            as_pypi_req,
+            PyPiRequirement::Path {
+                path: PathBuf::from("/path/to/boltons"),
+                editable: None,
+                extras: vec![]
+            }
+        );
     }
 }
