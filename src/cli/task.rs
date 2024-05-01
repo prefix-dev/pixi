@@ -294,20 +294,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 .transpose()?;
             let available_tasks: HashSet<TaskName> =
                 if let Some(explicit_environment) = explicit_environment {
-                    explicit_environment
-                        .tasks(Some(Platform::current()))
-                        .into_iter()
-                        .flat_map(|tasks| {
-                            tasks.into_iter().filter_map(|(key, _)| {
-                                if !key.as_str().starts_with('_') {
-                                    Some(key)
-                                } else {
-                                    None
-                                }
-                            })
-                        })
-                        .map(ToOwned::to_owned)
-                        .collect()
+                    explicit_environment.get_filtered_tasks()
                 } else {
                     project
                         .environments()
@@ -315,20 +302,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                         .filter(|env| {
                             verify_current_platform_has_required_virtual_packages(env).is_ok()
                         })
-                        .flat_map(|env| {
-                            env.tasks(Some(Platform::current()))
-                                .into_iter()
-                                .flat_map(|tasks| {
-                                    tasks.into_iter().filter_map(|(key, _)| {
-                                        if !key.as_str().starts_with('_') {
-                                            Some(key)
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                })
-                                .map(ToOwned::to_owned)
-                        })
+                        .flat_map(|env| env.get_filtered_tasks())
                         .collect()
                 };
 

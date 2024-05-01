@@ -9,6 +9,7 @@ use crate::task::TaskName;
 use crate::{task::Task, Project};
 use itertools::Either;
 use rattler_conda_types::Platform;
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::{collections::HashMap, fmt::Debug};
 
@@ -116,6 +117,23 @@ impl<'p> Environment<'p> {
         Ok(result)
     }
 
+    /// Return all tasks available for the given environment
+    /// This will not return task prefixed with _
+    pub fn get_filtered_tasks(&self) -> HashSet<TaskName> {
+        self.tasks(Some(Platform::current()))
+            .into_iter()
+            .flat_map(|tasks| {
+                tasks.into_iter().filter_map(|(key, _)| {
+                    if !key.as_str().starts_with('_') {
+                        Some(key)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .map(ToOwned::to_owned)
+            .collect()
+    }
     /// Returns the task with the given `name` and for the specified `platform` or an `UnknownTask`
     /// which explains why the task was not available.
     pub fn task(
