@@ -9,6 +9,7 @@ use crate::task::TaskName;
 use crate::{task::Task, Project};
 use itertools::Either;
 use rattler_conda_types::Platform;
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::{collections::HashMap, fmt::Debug};
 
@@ -116,6 +117,23 @@ impl<'p> Environment<'p> {
         Ok(result)
     }
 
+    /// Return all tasks available for the given environment
+    /// This will not return task prefixed with _
+    pub fn get_filtered_tasks(&self) -> HashSet<TaskName> {
+        self.tasks(Some(Platform::current()))
+            .into_iter()
+            .flat_map(|tasks| {
+                tasks.into_iter().filter_map(|(key, _)| {
+                    if !key.as_str().starts_with('_') {
+                        Some(key)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .map(ToOwned::to_owned)
+            .collect()
+    }
     /// Returns the task with the given `name` and for the specified `platform` or an `UnknownTask`
     /// which explains why the task was not available.
     pub fn task(
@@ -321,6 +339,28 @@ mod tests {
             .tasks(Some(Platform::Osx64))
             .is_err())
     }
+    #[test]
+    fn test_filtered_tasks() {
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = []
+        platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
+        [tasks]
+        foo = "echo foo"
+        _bar = "echo bar"
+        "#,
+        )
+        .unwrap();
+
+        let task = manifest.default_environment().get_filtered_tasks();
+
+        assert_eq!(task.len(), 1);
+        assert_eq!(task.contains(&"foo".into()), true);
+    }
 
     fn format_dependencies(dependencies: Dependencies) -> String {
         dependencies
@@ -453,5 +493,73 @@ mod tests {
                 .collect_vec(),
             vec!["barry", "conda-forge", "bar"]
         );
+    }
+
+    #[test]
+    fn test_pypi_options_per_environment() {
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "osx-64"]
+
+        [feature.foo]
+        pypi-options = { index-url = "https://mypypi.org/simple", extra-index-urls = ["https://1.com"] }
+
+        [feature.bar]
+        pypi-options = { extra-index-urls = ["https://2.com"] }
+
+        [environments]
+        foo = ["foo"]
+        bar = ["bar"]
+        foobar = ["foo", "bar"]
+        "#,
+        )
+        .unwrap();
+
+        let foo_opts = manifest.environment("foo").unwrap().pypi_options();
+        assert_eq!(
+            foo_opts.index_url.unwrap().to_string(),
+            "https://mypypi.org/simple"
+        );
+        assert_eq!(
+            foo_opts
+                .extra_index_urls
+                .unwrap()
+                .iter()
+                .map(|i| i.to_string())
+                .collect_vec(),
+            vec!["https://1.com/"]
+        );
+
+        let bar_opts = manifest.environment("bar").unwrap().pypi_options();
+        assert_eq!(
+            bar_opts
+                .extra_index_urls
+                .unwrap()
+                .iter()
+                .map(|i| i.to_string())
+                .collect_vec(),
+            vec!["https://2.com/"]
+        );
+
+        let foo_bar_opts = manifest.environment("foobar").unwrap().pypi_options();
+
+        assert_eq!(
+            foo_bar_opts.index_url.unwrap().to_string(),
+            "https://mypypi.org/simple"
+        );
+
+        assert_eq!(
+            foo_bar_opts
+                .extra_index_urls
+                .unwrap()
+                .iter()
+                .map(|i| i.to_string())
+                .collect_vec(),
+            vec!["https://1.com/", "https://2.com/"]
+        )
     }
 }

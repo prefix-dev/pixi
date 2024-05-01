@@ -1,6 +1,6 @@
-use indexmap::{Equivalent, IndexMap};
+use indexmap::{Equivalent, IndexMap, IndexSet};
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName};
-use std::hash::Hash;
+use std::{hash::Hash, iter::once};
 
 /// Holds a list of dependencies where for each package name there can be multiple requirements.
 ///
@@ -9,11 +9,11 @@ use std::hash::Hash;
 /// there can be multiple requirements for a given package.
 #[derive(Default, Debug, Clone)]
 pub struct Dependencies {
-    map: IndexMap<PackageName, Vec<NamelessMatchSpec>>,
+    map: IndexMap<PackageName, IndexSet<NamelessMatchSpec>>,
 }
 
-impl From<IndexMap<PackageName, Vec<NamelessMatchSpec>>> for Dependencies {
-    fn from(map: IndexMap<PackageName, Vec<NamelessMatchSpec>>) -> Self {
+impl From<IndexMap<PackageName, IndexSet<NamelessMatchSpec>>> for Dependencies {
+    fn from(map: IndexMap<PackageName, IndexSet<NamelessMatchSpec>>) -> Self {
         Self { map }
     }
 }
@@ -21,7 +21,10 @@ impl From<IndexMap<PackageName, Vec<NamelessMatchSpec>>> for Dependencies {
 impl From<IndexMap<PackageName, NamelessMatchSpec>> for Dependencies {
     fn from(map: IndexMap<PackageName, NamelessMatchSpec>) -> Self {
         Self {
-            map: map.into_iter().map(|(k, v)| (k, vec![v])).collect(),
+            map: map
+                .into_iter()
+                .map(|(k, v)| (k, once(v).collect()))
+                .collect(),
         }
     }
 }
@@ -29,7 +32,7 @@ impl From<IndexMap<PackageName, NamelessMatchSpec>> for Dependencies {
 impl Dependencies {
     /// Adds the given spec to the list of dependencies.
     pub fn insert(&mut self, name: PackageName, spec: NamelessMatchSpec) {
-        self.map.entry(name).or_default().push(spec);
+        self.map.entry(name).or_default().insert(spec);
     }
 
     /// Adds a list of specs to the list of dependencies.
@@ -46,12 +49,15 @@ impl Dependencies {
         iter: impl IntoIterator<Item = (PackageName, NamelessMatchSpec)>,
     ) {
         for (name, spec) in iter {
-            *self.map.entry(name).or_default() = vec![spec];
+            *self.map.entry(name).or_default() = once(spec).collect();
         }
     }
 
     /// Removes all requirements for the given package and returns them.
-    pub fn remove<Q: ?Sized>(&mut self, name: &Q) -> Option<(PackageName, Vec<NamelessMatchSpec>)>
+    pub fn remove<Q: ?Sized>(
+        &mut self,
+        name: &Q,
+    ) -> Option<(PackageName, IndexSet<NamelessMatchSpec>)>
     where
         Q: Hash + Equivalent<PackageName>,
     {
@@ -63,13 +69,7 @@ impl Dependencies {
     pub fn union(&self, other: &Self) -> Self {
         let mut map = self.map.clone();
         for (name, specs) in &other.map {
-            let entry = map.entry(name.clone()).or_default();
-            for spec in specs {
-                // TODO entry should be a set to avoid duplicates
-                if !entry.contains(spec) {
-                    entry.push(spec.clone());
-                }
-            }
+            map.entry(name.clone()).or_default().extend(specs.clone())
         }
         Self { map }
     }
@@ -87,7 +87,7 @@ impl Dependencies {
     /// Returns an iterator over the package names and their corresponding requirements.
     pub fn iter(
         &self,
-    ) -> impl DoubleEndedIterator<Item = (&PackageName, &Vec<NamelessMatchSpec>)> + '_ {
+    ) -> impl DoubleEndedIterator<Item = (&PackageName, &IndexSet<NamelessMatchSpec>)> + '_ {
         self.map.iter()
     }
 
@@ -123,8 +123,8 @@ impl Dependencies {
 }
 
 impl IntoIterator for Dependencies {
-    type Item = (PackageName, Vec<NamelessMatchSpec>);
-    type IntoIter = indexmap::map::IntoIter<PackageName, Vec<NamelessMatchSpec>>;
+    type Item = (PackageName, IndexSet<NamelessMatchSpec>);
+    type IntoIter = indexmap::map::IntoIter<PackageName, IndexSet<NamelessMatchSpec>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.into_iter()
