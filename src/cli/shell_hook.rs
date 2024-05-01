@@ -175,9 +175,11 @@ mod tests {
         let project = Project::discover().unwrap();
         let environment = project.default_environment();
         let json_env = generate_environment_json(&environment).await.unwrap();
-        println!("{}", json_env);
         assert!(json_env.contains("\"PIXI_ENVIRONMENT_NAME\": \"default\""));
-        assert!(json_env.contains("\"PATH\":"));
         assert!(json_env.contains("\"CONDA_PREFIX\":"));
+        #[cfg(not(target_os = "windows"))]
+        assert!(json_env.contains("\"PATH\":"));
+        #[cfg(target_os = "windows")]
+        assert!(json_env.contains("\"Path\":"));
     }
 }
