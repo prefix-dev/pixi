@@ -1,5 +1,3 @@
-#![deny(dead_code)]
-
 mod outdated;
 mod package_identifier;
 mod pypi_editables;
