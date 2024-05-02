@@ -280,11 +280,11 @@ mod tests {
 
         [tool.pixi.tasks]
         build = "conda build ."
-        test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
+        test = { cmd = "pytest", cwd = "tests", depends-on = ["build"] }
         test2 = { cmd = "pytest", cwd = "tests"}
-        test3 = { cmd = "pytest", depends_on = ["test2"] }
+        test3 = { cmd = "pytest", depends-on = ["test2"] }
         test5 = { cmd = "pytest" }
-        test6 = { depends_on = ["test5"] }
+        test6 = { depends-on = ["test5"] }
 
         [tool.pixi.system-requirements]
         linux = "5.10"
@@ -333,11 +333,11 @@ mod tests {
 
         [tool.pixi.target.linux-64.tasks]
         build = "conda build ."
-        test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
+        test = { cmd = "pytest", cwd = "tests", depends-on = ["build"] }
         test2 = { cmd = "pytest", cwd = "tests"}
-        test3 = { cmd = "pytest", depends_on = ["test2"] }
+        test3 = { cmd = "pytest", depends-on = ["test2"] }
         test5 = { cmd = "pytest" }
-        test6 = { depends_on = ["test5"] }
+        test6 = { depends-on = ["test5"] }
 
         [tool.pixi.feature.test.target.linux-64.dependencies]
         test = "bla"
