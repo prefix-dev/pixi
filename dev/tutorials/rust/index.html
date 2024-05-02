@@ -1596,7 +1596,7 @@ You can fix this, by adding the necessary dependencies for building git2, with p
 <p>You can add a formatting task to your project:
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>fmt<span class="w"> </span><span class="s2">&quot;cargo fmt&quot;</span>
 </span></code></pre></div></p>
-<p>You can extend these tasks to run multiple commands with the use of the <code>depends_on</code> field.
+<p>You can extend these tasks to run multiple commands with the use of the <code>depends-on</code> field.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>lint<span class="w"> </span><span class="s2">&quot;cargo clippy&quot;</span><span class="w"> </span>--depends-on<span class="w"> </span>fmt
 </span></code></pre></div></p>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
