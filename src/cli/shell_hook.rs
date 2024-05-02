@@ -37,7 +37,7 @@ pub struct Args {
     environment: Option<String>,
 
     /// Emit the environment variables set by running the activation as JSON
-    #[clap(long, default_value = "false")]
+    #[clap(long, default_value = "false", conflicts_with = "shell")]
     json: bool,
 }
 
