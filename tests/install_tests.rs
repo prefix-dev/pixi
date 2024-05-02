@@ -265,7 +265,7 @@ async fn pypi_add_remove() {
     pixi.add("python==3.11").with_install(true).await.unwrap();
 
     // Add flask from pypi
-    pixi.add("flask")
+    pixi.add("flask[dotenv]")
         .with_install(true)
         .set_type(pixi::DependencyType::PypiDependency)
         .await
@@ -280,8 +280,9 @@ async fn pypi_add_remove() {
     let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
     assert!(installed_311.iter().count() > 0);
 
-    pixi.remove("flask")
+    pixi.remove("flask[dotenv]")
         .set_type(pixi::DependencyType::PypiDependency)
+        .with_install(true)
         .await
         .unwrap();
 

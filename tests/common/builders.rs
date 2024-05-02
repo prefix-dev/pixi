@@ -115,7 +115,7 @@ impl AddBuilder {
         self
     }
 
-    /// Set whether or not to also install the environment. By default the environment is NOT
+    /// Set whether to also install the environment. By default, the environment is NOT
     /// installed to reduce test times.
     pub fn with_install(mut self, install: bool) -> Self {
         self.args.no_install = !install;
@@ -153,6 +153,13 @@ pub struct RemoveBuilder {
 impl RemoveBuilder {
     pub fn with_spec(mut self, spec: &str) -> Self {
         self.args.deps.push(spec.to_string());
+        self
+    }
+
+    /// Set whether to also install the environment. By default, the environment is NOT
+    /// installed to reduce test times.
+    pub fn with_install(mut self, install: bool) -> Self {
+        self.args.no_install = !install;
         self
     }
 

@@ -193,6 +193,7 @@ Removes dependencies from the [manifest file](configuration.md).
 - `--pypi`: Specifies a PyPI dependency, not a conda package.
 - `--platform <PLATFORM> (-p)`: The platform from which the dependency should be removed.
 - `--feature <FEATURE> (-f)`: The feature from which the dependency should be removed.
+- `--no-install`: Don't install the environment, only remove the package from the lock-file and manifest.
 
 ```shell
 pixi remove numpy
@@ -205,6 +206,7 @@ pixi remove --platform osx-64 --build clang
 pixi remove --feature featurex clang
 pixi remove --feature featurex --platform osx-64 clang
 pixi remove --feature featurex --platform osx-64 --build clang
+pixi remove --no-install numpy
 ```
 
 ## `task`
