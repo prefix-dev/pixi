@@ -606,9 +606,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#whats-in-the-pyproject" class="md-nav__link">
+  <a href="#whats-in-the-pyprojecttoml" class="md-nav__link">
     <span class="md-ellipsis">
-      What's in the pyproject?
+      What's in the pyproject.toml?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#managing-both-conda-and-pypi-dependencies-in-pixi" class="md-nav__link">
+    <span class="md-ellipsis">
+      Managing both conda and PyPI dependencies in pixi
     </span>
   </a>
   
@@ -673,7 +682,7 @@
         <li class="md-nav__item">
   <a href="#replacing-pypi-packages-with-conda-packages" class="md-nav__link">
     <span class="md-ellipsis">
-      Replacing pypi packages with conda packages
+      Replacing PyPI packages with conda packages
     </span>
   </a>
   
@@ -1435,9 +1444,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#whats-in-the-pyproject" class="md-nav__link">
+  <a href="#whats-in-the-pyprojecttoml" class="md-nav__link">
     <span class="md-ellipsis">
-      What's in the pyproject?
+      What's in the pyproject.toml?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#managing-both-conda-and-pypi-dependencies-in-pixi" class="md-nav__link">
+    <span class="md-ellipsis">
+      Managing both conda and PyPI dependencies in pixi
     </span>
   </a>
   
@@ -1502,7 +1520,7 @@
         <li class="md-nav__item">
   <a href="#replacing-pypi-packages-with-conda-packages" class="md-nav__link">
     <span class="md-ellipsis">
-      Replacing pypi packages with conda packages
+      Replacing PyPI packages with conda packages
     </span>
   </a>
   
@@ -1540,15 +1558,20 @@
   
 
 
-<h1 id="tutorial-doing-python-development-with-pixi">Tutorial: Doing python development with pixi<a class="headerlink" href="#tutorial-doing-python-development-with-pixi" title="Permanent link">#</a></h1>
-<p>In this tutorial we will show you how to create a simple python project with pixi. We will show some of the features that pixi provides, that are currently
-not a part of <code>pdm</code>, <code>poetry</code> etc.</p>
+<h1 id="tutorial-doing-python-development-with-pixi">Tutorial: Doing Python development with Pixi<a class="headerlink" href="#tutorial-doing-python-development-with-pixi" title="Permanent link">#</a></h1>
+<p>In this tutorial, we will show you how to create a simple Python project with pixi.
+We will show some of the features that pixi provides, that are currently not a part of <code>pdm</code>, <code>poetry</code> etc.</p>
 <h2 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
-<p>Pixi builts upon on the conda ecosystem, which allows you to create a python environment with all the dependencies you need. This is especially useful when you are working with multiple python interpreters and bindings to C and C++ libraries. Let's give it a go! E.g GDAL from PyPI does not have the binary C dependencies, but the conda package does.</p>
-<h2 id="pixitoml-and-pyprojecttoml">pixi.toml and pyproject.toml<a class="headerlink" href="#pixitoml-and-pyprojecttoml" title="Permanent link">#</a></h2>
-<p>We support two manifests formats, <code>pyproject.toml</code> and <code>pixi.toml</code>. In this tutorial we will use the <code>pyproject.toml</code> format. Because it is the most common format for python projects.</p>
+<p>Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need.
+This is especially useful when you are working with multiple Python interpreters and bindings to C and C++ libraries.
+For example, GDAL from PyPI does not have binary C dependencies, but the conda package does.
+On the other hand, some packages are only available through PyPI, which <code>pixi</code> can also install for you.
+Best of both world, let's give it a go!</p>
+<h2 id="pixitoml-and-pyprojecttoml"><code>pixi.toml</code> and <code>pyproject.toml</code><a class="headerlink" href="#pixitoml-and-pyprojecttoml" title="Permanent link">#</a></h2>
+<p>We support two manifest formats: <code>pyproject.toml</code> and <code>pixi.toml</code>.
+In this tutorial, we will use the <code>pyproject.toml</code> format because it is the most common format for Python projects.</p>
 <h2 id="lets-get-started">Let's get started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
-<p>Lets start out by making a directory and creating a new <code>pyproject.toml</code> file.</p>
+<p>Let's start out by making a directory and creating a new <code>pyproject.toml</code> file.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>pixi_py<span class="w"> </span>--pyproject
 </span></code></pre></div>
 <p>This gives you the following pyproject.toml:</p>
@@ -1573,7 +1596,7 @@ not a part of <code>pdm</code>, <code>poetry</code> etc.</p>
 </span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>
 </span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="k">[tool.pixi.tasks]</span>
 </span></code></pre></div>
-<p>Let's add the python project to the tree:</p>
+<p>Let's add the Python project to the tree:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux &amp; macOS</label><label for="__tabbed_1_2">Windows</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1596,171 +1619,246 @@ not a part of <code>pdm</code>, <code>poetry</code> etc.</p>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>│<span class="w">   </span>├──<span class="w"> </span>__init__.py
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>└──<span class="w"> </span>pyproject.toml
 </span></code></pre></div>
-<p>We've used a flat-layout here but we support both <a href="https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout">flat- and src-layouts</a>.</p>
-<h3 id="whats-in-the-pyproject">What's in the pyproject?<a class="headerlink" href="#whats-in-the-pyproject" title="Permanent link">#</a></h3>
-<p>Okay, so let's have a look at what's sections have been added.</p>
-<p>These things were added to the pyproject.toml file:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># 1. Main pixi entry</span>
+<p>We've used a flat-layout here but pixi supports both <a href="https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout">flat- and src-layouts</a>.</p>
+<h3 id="whats-in-the-pyprojecttoml">What's in the <code>pyproject.toml</code>?<a class="headerlink" href="#whats-in-the-pyprojecttoml" title="Permanent link">#</a></h3>
+<p>Okay, so let's have a look at what's sections have been added and how we can modify the <code>pyproject.toml</code>.</p>
+<p>These first entries were added to the <code>pyproject.toml</code> file:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Main pixi entry</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">[tool.pixi.project]</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># This is your machine platform by default</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># 2. Editable installs</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="k">[tool.pixi.pypi-dependencies]</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">pixi_py</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">editable</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>Let's go over them one by one:</p>
-<ol>
-<li>The <code>channels</code> and <code>platforms</code> are added to the <code>[tool.pixi.project]</code> section. Channels like <code>conda-forge</code> manage packages similar to pypi but allow for different packages across languages. Platforms determines for what platform to generate the lock for.</li>
-<li>The <code>pixi_py</code> package is added as an editable dependency. This means that the package is installed in editable mode, so you can make changes to the package and see the changes reflected in the environment. In pixi, unlike other package managers this is explicitly stated in the <code>pyproject.toml</code> file. The main reason being so that you can choose into which environment this package should be included.</li>
-</ol>
-<p>Now let's add some optional dependencies:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[project.optional-dependencies]</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pytest&quot;</span><span class="p">]</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># 3. Environments</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">[tool.pixi.environments]</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">}</span>
+<p>The <code>channels</code> and <code>platforms</code> are added to the <code>[tool.pixi.project]</code> section.
+Channels like <code>conda-forge</code> manage packages similar to PyPI but allow for different packages across languages.
+The keyword <code>platforms</code> determines what platform the project supports.</p>
+<p>The <code>pixi_py</code> package itself is added as an editable dependency.
+This means that the package is installed in editable mode, so you can make changes to the package and see the changes reflected in the environment, without having to re-install the environment.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Editable installs</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">[tool.pixi.pypi-dependencies]</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">pixi_py</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">editable</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>We've added the optional dependencies to the <code>pyproject.toml</code> and this automatically creates a <a href="../../reference/configuration/#the-feature-and-environments-tables"><code>feature</code></a>, which is a collection of <code>dependencies</code>, <code>tasks</code>, <code>channels</code> etc.
-These features can be combined</p>
-<ol>
-<li>We've created the <code>default</code> and <code>test</code> environments. The <code>default</code> environment is the default environment that is created when you run <code>pixi install</code>. The <code>test</code> environment is created from the optional dependencies in the <code>pyproject.toml</code> file. You can execute commands in this environment with e.g <code>pixi run -e test python</code></li>
-</ol>
+<p>In pixi, unlike other package managers, this is explicitly stated in the <code>pyproject.toml</code> file.
+The main reason being so that you can choose which environment this package should be included in.</p>
+<h3 id="managing-both-conda-and-pypi-dependencies-in-pixi">Managing both conda and PyPI dependencies in pixi<a class="headerlink" href="#managing-both-conda-and-pypi-dependencies-in-pixi" title="Permanent link">#</a></h3>
+<p>Our projects usually depend on other packages.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>add<span class="w"> </span>black
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>Added<span class="w"> </span>black
+</span></code></pre></div>
+<p>This will result in the following addition to the <code>pyproject.toml</code>:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Dependencies</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">[tool.pixi.dependencies]</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">black</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=24.4.2,&lt;24.5&quot;</span>
+</span></code></pre></div>
+<p>But we can also be strict about the version that should be used with <code>pixi add black=24</code>, resulting in</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[tool.pixi.dependencies]</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">black</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;24.*&quot;</span>
+</span></code></pre></div>
+<p>Now, let's add some optional dependencies:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>pytest
+</span></code></pre></div>
+<p>Which results in the following fields added to the <code>pyproject.toml</code>:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[project.optional-dependencies]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pytest&quot;</span><span class="p">]</span>
+</span></code></pre></div></p>
+<p>After we have added the optional dependencies to the <code>pyproject.toml</code>, pixi automatically creates a <a href="../../reference/configuration/#the-feature-and-environments-tables"><code>feature</code></a>, which can contain a collection of <code>dependencies</code>, <code>tasks</code>, <code>channels</code>, and more.</p>
+<p>Sometimes there are packages that aren't available on conda channels but are published on PyPI.
+We can add these as well, which pixi will solve together with the default dependencies.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>add<span class="w"> </span>black<span class="w"> </span>--pypi
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>Added<span class="w"> </span>black
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>Added<span class="w"> </span>these<span class="w"> </span>as<span class="w"> </span>pypi-dependencies.
+</span></code></pre></div>
+<p>which results in the addition to the <code>dependencies</code> key in the <code>pyproject.toml</code></p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;black&quot;</span><span class="p">]</span>
+</span></code></pre></div>
+<p>When using the <code>pypi-depenencies</code> you can make use of the <code>optional-dependencies</code> that other packages make available.
+For example, <code>black</code> makes the <code>cli</code> dependencies option, which can be added with the <code>--pypi</code> keyword:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>add<span class="w"> </span>black<span class="o">[</span>cli<span class="o">]</span><span class="w"> </span>--pypi
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>Added<span class="w"> </span>black<span class="o">[</span>cli<span class="o">]</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>Added<span class="w"> </span>these<span class="w"> </span>as<span class="w"> </span>pypi-dependencies.
+</span></code></pre></div>
+<p>which updates the <code>dependencies</code> entry to</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;black[cli]&quot;</span><span class="p">]</span>
+</span></code></pre></div>
 <details class="note">
-<summary>Solve Groups</summary>
-<p>Solve groups are a way to group dependencies together. This is useful when you have multiple environments that share the same dependencies. This way you can solve dependencies together. E.g maybe <code>pytest</code> is a dependency that influences the dependencies of the <code>default</code> environment. By putting these in the same solve group, you assure that the versions in <code>test</code> and <code>default</code> are exactly the same versions.</p>
+<summary>Optional dependencies in <code>pixi.toml</code></summary>
+<p>This tutorial focuses on the use of the <code>pyproject.toml</code>, but in case you're curious, the <code>pixi.toml</code> would contain the following entry after the installation of a PyPI package including an optional dependency:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[pypi-dependencies]</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">black</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">extras</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cli&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div></p>
 </details>
 <h3 id="installation-pixi-install">Installation: <code>pixi install</code><a class="headerlink" href="#installation-pixi-install" title="Permanent link">#</a></h3>
 <p>Now let's <code>install</code> the project with <code>pixi install</code>:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>install
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>✔<span class="w"> </span>Project<span class="w"> </span><span class="k">in</span><span class="w"> </span>/private/tmp/pixi_py<span class="w"> </span>is<span class="w"> </span>ready<span class="w"> </span>to<span class="w"> </span>use!
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>install
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>✔<span class="w"> </span>Project<span class="w"> </span><span class="k">in</span><span class="w"> </span>/path/to/pixi_py<span class="w"> </span>is<span class="w"> </span>ready<span class="w"> </span>to<span class="w"> </span>use!
 </span></code></pre></div>
-<p>We now have a new directory called <code>.pixi</code> in the project root. This directory contains the environment that was created when we ran <code>pixi install</code>. The environment is a conda environment that contains the dependencies that we specified in the <code>pyproject.toml</code> file. We can also install the test environment with <code>pixi install -e test</code>. We can use these environments for executing code.</p>
-<p>We also have a new file called <code>pixi.lock</code> in the project root. This file contains the exact versions of the dependencies that were installed in the environment, across platforms.</p>
+<p>We now have a new directory called <code>.pixi</code> in the project root.
+This directory contains the environment that was created when we ran <code>pixi install</code>.
+The environment is a conda environment that contains the dependencies that we specified in the <code>pyproject.toml</code> file.
+We can also install the test environment with <code>pixi install -e test</code>.
+We can use these environments for executing code.</p>
+<p>We also have a new file called <code>pixi.lock</code> in the project root.
+This file contains the exact versions of the dependencies that were installed in the environment across platforms.</p>
 <h2 id="whats-in-the-environment">What's in the environment?<a class="headerlink" href="#whats-in-the-environment" title="Permanent link">#</a></h2>
+<p>Using <code>pixi list</code>, you can see what's in the environment, this is essentially a nicer view on the lock file:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>list
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>Package<span class="w">          </span>Version<span class="w">       </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>bzip2<span class="w">            </span><span class="m">1</span>.0.8<span class="w">         </span>h93a5062_5<span class="w">          </span><span class="m">119</span>.5<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>bzip2-1.0.8-h93a5062_5.conda
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>black<span class="w">            </span><span class="m">24</span>.4.2<span class="w">                            </span><span class="m">3</span>.8<span class="w"> </span>MiB<span class="w">    </span>pypi<span class="w">   </span>black-24.4.2-cp312-cp312-win_amd64.http.whl
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>ca-certificates<span class="w">  </span><span class="m">2024</span>.2.2<span class="w">      </span>hf0a4a13_0<span class="w">          </span><span class="m">152</span>.1<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>ca-certificates-2024.2.2-hf0a4a13_0.conda
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>libexpat<span class="w">         </span><span class="m">2</span>.6.2<span class="w">         </span>hebf3989_0<span class="w">          </span><span class="m">62</span>.2<span class="w"> </span>KiB<span class="w">   </span>conda<span class="w">  </span>libexpat-2.6.2-hebf3989_0.conda
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>libffi<span class="w">           </span><span class="m">3</span>.4.2<span class="w">         </span>h3422bc3_5<span class="w">          </span><span class="m">38</span>.1<span class="w"> </span>KiB<span class="w">   </span>conda<span class="w">  </span>libffi-3.4.2-h3422bc3_5.tar.bz2
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>libsqlite<span class="w">        </span><span class="m">3</span>.45.2<span class="w">        </span>h091b4b1_0<span class="w">          </span><span class="m">806</span><span class="w"> </span>KiB<span class="w">    </span>conda<span class="w">  </span>libsqlite-3.45.2-h091b4b1_0.conda
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>libzlib<span class="w">          </span><span class="m">1</span>.2.13<span class="w">        </span>h53f4e23_5<span class="w">          </span><span class="m">47</span><span class="w"> </span>KiB<span class="w">     </span>conda<span class="w">  </span>libzlib-1.2.13-h53f4e23_5.conda
+</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>ncurses<span class="w">          </span><span class="m">6</span>.4.20240210<span class="w">  </span>h078ce10_0<span class="w">          </span><span class="m">801</span><span class="w"> </span>KiB<span class="w">    </span>conda<span class="w">  </span>ncurses-6.4.20240210-h078ce10_0.conda
+</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>openssl<span class="w">          </span><span class="m">3</span>.2.1<span class="w">         </span>h0d3ecfb_1<span class="w">          </span><span class="m">2</span>.7<span class="w"> </span>MiB<span class="w">    </span>conda<span class="w">  </span>openssl-3.2.1-h0d3ecfb_1.conda
+</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>python<span class="w">           </span><span class="m">3</span>.12.3<span class="w">        </span>h4a7b5fc_0_cpython<span class="w">  </span><span class="m">12</span>.6<span class="w"> </span>MiB<span class="w">   </span>conda<span class="w">  </span>python-3.12.3-h4a7b5fc_0_cpython.conda
+</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>readline<span class="w">         </span><span class="m">8</span>.2<span class="w">           </span>h92ec313_1<span class="w">          </span><span class="m">244</span>.5<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>readline-8.2-h92ec313_1.conda
+</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>tk<span class="w">               </span><span class="m">8</span>.6.13<span class="w">        </span>h5083fa2_1<span class="w">          </span><span class="m">3</span><span class="w"> </span>MiB<span class="w">      </span>conda<span class="w">  </span>tk-8.6.13-h5083fa2_1.conda
+</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a>tzdata<span class="w">           </span>2024a<span class="w">         </span>h0c530f3_0<span class="w">          </span><span class="m">117</span><span class="w"> </span>KiB<span class="w">    </span>conda<span class="w">  </span>tzdata-2024a-h0c530f3_0.conda
+</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a>pixi_py<span class="w">          </span><span class="m">0</span>.1.0<span class="w">                                        </span>pypi<span class="w">   </span>.<span class="w"> </span><span class="o">(</span>editable<span class="o">)</span>
+</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a>xz<span class="w">               </span><span class="m">5</span>.2.6<span class="w">         </span>h57fd34a_0<span class="w">          </span><span class="m">230</span>.2<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>xz-5.2.6-h57fd34a_0.tar.bz2
+</span></code></pre></div>
 <div class="admonition python interpreters">
 <p class="admonition-title">Python</p>
-<p>The python interpreter is also installed in the environment. This is because the python interpreter version is read from the <code>requires-python</code> field in the <code>pyproject.toml</code> file. This is used to determine the python version to install in the environment. This way pixi automatically manages/bootstraps the python interpreter for you, so no more <code>brew</code>, <code>apt</code> or other system install steps.</p>
+<p>The Python interpreter is also installed in the environment.
+This is because the Python interpreter version is read from the <code>requires-python</code> field in the <code>pyproject.toml</code> file.
+This is used to determine the Python version to install in the environment.
+This way, pixi automatically manages/bootstraps the Python interpreter for you, so no more <code>brew</code>, <code>apt</code> or other system install steps.</p>
 </div>
-<p>Using <code>pixi list</code> you can see what's in the environment, this is essentially a nicer view on the lock file:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>list
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>Package<span class="w">          </span>Version<span class="w">       </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>bzip2<span class="w">            </span><span class="m">1</span>.0.8<span class="w">         </span>h93a5062_5<span class="w">          </span><span class="m">119</span>.5<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>bzip2-1.0.8-h93a5062_5.conda
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>ca-certificates<span class="w">  </span><span class="m">2024</span>.2.2<span class="w">      </span>hf0a4a13_0<span class="w">          </span><span class="m">152</span>.1<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>ca-certificates-2024.2.2-hf0a4a13_0.conda
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>libexpat<span class="w">         </span><span class="m">2</span>.6.2<span class="w">         </span>hebf3989_0<span class="w">          </span><span class="m">62</span>.2<span class="w"> </span>KiB<span class="w">   </span>conda<span class="w">  </span>libexpat-2.6.2-hebf3989_0.conda
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>libffi<span class="w">           </span><span class="m">3</span>.4.2<span class="w">         </span>h3422bc3_5<span class="w">          </span><span class="m">38</span>.1<span class="w"> </span>KiB<span class="w">   </span>conda<span class="w">  </span>libffi-3.4.2-h3422bc3_5.tar.bz2
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>libsqlite<span class="w">        </span><span class="m">3</span>.45.2<span class="w">        </span>h091b4b1_0<span class="w">          </span><span class="m">806</span><span class="w"> </span>KiB<span class="w">    </span>conda<span class="w">  </span>libsqlite-3.45.2-h091b4b1_0.conda
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>libzlib<span class="w">          </span><span class="m">1</span>.2.13<span class="w">        </span>h53f4e23_5<span class="w">          </span><span class="m">47</span><span class="w"> </span>KiB<span class="w">     </span>conda<span class="w">  </span>libzlib-1.2.13-h53f4e23_5.conda
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>ncurses<span class="w">          </span><span class="m">6</span>.4.20240210<span class="w">  </span>h078ce10_0<span class="w">          </span><span class="m">801</span><span class="w"> </span>KiB<span class="w">    </span>conda<span class="w">  </span>ncurses-6.4.20240210-h078ce10_0.conda
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>openssl<span class="w">          </span><span class="m">3</span>.2.1<span class="w">         </span>h0d3ecfb_1<span class="w">          </span><span class="m">2</span>.7<span class="w"> </span>MiB<span class="w">    </span>conda<span class="w">  </span>openssl-3.2.1-h0d3ecfb_1.conda
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>python<span class="w">           </span><span class="m">3</span>.12.3<span class="w">        </span>h4a7b5fc_0_cpython<span class="w">  </span><span class="m">12</span>.6<span class="w"> </span>MiB<span class="w">   </span>conda<span class="w">  </span>python-3.12.3-h4a7b5fc_0_cpython.conda
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>readline<span class="w">         </span><span class="m">8</span>.2<span class="w">           </span>h92ec313_1<span class="w">          </span><span class="m">244</span>.5<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>readline-8.2-h92ec313_1.conda
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>tk<span class="w">               </span><span class="m">8</span>.6.13<span class="w">        </span>h5083fa2_1<span class="w">          </span><span class="m">3</span><span class="w"> </span>MiB<span class="w">      </span>conda<span class="w">  </span>tk-8.6.13-h5083fa2_1.conda
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>tzdata<span class="w">           </span>2024a<span class="w">         </span>h0c530f3_0<span class="w">          </span><span class="m">117</span><span class="w"> </span>KiB<span class="w">    </span>conda<span class="w">  </span>tzdata-2024a-h0c530f3_0.conda
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>pixi_py<span class="w">          </span><span class="m">0</span>.1.0<span class="w">                                        </span>pypi<span class="w">   </span>.<span class="w"> </span><span class="o">(</span>editable<span class="o">)</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>xz<span class="w">               </span><span class="m">5</span>.2.6<span class="w">         </span>h57fd34a_0<span class="w">          </span><span class="m">230</span>.2<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>xz-5.2.6-h57fd34a_0.tar.bz2
+<p>Here, you can see the different conda and Pypi packages listed.
+As you can see, the <code>pixi_py</code> package that we are working on is installed in editable mode.
+Every environment in pixi is isolated but reuses files that are hard-linked from a central cache directory.
+This means that you can have multiple environments with the same packages but only have the individual files stored once on disk.</p>
+<p>We can create the <code>default</code> and <code>test</code> environments based on our own <code>test</code> feature from the <code>optional-dependency</code>:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Environments</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="k">[tool.pixi.environments]</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>Here you can see the different conda and pypi packages listed. And as you can see the <code>pixi_py</code> package, that we are working on, is installed in editable mode. Every environment in pixi is isolated, but re-uses files that are hard-linked from a central cache directory. This means that you can have multiple environments with the same packages, but only have the individual files stored once on disk.</p>
+<details class="note">
+<summary>Solve Groups</summary>
+<p>Solve groups are a way to group dependencies together.
+This is useful when you have multiple environments that share the same dependencies.
+For example, maybe <code>pytest</code> is a dependency that influences the dependencies of the <code>default</code> environment.
+By putting these in the same solve group, you ensure that the versions in <code>test</code> and <code>default</code> are exactly the same.</p>
+</details>
+<p>The <code>default</code> environment is created when you run <code>pixi install</code>.
+The <code>test</code> environment is created from the optional dependencies in the <code>pyproject.toml</code> file.
+You can execute commands in this environment with e.g. <code>pixi run -e test python</code></p>
 <h2 id="getting-code-to-run">Getting code to run<a class="headerlink" href="#getting-code-to-run" title="Permanent link">#</a></h2>
-<p>Lets add some code to the <code>pixi_py</code> package. We will add a new function to the <code>pixi_py/__init__.py</code> file:</p>
-<p><div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span> <span class="nn">rich</span> <span class="kn">import</span> <span class="nb">print</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="k">def</span> <span class="nf">hello</span><span class="p">():</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="k">return</span> <span class="s2">&quot;Hello, [bold magenta]World[/bold magenta]!&quot;</span><span class="p">,</span> <span class="s2">&quot;:vampire:&quot;</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="k">def</span> <span class="nf">say_hello</span><span class="p">():</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="o">*</span><span class="n">hello</span><span class="p">())</span>
+<p>Let's add some code to the <code>pixi_py</code> package.
+We will add a new function to the <code>pixi_py/__init__.py</code> file:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">from</span> <span class="nn">rich</span> <span class="kn">import</span> <span class="nb">print</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="k">def</span> <span class="nf">hello</span><span class="p">():</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="k">return</span> <span class="s2">&quot;Hello, [bold magenta]World[/bold magenta]!&quot;</span><span class="p">,</span> <span class="s2">&quot;:vampire:&quot;</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="k">def</span> <span class="nf">say_hello</span><span class="p">():</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>    <span class="nb">print</span><span class="p">(</span><span class="o">*</span><span class="n">hello</span><span class="p">())</span>
 </span></code></pre></div>
-Now add the <code>rich</code> dependency using: <code>pixi add --pypi rich</code>.</p>
-<p>Let's see if it this works by running:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>r<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import pixi_py; pixi_py.say_hello()&quot;</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>Hello,<span class="w"> </span>World!<span class="w"> </span>🧛
+<p>Now add the <code>rich</code> dependency from PyPI using: <code>pixi add --pypi rich</code>.</p>
+<p>Let's see if this works by running:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>pixi<span class="w"> </span>r<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import pixi_py; pixi_py.say_hello()&quot;</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>Hello,<span class="w"> </span>World!<span class="w"> </span>🧛
 </span></code></pre></div>
 <details class="note">
 <summary>Slow?</summary>
-<p>The first time this might be slow because we install the project but the second time it will be instant.</p>
+<p>This might be slow(2 minutes) the first time because pixi installs the project, but it will be near instant the second time.</p>
 </details>
-<p>So we are running a python interpreter installed from conda. And we are importing the <code>pixi_py</code> package that is installed in editable mode. And we are calling the <code>say_hello</code> function that we just added. And it works! Cool!</p>
+<p>Pixi runs the self installed Python interpreter.
+Then, we are importing the <code>pixi_py</code> package, which is installed in editable mode.
+The code calls the <code>say_hello</code> function that we just added.
+And it works! Cool!</p>
 <h2 id="testing-this-code">Testing this code<a class="headerlink" href="#testing-this-code" title="Permanent link">#</a></h2>
-<p>Okay, so let's add a test for this function. Let's add a <code>tests/test_me.py</code> file in root of the project.</p>
+<p>Okay, so let's add a test for this function.
+Let's add a <code>tests/test_me.py</code> file in the root of the project.</p>
 <p>Giving us the following project structure:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>.
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>├──<span class="w"> </span>pixi.lock
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>├──<span class="w"> </span>pixi_py
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>│<span class="w">   </span>├──<span class="w"> </span>__init__.py
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>├──<span class="w"> </span>pyproject.toml
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>└──<span class="w"> </span>tests/test_me.py
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>.
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>├──<span class="w"> </span>pixi.lock
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>├──<span class="w"> </span>pixi_py
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>│<span class="w">   </span>├──<span class="w"> </span>__init__.py
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>├──<span class="w"> </span>pyproject.toml
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>└──<span class="w"> </span>tests/test_me.py
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span> <span class="nn">pixi_py</span> <span class="kn">import</span> <span class="n">hello</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="k">def</span> <span class="nf">test_pixi_py</span><span class="p">():</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="k">assert</span> <span class="n">hello</span><span class="p">()</span> <span class="o">==</span> <span class="p">(</span><span class="s2">&quot;Hello, [bold magenta]World[/bold magenta]!&quot;</span><span class="p">,</span> <span class="s2">&quot;:vampire:&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="kn">from</span> <span class="nn">pixi_py</span> <span class="kn">import</span> <span class="n">hello</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="k">def</span> <span class="nf">test_pixi_py</span><span class="p">():</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>    <span class="k">assert</span> <span class="n">hello</span><span class="p">()</span> <span class="o">==</span> <span class="p">(</span><span class="s2">&quot;Hello, [bold magenta]World[/bold magenta]!&quot;</span><span class="p">,</span> <span class="s2">&quot;:vampire:&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p>Let's add an easy task for running the tests.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>✔<span class="w"> </span>Added<span class="w"> </span>task<span class="w"> </span><span class="sb">`</span><span class="nb">test</span><span class="sb">`</span>:<span class="w"> </span>pytest<span class="w"> </span>.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>✔<span class="w"> </span>Added<span class="w"> </span>task<span class="w"> </span><span class="sb">`</span><span class="nb">test</span><span class="sb">`</span>:<span class="w"> </span>pytest<span class="w"> </span>.
 </span></code></pre></div>
-<p>So pixi has a task system to make it easy to run commands. Similar to <code>npm</code> scripts or something you would specify in a <code>Justfile</code>.</p>
+<p>So pixi has a task system to make it easy to run commands.
+Similar to <code>npm</code> scripts or something you would specify in a <code>Justfile</code>.</p>
 <details class="tip">
 <summary>Pixi tasks</summary>
-<p>Tasks are actually a pretty cool pixi feature that are powerful and are run in a cross-platform shell. You can do caching, dependencies and more. Read more about tasks in the <a href="../../features/advanced_tasks/">tasks</a> section.</p>
+<p>Tasks are actually a pretty cool pixi feature that is powerful and runs in a cross-platform shell.
+You can do caching, dependencies and more.
+Read more about tasks in the <a href="../../features/advanced_tasks/">tasks</a> section.</p>
 </details>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>r<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>✨<span class="w"> </span>Pixi<span class="w"> </span>task<span class="w"> </span><span class="o">(</span><span class="nb">test</span><span class="o">)</span>:<span class="w"> </span>pytest<span class="w"> </span>.
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="o">=================================================================================================</span><span class="w"> </span><span class="nb">test</span><span class="w"> </span>session<span class="w"> </span><span class="nv">starts</span><span class="w"> </span><span class="o">=================================================================================================</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>platform<span class="w"> </span>darwin<span class="w"> </span>--<span class="w"> </span>Python<span class="w"> </span><span class="m">3</span>.12.2,<span class="w"> </span>pytest-8.1.1,<span class="w"> </span>pluggy-1.4.0
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>rootdir:<span class="w"> </span>/private/tmp/pixi_py
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>configfile:<span class="w"> </span>pyproject.toml
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>collected<span class="w"> </span><span class="m">1</span><span class="w"> </span>item
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>test_me.py<span class="w"> </span>.<span class="w">                                                                                                                                                                                                    </span><span class="o">[</span><span class="m">100</span>%<span class="o">]</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="o">==================================================================================================</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>passed<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="m">0</span>.00s<span class="w"> </span><span class="o">=================================================================================================</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>r<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>✨<span class="w"> </span>Pixi<span class="w"> </span>task<span class="w"> </span><span class="o">(</span><span class="nb">test</span><span class="o">)</span>:<span class="w"> </span>pytest<span class="w"> </span>.
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="o">=================================================================================================</span><span class="w"> </span><span class="nb">test</span><span class="w"> </span>session<span class="w"> </span><span class="nv">starts</span><span class="w"> </span><span class="o">=================================================================================================</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>platform<span class="w"> </span>darwin<span class="w"> </span>--<span class="w"> </span>Python<span class="w"> </span><span class="m">3</span>.12.2,<span class="w"> </span>pytest-8.1.1,<span class="w"> </span>pluggy-1.4.0
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>rootdir:<span class="w"> </span>/private/tmp/pixi_py
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>configfile:<span class="w"> </span>pyproject.toml
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>collected<span class="w"> </span><span class="m">1</span><span class="w"> </span>item
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>test_me.py<span class="w"> </span>.<span class="w">                                                                                                                                                                                                    </span><span class="o">[</span><span class="m">100</span>%<span class="o">]</span>
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>
+</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="o">==================================================================================================</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>passed<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="m">0</span>.00s<span class="w"> </span><span class="o">=================================================================================================</span>
 </span></code></pre></div>
-<p>Cool it seems to be working!</p>
+<p>Neat! It seems to be working!</p>
 <h3 id="test-vs-default-environment">Test vs Default environment<a class="headerlink" href="#test-vs-default-environment" title="Permanent link">#</a></h3>
-<p>Interesting thing is if we compare the output of
-the two environments.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi<span class="w"> </span>list<span class="w"> </span>-e<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># v.s. default environment</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>pixi<span class="w"> </span>list
+<p>The interesting thing is if we compare the output of the two environments.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>pixi<span class="w"> </span>list<span class="w"> </span>-e<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># v.s. default environment</span>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>pixi<span class="w"> </span>list
 </span></code></pre></div>
 <p>Is that the test environment has:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>package<span class="w">          </span>version<span class="w">       </span>build<span class="w">               </span>size<span class="w">       </span>kind<span class="w">   </span><span class="nb">source</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>...
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>pytest<span class="w">           </span><span class="m">8</span>.1.1<span class="w">                             </span><span class="m">1</span>.1<span class="w"> </span>mib<span class="w">    </span>pypi<span class="w">   </span>pytest-8.1.1-py3-none-any.whl
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>...
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>package<span class="w">          </span>version<span class="w">       </span>build<span class="w">               </span>size<span class="w">       </span>kind<span class="w">   </span><span class="nb">source</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>...
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>pytest<span class="w">           </span><span class="m">8</span>.1.1<span class="w">                             </span><span class="m">1</span>.1<span class="w"> </span>mib<span class="w">    </span>pypi<span class="w">   </span>pytest-8.1.1-py3-none-any.whl
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>...
 </span></code></pre></div>
 <p>But the default environment is missing this package.
-This way you can finetune your environments to only have the packages that are needed for that environment.
-E.g you could also have a <code>dev</code> environment that has <code>pytest</code> and <code>ruff</code> installed, but you could omit these from the <code>prod</code> environment.
-There is a <a href="https://github.com/prefix-dev/pixi/tree/main/examples/docker">docker</a> example that shows how to set-up a minimal <code>prod</code> environment, and copy from there.</p>
-<h2 id="replacing-pypi-packages-with-conda-packages">Replacing pypi packages with conda packages<a class="headerlink" href="#replacing-pypi-packages-with-conda-packages" title="Permanent link">#</a></h2>
+This way, you can finetune your environments to only have the packages that are needed for that environment.
+E.g. you could also have a <code>dev</code> environment that has <code>pytest</code> and <code>ruff</code> installed, but you could omit these from the <code>prod</code> environment.
+There is a <a href="https://github.com/prefix-dev/pixi/tree/main/examples/docker">docker</a> example that shows how to set up a minimal <code>prod</code> environment and copy from there.</p>
+<h2 id="replacing-pypi-packages-with-conda-packages">Replacing PyPI packages with conda packages<a class="headerlink" href="#replacing-pypi-packages-with-conda-packages" title="Permanent link">#</a></h2>
 <p>Last thing, pixi provides the ability for <code>pypi</code> packages to depend on <code>conda</code> packages.
-Let's add <code>pygments</code> to the <code>pyproject.toml</code> file. Which is a dependency of the <code>rich</code> package.</p>
-<p><div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>pygments
+Let's confirm this with <code>pixi list</code>:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>list
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>Package<span class="w">          </span>Version<span class="w">       </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>...
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>pygments<span class="w">         </span><span class="m">2</span>.17.2<span class="w">                            </span><span class="m">4</span>.1<span class="w"> </span>MiB<span class="w">    </span>pypi<span class="w">   </span>pygments-2.17.2-py3-none-any.http.whl
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>...
 </span></code></pre></div>
-This will add the following to the <code>pyproject.toml</code> file:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">[tool.pixi.dependencies]</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">pygments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.17.2,&lt;2.18&quot;</span>
+<p>Let's explicitly add <code>pygments</code> to the <code>pyproject.toml</code> file.
+Which is a dependency of the <code>rich</code> package.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>pygments
 </span></code></pre></div>
-<p>We can now see that the <code>pygments</code> package is now installed as conda package.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>list
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>Package<span class="w">          </span>Version<span class="w">       </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>...
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>pygments<span class="w">         </span><span class="m">2</span>.17.2<span class="w">        </span>pyhd8ed1ab_0<span class="w">        </span><span class="m">840</span>.3<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>pygments-2.17.2-pyhd8ed1ab_0.conda
+<p>This will add the following to the <code>pyproject.toml</code> file:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="k">[tool.pixi.dependencies]</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="n">pygments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.17.2,&lt;2.18&quot;</span>
 </span></code></pre></div>
-<p>This way PyPI dependencies and conda dependencies can be mixed and matched, and seamlessly interoperate.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>$<span class="w">  </span>pixi<span class="w"> </span>r<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import pixi_py; pixi_py.say_hello()&quot;</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>Hello,<span class="w"> </span>World!<span class="w"> </span>🧛
+<p>We can now see that the <code>pygments</code> package is now installed as a conda package.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>list
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>Package<span class="w">          </span>Version<span class="w">       </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
+</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>...
+</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>pygments<span class="w">         </span><span class="m">2</span>.17.2<span class="w">        </span>pyhd8ed1ab_0<span class="w">        </span><span class="m">840</span>.3<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>pygments-2.17.2-pyhd8ed1ab_0.conda
+</span></code></pre></div>
+<p>This way, PyPI dependencies and conda dependencies can be mixed and matched to seamlessly interoperate.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>$<span class="w">  </span>pixi<span class="w"> </span>r<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import pixi_py; pixi_py.say_hello()&quot;</span>
+</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>Hello,<span class="w"> </span>World!<span class="w"> </span>🧛
 </span></code></pre></div>
 <p>And it still works!</p>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
-<p>In this tutorial you've seen how easy it is to use a <code>pyproject.toml</code> to manage your pixi dependencies. As well, as how to use PyPI and conda dependencies together in the same project.</p>
-<p>Hopefully, this provides for flexible and powerful way to manage your python projects, and a fertile base for further exploration with pixi.</p>
+<p>In this tutorial, you've seen how easy it is to use a <code>pyproject.toml</code> to manage your pixi dependencies and environments.
+We have also explored how to use PyPI and conda dependencies seamlessly together in the same project and install optional dependencies to manage Python packages.</p>
+<p>Hopefully, this provides a flexible and powerful way to manage your Python projects and a fertile base for further exploration with Pixi.</p>
 <p>Thanks for reading! Happy Coding 🚀</p>
 <p>Any questions? Feel free to reach out or share this tutorial on <a href="https://twitter.com/prefix_dev">X</a>, <a href="https://discord.gg/kKV8ZxyzY4">join our Discord</a>, send us an <a href="mailto:hi@prefix.dev">e-mail</a> or follow our <a href="https://github.com/prefix-dev">GitHub</a>.</p>
 
