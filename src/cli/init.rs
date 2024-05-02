@@ -55,7 +55,7 @@ platforms = {{ platforms }}
 
 [pypi-options]
 {% if index_url %}index-url = "{{ index_url }}"{% endif %}
-{% if extra_index_urls %}extra-indexes = {{ extra_index_urls }}{% endif %}
+{% if extra_index_urls %}extra-index-urls = {{ extra_index_urls }}{% endif %}
 {%- endif %}
 
 [tasks]
@@ -165,11 +165,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &env,
             name,
             version,
-            &author,
+            author.as_ref(),
             channels,
             &platforms,
             None,
-            vec![],
+            &vec![],
         );
         let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
         for spec in conda_deps {
@@ -295,11 +295,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &env,
                 default_name,
                 version,
-                &author,
+                author.as_ref(),
                 channels,
                 &platforms,
                 index_url.as_ref(),
-                extra_index_urls,
+                &extra_index_urls,
             );
             fs::write(&pixi_manifest_path, rv).into_diagnostic()?;
         };
@@ -338,11 +338,11 @@ fn render_project(
     env: &Environment<'_>,
     name: String,
     version: &str,
-    author: &Option<(String, String)>,
+    author: Option<&(String, String)>,
     channels: Vec<String>,
     platforms: &Vec<String>,
     index_url: Option<&Url>,
-    extra_index_urls: Vec<Url>,
+    extra_index_urls: &Vec<Url>,
 ) -> String {
     env.render_named_str(
         consts::PROJECT_MANIFEST,

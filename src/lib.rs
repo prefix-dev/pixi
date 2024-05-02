@@ -1,6 +1,6 @@
 mod activation;
 pub mod cli;
-mod config;
+pub mod config;
 pub mod consts;
 mod environment;
 mod install;
@@ -28,7 +28,7 @@ pub use lock_file::load_lock_file;
 pub use lock_file::UpdateLockFileOptions;
 pub use project::{
     manifest::{EnvironmentName, FeatureName},
-    DependencyType, Project, SpecType,
+    DependencyType, HasFeatures, Project, SpecType,
 };
 pub use task::{
     CmdArgs, ExecutableTask, FindTaskError, FindTaskSource, RunOutput, SearchEnvironments, Task,

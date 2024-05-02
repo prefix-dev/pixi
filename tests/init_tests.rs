@@ -1,9 +1,14 @@
 mod common;
 
 use crate::common::PixiControl;
-use pixi::util::default_channel_config;
+use pixi::{
+    config::{Config, PyPIConfig},
+    util::default_channel_config,
+    HasFeatures,
+};
 use rattler_conda_types::{Channel, Version};
 use std::str::FromStr;
+use url::Url;
 
 #[tokio::test]
 async fn init_creates_project_manifest() {
@@ -74,4 +79,31 @@ async fn default_channel() {
         channels,
         [&Channel::from_str("conda-forge", &default_channel_config()).unwrap()]
     )
+}
+
+#[tokio::test]
+async fn default_pypi_config() {
+    let pixi = PixiControl::new().unwrap();
+    // Create new PyPI configuration
+    let index_url: Url = "https://pypi.org/simple".parse().unwrap();
+    let mut pypi_config = PyPIConfig::default();
+    pypi_config.index_url = Some(index_url.clone());
+    pypi_config.extra_index_urls = vec![index_url.clone()];
+    // pypi_config.keyring_provider = Some(pixi::config::KeyringProvider::Subprocess);
+    let mut config = Config::default();
+    config.pypi_config = pypi_config;
+    pixi.init().await.unwrap();
+
+    // Load the project
+    let project = pixi.project().unwrap();
+    let options = project.environment("default").unwrap().pypi_options();
+    assert_eq!(options.index_url, Some(index_url.clone()));
+    assert_eq!(options.extra_index_urls, Some(vec![index_url]));
+
+    // Cannot test this currently as the keyring provider is not stored in the project manifest
+    // so the projects methods always load it from the global configuration
+    // assert_eq!(
+    //     project.config().pypi_config().keyring_provider,
+    //     Some(pixi::config::KeyringProvider::Subprocess)
+    // );
 }

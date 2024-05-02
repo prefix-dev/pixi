@@ -141,7 +141,12 @@ pub trait HasFeatures<'p> {
             .unwrap_or_default()
     }
 
-    /// Returns the pypi options for this solve group.
+    /// Returns the pypi options for this collection.
+    ///
+    /// The pypi options of all features are combined. They will be combined in the order
+    /// that they are defined in the manifest.
+    /// The index-url is a special case and can only be defined once. This should have been
+    /// verified before-hand.
     fn pypi_options(&self) -> PypiOptions {
         self.features()
             .filter_map(|f| f.pypi_options())

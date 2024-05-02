@@ -14,7 +14,9 @@ use pixi::{
         project, remove, run,
         task::{self, AddArgs, AliasArgs},
     },
-    consts, EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
+    config::Config,
+    consts::{self, CONFIG_FILE, PIXI_DIR},
+    EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
     TaskGraphError,
 };
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
@@ -28,6 +30,7 @@ use pixi::TaskExecutionError;
 use pixi::UpdateLockFileOptions;
 use rattler_lock::{LockFile, Package};
 use std::{
+    io::Write,
     path::{Path, PathBuf},
     process::Output,
     str::FromStr,

@@ -116,7 +116,7 @@ pub struct RepodataConfig {
     pub disable_zstd: Option<bool>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum KeyringProvider {
     Disabled,
@@ -134,7 +134,7 @@ pub struct PyPIConfig {
     pub extra_index_urls: Vec<Url>,
     /// Whether to use the `keyring` executable to look up credentials.
     #[serde(default)]
-    keyring_provider: Option<KeyringProvider>,
+    pub keyring_provider: Option<KeyringProvider>,
 }
 
 impl PyPIConfig {
@@ -453,10 +453,10 @@ mod tests {
             Some(Url::parse("https://pypi.org/simple").unwrap())
         );
         assert!(config.pypi_config().extra_index_urls.len() == 1);
-        assert!(matches!(
+        assert_eq!(
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
-        ));
+        );
     }
 
     #[test]
