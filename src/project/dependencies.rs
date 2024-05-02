@@ -1,6 +1,6 @@
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Either;
-use rattler_conda_types::{NamelessMatchSpec, PackageName};
+use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName};
 use std::{borrow::Cow, hash::Hash};
 
 use super::manifest::{python::PyPiPackageName, PyPiRequirement};
@@ -117,5 +117,16 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Dependencies<N, D> {
         self.map
             .into_iter()
             .flat_map(|(name, specs)| specs.into_iter().map(move |spec| (name.clone(), spec)))
+    }
+}
+
+impl Dependencies<PackageName, NamelessMatchSpec> {
+    /// Converts this instance into an iterator of [`MatchSpec`]s.
+    pub fn into_match_specs(self) -> impl DoubleEndedIterator<Item = MatchSpec> {
+        self.map.into_iter().flat_map(|(name, specs)| {
+            specs
+                .into_iter()
+                .map(move |spec| MatchSpec::from_nameless(spec, Some(name.clone())))
+        })
     }
 }
