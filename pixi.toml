@@ -34,7 +34,6 @@ tbump = ">=6.9.0,<6.10"
 
 [target.linux-64.dependencies]
 compilers = ">=1.6.0"
-sysroot_linux-64 = ">2.19"
 
 [feature.docs.dependencies]
 mkdocs = "1.5.3.*"
