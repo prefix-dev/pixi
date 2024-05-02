@@ -2251,6 +2251,7 @@ By only calling:
 <li><code>--pypi</code>: Specifies a PyPI dependency, not a conda package.</li>
 <li><code>--platform &lt;PLATFORM&gt; (-p)</code>: The platform from which the dependency should be removed.</li>
 <li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature from which the dependency should be removed.</li>
+<li><code>--no-install</code>: Don't install the environment, only remove the package from the lock-file and manifest.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>remove<span class="w"> </span>numpy
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>pixi<span class="w"> </span>remove<span class="w"> </span>numpy<span class="w"> </span>pandas<span class="w"> </span>pytorch
@@ -2262,6 +2263,7 @@ By only calling:
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>pixi<span class="w"> </span>remove<span class="w"> </span>--feature<span class="w"> </span>featurex<span class="w"> </span>clang
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>pixi<span class="w"> </span>remove<span class="w"> </span>--feature<span class="w"> </span>featurex<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>clang
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>pixi<span class="w"> </span>remove<span class="w"> </span>--feature<span class="w"> </span>featurex<span class="w"> </span>--platform<span class="w"> </span>osx-64<span class="w"> </span>--build<span class="w"> </span>clang
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>pixi<span class="w"> </span>remove<span class="w"> </span>--no-install<span class="w"> </span>numpy
 </span></code></pre></div>
 <h2 id="task"><code>task</code><a class="headerlink" href="#task" title="Permanent link">#</a></h2>
 <p>If you want to make a shorthand for a specific command you can add a task for it.</p>
