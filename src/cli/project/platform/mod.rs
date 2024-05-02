@@ -21,10 +21,13 @@ pub struct Args {
 #[derive(Parser, Debug)]
 pub enum Command {
     /// Adds a platform(s) to the project file and updates the lockfile.
+    #[clap(visible_alias = "a")]
     Add(add::Args),
     /// List the platforms in the project file.
+    #[clap(visible_alias = "ls")]
     List,
     /// Remove platform(s) from the project file and updates the lockfile.
+    #[clap(visible_alias = "rm")]
     Remove(remove::Args),
 }
 

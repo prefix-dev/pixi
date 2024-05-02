@@ -105,7 +105,7 @@ pub trait HasFeatures<'p> {
     fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
+    ) -> IndexMap<PyPiPackageName, IndexSet<PyPiRequirement>> {
         self.features()
             .filter_map(|f| f.pypi_dependencies(platform))
             .fold(IndexMap::default(), |mut acc, deps| {
@@ -121,7 +121,7 @@ pub trait HasFeatures<'p> {
 
                 // Add the requirements to the accumulator.
                 for (name, spec) in deps_iter {
-                    acc.entry(name).or_default().push(spec);
+                    acc.entry(name).or_default().insert(spec);
                 }
 
                 acc
