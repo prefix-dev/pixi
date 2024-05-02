@@ -6,12 +6,14 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{Channel, Platform};
-use rattler_repodata_gateway::fetch;
 use rattler_repodata_gateway::fetch::FetchRepoDataOptions;
 use rattler_repodata_gateway::sparse::SparseRepoData;
+use rattler_repodata_gateway::{fetch, Reporter};
 use reqwest_middleware::ClientWithMiddleware;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
+use url::Url;
 
 pub async fn fetch_sparse_repodata(
     channels: impl IntoIterator<Item = &'_ Channel>,
@@ -121,6 +123,17 @@ pub async fn fetch_sparse_repodata_targets(
     repo_data.wrap_err("failed to fetch repodata from channels")
 }
 
+struct DownloadProgressReporter {
+    progress_bar: ProgressBar,
+}
+
+impl Reporter for DownloadProgressReporter {
+    fn on_download_progress(&self, _url: &Url, _index: usize, bytes: usize, total: Option<usize>) {
+        self.progress_bar.set_length(total.unwrap_or(bytes) as u64);
+        self.progress_bar.set_position(bytes as u64);
+    }
+}
+
 /// Given a channel and platform, download and cache the `repodata.json` for it. This function
 /// reports its progress via a CLI progressbar.
 async fn fetch_repo_data_records_with_progress(
@@ -133,15 +146,13 @@ async fn fetch_repo_data_records_with_progress(
     fetch_options: FetchRepoDataOptions,
 ) -> miette::Result<Option<SparseRepoData>> {
     // Download the repodata.json
-    let download_progress_progress_bar = progress_bar.clone();
     let result = fetch::fetch_repo_data(
         channel.platform_url(platform),
         client,
         repodata_cache.to_path_buf(),
         fetch_options,
-        Some(Box::new(move |fetch::DownloadProgress { total, bytes }| {
-            download_progress_progress_bar.set_length(total.unwrap_or(bytes));
-            download_progress_progress_bar.set_position(bytes);
+        Some(Arc::new(DownloadProgressReporter {
+            progress_bar: progress_bar.clone(),
         })),
     )
     .await;

@@ -377,7 +377,12 @@ async fn determine_latest_versions(
     // Get the records for the package
     let records = project
         .repodata_gateway()
-        .load_records(project.channels(), platforms, [name.clone()])
+        .query(
+            project.channels().into_iter().cloned(),
+            platforms,
+            [name.clone()],
+        )
+        .recursive(false)
         .await
         .into_diagnostic()?;
 
@@ -431,11 +436,12 @@ pub async fn determine_best_version<'p>(
     // Extract the package names from all the dependencies
     let fetch_repodata_start = Instant::now();
     let available_packages = repodata_gateway
-        .load_records_recursive(
-            channels,
+        .query(
+            channels.into_iter().cloned(),
             [platform, Platform::NoArch],
             dependencies.clone().into_match_specs(),
         )
+        .recursive(true)
         .await
         .into_diagnostic()?;
     let total_records = available_packages.iter().map(RepoData::len).sum::<usize>();

@@ -1176,11 +1176,12 @@ async fn spawn_solve_conda_environment_task(
             pb.set_message("loading repodata");
             let fetch_repodata_start = Instant::now();
             let available_packages = repodata_gateway
-                .load_records_recursive(
+                .query(
                     channels,
                     [platform, Platform::NoArch],
                     dependencies.clone().into_match_specs(),
                 )
+                .recursive(true)
                 .await
                 .into_diagnostic()?;
             let total_records = available_packages.iter().map(RepoData::len).sum::<usize>();
