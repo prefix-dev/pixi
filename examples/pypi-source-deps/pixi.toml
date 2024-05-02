@@ -17,9 +17,11 @@ python = "*"
 
 rich = "~=13.7"
 # Lets start with some git dependencies
-# With ssh
-flask = { git = "ssh://git@github.com/pallets/flask" }
+# With ssh: (you need to have the correct ssh keys setup for which I (ruben) am to lazy to set up correctly)
+# flask = { git = "ssh://git@github.com/pallets/flask" }
+
 # With https
+flask = { git = "https://github.com/pallets/flask" }
 requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
 # TODO: will support later -> or use branch = '' or tag = '' to specify a branch or tag
 
