@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+
 use url::Url;
 
 use crate::consts;
@@ -91,6 +92,10 @@ pub struct ConfigCli {
     /// Path to the file containing the authentication token.
     #[arg(long, env = "RATTLER_AUTH_FILE")]
     auth_file: Option<PathBuf>,
+
+    /// Specifies if we want to use uv keyring provider
+    #[arg(long)]
+    pypi_keyring_provider: Option<KeyringProvider>,
 }
 
 #[derive(Parser, Debug, Default, Clone)]
@@ -116,7 +121,7 @@ pub struct RepodataConfig {
     pub disable_zstd: Option<bool>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum KeyringProvider {
     Disabled,
@@ -151,6 +156,11 @@ impl PyPIConfig {
             extra_index_urls,
             keyring_provider: other.keyring_provider.or(self.keyring_provider),
         }
+    }
+
+    pub fn with_keyring(mut self, keyring_provider: KeyringProvider) -> Self {
+        self.keyring_provider = Some(keyring_provider);
+        self
     }
 
     /// Whether to use the `keyring` executable to look up credentials.
@@ -225,6 +235,10 @@ impl From<ConfigCli> for Config {
         Self {
             tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
             authentication_override_file: cli.auth_file,
+            pypi_config: cli
+                .pypi_keyring_provider
+                .map(|val| PyPIConfig::default().with_keyring(val))
+                .unwrap_or_default(),
             ..Default::default()
         }
     }
@@ -422,13 +436,19 @@ mod tests {
         let cli = ConfigCli {
             tls_no_verify: true,
             auth_file: None,
+            pypi_keyring_provider: Some(KeyringProvider::Subprocess),
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
+        assert_eq!(
+            config.pypi_config().keyring_provider,
+            Some(KeyringProvider::Subprocess)
+        );
 
         let cli = ConfigCli {
             tls_no_verify: false,
             auth_file: Some(PathBuf::from("path.json")),
+            pypi_keyring_provider: None,
         };
 
         let config = Config::from(cli);

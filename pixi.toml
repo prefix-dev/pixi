@@ -2,10 +2,10 @@
 name = "pixi"
 description = "Package management made easy!"
 authors = [
-  "Wolf Vollprecht <wolf@prefix.dev>",
-  "Bas Zalmstra <bas@prefix.dev>",
-  "Tim de Jager <tim@prefix.dev>",
-  "Ruben Arts <ruben@prefix.dev>",
+    "Wolf Vollprecht <wolf@prefix.dev>",
+    "Bas Zalmstra <bas@prefix.dev>",
+    "Tim de Jager <tim@prefix.dev>",
+    "Ruben Arts <ruben@prefix.dev>",
 ]
 channels = ["conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
@@ -17,6 +17,7 @@ test = "cargo test"
 test-all = "cargo test --all-features"
 lint = "pre-commit run --all"
 bump = "tbump --only-patch"
+pypi-proxy = "python ./tests/pypi_proxy.py"
 
 [dependencies]
 # Dev dependencies

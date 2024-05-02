@@ -7,6 +7,7 @@ use crate::common::builders::{
     AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, TaskAddBuilder,
     TaskAliasBuilder,
 };
+use pixi::consts;
 use pixi::{
     cli::{
         add, init,
@@ -14,8 +15,6 @@ use pixi::{
         project, remove, run,
         task::{self, AddArgs, AliasArgs},
     },
-    config::Config,
-    consts::{self, CONFIG_FILE, PIXI_DIR},
     EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
     TaskGraphError,
 };
@@ -30,7 +29,6 @@ use pixi::TaskExecutionError;
 use pixi::UpdateLockFileOptions;
 use rattler_lock::{LockFile, Package};
 use std::{
-    io::Write,
     path::{Path, PathBuf},
     process::Output,
     str::FromStr,

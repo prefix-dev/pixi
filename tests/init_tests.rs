@@ -1,14 +1,9 @@
 mod common;
 
 use crate::common::PixiControl;
-use pixi::{
-    config::{Config, PyPIConfig},
-    util::default_channel_config,
-    HasFeatures,
-};
+use pixi::util::default_channel_config;
 use rattler_conda_types::{Channel, Version};
 use std::str::FromStr;
-use url::Url;
 
 #[tokio::test]
 async fn init_creates_project_manifest() {
