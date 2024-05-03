@@ -12,7 +12,6 @@ The `.netrc` file can be stored in your home directory (`$HOME/.netrc` for Unix-
 In the `.netrc` file, you store authentication details like this:
 
 ```sh
-Copy code
 machine registry-name
 login admin
 password admin
