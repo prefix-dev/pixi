@@ -1,6 +1,7 @@
 mod common;
 
 use std::path::Path;
+use std::str::FromStr;
 
 use crate::common::builders::string_from_iter;
 use crate::common::package_database::{Package, PackageDatabase};
@@ -8,6 +9,7 @@ use common::{LockFileExt, PixiControl};
 use pixi::cli::{run, LockFileUsageArgs};
 use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
 use rattler_conda_types::Platform;
+use rattler_lock::PypiPackageData;
 use serial_test::serial;
 use tempfile::TempDir;
 use uv_interpreter::PythonEnvironment;
@@ -355,4 +357,45 @@ async fn install_conda_meta_history() {
     let conda_meta_history_file = prefix.join("conda-meta/history");
 
     assert!(conda_meta_history_file.exists());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[serial]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn minimal_lockfile_update_pypi() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    // Add and update lockfile with this version of python
+    pixi.add("python==3.11").with_install(true).await.unwrap();
+
+    // Add pypi dependencies which are not the latest options
+    pixi.add_multiple(vec!["uvicorn==0.28.0", "click==7.1.2"])
+        .set_type(pixi::DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    // Check the locked click dependencies
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_pep508_requirement(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
+    ));
+
+    // Widening the click version to allow for the latest version
+    pixi.add_multiple(vec!["uvicorn==0.29.0", "click"])
+        .set_type(pixi::DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    // Check the locked click dependencies to see if it was only minimally updated
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_pep508_requirement(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
+    ));
 }

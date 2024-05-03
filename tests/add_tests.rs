@@ -253,6 +253,3 @@ async fn add_sdist_functionality() {
         .await
         .unwrap();
 }
-
-// TODO TEST MINIMAL UPDATE:
-// - Add fake wheels that depends on different versions of flask.
