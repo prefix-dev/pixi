@@ -137,7 +137,17 @@ impl Display for EnvironmentInfo {
             )?;
         }
         if !self.tasks.is_empty() {
-            let tasks_list = self.tasks.iter().map(|t| t.fancy_display()).format(", ");
+            let tasks_list = self
+                .tasks
+                .iter()
+                .filter_map(|t| {
+                    if !t.as_str().starts_with('_') {
+                        Some(t.fancy_display())
+                    } else {
+                        None
+                    }
+                })
+                .format(", ");
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Tasks"), tasks_list)?;
         }
         Ok(())

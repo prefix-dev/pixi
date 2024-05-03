@@ -35,7 +35,7 @@ start = { cmd = [
   "12345678",
   "-e",
   "python",
-], depends_on = "compile" }
+], depends-on = "compile" }
 
 [target.osx-64.tasks]
 compile = { cmd = "clang -shared -o src/factorial.so src/factorial.c" }

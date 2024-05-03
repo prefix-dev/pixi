@@ -171,8 +171,8 @@ Pixi's tasks are run in a pixi environment using `pixi run` and are executed usi
 [tasks]
 simple = "echo This is a simple task"
 cmd = { cmd="echo Same as a simple task but now more verbose"}
-depending = { cmd="echo run after simple", depends_on="simple"}
-alias = { depends_on=["depending"]}
+depending = { cmd="echo run after simple", depends-on="simple"}
+alias = { depends-on=["depending"]}
 download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
 build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
@@ -181,6 +181,10 @@ run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
 You can modify this table using [`pixi task`](cli.md#task).
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
+
+!!! info
+    If you want to hide a task from showing up with `pixi task list` or `pixi info`, you can prefix the name with `_`.
+    For example, if you want to hide `depending`, you can rename it to `_depending`.
 
 ## The `system-requirements` table
 

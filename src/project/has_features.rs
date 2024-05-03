@@ -1,17 +1,13 @@
-use std::{borrow::Cow, collections::HashSet};
+use std::collections::HashSet;
 
-use indexmap::{IndexMap, IndexSet};
-use itertools::Either;
+use indexmap::IndexSet;
 use rattler_conda_types::{Channel, Platform};
 
 use crate::{Project, SpecType};
 
 use super::{
-    manifest::{
-        pypi_options::PypiOptions, python::PyPiPackageName, Feature, PyPiRequirement,
-        SystemRequirements,
-    },
-    Dependencies,
+    manifest::{pypi_options::PypiOptions, Feature, SystemRequirements},
+    CondaDependencies, PyPiDependencies,
 };
 
 /// A trait that implement various methods for collections that combine attributes of Features
@@ -102,30 +98,10 @@ pub trait HasFeatures<'p> {
     /// The dependencies of all features are combined. This means that if two features define a
     /// requirement for the same package that both requirements are returned. The different
     /// requirements per package are sorted in the same order as the features they came from.
-    fn pypi_dependencies(
-        &self,
-        platform: Option<Platform>,
-    ) -> IndexMap<PyPiPackageName, IndexSet<PyPiRequirement>> {
+    fn pypi_dependencies(&self, platform: Option<Platform>) -> PyPiDependencies {
         self.features()
             .filter_map(|f| f.pypi_dependencies(platform))
-            .fold(IndexMap::default(), |mut acc, deps| {
-                // Either clone the values from the Cow or move the values from the owned map.
-                let deps_iter = match deps {
-                    Cow::Borrowed(borrowed) => Either::Left(
-                        borrowed
-                            .into_iter()
-                            .map(|(name, spec)| (name.clone(), spec.clone())),
-                    ),
-                    Cow::Owned(owned) => Either::Right(owned.into_iter()),
-                };
-
-                // Add the requirements to the accumulator.
-                for (name, spec) in deps_iter {
-                    acc.entry(name).or_default().insert(spec);
-                }
-
-                acc
-            })
+            .into()
     }
 
     /// Returns the dependencies to install for this collection.
@@ -133,12 +109,14 @@ pub trait HasFeatures<'p> {
     /// The dependencies of all features are combined. This means that if two features define a
     /// requirement for the same package that both requirements are returned. The different
     /// requirements per package are sorted in the same order as the features they came from.
-    fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
+    fn dependencies(
+        &self,
+        kind: Option<SpecType>,
+        platform: Option<Platform>,
+    ) -> CondaDependencies {
         self.features()
             .filter_map(|f| f.dependencies(kind, platform))
-            .map(|deps| Dependencies::from(deps.into_owned()))
-            .reduce(|acc, deps| acc.union(&deps))
-            .unwrap_or_default()
+            .into()
     }
 
     /// Returns the pypi options for this solve group.

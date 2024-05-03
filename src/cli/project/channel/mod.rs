@@ -21,10 +21,13 @@ pub struct Args {
 #[derive(Parser, Debug)]
 pub enum Command {
     /// Adds a channel to the project file and updates the lockfile.
+    #[clap(visible_alias = "a")]
     Add(add::Args),
     /// List the channels in the project file.
+    #[clap(visible_alias = "ls")]
     List(list::Args),
     /// Remove channel(s) from the project file and updates the lockfile.
+    #[clap(visible_alias = "rm")]
     Remove(remove::Args),
 }
 

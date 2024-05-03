@@ -11,7 +11,7 @@ use crate::{task::Task, Project};
 use itertools::Either;
 use rattler_conda_types::{Arch, Platform};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Debug,
     hash::{Hash, Hasher},
     sync::Once,
@@ -158,6 +158,23 @@ impl<'p> Environment<'p> {
         Ok(result)
     }
 
+    /// Return all tasks available for the given environment
+    /// This will not return task prefixed with _
+    pub fn get_filtered_tasks(&self) -> HashSet<TaskName> {
+        self.tasks(Some(Platform::current()))
+            .into_iter()
+            .flat_map(|tasks| {
+                tasks.into_iter().filter_map(|(key, _)| {
+                    if !key.as_str().starts_with('_') {
+                        Some(key)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .map(ToOwned::to_owned)
+            .collect()
+    }
     /// Returns the task with the given `name` and for the specified `platform` or an `UnknownTask`
     /// which explains why the task was not available.
     pub fn task(
@@ -263,7 +280,7 @@ impl<'p> Hash for Environment<'p> {
 
 #[cfg(test)]
 mod tests {
-    use crate::project::Dependencies;
+    use crate::project::CondaDependencies;
 
     use super::*;
     use insta::assert_snapshot;
@@ -363,8 +380,30 @@ mod tests {
             .tasks(Some(Platform::Osx64))
             .is_err())
     }
+    #[test]
+    fn test_filtered_tasks() {
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = []
+        platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
-    fn format_dependencies(dependencies: Dependencies) -> String {
+        [tasks]
+        foo = "echo foo"
+        _bar = "echo bar"
+        "#,
+        )
+        .unwrap();
+
+        let task = manifest.default_environment().get_filtered_tasks();
+
+        assert_eq!(task.len(), 1);
+        assert_eq!(task.contains(&"foo".into()), true);
+    }
+
+    fn format_dependencies(dependencies: CondaDependencies) -> String {
         dependencies
             .into_specs()
             .map(|(name, spec)| format!("{} = {}", name.as_source(), spec))
