@@ -89,7 +89,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Fetch sparse repodata
     let (authenticated_client, sparse_repodata) =
-        get_client_and_sparse_repodata(&channels, &config).await?;
+        get_client_and_sparse_repodata(&channels, args.platform.clone(), &config).await?;
 
     let records = load_package_records(package_matchspec, &sparse_repodata)?;
     let package_record = records
