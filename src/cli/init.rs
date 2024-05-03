@@ -67,7 +67,7 @@ platforms = {{ platforms }}
 /// The pyproject.toml template
 ///
 /// This is injected into an existing pyproject.toml
-const PYROJECT_TEMPLATE: &str = r#"
+const PYROJECT_TEMPLATE_EXISTING: &str = r#"
 [tool.pixi.project]
 channels = {{ channels }}
 platforms = {{ platforms }}
@@ -107,6 +107,14 @@ build-backend = "setuptools.build_meta"
 [tool.pixi.project]
 channels = {{ channels }}
 platforms = {{ platforms }}
+
+
+{%- if index_url or extra_indexes %}
+
+[tool.pixi.pypi-options]
+{% if index_url %}index-url = "{{ index_url }}"{% endif %}
+{% if extra_index_urls %}extra-index-urls = {{ extra_index_urls }}{% endif %}
+{%- endif %}
 
 [tool.pixi.pypi-dependencies]
 {{ name }} = { path = ".", editable = true }
@@ -230,7 +238,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,
-                    PYROJECT_TEMPLATE,
+                    PYROJECT_TEMPLATE_EXISTING,
                     context! {
                         name,
                         channels,
@@ -280,7 +288,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         version,
                         author,
                         channels,
-                        platforms
+                        platforms,
+                        index_url => index_url.as_ref(),
+                        extra_index_urls => &extra_index_urls,
                     },
                 )
                 .unwrap();
