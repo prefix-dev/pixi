@@ -9,7 +9,6 @@ use common::{LockFileExt, PixiControl};
 use pixi::cli::{run, LockFileUsageArgs};
 use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
 use rattler_conda_types::Platform;
-use rattler_lock::PypiPackageData;
 use serial_test::serial;
 use tempfile::TempDir;
 use uv_interpreter::PythonEnvironment;
