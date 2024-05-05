@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::time::Duration;
 
 use clap::Parser;
@@ -16,7 +16,6 @@ use super::common::{
     find_installed_package, get_client_and_sparse_repodata, load_package_records, HasSpecs,
 };
 use super::install::globally_install_package;
-use super::list::list_global_packages;
 
 /// Upgrade specific package which is installed globally.
 #[derive(Parser, Debug)]
@@ -47,29 +46,7 @@ impl HasSpecs for Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::load_global();
-
-    // Get the MatchSpec(s) we need to upgrade
     let specs = args.specs()?;
-
-    // Return with error if any package is not globally installed.
-    let global_packages = list_global_packages()
-        .await?
-        .into_iter()
-        .collect::<HashSet<_>>();
-    let requested = specs.keys().cloned().collect::<HashSet<_>>();
-    let not_installed = requested.difference(&global_packages).collect_vec();
-    match not_installed.len() {
-        0 => {} // Do nothing when all packages are globally installed
-        1 => miette::bail!(
-            "Package {} is not globally installed",
-            not_installed[0].as_normalized(),
-        ),
-        _ => miette::bail!(
-            "Packages {} are not globally installed",
-            not_installed.iter().map(|p| p.as_normalized()).join(", "),
-        ),
-    };
-
     upgrade_packages(specs, config, &args.channel).await
 }
 

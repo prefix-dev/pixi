@@ -125,7 +125,7 @@ pub fn bin_env_dir() -> Option<PathBuf> {
 /// # Returns
 ///
 /// The package name from the given MatchSpec
-pub(super) fn package_name(package_matchspec: &MatchSpec) -> miette::Result<PackageName> {
+fn package_name(package_matchspec: &MatchSpec) -> miette::Result<PackageName> {
     package_matchspec.name.clone().ok_or_else(|| {
         miette::miette!(
             "could not find package name in MatchSpec {}",
