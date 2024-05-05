@@ -1,5 +1,5 @@
 use clap::Parser;
-use itertools::Itertools;
+use indexmap::IndexMap;
 
 use rattler_conda_types::MatchSpec;
 
@@ -30,13 +30,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
 
     let names = list_global_packages().await?;
-    let specs = names
-        .iter()
-        .map(|name| MatchSpec {
-            name: Some(name.clone()),
-            ..Default::default()
-        })
-        .collect_vec();
+    let mut specs = IndexMap::with_capacity(names.len());
+    for name in names {
+        specs.insert(
+            name.clone(),
+            MatchSpec {
+                name: Some(name),
+                ..Default::default()
+            },
+        );
+    }
 
-    upgrade_packages(names, specs, config, &args.channel).await
+    upgrade_packages(specs, config, &args.channel).await
 }

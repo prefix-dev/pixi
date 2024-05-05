@@ -2,18 +2,18 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use clap::Parser;
+use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, MatchSpec, PackageName, Version};
-use rattler_conda_types::{ParseStrictness, RepoDataRecord};
+use rattler_conda_types::{Channel, MatchSpec, PackageName, RepoDataRecord, Version};
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::config::Config;
 use crate::progress::{global_multi_progress, long_running_progress_style};
 
 use super::common::{
-    find_installed_package, get_client_and_sparse_repodata, load_package_records, package_name,
+    find_installed_package, get_client_and_sparse_repodata, load_package_records, HasSpecs,
 };
 use super::install::globally_install_package;
 use super::list::list_global_packages;
@@ -39,26 +39,24 @@ pub struct Args {
     channel: Vec<String>,
 }
 
+impl HasSpecs for Args {
+    fn packages(&self) -> Vec<&str> {
+        self.specs.iter().map(AsRef::as_ref).collect()
+    }
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::load_global();
 
     // Get the MatchSpec(s) we need to upgrade
-    let specs = args
-        .specs
-        .iter()
-        .map(|p| MatchSpec::from_str(p, ParseStrictness::Strict).into_diagnostic())
-        .collect::<Result<Vec<_>, _>>()?;
-    let names = specs
-        .iter()
-        .map(package_name)
-        .collect::<Result<Vec<_>, _>>()?;
+    let specs = args.specs()?;
 
     // Return with error if any package is not globally installed.
     let global_packages = list_global_packages()
         .await?
         .into_iter()
         .collect::<HashSet<_>>();
-    let requested = names.iter().cloned().collect::<HashSet<_>>();
+    let requested = specs.keys().cloned().collect::<HashSet<_>>();
     let not_installed = requested.difference(&global_packages).collect_vec();
     match not_installed.len() {
         0 => {} // Do nothing when all packages are globally installed
@@ -72,7 +70,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ),
     };
 
-    upgrade_packages(names, specs, config, &args.channel).await
+    upgrade_packages(specs, config, &args.channel).await
 }
 
 pub(super) async fn upgrade_package(
@@ -103,16 +101,15 @@ pub(super) async fn upgrade_package(
 }
 
 pub(super) async fn upgrade_packages(
-    names: Vec<PackageName>,
-    specs: Vec<MatchSpec>,
+    specs: IndexMap<PackageName, MatchSpec>,
     config: Config,
     cli_channels: &[String],
 ) -> Result<(), miette::Error> {
     // Get channels and versions of globally installed packages
-    let mut installed_versions = HashMap::with_capacity(names.len());
+    let mut installed_versions = HashMap::with_capacity(specs.len());
     let mut channels = config.compute_channels(cli_channels).into_diagnostic()?;
 
-    for package_name in names.iter() {
+    for package_name in specs.keys() {
         let prefix_record = find_installed_package(package_name).await?;
         let last_installed_channel = Channel::from_str(
             prefix_record.repodata_record.channel.clone(),
@@ -137,7 +134,7 @@ pub(super) async fn upgrade_packages(
 
     // Upgrade each package when relevant
     let mut upgraded = false;
-    for (package_name, package_matchspec) in names.into_iter().zip(specs.into_iter()) {
+    for (package_name, package_matchspec) in specs {
         let matchspec_has_version = package_matchspec.version.is_some();
         let records = load_package_records(package_matchspec, &sparse_repodata)?;
         let package_record = records
