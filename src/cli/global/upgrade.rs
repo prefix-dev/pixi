@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use clap::Parser;
@@ -21,8 +22,9 @@ use super::list::list_global_packages;
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
-    /// Specifies the package that is to be upgraded.
-    package: String,
+    /// Specifies the packages to upgrade.
+    #[arg(required = true)]
+    pub specs: Vec<String>,
 
     /// Represents the channels from which to upgrade specified package.
     /// Multiple channels can be specified by using this field multiple times.
@@ -38,85 +40,39 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    // Get the MatchSpec we need to upgrade
-    let package_matchspec =
-        MatchSpec::from_str(&args.package, ParseStrictness::Strict).into_diagnostic()?;
-    let package_name = package_name(&package_matchspec)?;
-    let matchspec_has_version = package_matchspec.version.is_some();
-
-    // Return with error if this package is not globally installed.
-    if !list_global_packages()
-        .await?
-        .iter()
-        .any(|global_package| global_package.as_normalized() == package_name.as_normalized())
-    {
-        miette::bail!(
-            "Package {} is not globally installed",
-            package_name.as_source()
-        );
-    }
-
-    let prefix_record = find_installed_package(&package_name).await?;
-    let installed_version = prefix_record
-        .repodata_record
-        .package_record
-        .version
-        .into_version();
-
     let config = Config::load_global();
 
-    // Figure out what channels we are using
-    let last_installed_channel = Channel::from_str(
-        prefix_record.repodata_record.channel.clone(),
-        config.channel_config(),
-    )
-    .into_diagnostic()?;
-
-    let mut channels = vec![last_installed_channel];
-    let input_channels = args
-        .channel
+    // Get the MatchSpec(s) we need to upgrade
+    let specs = args
+        .specs
         .iter()
-        .map(|c| Channel::from_str(c, config.channel_config()))
-        .collect::<Result<Vec<Channel>, _>>()
-        .into_diagnostic()?;
-    channels.extend(input_channels);
-    // Remove possible duplicates
-    channels = channels.into_iter().unique().collect::<Vec<_>>();
-
-    // Fetch sparse repodata
-    let (authenticated_client, sparse_repodata) =
-        get_client_and_sparse_repodata(&channels, &config).await?;
-
-    let records = load_package_records(package_matchspec, &sparse_repodata)?;
-    let package_record = records
+        .map(|p| MatchSpec::from_str(p, ParseStrictness::Strict).into_diagnostic())
+        .collect::<Result<Vec<_>, _>>()?;
+    let names = specs
         .iter()
-        .find(|r| r.package_record.name.as_normalized() == package_name.as_normalized())
-        .ok_or_else(|| {
-            miette::miette!(
-                "Package {} not found in the specified channels",
-                package_name.as_normalized()
-            )
-        })?;
-    let toinstall_version = package_record.package_record.version.version().to_owned();
+        .map(package_name)
+        .collect::<Result<Vec<_>, _>>()?;
 
-    if !matchspec_has_version
-        && toinstall_version.cmp(&installed_version) != std::cmp::Ordering::Greater
-    {
-        eprintln!(
-            "Package {} is already up-to-date",
-            package_name.as_normalized(),
-        );
-        return Ok(());
-    }
+    // Return with error if any package is not globally installed.
+    let global_packages = list_global_packages()
+        .await?
+        .into_iter()
+        .collect::<HashSet<_>>();
+    let requested = names.iter().cloned().collect::<HashSet<_>>();
+    let not_installed = requested.difference(&global_packages).collect_vec();
+    match not_installed.len() {
+        0 => {} // Do nothing when all packages are globally installed
+        1 => miette::bail!(
+            "Package {} is not globally installed",
+            not_installed[0].as_normalized(),
+        ),
+        _ => miette::bail!(
+            "Packages {} are not globally installed",
+            not_installed.iter().map(|p| p.as_normalized()).join(", "),
+        ),
+    };
 
-    upgrade_package(
-        &package_name,
-        installed_version,
-        toinstall_version,
-        records,
-        authenticated_client,
-    )
-    .await
+    upgrade_packages(names, specs, config, &args.channel).await
 }
 
 pub(super) async fn upgrade_package(
@@ -143,5 +99,80 @@ pub(super) async fn upgrade_package(
     ));
     globally_install_package(package_name, records, authenticated_client).await?;
     pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));
+    Ok(())
+}
+
+pub(super) async fn upgrade_packages(
+    names: Vec<PackageName>,
+    specs: Vec<MatchSpec>,
+    config: Config,
+    cli_channels: &[String],
+) -> Result<(), miette::Error> {
+    // Get channels and versions of globally installed packages
+    let mut installed_versions = HashMap::with_capacity(names.len());
+    let mut channels = config.compute_channels(cli_channels).into_diagnostic()?;
+
+    for package_name in names.iter() {
+        let prefix_record = find_installed_package(package_name).await?;
+        let last_installed_channel = Channel::from_str(
+            prefix_record.repodata_record.channel.clone(),
+            config.channel_config(),
+        )
+        .into_diagnostic()?;
+
+        channels.push(last_installed_channel);
+
+        let installed_version = prefix_record
+            .repodata_record
+            .package_record
+            .version
+            .into_version();
+        installed_versions.insert(package_name.clone(), installed_version);
+    }
+    channels = channels.into_iter().unique().collect();
+
+    // Fetch sparse repodata
+    let (authenticated_client, sparse_repodata) =
+        get_client_and_sparse_repodata(&channels, &config).await?;
+
+    // Upgrade each package when relevant
+    let mut upgraded = false;
+    for (package_name, package_matchspec) in names.into_iter().zip(specs.into_iter()) {
+        let matchspec_has_version = package_matchspec.version.is_some();
+        let records = load_package_records(package_matchspec, &sparse_repodata)?;
+        let package_record = records
+            .iter()
+            .find(|r| r.package_record.name == package_name)
+            .ok_or_else(|| {
+                miette::miette!(
+                    "Package {} not found in the specified channels",
+                    package_name.as_normalized()
+                )
+            })?;
+        let toinstall_version = package_record.package_record.version.version().to_owned();
+        let installed_version = installed_versions
+            .get(&package_name)
+            .expect("should have the installed version")
+            .to_owned();
+
+        // Perform upgrade if a specific version was requested
+        // OR if a more recent version is available
+        if matchspec_has_version || toinstall_version > installed_version {
+            upgrade_package(
+                &package_name,
+                installed_version,
+                toinstall_version,
+                records,
+                authenticated_client.clone(),
+            )
+            .await?;
+            upgraded = true;
+        }
+    }
+
+    if !upgraded {
+        eprintln!("Nothing to upgrade");
+    }
+
     Ok(())
 }
