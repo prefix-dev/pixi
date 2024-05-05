@@ -7,7 +7,6 @@ use crate::progress::{global_multi_progress, long_running_progress_style};
 use clap::Parser;
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
 
 #[derive(Parser, Debug)]
 pub enum Command {
@@ -38,8 +37,11 @@ pub struct EnvironmentArgs {
 /// Clean the parts of your system which are touched by pixi.
 #[derive(Parser, Debug)]
 pub struct CacheArgs {
+    #[arg(long)]
     pub all: bool,
+    #[arg(long)]
     pub pypi: bool,
+    #[arg(long)]
     pub conda: bool,
 }
 
@@ -59,9 +61,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .map(|n| EnvironmentName::from_str(n.as_str()))
                 .transpose()?
                 .map(|n| {
-                    project
-                        .environment(&n)
-                        .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
+                    project.environment(&n).ok_or_else(|| {
+                        miette::miette!(
+                            "unknown environment '{n}' in {}",
+                            project
+                                .manifest_path()
+                                .to_str()
+                                .expect("expected to have a manifest_path")
+                        )
+                    })
                 })
                 .transpose()?;
 
@@ -70,10 +78,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 pb.enable_steady_tick(Duration::from_millis(100));
                 pb.set_style(long_running_progress_style());
                 let message = format!(
-                    "environment: {} from {}",
+                    "environment: '{}' from '{}'",
                     explicit_env.name().fancy_display(),
                     explicit_env.dir().display()
                 );
+
+                if !explicit_env.dir().exists() {
+                    pb.finish_with_message(
+                        console::style(format!("{} does not exist", message))
+                            .yellow()
+                            .to_string(),
+                    );
+                    return Ok(());
+                }
                 pb.set_message(format!(
                     "{} {}",
                     console::style("Removing").green(),
@@ -81,7 +98,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 ));
 
                 // Ignore errors
-                let _ = std::fs::remove_dir_all(explicit_env.dir());
+                let _ = tokio::fs::remove_dir(explicit_env.dir()).await;
 
                 pb.finish_with_message(format!(
                     "{} {}",
@@ -93,9 +110,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 pb.enable_steady_tick(Duration::from_millis(100));
                 pb.set_style(long_running_progress_style());
                 let message = format!(
-                    "all environments in {}",
+                    "all environments in '{}'",
                     project.environments_dir().display()
                 );
+
+                if !project.environments_dir().exists() {
+                    pb.finish_with_message(
+                        console::style(format!("{} does not exist", message))
+                            .yellow()
+                            .to_string(),
+                    );
+                    return Ok(());
+                }
+
                 pb.set_message(format!(
                     "{} {}",
                     console::style("Removing").green(),
@@ -103,7 +130,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 ));
 
                 // Ignore errors
-                let _ = std::fs::remove_dir_all(project.environments_dir()).into_diagnostic();
+                let _ = tokio::fs::remove_dir_all(project.environments_dir()).await;
 
                 pb.finish_with_message(format!(
                     "{} {}",
@@ -116,19 +143,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         Command::Cache(args) => {
             let mut dirs = vec![];
-            if args.all {
-                dirs.push(config::get_cache_dir()?);
-            } else if args.pypi {
+
+            if args.pypi {
                 dirs.push(config::get_cache_dir()?.join("pypi"));
-            } else if args.conda {
+            }
+            if args.conda {
                 dirs.push(config::get_cache_dir()?.join("pkgs"));
+            }
+            if args.all || dirs.is_empty() {
+                dirs.push(config::get_cache_dir()?);
             }
 
             let pb = global_multi_progress().add(ProgressBar::new_spinner());
             pb.enable_steady_tick(Duration::from_millis(100));
             pb.set_style(long_running_progress_style());
             let message = format!(
-                "cache from {}",
+                "cache from '{}'",
                 dirs.iter()
                     .map(|dir| dir.to_string_lossy().to_string())
                     .join(", ")
@@ -141,9 +171,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             // Ignore errors
             for dir in dirs {
-                let _ = std::fs::remove_dir_all(dir).into_diagnostic();
+                if dir.exists() {
+                    let _ = tokio::fs::remove_dir_all(&dir).await;
+                    pb.finish_with_message(format!(
+                        "{} {}",
+                        console::style("removed").green(),
+                        message
+                    ));
+                }
+                pb.finish_with_message(
+                    console::style(format!("{} was already removed", message))
+                        .yellow()
+                        .to_string(),
+                );
             }
-            pb.finish_with_message(format!("{} {}", console::style("removed").green(), message));
         }
     }
 
