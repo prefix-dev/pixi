@@ -6,8 +6,7 @@ use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, MatchSpec, PackageName, RepoDataRecord, Version};
-use reqwest_middleware::ClientWithMiddleware;
+use rattler_conda_types::{Channel, MatchSpec, PackageName};
 
 use crate::config::Config;
 use crate::progress::{global_multi_progress, long_running_progress_style};
@@ -50,38 +49,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     upgrade_packages(specs, config, &args.channel).await
 }
 
-pub(super) async fn upgrade_package(
-    package_name: &PackageName,
-    installed_version: Version,
-    toinstall_version: Version,
-    records: Vec<RepoDataRecord>,
-    authenticated_client: ClientWithMiddleware,
-) -> miette::Result<()> {
-    let message = format!(
-        "{} v{} -> v{}",
-        package_name.as_normalized(),
-        installed_version,
-        toinstall_version
-    );
-
-    let pb = global_multi_progress().add(ProgressBar::new_spinner());
-    pb.enable_steady_tick(Duration::from_millis(100));
-    pb.set_style(long_running_progress_style());
-    pb.set_message(format!(
-        "{} {}",
-        console::style("Updating").green(),
-        message
-    ));
-    globally_install_package(package_name, records, authenticated_client).await?;
-    pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));
-    Ok(())
-}
-
 pub(super) async fn upgrade_packages(
     specs: IndexMap<PackageName, MatchSpec>,
     config: Config,
     cli_channels: &[String],
-) -> Result<(), miette::Error> {
+) -> miette::Result<()> {
     // Get channels and versions of globally installed packages
     let mut installed_versions = HashMap::with_capacity(specs.len());
     let mut channels = config.compute_channels(cli_channels).into_diagnostic()?;
@@ -132,14 +104,23 @@ pub(super) async fn upgrade_packages(
         // Perform upgrade if a specific version was requested
         // OR if a more recent version is available
         if matchspec_has_version || toinstall_version > installed_version {
-            upgrade_package(
-                &package_name,
+            let message = format!(
+                "{} v{} -> v{}",
+                package_name.as_normalized(),
                 installed_version,
-                toinstall_version,
-                records,
-                authenticated_client.clone(),
-            )
-            .await?;
+                toinstall_version
+            );
+
+            let pb = global_multi_progress().add(ProgressBar::new_spinner());
+            pb.enable_steady_tick(Duration::from_millis(100));
+            pb.set_style(long_running_progress_style());
+            pb.set_message(format!(
+                "{} {}",
+                console::style("Updating").green(),
+                message
+            ));
+            globally_install_package(&package_name, records, authenticated_client.clone()).await?;
+            pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));
             upgraded = true;
         }
     }
