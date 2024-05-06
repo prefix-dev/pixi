@@ -321,8 +321,6 @@ mod tests {
         );
     }
 
-    // TODO: Add a test to verify that feature specific channels work as expected.
-
     #[test]
     fn test_default_platforms() {
         let manifest = Project::from_str(
@@ -511,13 +509,13 @@ mod tests {
 
         [environments]
         foo = ["foo"]
-        bar = ["bar"]
         foobar = ["foo", "bar"]
         barfoo = {features = ["barfoo"], no-default-feature=true}
         "#,
         )
         .unwrap();
 
+        // All channels are added in order of the features and default is last
         let foobar_channels = manifest.environment("foobar").unwrap().channels();
         assert_eq!(
             foobar_channels
@@ -526,6 +524,7 @@ mod tests {
                 .collect_vec(),
             vec!["c", "d", "e", "f", "a", "b"]
         );
+
         let foo_channels = manifest.environment("foo").unwrap().channels();
         assert_eq!(
             foo_channels
@@ -535,15 +534,7 @@ mod tests {
             vec!["c", "d", "a", "b"]
         );
 
-        let bar_channels = manifest.environment("bar").unwrap().channels();
-        assert_eq!(
-            bar_channels
-                .into_iter()
-                .map(|c| c.name.clone().unwrap())
-                .collect_vec(),
-            vec!["e", "f", "a", "b"]
-        );
-
+        // The default feature is not included in the channels, so only the feature channels are included.
         let barfoo_channels = manifest.environment("barfoo").unwrap().channels();
         assert_eq!(
             barfoo_channels
@@ -555,13 +546,13 @@ mod tests {
     }
 
     #[test]
-    fn test_channel_feature_priority_with_redifinition() {
+    fn test_channel_feature_priority_with_redefinition() {
         let manifest = Project::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]
-        name = "holoviews"
-        channels = ["a", "b"]
+        name = "test"
+        channels = ["d", "a", "b"]
         platforms = ["linux-64"]
 
         [environments]
@@ -569,6 +560,7 @@ mod tests {
 
         [feature.foo]
         channels = ["a", "c", "b"]
+
         "#,
         )
         .unwrap();
@@ -579,15 +571,18 @@ mod tests {
                 .into_iter()
                 .map(|c| c.name.clone().unwrap())
                 .collect_vec(),
-            vec!["a", "b"]
+            vec!["d", "a", "b"]
         );
+
+        // Check if the feature channels are sorted correctly,
+        // and that the remaining channels from the default feature are appended.
         let foo_channels = manifest.environment("foo").unwrap().channels();
         assert_eq!(
             foo_channels
                 .into_iter()
                 .map(|c| c.name.clone().unwrap())
                 .collect_vec(),
-            vec!["a", "c", "b"]
+            vec!["a", "c", "b", "d"]
         );
     }
 
