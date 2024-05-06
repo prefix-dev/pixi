@@ -490,7 +490,8 @@ mod tests {
         );
     }
 
-    fn test_channel_feature_priority(){
+    #[test]
+    fn test_channel_feature_priority() {
         let manifest = Project::from_str(
             Path::new("pixi.toml"),
             r#"
@@ -512,10 +513,10 @@ mod tests {
         foo = ["foo"]
         bar = ["bar"]
         foobar = ["foo", "bar"]
-        barfoo = {features = ["barfoo"], no-default-features=true}
+        barfoo = {features = ["barfoo"], no-default-feature=true}
         "#,
         )
-            .unwrap();
+        .unwrap();
 
         let foobar_channels = manifest.environment("foobar").unwrap().channels();
         assert_eq!(
@@ -523,7 +524,7 @@ mod tests {
                 .into_iter()
                 .map(|c| c.name.clone().unwrap())
                 .collect_vec(),
-            vec!["a", "b", "c", "d", "e", "f"]
+            vec!["c", "d", "e", "f", "a", "b"]
         );
         let foo_channels = manifest.environment("foo").unwrap().channels();
         assert_eq!(
@@ -531,7 +532,7 @@ mod tests {
                 .into_iter()
                 .map(|c| c.name.clone().unwrap())
                 .collect_vec(),
-            vec!["a", "b", "c", "d"]
+            vec!["c", "d", "a", "b"]
         );
 
         let bar_channels = manifest.environment("bar").unwrap().channels();
@@ -540,11 +541,54 @@ mod tests {
                 .into_iter()
                 .map(|c| c.name.clone().unwrap())
                 .collect_vec(),
-            vec!["a", "b", "e", "f"]
+            vec!["e", "f", "a", "b"]
         );
 
         let barfoo_channels = manifest.environment("barfoo").unwrap().channels();
-        assert_eq!(barfoo_channels.into_iter().map(|c| c.name.clone().unwrap()).collect_vec(), vec!["a", "f"])
+        assert_eq!(
+            barfoo_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["a", "f"]
+        )
+    }
+
+    #[test]
+    fn test_channel_feature_priority_with_redifinition() {
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "holoviews"
+        channels = ["a", "b"]
+        platforms = ["linux-64"]
+
+        [environments]
+        foo = ["foo"]
+
+        [feature.foo]
+        channels = ["a", "c", "b"]
+        "#,
+        )
+        .unwrap();
+
+        let foobar_channels = manifest.environment("default").unwrap().channels();
+        assert_eq!(
+            foobar_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["a", "b"]
+        );
+        let foo_channels = manifest.environment("foo").unwrap().channels();
+        assert_eq!(
+            foo_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["a", "c", "b"]
+        );
     }
 
     #[test]

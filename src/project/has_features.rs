@@ -27,15 +27,15 @@ pub trait HasFeatures<'p> {
     fn channels(&self) -> IndexSet<&'p Channel> {
         // We reverse once before collecting into an IndexSet, and once after,
         // to ensure the default channels of the project are added to the end of the list.
-        let mut channels: IndexSet<_> = self
+        let channels: IndexSet<_> = self
             .features()
             .flat_map(|feature| match &feature.channels {
                 Some(channels) => channels,
                 None => &self.project().manifest.parsed.project.channels,
             })
-            .rev()
+            // .rev()
             .collect();
-        channels.reverse();
+        // channels.reverse();
 
         // The prioritized channels contain a priority, sort on this priority.
         // Higher priority comes first. [-10, 1, 0 ,2] -> [2, 1, 0, -10]
