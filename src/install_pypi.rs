@@ -22,7 +22,7 @@ use uv_configuration::{ConfigSettings, SetupPyStrategy};
 use uv_resolver::InMemoryIndex;
 use uv_types::HashStrategy;
 
-use crate::consts::PROJECT_MANIFEST;
+use crate::consts::{PIXI_UV_INSTALLER, PROJECT_MANIFEST};
 use crate::lock_file::UvResolutionContext;
 use crate::project::manifest::SystemRequirements;
 
@@ -49,8 +49,6 @@ use uv_normalize::PackageName;
 use uv_resolver::FlatIndex;
 
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
-
-const PIXI_UV_INSTALLER: &str = "uv-pixi";
 
 fn elapsed(duration: Duration) -> String {
     let secs = duration.as_secs();
