@@ -433,7 +433,11 @@ async fn test_installer_name() {
             default_env_path.join("Lib/python").exists(),
             "python does not exist"
         );
-        default_env_path.join("Lib/python/site-packages/click-8.0.0.dist-info")
+        assert!(
+            default_env_path.join("Lib/Python/site-packages").exists(),
+            "site-packages does not exist"
+        );
+        default_env_path.join("Lib/Python/site-packages/click-8.0.0.dist-info")
     };
     // Check that installer name is uv-pixi
     assert!(dist_info.exists(), "{dist_info:?} does not exist");
