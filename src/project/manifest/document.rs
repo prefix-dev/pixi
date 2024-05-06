@@ -124,7 +124,7 @@ impl ManifestSource {
     }
 
     /// Returns a mutable reference to the specified array either in project or feature.
-    pub fn specific_array_mut(
+    pub fn get_array_mut(
         &mut self,
         array_name: &str,
         feature_name: &FeatureName,

@@ -204,23 +204,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Environment<'p>>) {
     let available_tasks: HashSet<TaskName> =
         if let Some(explicit_environment) = explicit_environment {
-            explicit_environment
-                .tasks(Some(Platform::current()))
-                .into_iter()
-                .flat_map(|tasks| tasks.into_keys())
-                .map(ToOwned::to_owned)
-                .collect()
+            explicit_environment.get_filtered_tasks()
         } else {
             project
                 .environments()
                 .into_iter()
                 .filter(|env| verify_current_platform_has_required_virtual_packages(env).is_ok())
-                .flat_map(|env| {
-                    env.tasks(Some(Platform::current()))
-                        .into_iter()
-                        .flat_map(|tasks| tasks.into_keys())
-                        .map(ToOwned::to_owned)
-                })
+                .flat_map(|env| env.get_filtered_tasks())
                 .collect()
         };
 

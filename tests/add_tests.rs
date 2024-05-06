@@ -50,6 +50,11 @@ async fn add_functionality() {
     assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==3"));
     assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==2"));
     assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==1"));
+
+    // remove the package, using matchspec
+    pixi.remove("rattler==1").await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==1"));
 }
 
 /// Test that we get the union of all packages in the lockfile for the run, build and host

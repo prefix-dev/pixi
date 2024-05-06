@@ -131,6 +131,7 @@ impl<'p> LockFileDerivedData<'p> {
             &python_status,
             &environment.system_requirements(),
             uv_context,
+            &environment.pypi_options(),
             env_variables,
             self.project.root(),
         )
@@ -805,6 +806,16 @@ pub async fn ensure_up_to_date_lock_file(
         // Get environment variables from the activation
         let env_variables = project.get_env_variables(&environment).await?;
 
+        // Get the previously locked pypi records
+        let locked_pypi_records = Arc::new(
+            context
+                .locked_pypi_records
+                .get(&environment)
+                .and_then(|records| records.get(&platform))
+                .map(|records| records.records.clone())
+                .unwrap_or_default(),
+        );
+
         // Spawn a task to solve the pypi environment
         let pypi_solve_future = spawn_solve_pypi_task(
             uv_context,
@@ -815,6 +826,7 @@ pub async fn ensure_up_to_date_lock_file(
             env_variables,
             pypi_solve_semaphore.clone(),
             project.root().to_path_buf(),
+            locked_pypi_records,
         );
 
         pending_futures.push(pypi_solve_future.boxed_local());
@@ -1027,30 +1039,35 @@ pub async fn ensure_up_to_date_lock_file(
 
     // Iterate over all environments and add their records to the lock-file.
     for environment in project.environments() {
+        let environment_name = environment.name().to_string();
+        let grouped_env = GroupedEnvironment::from(environment.clone());
+
         builder.set_channels(
-            environment.name().as_str(),
-            environment
+            &environment_name,
+            grouped_env
                 .channels()
                 .into_iter()
                 .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string())),
         );
 
+        let mut has_pypi_records = false;
         for platform in environment.platforms() {
             if let Some(records) = context.take_latest_repodata_records(&environment, platform) {
                 for record in records.into_inner() {
-                    builder.add_conda_package(environment.name().as_str(), platform, record.into());
+                    builder.add_conda_package(&environment_name, platform, record.into());
                 }
             }
             if let Some(records) = context.take_latest_pypi_records(&environment, platform) {
                 for (pkg_data, pkg_env_data) in records.into_inner() {
-                    builder.add_pypi_package(
-                        environment.name().as_str(),
-                        platform,
-                        pkg_data,
-                        pkg_env_data,
-                    );
+                    builder.add_pypi_package(&environment_name, platform, pkg_data, pkg_env_data);
+                    has_pypi_records = true;
                 }
             }
+        }
+
+        // Store the indexes that were used to solve the environment. But only if there are pypi packages.
+        if has_pypi_records {
+            builder.set_pypi_indexes(&environment_name, grouped_env.pypi_options().into());
         }
     }
 
@@ -1451,6 +1468,7 @@ async fn spawn_solve_pypi_task(
     env_variables: &HashMap<String, String>,
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
+    locked_pypi_packages: Arc<Vec<PypiRecord>>,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1484,6 +1502,7 @@ async fn spawn_solve_pypi_task(
     )
     .await?;
 
+    let pypi_options = environment.pypi_options();
     // let (pypi_packages, duration) = tokio::spawn(
     let (pypi_packages, duration) = async move {
         let pb = SolveProgressBar::new(
@@ -1502,12 +1521,14 @@ async fn spawn_solve_pypi_task(
 
         let records = lock_file::resolve_pypi(
             resolution_context,
+            &pypi_options,
             dependencies
                 .into_iter()
                 .map(|(name, requirement)| (name.as_normalized().clone(), requirement))
                 .collect(),
             system_requirements,
             &conda_records,
+            locked_pypi_packages,
             platform,
             &pb.pb,
             &python_path,

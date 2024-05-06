@@ -171,8 +171,8 @@ Pixi's tasks are run in a pixi environment using `pixi run` and are executed usi
 [tasks]
 simple = "echo This is a simple task"
 cmd = { cmd="echo Same as a simple task but now more verbose"}
-depending = { cmd="echo run after simple", depends_on="simple"}
-alias = { depends_on=["depending"]}
+depending = { cmd="echo run after simple", depends-on="simple"}
+alias = { depends-on=["depending"]}
 download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
 build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
@@ -181,6 +181,10 @@ run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
 You can modify this table using [`pixi task`](cli.md#task).
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
+
+!!! info
+    If you want to hide a task from showing up with `pixi task list` or `pixi info`, you can prefix the name with `_`.
+    For example, if you want to hide `depending`, you can rename it to `_depending`.
 
 ## The `system-requirements` table
 
@@ -242,6 +246,31 @@ cuda = "11" # or any other version of cuda you want to use
 ```
 
 This informs the solver that cuda is going to be available, so it can lock it into the lock file if needed.
+
+## The `pypi-options` table
+
+The `pypi-options` table is used to define options that are specific to PyPI registries.
+These options can be specified either at the root level, which will add it to the default options feature, or on feature level, which will create a union of these options when the features are included in the environment.
+
+### Alternative registries
+Currently the main reason to use this table is to define alternative registries.
+We support:
+
+- `index-url`: replaces the main index url.
+- `extra-index-urls`: adds an extra index url.
+- `find-links`: which can either be a path `{path: './links'}` or a url `{url: 'https://example.com/links'}`. This is similar to the `--find-links` option in `pip`.
+
+An example:
+
+```toml
+[pypi-options]
+index-url = "https://pypi.org/simple"
+extra-index-urls = ["https://example.com/simple"]
+find-links = [{path: './links'}]
+```
+
+There are some examples in the pixi repository that make use of this feature.
+
 
 ## The `dependencies` table(s)
 

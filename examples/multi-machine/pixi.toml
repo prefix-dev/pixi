@@ -8,7 +8,7 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 [tasks]
 train = "python train.py"
 test = "python test.py"
-start = { depends_on = ["train", "test"] }
+start = { depends-on = ["train", "test"] }
 
 [dependencies]
 python = "3.11.*"
