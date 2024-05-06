@@ -235,8 +235,15 @@ class TaskInlineTable(StrictBaseModel):
         description="A shell command to run the task in the limited, but cross-platform `bash`-like `deno_task_shell`. See the documentation for [supported syntax](https://pixi.sh/latest/features/advanced_tasks/#syntax)",
     )
     cwd: PathNoBackslash | None = Field(None, description="The working directory to run the task")
+    # BREAK: `depends_on` is deprecated, use `depends-on`
+    depends_on_deprecated: list[TaskName] | TaskName | None = Field(
+        None,
+        alias = "depends_on",
+        description="The tasks that this task depends on. Environment variables will **not** be expanded. Deprecated in favor of `depends-on` from v0.21.0 onward.",
+    )
     depends_on: list[TaskName] | TaskName | None = Field(
         None,
+        alias="depends-on",
         description="The tasks that this task depends on. Environment variables will **not** be expanded.",
     )
     inputs: list[Glob] | None = Field(

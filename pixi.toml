@@ -54,6 +54,7 @@ deploy-dev = "mike deploy --push dev devel"
 
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
+# Using deprecated `depends_on` to avoid conflicts in ci. Changes after release.
 test-schema = { cmd = "pytest -s", depends_on = "generate-schema", cwd = "schema" }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 toml-format = "taplo fmt **/pixi.toml"

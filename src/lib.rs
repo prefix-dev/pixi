@@ -27,8 +27,9 @@ pub use activation::get_activation_env;
 pub use lock_file::load_lock_file;
 pub use lock_file::UpdateLockFileOptions;
 pub use project::{
+    has_features::HasFeatures,
     manifest::{EnvironmentName, FeatureName},
-    DependencyType, HasFeatures, Project, SpecType,
+    DependencyType, Project, SpecType,
 };
 pub use task::{
     CmdArgs, ExecutableTask, FindTaskError, FindTaskSource, RunOutput, SearchEnvironments, Task,

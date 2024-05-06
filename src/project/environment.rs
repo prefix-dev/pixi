@@ -239,7 +239,7 @@ impl<'p> Hash for Environment<'p> {
 
 #[cfg(test)]
 mod tests {
-    use crate::project::Dependencies;
+    use crate::project::CondaDependencies;
 
     use super::*;
     use insta::assert_snapshot;
@@ -362,7 +362,7 @@ mod tests {
         assert_eq!(task.contains(&"foo".into()), true);
     }
 
-    fn format_dependencies(dependencies: Dependencies) -> String {
+    fn format_dependencies(dependencies: CondaDependencies) -> String {
         dependencies
             .into_specs()
             .map(|(name, spec)| format!("{} = {}", name.as_source(), spec))

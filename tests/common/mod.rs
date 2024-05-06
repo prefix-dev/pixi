@@ -216,7 +216,7 @@ impl PixiControl {
         }
     }
 
-    /// Add dependencies to the project. Returns an [`AddBuilder`].
+    /// Add a dependency to the project. Returns an [`AddBuilder`].
     /// the command and await the result call `.await` on the return value.
     pub fn add(&self, spec: &str) -> AddBuilder {
         AddBuilder {
@@ -224,6 +224,25 @@ impl PixiControl {
                 manifest_path: Some(self.manifest_path()),
                 host: false,
                 specs: vec![spec.to_string()],
+                build: false,
+                no_install: true,
+                no_lockfile_update: false,
+                platform: Default::default(),
+                pypi: false,
+                feature: None,
+                config: Default::default(),
+            },
+        }
+    }
+
+    /// Add dependencies to the project. Returns an [`AddBuilder`].
+    /// the command and await the result call `.await` on the return value.
+    pub fn add_multiple(&self, specs: Vec<&str>) -> AddBuilder {
+        AddBuilder {
+            args: add::Args {
+                manifest_path: Some(self.manifest_path()),
+                host: false,
+                specs: specs.iter().map(|s| s.to_string()).collect(),
                 build: false,
                 no_install: true,
                 no_lockfile_update: false,
@@ -247,6 +266,7 @@ impl PixiControl {
                 platform: Default::default(),
                 feature: None,
                 config: Default::default(),
+                no_install: true,
             },
         }
     }

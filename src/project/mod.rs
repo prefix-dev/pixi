@@ -8,8 +8,7 @@ mod solve_group;
 pub mod virtual_packages;
 
 use async_once_cell::OnceCell as AsyncCell;
-
-use indexmap::{Equivalent, IndexMap, IndexSet};
+use indexmap::{Equivalent, IndexSet};
 use miette::{IntoDiagnostic, NamedSource};
 
 use rattler_conda_types::{Channel, Platform, Version};
@@ -35,15 +34,15 @@ use crate::{
     consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
     task::Task,
 };
-use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
+use manifest::{EnvironmentName, Manifest, SystemRequirements};
 
-use crate::project::manifest::python::PyPiPackageName;
-pub use dependencies::Dependencies;
+use self::{
+    has_features::HasFeatures,
+    manifest::{pyproject::PyProjectToml, Environments},
+};
+pub use dependencies::{CondaDependencies, PyPiDependencies};
 pub use environment::Environment;
 pub use solve_group::SolveGroup;
-
-pub use self::has_features::HasFeatures;
-use self::manifest::{pyproject::PyProjectToml, Environments};
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -435,17 +434,18 @@ impl Project {
     /// Returns the dependencies of the project.
     ///
     /// TODO: Remove this function and use the `dependencies` function from the default environment instead.
-    pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
+    pub fn dependencies(
+        &self,
+        kind: Option<SpecType>,
+        platform: Option<Platform>,
+    ) -> CondaDependencies {
         self.default_environment().dependencies(kind, platform)
     }
 
     /// Returns the PyPi dependencies of the project
     ///
     /// TODO: Remove this function and use the `dependencies` function from the default environment instead.
-    pub fn pypi_dependencies(
-        &self,
-        platform: Option<Platform>,
-    ) -> IndexMap<PyPiPackageName, IndexSet<PyPiRequirement>> {
+    pub fn pypi_dependencies(&self, platform: Option<Platform>) -> PyPiDependencies {
         self.default_environment().pypi_dependencies(platform)
     }
 
@@ -595,7 +595,7 @@ mod tests {
         }
     }
 
-    fn format_dependencies(deps: Dependencies) -> String {
+    fn format_dependencies(deps: CondaDependencies) -> String {
         deps.iter_specs()
             .map(|(name, spec)| format!("{} = \"{}\"", name.as_source(), spec))
             .join("\n")

@@ -4,12 +4,11 @@ use clap::Parser;
 use clap_verbosity_flag::{Level, Verbosity};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::ParseStrictness::Strict;
-use rattler_conda_types::{MatchSpec, PackageName};
+use rattler_conda_types::PackageName;
 
 use crate::prefix::Prefix;
 
-use super::common::{find_designated_package, BinDir, BinEnvDir};
+use super::common::{find_designated_package, BinDir, BinEnvDir, HasSpecs};
 use super::install::{find_and_map_executable_scripts, BinScriptMapping};
 
 /// Removes a package previously installed into a globally accessible location via `pixi global install`.
@@ -24,24 +23,14 @@ pub struct Args {
     verbose: Verbosity,
 }
 
-pub async fn execute(args: Args) -> miette::Result<()> {
-    // Find the MatchSpec we want to remove
-    let specs = args
-        .package
-        .into_iter()
-        .map(|package_str| MatchSpec::from_str(&package_str, Strict))
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
-    let packages = specs
-        .into_iter()
-        .map(|spec| {
-            spec.name
-                .clone()
-                .ok_or_else(|| miette::miette!("could not find package name in MatchSpec {}", spec))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+impl HasSpecs for Args {
+    fn packages(&self) -> Vec<&str> {
+        self.package.iter().map(AsRef::as_ref).collect()
+    }
+}
 
-    for package_name in packages {
+pub async fn execute(args: Args) -> miette::Result<()> {
+    for (package_name, _) in args.specs()? {
         remove_global_package(package_name, &args.verbose).await?;
     }
 
