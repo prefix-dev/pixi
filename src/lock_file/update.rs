@@ -806,6 +806,16 @@ pub async fn ensure_up_to_date_lock_file(
         // Get environment variables from the activation
         let env_variables = project.get_env_variables(&environment).await?;
 
+        // Get the previously locked pypi records
+        let locked_pypi_records = Arc::new(
+            context
+                .locked_pypi_records
+                .get(&environment)
+                .and_then(|records| records.get(&platform))
+                .map(|records| records.records.clone())
+                .unwrap_or_default(),
+        );
+
         // Spawn a task to solve the pypi environment
         let pypi_solve_future = spawn_solve_pypi_task(
             uv_context,
@@ -816,6 +826,7 @@ pub async fn ensure_up_to_date_lock_file(
             env_variables,
             pypi_solve_semaphore.clone(),
             project.root().to_path_buf(),
+            locked_pypi_records,
         );
 
         pending_futures.push(pypi_solve_future.boxed_local());
@@ -1457,6 +1468,7 @@ async fn spawn_solve_pypi_task(
     env_variables: &HashMap<String, String>,
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
+    locked_pypi_packages: Arc<Vec<PypiRecord>>,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1516,6 +1528,7 @@ async fn spawn_solve_pypi_task(
                 .collect(),
             system_requirements,
             &conda_records,
+            locked_pypi_packages,
             platform,
             &pb.pb,
             &python_path,
