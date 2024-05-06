@@ -490,6 +490,63 @@ mod tests {
         );
     }
 
+    fn test_channel_feature_priority(){
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["a", "b"]
+        platforms = ["linux-64", "osx-64"]
+
+        [feature.foo]
+        channels = ["c", "d"]
+
+        [feature.bar]
+        channels = ["e", "f"]
+
+        [feature.barfoo]
+        channels = ["a", "f"]
+
+        [environments]
+        foo = ["foo"]
+        bar = ["bar"]
+        foobar = ["foo", "bar"]
+        barfoo = {features = ["barfoo"], no-default-features=true}
+        "#,
+        )
+            .unwrap();
+
+        let foobar_channels = manifest.environment("foobar").unwrap().channels();
+        assert_eq!(
+            foobar_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["a", "b", "c", "d", "e", "f"]
+        );
+        let foo_channels = manifest.environment("foo").unwrap().channels();
+        assert_eq!(
+            foo_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["a", "b", "c", "d"]
+        );
+
+        let bar_channels = manifest.environment("bar").unwrap().channels();
+        assert_eq!(
+            bar_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["a", "b", "e", "f"]
+        );
+
+        let barfoo_channels = manifest.environment("barfoo").unwrap().channels();
+        assert_eq!(barfoo_channels.into_iter().map(|c| c.name.clone().unwrap()).collect_vec(), vec!["a", "f"])
+    }
+
     #[test]
     fn test_channel_priorities() {
         let manifest = Project::from_str(
