@@ -208,7 +208,7 @@ pub async fn get_up_to_date_prefix(
     lock_file_usage: LockFileUsage,
     mut no_install: bool,
 ) -> miette::Result<Prefix> {
-    let current_platform = Platform::current();
+    let current_platform = environment.best_platform();
     let project = environment.project();
 
     // Do not install if the platform is not supported
@@ -251,6 +251,7 @@ pub async fn update_prefix_pypi(
     pypi_options: &PypiOptions,
     environment_variables: &HashMap<String, String>,
     lock_file_dir: &Path,
+    platform: Platform,
 ) -> miette::Result<()> {
     // Remove python packages from a previous python distribution if the python version changed.
 
@@ -271,6 +272,7 @@ pub async fn update_prefix_pypi(
                 uv_context,
                 pypi_options,
                 environment_variables,
+                platform,
             )
         },
     )

@@ -2,10 +2,10 @@
 name = "pixi"
 description = "Package management made easy!"
 authors = [
-  "Wolf Vollprecht <wolf@prefix.dev>",
-  "Bas Zalmstra <bas@prefix.dev>",
-  "Tim de Jager <tim@prefix.dev>",
-  "Ruben Arts <ruben@prefix.dev>",
+    "Wolf Vollprecht <wolf@prefix.dev>",
+    "Bas Zalmstra <bas@prefix.dev>",
+    "Tim de Jager <tim@prefix.dev>",
+    "Ruben Arts <ruben@prefix.dev>",
 ]
 channels = ["conda-forge"]
 #channels = ["https://fast.prefix.dev/conda-forge"]
@@ -18,6 +18,7 @@ test = "cargo test"
 test-all = "cargo test --all-features"
 lint = "pre-commit run --all"
 bump = "tbump --only-patch"
+pypi-proxy = "python ./tests/pypi_proxy.py"
 
 [dependencies]
 # Dev dependencies
@@ -35,7 +36,6 @@ tbump = ">=6.9.0,<6.10"
 
 [target.linux-64.dependencies]
 compilers = ">=1.6.0"
-sysroot_linux-64 = ">2.19"
 
 [feature.docs.dependencies]
 mkdocs = "1.5.3.*"
@@ -54,6 +54,7 @@ deploy-dev = "mike deploy --push dev devel"
 
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
+# Using deprecated `depends_on` to avoid conflicts in ci. Changes after release.
 test-schema = { cmd = "pytest -s", depends_on = "generate-schema", cwd = "schema" }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 toml-format = "taplo fmt **/pixi.toml"

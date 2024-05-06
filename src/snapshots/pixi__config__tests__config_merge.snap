@@ -49,4 +49,9 @@ Config {
             ),
         },
     ),
+    pypi_config: PyPIConfig {
+        index_url: None,
+        extra_index_urls: [],
+        keyring_provider: None,
+    },
 }

@@ -5,12 +5,18 @@ use super::{
 };
 use crate::project::has_features::HasFeatures;
 
+use crate::consts;
 use crate::task::TaskName;
 use crate::{task::Task, Project};
 use itertools::Either;
-use rattler_conda_types::Platform;
-use std::hash::{Hash, Hasher};
-use std::{collections::HashMap, fmt::Debug};
+use rattler_conda_types::{Arch, Platform};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    fs,
+    hash::{Hash, Hasher},
+    sync::Once,
+};
 
 /// Describes a single environment from a project manifest. This is used to describe environments
 /// that can be installed and activated.
@@ -96,6 +102,47 @@ impl<'p> Environment<'p> {
             .join(self.environment.name.as_str())
     }
 
+    /// Returns the best platform for the current platform & environment.
+    pub fn best_platform(&self) -> Platform {
+        let current = Platform::current();
+
+        // If the current platform is supported, return it.
+        if self.platforms().contains(&current) {
+            return current;
+        }
+
+        static WARN_ONCE: Once = Once::new();
+
+        // If the current platform is osx-arm64 and the environment supports osx-64, return osx-64.
+        if current.is_osx() && self.platforms().contains(&Platform::Osx64) {
+            WARN_ONCE.call_once(|| {
+                let warn_folder = self.project.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
+                let emulation_warn = warn_folder.join("macos-emulation-warn");
+                if !emulation_warn.exists() {
+                    tracing::warn!(
+                        "osx-arm64 (Apple Silicon) is not supported by the pixi.toml, falling back to osx-64 (emulated with Rosetta)"
+                    );
+                    // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
+                    fs::create_dir_all(warn_folder).and_then(|_| {
+                        std::fs::File::create(emulation_warn)
+                    }).ok();
+                }
+            });
+            return Platform::Osx64;
+        }
+
+        if self.platforms().len() == 1 {
+            // Take the first platform and see if it is a WASM one.
+            if let Some(platform) = self.platforms().iter().next() {
+                if platform.arch() == Some(Arch::Wasm32) {
+                    return *platform;
+                }
+            }
+        }
+
+        current
+    }
+
     /// Returns the tasks defined for this environment.
     ///
     /// Tasks are defined on a per-target per-feature per-environment basis.
@@ -116,6 +163,23 @@ impl<'p> Environment<'p> {
         Ok(result)
     }
 
+    /// Return all tasks available for the given environment
+    /// This will not return task prefixed with _
+    pub fn get_filtered_tasks(&self) -> HashSet<TaskName> {
+        self.tasks(Some(Platform::current()))
+            .into_iter()
+            .flat_map(|tasks| {
+                tasks.into_iter().filter_map(|(key, _)| {
+                    if !key.as_str().starts_with('_') {
+                        Some(key)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .map(ToOwned::to_owned)
+            .collect()
+    }
     /// Returns the task with the given `name` and for the specified `platform` or an `UnknownTask`
     /// which explains why the task was not available.
     pub fn task(
@@ -221,7 +285,7 @@ impl<'p> Hash for Environment<'p> {
 
 #[cfg(test)]
 mod tests {
-    use crate::project::Dependencies;
+    use crate::project::CondaDependencies;
 
     use super::*;
     use insta::assert_snapshot;
@@ -321,8 +385,30 @@ mod tests {
             .tasks(Some(Platform::Osx64))
             .is_err())
     }
+    #[test]
+    fn test_filtered_tasks() {
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = []
+        platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
-    fn format_dependencies(dependencies: Dependencies) -> String {
+        [tasks]
+        foo = "echo foo"
+        _bar = "echo bar"
+        "#,
+        )
+        .unwrap();
+
+        let task = manifest.default_environment().get_filtered_tasks();
+
+        assert_eq!(task.len(), 1);
+        assert_eq!(task.contains(&"foo".into()), true);
+    }
+
+    fn format_dependencies(dependencies: CondaDependencies) -> String {
         dependencies
             .into_specs()
             .map(|(name, spec)| format!("{} = {}", name.as_source(), spec))

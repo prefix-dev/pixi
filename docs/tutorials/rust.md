@@ -177,7 +177,7 @@ You can add a formatting task to your project:
 pixi task add fmt "cargo fmt"
 ```
 
-You can extend these tasks to run multiple commands with the use of the `depends_on` field.
+You can extend these tasks to run multiple commands with the use of the `depends-on` field.
 ```shell
 pixi task add lint "cargo clippy" --depends-on fmt
 ```

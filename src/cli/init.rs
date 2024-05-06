@@ -11,6 +11,7 @@ use rattler_conda_types::Platform;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::{fs, path::PathBuf};
+use url::Url;
 
 /// Creates a new project
 #[derive(Parser, Debug)]
@@ -49,6 +50,13 @@ authors = ["{{ author[0] }} <{{ author[1] }}>"]
 channels = {{ channels }}
 platforms = {{ platforms }}
 
+{%- if index_url or extra_indexes %}
+
+[pypi-options]
+{% if index_url %}index-url = "{{ index_url }}"{% endif %}
+{% if extra_index_urls %}extra-index-urls = {{ extra_index_urls }}{% endif %}
+{%- endif %}
+
 [tasks]
 
 [dependencies]
@@ -58,7 +66,7 @@ platforms = {{ platforms }}
 /// The pyproject.toml template
 ///
 /// This is injected into an existing pyproject.toml
-const PYROJECT_TEMPLATE: &str = r#"
+const PYROJECT_TEMPLATE_EXISTING: &str = r#"
 [tool.pixi.project]
 channels = {{ channels }}
 platforms = {{ platforms }}
@@ -98,6 +106,14 @@ build-backend = "setuptools.build_meta"
 [tool.pixi.project]
 channels = {{ channels }}
 platforms = {{ platforms }}
+
+
+{%- if index_url or extra_indexes %}
+
+[tool.pixi.pypi-options]
+{% if index_url %}index-url = "{{ index_url }}"{% endif %}
+{% if extra_index_urls %}extra-index-urls = {{ extra_index_urls }}{% endif %}
+{%- endif %}
 
 [tool.pixi.pypi-dependencies]
 {{ name }} = { path = ".", editable = true }
@@ -152,7 +168,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         //  - Use .condarc as channel config
         //  - Implement it for `[crate::project::manifest::ProjectManifest]` to do this for other filetypes, e.g. (pyproject.toml, requirements.txt)
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
-        let rv = render_project(&env, name, version, &author, channels, &platforms);
+        let rv = render_project(
+            &env,
+            name,
+            version,
+            author.as_ref(),
+            channels,
+            &platforms,
+            None,
+            &vec![],
+        );
         let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
         for spec in conda_deps {
             for platform in platforms.iter() {
@@ -184,6 +209,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             config.default_channels().to_vec()
         };
 
+        let index_url = config.pypi_config.index_url;
+        let extra_index_urls = config.pypi_config.extra_index_urls;
+
         // Inject a tool.pixi.project section into an existing pyproject.toml file if there is one without '[tool.pixi.project]'
         if pyproject_manifest_path.is_file() {
             let file = fs::read_to_string(&pyproject_manifest_path).unwrap();
@@ -203,7 +231,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,
-                    PYROJECT_TEMPLATE,
+                    PYROJECT_TEMPLATE_EXISTING,
                     context! {
                         name,
                         channels,
@@ -253,7 +281,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         version,
                         author,
                         channels,
-                        platforms
+                        platforms,
+                        index_url => index_url.as_ref(),
+                        extra_index_urls => &extra_index_urls,
                     },
                 )
                 .unwrap();
@@ -264,7 +294,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if pixi_manifest_path.is_file() {
                 miette::bail!("{} already exists", consts::PROJECT_MANIFEST);
             }
-            let rv = render_project(&env, default_name, version, &author, channels, &platforms);
+            let rv = render_project(
+                &env,
+                default_name,
+                version,
+                author.as_ref(),
+                channels,
+                &platforms,
+                index_url.as_ref(),
+                &extra_index_urls,
+            );
             fs::write(&pixi_manifest_path, rv).into_diagnostic()?;
         };
     }
@@ -297,13 +336,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_project(
     env: &Environment<'_>,
     name: String,
     version: &str,
-    author: &Option<(String, String)>,
+    author: Option<&(String, String)>,
     channels: Vec<String>,
     platforms: &Vec<String>,
+    index_url: Option<&Url>,
+    extra_index_urls: &Vec<Url>,
 ) -> String {
     env.render_named_str(
         consts::PROJECT_MANIFEST,
@@ -313,7 +355,9 @@ fn render_project(
             version,
             author,
             channels,
-            platforms
+            platforms,
+            index_url,
+            extra_index_urls,
         },
     )
     .unwrap()

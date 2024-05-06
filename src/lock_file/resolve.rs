@@ -2,7 +2,7 @@
 //!
 //! See [`resolve_pypi`] and [`resolve_conda`] for more information.
 
-use crate::config::get_cache_dir;
+use crate::config::{self, get_cache_dir};
 use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::pypi_editables::build_editables;
 use crate::project::manifest::pypi_options::PypiOptions;
@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::future::{ready, Future};
 use std::iter::once;
 
-use crate::lock_file::{package_identifier, PypiPackageIdentifier};
+use crate::lock_file::{package_identifier, PypiPackageIdentifier, PypiRecord};
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::{
@@ -32,7 +32,8 @@ use indicatif::ProgressBar;
 use install_wheel_rs::linker::LinkMode;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
-use pep508_rs::{Requirement, VerbatimUrl};
+use pep440_rs::{Operator, VersionSpecifier};
+use pep508_rs::{Requirement, VerbatimUrl, VersionOrUrl};
 use pypi_types::{HashAlgorithm, HashDigest, Metadata23};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
@@ -57,8 +58,8 @@ use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, MetadataResponse,
-    Options, PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
-    WheelMetadataResult,
+    Options, Preference, PythonRequirement, Resolver, ResolverProvider, VersionMap,
+    VersionsResponse, WheelMetadataResult,
 };
 use uv_types::{BuildContext, EmptyInstalledPackages, HashStrategy, InFlight};
 
@@ -71,6 +72,7 @@ pub struct UvResolutionContext {
     pub no_binary: NoBinary,
     pub hash_strategy: HashStrategy,
     pub client: reqwest::Client,
+    pub keyring_provider: uv_configuration::KeyringProviderType,
 }
 
 impl UvResolutionContext {
@@ -82,6 +84,18 @@ impl UvResolutionContext {
         )
         .into_diagnostic()
         .context("failed to create uv cache")?;
+
+        let keyring_provider = match project.config().pypi_config().use_keyring() {
+            config::KeyringProvider::Subprocess => {
+                tracing::info!("using uv keyring (subprocess) provider");
+                uv_configuration::KeyringProviderType::Subprocess
+            }
+            config::KeyringProvider::Disabled => {
+                tracing::info!("uv keyring provider is disabled");
+                uv_configuration::KeyringProviderType::Disabled
+            }
+        };
+
         let in_flight = Arc::new(InFlight::default());
         Ok(Self {
             cache,
@@ -90,6 +104,7 @@ impl UvResolutionContext {
             no_binary: NoBinary::None,
             hash_strategy: HashStrategy::None,
             client: project.client().clone(),
+            keyring_provider,
         })
     }
 }
@@ -295,6 +310,7 @@ pub async fn resolve_pypi(
     dependencies: IndexMap<PackageName, IndexSet<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
+    locked_pypi_packages: Arc<Vec<PypiRecord>>,
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
     python_location: &Path,
@@ -393,6 +409,7 @@ pub async fn resolve_pypi(
         RegistryClientBuilder::new(context.cache.clone())
             .client(context.client.clone())
             .index_urls(index_locations.index_urls())
+            .keyring(context.keyring_provider)
             .connectivity(Connectivity::Online)
             .build(),
     );
@@ -454,11 +471,29 @@ pub async fn resolve_pypi(
         .into_iter()
         .collect_vec();
 
+    // Create preferences from the locked pypi packages
+    let preferences = locked_pypi_packages
+        .iter()
+        .map(|record| {
+            let (package_data, environment_data) = record;
+            let version =
+                VersionSpecifier::from_version(Operator::Equal, package_data.version.clone())
+                    .expect("invalid version specifier");
+            let requirement = Requirement {
+                name: package_data.name.clone(),
+                extras: environment_data.clone().extras.into_iter().collect_vec(),
+                version_or_url: Some(VersionOrUrl::VersionSpecifier(version.into())),
+                marker: None,
+            };
+            Preference::from_requirement(requirement)
+        })
+        .collect::<Vec<_>>();
+
     let manifest = Manifest::new(
         requirements,
         Constraints::from_requirements(constraints),
         Overrides::default(),
-        Vec::new(),
+        preferences,
         None,
         built_editables.clone(),
         uv_resolver::Exclusions::None,

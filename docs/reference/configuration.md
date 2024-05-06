@@ -171,8 +171,8 @@ Pixi's tasks are run in a pixi environment using `pixi run` and are executed usi
 [tasks]
 simple = "echo This is a simple task"
 cmd = { cmd="echo Same as a simple task but now more verbose"}
-depending = { cmd="echo run after simple", depends_on="simple"}
-alias = { depends_on=["depending"]}
+depending = { cmd="echo run after simple", depends-on="simple"}
+alias = { depends-on=["depending"]}
 download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
 build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
@@ -181,6 +181,10 @@ run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
 You can modify this table using [`pixi task`](cli.md#task).
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
+
+!!! info
+    If you want to hide a task from showing up with `pixi task list` or `pixi info`, you can prefix the name with `_`.
+    For example, if you want to hide `depending`, you can rename it to `_depending`.
 
 ## The `system-requirements` table
 
@@ -249,12 +253,15 @@ The `pypi-options` table is used to define options that are specific to PyPI reg
 These options can be specified either at the root level, which will add it to the default options feature, or on feature level, which will create a union of these options when the features are included in the environment.
 
 ### Alternative registries
+
 Currently the main reason to use this table is to define alternative registries.
 We support:
 
 - `index-url`: replaces the main index url.
+   Only one `index-url` can be defined per environment.
 - `extra-index-urls`: adds an extra index url.
-- `find-links`: which can either be a path `{path: './links'}` or a url `{url: 'https://example.com/links'}`. This is similar to the `--find-links` option in `pip`.
+- `find-links`: which can either be a path `{path: './links'}` or a url `{url: 'https://example.com/links'}`.
+   This is similar to the `--find-links` option in `pip`.
 
 An example:
 
@@ -266,7 +273,11 @@ find-links = [{path: './links'}]
 ```
 
 There are some examples in the pixi repository that make use of this feature.
+To read about existing authentication methods, please check the [PyPI Authentication](../advanced/authentication.md#pypi-authentication) section.
 
+!!! info "Strict Index Priority"
+    Unlike pip, because we make use of uv, we have a strict index priority. This means that the first index is used where a package can be found.
+    The order is determined by the order in the toml file. Where the `extra-index-urls` are preferred over the `index-url`. Read more about this on the [UV Readme](https://github.com/astral-sh/uv/blob/main/PIP_COMPATIBILITY.md#packages-that-exist-on-multiple-indexes)
 
 ## The `dependencies` table(s)
 

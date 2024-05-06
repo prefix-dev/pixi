@@ -1,6 +1,6 @@
 mod activation;
 pub mod cli;
-mod config;
+pub mod config;
 pub mod consts;
 mod environment;
 mod install;
@@ -27,6 +27,7 @@ pub use activation::get_activation_env;
 pub use lock_file::load_lock_file;
 pub use lock_file::UpdateLockFileOptions;
 pub use project::{
+    has_features::HasFeatures,
     manifest::{EnvironmentName, FeatureName},
     DependencyType, Project, SpecType,
 };

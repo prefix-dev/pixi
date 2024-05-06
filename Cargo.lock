@@ -3243,7 +3243,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.20.1"
+version = "0.21.0"
 dependencies = [
  "assert_matches",
  "async-once-cell",
@@ -3321,6 +3321,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "uv-auth",
  "uv-build",
  "uv-cache",
  "uv-client",
@@ -3612,8 +3613,8 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.23.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#62a385d7b92872824476664a5fc9858560dec746"
+version = "0.24.0"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#e570cc74e8bce76606e3246926af723ae68461d2"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3650,8 +3651,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.22.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#62a385d7b92872824476664a5fc9858560dec746"
+version = "0.22.1"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#e570cc74e8bce76606e3246926af723ae68461d2"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3678,7 +3679,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.19.3"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#62a385d7b92872824476664a5fc9858560dec746"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#e570cc74e8bce76606e3246926af723ae68461d2"
 dependencies = [
  "blake2",
  "digest",
@@ -3693,8 +3694,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.4"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#62a385d7b92872824476664a5fc9858560dec746"
+version = "0.22.5"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#e570cc74e8bce76606e3246926af723ae68461d2"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3719,7 +3720,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.19.3"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#62a385d7b92872824476664a5fc9858560dec746"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#e570cc74e8bce76606e3246926af723ae68461d2"
 dependencies = [
  "quote",
  "syn 2.0.60",
@@ -3727,8 +3728,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.20.4"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#62a385d7b92872824476664a5fc9858560dec746"
+version = "0.20.5"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#e570cc74e8bce76606e3246926af723ae68461d2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3754,8 +3755,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.20.7"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#62a385d7b92872824476664a5fc9858560dec746"
+version = "0.20.8"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#e570cc74e8bce76606e3246926af723ae68461d2"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3779,8 +3780,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.19.10"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#62a385d7b92872824476664a5fc9858560dec746"
+version = "0.19.11"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#e570cc74e8bce76606e3246926af723ae68461d2"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3829,8 +3830,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.20.1"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#62a385d7b92872824476664a5fc9858560dec746"
+version = "0.20.2"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#e570cc74e8bce76606e3246926af723ae68461d2"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.6",
@@ -3846,8 +3847,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "0.21.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#62a385d7b92872824476664a5fc9858560dec746"
+version = "0.21.1"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#e570cc74e8bce76606e3246926af723ae68461d2"
 dependencies = [
  "chrono",
  "futures",
@@ -3863,8 +3864,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "0.19.8"
-source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#62a385d7b92872824476664a5fc9858560dec746"
+version = "0.19.9"
+source = "git+https://github.com/baszalmstra/rattler?branch=feat/gateway_v3#e570cc74e8bce76606e3246926af723ae68461d2"
 dependencies = [
  "archspec",
  "libloading",
@@ -4105,6 +4106,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "sync_wrapper",
+ "system-configuration",
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.25.0",

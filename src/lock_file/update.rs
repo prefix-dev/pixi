@@ -24,7 +24,7 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use parking_lot::Mutex;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{MatchSpec, Platform, RepoDataRecord};
+use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use std::collections::VecDeque;
@@ -100,12 +100,18 @@ impl<'p> LockFileDerivedData<'p> {
         }
 
         // Get the prefix with the conda packages installed.
-        let platform = Platform::current();
+        let platform = environment.best_platform();
         let (prefix, python_status) = self.conda_prefix(environment).await?;
         let repodata_records = self
             .repodata_records(environment, platform)
             .unwrap_or_default();
         let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
+
+        // No `uv` support for WASM right now
+        // TODO - figure out if we can create the `uv` context more lazily
+        if platform.arch() == Some(Arch::Wasm32) {
+            return Ok(prefix);
+        }
 
         let uv_context = match &self.uv_context {
             None => {
@@ -130,6 +136,7 @@ impl<'p> LockFileDerivedData<'p> {
             &environment.pypi_options(),
             env_variables,
             self.project.root(),
+            environment.best_platform(),
         )
         .await?;
 
@@ -174,7 +181,7 @@ impl<'p> LockFileDerivedData<'p> {
         }
 
         let prefix = Prefix::new(environment.dir());
-        let platform = Platform::current();
+        let platform = environment.best_platform();
 
         // Determine the currently installed packages.
         let installed_packages = prefix
@@ -608,7 +615,9 @@ pub async fn ensure_up_to_date_lock_file(
         // we solve the platforms. We want to solve the current platform first, so we can start
         // instantiating prefixes if we have to.
         let mut ordered_platforms = platforms.into_iter().collect::<IndexSet<_>>();
-        if let Some(current_platform_index) = ordered_platforms.get_index_of(&current_platform) {
+        if let Some(current_platform_index) =
+            ordered_platforms.get_index_of(&environment.best_platform())
+        {
             ordered_platforms.move_index(current_platform_index, 0);
         }
 
@@ -694,7 +703,7 @@ pub async fn ensure_up_to_date_lock_file(
         // Construct a future that will resolve when we have the repodata available for the current
         // platform for this group.
         let records_future = context
-            .get_latest_group_repodata_records(&group, current_platform)
+            .get_latest_group_repodata_records(&group, environment.best_platform())
             .ok_or_else(|| make_unsupported_pypi_platform_error(environment, current_platform))?;
 
         // Spawn a task to instantiate the environment
@@ -767,6 +776,16 @@ pub async fn ensure_up_to_date_lock_file(
         // Get environment variables from the activation
         let env_variables = project.get_env_variables(&environment).await?;
 
+        // Get the previously locked pypi records
+        let locked_pypi_records = Arc::new(
+            context
+                .locked_pypi_records
+                .get(&environment)
+                .and_then(|records| records.get(&platform))
+                .map(|records| records.records.clone())
+                .unwrap_or_default(),
+        );
+
         // Spawn a task to solve the pypi environment
         let pypi_solve_future = spawn_solve_pypi_task(
             uv_context,
@@ -777,6 +796,7 @@ pub async fn ensure_up_to_date_lock_file(
             env_variables,
             pypi_solve_semaphore.clone(),
             project.root().to_path_buf(),
+            locked_pypi_records,
         );
 
         pending_futures.push(pypi_solve_future.boxed_local());
@@ -1419,6 +1439,7 @@ async fn spawn_solve_pypi_task(
     env_variables: &HashMap<String, String>,
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
+    locked_pypi_packages: Arc<Vec<PypiRecord>>,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1478,6 +1499,7 @@ async fn spawn_solve_pypi_task(
                 .collect(),
             system_requirements,
             &conda_records,
+            locked_pypi_packages,
             platform,
             &pb.pb,
             &python_path,

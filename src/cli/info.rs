@@ -137,7 +137,17 @@ impl Display for EnvironmentInfo {
             )?;
         }
         if !self.tasks.is_empty() {
-            let tasks_list = self.tasks.iter().map(|t| t.fancy_display()).format(", ");
+            let tasks_list = self
+                .tasks
+                .iter()
+                .filter_map(|t| {
+                    if !t.as_str().starts_with('_') {
+                        Some(t.fancy_display())
+                    } else {
+                        None
+                    }
+                })
+                .format(", ");
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Tasks"), tasks_list)?;
         }
         Ok(())
@@ -321,12 +331,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             .map(|solve_group| solve_group.name().to_string()),
                         environment_size: None,
                         dependencies: env
-                            .dependencies(None, Some(Platform::current()))
+                            .dependencies(None, Some(env.best_platform()))
                             .names()
                             .map(|p| p.as_source().to_string())
                             .collect(),
                         pypi_dependencies: env
-                            .pypi_dependencies(Some(Platform::current()))
+                            .pypi_dependencies(Some(env.best_platform()))
                             .into_iter()
                             .map(|(name, _p)| name.as_source().to_string())
                             .collect(),
