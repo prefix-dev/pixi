@@ -1709,6 +1709,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "h2"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "816ec7294445779408f36fe57bc5b7fc1cf59664059096c65f905c1c61f58069"
+dependencies = [
+ "bytes",
+ "fnv",
+ "futures-core",
+ "futures-sink",
+ "futures-util",
+ "http 1.1.0",
+ "indexmap 2.2.6",
+ "slab",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1946,7 +1965,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
- "h2",
+ "h2 0.3.26",
  "http 0.2.12",
  "http-body 0.4.6",
  "httparse",
@@ -1969,6 +1988,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
+ "h2 0.4.4",
  "http 1.1.0",
  "http-body 1.0.0",
  "httparse",
@@ -3590,9 +3610,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.23.2"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f217021fa43c856d96d83a199992f969d288dfbff725aca853011a86ec3b4ba1"
+checksum = "0913842d86f1066efd20fc61ae03307b2feb450a79ac873dd6ca163d41258a4e"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3629,9 +3649,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.22.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cd0d656189850f103293abc6c3aa4554c1c0cbc7f077aa174bb91d58e5c3c92"
+checksum = "ff497a2ff0ed20fc47d92a209b8a7205e082fe33ff6b2422e88b9d772a90cb2b"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3673,9 +3693,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.4"
+version = "0.22.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6329506655ae7257c90ef91c9a19cadef2d157d1b096f2a54e922b13f2b95147"
+checksum = "04bacb6284a79ee25518f461458f7536feeadc6944f2cce2f256a5b17b371be7"
 dependencies = [
  "chrono",
  "fxhash",
@@ -3708,9 +3728,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.20.4"
+version = "0.20.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3892df9b0816a074020239b83a8e03f49ed5e6be3f638ebb0e410630b1e4ab0d"
+checksum = "48138be754fe9f500f167a6c6f446eb2f6ca1961fc9246dd142a22e92bcd8b2f"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3736,9 +3756,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.20.7"
+version = "0.20.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94fbb205bdb1f33e201ea59c6aa019f232785b22883aa7dce1073f9cdbbf69b6"
+checksum = "ad5d5ed1b0a7b95e69aecaace3681a29dfae802c8259f705e3af88b4fbce4a61"
 dependencies = [
  "bzip2",
  "chrono",
@@ -3762,9 +3782,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.19.10"
+version = "0.19.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99f3252f8a58e1a991c2bff138d353ffd72fa0489b701f1aff6756bf652c6434"
+checksum = "0d30d123a4d959107a51f9e0a1718fac263acad51b14e34b6f2d2d80a1c2cf4b"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -3802,9 +3822,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.20.1"
+version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a8028f088c24d44dde5f775f21b5aef78bdfcf9ef39c86a528f2b2ac72c981f"
+checksum = "a9df98140ed03751bba2423e5a5a0d180a974c4dc0a7b97bb7d219468f4496c2"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.6",
@@ -3820,9 +3840,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "0.21.0"
+version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5425aeee32412edb497b92de3b3d6e6d1ba6079f479d8d450a4a5aa58c9d8c66"
+checksum = "573d809a67c0414f90950031bd510f001da9ab5dff47f4ca9d0606aaef280994"
 dependencies = [
  "chrono",
  "futures",
@@ -3838,9 +3858,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "0.19.8"
+version = "0.19.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a85f440519e0b884275126cfd994e312eb17da7d44f8b96b44559c9e33e9972"
+checksum = "faeb60ccda96a097b5f97e8dc705c5bb7b69f96562e9a34340f4f00fcd2830af"
 dependencies = [
  "archspec",
  "libloading",
@@ -4012,7 +4032,7 @@ dependencies = [
  "encoding_rs",
  "futures-core",
  "futures-util",
- "h2",
+ "h2 0.3.26",
  "http 0.2.12",
  "http-body 0.4.6",
  "hyper 0.14.28",
@@ -4057,6 +4077,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
+ "h2 0.4.4",
  "http 1.1.0",
  "http-body 1.0.0",
  "http-body-util",
@@ -4080,6 +4101,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "sync_wrapper",
+ "system-configuration",
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.25.0",
