@@ -281,17 +281,17 @@ impl Project {
         &self.root
     }
 
-    /// Returns the pixi directory
+    /// Returns the pixi directory of the project [consts::PIXI_DIR]
     pub fn pixi_dir(&self) -> PathBuf {
         self.root.join(consts::PIXI_DIR)
     }
 
-    /// Returns the environment directory
+    /// Returns the environment directory of the project [consts::ENVIRONMENTS_DIR]
     pub fn environments_dir(&self) -> PathBuf {
         self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
     }
 
-    /// Returns the solve group directory
+    /// Returns the solve group directory of the project [consts::SOLVE_GROUP_ENVIRONMENTS_DIR]
     pub fn solve_group_environments_dir(&self) -> PathBuf {
         self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
@@ -301,7 +301,7 @@ impl Project {
         self.manifest.path.clone()
     }
 
-    /// Returns the path to the lock file of the project
+    /// Returns the path to the lock file of the project [consts::PROJECT_LOCK_FILE]
     pub fn lock_file_path(&self) -> PathBuf {
         self.root.join(consts::PROJECT_LOCK_FILE)
     }
