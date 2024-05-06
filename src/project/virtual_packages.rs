@@ -138,7 +138,7 @@ pub enum VerifyCurrentPlatformError {
 pub fn verify_current_platform_has_required_virtual_packages(
     environment: &Environment<'_>,
 ) -> Result<(), VerifyCurrentPlatformError> {
-    let current_platform = Platform::current();
+    let current_platform = environment.best_platform();
 
     // Is the current platform in the list of supported platforms?
     if !environment.platforms().contains(&current_platform) {

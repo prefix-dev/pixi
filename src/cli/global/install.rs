@@ -10,9 +10,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{
-    MatchSpec, PackageName, ParseStrictness, Platform, PrefixRecord, RepoDataRecord,
-};
+use rattler_conda_types::{PackageName, Platform, PrefixRecord, RepoDataRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::Shell,
@@ -22,7 +20,7 @@ use reqwest_middleware::ClientWithMiddleware;
 
 use super::common::{
     channel_name_from_prefix, find_designated_package, get_client_and_sparse_repodata,
-    load_package_records, package_name, BinDir, BinEnvDir,
+    load_package_records, BinDir, BinEnvDir, HasSpecs,
 };
 
 /// Installs the defined package in a global accessible location.
@@ -44,8 +42,17 @@ pub struct Args {
     #[clap(short, long)]
     channel: Vec<String>,
 
+    #[clap(short, long, default_value_t = Platform::current())]
+    platform: Platform,
+
     #[clap(flatten)]
     config: ConfigCli,
+}
+
+impl HasSpecs for Args {
+    fn packages(&self) -> Vec<&str> {
+        self.package.iter().map(AsRef::as_ref).collect()
+    }
 }
 
 /// Create the environment activation script
@@ -244,26 +251,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let channels = config.compute_channels(&args.channel).into_diagnostic()?;
 
-    // Find the MatchSpec we want to install
-    let specs = args
-        .package
-        .into_iter()
-        .map(|package_str| MatchSpec::from_str(&package_str, ParseStrictness::Strict))
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
-
     // Fetch sparse repodata
     let (authenticated_client, sparse_repodata) =
-        get_client_and_sparse_repodata(&channels, &config).await?;
+        get_client_and_sparse_repodata(&channels, args.platform, &config).await?;
 
     // Install the package(s)
     let mut executables = vec![];
-    for package_matchspec in specs {
-        let package_name = package_name(&package_matchspec)?;
+    for (package_name, package_matchspec) in args.specs()? {
         let records = load_package_records(package_matchspec, &sparse_repodata)?;
 
-        let (prefix_package, scripts, _) =
-            globally_install_package(&package_name, records, authenticated_client.clone()).await?;
+        let (prefix_package, scripts, _) = globally_install_package(
+            &package_name,
+            records,
+            authenticated_client.clone(),
+            &args.platform,
+        )
+        .await?;
         let channel_name = channel_name_from_prefix(&prefix_package, config.channel_config());
         let record = &prefix_package.repodata_record.package_record;
 
@@ -328,6 +331,7 @@ pub(super) async fn globally_install_package(
     package_name: &PackageName,
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
+    platform: &Platform,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
     // Create the binary environment prefix where we install or update the package
     let BinEnvDir(bin_prefix) = BinEnvDir::create(package_name).await?;
@@ -336,7 +340,7 @@ pub(super) async fn globally_install_package(
 
     // Create the transaction that we need
     let transaction =
-        Transaction::from_current_and_desired(prefix_records.clone(), records, Platform::current())
+        Transaction::from_current_and_desired(prefix_records.clone(), records, *platform)
             .into_diagnostic()?;
 
     let has_transactions = !transaction.operations.is_empty();

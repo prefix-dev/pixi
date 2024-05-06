@@ -13,6 +13,8 @@ pub const SOLVE_GROUP_ENVIRONMENTS_DIR: &str = "solve-group-envs";
 pub const PYPI_DEPENDENCIES: &str = "pypi-dependencies";
 pub const TASK_CACHE_DIR: &str = "task-cache-v0";
 
+pub const ONE_TIME_MESSAGES_DIR: &str = "one-time-messages";
+
 pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
 
 /// The default channels to use for a new project.

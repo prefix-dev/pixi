@@ -331,12 +331,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             .map(|solve_group| solve_group.name().to_string()),
                         environment_size: None,
                         dependencies: env
-                            .dependencies(None, Some(Platform::current()))
+                            .dependencies(None, Some(env.best_platform()))
                             .names()
                             .map(|p| p.as_source().to_string())
                             .collect(),
                         pypi_dependencies: env
-                            .pypi_dependencies(Some(Platform::current()))
+                            .pypi_dependencies(Some(env.best_platform()))
                             .into_iter()
                             .map(|(name, _p)| name.as_source().to_string())
                             .collect(),
