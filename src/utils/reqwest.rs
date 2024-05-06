@@ -88,12 +88,12 @@ pub(crate) fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientW
         tracing::warn!("TLS verification is disabled. This is insecure and should only be used for testing or internal networks.");
     }
 
-    let timeout = 100 * 60;
+    let timeout = 5 * 60;
     let client = Client::builder()
         .pool_max_idle_per_host(20)
         .user_agent(APP_USER_AGENT)
         .danger_accept_invalid_certs(config.tls_no_verify())
-        .timeout(Duration::from_secs(timeout))
+        .read_timeout(Duration::from_secs(timeout))
         .build()
         .expect("failed to create reqwest Client");
 
