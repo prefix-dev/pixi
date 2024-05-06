@@ -426,12 +426,17 @@ async fn test_installer_name() {
             .unwrap()
             .join("lib/python3.11/site-packages/click-8.0.0.dist-info")
     } else {
-        pixi.default_env_path()
-            .unwrap()
-            .join("Lib/python/site-packages/click-8.0.0.dist-info")
+        let default_env_path = pixi.default_env_path().unwrap();
+        assert!(default_env_path.exists(), "default_env_path does not exist");
+        assert!(default_env_path.join("Lib").exists(), "lib does not exist");
+        assert!(
+            default_env_path.join("Lib/python").exists(),
+            "python does not exist"
+        );
+        default_env_path.join("Lib/python/site-packages/click-8.0.0.dist-info")
     };
     // Check that installer name is uv-pixi
-    assert!(dist_info.exists());
+    assert!(dist_info.exists(), "{dist_info:?} does not exist");
     let installer = dist_info.join("INSTALLER");
     let installer = std::fs::read_to_string(installer).unwrap();
     assert_eq!(installer, PIXI_UV_INSTALLER);
