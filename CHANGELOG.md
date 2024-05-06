@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add error if channel or platform doesn't exist on remove by @ruben-arts in [#1315](https://github.com/prefix-dev/pixi/pull/1315)
 - Allow spec in `pixi q` instead of only name by @ruben-arts in [#1314](https://github.com/prefix-dev/pixi/pull/1314)
 - Remove dependency on sysroot for linux by @ruben-arts in [#1319](https://github.com/prefix-dev/pixi/pull/1319)
+- Fix linking symlink issue, by updating to the latest `rattler` by @baszalmstra in [#1327](https://github.com/prefix-dev/pixi/pull/1327)
 
 #### Refactor
 - Use IndexSet instead of Vec for collections of unique elements by @olivier-lacroix in [#1289](https://github.com/prefix-dev/pixi/pull/1289)
