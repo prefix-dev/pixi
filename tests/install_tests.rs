@@ -395,6 +395,7 @@ async fn minimal_lockfile_update_pypi() {
     assert!(lock.contains_pep508_requirement(
         DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
+        // With a fresh solve this would be bumped to `>=8.0.0`
         pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
     ));
 }
