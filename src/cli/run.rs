@@ -103,7 +103,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let search_environment = SearchEnvironments::from_opt_env(
         &project,
         explicit_environment.clone(),
-        Some(Platform::current()),
+        explicit_environment
+            .as_ref()
+            .map(|e| e.best_platform())
+            .or(Some(Platform::current())),
     )
     .with_disambiguate_fn(disambiguate_task_interactive);
 

@@ -24,7 +24,7 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{Arch, Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use std::path::PathBuf;
@@ -104,12 +104,18 @@ impl<'p> LockFileDerivedData<'p> {
         }
 
         // Get the prefix with the conda packages installed.
-        let platform = Platform::current();
+        let platform = environment.best_platform();
         let (prefix, python_status) = self.conda_prefix(environment).await?;
         let repodata_records = self
             .repodata_records(environment, platform)
             .unwrap_or_default();
         let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
+
+        // No `uv` support for WASM right now
+        // TODO - figure out if we can create the `uv` context more lazily
+        if platform.arch() == Some(Arch::Wasm32) {
+            return Ok(prefix);
+        }
 
         let uv_context = match &self.uv_context {
             None => {
@@ -134,6 +140,7 @@ impl<'p> LockFileDerivedData<'p> {
             &environment.pypi_options(),
             env_variables,
             self.project.root(),
+            environment.best_platform(),
         )
         .await?;
 
@@ -178,7 +185,7 @@ impl<'p> LockFileDerivedData<'p> {
         }
 
         let prefix = Prefix::new(environment.dir());
-        let platform = Platform::current();
+        let platform = environment.best_platform();
 
         // Determine the currently installed packages.
         let installed_packages = prefix
@@ -648,7 +655,9 @@ pub async fn ensure_up_to_date_lock_file(
         // we solve the platforms. We want to solve the current platform first, so we can start
         // instantiating prefixes if we have to.
         let mut ordered_platforms = platforms.into_iter().collect::<IndexSet<_>>();
-        if let Some(current_platform_index) = ordered_platforms.get_index_of(&current_platform) {
+        if let Some(current_platform_index) =
+            ordered_platforms.get_index_of(&environment.best_platform())
+        {
             ordered_platforms.move_index(current_platform_index, 0);
         }
 
@@ -734,7 +743,7 @@ pub async fn ensure_up_to_date_lock_file(
         // Construct a future that will resolve when we have the repodata available for the current
         // platform for this group.
         let records_future = context
-            .get_latest_group_repodata_records(&group, current_platform)
+            .get_latest_group_repodata_records(&group, environment.best_platform())
             .ok_or_else(|| make_unsupported_pypi_platform_error(environment, current_platform))?;
 
         // Spawn a task to instantiate the environment

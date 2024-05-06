@@ -412,7 +412,20 @@ pub fn verify_package_platform_satisfiability(
     let marker_environment = python_interpreter_record
         .map(|interpreter| determine_marker_environment(platform, &interpreter.package_record))
         .transpose()
-        .map_err(|err| PlatformUnsat::FailedToDetermineMarkerEnvironment(err.into()))?;
+        .map_err(|err| PlatformUnsat::FailedToDetermineMarkerEnvironment(err.into()));
+
+    // We cannot determine the marker environment, for example if installing `wasm32` dependencies.
+    // However, it also doesn't really matter if we don't have any pypi requirements.
+    let marker_environment = match marker_environment {
+        Err(err) => {
+            if !pypi_requirements.is_empty() {
+                return Err(err);
+            } else {
+                None
+            }
+        }
+        Ok(marker_environment) => marker_environment,
+    };
 
     // Determine the pypi packages provided by the locked conda packages.
     let locked_conda_pypi_packages = locked_conda_packages.by_pypi_name();

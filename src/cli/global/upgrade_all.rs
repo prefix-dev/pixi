@@ -1,7 +1,7 @@
 use clap::Parser;
 use indexmap::IndexMap;
 
-use rattler_conda_types::MatchSpec;
+use rattler_conda_types::{MatchSpec, Platform};
 
 use crate::config::{Config, ConfigCli};
 
@@ -24,6 +24,10 @@ pub struct Args {
 
     #[clap(flatten)]
     config: ConfigCli,
+
+    /// The platform to install the package for.
+    #[clap(long, default_value_t = Platform::current())]
+    platform: Platform,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -41,5 +45,5 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    upgrade_packages(specs, config, &args.channel).await
+    upgrade_packages(specs, config, &args.channel, &args.platform).await
 }

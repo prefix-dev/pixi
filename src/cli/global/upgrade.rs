@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::{Channel, MatchSpec, PackageName};
+use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform};
 
 use crate::config::Config;
 use crate::progress::{global_multi_progress, long_running_progress_style};
@@ -35,6 +35,10 @@ pub struct Args {
     /// the package was installed from will always be used.
     #[clap(short, long)]
     channel: Vec<String>,
+
+    /// The platform to install the package for.
+    #[clap(long, default_value_t = Platform::current())]
+    platform: Platform,
 }
 
 impl HasSpecs for Args {
@@ -46,13 +50,14 @@ impl HasSpecs for Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::load_global();
     let specs = args.specs()?;
-    upgrade_packages(specs, config, &args.channel).await
+    upgrade_packages(specs, config, &args.channel, &args.platform).await
 }
 
 pub(super) async fn upgrade_packages(
     specs: IndexMap<PackageName, MatchSpec>,
     config: Config,
     cli_channels: &[String],
+    platform: &Platform,
 ) -> miette::Result<()> {
     // Get channels and versions of globally installed packages
     let mut installed_versions = HashMap::with_capacity(specs.len());
@@ -79,7 +84,7 @@ pub(super) async fn upgrade_packages(
 
     // Fetch sparse repodata
     let (authenticated_client, sparse_repodata) =
-        get_client_and_sparse_repodata(&channels, &config).await?;
+        get_client_and_sparse_repodata(&channels, *platform, &config).await?;
 
     // Upgrade each package when relevant
     let mut upgraded = false;
@@ -119,7 +124,13 @@ pub(super) async fn upgrade_packages(
                 console::style("Updating").green(),
                 message
             ));
-            globally_install_package(&package_name, records, authenticated_client.clone()).await?;
+            globally_install_package(
+                &package_name,
+                records,
+                authenticated_client.clone(),
+                platform,
+            )
+            .await?;
             pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));
             upgraded = true;
         }
