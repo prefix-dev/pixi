@@ -84,7 +84,7 @@ pub(super) async fn upgrade_packages(
 
     // Fetch sparse repodata
     let (authenticated_client, sparse_repodata) =
-        get_client_and_sparse_repodata(&channels, platform.clone(), &config).await?;
+        get_client_and_sparse_repodata(&channels, *platform, &config).await?;
 
     // Upgrade each package when relevant
     let mut upgraded = false;
