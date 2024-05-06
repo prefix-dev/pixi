@@ -954,7 +954,7 @@ pub async fn update_python_distributions(
             .iter()
             .map(|name| name.to_string())
             .join(", ");
-        tracing::warn!("The following packages have been re-installed because they were installed by a different installer: {packages}")
+        tracing::warn!("These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: \n\t{packages}")
     }
 
     // Remove any unnecessary packages.
