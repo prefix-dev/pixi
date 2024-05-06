@@ -258,7 +258,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Install the package(s)
     let mut executables = vec![];
     for (package_name, package_matchspec) in args.specs()? {
-        let records = load_package_records(package_matchspec, &sparse_repodata)?;
+        let records = load_package_records(package_matchspec, sparse_repodata.values())?;
 
         let (prefix_package, scripts, _) = globally_install_package(
             &package_name,
