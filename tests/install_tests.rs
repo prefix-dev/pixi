@@ -420,11 +420,17 @@ async fn test_installer_name() {
         .unwrap();
     dbg!(pixi.default_env_path().unwrap());
 
+    // Get the correct dist-info folder
+    let dist_info = if cfg!(not(target_os = "windows")) {
+        pixi.default_env_path()
+            .unwrap()
+            .join("lib/python3.11/site-packages/click-8.0.0.dist-info")
+    } else {
+        pixi.default_env_path()
+            .unwrap()
+            .join("Lib/python/site-packages/click-8.0.0.dist-info")
+    };
     // Check that installer name is uv-pixi
-    let dist_info = pixi
-        .default_env_path()
-        .unwrap()
-        .join("lib/python3.11/site-packages/click-8.0.0.dist-info");
     assert!(dist_info.exists());
     let installer = dist_info.join("INSTALLER");
     let installer = std::fs::read_to_string(installer).unwrap();
