@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.21.0] - 2024-05-06
 ### ✨ Highlights
-- This release support for global configuration files, and keyring support for PyPI credentials.
+- This release adds support for configuring PyPI settings globally, to use alternative PyPI indexes and load credentials with keyring.
 - We now support cross-platform running, for `osx-64` on `osx-arm64` and `wasm` environments.
 - There is now a `no-default-feature` option to simplify usage of environments.
 
