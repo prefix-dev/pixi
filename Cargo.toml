@@ -121,6 +121,7 @@ toml_edit = { version = "0.22.11", features = ["serde"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
+uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 uv-build = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }

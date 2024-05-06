@@ -3298,6 +3298,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "uv-auth",
  "uv-build",
  "uv-cache",
  "uv-client",

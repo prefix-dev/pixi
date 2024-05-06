@@ -7,6 +7,7 @@ use crate::common::builders::{
     AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, TaskAddBuilder,
     TaskAliasBuilder,
 };
+use pixi::consts;
 use pixi::{
     cli::{
         add, init,
@@ -14,7 +15,7 @@ use pixi::{
         project, remove, run,
         task::{self, AddArgs, AliasArgs},
     },
-    consts, EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
+    EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
     TaskGraphError,
 };
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};

@@ -2,7 +2,7 @@
 //!
 //! See [`resolve_pypi`] and [`resolve_conda`] for more information.
 
-use crate::config::get_cache_dir;
+use crate::config::{self, get_cache_dir};
 use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::pypi_editables::build_editables;
 use crate::project::manifest::pypi_options::PypiOptions;
@@ -71,6 +71,7 @@ pub struct UvResolutionContext {
     pub no_binary: NoBinary,
     pub hash_strategy: HashStrategy,
     pub client: reqwest::Client,
+    pub keyring_provider: uv_configuration::KeyringProviderType,
 }
 
 impl UvResolutionContext {
@@ -82,6 +83,18 @@ impl UvResolutionContext {
         )
         .into_diagnostic()
         .context("failed to create uv cache")?;
+
+        let keyring_provider = match project.config().pypi_config().use_keyring() {
+            config::KeyringProvider::Subprocess => {
+                tracing::info!("using uv keyring (subprocess) provider");
+                uv_configuration::KeyringProviderType::Subprocess
+            }
+            config::KeyringProvider::Disabled => {
+                tracing::info!("uv keyring provider is disabled");
+                uv_configuration::KeyringProviderType::Disabled
+            }
+        };
+
         let in_flight = Arc::new(InFlight::default());
         Ok(Self {
             cache,
@@ -90,6 +103,7 @@ impl UvResolutionContext {
             no_binary: NoBinary::None,
             hash_strategy: HashStrategy::None,
             client: project.client().clone(),
+            keyring_provider,
         })
     }
 }
@@ -394,6 +408,7 @@ pub async fn resolve_pypi(
         RegistryClientBuilder::new(context.cache.clone())
             .client(context.client.clone())
             .index_urls(index_locations.index_urls())
+            .keyring(context.keyring_provider)
             .connectivity(Connectivity::Online)
             .build(),
     );
