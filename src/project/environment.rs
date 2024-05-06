@@ -116,13 +116,14 @@ impl<'p> Environment<'p> {
         // If the current platform is osx-arm64 and the environment supports osx-64, return osx-64.
         if current.is_osx() && self.platforms().contains(&Platform::Osx64) {
             WARN_ONCE.call_once(|| {
-                let emulation_warn = self.project.pixi_dir().join(consts::MACOS_EMULATION_WARN);
+                let warn_folder = self.project.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
+                let emulation_warn = warn_folder.join("macos-emulation-warn");
                 if !emulation_warn.exists() {
                     tracing::warn!(
                         "osx-arm64 (Apple Silicon) is not supported by the pixi.toml, falling back to osx-64 (emulated with Rosetta)"
                     );
                     // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                    fs::create_dir_all(self.project.pixi_dir()).and_then(|_| {
+                    fs::create_dir_all(warn_folder).and_then(|_| {
                         std::fs::File::create(emulation_warn)
                     }).ok();
                 }
