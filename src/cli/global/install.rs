@@ -10,9 +10,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{
-    MatchSpec, PackageName, ParseStrictness, Platform, PrefixRecord, RepoDataRecord,
-};
+use rattler_conda_types::{PackageName, Platform, PrefixRecord, RepoDataRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::Shell,
@@ -22,7 +20,7 @@ use reqwest_middleware::ClientWithMiddleware;
 
 use super::common::{
     channel_name_from_prefix, find_designated_package, get_client_and_sparse_repodata,
-    load_package_records, package_name, BinDir, BinEnvDir,
+    load_package_records, BinDir, BinEnvDir, HasSpecs,
 };
 
 /// Installs the defined package in a global accessible location.
@@ -49,6 +47,12 @@ pub struct Args {
 
     #[clap(flatten)]
     config: ConfigCli,
+}
+
+impl HasSpecs for Args {
+    fn packages(&self) -> Vec<&str> {
+        self.package.iter().map(AsRef::as_ref).collect()
+    }
 }
 
 /// Create the environment activation script
@@ -247,22 +251,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let channels = config.compute_channels(&args.channel).into_diagnostic()?;
 
-    // Find the MatchSpec we want to install
-    let specs = args
-        .package
-        .into_iter()
-        .map(|package_str| MatchSpec::from_str(&package_str, ParseStrictness::Strict))
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
-
     // Fetch sparse repodata
     let (authenticated_client, sparse_repodata) =
         get_client_and_sparse_repodata(&channels, args.platform.clone(), &config).await?;
 
     // Install the package(s)
     let mut executables = vec![];
-    for package_matchspec in specs {
-        let package_name = package_name(&package_matchspec)?;
+    for (package_name, package_matchspec) in args.specs()? {
         let records = load_package_records(package_matchspec, &sparse_repodata)?;
 
         let (prefix_package, scripts, _) = globally_install_package(
