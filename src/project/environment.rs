@@ -321,8 +321,6 @@ mod tests {
         );
     }
 
-    // TODO: Add a test to verify that feature specific channels work as expected.
-
     #[test]
     fn test_default_platforms() {
         let manifest = Project::from_str(
@@ -487,6 +485,104 @@ mod tests {
         assert_eq!(
             foo_env.activation_scripts(Some(Platform::Linux64)),
             vec!["foo.bat".to_string(), "linux.bat".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_channel_feature_priority() {
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["a", "b"]
+        platforms = ["linux-64", "osx-64"]
+
+        [feature.foo]
+        channels = ["c", "d"]
+
+        [feature.bar]
+        channels = ["e", "f"]
+
+        [feature.barfoo]
+        channels = ["a", "f"]
+
+        [environments]
+        foo = ["foo"]
+        foobar = ["foo", "bar"]
+        barfoo = {features = ["barfoo"], no-default-feature=true}
+        "#,
+        )
+        .unwrap();
+
+        // All channels are added in order of the features and default is last
+        let foobar_channels = manifest.environment("foobar").unwrap().channels();
+        assert_eq!(
+            foobar_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["c", "d", "e", "f", "a", "b"]
+        );
+
+        let foo_channels = manifest.environment("foo").unwrap().channels();
+        assert_eq!(
+            foo_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["c", "d", "a", "b"]
+        );
+
+        // The default feature is not included in the channels, so only the feature channels are included.
+        let barfoo_channels = manifest.environment("barfoo").unwrap().channels();
+        assert_eq!(
+            barfoo_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["a", "f"]
+        )
+    }
+
+    #[test]
+    fn test_channel_feature_priority_with_redefinition() {
+        let manifest = Project::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "test"
+        channels = ["d", "a", "b"]
+        platforms = ["linux-64"]
+
+        [environments]
+        foo = ["foo"]
+
+        [feature.foo]
+        channels = ["a", "c", "b"]
+
+        "#,
+        )
+        .unwrap();
+
+        let foobar_channels = manifest.environment("default").unwrap().channels();
+        assert_eq!(
+            foobar_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["d", "a", "b"]
+        );
+
+        // Check if the feature channels are sorted correctly,
+        // and that the remaining channels from the default feature are appended.
+        let foo_channels = manifest.environment("foo").unwrap().channels();
+        assert_eq!(
+            foo_channels
+                .into_iter()
+                .map(|c| c.name.clone().unwrap())
+                .collect_vec(),
+            vec!["a", "c", "b", "d"]
         );
     }
 

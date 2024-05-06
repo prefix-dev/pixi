@@ -25,17 +25,15 @@ pub trait HasFeatures<'p> {
     /// If a feature does not specify any channel the default channels from the project metadata are
     /// used instead.
     fn channels(&self) -> IndexSet<&'p Channel> {
-        // We reverse once before collecting into an IndexSet, and once after,
-        // to ensure the default channels of the project are added to the end of the list.
-        let mut channels: IndexSet<_> = self
+        // Collect all the channels from the features in one set,
+        // deduplicate them and sort them on feature index, default feature comes last.
+        let channels: IndexSet<_> = self
             .features()
             .flat_map(|feature| match &feature.channels {
                 Some(channels) => channels,
                 None => &self.project().manifest.parsed.project.channels,
             })
-            .rev()
             .collect();
-        channels.reverse();
 
         // The prioritized channels contain a priority, sort on this priority.
         // Higher priority comes first. [-10, 1, 0 ,2] -> [2, 1, 0, -10]
