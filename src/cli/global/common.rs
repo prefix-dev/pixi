@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
-    Channel, ChannelConfig, MatchSpec, PackageName, Platform, PrefixRecord, RepoDataRecord,
+    Channel, ChannelConfig, MatchSpec, PackageName, ParseStrictness, Platform, PrefixRecord,
+    RepoDataRecord,
 };
 use rattler_repodata_gateway::sparse::SparseRepoData;
 use rattler_solve::{resolvo, ChannelPriority, SolverImpl, SolverTask};
@@ -16,6 +17,22 @@ use crate::{
     utils::reqwest::build_reqwest_clients,
 };
 
+/// A trait to facilitate extraction of packages data from arguments
+pub(super) trait HasSpecs {
+    /// returns packages passed as arguments to the command
+    fn packages(&self) -> Vec<&str>;
+
+    fn specs(&self) -> miette::Result<IndexMap<PackageName, MatchSpec>> {
+        let mut map = IndexMap::with_capacity(self.packages().len());
+        for package in self.packages() {
+            let spec = MatchSpec::from_str(package, ParseStrictness::Strict).into_diagnostic()?;
+            let name = package_name(&spec)?;
+            map.insert(name, spec);
+        }
+
+        Ok(map)
+    }
+}
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 pub struct BinDir(pub PathBuf);
 
@@ -108,7 +125,7 @@ pub fn bin_env_dir() -> Option<PathBuf> {
 /// # Returns
 ///
 /// The package name from the given MatchSpec
-pub(super) fn package_name(package_matchspec: &MatchSpec) -> miette::Result<PackageName> {
+fn package_name(package_matchspec: &MatchSpec) -> miette::Result<PackageName> {
     package_matchspec.name.clone().ok_or_else(|| {
         miette::miette!(
             "could not find package name in MatchSpec {}",
@@ -177,19 +194,16 @@ pub fn load_package_records(
 /// The network client and the fetched sparse repodata
 pub(super) async fn get_client_and_sparse_repodata(
     channels: impl IntoIterator<Item = &'_ Channel>,
+    platform: Platform,
     config: &Config,
 ) -> miette::Result<(
     ClientWithMiddleware,
     IndexMap<(Channel, Platform), SparseRepoData>,
 )> {
     let authenticated_client = build_reqwest_clients(Some(config)).1;
-    let platform_sparse_repodata = repodata::fetch_sparse_repodata(
-        channels,
-        [Platform::current()],
-        &authenticated_client,
-        Some(config),
-    )
-    .await?;
+    let platform_sparse_repodata =
+        repodata::fetch_sparse_repodata(channels, [platform], &authenticated_client, Some(config))
+            .await?;
     Ok((authenticated_client, platform_sparse_repodata))
 }
 

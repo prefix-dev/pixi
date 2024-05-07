@@ -119,7 +119,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?;
 
     // Load the platform
-    let platform = args.platform.unwrap_or_else(Platform::current);
+    let platform = args.platform.unwrap_or_else(|| environment.best_platform());
 
     // Get all the packages in the environment.
     let locked_deps = lock_file
@@ -140,7 +140,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         uv_context = UvResolutionContext::from_project(&project)?;
         index_locations = environment.pypi_options().to_index_locations();
         tags = get_pypi_tags(
-            Platform::current(),
+            platform,
             &project.system_requirements(),
             python_record.package_record(),
         )?;

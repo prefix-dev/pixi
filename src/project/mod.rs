@@ -2,7 +2,7 @@ mod dependencies;
 mod environment;
 pub mod errors;
 pub mod grouped_environment;
-pub(crate) mod has_features;
+pub mod has_features;
 pub mod manifest;
 mod solve_group;
 pub mod virtual_packages;

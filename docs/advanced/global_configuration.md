@@ -81,6 +81,13 @@ authentication-override-file = "/path/to/your/override.json"
 disable-jlap = true  # don't try to download repodata.jlap
 disable-bzip2 = true # don't try to download repodata.json.bz2
 disable-zstd = true  # don't try to download repodata.json.zst
+
+
+[pypi-config]
+# These are sections specifically related to the PyPI configuration.
+index-url = "https://pypi.org/simple"
+extra-index-urls = ["https://pypi.org/simple2"]
+keyring-provider = "subprocess"
 ```
 
 ## Mirror configuration
@@ -124,3 +131,25 @@ team. You can use it like this:
 
 The GHCR mirror also contains `bioconda` packages. You can search the [available
 packages on Github](https://github.com/orgs/channel-mirrors/packages).
+
+
+### PyPI configuration
+To setup a certain number of defaults for the usage of PyPI registries. You can use the following configuration options:
+
+- `index-url`: The default index URL to use for PyPI packages. This will be added to a manifest file on a pixi init.
+- `extra-index-urls`: A list of additional URLs to use for PyPI packages. This will be added to a manifest file on a pixi init.
+- `keyring-provider`: Allows the use of the [keyring](https://pypi.org/project/keyring/) python package to store and retrieve credentials.
+
+```toml
+[pypi-config]
+# Main index url
+index-url = "https://pypi.org/simple"
+# list of additional urls
+extra-index-urls = ["https://pypi.org/simple2"]
+# can be "subprocess" or "disabled"
+keyring-provider = "subprocess"
+```
+
+!!! Note "`index-url` and `extra-index-urls` are *not* globals"
+    Unlike pip, these settings, with the exception of `keyring-provider` will only modify the `pixi.toml`/`pyproject.toml` file and are not globally interpreted when not present in the manifest.
+    This is because we want to keep the manifest file as complete and reproducible as possible.
