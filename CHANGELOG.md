@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.1] - 2024-05-07
+### 📃 Details
+#### Fixed
+- Use read timeout, not global timeout by @wolfv in [#1329](https://github.com/prefix-dev/pixi/pull/1329)
+- Channel priority logic by @ruben-arts in [#1332](https://github.com/prefix-dev/pixi/pull/1332)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.21.0..v0.21.1)
+
+## [0.21.0] - 2024-05-06
+### ✨ Highlights
+- This release adds support for configuring PyPI settings globally, to use alternative PyPI indexes and load credentials with keyring.
+- We now support cross-platform running, for `osx-64` on `osx-arm64` and `wasm` environments.
+- There is now a `no-default-feature` option to simplify usage of environments.
+
+### 📃 Details
+
+#### Added
+- Add pypi config for global local config file + keyring support by @wolfv in [#1279](https://github.com/prefix-dev/pixi/pull/1279)
+- Allow for cross-platform running, for `osx-64` on `osx-arm64` and `wasm` environments by @wolfv in [#1020](https://github.com/prefix-dev/pixi/pull/1020)
+
+#### Changed
+- Add `no-default-feature` option to environments by @olivier-lacroix in [#1092](https://github.com/prefix-dev/pixi/pull/1092)
+- Add `/etc/pixi/config.toml` to global configuration search paths by @pavelzw in [#1304](https://github.com/prefix-dev/pixi/pull/1304)
+- Change global config fields to kebab-case by @tdejager in [#1308](https://github.com/prefix-dev/pixi/pull/1308)
+- Show all available task with `task list` by @Hoxbro in [#1286](https://github.com/prefix-dev/pixi/pull/1286)
+- Allow to emit activation environment variables as JSON by @borchero in [#1317](https://github.com/prefix-dev/pixi/pull/1317)
+- Use locked pypi packages as preferences in the pypi solve to get minimally updating lock files by @ruben-arts in [#1320](https://github.com/prefix-dev/pixi/pull/1320)
+- Allow to upgrade several global packages at once by @olivier-lacroix in [#1324](https://github.com/prefix-dev/pixi/pull/1324)
+
+#### Documentation
+- Typo in tutorials python by @carschandler in [#1297](https://github.com/prefix-dev/pixi/pull/1297)
+- Python Tutorial: Dependencies, PyPI, Order, Grammar by @JesperDramsch in [#1313](https://github.com/prefix-dev/pixi/pull/1313)
+
+#### Fixed
+- Schema version and add it to tbump by @ruben-arts in [#1284](https://github.com/prefix-dev/pixi/pull/1284)
+- Make integration test fail in ci and fix ssh issue by @ruben-arts in [#1301](https://github.com/prefix-dev/pixi/pull/1301)
+- Automate adding install scripts to the docs by @ruben-arts in [#1302](https://github.com/prefix-dev/pixi/pull/1302)
+- Do not always request for prefix mapping by @nichmor in [#1300](https://github.com/prefix-dev/pixi/pull/1300)
+- Align CLI aliases and add missing by @ruben-arts in [#1316](https://github.com/prefix-dev/pixi/pull/1316)
+- Alias `depends_on` to `depends-on` by @ruben-arts in [#1310](https://github.com/prefix-dev/pixi/pull/1310)
+- Add error if channel or platform doesn't exist on remove by @ruben-arts in [#1315](https://github.com/prefix-dev/pixi/pull/1315)
+- Allow spec in `pixi q` instead of only name by @ruben-arts in [#1314](https://github.com/prefix-dev/pixi/pull/1314)
+- Remove dependency on sysroot for linux by @ruben-arts in [#1319](https://github.com/prefix-dev/pixi/pull/1319)
+- Fix linking symlink issue, by updating to the latest `rattler` by @baszalmstra in [#1327](https://github.com/prefix-dev/pixi/pull/1327)
+
+#### Refactor
+- Use IndexSet instead of Vec for collections of unique elements by @olivier-lacroix in [#1289](https://github.com/prefix-dev/pixi/pull/1289)
+- Use generics over PyPiDependencies and CondaDependencies by @olivier-lacroix in [#1303](https://github.com/prefix-dev/pixi/pull/1303)
+
+## New Contributors
+* @borchero made their first contribution in [#1317](https://github.com/prefix-dev/pixi/pull/1317)
+* @JesperDramsch made their first contribution in [#1313](https://github.com/prefix-dev/pixi/pull/1313)
+* @Hoxbro made their first contribution in [#1286](https://github.com/prefix-dev/pixi/pull/1286)
+* @carschandler made their first contribution in [#1297](https://github.com/prefix-dev/pixi/pull/1297)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.20.1..v0.21.0)
+
 ## [0.20.1] - 2024-04-26
 ### ✨ Highlights
 - Big improvements on the pypi-editable installs.

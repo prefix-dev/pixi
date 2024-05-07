@@ -7,6 +7,7 @@ use crate::common::builders::{
     AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, TaskAddBuilder,
     TaskAliasBuilder,
 };
+use pixi::consts;
 use pixi::{
     cli::{
         add, init,
@@ -14,7 +15,7 @@ use pixi::{
         project, remove, run,
         task::{self, AddArgs, AliasArgs},
     },
-    consts, EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
+    EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
     TaskGraphError,
 };
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
@@ -183,6 +184,14 @@ impl PixiControl {
         self.tmpdir.path()
     }
 
+    /// Get path to default environment
+    pub fn default_env_path(&self) -> miette::Result<PathBuf> {
+        let project = self.project()?;
+        let env = project.environment("default");
+        let env = env.ok_or_else(|| miette::miette!("default environment not found"))?;
+        Ok(self.tmpdir.path().join(env.dir()))
+    }
+
     pub fn manifest_path(&self) -> PathBuf {
         self.project_path().join(consts::PROJECT_MANIFEST)
     }
@@ -215,7 +224,7 @@ impl PixiControl {
         }
     }
 
-    /// Add dependencies to the project. Returns an [`AddBuilder`].
+    /// Add a dependency to the project. Returns an [`AddBuilder`].
     /// the command and await the result call `.await` on the return value.
     pub fn add(&self, spec: &str) -> AddBuilder {
         AddBuilder {
@@ -223,6 +232,25 @@ impl PixiControl {
                 manifest_path: Some(self.manifest_path()),
                 host: false,
                 specs: vec![spec.to_string()],
+                build: false,
+                no_install: true,
+                no_lockfile_update: false,
+                platform: Default::default(),
+                pypi: false,
+                feature: None,
+                config: Default::default(),
+            },
+        }
+    }
+
+    /// Add dependencies to the project. Returns an [`AddBuilder`].
+    /// the command and await the result call `.await` on the return value.
+    pub fn add_multiple(&self, specs: Vec<&str>) -> AddBuilder {
+        AddBuilder {
+            args: add::Args {
+                manifest_path: Some(self.manifest_path()),
+                host: false,
+                specs: specs.iter().map(|s| s.to_string()).collect(),
                 build: false,
                 no_install: true,
                 no_lockfile_update: false,
@@ -293,8 +321,11 @@ impl PixiControl {
         // Create a task graph from the command line arguments.
         let search_env = SearchEnvironments::from_opt_env(
             &project,
-            explicit_environment,
-            Some(Platform::current()),
+            explicit_environment.clone(),
+            explicit_environment
+                .as_ref()
+                .map(|e| e.best_platform())
+                .or(Some(Platform::current())),
         );
         let task_graph = TaskGraph::from_cmd_args(&project, &search_env, args.task)
             .map_err(RunError::TaskGraphError)?;

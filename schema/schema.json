@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.20.1/schema/manifest/schema.json",
+  "$id": "https://pixi.sh/v0.21.1/schema/manifest/schema.json",
   "title": "`pixi.toml` manifest file",
   "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
   "type": "object",
@@ -13,7 +13,7 @@
       "title": "Schema",
       "description": "The schema identifier for the project's configuration",
       "type": "string",
-      "default": "https://pixi.sh/v0.20.1/schema/manifest/schema.json",
+      "default": "https://pixi.sh/v0.21.1/schema/manifest/schema.json",
       "format": "uri-reference"
     },
     "activation": {
@@ -671,6 +671,12 @@
               },
               {
                 "const": "win-arm64"
+              },
+              {
+                "const": "emscripten-wasm32"
+              },
+              {
+                "const": "wasi-wasm32"
               }
             ]
           }

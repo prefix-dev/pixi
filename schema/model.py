@@ -47,6 +47,8 @@ Platform = (
     | Literal["win-32"]
     | Literal["win-64"]
     | Literal["win-arm64"]
+    | Literal["emscripten-wasm32"]
+    | Literal["wasi-wasm32"]
 )
 
 

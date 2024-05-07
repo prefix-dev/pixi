@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+
 use url::Url;
 
 use crate::consts;
@@ -91,6 +92,10 @@ pub struct ConfigCli {
     /// Path to the file containing the authentication token.
     #[arg(long, env = "RATTLER_AUTH_FILE")]
     auth_file: Option<PathBuf>,
+
+    /// Specifies if we want to use uv keyring provider
+    #[arg(long)]
+    pypi_keyring_provider: Option<KeyringProvider>,
 }
 
 #[derive(Parser, Debug, Default, Clone)]
@@ -114,6 +119,57 @@ pub struct RepodataConfig {
     /// Disable zstd compression for repodata.
     #[serde(alias = "disable-zstd")] // BREAK: rename instead of alias
     pub disable_zstd: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, clap::ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum KeyringProvider {
+    Disabled,
+    Subprocess,
+}
+
+#[derive(Clone, Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct PyPIConfig {
+    /// The default index URL for PyPI packages.
+    #[serde(default)]
+    pub index_url: Option<Url>,
+    /// A list of extra index URLs for PyPI packages
+    #[serde(default)]
+    pub extra_index_urls: Vec<Url>,
+    /// Whether to use the `keyring` executable to look up credentials.
+    #[serde(default)]
+    pub keyring_provider: Option<KeyringProvider>,
+}
+
+impl PyPIConfig {
+    /// Merge the given PyPIConfig into the current one.
+    pub fn merge(self, other: Self) -> Self {
+        let extra_index_urls = self
+            .extra_index_urls
+            .into_iter()
+            .chain(other.extra_index_urls)
+            .collect();
+
+        Self {
+            index_url: other.index_url.or(self.index_url),
+            extra_index_urls,
+            keyring_provider: other.keyring_provider.or(self.keyring_provider),
+        }
+    }
+
+    pub fn with_keyring(mut self, keyring_provider: KeyringProvider) -> Self {
+        self.keyring_provider = Some(keyring_provider);
+        self
+    }
+
+    /// Whether to use the `keyring` executable to look up credentials.
+    /// Defaults to false.
+    pub fn use_keyring(&self) -> KeyringProvider {
+        self.keyring_provider
+            .clone()
+            .unwrap_or(KeyringProvider::Disabled)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -151,6 +207,11 @@ pub struct Config {
     /// Configuration for repodata fetching.
     #[serde(alias = "repodata-config")] // BREAK: rename instead of alias
     pub repodata_config: Option<RepodataConfig>,
+
+    /// Configuration for PyPI packages.
+    #[serde(default)]
+    #[serde(rename = "pypi-config")]
+    pub pypi_config: PyPIConfig,
 }
 
 impl Default for Config {
@@ -164,6 +225,7 @@ impl Default for Config {
             loaded_from: Vec::new(),
             channel_config: default_channel_config(),
             repodata_config: None,
+            pypi_config: PyPIConfig::default(),
         }
     }
 }
@@ -173,6 +235,10 @@ impl From<ConfigCli> for Config {
         Self {
             tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
             authentication_override_file: cli.auth_file,
+            pypi_config: cli
+                .pypi_keyring_provider
+                .map(|val| PyPIConfig::default().with_keyring(val))
+                .unwrap_or_default(),
             ..Default::default()
         }
     }
@@ -221,13 +287,15 @@ impl Config {
             if location.exists() {
                 tracing::info!("Loading global config from {}", location.display());
                 let global_config = fs::read_to_string(&location).unwrap_or_default();
-                if let Ok(config) = Config::from_toml(&global_config, &location) {
-                    merged_config = merged_config.merge_config(config);
-                } else {
-                    tracing::warn!(
-                        "Could not load global config (invalid toml): {}",
-                        location.display()
-                    );
+                match Config::from_toml(&global_config, &location) {
+                    Ok(config) => merged_config = merged_config.merge_config(config),
+                    Err(e) => {
+                        tracing::warn!(
+                            "Could not load global config (invalid toml): {}",
+                            location.display()
+                        );
+                        tracing::warn!("Error: {}", e);
+                    }
                 }
             } else {
                 tracing::info!("Global config not found at {}", location.display());
@@ -288,6 +356,7 @@ impl Config {
             // currently this is always the default so just use the other value
             channel_config: other.channel_config,
             repodata_config: other.repodata_config.or(self.repodata_config),
+            pypi_config: other.pypi_config.merge(self.pypi_config),
         }
     }
 
@@ -320,6 +389,10 @@ impl Config {
 
     pub fn channel_config(&self) -> &ChannelConfig {
         &self.channel_config
+    }
+
+    pub fn pypi_config(&self) -> &PyPIConfig {
+        &self.pypi_config
     }
 
     pub fn compute_channels(
@@ -363,13 +436,19 @@ mod tests {
         let cli = ConfigCli {
             tls_no_verify: true,
             auth_file: None,
+            pypi_keyring_provider: Some(KeyringProvider::Subprocess),
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
+        assert_eq!(
+            config.pypi_config().keyring_provider,
+            Some(KeyringProvider::Subprocess)
+        );
 
         let cli = ConfigCli {
             tls_no_verify: false,
             auth_file: Some(PathBuf::from("path.json")),
+            pypi_keyring_provider: None,
         };
 
         let config = Config::from(cli);
@@ -377,6 +456,26 @@ mod tests {
         assert_eq!(
             config.authentication_override_file,
             Some(PathBuf::from("path.json"))
+        );
+    }
+
+    #[test]
+    fn test_pypi_config_parse() {
+        let toml = r#"
+            [pypi-config]
+            index-url = "https://pypi.org/simple"
+            extra-index-urls = ["https://pypi.org/simple2"]
+            keyring-provider = "subprocess"
+        "#;
+        let config = Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        assert_eq!(
+            config.pypi_config().index_url,
+            Some(Url::parse("https://pypi.org/simple").unwrap())
+        );
+        assert!(config.pypi_config().extra_index_urls.len() == 1);
+        assert_eq!(
+            config.pypi_config().keyring_provider,
+            Some(KeyringProvider::Subprocess)
         );
     }
 
