@@ -12,6 +12,7 @@ use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter
 
 pub mod add;
 pub mod completion;
+pub mod config;
 pub mod global;
 pub mod info;
 pub mod init;
@@ -60,6 +61,7 @@ pub struct CompletionCommand {
 #[derive(Parser, Debug)]
 pub enum Command {
     Completion(CompletionCommand),
+    Config(config::Args),
     Init(init::Args),
     #[clap(visible_alias = "a")]
     Add(add::Args),
@@ -229,6 +231,7 @@ pub async fn execute() -> miette::Result<()> {
 pub async fn execute_command(command: Command) -> miette::Result<()> {
     match command {
         Command::Completion(cmd) => completion::execute(cmd),
+        Command::Config(cmd) => config::execute(cmd).await,
         Command::Init(cmd) => init::execute(cmd).await,
         Command::Add(cmd) => add::execute(cmd).await,
         Command::Run(cmd) => run::execute(cmd).await,
