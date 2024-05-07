@@ -1,22 +1,22 @@
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 use url::Url;
 
 use async_once_cell::OnceCell;
 
 use crate::pypi_mapping::MappingLocation;
 
-use super::{
-    prefix_pypi_name_mapping::{self},
-    MappingMap, Reporter,
-};
+use super::{is_conda_forge_record, prefix_pypi_name_mapping, MappingMap, Reporter};
 
-pub async fn fetch_mapping_from_url(
+pub async fn fetch_mapping_from_url<T>(
     client: &ClientWithMiddleware,
     url: &Url,
-) -> miette::Result<HashMap<String, String>> {
+) -> miette::Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
     let response = client
         .get(url.clone())
         .send()
@@ -34,8 +34,7 @@ pub async fn fetch_mapping_from_url(
         ));
     }
 
-    let mapping_by_name: HashMap<String, String> =
-        response.json().await.into_diagnostic().context(format!(
+    let mapping_by_name: T = response.json().await.into_diagnostic().context(format!(
         "failed to parse pypi name mapping located at {}. Please make sure that it's a valid json",
         url
     ))?;
@@ -163,16 +162,26 @@ fn amend_pypi_purls_for_record(
 
     // If this package is a conda-forge package or user specified a custom channel mapping
     // we can try to guess the pypi name from the conda name
-    if custom_mapping.contains_key(&record.channel) {
-        if let Some(mapped_channel) = custom_mapping.get(&record.channel) {
-            if let Some(mapped_name) =
-                mapped_channel.get(record.package_record.name.as_normalized())
-            {
-                record.package_record.purls.push(
-                    PackageUrl::new(String::from("pypi"), mapped_name)
-                        .expect("valid pypi package url"),
-                );
-            }
+    if let Some(mapped_channel) = custom_mapping.get(&record.channel) {
+        if let Some(mapped_name) = mapped_channel.get(record.package_record.name.as_normalized()) {
+            record.package_record.purls.push(
+                PackageUrl::new(String::from("pypi"), mapped_name).expect("valid pypi package url"),
+            );
+        }
+    }
+
+    if record.package_record.purls.is_empty() && is_conda_forge_record(record) {
+        // Convert the conda package names to pypi package names. If the conversion fails we
+        // just assume that its not a valid python package.
+        let name = record.package_record.name.as_source();
+        let version = pep440_rs::Version::from_str(&record.package_record.version.as_str()).ok();
+        if version.is_some() {
+            let mut purl = PackageUrl::builder(String::from("pypi"), name);
+            purl = purl
+                .with_qualifier("from", "conda-forge")
+                .expect("valid qualifier");
+            let built_purl = purl.build().expect("valid pypi package url");
+            record.package_record.purls.push(built_purl);
         }
     }
 

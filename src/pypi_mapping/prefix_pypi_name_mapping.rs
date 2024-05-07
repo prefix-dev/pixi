@@ -9,17 +9,17 @@ use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
+use std::{collections::HashMap, str::FromStr};
 use tokio::sync::Semaphore;
 use url::Url;
 
-use super::{custom_pypi_mapping, Reporter};
+use super::{custom_pypi_mapping, is_conda_forge_record, Reporter};
 
 const STORAGE_URL: &str = "https://conda-mapping.prefix.dev";
 const HASH_DIR: &str = "hash-v0";
 const COMPRESSED_MAPPING: &str =
-    "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/mapping_as_grayskull.json";
+    "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json";
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Package {
@@ -143,7 +143,7 @@ pub async fn conda_pypi_name_mapping(
 /// Downloads and caches prefix.dev conda-pypi mapping.
 pub async fn conda_pypi_name_compressed_mapping(
     client: &ClientWithMiddleware,
-) -> miette::Result<HashMap<String, String>> {
+) -> miette::Result<HashMap<String, Option<String>>> {
     let compressed_mapping_url =
         Url::parse(COMPRESSED_MAPPING).expect("COMPRESSED_MAPPING static variable should be valid");
 
@@ -157,7 +157,9 @@ pub async fn amend_pypi_purls(
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
     let conda_mapping = conda_pypi_name_mapping(client, conda_packages, reporter).await?;
-    let compressed_mapping = conda_pypi_name_compressed_mapping(client).await?;
+    let mut compressed_mapping = conda_pypi_name_compressed_mapping(client).await?;
+    compressed_mapping.remove("boltons");
+
     for record in conda_packages.iter_mut() {
         amend_pypi_purls_for_record(record, &conda_mapping, &compressed_mapping)?;
     }
@@ -172,7 +174,7 @@ pub async fn amend_pypi_purls(
 pub fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
     conda_forge_mapping: &HashMap<Sha256Hash, Package>,
-    compressed_mapping: &HashMap<String, String>,
+    compressed_mapping: &HashMap<String, Option<String>>,
 ) -> miette::Result<()> {
     // If the package already has a pypi name we can stop here.
     if record
@@ -184,25 +186,51 @@ pub fn amend_pypi_purls_for_record(
         return Ok(());
     }
 
+    let mut no_a_pypi = false;
+
     if let Some(sha256) = record.package_record.sha256 {
         if let Some(mapped_name) = conda_forge_mapping.get(&sha256) {
-            if let Some(pypi_names) = &mapped_name.versions {
-                for pypi_name in pypi_names.keys() {
+            if let Some(pypi_names) = &mapped_name.pypi_normalized_names {
+                for pypi_name in pypi_names {
                     let purl = PackageUrl::builder(String::from("pypi"), pypi_name);
                     let built_purl = purl.build().expect("valid pypi package url");
                     record.package_record.purls.push(built_purl);
                 }
+            } else {
+                // it's not a pypi name
+                no_a_pypi = true;
             }
-        } else if let Some(mapped_name) =
+        } else if let Some(possible_mapped_name) =
             compressed_mapping.get(record.package_record.name.as_normalized())
         {
             // maybe the packages is not yet updated
             // so fallback to the one from compressed mapping
-            let purl = PackageUrl::builder(String::from("pypi"), mapped_name);
+            if let Some(mapped_name) = possible_mapped_name {
+                let purl = PackageUrl::builder(String::from("pypi"), mapped_name);
+                let built_purl = purl.build().expect("valid pypi package url");
+                record.package_record.purls.push(built_purl);
+            } else {
+                // it's not a pypi name
+                no_a_pypi = true;
+            }
+        }
+    }
+
+    // package is not in our mapping yet
+    // so we assume that it is the same as the one from conda-forge
+    if !no_a_pypi && record.package_record.purls.is_empty() && is_conda_forge_record(record) {
+        // Convert the conda package names to pypi package names. If the conversion fails we
+        // just assume that its not a valid python package.
+        let name = record.package_record.name.as_source();
+        let version = pep440_rs::Version::from_str(&record.package_record.version.as_str()).ok();
+        if version.is_some() {
+            let mut purl = PackageUrl::builder(String::from("pypi"), name);
+            purl = purl
+                .with_qualifier("from", "conda-forge")
+                .expect("valid qualifier");
             let built_purl = purl.build().expect("valid pypi package url");
             record.package_record.purls.push(built_purl);
         }
-        // nothing was matched so we don't add purls for it
     }
 
     Ok(())
