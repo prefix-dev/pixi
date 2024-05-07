@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.21.1] - 2024-05-07
+### 📃 Details
+#### Fixed
+- Use read timeout, not global timeout by @wolfv in [#1329](https://github.com/prefix-dev/pixi/pull/1329)
+- Channel priority logic by @ruben-arts in [#1332](https://github.com/prefix-dev/pixi/pull/1332)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.21.0..v0.21.1)
+
 ## [0.21.0] - 2024-05-06
 ### ✨ Highlights
 - This release adds support for configuring PyPI settings globally, to use alternative PyPI indexes and load credentials with keyring.
