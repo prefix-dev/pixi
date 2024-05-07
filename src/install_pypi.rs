@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use distribution_filename::DistFilename;
 
+use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, WrapErr};
 use pep440_rs::Version;
 use pep508_rs::VerbatimUrl;
@@ -21,7 +22,7 @@ use uv_configuration::{ConfigSettings, SetupPyStrategy};
 use uv_resolver::InMemoryIndex;
 use uv_types::HashStrategy;
 
-use crate::consts::PROJECT_MANIFEST;
+use crate::consts::{PIXI_UV_INSTALLER, PROJECT_MANIFEST};
 use crate::lock_file::UvResolutionContext;
 use crate::project::manifest::SystemRequirements;
 
@@ -80,6 +81,10 @@ struct PixiInstallPlan {
     /// Any distributions that are already installed in the current environment, and are
     /// _not_ necessary to satisfy the requirements.
     pub extraneous: Vec<InstalledDist>,
+
+    /// Keep track of any packages that have been re-installed because of installer mismatch
+    /// we can warn the user later that this has happened
+    pub installer_mismatch: Vec<PackageName>,
 }
 
 /// Converts our locked data to a file
@@ -405,6 +410,8 @@ fn whats_the_plan<'a>(
     // i.e. need to be removed before being installed
     let mut reinstalls = vec![];
 
+    let mut installer_mismatch = vec![];
+
     // First decide what we need to do with any editables
     for resolved_editable in editables {
         match resolved_editable {
@@ -438,35 +445,46 @@ fn whats_the_plan<'a>(
         }
     }
 
-    // Filter out packages not installed by uv
-    let installed = site_packages.iter().filter(|dist| {
-        dist.installer()
-            .unwrap_or_default()
-            .is_some_and(|installer| installer == "uv")
-    });
-
     // Walk over all installed packages and check if they are required
-    for dist in installed {
-        if let Some(pkg) = required_map.remove(&dist.name()) {
-            // Check if we need to reinstall
-            match need_reinstall(dist, pkg, python_version)? {
-                ValidateInstall::Keep => {
-                    // Continue with the loop
-                    continue;
-                }
-                ValidateInstall::Reinstall => {
-                    reinstalls.push(dist.clone());
+    for dist in site_packages.iter() {
+        // Check if we require the package to be installed
+        let pkg = required_map.remove(&dist.name());
+        // Get the installer name
+        let installer = dist
+            .installer()
+            // Empty string if no installer or any other error
+            .map_or(String::new(), |f| f.unwrap_or_default());
+
+        if let Some(pkg) = pkg {
+            if installer != PIXI_UV_INSTALLER {
+                // We are managing the package but something else has installed a version
+                // let's re-install to make sure that we have the **correct** version
+                reinstalls.push(dist.clone());
+                installer_mismatch.push(dist.name().clone());
+            } else {
+                // Check if we need to reinstall
+                match need_reinstall(dist, pkg, python_version)? {
+                    ValidateInstall::Keep => {
+                        // We are done here
+                        continue;
+                    }
+                    ValidateInstall::Reinstall => {
+                        reinstalls.push(dist.clone());
+                    }
                 }
             }
 
-            // Check if we need to revalidate
-            // In that case
+            // Okay so we need to re-install the package
+            // let's see if we need the remote or local version
+
+            // Check if we need to revalidate the package
+            // then we should get it from the remote
             if uv_cache.must_revalidate(&pkg.name) {
                 remote.push(convert_to_dist(pkg, lock_file_dir));
                 continue;
             }
 
-            // Do we have in the cache?
+            // Have we cached the wheel?
             let wheel = registry_index
                 .get(&pkg.name)
                 .find(|(version, _)| **version == pkg.version);
@@ -475,8 +493,12 @@ fn whats_the_plan<'a>(
             } else {
                 remote.push(convert_to_dist(pkg, lock_file_dir));
             }
+        } else if installer != PIXI_UV_INSTALLER {
+            // Ignore packages that we are not managed by us
+            continue;
         } else {
-            // We can uninstall
+            // Add to the extraneous list
+            // as we do manage it but have no need for it
             extraneous.push(dist.clone());
         }
     }
@@ -508,6 +530,7 @@ fn whats_the_plan<'a>(
         remote,
         reinstalls,
         extraneous,
+        installer_mismatch,
     })
 }
 
@@ -527,7 +550,24 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
             };
 
             if let Some(installed_dist) = installed_dist {
-                installed.push(installed_dist);
+                // If we can't get the installer, we can't be certain that we have installed it
+                let installer = match installed_dist.installer() {
+                    Ok(installer) => installer,
+                    Err(e) => {
+                        tracing::warn!(
+                            "could not get installer for {}: {}, will not remove distribution",
+                            installed_dist.name(),
+                            e
+                        );
+                        continue;
+                    }
+                };
+
+                // Only remove if have actually installed it
+                // by checking the installer
+                if installer.unwrap_or_default() == PIXI_UV_INSTALLER {
+                    installed.push(installed_dist);
+                }
             }
         }
     }
@@ -810,6 +850,7 @@ pub async fn update_python_distributions(
         remote,
         reinstalls,
         extraneous,
+        installer_mismatch,
     } = whats_the_plan(
         &python_packages,
         &editables_with_temp.resolved_editables,
@@ -906,6 +947,17 @@ pub async fn update_python_distributions(
         wheels
     };
 
+    // Notify the user if there are any packages that were re-installed because they were installed
+    // by a different installer.
+    if !installer_mismatch.is_empty() {
+        let packages = installer_mismatch
+            .iter()
+            .map(|name| name.to_string())
+            .join(", ");
+        // BREAK(0.20.1): change this into a warning in a future release
+        tracing::info!("These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: \n\t{packages}")
+    }
+
     // Remove any unnecessary packages.
     if !extraneous.is_empty() || !reinstalls.is_empty() {
         let start = std::time::Instant::now();
@@ -950,6 +1002,7 @@ pub async fn update_python_distributions(
         let start = std::time::Instant::now();
         uv_installer::Installer::new(&venv)
             .with_link_mode(LinkMode::default())
+            .with_installer_name(Some(PIXI_UV_INSTALLER.to_string()))
             .with_reporter(UvReporter::new(options))
             .install(&wheels)
             .unwrap();
