@@ -226,7 +226,7 @@ fn alter_config(common_args: &CommonArgs, key: &str, value: Option<String>) -> m
         "pypi_config.keyring_provider" | "pypi-config.keyring-provider" => {
             config.set("pypi_config.keyring_provider", value)?
         }
-        _ => return Err(miette::miette!("unsopperted key {}", key)),
+        _ => return Err(miette::miette!("unsupported key {}", key)),
     }
 
     config.save()
