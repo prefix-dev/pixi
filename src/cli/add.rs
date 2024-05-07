@@ -52,9 +52,15 @@ pub struct Args {
     ///
     /// Mixing `--platform` and `--build`/`--host` flags is supported
     ///
-    /// The `--pypi` option will add the package as a pypi-dependency this can not be mixed with the conda dependencies
+    /// The `--pypi` option will add the package as a pypi dependency. This can not be mixed with the conda dependencies
     /// - `pixi add --pypi boto3`
     /// - `pixi add --pypi "boto3==version"
+    ///
+    /// If the project manifest is a `pyproject.toml`, adding a pypi dependency will add it to the native pyproject `project.dependencies` array
+    /// or to the native `project.optional-dependencies` table if a feature is specified:
+    /// - `pixi add --pypi boto3` would add `boto3` to the `project.dependencies` array
+    /// - `pixi add --pypi boto3 --feature aws` would add `boto3` to the `project.dependencies.aws` array
+    /// These dependencies will be read by pixi as if they had been added to the pixi `pypi-dependencies` tables of the default or a named feature.
     ///
     #[arg(required = true)]
     pub specs: Vec<String>,
