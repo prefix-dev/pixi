@@ -9,6 +9,7 @@ use clap::Parser;
 use indicatif::ProgressBar;
 
 #[derive(Parser, Debug)]
+#[clap(group(clap::ArgGroup::new("command")))]
 pub enum Command {
     #[clap(name = "cache")]
     Cache(CacheArgs),
@@ -133,7 +134,10 @@ async fn remove_folder_with_progress(
     ));
 
     // Ignore errors
-    let _ = tokio::fs::remove_dir_all(&folder).await;
+    let result = tokio::fs::remove_dir_all(&folder).await;
+    if let Err(e) = result {
+        tracing::info!("Failed to remove folder {:?}: {}", folder, e);
+    }
 
     pb.finish_with_message(format!(
         "{} {}",
