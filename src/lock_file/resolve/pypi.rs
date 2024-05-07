@@ -1,10 +1,5 @@
-//! This module contains code to resolve python package from PyPi or Conda packages.
-//!
-//! See [`resolve_pypi`] and [`resolve_conda`] for more information.
-
-use crate::config::{self, get_cache_dir};
+use super::pypi_editables::build_editables;
 use crate::consts::PROJECT_MANIFEST;
-use crate::lock_file::pypi_editables::build_editables;
 use crate::project::manifest::pypi_options::PypiOptions;
 use crate::project::manifest::python::RequirementOrEditable;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
@@ -12,18 +7,19 @@ use std::collections::{BTreeMap, HashMap};
 use std::future::{ready, Future};
 use std::iter::once;
 
-use crate::lock_file::{package_identifier, PypiPackageIdentifier, PypiRecord};
+use crate::lock_file::{
+    package_identifier, PypiPackageIdentifier, PypiRecord, UvResolutionContext,
+};
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::{
-    lock_file::{LockedCondaPackages, LockedPypiPackages},
+    lock_file::LockedPypiPackages,
     project::manifest::{PyPiRequirement, SystemRequirements},
-    Project,
 };
 
 use distribution_types::{
     BuiltDist, DirectUrlSourceDist, Dist, FlatIndexLocation, HashPolicy, IndexLocations, IndexUrl,
-    Name, PrioritizedDist, Resolution, ResolvedDist, SourceDist,
+    LocalEditable, Name, PrioritizedDist, Resolution, ResolvedDist, SourceDist,
 };
 use distribution_types::{FileLocation, SourceDistCompatibility};
 use futures::FutureExt;
@@ -35,22 +31,18 @@ use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier};
 use pep508_rs::{Requirement, VerbatimUrl, VersionOrUrl};
 use pypi_types::{HashAlgorithm, HashDigest, Metadata23};
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
+use rattler_conda_types::RepoDataRecord;
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
 };
-use rattler_solve::{resolvo, ChannelPriority, SolverImpl};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
-use uv_configuration::{
-    ConfigSettings, Constraints, NoBinary, NoBuild, Overrides, SetupPyStrategy,
-};
+use uv_configuration::{ConfigSettings, Constraints, NoBuild, Overrides, SetupPyStrategy};
 
 use url::Url;
-use uv_cache::Cache;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{ArchiveMetadata, DistributionDatabase, Reporter};
 use uv_interpreter::Interpreter;
@@ -61,52 +53,6 @@ use uv_resolver::{
     VersionsResponse, WheelMetadataResult,
 };
 use uv_types::{BuildContext, EmptyInstalledPackages, HashStrategy, InFlight};
-
-/// Objects that are needed for resolutions which can be shared between different resolutions.
-#[derive(Clone)]
-pub struct UvResolutionContext {
-    pub cache: Cache,
-    pub in_flight: Arc<InFlight>,
-    pub no_build: NoBuild,
-    pub no_binary: NoBinary,
-    pub hash_strategy: HashStrategy,
-    pub client: reqwest::Client,
-    pub keyring_provider: uv_configuration::KeyringProviderType,
-}
-
-impl UvResolutionContext {
-    pub fn from_project(project: &Project) -> miette::Result<Self> {
-        let cache = Cache::from_path(
-            get_cache_dir()
-                .expect("missing caching directory")
-                .join("uv-cache"),
-        )
-        .into_diagnostic()
-        .context("failed to create uv cache")?;
-
-        let keyring_provider = match project.config().pypi_config().use_keyring() {
-            config::KeyringProvider::Subprocess => {
-                tracing::info!("using uv keyring (subprocess) provider");
-                uv_configuration::KeyringProviderType::Subprocess
-            }
-            config::KeyringProvider::Disabled => {
-                tracing::info!("uv keyring provider is disabled");
-                uv_configuration::KeyringProviderType::Disabled
-            }
-        };
-
-        let in_flight = Arc::new(InFlight::default());
-        Ok(Self {
-            cache,
-            in_flight,
-            no_build: NoBuild::None,
-            no_binary: NoBinary::None,
-            hash_strategy: HashStrategy::None,
-            client: project.client().clone(),
-            keyring_provider,
-        })
-    }
-}
 
 fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes> {
     let mut sha256 = None;
@@ -301,6 +247,8 @@ fn convert_flat_index_path(
     // Join with the given flat index path
     given_flat_index_path.join(path)
 }
+
+type CondaPythonPackages = HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
@@ -557,9 +505,29 @@ pub async fn resolve_pypi(
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
-    let database = DistributionDatabase::new(&registry_client, &build_dispatch);
+    // Collect resolution into locked packages
+    lock_pypi_packages(
+        conda_python_packages,
+        &build_dispatch,
+        &registry_client,
+        flat_index_locations,
+        resolution,
+        built_editables,
+    )
+    .await
+}
 
+/// Create a vector of locked pacakges from a resolution
+async fn lock_pypi_packages<'a>(
+    conda_python_packages: CondaPythonPackages,
+    build_dispatch: &BuildDispatch<'a>,
+    registry_client: &Arc<RegistryClient>,
+    flat_index_locations: Vec<FindLinksLocation>,
+    resolution: Resolution,
+    built_editables: Vec<(LocalEditable, Metadata23)>,
+) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
+    let database = DistributionDatabase::new(registry_client, build_dispatch);
     for dist in resolution.into_distributions() {
         // If this refers to a conda package we can skip it
         if conda_python_packages.contains_key(dist.name()) {
@@ -740,37 +708,5 @@ pub async fn resolve_pypi(
 
         locked_packages.push((pypi_package_data, PypiPackageEnvironmentData::default()));
     }
-
     Ok(locked_packages)
-}
-
-/// Solves the conda package environment for the given input. This function is async because it
-/// spawns a background task for the solver. Since solving is a CPU intensive task we do not want to
-/// block the main task.
-pub async fn resolve_conda(
-    specs: Vec<MatchSpec>,
-    virtual_packages: Vec<GenericVirtualPackage>,
-    locked_packages: Vec<RepoDataRecord>,
-    available_packages: Vec<Vec<RepoDataRecord>>,
-) -> miette::Result<LockedCondaPackages> {
-    tokio::task::spawn_blocking(move || {
-        // Construct a solver task that we can start solving.
-        let task = rattler_solve::SolverTask {
-            specs,
-            available_packages: &available_packages,
-            locked_packages,
-            pinned_packages: vec![],
-            virtual_packages,
-            timeout: None,
-            channel_priority: ChannelPriority::Strict,
-        };
-
-        // Solve the task
-        resolvo::Solver.solve(task).into_diagnostic()
-    })
-    .await
-    .unwrap_or_else(|e| match e.try_into_panic() {
-        Ok(e) => std::panic::resume_unwind(e),
-        Err(_err) => Err(miette::miette!("cancelled")),
-    })
 }
