@@ -5,4 +5,5 @@
 pub(crate) mod conda;
 pub(crate) mod pypi;
 mod pypi_editables;
+mod resolver_provider;
 pub(crate) mod uv_resolution_context;
