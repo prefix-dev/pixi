@@ -1,7 +1,7 @@
 use clap::{ArgAction, Parser};
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -108,37 +108,43 @@ pub struct ConfigCliPrompt {
     change_ps1: Option<bool>,
 }
 
-#[derive(Clone, Default, Debug, Deserialize)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub struct RepodataConfig {
     /// Disable JLAP compression for repodata.
     #[serde(alias = "disable-jlap")] // BREAK: rename instead of alias
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_jlap: Option<bool>,
     /// Disable bzip2 compression for repodata.
     #[serde(alias = "disable-bzip2")] // BREAK: rename instead of alias
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_bzip2: Option<bool>,
     /// Disable zstd compression for repodata.
     #[serde(alias = "disable-zstd")] // BREAK: rename instead of alias
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_zstd: Option<bool>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, clap::ValueEnum)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum KeyringProvider {
     Disabled,
     Subprocess,
 }
 
-#[derive(Clone, Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct PyPIConfig {
     /// The default index URL for PyPI packages.
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub index_url: Option<Url>,
     /// A list of extra index URLs for PyPI packages
     #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub extra_index_urls: Vec<Url>,
     /// Whether to use the `keyring` executable to look up credentials.
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keyring_provider: Option<KeyringProvider>,
 }
 
@@ -170,30 +176,41 @@ impl PyPIConfig {
             .clone()
             .unwrap_or(KeyringProvider::Disabled)
     }
+
+    fn is_default(&self) -> bool {
+        self.index_url.is_none()
+            && self.extra_index_urls.is_empty()
+            && self.keyring_provider.is_none()
+    }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
     #[serde(default)]
     #[serde(alias = "default-channels")] // BREAK: rename instead of alias
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub default_channels: Vec<String>,
 
     /// If set to true, pixi will set the PS1 environment variable to a custom value.
     #[serde(default)]
     #[serde(alias = "change-ps1")] // BREAK: rename instead of alias
+    #[serde(skip_serializing_if = "Option::is_none")]
     change_ps1: Option<bool>,
 
     /// Path to the file containing the authentication token.
     #[serde(default)]
     #[serde(alias = "authentication-override-file")] // BREAK: rename instead of alias
+    #[serde(skip_serializing_if = "Option::is_none")]
     authentication_override_file: Option<PathBuf>,
 
     /// If set to true, pixi will not verify the TLS certificate of the server.
     #[serde(default)]
     #[serde(alias = "tls-no-verify")] // BREAK: rename instead of alias
+    #[serde(skip_serializing_if = "Option::is_none")]
     tls_no_verify: Option<bool>,
 
     #[serde(default)]
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     mirrors: HashMap<Url, Vec<Url>>,
 
     #[serde(skip)]
@@ -206,11 +223,13 @@ pub struct Config {
 
     /// Configuration for repodata fetching.
     #[serde(alias = "repodata-config")] // BREAK: rename instead of alias
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub repodata_config: Option<RepodataConfig>,
 
     /// Configuration for PyPI packages.
     #[serde(default)]
     #[serde(rename = "pypi-config")]
+    #[serde(skip_serializing_if = "PyPIConfig::is_default")]
     pub pypi_config: PyPIConfig,
 }
 

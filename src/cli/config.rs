@@ -46,6 +46,10 @@ struct EditArgs {
 
 #[derive(Parser, Debug, Clone)]
 struct ListArgs {
+    /// output in JSON format
+    #[arg(long)]
+    json: bool,
+
     #[clap(flatten)]
     common: CommonArgs,
 }
@@ -141,7 +145,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             } else {
                 let project_toml = project::find_project_manifest();
 
-                if let Some(project_toml) = project_toml {
+                let config = if let Some(project_toml) = project_toml {
                     let full_path = dunce::canonicalize(&project_toml).into_diagnostic()?;
                     let pixi_dir = full_path
                         .parent()
@@ -153,22 +157,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     if args.common.local {
                         let config_toml = pixi_dir.join(consts::CONFIG_FILE);
                         if let Ok(config) = Config::from_path(&config_toml) {
-                            eprint!("{:?}", config);
+                            config
                         } else {
-                            eprintln!("there is no local config file for current project");
+                            return Err(miette::miette!(
+                                "there is no local config file for current project"
+                            ));
                         }
                     } else {
-                        let config = Config::load(&pixi_dir)?;
-                        eprint!("{:?}", config);
+                        Config::load(&pixi_dir)?
                     }
                 } else if args.common.local {
                     return Err(miette::miette!(
                         "--local flag can only be used inside a pixi project"
                     ));
                 } else {
-                    let config = Config::load_global();
-                    eprint!("{:?}", config);
-                }
+                    Config::load_global()
+                };
+
+                let out = if args.json {
+                    serde_json::to_string_pretty(&config).into_diagnostic()?
+                } else {
+                    toml::to_string_pretty(&config).into_diagnostic()?
+                };
+
+                eprintln!("{}", out);
             }
         }
         Subcommand::Set(_) => panic!("Unimplemented"),
