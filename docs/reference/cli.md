@@ -95,6 +95,7 @@ Which gets generated on `pixi add` or when you manually change the [manifest fil
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](configuration.md), by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--environemnt <ENVIRONMENT> (-e)`: install the specific environment (example: `pixi install -e lint`).
 
 ```shell
 pixi install
@@ -102,6 +103,13 @@ pixi install --manifest-path ~/myproject/pixi.toml
 pixi install --frozen
 pixi install --locked
 ```
+
+!!! info
+    `pixi install` by default will only install the required environment (`default` environment).
+    To specify installation of other environments use the `-e` flag to specify the name of the environment that you require to install.
+    The install command is used when only the installation of the default environment is required and nothing else.
+    The other commands, `run` `shell` `shell-hook`, `remove` to name a few, will all install the environment/s as and when it's required by the commands.
+    This mechanism ensures that the environments are always in the correct state.
 
 To reinitialize the lock file in your project, you can remove the existing `pixi.lock` file and run `pixi install`.
 This process will regenerate the lock file based on the dependencies defined in your manifest file:
