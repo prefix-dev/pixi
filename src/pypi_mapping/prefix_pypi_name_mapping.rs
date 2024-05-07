@@ -225,7 +225,7 @@ pub fn amend_pypi_purls_for_record(
         if version.is_some() {
             let mut purl = PackageUrl::builder(String::from("pypi"), name);
             purl = purl
-                .with_qualifier("from", "conda-forge")
+                .with_qualifier("source", "conda-forge-mapping")
                 .expect("valid qualifier");
             let built_purl = purl.build().expect("valid pypi package url");
             record.package_record.purls.push(built_purl);
