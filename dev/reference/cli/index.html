@@ -2157,20 +2157,26 @@ It will only add if the package with its version constraint is able to work with
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>featurex<span class="w"> </span>numpy
 </span></code></pre></div>
 <h2 id="install"><code>install</code><a class="headerlink" href="#install" title="Permanent link">#</a></h2>
-<p>Installs all dependencies specified in the lock file <code>pixi.lock</code>.
-Which gets generated on <code>pixi add</code> or when you manually change the <a href="../configuration/">manifest file</a> file and run <code>pixi install</code>.</p>
+<p>Installs an environment based on the <a href="../configuration/">manifest file</a>.
+If there is no <code>pixi.lock</code> file or it is not up-to-date with the <a href="../configuration/">manifest file</a>, it will (re-)generate the lock file.</p>
+<p><code>pixi install</code> only installs one environment at a time, if you have multiple environments you can select the right one with the <code>--environment</code> flag.
+If you don't provide an environment, the <code>default</code> environment will be installed.</p>
+<p>Running <code>pixi install</code> is not required before running other commands.
+As all commands interacting with the environment will first run the <code>install</code> command if the environment is not ready, to make sure you always run in a correct state.
+E.g. <code>pixi run</code>, <code>pixi shell</code>, <code>pixi shell-hook</code>, <code>pixi add</code>, <code>pixi remove</code> to name a few.</p>
 <h5 id="options_2">Options<a class="headerlink" href="#options_2" title="Permanent link">#</a></h5>
-<div class="language-text highlight"><pre><span></span><code>/// Install the environment as defined in the lock file, doesn&#39;t abort when lock file isn&#39;t up-to-date with the manifest file.
-</code></pre></div>
 <ul>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 <li><code>--frozen</code>: install the environment as defined in the lock file, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../configuration/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
 <li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../configuration/">manifest file</a><sup id="fnref6:1"><a class="footnote-ref" href="#fn:1">1</a></sup>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
+<li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to install, if none are provided the default environment will be used.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>install
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pixi<span class="w"> </span>install<span class="w"> </span>--manifest-path<span class="w"> </span>~/myproject/pixi.toml
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>pixi<span class="w"> </span>install<span class="w"> </span>--frozen
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>pixi<span class="w"> </span>install<span class="w"> </span>--locked
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>pixi<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span>lint
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>pixi<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>lint
 </span></code></pre></div>
 <p>To reinitialize the lock file in your project, you can remove the existing <code>pixi.lock</code> file and run <code>pixi install</code>.
 This process will regenerate the lock file based on the dependencies defined in your manifest file:</p>
