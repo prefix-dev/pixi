@@ -433,6 +433,62 @@ impl Config {
     pub fn mirror_map(&self) -> &std::collections::HashMap<Url, Vec<Url>> {
         &self.mirrors
     }
+
+    /// Modify this config with the given key and value
+    ///
+    /// # Note
+    ///
+    /// It is required to call `save()` to persist the changes.
+    pub fn set(&mut self, key: &str, value: Option<String>) -> miette::Result<()> {
+        match key {
+            "change_ps1" => {
+                self.change_ps1 = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "repodata_config.disable_jlap" => {
+                self.repodata_config
+                    .get_or_insert(RepodataConfig::default())
+                    .disable_jlap = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "repodata_config.disable_bzip2" => {
+                self.repodata_config
+                    .get_or_insert(RepodataConfig::default())
+                    .disable_bzip2 = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "repodata_config.disable_zstd" => {
+                self.repodata_config
+                    .get_or_insert(RepodataConfig::default())
+                    .disable_zstd = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "pypi_config.index_url" => {
+                self.pypi_config.index_url = value
+                    .map(|v| Url::parse(&v))
+                    .transpose()
+                    .into_diagnostic()?;
+            }
+            "pypi_config.keyring_provider" => {
+                self.pypi_config.keyring_provider = value
+                    .map(|v| match v.as_str() {
+                        "disabled" => Ok(KeyringProvider::Disabled),
+                        "subprocess" => Ok(KeyringProvider::Subprocess),
+                        _ => Err(miette::miette!("Invalid keyring provider")),
+                    })
+                    .transpose()?;
+            }
+            _ => return Err(miette::miette!("Unknown key: {}", key)),
+        }
+
+        Ok(())
+    }
+
+    /// Save the config to the file
+    pub fn save(&self) -> miette::Result<()> {
+        let contents = toml_edit::ser::to_string_pretty(&self).into_diagnostic()?;
+        let path = self
+            .loaded_from
+            .first()
+            .expect("config should have a loaded_from path");
+        fs::write(path, contents).into_diagnostic()
+    }
 }
 
 #[cfg(test)]
