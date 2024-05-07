@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
-use rattler_conda_types::RepoDataRecord;
+use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
 use reqwest_middleware::ClientBuilder;
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use url::Url;
@@ -86,4 +86,19 @@ pub fn is_conda_forge_record(record: &RepoDataRecord) -> bool {
 /// Returns `true` if the specified url refers to a conda-forge channel.
 pub fn is_conda_forge_url(url: &Url) -> bool {
     url.path().starts_with("/conda-forge")
+}
+
+pub fn build_pypi_purl_from_package_record(package_record: &PackageRecord) -> Option<PackageUrl> {
+    let name = pep508_rs::PackageName::from_str(package_record.name.as_source()).ok();
+    let version = pep440_rs::Version::from_str(&package_record.version.as_str()).ok();
+    if let (Some(name), Some(_)) = (name, version) {
+        let mut purl = PackageUrl::builder(String::from("pypi"), name.to_string());
+        purl = purl
+            .with_qualifier("source", "conda-forge-mapping")
+            .expect("valid qualifier");
+        let built_purl = purl.build().expect("valid pypi package url");
+        return Some(built_purl);
+    }
+
+    None
 }

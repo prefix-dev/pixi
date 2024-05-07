@@ -9,12 +9,14 @@ use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::{collections::HashMap, str::FromStr};
 use tokio::sync::Semaphore;
 use url::Url;
 
-use super::{custom_pypi_mapping, is_conda_forge_record, Reporter};
+use super::{
+    build_pypi_purl_from_package_record, custom_pypi_mapping, is_conda_forge_record, Reporter,
+};
 
 const STORAGE_URL: &str = "https://conda-mapping.prefix.dev";
 const HASH_DIR: &str = "hash-v0";
@@ -220,15 +222,8 @@ pub fn amend_pypi_purls_for_record(
     if !no_a_pypi && record.package_record.purls.is_empty() && is_conda_forge_record(record) {
         // Convert the conda package names to pypi package names. If the conversion fails we
         // just assume that its not a valid python package.
-        let name = record.package_record.name.as_source();
-        let version = pep440_rs::Version::from_str(&record.package_record.version.as_str()).ok();
-        if version.is_some() {
-            let mut purl = PackageUrl::builder(String::from("pypi"), name);
-            purl = purl
-                .with_qualifier("source", "conda-forge-mapping")
-                .expect("valid qualifier");
-            let built_purl = purl.build().expect("valid pypi package url");
-            record.package_record.purls.push(built_purl);
+        if let Some(purl) = build_pypi_purl_from_package_record(&record.package_record) {
+            record.package_record.purls.push(purl);
         }
     }
 
