@@ -45,11 +45,11 @@ where
 pub async fn fetch_custom_mapping(
     client: &ClientWithMiddleware,
     mapping_url: &MappingMap,
-) -> miette::Result<&'static HashMap<String, HashMap<String, String>>> {
-    static MAPPING: OnceCell<HashMap<String, HashMap<String, String>>> = OnceCell::new();
+) -> miette::Result<&'static HashMap<String, HashMap<String, Option<String>>>> {
+    static MAPPING: OnceCell<HashMap<String, HashMap<String, Option<String>>>> = OnceCell::new();
     MAPPING
         .get_or_try_init(async {
-            let mut mapping_url_to_name: HashMap<String, HashMap<String, String>> =
+            let mut mapping_url_to_name: HashMap<String, HashMap<String, Option<String>>> =
                 Default::default();
 
             for (name, url) in mapping_url.iter() {
@@ -82,7 +82,7 @@ pub async fn fetch_custom_mapping(
                         let contents = std::fs::read_to_string(path)
                             .into_diagnostic()
                             .context(format!("mapping on {path:?} could not be loaded"))?;
-                        let data: HashMap<String, String> = serde_json::from_str(&contents)
+                        let data: HashMap<String, Option<String>> = serde_json::from_str(&contents)
                             .unwrap_or_else(|_| {
                                 panic!("Failed to parse JSON mapping located at {path:?}")
                             });
@@ -148,7 +148,7 @@ pub async fn amend_pypi_purls(
 /// a conda-forge package.
 fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
-    custom_mapping: &'static HashMap<String, HashMap<String, String>>,
+    custom_mapping: &'static HashMap<String, HashMap<String, Option<String>>>,
 ) -> miette::Result<()> {
     // If the package already has a pypi name we can stop here.
     if record
@@ -160,17 +160,23 @@ fn amend_pypi_purls_for_record(
         return Ok(());
     }
 
+    let mut not_a_pypi = false;
+
     // If this package is a conda-forge package or user specified a custom channel mapping
     // we can try to guess the pypi name from the conda name
     if let Some(mapped_channel) = custom_mapping.get(&record.channel) {
         if let Some(mapped_name) = mapped_channel.get(record.package_record.name.as_normalized()) {
-            record.package_record.purls.push(
-                PackageUrl::new(String::from("pypi"), mapped_name).expect("valid pypi package url"),
-            );
+            if let Some(name) = mapped_name {
+                record.package_record.purls.push(
+                    PackageUrl::new(String::from("pypi"), name).expect("valid pypi package url"),
+                );
+            } else {
+                not_a_pypi = true;
+            }
         }
     }
 
-    if record.package_record.purls.is_empty() && is_conda_forge_record(record) {
+    if !not_a_pypi && record.package_record.purls.is_empty() && is_conda_forge_record(record) {
         // Convert the conda package names to pypi package names. If the conversion fails we
         // just assume that its not a valid python package.
         let name = record.package_record.name.as_source();
@@ -178,7 +184,7 @@ fn amend_pypi_purls_for_record(
         if version.is_some() {
             let mut purl = PackageUrl::builder(String::from("pypi"), name);
             purl = purl
-                .with_qualifier("from", "conda-forge")
+                .with_qualifier("source", "conda-forge-mapping")
                 .expect("valid qualifier");
             let built_purl = purl.build().expect("valid pypi package url");
             record.package_record.purls.push(built_purl);
@@ -190,7 +196,7 @@ fn amend_pypi_purls_for_record(
 
 pub fn _amend_only_custom_pypi_purls(
     conda_packages: &mut [RepoDataRecord],
-    custom_mapping: &'static HashMap<String, HashMap<String, String>>,
+    custom_mapping: &'static HashMap<String, HashMap<String, Option<String>>>,
 ) -> miette::Result<()> {
     for record in conda_packages.iter_mut() {
         amend_pypi_purls_for_record(record, custom_mapping)?;

@@ -157,8 +157,7 @@ pub async fn amend_pypi_purls(
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
     let conda_mapping = conda_pypi_name_mapping(client, conda_packages, reporter).await?;
-    let mut compressed_mapping = conda_pypi_name_compressed_mapping(client).await?;
-    compressed_mapping.remove("boltons");
+    let compressed_mapping = conda_pypi_name_compressed_mapping(client).await?;
 
     for record in conda_packages.iter_mut() {
         amend_pypi_purls_for_record(record, &conda_mapping, &compressed_mapping)?;
