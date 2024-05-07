@@ -8,7 +8,7 @@ use url::Url;
 
 use crate::config::get_cache_dir;
 
-mod custom_pypi_mapping;
+pub mod custom_pypi_mapping;
 pub mod prefix_pypi_name_mapping;
 
 pub trait Reporter: Send + Sync {
@@ -19,9 +19,9 @@ pub trait Reporter: Send + Sync {
 
 pub type ChannelName = String;
 
-type MappingMap = HashMap<ChannelName, MappingLocation>;
+pub type MappingMap = HashMap<ChannelName, MappingLocation>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MappingLocation {
     Path(PathBuf),
     Url(Url),
@@ -30,6 +30,15 @@ pub enum MappingLocation {
 pub enum MappingSource {
     Custom { mapping: MappingMap },
     Prefix,
+}
+
+impl MappingSource {
+    pub fn custom(&self) -> Option<MappingMap> {
+        match self {
+            MappingSource::Custom { mapping } => Some(mapping.clone()),
+            _ => None,
+        }
+    }
 }
 
 pub async fn amend_pypi_purls(

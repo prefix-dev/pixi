@@ -4,7 +4,7 @@ use crate::common::{
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };
-use pixi::pypi_mapping;
+use pixi::pypi_mapping::{self, MappingSource};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use serial_test::serial;
@@ -172,7 +172,8 @@ async fn test_compressed_mapping_catch_missing_package() {
         pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
             .await
             .unwrap();
-    let compressed_mapping = HashMap::from([("foo-bar-car".to_owned(), "my-test-name".to_owned())]);
+    let compressed_mapping =
+        HashMap::from([("foo-bar-car".to_owned(), Some("my-test-name".to_owned()))]);
 
     pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
         &mut repo_data_record,
@@ -184,4 +185,142 @@ async fn test_compressed_mapping_catch_missing_package() {
     let first_purl = repo_data_record.package_record.purls.pop().unwrap();
 
     assert!(first_purl.name() == "my-test-name")
+}
+
+#[tokio::test]
+async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    let project = pixi.project().unwrap();
+    let client = project.authenticated_client();
+    let foo_bar_package = Package::build("pandoc", "2").finish();
+
+    let mut repo_data_record = RepoDataRecord {
+        package_record: foo_bar_package.package_record,
+        file_name: "pandoc".to_owned(),
+        url: Url::parse("https://haskell.org/pandoc/").unwrap(),
+        channel: "conda-forge".to_owned(),
+    };
+
+    let packages = vec![repo_data_record.clone()];
+
+    let conda_mapping =
+        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
+            .await
+            .unwrap();
+
+    let compressed_mapping =
+        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client)
+            .await
+            .unwrap();
+
+    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
+        &mut repo_data_record,
+        &conda_mapping,
+        &compressed_mapping,
+    )
+    .unwrap();
+
+    // pandoc is not a python package
+    // so purls for it should be empty
+    assert!(repo_data_record.package_record.purls.is_empty())
+}
+
+#[tokio::test]
+async fn test_we_record_not_present_package_as_purl() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    let project = pixi.project().unwrap();
+    let client = project.authenticated_client();
+    let foo_bar_package = Package::build("something-new", "2").finish();
+
+    let mut repo_data_record = RepoDataRecord {
+        package_record: foo_bar_package.package_record,
+        file_name: "something-new".to_owned(),
+        url: Url::parse("https://pypi.org/simple/something-new/").unwrap(),
+        channel: "https://conda.anaconda.org/conda-forge/osx-arm64/brotli-python-1.1.0-py311ha891d26_1.conda".to_owned(),
+    };
+
+    let packages = vec![repo_data_record.clone()];
+
+    let conda_mapping =
+        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
+            .await
+            .unwrap();
+
+    let compressed_mapping =
+        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client)
+            .await
+            .unwrap();
+
+    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
+        &mut repo_data_record,
+        &conda_mapping,
+        &compressed_mapping,
+    )
+    .unwrap();
+
+    // package is not yet present
+    // so just assume that
+    let first_purl = repo_data_record.package_record.purls.pop().unwrap();
+
+    assert!(first_purl.qualifiers().get("source").unwrap() == "conda-forge-mapping")
+}
+
+#[tokio::test]
+async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-channel-change"
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    conda-pypi-map = {{ 'conda-forge' = "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json" }}
+
+    "#,
+    ))
+    .unwrap();
+
+    let project = pixi.project().unwrap();
+
+    let client = project.authenticated_client();
+    let foo_bar_package = Package::build("something-new", "2").finish();
+
+    let mut repo_data_record = RepoDataRecord {
+        package_record: foo_bar_package.package_record,
+        file_name: "something-new".to_owned(),
+        url: Url::parse("https://pypi.org/simple/something-new/").unwrap(),
+        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+    };
+
+    let mut packages = vec![repo_data_record];
+
+    // let compressed_mapping = HashMap::from([("foo-bar-car".to_owned(), Some("my-test-name".to_owned()))]);
+
+    // let mapping_location = pypi_mapping::MappingLocation::Url(Url::parse("https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json").unwrap());
+
+    // let mut mapping_map = pypi_mapping::MappingMap::default();
+
+    // mapping_map.insert("conda-forge".to_owned(), mapping_location);
+
+    let mapping_map = project.pypi_name_mapping_source().custom().unwrap();
+
+    println!("mapping map is {:?}", mapping_map);
+
+    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(&client, &mapping_map, &mut packages, None)
+        .await
+        .unwrap();
+
+    // println!("Purls are {:?}", repo_data_record.package_record.purls);
+
+    // package is not yet present
+    // so just assume that is the same as pypi
+
+    let mut package = packages.pop().unwrap();
+
+    let first_purl = package.package_record.purls.pop().unwrap();
+
+    assert!(first_purl.qualifiers().get("source").unwrap() == "conda-forge-mapping")
 }
