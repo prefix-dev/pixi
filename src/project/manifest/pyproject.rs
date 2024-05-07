@@ -90,7 +90,7 @@ impl From<PyProjectManifest> for ProjectManifest {
         // Add pyproject dependencies as pypi dependencies
         if let Some(deps) = &pyproject.dependencies {
             for requirement in deps.iter() {
-                target.add_pypi_dependency(requirement);
+                target.add_pypi_dependency(requirement, None);
             }
         }
 
@@ -110,7 +110,7 @@ impl From<PyProjectManifest> for ProjectManifest {
                 for requirement in reqs.iter() {
                     // filter out any self references in groups of extra dependencies
                     if project_name != requirement.name {
-                        target.add_pypi_dependency(requirement);
+                        target.add_pypi_dependency(requirement, None);
                     }
                 }
             }

@@ -190,6 +190,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 spec_platforms,
                 args.no_lockfile_update,
                 args.no_install,
+                Some(args.editable),
             )
             .await
         }
@@ -233,6 +234,7 @@ pub async fn add_pypi_requirements_to_project(
     platforms: &[Platform],
     no_update_lockfile: bool,
     no_install: bool,
+    editable: Option<bool>,
 ) -> miette::Result<()> {
     for requirement in &requirements {
         // TODO: Get best version
@@ -240,12 +242,15 @@ pub async fn add_pypi_requirements_to_project(
         if platforms.is_empty() {
             project
                 .manifest
-                .add_pypi_dependency(requirement, None, feature_name)?;
+                .add_pypi_dependency(requirement, None, feature_name, editable)?;
         } else {
             for platform in platforms.iter() {
-                project
-                    .manifest
-                    .add_pypi_dependency(requirement, Some(*platform), feature_name)?;
+                project.manifest.add_pypi_dependency(
+                    requirement,
+                    Some(*platform),
+                    feature_name,
+                    editable,
+                )?;
             }
         }
     }
