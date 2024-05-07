@@ -177,7 +177,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 let out = if args.json {
                     serde_json::to_string_pretty(&config).into_diagnostic()?
                 } else {
-                    toml::to_string_pretty(&config).into_diagnostic()?
+                    toml_edit::ser::to_string_pretty(&config).into_diagnostic()?
                 };
 
                 eprintln!("{}", out);

@@ -3313,7 +3313,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
- "toml",
  "toml_edit 0.22.11",
  "tracing",
  "tracing-subscriber",

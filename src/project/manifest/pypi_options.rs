@@ -188,7 +188,7 @@ mod tests {
                  [[find-links]]
                  url = "https://flat.index"
              "#;
-        let deserialized_options: PypiOptions = toml::from_str(toml_str).unwrap();
+        let deserialized_options: PypiOptions = toml_edit::de::from_str(toml_str).unwrap();
         assert_eq!(
             deserialized_options,
             PypiOptions {
