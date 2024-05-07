@@ -95,6 +95,10 @@ pub struct Args {
 
     #[clap(flatten)]
     pub config: ConfigCli,
+
+    /// Whether the pypi requirement should be editable
+    #[arg(long, requires = "pypi")]
+    pub editable: bool,
 }
 
 impl DependencyType {
@@ -168,7 +172,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .into_iter()
                 .map(|req| {
                     let name = PyPiPackageName::from_normalized(req.name.clone());
-                    let requirement = PyPiRequirement::from(req);
+                    let mut requirement = PyPiRequirement::from(req);
+                    if args.editable {
+                        requirement.set_editable(true);
+                    }
                     Ok((name, requirement))
                 })
                 .collect::<Result<Vec<_>, uv_normalize::InvalidNameError>>()

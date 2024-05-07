@@ -156,6 +156,18 @@ impl PyPiRequirement {
                 | PyPiRequirement::Url { .. }
         )
     }
+
+    /// Define whether the requirement is editable.
+    pub fn set_editable(&mut self, editable: bool) {
+        match self {
+            PyPiRequirement::Path { editable: e, .. } => {
+                *e = Some(editable);
+            }
+            _ => {
+                tracing::warn!("Trying to set editable on a non-path requirement");
+            }
+        }
+    }
 }
 
 impl Default for PyPiRequirement {
