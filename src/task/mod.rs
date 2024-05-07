@@ -172,7 +172,8 @@ pub struct Execute {
     pub outputs: Option<Vec<String>>,
 
     /// A list of commands that should be run before this one
-    #[serde(default)]
+    // BREAK: Make the alias a renamed field to force kebab-case
+    #[serde(default, alias = "depends-on")]
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<TaskName>,
 
@@ -247,6 +248,7 @@ impl CmdArgs {
 #[serde_as]
 pub struct Alias {
     /// A list of commands that should be run before this one
+    #[serde(alias = "depends-on")]
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<TaskName>,
 }
@@ -269,13 +271,13 @@ impl Display for Task {
             if depends_on.len() == 1 {
                 write!(
                     f,
-                    ", depends_on = '{}'",
+                    ", depends-on = '{}'",
                     depends_on.iter().map(|t| t.fancy_display()).join(",")
                 )?;
             } else {
                 write!(
                     f,
-                    ", depends_on = [{}]",
+                    ", depends-on = [{}]",
                     depends_on.iter().map(|t| t.fancy_display()).join(",")
                 )?;
             }

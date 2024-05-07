@@ -34,6 +34,7 @@ use tracing::Level;
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
     /// The task you want to run in the projects environment.
+    #[arg(required = true)]
     pub task: Vec<String>,
 
     /// The path to 'pixi.toml' or 'pyproject.toml'
@@ -102,7 +103,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let search_environment = SearchEnvironments::from_opt_env(
         &project,
         explicit_environment.clone(),
-        Some(Platform::current()),
+        explicit_environment
+            .as_ref()
+            .map(|e| e.best_platform())
+            .or(Some(Platform::current())),
     )
     .with_disambiguate_fn(disambiguate_task_interactive);
 
@@ -203,23 +207,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Environment<'p>>) {
     let available_tasks: HashSet<TaskName> =
         if let Some(explicit_environment) = explicit_environment {
-            explicit_environment
-                .tasks(Some(Platform::current()), true)
-                .into_iter()
-                .flat_map(|tasks| tasks.into_keys())
-                .map(ToOwned::to_owned)
-                .collect()
+            explicit_environment.get_filtered_tasks()
         } else {
             project
                 .environments()
                 .into_iter()
                 .filter(|env| verify_current_platform_has_required_virtual_packages(env).is_ok())
-                .flat_map(|env| {
-                    env.tasks(Some(Platform::current()), true)
-                        .into_iter()
-                        .flat_map(|tasks| tasks.into_keys())
-                        .map(ToOwned::to_owned)
-                })
+                .flat_map(|env| env.get_filtered_tasks())
                 .collect()
         };
 

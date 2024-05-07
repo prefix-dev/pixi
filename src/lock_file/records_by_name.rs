@@ -176,7 +176,8 @@ impl PypiRecordsByName {
 
     /// Returns an iterator over the names of the records stored in this instance.
     pub fn names(&self) -> impl Iterator<Item = &uv_normalize::PackageName> {
-        self.by_name.keys()
+        // Iterate over the records to retain the index of the original record.
+        self.records.iter().map(|r| &r.0.name)
     }
 
     /// Converts this instance into the internally stored records.

@@ -6,7 +6,7 @@ TOML parse error at line 8, column 2
   |
 8 | [foobar]
   |  ^^^^^^
-unknown field `foobar`, expected one of `project`, `system-requirements`, `target`, `dependencies`, `host-dependencies`, `build-dependencies`, `pypi-dependencies`, `activation`, `tasks`, `feature`, `environments`, `tool`
+unknown field `foobar`, expected one of `project`, `system-requirements`, `target`, `dependencies`, `host-dependencies`, `build-dependencies`, `pypi-dependencies`, `activation`, `tasks`, `feature`, `environments`, `pypi-options`, `tool`, `$schema`
 
 TOML parse error at line 8, column 16
   |

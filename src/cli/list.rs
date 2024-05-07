@@ -6,13 +6,14 @@ use clap::Parser;
 use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
+
 use rattler_conda_types::Platform;
 use rattler_lock::{Package, UrlOrPath};
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
-use crate::project::manifest::EnvironmentName;
+use crate::project::has_features::HasFeatures;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::Project;
 
@@ -107,10 +108,7 @@ where
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment_name = EnvironmentName::from_arg_or_env_var(args.environment);
-    let environment = project
-        .environment(&environment_name)
-        .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
+    let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     let lock_file = project
         .up_to_date_lock_file(UpdateLockFileOptions {
@@ -121,7 +119,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?;
 
     // Load the platform
-    let platform = args.platform.unwrap_or_else(Platform::current);
+    let platform = args.platform.unwrap_or_else(|| environment.best_platform());
 
     // Get all the packages in the environment.
     let locked_deps = lock_file
@@ -137,17 +135,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let python_record = conda_records.find(|r| is_python_record(r));
     let tags;
     let uv_context;
+    let index_locations;
     let mut registry_index = if let Some(python_record) = python_record {
         uv_context = UvResolutionContext::from_project(&project)?;
+        index_locations = environment.pypi_options().to_index_locations();
         tags = get_pypi_tags(
-            Platform::current(),
+            platform,
             &project.system_requirements(),
             python_record.package_record(),
         )?;
         Some(RegistryWheelIndex::new(
             &uv_context.cache,
             &tags,
-            &uv_context.index_locations,
+            &index_locations,
             &uv_types::HashStrategy::None,
         ))
     } else {
@@ -209,8 +209,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // print packages as json
         json_packages(&packages_to_output, args.json_pretty);
     } else {
-        if !environment_name.is_default() {
-            eprintln!("Environment: {}", environment_name.fancy_display());
+        if !environment.is_default() {
+            eprintln!("Environment: {}", environment.name().fancy_display());
         }
 
         // print packages as table

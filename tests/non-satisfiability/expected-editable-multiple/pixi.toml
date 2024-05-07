@@ -1,0 +1,15 @@
+[project]
+name = "expected-editable-multiple"
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+[dependencies]
+python = "*"
+
+[pypi-dependencies]
+# In the lock file these are NOT editable
+foo = { path = "./foo", editable = true }
+bar = { path = "./bar", editable = true }
+
+# In the lock file this package IS editable, but they should not be
+baz = { path = "./baz" }

@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::project::has_features::HasFeatures;
 use crate::project::Environment;
 use crate::{config, progress, project::Project};
 use futures::{stream, StreamExt, TryStreamExt};

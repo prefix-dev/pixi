@@ -1,6 +1,8 @@
 use crate::lock_file::UvResolutionContext;
 use crate::progress::await_in_progress;
 use crate::project::grouped_environment::GroupedEnvironmentName;
+use crate::project::has_features::HasFeatures;
+use crate::project::manifest::pypi_options::PypiOptions;
 use crate::{
     consts, install, install_pypi,
     lock_file::UpdateLockFileOptions,
@@ -209,7 +211,7 @@ pub async fn get_up_to_date_prefix(
     mut no_install: bool,
     existing_repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
 ) -> miette::Result<Prefix> {
-    let current_platform = Platform::current();
+    let current_platform = environment.best_platform();
     let project = environment.project();
 
     // Do not install if the platform is not supported
@@ -250,8 +252,10 @@ pub async fn update_prefix_pypi(
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
     uv_context: UvResolutionContext,
+    pypi_options: &PypiOptions,
     environment_variables: &HashMap<String, String>,
     lock_file_dir: &Path,
+    platform: Platform,
 ) -> miette::Result<()> {
     // Remove python packages from a previous python distribution if the python version changed.
 
@@ -270,7 +274,9 @@ pub async fn update_prefix_pypi(
                 status,
                 system_requirements,
                 uv_context,
+                pypi_options,
                 environment_variables,
+                platform,
             )
         },
     )

@@ -59,7 +59,7 @@ impl PyPiPackageName {
 
 /// The pep crate does not support "*" as a version specifier, so we need to
 /// handle it ourselves.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VersionOrStar {
     Version(VersionSpecifiers),
     Star,
@@ -114,7 +114,7 @@ impl<'de> Deserialize<'de> for VersionOrStar {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
 #[serde(untagged, rename_all = "snake_case", deny_unknown_fields)]
 pub enum PyPiRequirement {
     Git {

@@ -6,7 +6,7 @@ This examples calculates approximate factorials of large numbers using pure Pyth
 ## Features demonstrated:
 - packaging C and Python libraries together
 - compiling with gcc through Pixi tasks
-- conditional Pixi task execution (`depends_on`)
+- conditional Pixi task execution (`depends-on`)
 - defining tasks with arguments
 
 

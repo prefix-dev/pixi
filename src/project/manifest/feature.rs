@@ -1,3 +1,4 @@
+use super::pypi_options::PypiOptions;
 use super::{Activation, PyPiRequirement, SystemRequirements, Target, TargetSelector};
 use crate::consts;
 use crate::project::manifest::channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap};
@@ -7,7 +8,7 @@ use crate::project::manifest::{deserialize_opt_package_map, deserialize_package_
 use crate::project::SpecType;
 use crate::task::{Task, TaskName};
 use crate::utils::spanned::PixiSpanned;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use itertools::Either;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use serde::de::Error;
@@ -116,16 +117,19 @@ pub struct Feature {
     ///
     /// This value is `None` if this feature does not specify any platforms and the default
     /// platforms from the project should be used.
-    pub platforms: Option<PixiSpanned<Vec<Platform>>>,
+    pub platforms: Option<PixiSpanned<IndexSet<Platform>>>,
 
     /// Channels specific to this feature.
     ///
     /// This value is `None` if this feature does not specify any channels and the default
     /// channels from the project should be used.
-    pub channels: Option<Vec<PrioritizedChannel>>,
+    pub channels: Option<IndexSet<PrioritizedChannel>>,
 
     /// Additional system requirements
     pub system_requirements: SystemRequirements,
+
+    /// Pypi-related options
+    pub pypi_options: Option<PypiOptions>,
 
     /// Target specific configuration.
     pub targets: Targets,
@@ -139,6 +143,7 @@ impl Feature {
             platforms: None,
             channels: None,
             system_requirements: SystemRequirements::default(),
+            pypi_options: None,
             targets: <Targets as Default>::default(),
         }
     }
@@ -146,6 +151,18 @@ impl Feature {
     /// Returns true if this feature is the default feature.
     pub fn is_default(&self) -> bool {
         self.name == FeatureName::Default
+    }
+
+    /// Returns a mutable reference to the platforms of the feature. Create them if needed
+    pub fn platforms_mut(&mut self) -> &mut IndexSet<Platform> {
+        self.platforms
+            .get_or_insert_with(Default::default)
+            .get_mut()
+    }
+
+    /// Returns a mutable reference to the channels of the feature. Create them if needed
+    pub fn channels_mut(&mut self) -> &mut IndexSet<PrioritizedChannel> {
+        self.channels.get_or_insert_with(Default::default)
     }
 
     /// Returns the dependencies of the feature for a given `spec_type` and `platform`.
@@ -231,6 +248,11 @@ impl Feature {
             .targets()
             .any(|t| t.pypi_dependencies.iter().flatten().next().is_some())
     }
+
+    /// Returns any pypi_options if they are set.
+    pub fn pypi_options(&self) -> Option<&PypiOptions> {
+        self.pypi_options.as_ref()
+    }
 }
 
 impl<'de> Deserialize<'de> for Feature {
@@ -243,7 +265,7 @@ impl<'de> Deserialize<'de> for Feature {
         #[serde(deny_unknown_fields, rename_all = "kebab-case")]
         struct FeatureInner {
             #[serde(default)]
-            platforms: Option<PixiSpanned<Vec<Platform>>>,
+            platforms: Option<PixiSpanned<IndexSet<Platform>>>,
             #[serde(default)]
             channels: Option<Vec<TomlPrioritizedChannelStrOrMap>>,
             #[serde(default)]
@@ -270,6 +292,10 @@ impl<'de> Deserialize<'de> for Feature {
             /// Target specific tasks to run in the environment
             #[serde(default)]
             tasks: HashMap<TaskName, Task>,
+
+            /// Additional options for PyPi dependencies.
+            #[serde(default)]
+            pypi_options: Option<PypiOptions>,
         }
 
         let inner = FeatureInner::deserialize(deserializer)?;
@@ -298,6 +324,7 @@ impl<'de> Deserialize<'de> for Feature {
                     .collect()
             }),
             system_requirements: inner.system_requirements,
+            pypi_options: inner.pypi_options,
             targets: Targets::from_default_and_user_defined(default_target, inner.target),
         })
     }
@@ -409,5 +436,24 @@ mod tests {
             &vec!["linux-64.bat".to_string()],
             "should have selected the activation from the [linux-64] section"
         );
+    }
+
+    #[test]
+    pub fn test_pypi_options_manifest() {
+        let manifest = Manifest::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foo"
+        platforms = ["linux-64", "osx-64", "win-64"]
+        channels = []
+
+        [pypi-options]
+        index-url = "https://pypi.org/simple"
+        "#,
+        )
+        .unwrap();
+
+        manifest.default_feature().pypi_options().unwrap();
     }
 }

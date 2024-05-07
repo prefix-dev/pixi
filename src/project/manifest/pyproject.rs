@@ -5,18 +5,14 @@ use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenie
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
-use std::{
-    collections::{HashMap, HashSet},
-    str::FromStr,
-};
+use std::{collections::HashMap, str::FromStr};
 use toml_edit::DocumentMut;
 
 use crate::FeatureName;
 
 use super::{
     error::{RequirementConversionError, TomlError},
-    python::PyPiPackageName,
-    Feature, ProjectManifest, PyPiRequirement, SpecType,
+    Feature, ProjectManifest, SpecType,
 };
 
 #[derive(Deserialize, Debug, Clone)]
@@ -74,15 +70,16 @@ impl From<PyProjectManifest> for ProjectManifest {
         let python_spec = pyproject.requires_python.clone();
 
         let target = manifest.default_feature_mut().targets.default_mut();
+        let python = PackageName::from_str("python").unwrap();
         // If the target doesn't have any python dependency, we add it from the `requires-python`
-        if !target.has_dependency("python", Some(SpecType::Run)) {
+        if !target.has_dependency(&python, Some(SpecType::Run), None) {
             target.add_dependency(
-                PackageName::from_str("python").unwrap(),
-                version_or_url_to_nameless_matchspec(&python_spec).unwrap(),
+                &python,
+                &version_or_url_to_nameless_matchspec(&python_spec).unwrap(),
                 SpecType::Run,
             );
         } else if let Some(_spec) = python_spec {
-            if target.has_dependency("python", Some(SpecType::Run)) {
+            if target.has_dependency(&python, Some(SpecType::Run), None) {
                 // TODO: implement some comparison or spec merging logic here
                 tracing::info!(
                     "Overriding the requires-python with the one defined in pixi dependencies"
@@ -91,44 +88,29 @@ impl From<PyProjectManifest> for ProjectManifest {
         }
 
         // Add pyproject dependencies as pypi dependencies
-        if let Some(deps) = pyproject.dependencies.clone() {
-            for d in deps.into_iter() {
-                target.add_pypi_dependency(
-                    PyPiPackageName::from_normalized(d.name.clone()),
-                    PyPiRequirement::from(d),
-                )
+        if let Some(deps) = &pyproject.dependencies {
+            for requirement in deps.iter() {
+                target.add_pypi_dependency(requirement);
             }
         }
 
         // For each extra group, create a feature of the same name if it does not exist,
         // and add pypi dependencies from project.optional-dependencies,
-        // filtering out unused features and self-references
+        // filtering out self-references
         if let Some(extras) = pyproject.optional_dependencies.as_ref() {
             let project_name = pep508_rs::PackageName::new(pyproject.name.clone()).unwrap();
-            let mut features_used = HashSet::new();
-            for env in manifest.environments.iter() {
-                for feature in env.features.iter() {
-                    features_used.insert(feature);
-                }
-            }
             for (extra, reqs) in extras {
-                // Filter out unused features
-                if features_used.contains(extra) {
-                    let feature_name = FeatureName::Named(extra.to_string());
-                    let target = manifest
-                        .features
-                        .entry(feature_name.clone())
-                        .or_insert_with(move || Feature::new(feature_name))
-                        .targets
-                        .default_mut();
-                    for req in reqs.iter() {
-                        // filter out any self references in groups of extra dependencies
-                        if project_name != req.name {
-                            target.add_pypi_dependency(
-                                PyPiPackageName::from_normalized(req.name.clone()),
-                                PyPiRequirement::from(req.clone()),
-                            )
-                        }
+                let feature_name = FeatureName::Named(extra.to_string());
+                let target = manifest
+                    .features
+                    .entry(feature_name.clone())
+                    .or_insert_with(move || Feature::new(feature_name))
+                    .targets
+                    .default_mut();
+                for requirement in reqs.iter() {
+                    // filter out any self references in groups of extra dependencies
+                    if project_name != requirement.name {
+                        target.add_pypi_dependency(requirement);
                     }
                 }
             }
@@ -251,7 +233,7 @@ mod tests {
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use crate::{
-        project::manifest::{python::PyPiPackageName, Manifest, PyPiRequirement},
+        project::manifest::{python::PyPiPackageName, Manifest},
         FeatureName,
     };
 
@@ -298,11 +280,11 @@ mod tests {
 
         [tool.pixi.tasks]
         build = "conda build ."
-        test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
+        test = { cmd = "pytest", cwd = "tests", depends-on = ["build"] }
         test2 = { cmd = "pytest", cwd = "tests"}
-        test3 = { cmd = "pytest", depends_on = ["test2"] }
+        test3 = { cmd = "pytest", depends-on = ["test2"] }
         test5 = { cmd = "pytest" }
-        test6 = { depends_on = ["test5"] }
+        test6 = { depends-on = ["test5"] }
 
         [tool.pixi.system-requirements]
         linux = "5.10"
@@ -351,11 +333,11 @@ mod tests {
 
         [tool.pixi.target.linux-64.tasks]
         build = "conda build ."
-        test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
+        test = { cmd = "pytest", cwd = "tests", depends-on = ["build"] }
         test2 = { cmd = "pytest", cwd = "tests"}
-        test3 = { cmd = "pytest", depends_on = ["test2"] }
+        test3 = { cmd = "pytest", depends-on = ["test2"] }
         test5 = { cmd = "pytest" }
-        test6 = { depends_on = ["test5"] }
+        test6 = { depends-on = ["test5"] }
 
         [tool.pixi.feature.test.target.linux-64.dependencies]
         test = "bla"
@@ -407,7 +389,6 @@ mod tests {
         dependencies = ["flask==2.*"]
 
         [tool.pixi.project]
-        name = "flask-hello-world-pyproject"
         channels = ["conda-forge"]
         platforms = ["linux-64"]
 
@@ -426,10 +407,9 @@ mod tests {
             Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_BOILERPLATE).unwrap();
 
         // Add numpy to pyproject
-        let name = PyPiPackageName::from_str("numpy").unwrap();
-        let requirement = PyPiRequirement::RawVersion(">=3.12".parse().unwrap());
+        let requirement = pep508_rs::Requirement::from_str("numpy>=3.12").unwrap();
         manifest
-            .add_pypi_dependency(&name, &requirement, None, &FeatureName::Default)
+            .add_pypi_dependency(&requirement, None, &FeatureName::Default)
             .unwrap();
 
         assert!(manifest
@@ -440,19 +420,13 @@ mod tests {
             .pypi_dependencies
             .as_ref()
             .unwrap()
-            .get(&name)
+            .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
             .is_some());
 
         // Add numpy to feature in pyproject
-        let name = PyPiPackageName::from_str("pytest").unwrap();
-        let requirement = PyPiRequirement::RawVersion(">=3.12".parse().unwrap());
+        let requirement = pep508_rs::Requirement::from_str("pytest>=3.12").unwrap();
         manifest
-            .add_pypi_dependency(
-                &name,
-                &requirement,
-                None,
-                &FeatureName::Named("test".to_string()),
-            )
+            .add_pypi_dependency(&requirement, None, &FeatureName::Named("test".to_string()))
             .unwrap();
         assert!(manifest
             .feature(&FeatureName::Named("test".to_string()))
@@ -463,7 +437,7 @@ mod tests {
             .pypi_dependencies
             .as_ref()
             .unwrap()
-            .get(&name)
+            .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
             .is_some());
 
         assert_snapshot!(manifest.document.to_string());

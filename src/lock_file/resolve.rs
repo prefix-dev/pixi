@@ -2,16 +2,17 @@
 //!
 //! See [`resolve_pypi`] and [`resolve_conda`] for more information.
 
-use crate::config::get_cache_dir;
+use crate::config::{self, get_cache_dir};
 use crate::consts::PROJECT_MANIFEST;
 use crate::lock_file::pypi_editables::build_editables;
+use crate::project::manifest::pypi_options::PypiOptions;
 use crate::project::manifest::python::RequirementOrEditable;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::collections::{BTreeMap, HashMap};
 use std::future::{ready, Future};
 use std::iter::once;
 
-use crate::lock_file::{package_identifier, PypiPackageIdentifier};
+use crate::lock_file::{package_identifier, PypiPackageIdentifier, PypiRecord};
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::{
@@ -21,24 +22,25 @@ use crate::{
 };
 
 use distribution_types::{
-    BuiltDist, DirectUrlSourceDist, Dist, HashPolicy, IndexLocations, Name, PrioritizedDist,
-    Resolution, ResolvedDist, SourceDist,
+    BuiltDist, DirectUrlSourceDist, Dist, FlatIndexLocation, HashPolicy, IndexLocations, IndexUrl,
+    Name, PrioritizedDist, Resolution, ResolvedDist, SourceDist,
 };
 use distribution_types::{FileLocation, SourceDistCompatibility};
 use futures::FutureExt;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use install_wheel_rs::linker::LinkMode;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
-use pep508_rs::{Requirement, VerbatimUrl};
+use pep440_rs::{Operator, VersionSpecifier};
+use pep508_rs::{Requirement, VerbatimUrl, VersionOrUrl};
 use pypi_types::{HashAlgorithm, HashDigest, Metadata23};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
 };
-use rattler_solve::{resolvo, SolverImpl};
+use rattler_solve::{resolvo, ChannelPriority, SolverImpl};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -48,15 +50,15 @@ use uv_configuration::{
 
 use url::Url;
 use uv_cache::Cache;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{ArchiveMetadata, DistributionDatabase, Reporter};
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, MetadataResponse,
-    Options, PythonRequirement, Resolver, ResolverProvider, VersionMap, VersionsResponse,
-    WheelMetadataResult,
+    Options, Preference, PythonRequirement, Resolver, ResolverProvider, VersionMap,
+    VersionsResponse, WheelMetadataResult,
 };
 use uv_types::{BuildContext, EmptyInstalledPackages, HashStrategy, InFlight};
 
@@ -64,12 +66,12 @@ use uv_types::{BuildContext, EmptyInstalledPackages, HashStrategy, InFlight};
 #[derive(Clone)]
 pub struct UvResolutionContext {
     pub cache: Cache,
-    pub registry_client: Arc<RegistryClient>,
     pub in_flight: Arc<InFlight>,
-    pub index_locations: Arc<IndexLocations>,
     pub no_build: NoBuild,
     pub no_binary: NoBinary,
     pub hash_strategy: HashStrategy,
+    pub client: reqwest::Client,
+    pub keyring_provider: uv_configuration::KeyringProviderType,
 }
 
 impl UvResolutionContext {
@@ -81,22 +83,27 @@ impl UvResolutionContext {
         )
         .into_diagnostic()
         .context("failed to create uv cache")?;
-        let registry_client = Arc::new(
-            RegistryClientBuilder::new(cache.clone())
-                .client(project.client().clone())
-                .connectivity(Connectivity::Online)
-                .build(),
-        );
+
+        let keyring_provider = match project.config().pypi_config().use_keyring() {
+            config::KeyringProvider::Subprocess => {
+                tracing::info!("using uv keyring (subprocess) provider");
+                uv_configuration::KeyringProviderType::Subprocess
+            }
+            config::KeyringProvider::Disabled => {
+                tracing::info!("uv keyring provider is disabled");
+                uv_configuration::KeyringProviderType::Disabled
+            }
+        };
+
         let in_flight = Arc::new(InFlight::default());
-        let index_locations = Arc::new(project.pypi_index_locations());
         Ok(Self {
             cache,
-            registry_client,
             in_flight,
-            index_locations,
             no_build: NoBuild::None,
             no_binary: NoBinary::None,
             hash_strategy: HashStrategy::None,
+            client: project.client().clone(),
+            keyring_provider,
         })
     }
 }
@@ -217,12 +224,92 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
     }
 }
 
+/// Given a pyproject.toml and either case:
+///   1) dependencies = [ foo @ /home/foo ]
+///   2) tool.pixi.pypi-depencies.foo = { path = "/home/foo"}
+/// uv has different behavior for each.
+///
+///   1) Because uv processes 1) during the 'source build' first we get a `file::` as a given. Which is never relative.
+///        because of PEP508.
+///   2) We get our processed path as a given, which can be relative, as our lock may store relative url's.
+///
+/// For case 1) we can just use the original path, as it can never be relative. And should be the same
+/// For case 2) we need to use the given as it may be relative
+///
+/// I think this has to do with the order of UV processing the requirements
+fn process_uv_path_url(path_url: &VerbatimUrl) -> PathBuf {
+    let given = path_url.given().expect("path should have a given url");
+    if given.starts_with("file://") {
+        path_url
+            .to_file_path()
+            .expect("path should be a valid file path")
+    } else {
+        PathBuf::from(given)
+    }
+}
+
+// Store a reference to the flat index
+#[derive(Clone)]
+struct FindLinksLocation {
+    /// Canocialized path to the flat index.
+    canonicalized_path: PathBuf,
+    /// Manifest path to flat index.
+    given_path: PathBuf,
+}
+
+/// Given a flat index url and a list of flat indexes, return the path to the flat index.
+/// for that specific index.
+fn find_links_for(
+    flat_index_url: &IndexUrl,
+    flat_indexes_paths: &[FindLinksLocation],
+) -> Option<FindLinksLocation> {
+    // Convert to file path
+    let flat_index_url_path = flat_index_url
+        .url()
+        .to_file_path()
+        .expect("invalid path-based index");
+
+    // Find the flat index in the list of flat indexes
+    // Compare with the path that we got from the `IndexUrl`
+    // which is absolute
+    flat_indexes_paths
+        .iter()
+        .find(|path| path.canonicalized_path == flat_index_url_path)
+        .cloned()
+}
+
+/// Convert an absolute path to a path relative to the flat index url.
+/// which is assumed to be a file:// url.
+fn convert_flat_index_path(
+    flat_index_url: &IndexUrl,
+    absolute_path: &Path,
+    given_flat_index_path: &Path,
+) -> PathBuf {
+    assert!(
+        absolute_path.is_absolute(),
+        "flat index package does not have an absolute path"
+    );
+    let base = flat_index_url
+        .url()
+        .to_file_path()
+        .expect("invalid path-based index");
+    // Strip the index from the path
+    // This is safe because we know the index is a prefix of the path
+    let path = absolute_path
+        .strip_prefix(&base)
+        .expect("base was not a prefix of the flat index path");
+    // Join with the given flat index path
+    given_flat_index_path.join(path)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
     context: UvResolutionContext,
-    dependencies: IndexMap<PackageName, Vec<PyPiRequirement>>,
+    pypi_options: &PypiOptions,
+    dependencies: IndexMap<PackageName, IndexSet<PyPiRequirement>>,
     system_requirements: SystemRequirements,
     locked_conda_records: &[RepoDataRecord],
+    locked_pypi_packages: Arc<Vec<PypiRecord>>,
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
     python_location: &Path,
@@ -314,11 +401,22 @@ pub async fn resolve_pypi(
 
     tracing::debug!("[Resolve] Using Python Interpreter: {:?}", interpreter);
 
+    let index_locations = pypi_options.to_index_locations();
+
+    // TODO: create a cached registry client per index_url set?
+    let registry_client = Arc::new(
+        RegistryClientBuilder::new(context.cache.clone())
+            .client(context.client.clone())
+            .index_urls(index_locations.index_urls())
+            .keyring(context.keyring_provider)
+            .connectivity(Connectivity::Online)
+            .build(),
+    );
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
-        let client = FlatIndexClient::new(&context.registry_client, &context.cache);
+        let client = FlatIndexClient::new(&registry_client, &context.cache);
         let entries = client
-            .fetch(context.index_locations.flat_index())
+            .fetch(index_locations.flat_index())
             .await
             .into_diagnostic()?;
         FlatIndex::from_entries(
@@ -336,10 +434,10 @@ pub async fn resolve_pypi(
     // Create a shared in-memory index.
     let options = Options::default();
     let build_dispatch = BuildDispatch::new(
-        &context.registry_client,
+        &registry_client,
         &context.cache,
         &interpreter,
-        &context.index_locations,
+        &index_locations,
         &flat_index,
         &in_memory_index,
         &context.in_flight,
@@ -372,11 +470,29 @@ pub async fn resolve_pypi(
         .into_iter()
         .collect_vec();
 
+    // Create preferences from the locked pypi packages
+    let preferences = locked_pypi_packages
+        .iter()
+        .map(|record| {
+            let (package_data, environment_data) = record;
+            let version =
+                VersionSpecifier::from_version(Operator::Equal, package_data.version.clone())
+                    .expect("invalid version specifier");
+            let requirement = Requirement {
+                name: package_data.name.clone(),
+                extras: environment_data.clone().extras.into_iter().collect_vec(),
+                version_or_url: Some(VersionOrUrl::VersionSpecifier(version.into())),
+                marker: None,
+            };
+            Preference::from_requirement(requirement)
+        })
+        .collect::<Vec<_>>();
+
     let manifest = Manifest::new(
         requirements,
         Constraints::from_requirements(constraints),
         Overrides::default(),
-        Vec::new(),
+        preferences,
         None,
         built_editables.clone(),
         uv_resolver::Exclusions::None,
@@ -384,8 +500,8 @@ pub async fn resolve_pypi(
     );
 
     let fallback_provider = DefaultResolverProvider::new(
-        &context.registry_client,
-        DistributionDatabase::new(&context.registry_client, &build_dispatch),
+        &registry_client,
+        DistributionDatabase::new(&registry_client, &build_dispatch),
         &flat_index,
         &tags,
         PythonRequirement::new(&interpreter, &marker_environment),
@@ -422,7 +538,26 @@ pub async fn resolve_pypi(
 
     let resolution = Resolution::from(resolution);
 
-    let database = DistributionDatabase::new(&context.registry_client, &build_dispatch);
+    // Create a list of canocialized flat indexes.
+    let flat_index_locations = index_locations
+        .flat_index()
+        // Take only path based flat indexes
+        .filter_map(|i| match i {
+            FlatIndexLocation::Path(path) => Some(path),
+            FlatIndexLocation::Url(_) => None,
+        })
+        // Canonicalize the path
+        .map(|path| {
+            let canonicalized_path = path.canonicalize()?;
+            Ok::<_, std::io::Error>(FindLinksLocation {
+                canonicalized_path,
+                given_path: path.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
+
+    let database = DistributionDatabase::new(&registry_client, &build_dispatch);
 
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     for dist in resolution.into_distributions() {
@@ -443,8 +578,22 @@ pub async fn resolve_pypi(
                             FileLocation::AbsoluteUrl(url) => {
                                 UrlOrPath::Url(Url::from_str(url).expect("invalid absolute url"))
                             }
-                            FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
-                            _ => todo!("unsupported URL"),
+                            // I (tim) thinks this only happens for flat path based indexes
+                            FileLocation::Path(path) => {
+                                let flat_index = find_links_for(&dist.index, &flat_index_locations)
+                                    .expect("flat index does not exist for resolved ids");
+                                UrlOrPath::Path(convert_flat_index_path(
+                                    &dist.index,
+                                    path,
+                                    &flat_index.given_path,
+                                ))
+                            }
+                            // This happens when it is relative to the non-standard index
+                            FileLocation::RelativeUrl(base, relative) => {
+                                let base = Url::from_str(base).expect("invalid base url");
+                                let url = base.join(relative).expect("could not join urls");
+                                UrlOrPath::Url(url)
+                            }
                         };
 
                         let hash = parse_hashes_from_hash_vec(&dist.file.hashes);
@@ -456,17 +605,12 @@ pub async fn resolve_pypi(
                             .expect("could not create direct-url");
                         (UrlOrPath::Url(direct_url), None)
                     }
-                    BuiltDist::Path(dist) => (
-                        dist.url
-                            .given()
-                            .map(|path| UrlOrPath::Path(PathBuf::from(path)))
-                            .expect("path should be given"),
-                        None,
-                    ),
+                    BuiltDist::Path(dist) => {
+                        (UrlOrPath::Path(process_uv_path_url(&dist.url)), None)
+                    }
                 };
 
-                let metadata = context
-                    .registry_client
+                let metadata = registry_client
                     .wheel_metadata(&dist)
                     .await
                     .expect("failed to get wheel metadata");
@@ -500,8 +644,22 @@ pub async fn resolve_pypi(
                             FileLocation::AbsoluteUrl(url) => {
                                 UrlOrPath::Url(Url::from_str(url).expect("invalid absolute url"))
                             }
-                            FileLocation::Path(path) => UrlOrPath::Path(path.clone()),
-                            _ => todo!("unsupported URL"),
+                            // I (tim) thinks this only happens for flat path based indexes
+                            FileLocation::Path(path) => {
+                                let flat_index = find_links_for(&reg.index, &flat_index_locations)
+                                    .expect("flat index does not exist for resolved ids");
+                                UrlOrPath::Path(convert_flat_index_path(
+                                    &reg.index,
+                                    path,
+                                    &flat_index.given_path,
+                                ))
+                            }
+                            // This happens when it is relative to the non-standard index
+                            FileLocation::RelativeUrl(base, relative) => {
+                                let base = Url::from_str(base).expect("invalid base url");
+                                let url = base.join(relative).expect("could not join urls");
+                                UrlOrPath::Url(url)
+                            }
                         };
                         (url_or_path, hash, false)
                     }
@@ -525,25 +683,8 @@ pub async fn resolve_pypi(
                             None
                         };
 
-                        // Given a pyproject.toml and either case:
-                        //   1) dependencies = [ foo @ /home/foo ]
-                        //   2) tool.pixi.pypi-depencies.foo = { path = "/home/foo"}
-                        // uv has different behavior for each.
-                        //
-                        //   1) Because uv processes 1) during the 'source build' first we get a `file::` as a given. Which is never relative.
-                        //        because of PEP508.
-                        //   2) We get our processed path as a given, which can be relative, as our lock may store relative url's.
-                        //
-                        // For case 1) we can just use the original path, as it can never be relative. And should be the same
-                        // For case 2) we need to use the given as it may be relative
-                        //
-                        // I think this has to do with the order of UV processing the requirements
-                        let given = path.url.given().expect("path should have a given url");
-                        let given_path = if given.starts_with("file://") {
-                            path.path
-                        } else {
-                            PathBuf::from(given)
-                        };
+                        // process the path or url that we get back from uv
+                        let given_path = process_uv_path_url(&path.url);
 
                         // Create the url for the lock file. This is based on the passed in URL
                         // instead of from the source path to copy the path that was passed in from
@@ -621,6 +762,7 @@ pub async fn resolve_conda(
             pinned_packages: vec![],
             virtual_packages,
             timeout: None,
+            channel_priority: ChannelPriority::Strict,
         };
 
         // Solve the task

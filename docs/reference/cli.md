@@ -158,12 +158,12 @@ pixi run --environment cuda python
     This is done so that the run commands can be run across all platforms.
 
 !!! tip "Cross environment tasks"
-    If you're using the `depends_on` feature of the `tasks`, the tasks will be run in the order you specified them.
-    The `depends_on` can be used cross environment, e.g. you have this `pixi.toml`:
+    If you're using the `depends-on` feature of the `tasks`, the tasks will be run in the order you specified them.
+    The `depends-on` can be used cross environment, e.g. you have this `pixi.toml`:
     ??? "pixi.toml"
         ```toml
         [tasks]
-        start = { cmd = "python start.py", depends_on = ["build"] }
+        start = { cmd = "python start.py", depends-on = ["build"] }
 
         [feature.build.tasks]
         build = "cargo build"
@@ -196,6 +196,7 @@ Removes dependencies from the [manifest file](configuration.md).
 - `--pypi`: Specifies a PyPI dependency, not a conda package.
 - `--platform <PLATFORM> (-p)`: The platform from which the dependency should be removed.
 - `--feature <FEATURE> (-f)`: The feature from which the dependency should be removed.
+- `--no-install`: Don't install the environment, only remove the package from the lock-file and manifest.
 
 ```shell
 pixi remove numpy
@@ -208,6 +209,7 @@ pixi remove --platform osx-64 --build clang
 pixi remove --feature featurex clang
 pixi remove --feature featurex --platform osx-64 clang
 pixi remove --feature featurex --platform osx-64 --build clang
+pixi remove --no-install numpy
 ```
 
 ## `task`
@@ -251,7 +253,7 @@ This adds the following to the [manifest file](configuration.md):
 [tasks]
 cow = "cowpy \"Hello User\""
 tls = { cmd = "ls", cwd = "tests" }
-test = { cmd = "cargo t", depends_on = ["build"] }
+test = { cmd = "cargo t", depends-on = ["build"] }
 
 [target.osx-64.tasks]
 build-osx = "METAL=1 cargo build"
@@ -531,6 +533,8 @@ This command prints the activation script of an environment.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.
+- `--json`: Print all environment variables that are exported by running the activation script as JSON. When specifying
+  this option, `--shell` is ignored.
 
 ```shell
 pixi shell-hook
@@ -541,6 +545,7 @@ pixi shell-hook --manifest-path ~/myproject/pixi.toml
 pixi shell-hook --frozen
 pixi shell-hook --locked
 pixi shell-hook --environment cuda
+pixi shell-hook --json
 ```
 
 Example use-case, when you want to get rid of the `pixi` executable in a Docker container.

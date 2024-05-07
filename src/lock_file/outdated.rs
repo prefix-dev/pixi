@@ -1,5 +1,6 @@
 use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::lock_file::satisfiability::EnvironmentUnsat;
+use crate::project::has_features::HasFeatures;
 use crate::{consts, project::Environment, project::SolveGroup, Project};
 use itertools::Itertools;
 use rattler_conda_types::Platform;
@@ -134,7 +135,7 @@ fn find_unsatisfiable_targets<'p>(
                 .extend(platforms);
 
             match unsat {
-                EnvironmentUnsat::ChannelsMismatch => {
+                EnvironmentUnsat::ChannelsMismatch | EnvironmentUnsat::IndexesMismatch => {
                     // If the channels mismatched we also cannot trust any of the locked content.
                     disregard_locked_content.insert(environment.clone());
                 }

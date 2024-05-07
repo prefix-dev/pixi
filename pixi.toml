@@ -17,6 +17,7 @@ test = "cargo test"
 test-all = "cargo test --all-features"
 lint = "pre-commit run --all"
 bump = "tbump --only-patch"
+pypi-proxy = "python ./tests/pypi_proxy.py"
 
 [dependencies]
 # Dev dependencies
@@ -52,7 +53,10 @@ deploy-dev = "mike deploy --push dev devel"
 
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
+# Using deprecated `depends_on` to avoid conflicts in ci. Changes after release.
 test-schema = { cmd = "pytest -s", depends_on = "generate-schema", cwd = "schema" }
+toml-lint = "taplo lint --verbose **/pixi.toml"
+toml-format = "taplo fmt **/pixi.toml"
 
 [feature.schema.dependencies]
 python = ">=3.11"
@@ -60,7 +64,11 @@ pytest = ">=8.0.2,<8.1"
 jsonschema = "*"
 pydantic = ">=2.6.3,<2.7"
 pyyaml = ">=6.0.1,<6.1"
+taplo = ">=0.9.1,<0.10"
 
 [environments]
 docs = ["docs"]
 schema = ["schema"]
+# Enable these after merge to avoid conflicts in ci.
+#docs = { features = ["docs"], no-default-feature = true }
+#schema = { features = ["schema"], no-default-feature = true }
