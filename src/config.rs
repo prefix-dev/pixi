@@ -442,40 +442,50 @@ impl Config {
     /// It is required to call `save()` to persist the changes.
     pub fn set(&mut self, key: &str, value: Option<String>) -> miette::Result<()> {
         match key {
-            "change_ps1" => {
+            "default-channels" => {
+                self.default_channels = value
+                    .map(|v| serde_json::de::from_str(&v))
+                    .transpose()
+                    .into_diagnostic()?
+                    .unwrap_or_default();
+            }
+            "change-ps1" => {
                 self.change_ps1 = value.map(|v| v.parse()).transpose().into_diagnostic()?;
             }
-            "repodata_config.disable_jlap" => {
+            "tls-no-verify" => {
+                self.tls_no_verify = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "repodata-config.disable-jlap" => {
                 self.repodata_config
                     .get_or_insert(RepodataConfig::default())
                     .disable_jlap = value.map(|v| v.parse()).transpose().into_diagnostic()?;
             }
-            "repodata_config.disable_bzip2" => {
+            "repodata-config.disable-bzip2" => {
                 self.repodata_config
                     .get_or_insert(RepodataConfig::default())
                     .disable_bzip2 = value.map(|v| v.parse()).transpose().into_diagnostic()?;
             }
-            "repodata_config.disable_zstd" => {
+            "repodata-config.disable-zstd" => {
                 self.repodata_config
                     .get_or_insert(RepodataConfig::default())
                     .disable_zstd = value.map(|v| v.parse()).transpose().into_diagnostic()?;
             }
-            "pypi_config.index_url" => {
+            "pypi-config.index-url" => {
                 self.pypi_config.index_url = value
                     .map(|v| Url::parse(&v))
                     .transpose()
                     .into_diagnostic()?;
             }
-            "pypi_config.keyring_provider" => {
+            "pypi-config.keyring-provider" => {
                 self.pypi_config.keyring_provider = value
                     .map(|v| match v.as_str() {
                         "disabled" => Ok(KeyringProvider::Disabled),
                         "subprocess" => Ok(KeyringProvider::Subprocess),
-                        _ => Err(miette::miette!("Invalid keyring provider")),
+                        _ => Err(miette::miette!("invalid keyring provider")),
                     })
                     .transpose()?;
             }
-            _ => return Err(miette::miette!("Unknown key: {}", key)),
+            _ => return Err(miette::miette!("unsupported key: {}", key)),
         }
 
         Ok(())

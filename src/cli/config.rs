@@ -209,25 +209,6 @@ fn alter_config(common_args: &CommonArgs, key: &str, value: Option<String>) -> m
     let config_path = determine_mutable_config_path(common_args)?;
     let mut config = Config::from_path(&config_path)?;
 
-    match key {
-        "change_ps1" | "change-ps1" => config.set("change_ps1", value)?,
-        "repodata_config.disable_jlap" | "repodata-config.disable-jlap" => {
-            config.set("repodata_config.disable_jlap", value)?
-        }
-        "repodata_config.disable_bzip2" | "repodata-config.disable-bzip2" => {
-            config.set("repodata_config.disable_bzip2", value)?
-        }
-        "repodata_config.disable_zstd" | "repodata-config.disable-zstd" => {
-            config.set("repodata_config.disable_zstd", value)?
-        }
-        "pypi_config.index_url" | "pypi-config.index-url" => {
-            config.set("pypi_config.index_url", value)?
-        }
-        "pypi_config.keyring_provider" | "pypi-config.keyring-provider" => {
-            config.set("pypi_config.keyring_provider", value)?
-        }
-        _ => return Err(miette::miette!("unsupported key {}", key)),
-    }
-
+    config.set(key, value)?;
     config.save()
 }
