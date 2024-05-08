@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Version: v0.21.1
 
 __wrap__() {
 
@@ -9,12 +10,14 @@ BIN_DIR="$PIXI_HOME/bin"
 
 REPO=prefix-dev/pixi
 PLATFORM=$(uname -s)
-ARCH=$(uname -m)
+ARCH=${PIXI_ARCH:-$(uname -m)}
 
 if [[ $PLATFORM == "Darwin" ]]; then
   PLATFORM="apple-darwin"
 elif [[ $PLATFORM == "Linux" ]]; then
   PLATFORM="unknown-linux-musl"
+elif [[ $(uname -o) == "Msys" ]]; then
+  PLATFORM="pc-windows-msvc"
 fi
 
 if [[ $ARCH == "arm64" ]] || [[ $ARCH == "aarch64" ]]; then
@@ -24,14 +27,18 @@ fi
 
 
 BINARY="pixi-${ARCH}-${PLATFORM}"
-
-if [[ $VERSION == "latest" ]]; then
-  DOWNLOAD_URL=https://github.com/${REPO}/releases/latest/download/${BINARY}.tar.gz
-else
-  DOWNLOAD_URL=https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}.tar.gz
+EXTENSION="tar.gz"
+if [[ $(uname -o) == "Msys" ]]; then
+  EXTENSION="zip"
 fi
 
-printf "This script will automatically download and install Pixi (${VERSION}) for you.\nGetting it from this url: $DOWNLOAD_URL\nThe binary will be installed into '$BIN_DIR'\n"
+if [[ $VERSION == "latest" ]]; then
+  DOWNLOAD_URL=https://github.com/${REPO}/releases/latest/download/${BINARY}.${EXTENSION}
+else
+  DOWNLOAD_URL=https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}.${EXTENSION}
+fi
+
+printf "This script will automatically download and install Pixi (${VERSION}) for you.\nGetting it from this url: $DOWNLOAD_URL\n"
 
 if ! hash curl 2> /dev/null && ! hash wget 2> /dev/null; then
   echo "error: you need either 'curl' or 'wget' installed for this script."
@@ -71,9 +78,16 @@ if [[ ! -s $TEMP_FILE ]]; then
   exit 1
 fi
 
-# Extract pixi from the downloaded tar file
+# Extract pixi from the downloaded file
 mkdir -p "$BIN_DIR"
-tar -xzf "$TEMP_FILE" -C "$BIN_DIR"
+if [[ $(uname -o) == "Msys" ]]; then
+  unzip "$TEMP_FILE" -d "$BIN_DIR"
+else
+  tar -xzf "$TEMP_FILE" -C "$BIN_DIR"
+  chmod +x "$BIN_DIR/pixi"
+fi
+
+echo "The 'pixi' binary is installed into '${BIN_DIR}'"
 
 update_shell() {
     FILE=$1
@@ -92,11 +106,13 @@ update_shell() {
     then
         echo "Updating '${FILE}'"
         echo "$LINE" >> "$FILE"
+        echo "Please restart or source your shell."
     fi
 }
+
 case "$(basename "$SHELL")" in
     bash)
-        if [ -f ~/.bash_profile ]; then
+        if [ -w ~/.bash_profile ]; then
             BASH_FILE=~/.bash_profile
         else
             # Default to bashrc as that is used in non login shells instead of the profile.
@@ -116,13 +132,15 @@ case "$(basename "$SHELL")" in
         update_shell ~/.zshrc "$LINE"
         ;;
 
+    tcsh)
+        LINE="set path = ( \$path ${BIN_DIR} )"
+        update_shell ~/.tcshrc "$LINE"
+        ;;
+
     *)
-        echo "Unsupported shell: $(basename "$0")"
+        echo "Could not update shell: $(basename "$SHELL")"
+        echo "Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command."
         ;;
 esac
-
-chmod +x "$BIN_DIR/pixi"
-
-echo "Please restart or source your shell."
 
 }; __wrap__
