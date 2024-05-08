@@ -18,7 +18,7 @@ use pixi::{
     EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
     TaskGraphError,
 };
-use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
+use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform, RepoDataRecord};
 
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::cli::run::get_task_env;
@@ -239,6 +239,7 @@ impl PixiControl {
                 pypi: false,
                 feature: None,
                 config: Default::default(),
+                editable: false,
             },
         }
     }
@@ -258,6 +259,7 @@ impl PixiControl {
                 pypi: false,
                 feature: None,
                 config: Default::default(),
+                editable: false,
             },
         }
     }
