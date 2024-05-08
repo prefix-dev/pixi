@@ -36,7 +36,7 @@ use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -524,6 +524,8 @@ fn whats_the_plan<'a>(
             remote.push(convert_to_dist(pkg, lock_file_dir));
         }
     }
+    eprintln!("reinstalls : {:?}", reinstalls);
+    eprintln!("extraneous : {:?}", extraneous);
 
     Ok(PixiInstallPlan {
         local,
@@ -743,11 +745,12 @@ pub async fn update_python_distributions(
         // No python interpreter in the environment, so there is nothing to do here.
         return Ok(());
     };
-
     // If we have changed interpreter, we need to uninstall all site-packages from the old interpreter
     if let PythonStatus::Changed { old, new: _ } = status {
         let site_packages_path = prefix.root().join(&old.site_packages_path);
         if site_packages_path.exists() {
+            eprintln!("Status is {:?}", status);
+            eprintln!("removing sitepackages");
             uninstall_outdated_site_packages(&site_packages_path).await?;
         }
     }
@@ -860,6 +863,12 @@ pub async fn update_python_distributions(
         venv.interpreter().python_version(),
         lock_file_dir,
     )?;
+
+    let mut pypi_conda_clobber = PypiCondaClobber::default();
+    pypi_conda_clobber.register_paths([reinstalls.as_slice(), extraneous.as_slice()].concat());
+
+    // let mut removed_registry = Vec::from_iter(reinstalls.iter().map(|dist|dist.path()));
+    // removed_registry.extend(extraneous.iter().map(|dist| dist.path()));
 
     // Nothing to do.
     if remote.is_empty() && local.is_empty() && reinstalls.is_empty() && extraneous.is_empty() {
@@ -998,6 +1007,11 @@ pub async fn update_python_distributions(
         .with_capacity(wheels.len() + 30)
         .with_starting_tasks(wheels.iter().map(|d| format!("{}", d.name())))
         .with_top_level_message("Installing distributions");
+
+    eprintln!("wheel path is {:?}", wheels.first().unwrap().path());
+
+    eprintln!("venv path {:?}", venv.interpreter().purelib());
+
     if !wheels.is_empty() {
         let start = std::time::Instant::now();
         uv_installer::Installer::new(&venv)
@@ -1018,5 +1032,34 @@ pub async fn update_python_distributions(
         );
     }
 
+    // let's reiterate over site-packages again and find if we have something overlapping
+    pypi_conda_clobber.warn_on_clobbering(site_packages.iter());
+
     Ok(())
+}
+
+#[derive(Default)]
+struct PypiCondaClobber {
+    dists: HashMap<PathBuf, InstalledDist>,
+}
+
+impl PypiCondaClobber {
+    pub fn register_paths(&mut self, removed_dists: Vec<InstalledDist>) {
+        for dist in removed_dists {
+            self.dists.insert(dist.path().into(), dist);
+        }
+    }
+
+    pub fn warn_on_clobbering<'a>(&self, installed_dists: impl Iterator<Item = &'a InstalledDist>) {
+        let mut to_warn = Vec::new();
+
+        for dist in installed_dists {
+            let path = PathBuf::from(dist.path());
+            if let Some(found_dist) = self.dists.get(&path) {
+                to_warn.push(found_dist.name().to_string());
+            }
+        }
+
+        tracing::warn!("The installation of the following PyPI package(s) will overwrite existing Conda package(s):  {:?} ", to_warn);
+    }
 }
