@@ -860,8 +860,8 @@ pub async fn update_python_distributions(
         lock_file_dir,
     )?;
 
-    let mut pypi_conda_clobber = PypiCondaClobber::default();
-    pypi_conda_clobber.register_paths([reinstalls.as_slice(), extraneous.as_slice()].concat());
+    let pypi_conda_clobber =
+        PypiCondaClobber::with_paths([reinstalls.as_slice(), extraneous.as_slice()].concat());
 
     // Nothing to do.
     if remote.is_empty() && local.is_empty() && reinstalls.is_empty() && extraneous.is_empty() {
@@ -1033,22 +1033,85 @@ struct PypiCondaClobber {
 }
 
 impl PypiCondaClobber {
-    pub fn register_paths(&mut self, removed_dists: Vec<InstalledDist>) {
-        for dist in removed_dists {
-            self.dists.insert(dist.path().into(), dist);
-        }
+    pub fn with_paths(removed_dists: Vec<InstalledDist>) -> Self {
+        let dists = removed_dists
+            .iter()
+            .map(|dist| (PathBuf::from(dist.path()), dist.clone()))
+            .collect::<HashMap<_, _>>();
+
+        Self { dists }
     }
 
-    pub fn warn_on_clobbering<'a>(&self, installed_dists: impl Iterator<Item = &'a InstalledDist>) {
-        let mut to_warn = Vec::new();
+    pub fn warn_on_clobbering<'a>(
+        &self,
+        installed_dists: impl Iterator<Item = &'a InstalledDist>,
+    ) -> Option<Vec<String>> {
+        let to_warn: Vec<String> = installed_dists
+            .filter_map(|dist| {
+                self.dists
+                    .get(dist.path())
+                    .map(|seen_dist| seen_dist.name().to_string())
+            })
+            .collect();
 
-        for dist in installed_dists {
-            let path = PathBuf::from(dist.path());
-            if let Some(found_dist) = self.dists.get(&path) {
-                to_warn.push(found_dist.name().to_string());
+        if !to_warn.is_empty() {
+            tracing::warn!("The installation of the following PyPI package(s) will overwrite existing Conda package(s):  {:?} ", to_warn);
+            Some(to_warn)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{path::PathBuf, str::FromStr};
+
+    use distribution_types::{InstalledDist, InstalledRegistryDist};
+    use insta::assert_snapshot;
+    use pep440_rs::Version;
+    use pep508_rs::PackageName;
+
+    use super::PypiCondaClobber;
+
+    struct TestSitePackages {
+        installed_dists: Vec<Option<InstalledDist>>,
+    }
+
+    impl TestSitePackages {
+        pub fn new(dists: Vec<InstalledDist>) -> Self {
+            Self {
+                installed_dists: dists.into_iter().map(Some).collect(),
             }
         }
 
-        tracing::warn!("The installation of the following PyPI package(s) will overwrite existing Conda package(s):  {:?} ", to_warn);
+        /// Returns an iterator over the installed distributions.
+        pub fn iter(&self) -> impl Iterator<Item = &InstalledDist> {
+            self.installed_dists.iter().flatten()
+        }
+    }
+
+    #[test]
+    fn test_warn_on_clobbering() {
+        // during resolution, conda installed mdurl
+        // when we do uv::install, it will be removed
+        let mdurl = InstalledDist::Registry(InstalledRegistryDist {
+            name: PackageName::new("mdurl".to_owned()).unwrap(),
+            version: Version::from_str("1.19").unwrap(),
+            path: PathBuf::from_str("site-packages/mdurl.dist_info").unwrap(),
+        });
+
+        // let's register it
+        let clobber = PypiCondaClobber::with_paths([mdurl.clone()].to_vec());
+
+        // let's assume that we map wrongly mdurl
+        // mdurl: some_wrong_mdurl
+        // this means that uv::install will install it again
+        // so we warn user about it
+
+        let some_site_packages = TestSitePackages::new([mdurl].to_vec());
+
+        let warned_packages = clobber.warn_on_clobbering(some_site_packages.iter());
+        assert_snapshot!(format!("{:?}", warned_packages.unwrap()));
     }
 }

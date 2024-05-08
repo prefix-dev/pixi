@@ -1,0 +1,5 @@
+---
+source: src/install_pypi.rs
+expression: "format!(\"{:?}\", warned_packages.unwrap())"
+---
+["mdurl"]
