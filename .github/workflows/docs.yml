@@ -6,7 +6,9 @@ on:
       - main
     paths:
       - "docs/**"
+      - ".github/workflows/docs.yml"
       - "mkdocs.yml"
+      - "pixi.*"
     tags:
       - v**
   pull_request:
