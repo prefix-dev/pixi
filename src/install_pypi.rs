@@ -524,8 +524,6 @@ fn whats_the_plan<'a>(
             remote.push(convert_to_dist(pkg, lock_file_dir));
         }
     }
-    eprintln!("reinstalls : {:?}", reinstalls);
-    eprintln!("extraneous : {:?}", extraneous);
 
     Ok(PixiInstallPlan {
         local,
@@ -749,8 +747,6 @@ pub async fn update_python_distributions(
     if let PythonStatus::Changed { old, new: _ } = status {
         let site_packages_path = prefix.root().join(&old.site_packages_path);
         if site_packages_path.exists() {
-            eprintln!("Status is {:?}", status);
-            eprintln!("removing sitepackages");
             uninstall_outdated_site_packages(&site_packages_path).await?;
         }
     }
@@ -866,9 +862,6 @@ pub async fn update_python_distributions(
 
     let mut pypi_conda_clobber = PypiCondaClobber::default();
     pypi_conda_clobber.register_paths([reinstalls.as_slice(), extraneous.as_slice()].concat());
-
-    // let mut removed_registry = Vec::from_iter(reinstalls.iter().map(|dist|dist.path()));
-    // removed_registry.extend(extraneous.iter().map(|dist| dist.path()));
 
     // Nothing to do.
     if remote.is_empty() && local.is_empty() && reinstalls.is_empty() && extraneous.is_empty() {
@@ -1007,10 +1000,6 @@ pub async fn update_python_distributions(
         .with_capacity(wheels.len() + 30)
         .with_starting_tasks(wheels.iter().map(|d| format!("{}", d.name())))
         .with_top_level_message("Installing distributions");
-
-    eprintln!("wheel path is {:?}", wheels.first().unwrap().path());
-
-    eprintln!("venv path {:?}", venv.interpreter().purelib());
 
     if !wheels.is_empty() {
         let start = std::time::Instant::now();
