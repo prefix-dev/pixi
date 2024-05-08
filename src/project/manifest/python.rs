@@ -304,7 +304,8 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
                     // If serialization starts with `git+` then it is a git url.
                     if let Some(stripped_url) = u.to_string().strip_prefix("git+") {
                         if let Some((url, version)) = stripped_url.split_once('@') {
-                            let url = Url::parse(url).unwrap();
+                            let url = Url::parse(url)
+                                .expect("expect proper url as it is previously parsed");
                             PyPiRequirement::Git {
                                 git: url,
                                 branch: None,
@@ -314,7 +315,8 @@ impl From<pep508_rs::Requirement> for PyPiRequirement {
                                 extras: req.extras,
                             }
                         } else {
-                            let url = Url::parse(stripped_url).unwrap();
+                            let url = Url::parse(stripped_url)
+                                .expect("expect proper url as it is previously parsed");
                             PyPiRequirement::Git {
                                 git: url,
                                 branch: None,
