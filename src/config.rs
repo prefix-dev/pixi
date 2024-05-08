@@ -109,17 +109,18 @@ pub struct ConfigCliPrompt {
 }
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct RepodataConfig {
     /// Disable JLAP compression for repodata.
-    #[serde(alias = "disable-jlap")] // BREAK: rename instead of alias
+    #[serde(alias = "disable_jlap")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_jlap: Option<bool>,
     /// Disable bzip2 compression for repodata.
-    #[serde(alias = "disable-bzip2")] // BREAK: rename instead of alias
+    #[serde(alias = "disable_bzip2")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_bzip2: Option<bool>,
     /// Disable zstd compression for repodata.
-    #[serde(alias = "disable-zstd")] // BREAK: rename instead of alias
+    #[serde(alias = "disable_zstd")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_zstd: Option<bool>,
 }
@@ -185,27 +186,28 @@ impl PyPIConfig {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct Config {
     #[serde(default)]
-    #[serde(alias = "default-channels")] // BREAK: rename instead of alias
+    #[serde(alias = "default_channels")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub default_channels: Vec<String>,
 
     /// If set to true, pixi will set the PS1 environment variable to a custom value.
     #[serde(default)]
-    #[serde(alias = "change-ps1")] // BREAK: rename instead of alias
+    #[serde(alias = "change_ps1")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
     change_ps1: Option<bool>,
 
     /// Path to the file containing the authentication token.
     #[serde(default)]
-    #[serde(alias = "authentication-override-file")] // BREAK: rename instead of alias
+    #[serde(alias = "authentication_override_file")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
     authentication_override_file: Option<PathBuf>,
 
     /// If set to true, pixi will not verify the TLS certificate of the server.
     #[serde(default)]
-    #[serde(alias = "tls-no-verify")] // BREAK: rename instead of alias
+    #[serde(alias = "tls_no_verify")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
     tls_no_verify: Option<bool>,
 
@@ -214,21 +216,20 @@ pub struct Config {
     mirrors: HashMap<Url, Vec<Url>>,
 
     #[serde(skip)]
-    #[serde(alias = "loaded-from")] // BREAK: rename instead of alias
+    #[serde(alias = "loaded_from")] // BREAK: remove to stop supporting snake_case alias
     pub loaded_from: Vec<PathBuf>,
 
     #[serde(skip, default = "default_channel_config")]
-    #[serde(alias = "channel-config")] // BREAK: rename instead of alias
+    #[serde(alias = "channel_config")] // BREAK: remove to stop supporting snake_case alias
     pub channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
-    #[serde(alias = "repodata-config")] // BREAK: rename instead of alias
+    #[serde(alias = "repodata_config")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
     pub repodata_config: Option<RepodataConfig>,
 
     /// Configuration for PyPI packages.
     #[serde(default)]
-    #[serde(rename = "pypi-config")]
     #[serde(skip_serializing_if = "PyPIConfig::is_default")]
     pub pypi_config: PyPIConfig,
 }
