@@ -50,6 +50,7 @@ build-docs = "mkdocs build --strict"
 docs = "mkdocs serve"
 deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
 deploy-dev = "mike deploy --push dev devel"
+mike-serve = "mike serve"
 
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
