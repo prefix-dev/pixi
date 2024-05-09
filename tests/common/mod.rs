@@ -18,7 +18,7 @@ use pixi::{
     EnvironmentName, ExecutableTask, Project, RunOutput, SearchEnvironments, TaskGraph,
     TaskGraphError,
 };
-use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform, RepoDataRecord};
+use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::cli::run::get_task_env;
