@@ -10,6 +10,7 @@ use crate::{
 #[derive(Parser, Debug)]
 enum Subcommand {
     /// Edit the configuration file
+    #[clap(alias = "e")]
     Edit(EditArgs),
 
     /// List configuration values
