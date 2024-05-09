@@ -123,8 +123,7 @@ impl Project {
 
         let root = manifest.path.parent().unwrap_or(Path::new("")).to_owned();
 
-        let config =
-            Config::load(&root.join(consts::PIXI_DIR)).unwrap_or_else(|_| Config::load_global());
+        let config = Config::load(&root);
 
         let (client, authenticated_client) = build_reqwest_clients(Some(&config));
         Self {
@@ -207,7 +206,7 @@ impl Project {
 
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
-        let config = Config::load(&root.join(consts::PIXI_DIR))?;
+        let config = Config::load(root);
 
         let (client, authenticated_client) = build_reqwest_clients(Some(&config));
 

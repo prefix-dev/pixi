@@ -1,5 +1,5 @@
 use clap::{ArgAction, Parser};
-use miette::{Context, IntoDiagnostic};
+use miette::IntoDiagnostic;
 use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -274,51 +274,84 @@ impl From<ConfigCliPrompt> for Config {
 
 impl Config {
     /// Parse the given toml string and return a Config instance.
-    pub fn from_toml(toml: &str, location: &Path) -> miette::Result<Config> {
-        let mut config: Config = toml_edit::de::from_str(toml)
-            .into_diagnostic()
-            .context(format!("Failed to parse {}", consts::CONFIG_FILE))?;
+    ///
+    /// # Returns
+    ///
+    /// The parsed config
+    ///
+    /// # Errors
+    ///
+    /// Parsing errors
+    #[inline]
+    pub fn from_toml(toml: &str) -> miette::Result<Config> {
+        toml_edit::de::from_str(toml).into_diagnostic()
+    }
 
-        config.loaded_from.push(location.to_path_buf());
+    /// Load the config from the given path.
+    ///
+    /// # Returns
+    ///
+    /// The loaded config
+    ///
+    /// # Errors
+    ///
+    /// I/O errors or parsing errors
+    pub fn from_path(path: &Path) -> miette::Result<Config> {
+        tracing::debug!("Loading config from {}", path.display());
+        let s = fs::read_to_string(path).into_diagnostic()?;
+        let mut config = Config::from_toml(&s)?;
+        config.loaded_from.push(path.to_path_buf());
+        tracing::info!("Loaded config from: {}", path.display());
 
         Ok(config)
     }
 
-    /// Load the global config file from the home directory (~/.pixi/config.toml)
+    /// Try to load the system config file from the system path.
+    ///
+    /// # Returns
+    ///
+    /// The loaded system config
+    ///
+    /// # Errors
+    ///
+    /// I/O errors or parsing errors
+    pub fn try_load_system() -> miette::Result<Config> {
+        Self::from_path(&config_path_system())
+    }
+
+    /// Load the system config file from the system path.
+    ///
+    /// # Returns
+    ///
+    /// The loaded system config
+    pub fn load_system() -> Config {
+        Self::try_load_system().unwrap_or_else(|e| {
+            let path = config_path_system();
+            tracing::debug!(
+                "Failed to load system config: {} (error: {})",
+                path.display(),
+                e
+            );
+            Self::default()
+        })
+    }
+
+    /// Load the global config file from various global paths.
+    ///
+    /// # Returns
+    ///
+    /// The loaded global config
     pub fn load_global() -> Config {
-        #[cfg(target_os = "windows")]
-        let base_path = PathBuf::from("C:\\ProgramData");
-        #[cfg(not(target_os = "windows"))]
-        let base_path = PathBuf::from("/etc");
+        let mut config = Self::load_system();
 
-        let xdg_config_home = std::env::var_os("XDG_CONFIG_HOME").map_or_else(
-            || dirs::home_dir().map(|d| d.join(".config")),
-            |p| Some(PathBuf::from(p)),
-        );
-
-        let global_locations = vec![
-            Some(base_path.join("pixi").join(consts::CONFIG_FILE)),
-            xdg_config_home.map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
-            dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
-            home_path().map(|d| d.join(consts::CONFIG_FILE)),
-        ];
-        let mut merged_config = Config::default();
-        for location in global_locations.into_iter().flatten() {
-            if location.exists() {
-                tracing::info!("Loading global config from {}", location.display());
-                let global_config = fs::read_to_string(&location).unwrap_or_default();
-                match Config::from_toml(&global_config, &location) {
-                    Ok(config) => merged_config = merged_config.merge_config(config),
-                    Err(e) => {
-                        tracing::warn!(
-                            "Could not load global config (invalid toml): {}",
-                            location.display()
-                        );
-                        tracing::warn!("Error: {}", e);
-                    }
-                }
-            } else {
-                tracing::info!("Global config not found at {}", location.display());
+        for p in config_path_global() {
+            match Self::from_path(&p) {
+                Ok(c) => config = config.merge_config(c),
+                Err(e) => tracing::debug!(
+                    "Failed to load global config: {} (error: {})",
+                    p.display(),
+                    e
+                ),
             }
         }
 
@@ -326,7 +359,7 @@ impl Config {
         // This will add any environment variables defined in the `clap` attributes to the config
         let mut default_cli = ConfigCli::default();
         default_cli.update_from(std::env::args().take(0));
-        merged_config.merge_config(default_cli.into())
+        config.merge_config(default_cli.into())
     }
 
     /// Load the global config and layer the given cli config on top of it.
@@ -335,23 +368,27 @@ impl Config {
         config.merge_config(cli.clone().into())
     }
 
-    /// Load the config from the given path pixi folder and merge it with the global config.
-    pub fn load(p: &Path) -> miette::Result<Config> {
-        let local_config = p.join(consts::CONFIG_FILE);
+    /// Load the config from the given path (project root).
+    ///
+    /// # Returns
+    ///
+    /// The loaded config (merged with the global config)
+    pub fn load(project_root: &Path) -> Config {
         let mut config = Self::load_global();
+        let local_config_path = project_root
+            .join(consts::PIXI_DIR)
+            .join(consts::CONFIG_FILE);
 
-        if local_config.exists() {
-            let s = fs::read_to_string(&local_config).into_diagnostic()?;
-            let local = Config::from_toml(&s, &local_config)?;
-            config = config.merge_config(local);
+        match Self::from_path(&local_config_path) {
+            Ok(c) => config = config.merge_config(c),
+            Err(e) => tracing::debug!(
+                "Failed to load local config: {} (error: {})",
+                local_config_path.display(),
+                e
+            ),
         }
 
-        Ok(config)
-    }
-
-    pub fn from_path(p: &Path) -> miette::Result<Config> {
-        let s = fs::read_to_string(p).into_diagnostic()?;
-        Config::from_toml(&s, p)
+        config
     }
 
     /// Merge the given config into the current one.
@@ -491,15 +528,44 @@ impl Config {
         Ok(())
     }
 
-    /// Save the config to the file
-    pub fn save(&self) -> miette::Result<()> {
+    /// Save the config to the given path.
+    pub fn save(&self, to: &Path) -> miette::Result<()> {
         let contents = toml_edit::ser::to_string_pretty(&self).into_diagnostic()?;
-        let path = self
-            .loaded_from
-            .first()
-            .expect("config should have a loaded_from path");
-        fs::write(path, contents).into_diagnostic()
+        tracing::debug!("Saving config to: {}", to.display());
+
+        fs::create_dir_all(to.parent().expect("config path should have a parent"))
+            .into_diagnostic()?;
+        fs::write(to, contents).into_diagnostic()
     }
+}
+
+/// Returns the path to the system-level pixi config file.
+pub fn config_path_system() -> PathBuf {
+    // TODO: the base_path for Windows is currently hardcoded, it should be
+    // determined via the system API to support general volume label
+    #[cfg(target_os = "windows")]
+    let base_path = PathBuf::from("C:\\ProgramData");
+    #[cfg(not(target_os = "windows"))]
+    let base_path = PathBuf::from("/etc");
+
+    base_path.join("pixi").join(consts::CONFIG_FILE)
+}
+
+/// Returns the path(s) to the global pixi config file.
+pub fn config_path_global() -> Vec<PathBuf> {
+    let xdg_config_home = std::env::var_os("XDG_CONFIG_HOME").map_or_else(
+        || dirs::home_dir().map(|d| d.join(".config")),
+        |p| Some(PathBuf::from(p)),
+    );
+
+    vec![
+        xdg_config_home.map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
+        dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
+        home_path().map(|d| d.join(consts::CONFIG_FILE)),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 #[cfg(test)]
@@ -512,7 +578,7 @@ mod tests {
         default_channels = ["conda-forge"]
         tls_no_verify = true
         "#;
-        let config = Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        let config = Config::from_toml(toml).unwrap();
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(true));
     }
@@ -553,7 +619,7 @@ mod tests {
             extra-index-urls = ["https://pypi.org/simple2"]
             keyring-provider = "subprocess"
         "#;
-        let config = Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        let config = Config::from_toml(toml).unwrap();
         assert_eq!(
             config.pypi_config().index_url,
             Some(Url::parse("https://pypi.org/simple").unwrap())
@@ -615,7 +681,7 @@ mod tests {
             disable_bzip2 = true
             disable_zstd = true
         "#;
-        let config = Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        let config = Config::from_toml(toml).unwrap();
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(false));
         assert_eq!(
@@ -648,6 +714,6 @@ mod tests {
             disable-bzip2 = true
             disable-zstd = true
         "#;
-        Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        Config::from_toml(toml).unwrap();
     }
 }
