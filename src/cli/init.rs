@@ -197,6 +197,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     &requirement,
                     Some(platform.parse().into_diagnostic()?),
                     &FeatureName::default(),
+                    None,
                 )?;
             }
         }

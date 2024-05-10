@@ -90,7 +90,7 @@ impl From<PyProjectManifest> for ProjectManifest {
         // Add pyproject dependencies as pypi dependencies
         if let Some(deps) = &pyproject.dependencies {
             for requirement in deps.iter() {
-                target.add_pypi_dependency(requirement);
+                target.add_pypi_dependency(requirement, None);
             }
         }
 
@@ -110,7 +110,7 @@ impl From<PyProjectManifest> for ProjectManifest {
                 for requirement in reqs.iter() {
                     // filter out any self references in groups of extra dependencies
                     if project_name != requirement.name {
-                        target.add_pypi_dependency(requirement);
+                        target.add_pypi_dependency(requirement, None);
                     }
                 }
             }
@@ -409,7 +409,7 @@ mod tests {
         // Add numpy to pyproject
         let requirement = pep508_rs::Requirement::from_str("numpy>=3.12").unwrap();
         manifest
-            .add_pypi_dependency(&requirement, None, &FeatureName::Default)
+            .add_pypi_dependency(&requirement, None, &FeatureName::Default, None)
             .unwrap();
 
         assert!(manifest
@@ -426,7 +426,12 @@ mod tests {
         // Add numpy to feature in pyproject
         let requirement = pep508_rs::Requirement::from_str("pytest>=3.12").unwrap();
         manifest
-            .add_pypi_dependency(&requirement, None, &FeatureName::Named("test".to_string()))
+            .add_pypi_dependency(
+                &requirement,
+                None,
+                &FeatureName::Named("test".to_string()),
+                None,
+            )
             .unwrap();
         assert!(manifest
             .feature(&FeatureName::Named("test".to_string()))
