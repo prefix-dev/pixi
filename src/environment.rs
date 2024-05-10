@@ -101,21 +101,39 @@ async fn prefix_location_changed(
 /// Create the prefix location file.
 /// Give it the environment path to place it.
 fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
-    let prefix_file = environment_dir
+    let prefix_file_path = environment_dir
         .join("conda-meta")
         .join(consts::PREFIX_FILE_NAME);
+    tracing::info!("Creating prefix file at: {}", prefix_file_path.display());
 
-    tracing::info!("create prefix file: {}", prefix_file.display());
-    let binding = prefix_file.clone();
-    let parent = binding
-        .parent()
-        .ok_or_else(|| miette::miette!("cannot find parent of '{}'", binding.display()))?;
+    let parent_dir = prefix_file_path.parent().ok_or_else(|| {
+        miette::miette!(
+            "Cannot find parent directory of '{}'",
+            prefix_file_path.display()
+        )
+    })?;
 
-    if parent.exists() {
-        let contents = parent.to_str().ok_or_else(|| {
-            miette::miette!("failed to convert path to str: '{}'", parent.display())
+    if parent_dir.exists() {
+        let contents = parent_dir.to_str().ok_or_else(|| {
+            miette::miette!(
+                "Failed to convert path to string: '{}'",
+                parent_dir.display()
+            )
         })?;
-        std::fs::write(prefix_file, contents).into_diagnostic()?;
+
+        let path = Path::new(&prefix_file_path);
+        // Read existing contents to determine if an update is necessary
+        if path.exists() {
+            let existing_contents = std::fs::read_to_string(path).into_diagnostic()?;
+            if existing_contents == contents {
+                tracing::info!("No update needed for the prefix file.");
+                return Ok(());
+            }
+        }
+
+        // Write new contents to the prefix file
+        std::fs::write(path, contents).into_diagnostic()?;
+        tracing::info!("Prefix file updated with: '{}'.", contents);
     }
     Ok(())
 }
