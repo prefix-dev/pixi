@@ -913,7 +913,11 @@ mod tests {
         let as_pypi_req: PyPiRequirement = pypi.into();
         assert_eq!(as_pypi_req, PyPiRequirement::Url{url: Url::parse("https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl").unwrap(), extras: vec![ExtraName::new("nichita".to_string()).unwrap()] });
 
+        #[cfg(target_os = "windows")]
+        let pypi: Requirement = "boltons @ file:///C:/path/to/boltons".parse().unwrap();
+        #[cfg(not(target_os = "windows"))]
         let pypi: Requirement = "boltons @ file:///path/to/boltons".parse().unwrap();
+
         let as_pypi_req: PyPiRequirement = pypi.into();
         assert_eq!(
             as_pypi_req,
