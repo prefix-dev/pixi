@@ -124,7 +124,15 @@ async fn install_locked() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
-    pixi.add("python==3.10.0").await.unwrap();
+    let python_version = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
+        "python==3.10.0"
+    } else {
+        // Abusing this test to also test the `add` function of older version of python
+        // Before this wasn't possible because uv queried the python interpreter, even without pypi dependencies.
+        "python==2.7.15"
+    };
+
+    pixi.add(python_version).await.unwrap();
 
     // Add new version of python only to the manifest
     pixi.add("python==3.9.0")
@@ -139,7 +147,7 @@ async fn install_locked() {
     assert!(lock.contains_match_spec(
         DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
-        "python==3.10.0"
+        python_version
     ));
 
     // After an install with lockfile update the locked install should succeed.
