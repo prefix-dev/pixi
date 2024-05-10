@@ -163,9 +163,10 @@ impl PyPiRequirement {
             PyPiRequirement::Path { editable: e, .. } => {
                 *e = Some(editable);
             }
-            _ => {
-                tracing::error!("Cannot add editable to a non path like dependency.");
+            _ if editable => {
+                tracing::warn!("Ignoring editable flag for non-path requirements.");
             }
+            _ => {}
         }
     }
 }
