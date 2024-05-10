@@ -919,6 +919,17 @@ mod tests {
         let pypi: Requirement = "boltons @ file:///path/to/boltons".parse().unwrap();
 
         let as_pypi_req: PyPiRequirement = pypi.into();
+
+        #[cfg(target_os = "windows")]
+        assert_eq!(
+            as_pypi_req,
+            PyPiRequirement::Path {
+                path: PathBuf::from("C:/path/to/boltons"),
+                editable: None,
+                extras: vec![]
+            }
+        );
+        #[cfg(not(target_os = "windows"))]
         assert_eq!(
             as_pypi_req,
             PyPiRequirement::Path {
