@@ -126,9 +126,11 @@ async fn install_locked() {
     // Add and update lockfile with this version of python
     let python_version = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
         "python==3.10.0"
-    } else {
+    } else if cfg!(target_os = "windows") {
         // Abusing this test to also test the `add` function of older version of python
         // Before this wasn't possible because uv queried the python interpreter, even without pypi dependencies.
+        "python==3.6.0"
+    } else {
         "python==2.7.15"
     };
 
