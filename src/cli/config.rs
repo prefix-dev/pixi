@@ -189,5 +189,7 @@ fn alter_config(common_args: &CommonArgs, key: &str, value: Option<String>) -> m
     let to = determine_config_write_path(common_args)?;
 
     config.set(key, value)?;
-    config.save(&to)
+    config.save(&to)?;
+    eprintln!("✅ Updated config at {}", to.display());
+    Ok(())
 }
