@@ -22,7 +22,7 @@ use std::{
     path::PathBuf,
 };
 
-/// Adds a dependency to the project
+/// Adds dependencies to the project
 #[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
@@ -36,18 +36,14 @@ pub struct Args {
     ///
     /// - `pixi add python=3.9`: This will select the latest minor version that complies with 3.9.*, i.e.,
     ///   python version 3.9.0, 3.9.1, 3.9.2, etc.
-    ///
     /// - `pixi add python`: In absence of a specified version, the latest version will be chosen.
     ///   For instance, this could resolve to python version 3.11.3.* at the time of writing.
     ///
     /// Adding multiple dependencies at once is also supported:
-    ///
     /// - `pixi add python pytest`: This will add both `python` and `pytest` to the project's dependencies.
     ///
     /// The `--platform` and `--build/--host` flags make the dependency target specific.
-    ///
     /// - `pixi add python --platform linux-64 --platform osx-arm64`: Will add the latest version of python for linux-64 and osx-arm64 platforms.
-    ///
     /// - `pixi add python --build`: Will add the latest version of python for as a build dependency.
     ///
     /// Mixing `--platform` and `--build`/`--host` flags is supported
@@ -58,11 +54,11 @@ pub struct Args {
     ///
     /// If the project manifest is a `pyproject.toml`, adding a pypi dependency will add it to the native pyproject `project.dependencies` array
     /// or to the native `project.optional-dependencies` table if a feature is specified:
-    /// - `pixi add --pypi boto3` would add `boto3` to the `project.dependencies` array
-    /// - `pixi add --pypi boto3 --feature aws` would add `boto3` to the `project.dependencies.aws` array
-    /// These dependencies will be read by pixi as if they had been added to the pixi `pypi-dependencies` tables of the default or a named feature.
+    /// - `pixi add --pypi boto3` will add `boto3` to the `project.dependencies` array
+    /// - `pixi add --pypi boto3 --feature aws` will add `boto3` to the `project.dependencies.aws` array
+    /// These dependencies will then be read by pixi as if they had been added to the pixi `pypi-dependencies` tables of the default or of a named feature.
     ///
-    #[arg(required = true)]
+    #[arg(required = true, verbatim_doc_comment)]
     pub specs: Vec<String>,
 
     /// The path to 'pixi.toml' or 'pyproject.toml'
