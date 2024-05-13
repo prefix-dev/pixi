@@ -6,7 +6,7 @@ INSTALL_SCRIPTS = [Path(__file__).parent / "install.sh", Path(__file__).parent /
 
 
 def on_files(files: Files, config: MkDocsConfig):
-    """Copy the install scripts to the site."""
+    """Copy the installation scripts to the site."""
     for script in INSTALL_SCRIPTS:
         files.append(
             File(

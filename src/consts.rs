@@ -12,6 +12,7 @@ pub const ENVIRONMENTS_DIR: &str = "envs";
 pub const SOLVE_GROUP_ENVIRONMENTS_DIR: &str = "solve-group-envs";
 pub const PYPI_DEPENDENCIES: &str = "pypi-dependencies";
 pub const TASK_CACHE_DIR: &str = "task-cache-v0";
+pub const PIXI_UV_INSTALLER: &str = "uv-pixi";
 
 pub const ONE_TIME_MESSAGES_DIR: &str = "one-time-messages";
 

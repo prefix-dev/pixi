@@ -206,12 +206,21 @@ impl Target {
     /// Adds a pypi dependency to a target
     ///
     /// This will overwrite any existing dependency of the same name
-    pub fn add_pypi_dependency(&mut self, requirement: &pep508_rs::Requirement) {
+    pub fn add_pypi_dependency(
+        &mut self,
+        requirement: &pep508_rs::Requirement,
+        editable: Option<bool>,
+    ) {
+        let mut pypi_requirement = PyPiRequirement::from(requirement.clone());
+        if let Some(editable) = editable {
+            pypi_requirement.set_editable(editable);
+        }
+
         self.pypi_dependencies
             .get_or_insert_with(Default::default)
             .insert(
                 PyPiPackageName::from_normalized(requirement.name.clone()),
-                PyPiRequirement::from(requirement.clone()),
+                pypi_requirement,
             );
     }
 
@@ -222,11 +231,12 @@ impl Target {
     pub fn try_add_pypi_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
+        editable: Option<bool>,
     ) -> Result<(), DependencyError> {
         if self.has_pypi_dependency(requirement, true) {
             return Err(DependencyError::Duplicate(requirement.name.to_string()));
         }
-        self.add_pypi_dependency(requirement);
+        self.add_pypi_dependency(requirement, editable);
         Ok(())
     }
 }
