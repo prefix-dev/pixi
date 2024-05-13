@@ -8,6 +8,8 @@ use clap::Parser;
 use itertools::{Either, Itertools};
 
 use crate::project::grouped_environment::GroupedEnvironment;
+// use crate::project::manifest::python::PyPiPackageName;
+// use crate::project::manifest::PyPiRequirement;
 use indexmap::IndexMap;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{
@@ -22,7 +24,7 @@ use std::{
     path::PathBuf,
 };
 
-/// Adds a dependency to the project
+/// Adds dependencies to the project
 #[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
@@ -36,27 +38,29 @@ pub struct Args {
     ///
     /// - `pixi add python=3.9`: This will select the latest minor version that complies with 3.9.*, i.e.,
     ///   python version 3.9.0, 3.9.1, 3.9.2, etc.
-    ///
     /// - `pixi add python`: In absence of a specified version, the latest version will be chosen.
     ///   For instance, this could resolve to python version 3.11.3.* at the time of writing.
     ///
     /// Adding multiple dependencies at once is also supported:
-    ///
     /// - `pixi add python pytest`: This will add both `python` and `pytest` to the project's dependencies.
     ///
     /// The `--platform` and `--build/--host` flags make the dependency target specific.
-    ///
     /// - `pixi add python --platform linux-64 --platform osx-arm64`: Will add the latest version of python for linux-64 and osx-arm64 platforms.
-    ///
     /// - `pixi add python --build`: Will add the latest version of python for as a build dependency.
     ///
     /// Mixing `--platform` and `--build`/`--host` flags is supported
     ///
-    /// The `--pypi` option will add the package as a pypi-dependency this can not be mixed with the conda dependencies
+    /// The `--pypi` option will add the package as a pypi dependency. This can not be mixed with the conda dependencies
     /// - `pixi add --pypi boto3`
     /// - `pixi add --pypi "boto3==version"
     ///
-    #[arg(required = true)]
+    /// If the project manifest is a `pyproject.toml`, adding a pypi dependency will add it to the native pyproject `project.dependencies` array
+    /// or to the native `project.optional-dependencies` table if a feature is specified:
+    /// - `pixi add --pypi boto3` will add `boto3` to the `project.dependencies` array
+    /// - `pixi add --pypi boto3 --feature aws` will add `boto3` to the `project.dependencies.aws` array
+    /// These dependencies will then be read by pixi as if they had been added to the pixi `pypi-dependencies` tables of the default or of a named feature.
+    ///
+    #[arg(required = true, verbatim_doc_comment)]
     pub specs: Vec<String>,
 
     /// The path to 'pixi.toml' or 'pyproject.toml'
@@ -93,6 +97,10 @@ pub struct Args {
 
     #[clap(flatten)]
     pub config: ConfigCli,
+
+    /// Whether the pypi requirement should be editable
+    #[arg(long, requires = "pypi")]
+    pub editable: bool,
 }
 
 impl DependencyType {
@@ -170,6 +178,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 spec_platforms,
                 args.no_lockfile_update,
                 args.no_install,
+                Some(args.editable),
             )
             .await
         }
@@ -213,6 +222,7 @@ pub async fn add_pypi_requirements_to_project(
     platforms: &[Platform],
     no_update_lockfile: bool,
     no_install: bool,
+    editable: Option<bool>,
 ) -> miette::Result<()> {
     for requirement in &requirements {
         // TODO: Get best version
@@ -220,12 +230,15 @@ pub async fn add_pypi_requirements_to_project(
         if platforms.is_empty() {
             project
                 .manifest
-                .add_pypi_dependency(requirement, None, feature_name)?;
+                .add_pypi_dependency(requirement, None, feature_name, editable)?;
         } else {
             for platform in platforms.iter() {
-                project
-                    .manifest
-                    .add_pypi_dependency(requirement, Some(*platform), feature_name)?;
+                project.manifest.add_pypi_dependency(
+                    requirement,
+                    Some(*platform),
+                    feature_name,
+                    editable,
+                )?;
             }
         }
     }

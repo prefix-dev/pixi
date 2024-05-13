@@ -53,6 +53,12 @@ Adds dependencies to the [manifest file](configuration.md).
 It will only add if the package with its version constraint is able to work with rest of the dependencies in the project.
 [More info](../features/multi_platform_configuration.md) on multi-platform configuration.
 
+If the project manifest is a `pyproject.toml`, adding a pypi dependency will add it to the native pyproject `project.dependencies` array, or to the native `project.optional-dependencies` table if a feature is specified:
+- `pixi add --pypi boto3` would add `boto3` to the `project.dependencies` array
+- `pixi add --pypi boto3 --feature aws` would add `boto3` to the `project.dependencies.aws` array
+
+These dependencies will be read by pixi as if they had been added to the pixi `pypi-dependencies` tables of the default or a named feature.
+
 ##### Arguments
 
 1. `<SPECS>`: The package(s) to add, space separated. The version constraint is optional.
@@ -78,6 +84,9 @@ pixi add --manifest-path ~/myproject/pixi.toml numpy
 pixi add --host "python>=3.9.0"
 pixi add --build cmake
 pixi add --pypi requests[security]
+pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl"
+pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib"
+pixi add --pypi "project @ file:///absolute/path/to/project"
 pixi add --platform osx-64 --build clang
 pixi add --no-install numpy
 pixi add --no-lock file-update numpy
@@ -188,6 +197,10 @@ pixi run --environment cuda python
 ## `remove`
 
 Removes dependencies from the [manifest file](configuration.md).
+
+If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
+- the native pyproject `project.dependencies` array or the native `project.optional-dependencies` table (if a feature is specified)
+- pixi `pypi-dependencies` tables of the default or a named feature (if a feature is specified)
 
 ##### Arguments
 

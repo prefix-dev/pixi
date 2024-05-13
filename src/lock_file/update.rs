@@ -112,7 +112,6 @@ impl<'p> LockFileDerivedData<'p> {
         let pypi_records = self.pypi_records(environment, platform).unwrap_or_default();
 
         // No `uv` support for WASM right now
-        // TODO - figure out if we can create the `uv` context more lazily
         if platform.arch() == Some(Arch::Wasm32) {
             return Ok(prefix);
         }
@@ -1524,7 +1523,12 @@ async fn spawn_solve_pypi_task(
         let python_path = python_status
             .location()
             .map(|path| prefix.root().join(path))
-            .ok_or_else(|| miette::miette!("missing python interpreter from environment"))?;
+            .ok_or_else(|| {
+                miette::miette!(
+                    help = "Use `pixi add python` to install the latest python interpreter.",
+                    "missing python interpreter from environment"
+                )
+            })?;
 
         let start = Instant::now();
 
