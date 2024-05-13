@@ -2127,6 +2127,10 @@ It initializes a <code>pixi.toml</code> file and also prepares a <code>.gitignor
 <p>Adds dependencies to the <a href="../configuration/">manifest file</a>.
 It will only add if the package with its version constraint is able to work with rest of the dependencies in the project.
 <a href="../../features/multi_platform_configuration/">More info</a> on multi-platform configuration.</p>
+<p>If the project manifest is a <code>pyproject.toml</code>, adding a pypi dependency will add it to the native pyproject <code>project.dependencies</code> array, or to the native <code>project.optional-dependencies</code> table if a feature is specified:
+- <code>pixi add --pypi boto3</code> would add <code>boto3</code> to the <code>project.dependencies</code> array
+- <code>pixi add --pypi boto3 --feature aws</code> would add <code>boto3</code> to the <code>project.dependencies.aws</code> array</p>
+<p>These dependencies will be read by pixi as if they had been added to the pixi <code>pypi-dependencies</code> tables of the default or a named feature.</p>
 <h5 id="arguments_1">Arguments<a class="headerlink" href="#arguments_1" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;SPECS&gt;</code>: The package(s) to add, space separated. The version constraint is optional.</li>
@@ -2248,6 +2252,9 @@ By only calling:
 </div>
 <h2 id="remove"><code>remove</code><a class="headerlink" href="#remove" title="Permanent link">#</a></h2>
 <p>Removes dependencies from the <a href="../configuration/">manifest file</a>.</p>
+<p>If the project manifest is a <code>pyproject.toml</code>, removing a pypi dependency with the <code>--pypi</code> flag will remove it from either
+- the native pyproject <code>project.dependencies</code> array or the native <code>project.optional-dependencies</code> table (if a feature is specified)
+- pixi <code>pypi-dependencies</code> tables of the default or a named feature (if a feature is specified)</p>
 <h5 id="arguments_3">Arguments<a class="headerlink" href="#arguments_3" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;DEPS&gt;...</code>: List of dependencies you wish to remove from the project.</li>
