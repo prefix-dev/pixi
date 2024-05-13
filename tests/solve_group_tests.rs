@@ -4,7 +4,7 @@ use crate::common::{
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };
-use pixi::pypi_mapping::{self, MappingSource};
+use pixi::pypi_mapping;
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use serial_test::serial;
@@ -288,7 +288,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     let client = project.authenticated_client();
     let foo_bar_package = Package::build("something-new", "2").finish();
 
-    let mut repo_data_record = RepoDataRecord {
+    let repo_data_record = RepoDataRecord {
         package_record: foo_bar_package.package_record,
         file_name: "something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/something-new/").unwrap(),
