@@ -234,16 +234,24 @@ async fn test_we_record_not_present_package_as_purl() {
 
     let project = pixi.project().unwrap();
     let client = project.authenticated_client();
-    let foo_bar_package = Package::build("something-new", "2").finish();
+    let foo_bar_package = Package::build("pixi-something-new-for-test", "2").finish();
+    let boltons_package = Package::build("boltons", "2").finish();
 
     let mut repo_data_record = RepoDataRecord {
         package_record: foo_bar_package.package_record,
-        file_name: "something-new".to_owned(),
+        file_name: "pixi-something-new-for-test".to_owned(),
         url: Url::parse("https://pypi.org/simple/something-new/").unwrap(),
         channel: "https://conda.anaconda.org/conda-forge/osx-arm64/brotli-python-1.1.0-py311ha891d26_1.conda".to_owned(),
     };
 
-    let packages = vec![repo_data_record.clone()];
+    let mut boltons_repo_data_record = RepoDataRecord {
+        package_record: boltons_package.package_record,
+        file_name: "boltons".to_owned(),
+        url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
+        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+    };
+
+    let packages = vec![repo_data_record.clone(), boltons_repo_data_record.clone()];
 
     let conda_mapping =
         pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
@@ -262,11 +270,22 @@ async fn test_we_record_not_present_package_as_purl() {
     )
     .unwrap();
 
+    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
+        &mut boltons_repo_data_record,
+        &conda_mapping,
+        &compressed_mapping,
+    )
+    .unwrap();
+
     // package is not yet present
-    // so just assume that
+    // so just assume that conda name == pypi name
     let first_purl = repo_data_record.package_record.purls.pop().unwrap();
 
-    assert!(first_purl.qualifiers().get("source").unwrap() == "conda-forge-mapping")
+    assert!(first_purl.name() == "pixi-something-new-for-test");
+
+    let boltons_purl = boltons_repo_data_record.package_record.purls.pop().unwrap();
+
+    assert!(boltons_purl.qualifiers().get("source").unwrap() == "conda-forge-mapping");
 }
 
 #[tokio::test]
@@ -286,24 +305,24 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     let project = pixi.project().unwrap();
 
     let client = project.authenticated_client();
-    let foo_bar_package = Package::build("something-new", "2").finish();
+    let foo_bar_package = Package::build("pixi-something-new", "2").finish();
+    let boltons_package = Package::build("boltons", "2").finish();
 
     let repo_data_record = RepoDataRecord {
         package_record: foo_bar_package.package_record,
-        file_name: "something-new".to_owned(),
-        url: Url::parse("https://pypi.org/simple/something-new/").unwrap(),
+        file_name: "pixi-something-new".to_owned(),
+        url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
         channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
     };
 
-    let mut packages = vec![repo_data_record];
+    let boltons_repo_data_record = RepoDataRecord {
+        package_record: boltons_package.package_record,
+        file_name: "boltons".to_owned(),
+        url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
+        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+    };
 
-    // let compressed_mapping = HashMap::from([("foo-bar-car".to_owned(), Some("my-test-name".to_owned()))]);
-
-    // let mapping_location = pypi_mapping::MappingLocation::Url(Url::parse("https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json").unwrap());
-
-    // let mut mapping_map = pypi_mapping::MappingMap::default();
-
-    // mapping_map.insert("conda-forge".to_owned(), mapping_location);
+    let mut packages = vec![repo_data_record, boltons_repo_data_record];
 
     let mapping_map = project.pypi_name_mapping_source().custom().unwrap();
 
@@ -318,9 +337,16 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     // package is not yet present
     // so just assume that is the same as pypi
 
+    let mut boltons_package = packages.pop().unwrap();
+
+    let boltons_first_purl = boltons_package.package_record.purls.pop().unwrap();
+
+    assert!(boltons_first_purl.name() == "boltons");
+    assert!(boltons_first_purl.qualifiers().get("source").unwrap() == "project-defined-mapping");
+
     let mut package = packages.pop().unwrap();
 
     let first_purl = package.package_record.purls.pop().unwrap();
 
-    assert!(first_purl.qualifiers().get("source").unwrap() == "conda-forge-mapping")
+    assert!(first_purl.name() == "pixi-something-new")
 }
