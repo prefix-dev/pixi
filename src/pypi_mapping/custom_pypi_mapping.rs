@@ -86,9 +86,8 @@ pub async fn fetch_custom_mapping(
                             .into_diagnostic()
                             .context(format!("mapping on {path:?} could not be loaded"))?;
                         let data: HashMap<String, Option<String>> = serde_json::from_str(&contents)
-                            .unwrap_or_else(|_| {
-                                panic!("Failed to parse JSON mapping located at {path:?}")
-                            });
+                            .into_diagnostic()
+                            .context(format!("Failed to parse JSON mapping located at {path:?}"))?;
 
                         mapping_url_to_name.insert(name.to_string(), data);
                     }

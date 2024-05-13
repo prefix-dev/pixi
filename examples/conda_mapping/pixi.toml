@@ -17,6 +17,7 @@ python = "~=3.11.0"
 scipy = "~=1.11.4"
 boltons = "*"
 jupyter-ros = { version = "*", channel = "robostack" }
+jupyter-amphion = {version = "*", channel = "robostack"}
 
 [pypi-dependencies]
 black = { version = "~=23.10", extras = ["jupyter"] }
