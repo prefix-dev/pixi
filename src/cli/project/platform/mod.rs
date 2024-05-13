@@ -6,7 +6,7 @@ use crate::Project;
 use clap::Parser;
 use std::path::PathBuf;
 
-/// Commands to manage project channels.
+/// Commands to manage project platforms.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The path to 'pixi.toml' or 'pyproject.toml'

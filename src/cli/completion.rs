@@ -103,7 +103,7 @@ _arguments "${_arguments_options[@]}" \
 '(-v --verbose)*--quiet[Less output per occurrence]' \
 '-h[Print help]' \
 '--help[Print help]' \
-'*::task -- The task you want to run in the projects environment:' \
+'*::task -- The pixi task or a deno task shell command you want to run in the project's environment, which can be an executable in the environment's PATH.:' \
 && ret=0
 ;;
 (add)

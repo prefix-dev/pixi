@@ -6,7 +6,9 @@ on:
       - main
     paths:
       - "docs/**"
+      - ".github/workflows/docs.yml"
       - "mkdocs.yml"
+      - "pixi.*"
     tags:
       - v**
   pull_request:
@@ -117,7 +119,6 @@ jobs:
           git checkout gh-pages
           git checkout main -- install/install.sh install/install.ps1
           mv install/install.sh install/install.ps1 .
-          git restore .
           git restore --staged .
           git add install.sh install.ps1
           # Check diff before committing

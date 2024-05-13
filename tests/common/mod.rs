@@ -239,6 +239,7 @@ impl PixiControl {
                 pypi: false,
                 feature: None,
                 config: Default::default(),
+                editable: false,
             },
         }
     }
@@ -258,6 +259,7 @@ impl PixiControl {
                 pypi: false,
                 feature: None,
                 config: Default::default(),
+                editable: false,
             },
         }
     }
