@@ -23,6 +23,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+use xxhash_rust::xxh3::xxh3_64;
 
 use crate::activation::{get_environment_variables, run_activation};
 use crate::config::Config;
@@ -207,6 +208,7 @@ impl Project {
 
         let env_vars = Project::init_env_vars(&manifest.parsed.environments);
 
+        // Load the user configuration from the local project and all default locations
         let config = Config::load(&root.join(consts::PIXI_DIR))?;
 
         let (client, authenticated_client) = build_reqwest_clients(Some(&config));
@@ -283,6 +285,19 @@ impl Project {
 
     /// Returns the pixi directory
     pub fn pixi_dir(&self) -> PathBuf {
+        // Custom root directory for target environments if set in configuration.
+        if let Some(custom_root) = self.config().target_environments_directory() {
+            tracing::info!(
+                "Using custom target directory for environments: {}",
+                custom_root.display()
+            );
+            return custom_root.join(format!(
+                "{}-{}",
+                self.name(),
+                xxh3_64(self.root.to_string_lossy().as_bytes())
+            ));
+        }
+        tracing::debug!("Using default root directory for target environments");
         self.root.join(consts::PIXI_DIR)
     }
 

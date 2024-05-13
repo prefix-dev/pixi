@@ -1,7 +1,7 @@
 use clap::{ArgAction, Parser};
-use miette::{Context, IntoDiagnostic};
+use miette::{miette, Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -108,7 +108,7 @@ pub struct ConfigCliPrompt {
     change_ps1: Option<bool>,
 }
 
-#[derive(Clone, Default, Debug, Deserialize)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub struct RepodataConfig {
     /// Disable JLAP compression for repodata.
     #[serde(alias = "disable-jlap")] // BREAK: rename instead of alias
@@ -121,14 +121,14 @@ pub struct RepodataConfig {
     pub disable_zstd: Option<bool>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, clap::ValueEnum)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum KeyringProvider {
     Disabled,
     Subprocess,
 }
 
-#[derive(Clone, Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct PyPIConfig {
     /// The default index URL for PyPI packages.
@@ -172,7 +172,7 @@ impl PyPIConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
     #[serde(default)]
     #[serde(alias = "default-channels")] // BREAK: rename instead of alias
@@ -212,6 +212,14 @@ pub struct Config {
     #[serde(default)]
     #[serde(rename = "pypi-config")]
     pub pypi_config: PyPIConfig,
+
+    /// The location of the environments build by pixi
+    #[serde(default)]
+    #[serde(
+        alias = "target-environments-directory",
+        skip_serializing_if = "Option::is_none"
+    )]
+    target_environments_directory: Option<PathBuf>,
 }
 
 impl Default for Config {
@@ -226,6 +234,7 @@ impl Default for Config {
             channel_config: default_channel_config(),
             repodata_config: None,
             pypi_config: PyPIConfig::default(),
+            target_environments_directory: None,
         }
     }
 }
@@ -261,7 +270,20 @@ impl Config {
 
         config.loaded_from.push(location.to_path_buf());
 
+        config.validate()?;
+
         Ok(config)
+    }
+
+    /// Validate the config file.
+    pub fn validate(&self) -> miette::Result<()> {
+        if let Some(target_env_dir) = self.target_environments_directory.clone() {
+            if !target_env_dir.exists() {
+                return Err(miette!("The `target-environments-directory` path does not exist: {:?}. It needs to be an absolute path to a directory.", target_env_dir));
+            }
+        }
+
+        Ok(())
     }
 
     /// Load the global config file from the home directory (~/.pixi/config.toml)
@@ -357,6 +379,9 @@ impl Config {
             channel_config: other.channel_config,
             repodata_config: other.repodata_config.or(self.repodata_config),
             pypi_config: other.pypi_config.merge(self.pypi_config),
+            target_environments_directory: other
+                .target_environments_directory
+                .or(self.target_environments_directory),
         }
     }
 
@@ -414,6 +439,11 @@ impl Config {
     pub fn mirror_map(&self) -> &std::collections::HashMap<Url, Vec<Url>> {
         &self.mirrors
     }
+
+    /// Retrieve the value for the target_environments_directory field.
+    pub fn target_environments_directory(&self) -> Option<PathBuf> {
+        self.target_environments_directory.clone()
+    }
 }
 
 #[cfg(test)]
@@ -422,13 +452,21 @@ mod tests {
 
     #[test]
     fn test_config_parse() {
-        let toml = r#"
+        let toml = format!(
+            r#"
         default_channels = ["conda-forge"]
         tls_no_verify = true
-        "#;
-        let config = Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        target-environments-directory = "{}"
+        "#,
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let config = Config::from_toml(toml.as_str(), &PathBuf::from("")).unwrap();
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(true));
+        assert_eq!(
+            config.target_environments_directory,
+            Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+        );
     }
 
     #[test]
@@ -486,11 +524,16 @@ mod tests {
             default_channels: vec!["conda-forge".to_string()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
+            target_environments_directory: Some(PathBuf::from("/path/to/envs")),
             ..Default::default()
         };
         config = config.merge_config(other);
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(true));
+        assert_eq!(
+            config.target_environments_directory,
+            Some(PathBuf::from("/path/to/envs"))
+        );
 
         let d = Path::new(&env!("CARGO_MANIFEST_DIR"))
             .join("tests")
