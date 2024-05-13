@@ -170,9 +170,14 @@ fn amend_pypi_purls_for_record(
     if let Some(mapped_channel) = custom_mapping.get(&record.channel) {
         if let Some(mapped_name) = mapped_channel.get(record.package_record.name.as_normalized()) {
             if let Some(name) = mapped_name {
-                record.package_record.purls.push(
-                    PackageUrl::new(String::from("pypi"), name).expect("valid pypi package url"),
-                );
+                let purl = PackageUrl::builder(String::from("pypi"), name.to_string())
+                    .with_qualifier("source", "project-defined-mapping")
+                    .expect("valid qualifier");
+
+                record
+                    .package_record
+                    .purls
+                    .push(purl.build().expect("valid pypi package url"));
             } else {
                 not_a_pypi = true;
             }

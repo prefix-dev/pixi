@@ -193,7 +193,9 @@ pub fn amend_pypi_purls_for_record(
         if let Some(mapped_name) = conda_forge_mapping.get(&sha256) {
             if let Some(pypi_names) = &mapped_name.pypi_normalized_names {
                 for pypi_name in pypi_names {
-                    let purl = PackageUrl::builder(String::from("pypi"), pypi_name);
+                    let purl = PackageUrl::builder(String::from("pypi"), pypi_name)
+                        .with_qualifier("source", "conda-forge-mapping")
+                        .expect("valid qualifier");
                     let built_purl = purl.build().expect("valid pypi package url");
                     record.package_record.purls.push(built_purl);
                 }
@@ -207,7 +209,9 @@ pub fn amend_pypi_purls_for_record(
             // maybe the packages is not yet updated
             // so fallback to the one from compressed mapping
             if let Some(mapped_name) = possible_mapped_name {
-                let purl = PackageUrl::builder(String::from("pypi"), mapped_name);
+                let purl = PackageUrl::builder(String::from("pypi"), mapped_name)
+                    .with_qualifier("source", "conda-forge-mapping")
+                    .expect("valid qualifier");
                 let built_purl = purl.build().expect("valid pypi package url");
                 record.package_record.purls.push(built_purl);
             } else {
