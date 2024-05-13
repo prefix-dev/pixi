@@ -8,7 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.22.0] - 2024-05-13
 ### ✨ Highlights
 
-- You can now run `pixi add --pypi 'package @ package.whl'`, perfect for adding a specific wheel to your environment in CI.
+- Support for source pypi dependencies through the cli:
+  - `pixi add --pypi 'package @ package.whl'`, perfect for adding just build wheels to your environment in CI.
+  - `pixi add --pypi 'package_from_git @ git+https://github.com/org/package.git'`, to add a package from a git repository.
+  - `pixi add --pypi 'package_from_path @ file:///path/to/package' --editable`, to add a package from a local path.
+
 
 ### 📃 Details
 #### Added
