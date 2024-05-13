@@ -114,12 +114,7 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
     })?;
 
     if parent_dir.exists() {
-        let contents = parent_dir.to_str().ok_or_else(|| {
-            miette::miette!(
-                "Failed to convert path to string: '{}'",
-                parent_dir.display()
-            )
-        })?;
+        let contents = parent_dir.to_string_lossy();
 
         let path = Path::new(&prefix_file_path);
         // Read existing contents to determine if an update is necessary
@@ -132,7 +127,7 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
         }
 
         // Write new contents to the prefix file
-        std::fs::write(path, contents).into_diagnostic()?;
+        std::fs::write(path, contents.as_ref()).into_diagnostic()?;
         tracing::info!("Prefix file updated with: '{}'.", contents);
     }
     Ok(())
