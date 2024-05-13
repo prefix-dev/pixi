@@ -60,22 +60,10 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
 
 /// Replace the parts of the bash completion script that need different functionality.
 fn replace_zsh_completion(script: &str) -> Cow<str> {
-    let pattern = r"(?ms)(\(run\))(?:.*?)(_arguments.*?)(\*::task)";
-    // Adds tab completion to the pixi run command.
-    // NOTE THIS IS FORMATTED BY HAND
-    let zsh_replacement = r#"$1
-local tasks
-tasks=("$${(@s/ /)$$(pixi task list --summary 2> /dev/null)}")
-
-if [[ -n "$$tasks" ]]; then
-    _values 'task' "$${tasks[@]}"
-else
-    return 1
-fi
-$2::task"#;
-
-    let re = Regex::new(pattern).unwrap();
-    re.replace(script, zsh_replacement)
+    let mut script = script.to_string();
+    script.push_str("\n");
+    script.push_str(include_str!("./completion_script/postamble.zsh"));
+    Cow::Owned(script)
 }
 
 #[cfg(test)]
