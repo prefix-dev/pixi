@@ -1,3 +1,2 @@
 default_channels = ["conda-forge", "bioconda", "defaults"]
 tls_no_verify = true
-target-environments-directory = "/home/test/envs"

@@ -535,6 +535,22 @@ mod tests {
             Some(PathBuf::from("/path/to/envs"))
         );
 
+        let other2 = Config {
+            default_channels: vec!["channel".to_string()],
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir2")),
+            tls_no_verify: Some(false),
+            target_environments_directory: Some(PathBuf::from("/path/to/envs2")),
+            ..Default::default()
+        };
+
+        config = config.merge_config(other2);
+        assert_eq!(config.default_channels, vec!["channel"]);
+        assert_eq!(config.tls_no_verify, Some(false));
+        assert_eq!(
+            config.target_environments_directory,
+            Some(PathBuf::from("/path/to/envs2"))
+        );
+
         let d = Path::new(&env!("CARGO_MANIFEST_DIR"))
             .join("tests")
             .join("config");

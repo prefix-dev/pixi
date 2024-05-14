@@ -54,4 +54,5 @@ Config {
         extra_index_urls: [],
         keyring_provider: None,
     },
+    target_environments_directory: None,
 }
