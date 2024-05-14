@@ -484,12 +484,14 @@ impl Config {
                 "change-ps1",
                 "authentication-override-file",
                 "tls-no-verify",
+                "mirrors",
                 "repodata-config",
                 "repodata-config.disable-jlap",
                 "repodata-config.disable-bzip2",
                 "repodata-config.disable-zstd",
                 "pypi-config",
                 "pypi-config.index-url",
+                "pyi-config.extra-index-urls",
                 "pypi-config.keyring-provider",
             ];
             format!("Supported keys:\n\n{}", keys.join("\n"))
@@ -513,6 +515,13 @@ impl Config {
             }
             "tls-no-verify" => {
                 self.tls_no_verify = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "mirrors" => {
+                self.mirrors = value
+                    .map(|v| serde_json::de::from_str(&v))
+                    .transpose()
+                    .into_diagnostic()?
+                    .unwrap_or_default();
             }
             key if key.starts_with("repodata-config") => {
                 if key == "repodata-config" {
@@ -567,6 +576,13 @@ impl Config {
                             .map(|v| Url::parse(&v))
                             .transpose()
                             .into_diagnostic()?;
+                    }
+                    "extra-index-urls" => {
+                        self.pypi_config.extra_index_urls = value
+                            .map(|v| serde_json::de::from_str(&v))
+                            .transpose()
+                            .into_diagnostic()?
+                            .unwrap_or_default();
                     }
                     "keyring-provider" => {
                         self.pypi_config.keyring_provider = value
