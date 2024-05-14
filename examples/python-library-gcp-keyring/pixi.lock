@@ -1699,15 +1699,6 @@ packages:
   - pkg:pypi/hatchling
   size: 63793
   timestamp: 1713757830609
-- kind: pypi
-  name: hi
-  version: 0.1.0
-  path: .
-  sha256: a7ce059128dc8bf4bd9a6552f68e42a522be33d5cb2c9f51081966f8506afa62
-  requires_dist:
-  - rich
-  requires_python: '>=3.11'
-  editable: true
 - kind: conda
   name: hpack
   version: 4.0.0
@@ -3197,6 +3188,15 @@ packages:
   license: Python-2.0
   size: 31991381
   timestamp: 1713208036041
+- kind: pypi
+  name: python-library-gcp-keyring
+  version: 0.1.0
+  path: .
+  sha256: a74c1d4dc52857dd9f6c98189ef985ee9046ddfa31eed77d4c30760fd4b26a2f
+  requires_dist:
+  - rich
+  requires_python: '>=3.11'
+  editable: true
 - kind: conda
   name: python_abi
   version: '3.12'

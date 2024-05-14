@@ -13,17 +13,17 @@
 #
 # Example of a feature that uses this:
 #
-# [feature.hi.pypi-options]
+# [feature.lib.pypi-options]
 # index-url = "https://oauth2accesstoken@europe-west4-python.pkg.dev/test-artifact-registry-423208/test/"
 #
-# [feature.hi.pypi-dependencies]
-# hi = { version = "==0.1.0" }
+# [feature.lib.pypi-dependencies]
+# python-library-gcp-keyring = { version = "==0.1.0" }
 #
 # To Install:
 # Use `pixi install --pypi-keyring-provider subprocess` or configure in global configuration
 
 [project]
-name = "hi"
+name = "python-library-gcp-keyring"
 version = "0.1.0"
 description = "Add a short description here"
 authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
@@ -56,13 +56,13 @@ pytest = "*"
 
 # Local install for testing
 [tool.pixi.pypi-dependencies]
-hi = { path = ".", editable = true }
+python-library-gcp-keyring = { path = ".", editable = true }
 
 [tool.pixi.environments]
 # Use this env for publishing:
-publish = {features = ["publish"], solve-group = "default"}
+publish = { features = ["publish"], solve-group = "default" }
 # Use this env for testing:
-test = {features = ["test"], solve-group = "default"}
+test = { features = ["test"], solve-group = "default" }
 
 # This has tasks for building and uploading
 # to custom GCP instance
