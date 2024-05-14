@@ -478,7 +478,24 @@ impl Config {
     ///
     /// It is required to call `save()` to persist the changes.
     pub fn set(&mut self, key: &str, value: Option<String>) -> miette::Result<()> {
-        let err = miette::miette!("unsupported key: {}", key);
+        let show_supported_keys = || {
+            let keys = [
+                "default-channels",
+                "change-ps1",
+                "authentication-override-file",
+                "tls-no-verify",
+                "repodata-config",
+                "repodata-config.disable-jlap",
+                "repodata-config.disable-bzip2",
+                "repodata-config.disable-zstd",
+                "pypi-config",
+                "pypi-config.index-url",
+                "pypi-config.keyring-provider",
+            ];
+            format!("Supported keys:\n\n{}", keys.join("\n"))
+        };
+
+        let err = miette::miette!("Unknown key: {}\n{}", key, show_supported_keys());
 
         match key {
             "default-channels" => {
