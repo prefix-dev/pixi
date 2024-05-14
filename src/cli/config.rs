@@ -161,12 +161,10 @@ fn load_config(common_args: &CommonArgs) -> miette::Result<Config> {
         Config::load_system()
     } else if common_args.global {
         Config::load_global()
+    } else if let Some(root) = determine_project_root(common_args)? {
+        Config::load(&root)
     } else {
-        if let Some(root) = determine_project_root(common_args)? {
-            Config::load(&root)
-        } else {
-            Config::load_global()
-        }
+        Config::load_global()
     };
 
     Ok(ret)
