@@ -1,13 +1,18 @@
 mod common;
 
+use std::fs::{create_dir_all, File};
+use std::io::Write;
 use std::path::Path;
 use std::str::FromStr;
 
 use crate::common::builders::string_from_iter;
 use crate::common::package_database::{Package, PackageDatabase};
 use common::{LockFileExt, PixiControl};
+use pixi::cli::run::Args;
 use pixi::cli::{run, LockFileUsageArgs};
+use pixi::config::Config;
 use pixi::consts::{DEFAULT_ENVIRONMENT_NAME, PIXI_UV_INSTALLER};
+use pixi::FeatureName;
 use rattler_conda_types::Platform;
 use serial_test::serial;
 use tempfile::TempDir;
@@ -120,9 +125,24 @@ async fn test_incremental_lock_file() {
 #[tokio::test]
 #[serial]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-async fn install_locked() {
+async fn install_locked_with_config() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
+
+    // Overwrite install location to a target directory
+    let mut config = Config::default();
+    let target_dir = pixi.project_path().join("target");
+    config.target_environments_directory = Some(target_dir.clone());
+    create_dir_all(target_dir.clone()).unwrap();
+    dbg!(config.clone().target_environments_directory);
+
+    let config_path = pixi.project().unwrap().pixi_dir().join("config.toml");
+    create_dir_all(config_path.parent().unwrap()).unwrap();
+
+    let mut file = File::create(config_path).unwrap();
+    file.write_all(toml::to_string(&config).unwrap().as_bytes())
+        .unwrap();
+
     // Add and update lockfile with this version of python
     let python_version = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
         "python==3.10.0"
@@ -163,6 +183,24 @@ async fn install_locked() {
         Platform::current(),
         "python==3.9.0"
     ));
+
+    // Verify that the folders are present in the target directory using a task.
+    pixi.tasks()
+        .add("which_python".into(), None, FeatureName::Default)
+        .with_commands(["which python"])
+        .execute()
+        .unwrap();
+
+    let result = pixi
+        .run(Args {
+            task: vec!["which_python".to_string()],
+            manifest_path: None,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(result.exit_code, 0);
+    assert!(result.stdout.contains(target_dir.to_str().unwrap()));
 }
 
 /// Test `pixi install/run --frozen` functionality

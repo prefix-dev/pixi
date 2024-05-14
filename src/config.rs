@@ -219,7 +219,7 @@ pub struct Config {
         alias = "target-environments-directory",
         skip_serializing_if = "Option::is_none"
     )]
-    target_environments_directory: Option<PathBuf>,
+    pub target_environments_directory: Option<PathBuf>,
 }
 
 impl Default for Config {
