@@ -191,7 +191,7 @@ gcloud artifacts print-settings python --project=<project> --repository=<reposit
 ```
 
 #### Installing your environment
-To actually install either configure your [Global Config](./global_configuration.md#pypi-configuration), or use the flag:
+To actually install either configure your [Global Config](../reference/pixi_configuration.md#pypi-config), or use the flag:
 ```shell
 pixi install --pypi-keyring-provider subprocess
 ```
