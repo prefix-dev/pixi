@@ -33,7 +33,8 @@ impl PypiPackageIdentifier {
     ) -> Result<(), ConversionError> {
         // Check the PURLs for a python package.
         for purl in record.package_record.purls.iter() {
-            if let Some(entry) = Self::try_from_purl(purl, &record.package_record.version.as_str())?
+            if let Some(entry) =
+                Self::convert_from_purl(purl, &record.package_record.version.as_str())?
             {
                 result.push(entry);
             }
@@ -42,20 +43,10 @@ impl PypiPackageIdentifier {
         Ok(())
     }
 
-    // /// Given a list of conda package records, extract the python packages that will be installed
-    // /// when these conda packages are installed.
-    // pub fn from_records(records: &[RepoDataRecord]) -> Result<Vec<Self>, ConversionError> {
-    //     let mut result = Vec::new();
-    //     for record in records {
-    //         Self::from_record_into(record, &mut result)?;
-    //     }
-    //     Ok(result)
-    // }
-
     /// Tries to construct an instance from a generic PURL.
     ///
     /// The `fallback_version` is used if the PURL does not contain a version.
-    pub fn try_from_purl(
+    pub fn convert_from_purl(
         package_url: &PackageUrl,
         fallback_version: &str,
     ) -> Result<Option<Self>, ConversionError> {

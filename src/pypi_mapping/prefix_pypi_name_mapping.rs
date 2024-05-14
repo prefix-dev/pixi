@@ -170,8 +170,10 @@ pub async fn amend_pypi_purls(
 
 /// Updates the specified repodata record to include an optional PyPI package name if it is missing.
 ///
-/// This function guesses the PyPI package name from the conda package name if the record refers to
-/// a conda-forge package.
+/// This function resolves package pypi purl using the following approach:
+/// 1. Tries to find a mapping by package hash.
+/// 2. If the mapping is missing, tries to find a .json mapping by name.
+/// 3. If both mappings are missing and it's a conda-forge record, assumes it is a PyPI package.
 pub fn amend_pypi_purls_for_record(
     record: &mut RepoDataRecord,
     conda_forge_mapping: &HashMap<Sha256Hash, Package>,
@@ -187,10 +189,14 @@ pub fn amend_pypi_purls_for_record(
         return Ok(());
     }
 
-    let mut no_a_pypi = false;
+    let mut not_a_pypi = false;
 
+    // if package have a hash
     if let Some(sha256) = record.package_record.sha256 {
+        // we look into our mapping by it's hash
         if let Some(mapped_name) = conda_forge_mapping.get(&sha256) {
+            // if we have pypi names in mapping
+            // we populate purls for it
             if let Some(pypi_names) = &mapped_name.pypi_normalized_names {
                 for pypi_name in pypi_names {
                     let purl = PackageUrl::builder(String::from("pypi"), pypi_name)
@@ -201,13 +207,22 @@ pub fn amend_pypi_purls_for_record(
                 }
             } else {
                 // it's not a pypi name
-                no_a_pypi = true;
+                not_a_pypi = true;
             }
-        } else if let Some(possible_mapped_name) =
-            compressed_mapping.get(record.package_record.name.as_normalized())
-        {
-            // maybe the packages is not yet updated
-            // so fallback to the one from compressed mapping
+            // we don't have a mapping for it's hash yet
+            // so we are looking into our .json map by name
+        }
+    }
+
+    // if we don't have a mapping for it's hash yet
+    // or this package is missing sha256
+    // we are looking into our .json map by name
+    if let Some(possible_mapped_name) =
+        compressed_mapping.get(record.package_record.name.as_normalized())
+    {
+        if !not_a_pypi && record.package_record.purls.is_empty() {
+            // if we have a pypi name for it
+            // we record the purl
             if let Some(mapped_name) = possible_mapped_name {
                 let purl = PackageUrl::builder(String::from("pypi"), mapped_name)
                     .with_qualifier("source", "conda-forge-mapping")
@@ -216,14 +231,14 @@ pub fn amend_pypi_purls_for_record(
                 record.package_record.purls.push(built_purl);
             } else {
                 // it's not a pypi name
-                no_a_pypi = true;
+                not_a_pypi = true;
             }
         }
     }
 
     // package is not in our mapping yet
     // so we assume that it is the same as the one from conda-forge
-    if !no_a_pypi && record.package_record.purls.is_empty() && is_conda_forge_record(record) {
+    if !not_a_pypi && record.package_record.purls.is_empty() && is_conda_forge_record(record) {
         // Convert the conda package names to pypi package names. If the conversion fails we
         // just assume that its not a valid python package.
         if let Some(purl) = build_pypi_purl_from_package_record(&record.package_record) {

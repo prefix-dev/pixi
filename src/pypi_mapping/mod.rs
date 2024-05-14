@@ -27,12 +27,18 @@ pub enum MappingLocation {
     Url(Url),
 }
 
+/// This enum represents the source of mapping
+/// it can be user-defined ( custom )
+/// or from prefix.dev ( prefix )
+
 pub enum MappingSource {
     Custom { mapping: MappingMap },
     Prefix,
 }
 
 impl MappingSource {
+    /// Return the custom `MappingMap`
+    /// for `MappingSource::Custom`
     pub fn custom(&self) -> Option<MappingMap> {
         match self {
             MappingSource::Custom { mapping } => Some(mapping.clone()),
@@ -88,6 +94,9 @@ pub fn is_conda_forge_url(url: &Url) -> bool {
     url.path().starts_with("/conda-forge")
 }
 
+/// Build a purl for a `PackageRecord`
+/// it will return a purl in this format
+/// `pkg:pypi/aiofiles`
 pub fn build_pypi_purl_from_package_record(package_record: &PackageRecord) -> Option<PackageUrl> {
     let name = pep508_rs::PackageName::from_str(package_record.name.as_source()).ok();
     let version = pep440_rs::Version::from_str(&package_record.version.as_str()).ok();

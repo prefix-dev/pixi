@@ -87,7 +87,10 @@ pub async fn fetch_custom_mapping(
                             .context(format!("mapping on {path:?} could not be loaded"))?;
                         let data: HashMap<String, Option<String>> = serde_json::from_str(&contents)
                             .into_diagnostic()
-                            .context(format!("Failed to parse JSON mapping located at {path:?}"))?;
+                            .context(format!(
+                                "Failed to parse JSON mapping located at {}",
+                                path.display()
+                            ))?;
 
                         mapping_url_to_name.insert(name.to_string(), data);
                     }
@@ -164,10 +167,10 @@ fn amend_pypi_purls_for_record(
 
     let mut not_a_pypi = false;
 
-    // If this package is a conda-forge package or user specified a custom channel mapping
-    // we can try to guess the pypi name from the conda name
+    // we verify if we have package channel and name in user provided mapping
     if let Some(mapped_channel) = custom_mapping.get(&record.channel) {
         if let Some(mapped_name) = mapped_channel.get(record.package_record.name.as_normalized()) {
+            // we have a pypi name for it so we record a purl
             if let Some(name) = mapped_name {
                 let purl = PackageUrl::builder(String::from("pypi"), name.to_string())
                     .with_qualifier("source", "project-defined-mapping")
@@ -183,6 +186,8 @@ fn amend_pypi_purls_for_record(
         }
     }
 
+    // if we don't have it and it's channel is conda-forge
+    // we assume that it's the pypi package
     if !not_a_pypi && record.package_record.purls.is_empty() && is_conda_forge_record(record) {
         // Convert the conda package names to pypi package names. If the conversion fails we
         // just assume that its not a valid python package.

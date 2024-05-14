@@ -91,7 +91,6 @@ async fn conda_solve_group_functionality() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[serial]
-// #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_purl_are_added_for_pypi() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
@@ -151,7 +150,7 @@ async fn test_purl_are_added_for_pypi() {
 }
 
 #[tokio::test]
-async fn test_compressed_mapping_catch_missing_package() {
+async fn test_purl_are_generated_using_custom_mapping() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -172,6 +171,7 @@ async fn test_compressed_mapping_catch_missing_package() {
         pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
             .await
             .unwrap();
+    // We are using custom mapping
     let compressed_mapping =
         HashMap::from([("foo-bar-car".to_owned(), Some("my-test-name".to_owned()))]);
 
@@ -184,6 +184,7 @@ async fn test_compressed_mapping_catch_missing_package() {
 
     let first_purl = repo_data_record.package_record.purls.pop().unwrap();
 
+    // We verify that `my-test-name` is used for `foo-bar-car` package
     assert!(first_purl.name() == "my-test-name")
 }
 
@@ -228,12 +229,17 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
 }
 
 #[tokio::test]
-async fn test_we_record_not_present_package_as_purl() {
+async fn test_dont_record_not_present_package_as_purl() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
     let project = pixi.project().unwrap();
     let client = project.authenticated_client();
+    // We use one package that is present in our mapping: `boltons`
+    // and another one that is missing from conda and our mapping: `pixi-something-new-for-test`
+    // because `pixi-something-new-for-test` is from conda-forge channel
+    // we will anyway record a purl for it
+    // by assumption that it's a pypi package
     let foo_bar_package = Package::build("pixi-something-new-for-test", "2").finish();
     let boltons_package = Package::build("boltons", "2").finish();
 
@@ -277,14 +283,17 @@ async fn test_we_record_not_present_package_as_purl() {
     )
     .unwrap();
 
-    // package is not yet present
-    // so just assume that conda name == pypi name
     let first_purl = repo_data_record.package_record.purls.pop().unwrap();
 
+    // we verify that even if this name is not present in our mapping
+    // we anyway record a purl because we make an assumption
+    // that it's a pypi package
     assert!(first_purl.name() == "pixi-something-new-for-test");
 
     let boltons_purl = boltons_repo_data_record.package_record.purls.pop().unwrap();
 
+    // for boltons we have a mapping record
+    // so we test that we also record source=conda-forge-mapping qualifier
     assert!(boltons_purl.qualifiers().get("source").unwrap() == "conda-forge-mapping");
 }
 
@@ -305,6 +314,15 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     let project = pixi.project().unwrap();
 
     let client = project.authenticated_client();
+
+    // We use one package that is present in our mapping: `boltons`
+    // and another one that is missing from conda and our mapping: `pixi-something-new-for-test`
+    // because `pixi-something-new-for-test` is from conda-forge channel
+    // we will anyway record a purl for it
+    // by assumption that it's a pypi package
+    // also we are using some custom mapping
+    // so we will test for other purl qualifier comparing to
+    // `test_dont_record_not_present_package_as_purl` test
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
     let boltons_package = Package::build("boltons", "2").finish();
 
@@ -326,21 +344,16 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let mapping_map = project.pypi_name_mapping_source().custom().unwrap();
 
-    println!("mapping map is {:?}", mapping_map);
-
     pypi_mapping::custom_pypi_mapping::amend_pypi_purls(&client, &mapping_map, &mut packages, None)
         .await
         .unwrap();
-
-    // println!("Purls are {:?}", repo_data_record.package_record.purls);
-
-    // package is not yet present
-    // so just assume that is the same as pypi
 
     let mut boltons_package = packages.pop().unwrap();
 
     let boltons_first_purl = boltons_package.package_record.purls.pop().unwrap();
 
+    // for boltons we have a mapping record
+    // so we test that we also record source=project-defined-mapping qualifier
     assert!(boltons_first_purl.name() == "boltons");
     assert!(boltons_first_purl.qualifiers().get("source").unwrap() == "project-defined-mapping");
 
@@ -348,5 +361,9 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let first_purl = package.package_record.purls.pop().unwrap();
 
-    assert!(first_purl.name() == "pixi-something-new")
+    // we verify that even if this name is not present in our mapping
+    // we anyway record a purl because we make an assumption
+    // that it's a pypi package
+    assert!(first_purl.name() == "pixi-something-new");
+    assert!(first_purl.qualifiers().is_empty());
 }

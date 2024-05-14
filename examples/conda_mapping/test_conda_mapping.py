@@ -1,19 +1,30 @@
 import yaml
 
+# This test verify if we generate right purls for our packages
+# We use one remote mapping for conda-forge channel
+# and one local mapping for robostack channel
+
+
+# For packages that are present in local-mapping
+# we verify if source=project-defined-mapping qualifier is present in purl
+# so purl should look like this:
+# pkg:pypi/my-boltons-name?source=project-defined-mapping
 
 PACKAGE_NAME_TO_TEST = {
     "boltons": "my-boltons-name?source=project-defined-mapping",
     "jupyter-ros": "my-name-from-mapping?source=project-defined-mapping"
 }
 
+
+
+# We test if having a null for conda name
+# will mark a conda package as not a pypi package
+# and will not add any purls for it
+# "jupyter-amphion": null
 PACKAGE_NAME_SHOULD_BE_NULL = ("jupyter-amphion",)
 
 
 if __name__ == "__main__":
-    # this will test if we map correctly our packages
-    # we have one remote mapping for conda-forge
-    # and one local mapping for robostack
-
     with open("pixi.lock") as pixi_lock:
         lock = yaml.safe_load(pixi_lock)
 
