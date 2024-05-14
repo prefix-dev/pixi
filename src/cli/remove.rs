@@ -13,11 +13,17 @@ use crate::project::manifest::python::PyPiPackageName;
 use crate::project::manifest::FeatureName;
 use crate::{consts, project::SpecType, Project};
 
-/// Remove the dependency from the project
+/// Removes dependencies from the project
 #[derive(Debug, Default, Parser)]
+#[clap(arg_required_else_help = true)]
 pub struct Args {
-    /// List of dependencies you wish to remove from the project
-    #[arg(required = true)]
+    /// Specify the dependencies you wish to remove from the project.
+    ///
+    /// If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
+    /// - the native pyproject `project.dependencies` array or, if a feature is specified, the native `project.optional-dependencies` table
+    /// - pixi `pypi-dependencies` tables of the default feature or, if a feature is specified, a named feature
+    ///
+    #[arg(required = true, verbatim_doc_comment)]
     pub deps: Vec<String>,
 
     /// The path to 'pixi.toml' or 'pyproject.toml'

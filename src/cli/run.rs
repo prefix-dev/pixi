@@ -33,7 +33,7 @@ use tracing::Level;
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
-    /// The task you want to run in the projects environment.
+    /// The pixi task or a deno task shell command you want to run in the project's environment, which can be an executable in the environment's PATH.
     #[arg(required = true)]
     pub task: Vec<String>,
 
