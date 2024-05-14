@@ -142,7 +142,7 @@ Which results in the following fields added to the `pyproject.toml`:
 test = ["pytest"]
 ```
 
-After we have added the optional dependencies to the `pyproject.toml`, pixi automatically creates a [`feature`](../reference/configuration.md/#the-feature-and-environments-tables), which can contain a collection of `dependencies`, `tasks`, `channels`, and more.
+After we have added the optional dependencies to the `pyproject.toml`, pixi automatically creates a [`feature`](../reference/project_configuration.md/#the-feature-and-environments-tables), which can contain a collection of `dependencies`, `tasks`, `channels`, and more.
 
 Sometimes there are packages that aren't available on conda channels but are published on PyPI.
 We can add these as well, which pixi will solve together with the default dependencies.

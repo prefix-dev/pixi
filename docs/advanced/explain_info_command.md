@@ -83,11 +83,11 @@ The size of the previously mentioned "Cache dir" in Mebibytes.
 ## Project info
 
 Everything below `Project` is info about the project you're currently in.
-This info is only available if your path has a [manifest file](../reference/configuration.md).
+This info is only available if your path has a [manifest file](../reference/project_configuration.md).
 
 ### Manifest file
 
-The path to the [manifest file](../reference/configuration.md) that describes the project.
+The path to the [manifest file](../reference/project_configuration.md) that describes the project.
 
 ### Last updated
 

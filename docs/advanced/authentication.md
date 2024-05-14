@@ -102,7 +102,7 @@ The JSON should follow the following format:
 
 Note: if you use a wildcard in the host, any subdomain will match (e.g. `*.prefix.dev` also matches `repo.prefix.dev`).
 
-Lastly you can set the authentication override file in the [global configuration file](./global_configuration.md).
+Lastly you can set the authentication override file in the [global configuration file](./../reference/pixi_configuration.md).
 
 ## PyPI authentication
 Currently, we support the following methods for authenticating against PyPI:
@@ -122,7 +122,7 @@ To enable this use the CLI flag `--pypi-keyring-provider` which can either be se
 pixi install --pypi-keyring-provider subprocess
 ```
 
-This option can also be set in the global configuration file under [pypi-config](./global_configuration.md#pypi-configuration).
+This option can also be set in the global configuration file under [pypi-config](./../reference/pixi_configuration.md#pypi-configuration).
 
 #### Installing keyring
 To install keyring you can use pixi global install:

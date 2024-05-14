@@ -216,7 +216,7 @@ pub struct Config {
     /// The location of the environments build by pixi
     #[serde(default)]
     #[serde(
-        alias = "target-environments-directory",
+        rename = "target-environments-directory",
         skip_serializing_if = "Option::is_none"
     )]
     pub target_environments_directory: Option<PathBuf>,
