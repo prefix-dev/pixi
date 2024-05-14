@@ -333,10 +333,11 @@ impl Manifest {
         requirement: &pep508_rs::Requirement,
         platform: Option<Platform>,
         feature_name: &FeatureName,
+        editable: Option<bool>,
     ) -> miette::Result<()> {
         // Add the pypi dependency to the manifest
         self.get_or_insert_target_mut(platform, Some(feature_name))
-            .try_add_pypi_dependency(requirement)?;
+            .try_add_pypi_dependency(requirement, editable)?;
         // and to the TOML document
         self.document
             .add_pypi_dependency(requirement, platform, feature_name)?;
