@@ -16,6 +16,7 @@ use reqwest_middleware::ClientWithMiddleware;
 use std::hash::Hash;
 
 use rattler_virtual_packages::VirtualPackage;
+use std::os::unix::fs::symlink;
 use std::{
     collections::{HashMap, HashSet},
     env,
@@ -292,27 +293,41 @@ impl Project {
 
         // Custom root directory for target environments if set in configuration.
         if let Some(custom_root) = self.config().target_environments_directory() {
-            let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
-                tracing::info!(
-                    "Using custom target directory for environments: {}",
-                    custom_root.display()
-                );
-                // Warn user if environments are found in the default directory
-                if default_pixi_dir.join(consts::ENVIRONMENTS_DIR).exists() {
-                    tracing::warn!(
-                        "Environments found in '{}', this will be ignored in favor of custom target directory '{}'\n\
-                        \t\tIt's advised to remove the environments from the default directory to avoid confusion.",
-                        default_pixi_dir.display(),
-                        custom_root.display()
-                    );
-                }
-            });
-
-            return custom_root.join(format!(
+            let pixi_dir_name = custom_root.join(format!(
                 "{}-{}",
                 self.name(),
                 xxh3_64(self.root.to_string_lossy().as_bytes())
             ));
+            let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
+                tracing::info!(
+                    "Using custom target directory for environments: {}",
+                    pixi_dir_name.display()
+                );
+                // Warn user if environments are found in the default directory
+                if !default_pixi_dir.is_symlink() {
+                    if default_pixi_dir.join(consts::ENVIRONMENTS_DIR).exists() {
+                        tracing::warn!(
+                            "Environments found in '{}', this will be ignored in favor of custom target directory '{}'\n\
+                            \t\tIt's advised to remove the environments from the default directory to avoid confusion.",
+                            default_pixi_dir.display(),
+                            custom_root.display()
+                        );
+                    } else {
+                        // Create symlink from custom root to default pixi directory
+                        if cfg!(unix) {
+                            match symlink(pixi_dir_name.clone(), default_pixi_dir.clone()) {
+                                Ok(_) => tracing::info!("Symlink created successfully from {} to {} folder", custom_root.display(), default_pixi_dir.display()),
+                                Err(e) => println!("Failed to create symlink: {}", e),
+                            }
+                        } else {
+                            tracing::info!("Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi') directory.");
+                        }
+                    }
+                }
+
+            });
+
+            return pixi_dir_name;
         }
         tracing::debug!("Using default root directory for target environments");
         default_pixi_dir
