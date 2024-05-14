@@ -966,7 +966,7 @@ pub async fn update_python_distributions(
             .map(|name| name.to_string())
             .join(", ");
         // BREAK(0.20.1): change this into a warning in a future release
-        tracing::warn!("These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: \n\t{packages}")
+        tracing::info!("These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: \n\t{packages}")
     }
 
     let options = UvReporterOptions::new()
