@@ -1,9 +1,11 @@
-# Explanation:
+# Introduction:
+#
 # This is a small example that builds and uploads a `.whl` to a custom pypi registry
 # If you want to upload to PyPI just replace the `--repository-url`
 # To use with GCP, make sure you've run a `gcloud auth`
 
 # Using the custom registry:
+#
 # To use the custom GCP registry, unfortunately you have to have keyring installed globally
 # Because `uv` which we use for PyPI resolution uses a subprocess to call `keyring`
 # Also you need to add `oauth2token@` to the url e.g.
@@ -11,10 +13,13 @@
 #
 # Example of a feature that uses this:
 #
-# [feature.foo.pypi-options]
+# [feature.hi.pypi-options]
 # index-url = "https://oauth2token@europe-west4-python.pkg.dev/test-artifact-registry-423208/test/"
-# [feature.foo.pypi-dependencies]
-# foo = { version = "0.1.0" }
+#
+# [feature.hi.pypi-dependencies]
+# hi = { version = "==0.1.0" }
+#
+# To Install:
 # Use `pixi install --pypi-keyring-provider subprocess` or configure in global configuration
 
 [project]
@@ -54,10 +59,10 @@ pytest = "*"
 hi = { path = ".", editable = true }
 
 [tool.pixi.environments]
-# Use this env for publhing
-publish = ["publish"]
-# Use this env for testing
-test = ["test"]
+# Use this env for publishing:
+publish = {features = ["publish"], solve-group = "default"}
+# Use this env for testing:
+test = {features = ["test"], solve-group = "default"}
 
 # This has tasks for building and uploading
 # to custom GCP instance
