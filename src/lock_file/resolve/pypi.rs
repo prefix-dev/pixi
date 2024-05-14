@@ -1,32 +1,28 @@
-//! This module contains code to resolve python package from PyPi or Conda packages.
-//!
-//! See [`resolve_pypi`] and [`resolve_conda`] for more information.
-
-use crate::config::{self, get_cache_dir};
+use super::pypi_editables::build_editables;
 use crate::consts::PROJECT_MANIFEST;
-use crate::lock_file::pypi_editables::build_editables;
+use crate::lock_file::resolve::resolver_provider::CondaResolverProvider;
 use crate::project::manifest::pypi_options::PypiOptions;
 use crate::project::manifest::python::RequirementOrEditable;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
-use std::collections::{BTreeMap, HashMap};
-use std::future::{ready, Future};
+use std::collections::HashMap;
+
 use std::iter::once;
 
-use crate::lock_file::{package_identifier, PypiPackageIdentifier, PypiRecord};
+use crate::lock_file::{
+    package_identifier, PypiPackageIdentifier, PypiRecord, UvResolutionContext,
+};
 use crate::pypi_marker_env::determine_marker_environment;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use crate::{
-    lock_file::{LockedCondaPackages, LockedPypiPackages},
+    lock_file::LockedPypiPackages,
     project::manifest::{PyPiRequirement, SystemRequirements},
-    Project,
 };
 
+use distribution_types::FileLocation;
 use distribution_types::{
-    BuiltDist, DirectUrlSourceDist, Dist, FlatIndexLocation, HashPolicy, IndexLocations, IndexUrl,
-    Name, PrioritizedDist, Resolution, ResolvedDist, SourceDist,
+    BuiltDist, Dist, FlatIndexLocation, HashPolicy, IndexUrl, LocalEditable, Name, Resolution,
+    ResolvedDist, SourceDist,
 };
-use distribution_types::{FileLocation, SourceDistCompatibility};
-use futures::FutureExt;
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use install_wheel_rs::linker::LinkMode;
@@ -35,79 +31,27 @@ use miette::{Context, IntoDiagnostic};
 use pep440_rs::{Operator, VersionSpecifier};
 use pep508_rs::{Requirement, VerbatimUrl, VersionOrUrl};
 use pypi_types::{HashAlgorithm, HashDigest, Metadata23};
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
+use rattler_conda_types::RepoDataRecord;
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
 };
-use rattler_repodata_gateway::RepoData;
-use rattler_solve::{resolvo, ChannelPriority, RepoDataIter, SolverImpl};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
-use uv_configuration::{
-    ConfigSettings, Constraints, NoBinary, NoBuild, Overrides, SetupPyStrategy,
-};
+use uv_configuration::{ConfigSettings, Constraints, NoBuild, Overrides, SetupPyStrategy};
 
 use url::Url;
-use uv_cache::Cache;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
-use uv_distribution::{ArchiveMetadata, DistributionDatabase, Reporter};
+use uv_distribution::DistributionDatabase;
 use uv_interpreter::Interpreter;
 use uv_normalize::PackageName;
 use uv_resolver::{
-    AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, MetadataResponse,
-    Options, Preference, PythonRequirement, Resolver, ResolverProvider, VersionMap,
-    VersionsResponse, WheelMetadataResult,
+    AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
+    PythonRequirement, Resolver,
 };
-use uv_types::{BuildContext, EmptyInstalledPackages, HashStrategy, InFlight};
-
-/// Objects that are needed for resolutions which can be shared between different resolutions.
-#[derive(Clone)]
-pub struct UvResolutionContext {
-    pub cache: Cache,
-    pub in_flight: Arc<InFlight>,
-    pub no_build: NoBuild,
-    pub no_binary: NoBinary,
-    pub hash_strategy: HashStrategy,
-    pub client: reqwest::Client,
-    pub keyring_provider: uv_configuration::KeyringProviderType,
-}
-
-impl UvResolutionContext {
-    pub fn from_project(project: &Project) -> miette::Result<Self> {
-        let cache = Cache::from_path(
-            get_cache_dir()
-                .expect("missing caching directory")
-                .join("uv-cache"),
-        )
-        .into_diagnostic()
-        .context("failed to create uv cache")?;
-
-        let keyring_provider = match project.config().pypi_config().use_keyring() {
-            config::KeyringProvider::Subprocess => {
-                tracing::info!("using uv keyring (subprocess) provider");
-                uv_configuration::KeyringProviderType::Subprocess
-            }
-            config::KeyringProvider::Disabled => {
-                tracing::info!("uv keyring provider is disabled");
-                uv_configuration::KeyringProviderType::Disabled
-            }
-        };
-
-        let in_flight = Arc::new(InFlight::default());
-        Ok(Self {
-            cache,
-            in_flight,
-            no_build: NoBuild::None,
-            no_binary: NoBinary::None,
-            hash_strategy: HashStrategy::None,
-            client: project.client().clone(),
-            keyring_provider,
-        })
-    }
-}
+use uv_types::{BuildContext, EmptyInstalledPackages};
 
 fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes> {
     let mut sha256 = None;
@@ -139,89 +83,6 @@ fn parse_hashes_from_hash_vec(hashes: &Vec<HashDigest>) -> Option<PackageHashes>
             parse_digest_from_hex::<Sha256>(&sha256).expect("invalid sha256"),
         )),
         (None, None) => None,
-    }
-}
-
-struct CondaResolverProvider<'a, Context: BuildContext + Send + Sync> {
-    fallback: DefaultResolverProvider<'a, Context>,
-    conda_python_identifiers: &'a HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>,
-}
-
-impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
-    for CondaResolverProvider<'a, Context>
-{
-    fn get_package_versions<'io>(
-        &'io self,
-        package_name: &'io PackageName,
-    ) -> impl Future<Output = uv_resolver::PackageVersionsResult> + Send + 'io {
-        if let Some((repodata_record, identifier)) = self.conda_python_identifiers.get(package_name)
-        {
-            // If we encounter a package that was installed by conda we simply return a single
-            // available version in the form of a source distribution with the URL of the
-            // conda package.
-            //
-            // Obviously this is not a valid source distribution but it easies debugging.
-            let dist = Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist {
-                name: identifier.name.as_normalized().clone(),
-                url: VerbatimUrl::unknown(repodata_record.url.clone()),
-            }));
-
-            let prioritized_dist = PrioritizedDist::from_source(
-                dist,
-                Vec::new(),
-                SourceDistCompatibility::Compatible(distribution_types::Hash::Matched),
-            );
-
-            return ready(Ok(VersionsResponse::Found(vec![VersionMap::from(
-                BTreeMap::from_iter([(identifier.version.clone(), prioritized_dist)]),
-            )])))
-            .right_future();
-        }
-
-        // Otherwise use the default implementation
-        self.fallback
-            .get_package_versions(package_name)
-            .left_future()
-    }
-
-    fn get_or_build_wheel_metadata<'io>(
-        &'io self,
-        dist: &'io Dist,
-    ) -> impl Future<Output = WheelMetadataResult> + Send + 'io {
-        if let Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist { name, .. })) = dist {
-            if let Some((_, iden)) = self.conda_python_identifiers.get(name) {
-                // If this is a Source dist and the package is actually installed by conda we
-                // create fake metadata with no dependencies. We assume that all conda installed
-                // packages are properly installed including its dependencies.
-                return ready(Ok(MetadataResponse::Found(ArchiveMetadata {
-                    metadata: Metadata23 {
-                        name: iden.name.as_normalized().clone(),
-                        version: iden.version.clone(),
-                        requires_dist: vec![],
-                        requires_python: None,
-                        provides_extras: iden.extras.iter().cloned().collect(),
-                    },
-                    hashes: vec![],
-                })))
-                .left_future();
-            }
-        }
-
-        // Otherwise just call the default implementation
-        self.fallback
-            .get_or_build_wheel_metadata(dist)
-            .right_future()
-    }
-
-    fn index_locations(&self) -> &IndexLocations {
-        self.fallback.index_locations()
-    }
-
-    fn with_reporter(self, reporter: impl Reporter + 'static) -> Self {
-        Self {
-            fallback: self.fallback.with_reporter(reporter),
-            ..self
-        }
     }
 }
 
@@ -302,6 +163,8 @@ fn convert_flat_index_path(
     // Join with the given flat index path
     given_flat_index_path.join(path)
 }
+
+type CondaPythonPackages = HashMap<PackageName, (RepoDataRecord, PypiPackageIdentifier)>;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
@@ -558,9 +421,29 @@ pub async fn resolve_pypi(
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
-    let database = DistributionDatabase::new(&registry_client, &build_dispatch);
+    // Collect resolution into locked packages
+    lock_pypi_packages(
+        conda_python_packages,
+        &build_dispatch,
+        &registry_client,
+        flat_index_locations,
+        resolution,
+        built_editables,
+    )
+    .await
+}
 
+/// Create a vector of locked packages from a resolution
+async fn lock_pypi_packages<'a>(
+    conda_python_packages: CondaPythonPackages,
+    build_dispatch: &BuildDispatch<'a>,
+    registry_client: &Arc<RegistryClient>,
+    flat_index_locations: Vec<FindLinksLocation>,
+    resolution: Resolution,
+    built_editables: Vec<(LocalEditable, Metadata23)>,
+) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
+    let database = DistributionDatabase::new(registry_client, build_dispatch);
     for dist in resolution.into_distributions() {
         // If this refers to a conda package we can skip it
         if conda_python_packages.contains_key(dist.name()) {
@@ -741,40 +624,5 @@ pub async fn resolve_pypi(
 
         locked_packages.push((pypi_package_data, PypiPackageEnvironmentData::default()));
     }
-
     Ok(locked_packages)
-}
-
-/// Solves the conda package environment for the given input. This function is async because it
-/// spawns a background task for the solver. Since solving is a CPU intensive task we do not want to
-/// block the main task.
-pub async fn resolve_conda(
-    specs: Vec<MatchSpec>,
-    virtual_packages: Vec<GenericVirtualPackage>,
-    locked_packages: Vec<RepoDataRecord>,
-    available_packages: Vec<RepoData>,
-) -> miette::Result<LockedCondaPackages> {
-    tokio::task::spawn_blocking(move || {
-        // Construct a solver task that we can start solving.
-        let task = rattler_solve::SolverTask {
-            specs,
-            available_packages: available_packages
-                .iter()
-                .map(RepoDataIter)
-                .collect::<Vec<_>>(),
-            locked_packages,
-            pinned_packages: vec![],
-            virtual_packages,
-            timeout: None,
-            channel_priority: ChannelPriority::Strict,
-        };
-
-        // Solve the task
-        resolvo::Solver.solve(task).into_diagnostic()
-    })
-    .await
-    .unwrap_or_else(|e| match e.try_into_panic() {
-        Ok(e) => std::panic::resume_unwind(e),
-        Err(_err) => Err(miette::miette!("cancelled")),
-    })
 }

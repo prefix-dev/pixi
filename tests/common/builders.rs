@@ -133,6 +133,11 @@ impl AddBuilder {
         self.args.platform.extend(platforms.iter());
         self
     }
+
+    pub fn set_editable(mut self, editable: bool) -> Self {
+        self.args.editable = editable;
+        self
+    }
 }
 
 impl IntoFuture for AddBuilder {

@@ -53,6 +53,12 @@ Adds dependencies to the [manifest file](configuration.md).
 It will only add if the package with its version constraint is able to work with rest of the dependencies in the project.
 [More info](../features/multi_platform_configuration.md) on multi-platform configuration.
 
+If the project manifest is a `pyproject.toml`, adding a pypi dependency will add it to the native pyproject `project.dependencies` array, or to the native `project.optional-dependencies` table if a feature is specified:
+- `pixi add --pypi boto3` would add `boto3` to the `project.dependencies` array
+- `pixi add --pypi boto3 --feature aws` would add `boto3` to the `project.dependencies.aws` array
+
+These dependencies will be read by pixi as if they had been added to the pixi `pypi-dependencies` tables of the default or a named feature.
+
 ##### Arguments
 
 1. `<SPECS>`: The package(s) to add, space separated. The version constraint is optional.
@@ -78,6 +84,9 @@ pixi add --manifest-path ~/myproject/pixi.toml numpy
 pixi add --host "python>=3.9.0"
 pixi add --build cmake
 pixi add --pypi requests[security]
+pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl"
+pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib"
+pixi add --pypi "project @ file:///absolute/path/to/project"
 pixi add --platform osx-64 --build clang
 pixi add --no-install numpy
 pixi add --no-lock file-update numpy
@@ -86,21 +95,29 @@ pixi add --feature featurex numpy
 
 ## `install`
 
-Installs all dependencies specified in the lock file `pixi.lock`.
-Which gets generated on `pixi add` or when you manually change the [manifest file](configuration.md) file and run `pixi install`.
+Installs an environment based on the [manifest file](configuration.md).
+If there is no `pixi.lock` file or it is not up-to-date with the [manifest file](configuration.md), it will (re-)generate the lock file.
+
+`pixi install` only installs one environment at a time, if you have multiple environments you can select the right one with the `--environment` flag.
+If you don't provide an environment, the `default` environment will be installed.
+
+Running `pixi install` is not required before running other commands.
+As all commands interacting with the environment will first run the `install` command if the environment is not ready, to make sure you always run in a correct state.
+E.g. `pixi run`, `pixi shell`, `pixi shell-hook`, `pixi add`, `pixi remove` to name a few.
 
 ##### Options
-    /// Install the environment as defined in the lock file, doesn't abort when lock file isn't up-to-date with the manifest file.
-
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](configuration.md), by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--environment <ENVIRONMENT> (-e)`: The environment to install, if none are provided the default environment will be used.
 
 ```shell
 pixi install
 pixi install --manifest-path ~/myproject/pixi.toml
 pixi install --frozen
 pixi install --locked
+pixi install --environment lint
+pixi install -e lint
 ```
 
 To reinitialize the lock file in your project, you can remove the existing `pixi.lock` file and run `pixi install`.
@@ -180,6 +197,10 @@ pixi run --environment cuda python
 ## `remove`
 
 Removes dependencies from the [manifest file](configuration.md).
+
+If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
+- the native pyproject `project.dependencies` array or the native `project.optional-dependencies` table (if a feature is specified)
+- pixi `pypi-dependencies` tables of the default or a named feature (if a feature is specified)
 
 ##### Arguments
 

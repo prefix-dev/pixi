@@ -184,6 +184,14 @@ impl PixiControl {
         self.tmpdir.path()
     }
 
+    /// Get path to default environment
+    pub fn default_env_path(&self) -> miette::Result<PathBuf> {
+        let project = self.project()?;
+        let env = project.environment("default");
+        let env = env.ok_or_else(|| miette::miette!("default environment not found"))?;
+        Ok(self.tmpdir.path().join(env.dir()))
+    }
+
     pub fn manifest_path(&self) -> PathBuf {
         self.project_path().join(consts::PROJECT_MANIFEST)
     }
@@ -231,6 +239,7 @@ impl PixiControl {
                 pypi: false,
                 feature: None,
                 config: Default::default(),
+                editable: false,
             },
         }
     }
@@ -250,6 +259,7 @@ impl PixiControl {
                 pypi: false,
                 feature: None,
                 config: Default::default(),
+                editable: false,
             },
         }
     }

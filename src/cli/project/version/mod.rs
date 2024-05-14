@@ -7,7 +7,7 @@ use clap::Parser;
 use rattler_conda_types::VersionBumpType;
 use std::path::PathBuf;
 
-/// Commands to manage project description.
+/// Commands to manage project version.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The path to 'pixi.toml' or 'pyproject.toml'
