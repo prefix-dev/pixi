@@ -1600,37 +1600,6 @@ async fn spawn_create_prefix_task(
         duration,
     ))
 }
-//
-// /// Load the repodata records for the specified platform and package names in the background. This
-// /// is a CPU and IO intensive task so we run it in a blocking task to not block the main task.
-// pub async fn load_sparse_repo_data_async(
-//     package_names: Vec<PackageName>,
-//     sparse_repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
-//     channels: Vec<Channel>,
-//     platform: Platform,
-// ) -> miette::Result<Vec<Vec<RepoDataRecord>>> {
-//     tokio::task::spawn_blocking(move || {
-//         let sparse = channels
-//             .into_iter()
-//             .cartesian_product(vec![platform, Platform::NoArch])
-//             .filter_map(|target| sparse_repo_data.get(&target));
-//
-//         // Load only records we need for this platform
-//         SparseRepoData::load_records_recursive(sparse, package_names, None).into_diagnostic()
-//     })
-//     .await
-//     .map_err(|e| match e.try_into_panic() {
-//         Ok(panic) => std::panic::resume_unwind(panic),
-//         Err(_err) => miette::miette!("the operation was cancelled"),
-//     })
-//     .map_or_else(Err, identity)
-//     .with_context(|| {
-//         format!(
-//             "failed to load repodata records for platform '{}'",
-//             platform.as_str()
-//         )
-//     })
-// }
 
 /// A helper struct that manages a progress-bar for solving an environment.
 #[derive(Clone)]
