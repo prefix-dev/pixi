@@ -16,7 +16,9 @@ use reqwest_middleware::ClientWithMiddleware;
 use std::hash::Hash;
 
 use rattler_virtual_packages::VirtualPackage;
+#[cfg(unix)]
 use std::os::unix::fs::symlink;
+
 use std::{
     collections::{HashMap, HashSet},
     env,
