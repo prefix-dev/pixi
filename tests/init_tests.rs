@@ -18,11 +18,7 @@ async fn init_creates_project_manifest() {
     assert!(!project.name().is_empty());
     assert_eq!(
         project.name(),
-        pixi.project_path()
-            .file_stem()
-            .unwrap()
-            .to_string_lossy()
-            .as_ref(),
+        &pixi.project_path().file_stem().unwrap().to_string_lossy(),
         "project name should match the directory name"
     );
     assert_eq!(
