@@ -472,11 +472,9 @@ fn whats_the_plan<'a>(
                 match need_reinstall(dist, pkg, python_version)? {
                     ValidateInstall::Keep => {
                         // We are done here
-                        // eprintln!("pkg is keep");
                         continue;
                     }
                     ValidateInstall::Reinstall => {
-                        // eprintln!("pkg is reinstall");
                         reinstalls.push(dist.clone());
                     }
                 }
@@ -836,7 +834,6 @@ pub async fn update_python_distributions(
                 elapsed(start.elapsed())
             )
         );
-
         return Ok(());
     }
 
@@ -945,6 +942,8 @@ pub async fn update_python_distributions(
     // Install the resolved distributions.
     let wheels = wheels.into_iter().chain(local).collect::<Vec<_>>();
 
+    // Verify if pypi wheels will override existent conda packages
+    // and warn if they are
     if let Ok(Some(clobber_packages)) =
         pypi_conda_clobber.clobber_on_instalation(wheels.clone(), &venv)
     {
@@ -952,6 +951,8 @@ pub async fn update_python_distributions(
 
         tracing::warn!("These conda-packages will be overridden by pypi: \n\t{packages_names}");
 
+        // because we are removing conda packages
+        // we filter the ones we already warn
         if !installer_mismatch.is_empty() {
             installer_mismatch.retain(|name| !packages_names.contains(name));
         }
