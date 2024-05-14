@@ -16,7 +16,7 @@ use reqwest_middleware::ClientWithMiddleware;
 use std::hash::Hash;
 
 use rattler_virtual_packages::VirtualPackage;
-#[cfg(unix)]
+#[cfg(not(windows))]
 use std::os::unix::fs::symlink;
 
 use std::{
@@ -316,14 +316,14 @@ impl Project {
                         );
                     } else {
                         // Create symlink from custom root to default pixi directory
-                        if cfg!(unix) {
-                            match symlink(pixi_dir_name.clone(), default_pixi_dir.clone()) {
+                        #[cfg(not(windows))]
+                        match symlink(pixi_dir_name.clone(), default_pixi_dir.clone()) {
                                 Ok(_) => tracing::info!("Symlink created successfully from {} to {} folder", custom_root.display(), default_pixi_dir.display()),
                                 Err(e) => println!("Failed to create symlink: {}", e),
-                            }
-                        } else {
-                            tracing::info!("Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi') directory.");
                         }
+
+                        #[cfg(windows)]
+                         tracing::info!("Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi') directory.");
                     }
                 }
 
