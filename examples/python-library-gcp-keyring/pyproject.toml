@@ -8,13 +8,13 @@
 #
 # To use the custom GCP registry, unfortunately you have to have keyring installed globally
 # Because `uv` which we use for PyPI resolution uses a subprocess to call `keyring`
-# Also you need to add `oauth2token@` to the url e.g.
+# Also you need to add `oauth2accesstoken@` to the url e.g.
 # `https://oauth2token@europe-west4-python.pkg.dev/test-artifact-registry-423208/test/`
 #
 # Example of a feature that uses this:
 #
 # [feature.hi.pypi-options]
-# index-url = "https://oauth2token@europe-west4-python.pkg.dev/test-artifact-registry-423208/test/"
+# index-url = "https://oauth2accesstoken@europe-west4-python.pkg.dev/test-artifact-registry-423208/test/"
 #
 # [feature.hi.pypi-dependencies]
 # hi = { version = "==0.1.0" }

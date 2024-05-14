@@ -1703,7 +1703,7 @@ packages:
   name: hi
   version: 0.1.0
   path: .
-  sha256: 621d32be45c248984c50eb86d73da9e5381e749d088b12c2313e6bb81885274a
+  sha256: a7ce059128dc8bf4bd9a6552f68e42a522be33d5cb2c9f51081966f8506afa62
   requires_dist:
   - rich
   requires_python: '>=3.11'
