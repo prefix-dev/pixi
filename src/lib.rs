@@ -5,6 +5,7 @@ pub mod consts;
 mod environment;
 mod install;
 mod install_pypi;
+mod install_wheel;
 mod lock_file;
 mod prefix;
 mod progress;

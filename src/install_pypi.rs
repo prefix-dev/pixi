@@ -1,4 +1,5 @@
 use crate::environment::PythonStatus;
+use crate::install_wheel::get_wheel_info;
 use crate::prefix::Prefix;
 use crate::project::manifest::pypi_options::PypiOptions;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
@@ -32,10 +33,10 @@ use distribution_types::{
 };
 use install_wheel_rs::linker::LinkMode;
 
-use rattler_conda_types::{Platform, RepoDataRecord};
+use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
@@ -84,7 +85,7 @@ struct PixiInstallPlan {
 
     /// Keep track of any packages that have been re-installed because of installer mismatch
     /// we can warn the user later that this has happened
-    pub installer_mismatch: Vec<PackageName>,
+    pub installer_mismatch: Vec<String>,
 }
 
 /// Converts our locked data to a file
@@ -445,6 +446,10 @@ fn whats_the_plan<'a>(
         }
     }
 
+    // Used to verify if there are any additional .dist-info installed
+    // that should be removed
+    let required_map_copy = required_map.clone();
+
     // Walk over all installed packages and check if they are required
     for dist in site_packages.iter() {
         // Check if we require the package to be installed
@@ -455,20 +460,24 @@ fn whats_the_plan<'a>(
             // Empty string if no installer or any other error
             .map_or(String::new(), |f| f.unwrap_or_default());
 
+        if required_map_copy.contains_key(&dist.name()) && installer != PIXI_UV_INSTALLER {
+            // We are managing the package but something else has installed a version
+            // let's re-install to make sure that we have the **correct** version
+            reinstalls.push(dist.clone());
+            installer_mismatch.push(dist.name().to_string());
+        }
+
         if let Some(pkg) = pkg {
-            if installer != PIXI_UV_INSTALLER {
-                // We are managing the package but something else has installed a version
-                // let's re-install to make sure that we have the **correct** version
-                reinstalls.push(dist.clone());
-                installer_mismatch.push(dist.name().clone());
-            } else {
+            if installer == PIXI_UV_INSTALLER {
                 // Check if we need to reinstall
                 match need_reinstall(dist, pkg, python_version)? {
                     ValidateInstall::Keep => {
                         // We are done here
+                        // eprintln!("pkg is keep");
                         continue;
                     }
                     ValidateInstall::Reinstall => {
+                        // eprintln!("pkg is reinstall");
                         reinstalls.push(dist.clone());
                     }
                 }
@@ -849,7 +858,7 @@ pub async fn update_python_distributions(
         remote,
         reinstalls,
         extraneous,
-        installer_mismatch,
+        mut installer_mismatch,
     } = whats_the_plan(
         &python_packages,
         &editables_with_temp.resolved_editables,
@@ -860,8 +869,18 @@ pub async fn update_python_distributions(
         lock_file_dir,
     )?;
 
-    let pypi_conda_clobber =
-        PypiCondaClobber::with_paths([reinstalls.as_slice(), extraneous.as_slice()].concat());
+    // Determine the currently installed conda packages.
+    let installed_packages = prefix
+        .find_installed_packages(None)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to determine the currently installed packages for {}",
+                prefix.root().display()
+            )
+        })?;
+
+    let pypi_conda_clobber = PypiCondaClobberRegistry::with_conda_packages(&installed_packages);
 
     // Nothing to do.
     if remote.is_empty() && local.is_empty() && reinstalls.is_empty() && extraneous.is_empty() {
@@ -877,6 +896,7 @@ pub async fn update_python_distributions(
                 elapsed(start.elapsed())
             )
         );
+
         return Ok(());
     }
 
@@ -949,17 +969,6 @@ pub async fn update_python_distributions(
         wheels
     };
 
-    // Notify the user if there are any packages that were re-installed because they were installed
-    // by a different installer.
-    if !installer_mismatch.is_empty() {
-        let packages = installer_mismatch
-            .iter()
-            .map(|name| name.to_string())
-            .join(", ");
-        // BREAK(0.20.1): change this into a warning in a future release
-        tracing::info!("These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: \n\t{packages}")
-    }
-
     // Remove any unnecessary packages.
     if !extraneous.is_empty() || !reinstalls.is_empty() {
         let start = std::time::Instant::now();
@@ -995,6 +1004,30 @@ pub async fn update_python_distributions(
 
     // Install the resolved distributions.
     let wheels = wheels.into_iter().chain(local).collect::<Vec<_>>();
+
+    if let Ok(Some(clobber_packages)) =
+        pypi_conda_clobber.clobber_on_instalation(wheels.clone(), &venv)
+    {
+        let packages_names = clobber_packages.iter().join(", ");
+
+        tracing::warn!("These conda-packages will be overridden by pypi: \n\t{packages_names}");
+
+        if !installer_mismatch.is_empty() {
+            installer_mismatch.retain(|name| !packages_names.contains(name));
+        }
+    }
+
+    if !installer_mismatch.is_empty() {
+        // Notify the user if there are any packages that were re-installed because they were installed
+        // by a different installer.
+        let packages = installer_mismatch
+            .iter()
+            .map(|name| name.to_string())
+            .join(", ");
+        // BREAK(0.20.1): change this into a warning in a future release
+        tracing::warn!("These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: \n\t{packages}")
+    }
+
     let options = UvReporterOptions::new()
         .with_length(wheels.len() as u64)
         .with_capacity(wheels.len() + 30)
@@ -1021,45 +1054,54 @@ pub async fn update_python_distributions(
         );
     }
 
-    // let's reiterate over site-packages again and find if we have something overlapping
-    pypi_conda_clobber.warn_on_clobbering(site_packages.iter());
-
     Ok(())
 }
 
-#[derive(Default)]
-struct PypiCondaClobber {
-    dists: HashMap<PathBuf, InstalledDist>,
+#[derive(Default, Debug)]
+struct PypiCondaClobberRegistry {
+    paths_registry: HashMap<PathBuf, rattler_conda_types::PackageName>,
 }
 
-impl PypiCondaClobber {
-    pub fn with_paths(removed_dists: Vec<InstalledDist>) -> Self {
-        let dists = removed_dists
-            .iter()
-            .map(|dist| (PathBuf::from(dist.path()), dist.clone()))
-            .collect::<HashMap<_, _>>();
-
-        Self { dists }
+impl PypiCondaClobberRegistry {
+    pub fn with_conda_packages(conda_packages: &[PrefixRecord]) -> Self {
+        let mut registry = HashMap::default();
+        for record in conda_packages {
+            for path in &record.paths_data.paths {
+                registry.insert(
+                    path.relative_path.clone(),
+                    record.repodata_record.package_record.name.clone(),
+                );
+            }
+        }
+        Self {
+            paths_registry: registry,
+        }
     }
 
-    pub fn warn_on_clobbering<'a>(
-        &self,
-        installed_dists: impl Iterator<Item = &'a InstalledDist>,
-    ) -> Option<Vec<String>> {
-        let to_warn: Vec<String> = installed_dists
-            .filter_map(|dist| {
-                self.dists
-                    .get(dist.path())
-                    .map(|seen_dist| seen_dist.name().to_string())
-            })
-            .collect();
+    pub fn clobber_on_instalation(
+        self,
+        wheels: Vec<CachedDist>,
+        venv: &PythonEnvironment,
+    ) -> miette::Result<Option<HashSet<String>>> {
+        let mut clobber_packages: HashSet<String> = HashSet::default();
 
-        if !to_warn.is_empty() {
-            tracing::warn!("The installation of the following PyPI package(s) will overwrite existing Conda package(s):  {:?} ", to_warn);
-            Some(to_warn)
-        } else {
-            None
+        for wheel in wheels {
+            let Ok(Some(whl_info)) = get_wheel_info(wheel.path(), venv) else {
+                continue;
+            };
+
+            for entry in whl_info.0 {
+                let path_to_clobber = whl_info.1.join(entry.path);
+
+                if let Some(name) = self.paths_registry.get(&path_to_clobber) {
+                    clobber_packages.insert(name.as_normalized().to_string());
+                }
+            }
         }
+        if clobber_packages.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(clobber_packages))
     }
 }
 
@@ -1071,8 +1113,6 @@ mod tests {
     use insta::assert_snapshot;
     use pep440_rs::Version;
     use pep508_rs::PackageName;
-
-    use super::PypiCondaClobber;
 
     struct TestSitePackages {
         installed_dists: Vec<Option<InstalledDist>>,
@@ -1091,27 +1131,27 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_warn_on_clobbering() {
-        // during resolution, conda installed mdurl
-        // when we do uv::install, it will be removed
-        let mdurl = InstalledDist::Registry(InstalledRegistryDist {
-            name: PackageName::new("mdurl".to_owned()).unwrap(),
-            version: Version::from_str("1.19").unwrap(),
-            path: PathBuf::from_str("site-packages/mdurl.dist_info").unwrap(),
-        });
+    // #[test]
+    // fn test_warn_on_clobbering() {
+    //     // during resolution, conda installed mdurl
+    //     // when we do uv::install, it will be removed
+    //     let mdurl = InstalledDist::Registry(InstalledRegistryDist {
+    //         name: PackageName::new("mdurl".to_owned()).unwrap(),
+    //         version: Version::from_str("1.19").unwrap(),
+    //         path: PathBuf::from_str("site-packages/mdurl.dist_info").unwrap(),
+    //     });
 
-        // let's register it
-        let clobber = PypiCondaClobber::with_paths([mdurl.clone()].to_vec());
+    //     // let's register it
+    //     let clobber = PypiCondaClobber::with_dists([mdurl.clone()].to_vec());
 
-        // let's assume that we map wrongly mdurl
-        // mdurl: some_wrong_mdurl
-        // this means that uv::install will install it again
-        // so we warn user about it
+    //     // let's assume that we map wrongly mdurl
+    //     // mdurl: some_wrong_mdurl
+    //     // this means that uv::install will install it again
+    //     // so we warn user about it
 
-        let some_site_packages = TestSitePackages::new([mdurl].to_vec());
+    //     let some_site_packages = TestSitePackages::new([mdurl].to_vec());
 
-        let warned_packages = clobber.warn_on_clobbering(some_site_packages.iter());
-        assert_snapshot!(format!("{:?}", warned_packages.unwrap()));
-    }
+    //     let warned_packages = clobber.warn_on_clobbering(some_site_packages.iter());
+    //     assert_snapshot!(format!("{:?}", warned_packages.unwrap()));
+    // }
 }
