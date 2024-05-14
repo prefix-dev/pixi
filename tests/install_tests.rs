@@ -185,9 +185,16 @@ async fn install_locked_with_config() {
     ));
 
     // Verify that the folders are present in the target directory using a task.
+    #[cfg(not(target_os = "windows"))]
     pixi.tasks()
         .add("which_python".into(), None, FeatureName::Default)
         .with_commands(["which python"])
+        .execute()
+        .unwrap();
+    #[cfg(target_os = "windows")]
+    pixi.tasks()
+        .add("which_python".into(), None, FeatureName::Default)
+        .with_commands(["where python"])
         .execute()
         .unwrap();
 
@@ -200,7 +207,9 @@ async fn install_locked_with_config() {
         .await
         .unwrap();
     assert_eq!(result.exit_code, 0);
-    assert!(result.stdout.contains(target_dir.to_str().unwrap()));
+    // Check for correct path in most important path
+    let line = result.stdout.lines().next().unwrap();
+    assert!(line.contains(target_dir.to_str().unwrap()));
 }
 
 /// Test `pixi install/run --frozen` functionality
