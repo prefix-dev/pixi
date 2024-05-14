@@ -4,6 +4,7 @@ pub mod errors;
 pub mod grouped_environment;
 pub mod has_features;
 pub mod manifest;
+mod repodata;
 mod solve_group;
 pub mod virtual_packages;
 
@@ -15,10 +16,13 @@ use rattler_conda_types::{Channel, Platform, Version};
 use reqwest_middleware::ClientWithMiddleware;
 use std::hash::Hash;
 
+use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::VirtualPackage;
+
 #[cfg(not(windows))]
 use std::os::unix::fs::symlink;
 
+use std::sync::OnceLock;
 use std::{
     collections::{HashMap, HashSet},
     env,
@@ -106,6 +110,9 @@ pub struct Project {
     client: reqwest::Client,
     /// Authenticated reqwest client shared for this project
     authenticated_client: ClientWithMiddleware,
+    /// The repodata gateway to use for answering queries about repodata.
+    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
+    repodata_gateway: OnceLock<Arc<Gateway>>,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
     /// The cache that contains environment variables
@@ -134,6 +141,7 @@ impl Project {
             Config::load(&root.join(consts::PIXI_DIR)).unwrap_or_else(|_| Config::load_global());
 
         let (client, authenticated_client) = build_reqwest_clients(Some(&config));
+
         Self {
             root,
             client,
@@ -141,6 +149,7 @@ impl Project {
             manifest,
             env_vars,
             config,
+            repodata_gateway: Default::default(),
         }
     }
 
@@ -226,6 +235,7 @@ impl Project {
             manifest,
             env_vars,
             config,
+            repodata_gateway: Default::default(),
         })
     }
 

@@ -22,6 +22,14 @@ unsafe impl<T: Sync> Sync for BarrierCell<T> {}
 
 unsafe impl<T: Send> Send for BarrierCell<T> {}
 
+impl<T> Drop for BarrierCell<T> {
+    fn drop(&mut self) {
+        if self.state.load(Ordering::Acquire) == BarrierCellState::Initialized as u8 {
+            unsafe { self.value.get_mut().assume_init_drop() }
+        }
+    }
+}
+
 #[repr(u8)]
 enum BarrierCellState {
     Uninitialized,
@@ -78,9 +86,15 @@ impl<T> BarrierCell<T> {
     }
 
     /// Consumes this instance and converts it into the inner value if it has been initialized.
-    pub fn into_inner(self) -> Option<T> {
-        if self.state.load(Ordering::Acquire) == BarrierCellState::Initialized as u8 {
-            Some(unsafe { self.value.into_inner().assume_init() })
+    pub fn into_inner(mut self) -> Option<T> {
+        if self.state.compare_exchange(
+            BarrierCellState::Initialized as u8,
+            BarrierCellState::Uninitialized as u8,
+            Ordering::Acquire,
+            Ordering::Acquire,
+        ) == Ok(BarrierCellState::Initialized as u8)
+        {
+            Some(unsafe { self.value.get_mut().assume_init_read() })
         } else {
             None
         }
