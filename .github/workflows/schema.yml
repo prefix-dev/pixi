@@ -21,7 +21,7 @@ jobs:
     steps:
         - uses: actions/checkout@v4
 
-        - uses: prefix-dev/setup-pixi@v0.6.0
+        - uses: prefix-dev/setup-pixi@v0.7.0
           with:
             cache: true
             environments: schema

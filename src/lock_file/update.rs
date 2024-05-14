@@ -14,32 +14,34 @@ use crate::{
     prefix::Prefix,
     progress::global_multi_progress,
     project::{grouped_environment::GroupedEnvironment, Environment},
-    repodata::fetch_sparse_repodata_targets,
     utils::BarrierCell,
     EnvironmentName, Project,
 };
 use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
-use indexmap::{IndexMap, IndexSet};
-use indicatif::ProgressBar;
+use indexmap::IndexSet;
+use indicatif::{HumanBytes, ProgressBar, ProgressState};
 use itertools::Itertools;
 use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
+use parking_lot::Mutex;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, Channel, MatchSpec, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
 use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_repodata_gateway::sparse::SparseRepoData;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use rattler_repodata_gateway::{Gateway, RepoData};
+use std::collections::VecDeque;
+use std::fmt::Write;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    convert::identity,
     future::{ready, Future},
     iter,
+    path::PathBuf,
+    sync::atomic::{AtomicBool, Ordering},
     sync::Arc,
     time::{Duration, Instant},
 };
 use tokio::sync::Semaphore;
 use tracing::Instrument;
+use url::Url;
 use uv_normalize::ExtraName;
 
 impl Project {
@@ -64,9 +66,6 @@ pub struct UpdateLockFileOptions {
     /// Don't install anything to disk.
     pub no_install: bool,
 
-    /// Existing repodata that can be used to avoid downloading it again.
-    pub existing_repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
-
     /// The maximum number of concurrent solves that are allowed to run. If this value is None
     /// a heuristic is used based on the number of cores available from the system.
     pub max_concurrent_solves: Option<usize>,
@@ -82,9 +81,6 @@ pub struct LockFileDerivedData<'p> {
 
     /// The package cache
     pub package_cache: Arc<PackageCache>,
-
-    /// Repodata that was fetched
-    pub repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
 
     /// A list of prefixes that are up-to-date with the latest conda packages.
     pub updated_conda_prefixes: HashMap<Environment<'p>, (Prefix, PythonStatus)>,
@@ -224,9 +220,6 @@ impl<'p> LockFileDerivedData<'p> {
 
 #[derive(Default)]
 struct UpdateContext<'p> {
-    /// Repodata that is available to the solve tasks.
-    repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
-
     /// Repodata records from the lock-file. This contains the records that actually exist in the
     /// lock-file. If the lock-file is missing or partially missing then the data also won't exist
     /// in this field.
@@ -397,8 +390,7 @@ impl<'p> UpdateContext<'p> {
 
 /// Returns the default number of concurrent solves.
 fn default_max_concurrent_solves() -> usize {
-    let available_parallelism = std::thread::available_parallelism().map_or(1, |n| n.get());
-    (available_parallelism.saturating_sub(2)).min(4).max(1)
+    std::thread::available_parallelism().map_or(1, |n| n.get())
 }
 
 /// If the project has any source dependencies, like `git` or `path` dependencies.
@@ -454,7 +446,6 @@ pub async fn ensure_up_to_date_lock_file(
             project,
             lock_file,
             package_cache,
-            repo_data: options.existing_repo_data,
             updated_conda_prefixes: Default::default(),
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
@@ -471,7 +462,6 @@ pub async fn ensure_up_to_date_lock_file(
             project,
             lock_file,
             package_cache,
-            repo_data: options.existing_repo_data,
             updated_conda_prefixes: Default::default(),
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
@@ -482,34 +472,6 @@ pub async fn ensure_up_to_date_lock_file(
     if !options.lock_file_usage.allows_lock_file_updates() {
         miette::bail!("lock-file not up-to-date with the project");
     }
-
-    // Determine the repodata that we're going to need to solve the environments. For all outdated
-    // conda targets we take the union of all the channels that are used by the environment.
-    //
-    // The NoArch platform is always added regardless of whether it is explicitly used by the
-    // environment.
-    let mut fetch_targets = IndexSet::new();
-    for (environment, platforms) in outdated.conda.iter() {
-        for channel in environment.channels() {
-            for platform in platforms {
-                fetch_targets.insert((channel.clone(), *platform));
-            }
-            fetch_targets.insert((channel.clone(), Platform::NoArch));
-        }
-    }
-
-    // Fetch all the repodata that we need to solve the environments.
-    let mut repo_data = fetch_sparse_repodata_targets(
-        fetch_targets
-            .into_iter()
-            .filter(|target| !options.existing_repo_data.contains_key(target)),
-        project.authenticated_client(),
-        Some(project.config()),
-    )
-    .await?;
-
-    // Add repo data that was already fetched
-    repo_data.extend(options.existing_repo_data);
 
     // Extract the current conda records from the lock-file
     // TODO: Should we parallelize this? Measure please.
@@ -630,8 +592,6 @@ pub async fn ensure_up_to_date_lock_file(
     );
 
     let mut context = UpdateContext {
-        repo_data: Arc::new(repo_data),
-
         locked_repodata_records,
         locked_grouped_repodata_records,
         locked_pypi_records,
@@ -686,7 +646,7 @@ pub async fn ensure_up_to_date_lock_file(
             let group_solve_task = spawn_solve_conda_environment_task(
                 source.clone(),
                 locked_group_records,
-                context.repo_data.clone(),
+                project.repodata_gateway().clone(),
                 platform,
                 solve_semaphore.clone(),
                 project.client().clone(),
@@ -791,6 +751,7 @@ pub async fn ensure_up_to_date_lock_file(
             // There is already a task to solve the pypi records for the group.
             continue;
         }
+
         // Construct a future that will resolve when we have the repodata available
         let repodata_future = context
             .get_latest_group_repodata_records(&group, platform)
@@ -1094,8 +1055,6 @@ pub async fn ensure_up_to_date_lock_file(
         package_cache,
         updated_conda_prefixes: context.take_instantiated_conda_prefixes(),
         updated_pypi_prefixes: HashMap::default(),
-        repo_data: Arc::into_inner(context.repo_data)
-            .expect("repo data should not be shared anymore"),
         uv_context,
     })
 }
@@ -1189,7 +1148,7 @@ enum TaskResult {
 async fn spawn_solve_conda_environment_task(
     group: GroupedEnvironment<'_>,
     existing_repodata_records: Arc<RepoDataRecordsByName>,
-    sparse_repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
+    repodata_gateway: Arc<Gateway>,
     platform: Platform,
     concurrency_semaphore: Arc<Semaphore>,
     client: reqwest::Client,
@@ -1205,9 +1164,6 @@ async fn spawn_solve_conda_environment_task(
 
     // The list of channels and platforms we need for this task
     let channels = group.channels().into_iter().cloned().collect_vec();
-
-    // Capture local variables
-    let sparse_repo_data = sparse_repo_data.clone();
 
     // Whether there are pypi dependencies, and we should fetch purls.
     let has_pypi_dependencies = group.has_pypi_dependencies();
@@ -1239,18 +1195,24 @@ async fn spawn_solve_conda_environment_task(
                 })
                 .collect_vec();
 
-            // Extract the package names from the dependencies
-            let package_names = dependencies.names().cloned().collect_vec();
-
             // Extract the repo data records needed to solve the environment.
             pb.set_message("loading repodata");
-            let available_packages = load_sparse_repo_data_async(
-                package_names.clone(),
-                sparse_repo_data,
-                channels,
-                platform,
-            )
-            .await?;
+            let fetch_repodata_start = Instant::now();
+            let available_packages = repodata_gateway
+                .query(
+                    channels,
+                    [platform, Platform::NoArch],
+                    dependencies.clone().into_match_specs(),
+                )
+                .recursive(true)
+                .with_reporter(GatewayProgressReporter::new(pb.clone()))
+                .await
+                .into_diagnostic()?;
+            let total_records = available_packages.iter().map(RepoData::len).sum::<usize>();
+            tracing::info!(
+                "fetched {total_records} records in {:?}",
+                fetch_repodata_start.elapsed()
+            );
 
             // Solve conda packages
             pb.set_message("resolving conda");
@@ -1639,41 +1601,10 @@ async fn spawn_create_prefix_task(
     ))
 }
 
-/// Load the repodata records for the specified platform and package names in the background. This
-/// is a CPU and IO intensive task so we run it in a blocking task to not block the main task.
-pub async fn load_sparse_repo_data_async(
-    package_names: Vec<PackageName>,
-    sparse_repo_data: Arc<IndexMap<(Channel, Platform), SparseRepoData>>,
-    channels: Vec<Channel>,
-    platform: Platform,
-) -> miette::Result<Vec<Vec<RepoDataRecord>>> {
-    tokio::task::spawn_blocking(move || {
-        let sparse = channels
-            .into_iter()
-            .cartesian_product(vec![platform, Platform::NoArch])
-            .filter_map(|target| sparse_repo_data.get(&target));
-
-        // Load only records we need for this platform
-        SparseRepoData::load_records_recursive(sparse, package_names, None).into_diagnostic()
-    })
-    .await
-    .map_err(|e| match e.try_into_panic() {
-        Ok(panic) => std::panic::resume_unwind(panic),
-        Err(_err) => miette::miette!("the operation was cancelled"),
-    })
-    .map_or_else(Err, identity)
-    .with_context(|| {
-        format!(
-            "failed to load repodata records for platform '{}'",
-            platform.as_str()
-        )
-    })
-}
-
 /// A helper struct that manages a progress-bar for solving an environment.
 #[derive(Clone)]
 pub(crate) struct SolveProgressBar {
-    pb: ProgressBar,
+    pub pb: ProgressBar,
 }
 
 impl SolveProgressBar {
@@ -1707,6 +1638,10 @@ impl SolveProgressBar {
         self.pb.inc(n);
     }
 
+    pub fn set_position(&self, n: u64) {
+        self.pb.set_position(n)
+    }
+
     pub fn set_update_style(&self, total: usize) {
         self.pb.set_length(total as u64);
         self.pb.set_position(0);
@@ -1715,6 +1650,26 @@ impl SolveProgressBar {
                 "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {pos:>4}/{len:4} {msg:.dim}")
                 .unwrap()
                 .progress_chars("━━╾─"),
+        );
+    }
+
+    pub fn set_bytes_update_style(&self, total: usize) {
+        self.pb.set_length(total as u64);
+        self.pb.set_position(0);
+        self.pb.set_style(
+            indicatif::ProgressStyle::with_template(
+                "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {bytes:>8} @ {smoothed_bytes_per_sec:8} {msg:.dim}")
+                .unwrap()
+                .progress_chars("━━╾─")
+                .with_key(
+                    "smoothed_bytes_per_sec",
+                    |s: &ProgressState, w: &mut dyn Write| match (s.pos(), s.elapsed().as_millis()) {
+                        (pos, elapsed_ms) if elapsed_ms > 0 => {
+                            write!(w, "{}/s", HumanBytes((pos as f64 * 1000_f64 / elapsed_ms as f64) as u64)).unwrap()
+                        }
+                        _ => write!(w, "-").unwrap(),
+                    },
+                )
         );
     }
 
@@ -1764,5 +1719,146 @@ impl pypi_mapping::Reporter for PurlAmendReporter {
 
     fn download_failed(&self, package: &RepoDataRecord, total: usize) {
         self.download_finished(package, total);
+    }
+}
+
+struct GatewayProgressReporter {
+    inner: Mutex<InnerProgressState>,
+}
+
+impl GatewayProgressReporter {
+    pub fn new(pb: Arc<SolveProgressBar>) -> Self {
+        Self {
+            inner: Mutex::new(InnerProgressState {
+                pb,
+                downloads: VecDeque::new(),
+
+                bytes_downloaded: 0,
+                total_bytes: 0,
+                total_pending_downloads: 0,
+
+                jlap: VecDeque::default(),
+                total_pending_jlap: 0,
+            }),
+        }
+    }
+}
+
+struct InnerProgressState {
+    pb: Arc<SolveProgressBar>,
+
+    downloads: VecDeque<DownloadState>,
+
+    bytes_downloaded: usize,
+    total_bytes: usize,
+    total_pending_downloads: usize,
+
+    jlap: VecDeque<JLAPState>,
+    total_pending_jlap: usize,
+}
+
+impl InnerProgressState {
+    fn update_progress(&self) {
+        if self.total_pending_downloads > 0 {
+            self.pb.set_bytes_update_style(self.total_bytes);
+            self.pb.set_position(self.bytes_downloaded as u64);
+            self.pb.set_message("downloading repodata");
+        } else if self.total_pending_jlap > 0 {
+            self.pb.reset_style();
+            self.pb.set_message("applying JLAP patches");
+        } else {
+            self.pb.reset_style();
+            self.pb.set_message("parsing repodata");
+        }
+    }
+}
+
+struct DownloadState {
+    _started_at: Instant,
+    bytes_downloaded: usize,
+    total_size: usize,
+    _finished_at: Option<Instant>,
+}
+
+struct JLAPState {
+    _started_at: Instant,
+    _finished_at: Option<Instant>,
+}
+
+impl rattler_repodata_gateway::Reporter for GatewayProgressReporter {
+    fn on_download_start(&self, _url: &Url) -> usize {
+        let mut inner = self.inner.lock();
+        let download_idx = inner.downloads.len();
+        inner.downloads.push_back(DownloadState {
+            _started_at: Instant::now(),
+            bytes_downloaded: 0,
+            total_size: 0,
+            _finished_at: None,
+        });
+        inner.total_pending_downloads += 1;
+        inner.update_progress();
+        download_idx
+    }
+
+    fn on_download_progress(
+        &self,
+        _url: &Url,
+        index: usize,
+        bytes_downloaded: usize,
+        total_bytes: Option<usize>,
+    ) {
+        let mut inner = self.inner.lock();
+
+        let download = inner
+            .downloads
+            .get_mut(index)
+            .expect("download index should exist");
+
+        let prev_bytes_downloaded = download.bytes_downloaded;
+        let prev_total_size = download.total_size;
+        download.bytes_downloaded = bytes_downloaded;
+        download.total_size = total_bytes.unwrap_or(0);
+
+        inner.bytes_downloaded = inner.bytes_downloaded + bytes_downloaded - prev_bytes_downloaded;
+        inner.total_bytes = inner.total_bytes + total_bytes.unwrap_or(0) - prev_total_size;
+
+        inner.update_progress();
+    }
+
+    fn on_download_complete(&self, _url: &Url, _index: usize) {
+        let mut inner = self.inner.lock();
+        let download = inner
+            .downloads
+            .get_mut(_index)
+            .expect("download index should exist");
+        download._finished_at = Some(Instant::now());
+
+        inner.total_pending_downloads -= 1;
+
+        inner.update_progress();
+    }
+
+    fn on_jlap_start(&self) -> usize {
+        let mut inner = self.inner.lock();
+
+        let index = inner.jlap.len();
+        inner.jlap.push_back(JLAPState {
+            _started_at: Instant::now(),
+            _finished_at: None,
+        });
+        inner.total_pending_jlap += 1;
+
+        inner.update_progress();
+
+        index
+    }
+
+    fn on_jlap_completed(&self, index: usize) {
+        let mut inner = self.inner.lock();
+        let jlap = inner.jlap.get_mut(index).expect("jlap index should exist");
+        jlap._finished_at = Some(Instant::now());
+        inner.total_pending_jlap -= 1;
+
+        inner.update_progress();
     }
 }

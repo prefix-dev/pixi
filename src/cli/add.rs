@@ -8,17 +8,15 @@ use clap::Parser;
 use itertools::{Either, Itertools};
 
 use crate::project::grouped_environment::GroupedEnvironment;
-// use crate::project::manifest::python::PyPiPackageName;
-// use crate::project::manifest::PyPiRequirement;
-use indexmap::IndexMap;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{
     version_spec::{LogicalOperator, RangeOperator},
     Channel, MatchSpec, NamelessMatchSpec, PackageName, ParseStrictness, Platform, Version,
     VersionBumpType, VersionSpec,
 };
-use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{resolvo, ChannelPriority, SolverImpl};
+use rattler_repodata_gateway::{Gateway, RepoData};
+use rattler_solve::{resolvo, ChannelPriority, RepoDataIter, SolverImpl};
+use std::time::Instant;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -248,13 +246,7 @@ pub async fn add_pypi_requirements_to_project(
         LockFileUsage::Update
     };
 
-    get_up_to_date_prefix(
-        &project.default_environment(),
-        lock_file_usage,
-        no_install,
-        IndexMap::default(),
-    )
-    .await?;
+    get_up_to_date_prefix(&project.default_environment(), lock_file_usage, no_install).await?;
 
     project.save()?;
 
@@ -278,9 +270,6 @@ pub async fn add_conda_specs_to_project(
             None => Err(miette::miette!("missing package name for spec '{spec}'")),
         })
         .collect::<miette::Result<HashMap<PackageName, NamelessMatchSpec>>>()?;
-
-    // Fetch the repodata for the project
-    let sparse_repo_data = project.fetch_sparse_repodata().await?;
 
     // Determine the best version per platform
     let mut package_versions = HashMap::<PackageName, HashSet<Version>>::new();
@@ -313,9 +302,12 @@ pub async fn add_conda_specs_to_project(
                 &grouped_environment,
                 &new_specs,
                 spec_type,
-                &sparse_repo_data,
                 platform,
-            ) {
+                grouped_environment.channels(),
+                project.repodata_gateway(),
+            )
+            .await
+            {
                 Ok(versions) => versions,
                 Err(err) => {
                     return Err(err).wrap_err_with(|| miette::miette!(
@@ -339,12 +331,9 @@ pub async fn add_conda_specs_to_project(
             if let Some(versions_seen) = package_versions.get(&name).cloned() {
                 updated_spec.version = determine_version_constraint(&versions_seen);
             } else {
-                updated_spec.version = determine_version_constraint(&determine_latest_versions(
-                    project,
-                    specs_platforms,
-                    &sparse_repo_data,
-                    &name,
-                )?);
+                updated_spec.version = determine_version_constraint(
+                    &determine_latest_versions(project, specs_platforms, &name).await?,
+                );
             }
             updated_spec
         } else {
@@ -372,13 +361,7 @@ pub async fn add_conda_specs_to_project(
     };
 
     // Update the prefix
-    get_up_to_date_prefix(
-        &project.default_environment(),
-        lock_file_usage,
-        no_install,
-        sparse_repo_data,
-    )
-    .await?;
+    get_up_to_date_prefix(&project.default_environment(), lock_file_usage, no_install).await?;
 
     project.save()?;
 
@@ -386,15 +369,11 @@ pub async fn add_conda_specs_to_project(
 }
 
 /// Get all the latest versions found in the platforms repodata.
-fn determine_latest_versions(
+async fn determine_latest_versions(
     project: &Project,
     platforms: &[Platform],
-    sparse_repo_data: &IndexMap<(Channel, Platform), SparseRepoData>,
     name: &PackageName,
 ) -> miette::Result<Vec<Version>> {
-    // If we didn't find any versions, we'll just use the latest version we can find in the repodata.
-    let mut found_records = Vec::new();
-
     // Get platforms to search for including NoArch
     let platforms = if platforms.is_empty() {
         let mut temp = project.platforms().into_iter().collect_vec();
@@ -406,36 +385,49 @@ fn determine_latest_versions(
         temp
     };
 
-    // Search for the package in the all the channels and platforms
-    for channel in project.channels() {
-        for platform in &platforms {
-            let sparse_repo_data = sparse_repo_data.get(&(channel.clone(), *platform));
-            if let Some(sparse_repo_data) = sparse_repo_data {
-                let records = sparse_repo_data.load_records(name).into_diagnostic()?;
-                // Add max of every channel and platform
-                if let Some(max_record) = records
-                    .into_iter()
-                    .max_by_key(|record| record.package_record.version.version().clone())
-                {
-                    found_records.push(max_record);
+    // Get the records for the package
+    let records = project
+        .repodata_gateway()
+        .query(
+            project.channels().into_iter().cloned(),
+            platforms,
+            [name.clone()],
+        )
+        .recursive(false)
+        .await
+        .into_diagnostic()?;
+
+    // Find the first non-empty channel
+    let Some(priority_records) = records.into_iter().find(|records| !records.is_empty()) else {
+        return Ok(vec![]);
+    };
+
+    // Find the maximum versions per platform
+    let mut found_records: HashMap<String, Version> = HashMap::new();
+    for record in priority_records.iter() {
+        let version = record.package_record.version.version().clone();
+        let platform = &record.package_record.subdir;
+        found_records
+            .entry(platform.clone())
+            .and_modify(|max| {
+                if &version > max {
+                    *max = version.clone();
                 }
-            };
-        }
+            })
+            .or_insert(version);
     }
 
     // Determine the version constraint based on the max of every channel and platform.
-    Ok(found_records
-        .iter()
-        .map(|record| record.package_record.version.version().clone())
-        .collect_vec())
+    Ok(found_records.into_values().collect())
 }
 /// Given several specs determines the highest installable version for them.
-pub fn determine_best_version(
-    environment: &GroupedEnvironment,
+pub async fn determine_best_version<'p>(
+    environment: &GroupedEnvironment<'p>,
     new_specs: &HashMap<PackageName, NamelessMatchSpec>,
     new_specs_type: SpecType,
-    sparse_repo_data: &IndexMap<(Channel, Platform), SparseRepoData>,
     platform: Platform,
+    channels: impl IntoIterator<Item = &'p Channel>,
+    repodata_gateway: &Gateway,
 ) -> miette::Result<HashMap<PackageName, Version>> {
     // Build the combined set of specs while updating the dependencies with the new specs.
     let dependencies = SpecType::all()
@@ -453,23 +445,21 @@ pub fn determine_best_version(
         .unwrap_or_default();
 
     // Extract the package names from all the dependencies
-    let package_names = dependencies.names().cloned().collect_vec();
-
-    // Get the repodata for the current platform and for NoArch
-    let platform_sparse_repo_data = environment
-        .channels()
-        .into_iter()
-        .cloned()
-        .cartesian_product(vec![platform, Platform::NoArch])
-        .filter_map(|target| sparse_repo_data.get(&target));
-
-    // Load only records we need for this platform
-    let available_packages = SparseRepoData::load_records_recursive(
-        platform_sparse_repo_data,
-        package_names.iter().cloned(),
-        None,
-    )
-    .into_diagnostic()?;
+    let fetch_repodata_start = Instant::now();
+    let available_packages = repodata_gateway
+        .query(
+            channels.into_iter().cloned(),
+            [platform, Platform::NoArch],
+            dependencies.clone().into_match_specs(),
+        )
+        .recursive(true)
+        .await
+        .into_diagnostic()?;
+    let total_records = available_packages.iter().map(RepoData::len).sum::<usize>();
+    tracing::info!(
+        "fetched {total_records} records in {:?}",
+        fetch_repodata_start.elapsed()
+    );
 
     // Construct a solver task to start solving.
     let task = rattler_solve::SolverTask {
@@ -477,15 +467,13 @@ pub fn determine_best_version(
             .iter_specs()
             .map(|(name, spec)| MatchSpec::from_nameless(spec.clone(), Some(name.clone())))
             .collect(),
-
-        available_packages: &available_packages,
-
+        available_packages: available_packages
+            .iter()
+            .map(RepoDataIter)
+            .collect::<Vec<_>>(),
         virtual_packages: environment.virtual_packages(platform),
-
         locked_packages: vec![],
-
         pinned_packages: vec![],
-
         timeout: None,
         channel_priority: ChannelPriority::Strict,
     };
