@@ -478,6 +478,8 @@ impl Config {
     ///
     /// It is required to call `save()` to persist the changes.
     pub fn set(&mut self, key: &str, value: Option<String>) -> miette::Result<()> {
+        let err = miette::miette!("unsupported key: {}", key);
+
         match key {
             "default-channels" => {
                 self.default_channels = value
@@ -495,37 +497,73 @@ impl Config {
             "tls-no-verify" => {
                 self.tls_no_verify = value.map(|v| v.parse()).transpose().into_diagnostic()?;
             }
-            "repodata-config.disable-jlap" => {
-                self.repodata_config
-                    .get_or_insert(RepodataConfig::default())
-                    .disable_jlap = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            key if key.starts_with("repodata-config") => {
+                if key == "repodata-config" {
+                    self.repodata_config = value
+                        .map(|v| serde_json::de::from_str(&v))
+                        .transpose()
+                        .into_diagnostic()?;
+                    return Ok(());
+                } else if !key.starts_with("repodata-config.") {
+                    return Err(err);
+                }
+
+                let subkey = key.strip_prefix("repodata-config.").unwrap();
+                match subkey {
+                    "disable-jlap" => {
+                        self.repodata_config
+                            .get_or_insert(RepodataConfig::default())
+                            .disable_jlap =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "disable-bzip2" => {
+                        self.repodata_config
+                            .get_or_insert(RepodataConfig::default())
+                            .disable_bzip2 =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "disable-zstd" => {
+                        self.repodata_config
+                            .get_or_insert(RepodataConfig::default())
+                            .disable_zstd =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    _ => return Err(err),
+                }
             }
-            "repodata-config.disable-bzip2" => {
-                self.repodata_config
-                    .get_or_insert(RepodataConfig::default())
-                    .disable_bzip2 = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            key if key.starts_with("pypi-config") => {
+                if key == "pypi-config" {
+                    if let Some(value) = value {
+                        self.pypi_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        self.pypi_config = PyPIConfig::default();
+                    }
+                    return Ok(());
+                } else if !key.starts_with("pypi-config.") {
+                    return Err(err);
+                }
+
+                let subkey = key.strip_prefix("pypi-config.").unwrap();
+                match subkey {
+                    "index-url" => {
+                        self.pypi_config.index_url = value
+                            .map(|v| Url::parse(&v))
+                            .transpose()
+                            .into_diagnostic()?;
+                    }
+                    "keyring-provider" => {
+                        self.pypi_config.keyring_provider = value
+                            .map(|v| match v.as_str() {
+                                "disabled" => Ok(KeyringProvider::Disabled),
+                                "subprocess" => Ok(KeyringProvider::Subprocess),
+                                _ => Err(miette::miette!("invalid keyring provider")),
+                            })
+                            .transpose()?;
+                    }
+                    _ => return Err(err),
+                }
             }
-            "repodata-config.disable-zstd" => {
-                self.repodata_config
-                    .get_or_insert(RepodataConfig::default())
-                    .disable_zstd = value.map(|v| v.parse()).transpose().into_diagnostic()?;
-            }
-            "pypi-config.index-url" => {
-                self.pypi_config.index_url = value
-                    .map(|v| Url::parse(&v))
-                    .transpose()
-                    .into_diagnostic()?;
-            }
-            "pypi-config.keyring-provider" => {
-                self.pypi_config.keyring_provider = value
-                    .map(|v| match v.as_str() {
-                        "disabled" => Ok(KeyringProvider::Disabled),
-                        "subprocess" => Ok(KeyringProvider::Subprocess),
-                        _ => Err(miette::miette!("invalid keyring provider")),
-                    })
-                    .transpose()?;
-            }
-            _ => return Err(miette::miette!("unsupported key: {}", key)),
+            _ => return Err(err),
         }
 
         Ok(())
