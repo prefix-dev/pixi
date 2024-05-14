@@ -197,23 +197,23 @@ pub struct Config {
     #[serde(default)]
     #[serde(alias = "change_ps1")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
-    change_ps1: Option<bool>,
+    pub change_ps1: Option<bool>,
 
     /// Path to the file containing the authentication token.
     #[serde(default)]
     #[serde(alias = "authentication_override_file")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
-    authentication_override_file: Option<PathBuf>,
+    pub authentication_override_file: Option<PathBuf>,
 
     /// If set to true, pixi will not verify the TLS certificate of the server.
     #[serde(default)]
     #[serde(alias = "tls_no_verify")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
-    tls_no_verify: Option<bool>,
+    pub tls_no_verify: Option<bool>,
 
     #[serde(default)]
     #[serde(skip_serializing_if = "HashMap::is_empty")]
-    mirrors: HashMap<Url, Vec<Url>>,
+    pub mirrors: HashMap<Url, Vec<Url>>,
 
     #[serde(skip)]
     #[serde(alias = "loaded_from")] // BREAK: remove to stop supporting snake_case alias
@@ -488,6 +488,9 @@ impl Config {
             }
             "change-ps1" => {
                 self.change_ps1 = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "authentication-override-file" => {
+                self.authentication_override_file = value.map(PathBuf::from);
             }
             "tls-no-verify" => {
                 self.tls_no_verify = value.map(|v| v.parse()).transpose().into_diagnostic()?;

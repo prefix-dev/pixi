@@ -47,6 +47,9 @@ struct EditArgs {
 
 #[derive(Parser, Debug, Clone)]
 struct ListArgs {
+    /// configuration key to show (all if not provided)
+    key: Option<String>,
+
     /// output in JSON format
     #[arg(long)]
     json: bool,
@@ -106,7 +109,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             child.wait().into_diagnostic()?;
         }
         Subcommand::List(args) => {
-            let config = load_config(&args.common)?;
+            let mut config = load_config(&args.common)?;
+
+            if let Some(key) = args.key {
+                partial_config(&mut config, &key)?;
+            }
+
             let out = if args.json {
                 serde_json::to_string_pretty(&config).into_diagnostic()?
             } else {
@@ -114,7 +122,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             };
 
             if out.is_empty() {
-                eprintln!("No configuration values found");
+                eprintln!("Configuration not set");
             } else {
                 eprintln!("{}", out);
             }
@@ -126,18 +134,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 fn determine_project_root(common_args: &CommonArgs) -> miette::Result<PathBuf> {
-    let project_toml = project::find_project_manifest();
-    if common_args.local && project_toml.is_none() {
+    let manifest_file = project::find_project_manifest();
+    if common_args.local && manifest_file.is_none() {
         return Err(miette::miette!(
             "--local flag can only be used inside a pixi project"
         ));
     }
 
-    if let Some(project_toml) = project_toml {
-        let full_path = dunce::canonicalize(&project_toml).into_diagnostic()?;
+    if let Some(manifest_file) = manifest_file {
+        let full_path = dunce::canonicalize(&manifest_file).into_diagnostic()?;
         let root = full_path
             .parent()
-            .ok_or_else(|| miette::miette!("can not find parent of {}", project_toml.display()))?
+            .ok_or_else(|| miette::miette!("can not find parent of {}", manifest_file.display()))?
             .to_path_buf();
         Ok(root)
     } else {
@@ -191,5 +199,27 @@ fn alter_config(common_args: &CommonArgs, key: &str, value: Option<String>) -> m
     config.set(key, value)?;
     config.save(&to)?;
     eprintln!("✅ Updated config at {}", to.display());
+    Ok(())
+}
+
+// Trick to show only relevant field of the Config
+fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
+    let mut new = Config::default();
+
+    match key {
+        "default-channels" => new.default_channels = config.default_channels.clone(),
+        "change-ps1" => new.change_ps1 = config.change_ps1,
+        "tls-no-verify" => new.tls_no_verify = config.tls_no_verify,
+        "authentication-override-file" => {
+            new.authentication_override_file = config.authentication_override_file.clone()
+        }
+        "mirrors" => new.mirrors = config.mirrors.clone(),
+        "repodata-config" => new.repodata_config = config.repodata_config.clone(),
+        "pypi-config" => new.pypi_config = config.pypi_config.clone(),
+        _ => return Err(miette::miette!("unknown key: {}", key)),
+    }
+
+    *config = new;
+
     Ok(())
 }
