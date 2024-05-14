@@ -36,11 +36,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .await?;
 
     // Emit success
-    eprintln!(
-        "{}Project in {} is ready to use!",
-        console::style(console::Emoji("✔ ", "")).green(),
-        project.root().display()
-    );
+    if project.config().target_environments_directory.is_some() {
+        eprintln!(
+            "{}Project environment is installed in '{}' and is ready to use!",
+            console::style(console::Emoji("✔ ", "")).green(),
+            project
+                .config()
+                .target_environments_directory
+                .as_ref()
+                .unwrap()
+                .display()
+        );
+    } else {
+        eprintln!(
+            "{}Project in {} is ready to use!",
+            console::style(console::Emoji("✔ ", "")).green(),
+            project.root().display()
+        );
+    }
     Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
 }

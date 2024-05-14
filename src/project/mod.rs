@@ -43,7 +43,10 @@ use self::{
 };
 pub use dependencies::{CondaDependencies, PyPiDependencies};
 pub use environment::Environment;
+use once_cell::sync::OnceCell;
 pub use solve_group::SolveGroup;
+
+static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -285,12 +288,26 @@ impl Project {
 
     /// Returns the pixi directory
     pub fn pixi_dir(&self) -> PathBuf {
+        let default_pixi_dir = self.root.join(consts::PIXI_DIR);
+
         // Custom root directory for target environments if set in configuration.
         if let Some(custom_root) = self.config().target_environments_directory() {
-            tracing::info!(
-                "Using custom target directory for environments: {}",
-                custom_root.display()
-            );
+            let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
+                tracing::info!(
+                    "Using custom target directory for environments: {}",
+                    custom_root.display()
+                );
+                // Warn user if environments are found in the default directory
+                if default_pixi_dir.join(consts::ENVIRONMENTS_DIR).exists() {
+                    tracing::warn!(
+                        "Environments found in '{}', this will be ignored in favor of custom target directory '{}'\n\
+                        \t\tIt's advised to remove the environments from the default directory to avoid confusion.",
+                        default_pixi_dir.display(),
+                        custom_root.display()
+                    );
+                }
+            });
+
             return custom_root.join(format!(
                 "{}-{}",
                 self.name(),
@@ -298,7 +315,7 @@ impl Project {
             ));
         }
         tracing::debug!("Using default root directory for target environments");
-        self.root.join(consts::PIXI_DIR)
+        default_pixi_dir
     }
 
     /// Returns the environment directory
