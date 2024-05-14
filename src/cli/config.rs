@@ -133,23 +133,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-fn determine_project_root(common_args: &CommonArgs) -> miette::Result<PathBuf> {
-    let manifest_file = project::find_project_manifest();
-    if common_args.local && manifest_file.is_none() {
-        return Err(miette::miette!(
-            "--local flag can only be used inside a pixi project"
-        ));
-    }
-
-    if let Some(manifest_file) = manifest_file {
-        let full_path = dunce::canonicalize(&manifest_file).into_diagnostic()?;
-        let root = full_path
-            .parent()
-            .ok_or_else(|| miette::miette!("can not find parent of {}", manifest_file.display()))?
-            .to_path_buf();
-        Ok(root)
-    } else {
-        Err(miette::miette!("not inside a pixi project"))
+fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<PathBuf>> {
+    match project::find_project_manifest() {
+        None => {
+            if common_args.local {
+                return Err(miette::miette!(
+                    "--local flag can only be used inside a pixi project"
+                ));
+            }
+            Ok(None)
+        }
+        Some(manifest_file) => {
+            let full_path = dunce::canonicalize(&manifest_file).into_diagnostic()?;
+            let root = full_path
+                .parent()
+                .ok_or_else(|| {
+                    miette::miette!("can not find parent of {}", manifest_file.display())
+                })?
+                .to_path_buf();
+            Ok(Some(root))
+        }
     }
 }
 
@@ -159,8 +162,11 @@ fn load_config(common_args: &CommonArgs) -> miette::Result<Config> {
     } else if common_args.global {
         Config::load_global()
     } else {
-        let root = determine_project_root(common_args)?;
-        Config::load(&root)
+        if let Some(root) = determine_project_root(common_args)? {
+            Config::load(&root)
+        } else {
+            Config::load_global()
+        }
     };
 
     Ok(ret)
@@ -169,24 +175,26 @@ fn load_config(common_args: &CommonArgs) -> miette::Result<Config> {
 fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathBuf> {
     let write_path = if common_args.system {
         config::config_path_system()
-    } else if common_args.global {
+    } else {
+        if let Some(root) = determine_project_root(common_args)? {
+            if !common_args.global {
+                return Ok(root.join(consts::PIXI_DIR).join(consts::CONFIG_FILE));
+            }
+        }
+
         let mut global_locations = config::config_path_global();
-        let mut ret = global_locations
+        let mut to = global_locations
             .pop()
             .expect("should have at least one global config path");
 
         for p in global_locations {
             if p.exists() {
-                ret = p;
+                to = p;
                 break;
             }
         }
 
-        ret
-    } else {
-        determine_project_root(common_args)?
-            .join(consts::PIXI_DIR)
-            .join(consts::CONFIG_FILE)
+        to
     };
 
     Ok(write_path)
