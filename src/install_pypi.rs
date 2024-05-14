@@ -942,7 +942,7 @@ pub async fn update_python_distributions(
     // Install the resolved distributions.
     let wheels = wheels.into_iter().chain(local).collect::<Vec<_>>();
 
-    // Verify if pypi wheels will override existent conda packages
+    // Verify if pypi wheels will override existing conda packages
     // and warn if they are
     if let Ok(Some(clobber_packages)) =
         pypi_conda_clobber.clobber_on_instalation(wheels.clone(), &venv)
