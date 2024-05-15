@@ -2,7 +2,7 @@ mod common;
 
 use std::fs::{create_dir_all, File};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use crate::common::builders::string_from_iter;
@@ -207,10 +207,12 @@ async fn install_locked_with_config() {
         .await
         .unwrap();
     assert_eq!(result.exit_code, 0);
+
     // Check for correct path in most important path
     let line = result.stdout.lines().next().unwrap();
-    dbg!(line);
-    assert!(line.contains(target_dir.to_str().unwrap()));
+    let target_dir_canonical = target_dir.canonicalize().unwrap();
+    let line_path = PathBuf::from(line).canonicalize().unwrap();
+    assert!(line_path.starts_with(&target_dir_canonical));
 }
 
 /// Test `pixi install/run --frozen` functionality
