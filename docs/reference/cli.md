@@ -72,7 +72,7 @@ These dependencies will be read by pixi as if they had been added to the pixi `p
   Parses dependencies as [PEP508](https://peps.python.org/pep-0508/) requirements, supporting extras and versions.
   See [configuration](configuration.md) for details.
 - `--no-install`: Don't install the package to the environment, only add the package to the lock-file.
-- `--no-lock file-update`: Don't update the lock-file, implies the `--no-install` flag.
+- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 - `--feature <FEATURE> (-f)`: The feature for which the dependency should be added.
 
@@ -89,7 +89,7 @@ pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib"
 pixi add --pypi "project @ file:///absolute/path/to/project"
 pixi add --platform osx-64 --build clang
 pixi add --no-install numpy
-pixi add --no-lock file-update numpy
+pixi add --no-lockfile-update numpy
 pixi add --feature featurex numpy
 ```
 
