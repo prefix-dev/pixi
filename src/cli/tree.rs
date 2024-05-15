@@ -367,8 +367,7 @@ fn direct_dependencies(
             .pypi_dependencies(Some(*platform))
             .into_iter()
             .filter(|(name, _)| {
-                if let Some(value) = dep_map.get(name.as_normalized().as_dist_info_name().as_ref())
-                {
+                if let Some(value) = dep_map.get(&*name.as_normalized().as_dist_info_name()) {
                     value.source == PackageSource::Pypi
                 } else {
                     false

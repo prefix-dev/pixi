@@ -18,15 +18,13 @@ use crate::{
 };
 use dialoguer::theme::ColorfulTheme;
 use distribution_types::{InstalledDist, Name};
-use indexmap::IndexMap;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler::{
     install::{PythonInfo, Transaction},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{Channel, Platform, PrefixRecord, RepoDataRecord};
+use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
-use rattler_repodata_gateway::sparse::SparseRepoData;
 use reqwest_middleware::ClientWithMiddleware;
 use std::convert::identity;
 use std::{collections::HashMap, io::ErrorKind, path::Path, sync::Arc};
@@ -129,7 +127,7 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
         }
 
         // Write new contents to the prefix file
-        std::fs::write(path, contents.as_ref()).into_diagnostic()?;
+        std::fs::write(path, &*contents).into_diagnostic()?;
         tracing::info!("Prefix file updated with: '{}'.", contents);
     }
     Ok(())
@@ -224,7 +222,6 @@ pub async fn get_up_to_date_prefix(
     environment: &Environment<'_>,
     lock_file_usage: LockFileUsage,
     mut no_install: bool,
-    existing_repo_data: IndexMap<(Channel, Platform), SparseRepoData>,
 ) -> miette::Result<Prefix> {
     let current_platform = environment.best_platform();
     let project = environment.project();
@@ -241,7 +238,6 @@ pub async fn get_up_to_date_prefix(
     // Ensure that the lock-file is up-to-date
     let mut lock_file = project
         .up_to_date_lock_file(UpdateLockFileOptions {
-            existing_repo_data,
             lock_file_usage,
             no_install,
             ..UpdateLockFileOptions::default()

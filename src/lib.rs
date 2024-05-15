@@ -12,7 +12,6 @@ mod prefix;
 mod progress;
 mod project;
 mod prompt;
-mod repodata;
 pub mod task;
 #[cfg(unix)]
 pub mod unix;
@@ -24,6 +23,7 @@ mod pypi_tags;
 mod uv_reporter;
 
 pub mod pypi_mapping;
+mod repodata;
 
 pub use activation::get_activation_env;
 pub use lock_file::load_lock_file;
