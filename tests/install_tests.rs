@@ -124,7 +124,7 @@ async fn test_incremental_lock_file() {
 /// Test the `pixi install --locked` functionality.
 #[tokio::test]
 #[serial]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+// #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_locked_with_config() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
@@ -209,6 +209,7 @@ async fn install_locked_with_config() {
     assert_eq!(result.exit_code, 0);
     // Check for correct path in most important path
     let line = result.stdout.lines().next().unwrap();
+    dbg!(line);
     assert!(line.contains(target_dir.to_str().unwrap()));
 }
 
