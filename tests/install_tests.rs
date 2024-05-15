@@ -134,7 +134,6 @@ async fn install_locked_with_config() {
     let target_dir = pixi.project_path().join("target");
     config.target_environments_directory = Some(target_dir.clone());
     create_dir_all(target_dir.clone()).unwrap();
-    dbg!(config.clone().target_environments_directory);
 
     let config_path = pixi.project().unwrap().pixi_dir().join("config.toml");
     create_dir_all(config_path.parent().unwrap()).unwrap();
