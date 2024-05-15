@@ -105,11 +105,8 @@ pub async fn amend_pypi_purls(
     conda_packages: &mut [RepoDataRecord],
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
-    let packages_for_prefix_mapping: Vec<RepoDataRecord> = conda_packages
-        .iter()
-        .filter(|package| !mapping_url.contains_key(package.channel.trim_end_matches('/')))
-        .cloned()
-        .collect();
+    let packages_for_prefix_mapping: Vec<RepoDataRecord> =
+        filter_packages_for_prefix_mapping(mapping_url, conda_packages);
 
     let custom_mapping = fetch_custom_mapping(client, mapping_url).await?;
 
@@ -187,4 +184,67 @@ pub fn _amend_only_custom_pypi_purls(
         amend_pypi_purls_for_record(record, custom_mapping)?;
     }
     Ok(())
+}
+
+fn filter_packages_for_prefix_mapping(
+    mapping_url: &MappingMap,
+    conda_packages: &[RepoDataRecord],
+) -> Vec<RepoDataRecord> {
+    conda_packages
+        .iter()
+        .filter(|package| !mapping_url.contains_key(package.channel.trim_end_matches('/')))
+        .cloned()
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::str::FromStr;
+
+    use rattler_conda_types::{PackageName, PackageRecord, RepoDataRecord, VersionWithSource};
+    use url::Url;
+
+    use crate::pypi_mapping::{MappingLocation, MappingMap};
+
+    use super::filter_packages_for_prefix_mapping;
+
+    #[test]
+    fn test_filter_packages_for_prefix_mapping() {
+        let channel = "https://conda.anaconda.org/conda-forge".to_string();
+        let mapping_url = MappingMap::from_iter(vec![(
+            channel.clone(),
+            MappingLocation::Path("./mapping.json".into()),
+        )]);
+        let conda_packages = vec![RepoDataRecord {
+            package_record: PackageRecord {
+                arch: None,
+                build: "abc".into(),
+                build_number: 1,
+                constrains: vec![],
+                depends: vec![],
+                features: None,
+                legacy_bz2_md5: None,
+                legacy_bz2_size: None,
+                license: None,
+                license_family: None,
+                md5: None,
+                name: PackageName::new_unchecked("abc"),
+                noarch: Default::default(),
+                platform: None,
+                sha256: None,
+                size: None,
+                subdir: "abc".into(),
+                timestamp: None,
+                track_features: vec![],
+                version: VersionWithSource::from_str("0.1.0").unwrap(),
+                purls: vec![],
+            },
+            file_name: "test".into(),
+            url: Url::from_str("https://demo").unwrap(),
+            channel: format!("{channel}/"),
+        }];
+
+        assert!(filter_packages_for_prefix_mapping(&mapping_url, &conda_packages).is_empty());
+    }
 }
