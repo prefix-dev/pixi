@@ -118,6 +118,7 @@ impl<'p> TaskGraph<'p> {
         project: &'p Project,
         search_envs: &SearchEnvironments<'p, D>,
         args: Vec<String>,
+        isolated: bool,
     ) -> Result<Self, TaskGraphError> {
         let mut args = args;
 
@@ -164,6 +165,7 @@ impl<'p> TaskGraph<'p> {
                     Custom {
                         cmd: CmdArgs::from(args),
                         cwd: env::current_dir().ok(),
+                        isolated,
                     }
                     .into(),
                 ),
@@ -318,6 +320,7 @@ mod test {
             &project,
             &search_envs,
             run_args.iter().map(|arg| arg.to_string()).collect(),
+            false,
         )
         .unwrap();
 

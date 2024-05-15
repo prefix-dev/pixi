@@ -11,7 +11,6 @@ use itertools::Itertools;
 use miette::{miette, Context, Diagnostic, IntoDiagnostic};
 use rattler_conda_types::Platform;
 
-use crate::activation::get_environment_variables;
 use crate::environment::verify_prefix_location_unchanged;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::task::{
@@ -49,6 +48,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub config: ConfigCli,
+
+    #[arg(long)]
+    pub isolated: bool,
 }
 
 /// CLI entry point for `pixi run`
@@ -110,7 +112,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .with_disambiguate_fn(disambiguate_task_interactive);
 
-    let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, task_args)?;
+    let task_graph =
+        TaskGraph::from_cmd_args(&project, &search_environment, task_args, args.isolated)?;
 
     tracing::info!("Task graph: {}", task_graph);
 
@@ -171,8 +174,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let task_env: &_ = match task_envs.entry(executable_task.run_environment.clone()) {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
-                let command_env =
-                    get_task_env(&mut lock_file, &executable_task.run_environment).await?;
+                let command_env = get_task_env(
+                    &mut lock_file,
+                    &executable_task.run_environment,
+                    args.isolated || executable_task.task().is_isolated(),
+                )
+                .await?;
                 entry.insert(command_env)
             }
         };
@@ -235,6 +242,7 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
 pub async fn get_task_env<'p>(
     lock_file_derived_data: &mut LockFileDerivedData<'p>,
     environment: &Environment<'p>,
+    isolated: bool,
 ) -> miette::Result<HashMap<String, String>> {
     // Make sure the system requirements are met
     verify_current_platform_has_required_virtual_packages(environment).into_diagnostic()?;
@@ -244,19 +252,17 @@ pub async fn get_task_env<'p>(
 
     // Get environment variables from the activation
     let activation_env = await_in_progress("activating environment", |_| {
-        crate::activation::run_activation(environment)
+        crate::activation::run_activation(environment, isolated)
     })
     .await
     .wrap_err("failed to activate environment")?;
 
-    // Get environments from pixi
-    let environment_variables = get_environment_variables(environment);
+    if isolated {
+        return Ok(activation_env);
+    }
 
     // Concatenate with the system environment variables
-    Ok(std::env::vars()
-        .chain(activation_env)
-        .chain(environment_variables)
-        .collect())
+    Ok(std::env::vars().chain(activation_env).collect())
 }
 
 #[derive(Debug, Error, Diagnostic)]

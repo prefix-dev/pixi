@@ -121,7 +121,10 @@ impl<'p> LockFileDerivedData<'p> {
             Some(context) => context.clone(),
         };
 
-        let env_variables = environment.project().get_env_variables(environment).await?;
+        let env_variables = environment
+            .project()
+            .get_env_variables(environment, false)
+            .await?;
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -773,7 +776,7 @@ pub async fn ensure_up_to_date_lock_file(
         };
 
         // Get environment variables from the activation
-        let env_variables = project.get_env_variables(&environment).await?;
+        let env_variables = project.get_env_variables(&environment, false).await?;
 
         // Get the previously locked pypi records
         let locked_pypi_records = Arc::new(

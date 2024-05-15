@@ -130,6 +130,7 @@ pub fn get_activator<'p>(
 /// Runs and caches the activation script.
 pub async fn run_activation(
     environment: &Environment<'_>,
+    isolated: bool,
 ) -> miette::Result<HashMap<String, String>> {
     let activator = get_activator(environment, ShellEnum::default()).map_err(|e| {
         miette::miette!(format!(
@@ -139,6 +140,11 @@ pub async fn run_activation(
         ))
     })?;
 
+    let path_modification_behavior = if isolated {
+        PathModificationBehavior::Replace
+    } else {
+        PathModificationBehavior::Prepend
+    };
     let activator_result = match tokio::task::spawn_blocking(move || {
         // Run and cache the activation script
         activator.run_activation(ActivationVariables {
@@ -149,7 +155,7 @@ pub async fn run_activation(
             conda_prefix: None,
 
             // Prepending environment paths so they get found first.
-            path_modification_behavior: PathModificationBehavior::Prepend,
+            path_modification_behavior,
         })
     })
     .await
@@ -183,7 +189,6 @@ pub async fn run_activation(
             }
         }
     };
-
     Ok(activator_result)
 }
 
@@ -222,7 +227,10 @@ pub async fn get_activation_env<'p>(
     // Get the prefix which we can then activate.
     get_up_to_date_prefix(environment, lock_file_usage, false).await?;
 
-    environment.project().get_env_variables(environment).await
+    environment
+        .project()
+        .get_env_variables(environment, false)
+        .await
 }
 
 #[cfg(test)]
@@ -248,14 +256,13 @@ mod tests {
 
         let default_env = project.default_environment();
         let env = default_env.get_metadata_env();
-        dbg!(&env);
+
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "default");
         assert!(env.get("PIXI_ENVIRONMENT_PLATFORMS").is_some());
         assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));
 
         let test_env = project.environment("test").unwrap();
         let env = test_env.get_metadata_env();
-        dbg!(&env);
 
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "test");
         assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));

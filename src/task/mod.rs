@@ -154,6 +154,16 @@ impl Task {
     pub fn is_custom(&self) -> bool {
         matches!(self, Task::Custom(_))
     }
+
+    /// True if this task is isolated.
+    pub fn is_isolated(&self) -> bool {
+        match self {
+            Task::Plain(_) => false,
+            Task::Custom(custom) => custom.isolated,
+            Task::Execute(execute) => execute.isolated,
+            Task::Alias(_) => false,
+        }
+    }
 }
 
 /// A command script executes a single command from the environment
@@ -182,6 +192,10 @@ pub struct Execute {
 
     /// A list of environment variables to set before running the command
     pub env: Option<IndexMap<String, String>>,
+
+    /// Isolate the task from the running machine
+    #[serde(default)]
+    pub isolated: bool,
 }
 
 impl From<Execute> for Task {
@@ -199,6 +213,9 @@ pub struct Custom {
 
     /// The working directory for the command relative to the root of the project.
     pub cwd: Option<PathBuf>,
+
+    /// Isolate the task from the running machine
+    pub isolated: bool,
 }
 impl From<Custom> for Task {
     fn from(value: Custom) -> Self {

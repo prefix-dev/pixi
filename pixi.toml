@@ -37,6 +37,19 @@ tbump = ">=6.9.0,<6.10"
 [target.linux-64.dependencies]
 compilers = ">=1.6.0"
 
+[feature.isolated]
+platforms = ["linux-64"]
+
+[feature.isolated.tasks]
+install = { cmd = "cargo install --path . --locked", isolated = true}
+
+[feature.isolated.dependencies]
+cmake = ">=3.29.3,<3.30"
+make = ">=4.3,<5"
+coreutils = ">=9.5,<10"
+grep = ">=3.11,<4"
+findutils = ">=4.6.0,<4.7"
+
 [feature.docs.dependencies]
 mkdocs = "1.5.3.*"
 mkdocs-material = ">=9.5.16"
@@ -69,5 +82,6 @@ pyyaml = ">=6.0.1,<6.1"
 taplo = ">=0.9.1,<0.10"
 
 [environments]
+isolated = { features = ["isolated"] }
 docs = { features = ["docs"], no-default-feature = true }
 schema = { features = ["schema"], no-default-feature = true }
