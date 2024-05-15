@@ -214,8 +214,6 @@ impl<'p> LockFileDerivedData<'p> {
         )
         .await?;
 
-        // eprintln!("Installed packages {:?}", installed_packages);
-
         // Store that we updated the environment, so we won't have to do it again.
         self.updated_conda_prefixes
             .insert(environment.clone(), (prefix.clone(), python_status.clone()));

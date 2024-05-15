@@ -26,6 +26,7 @@ rustls-tls = [
 slow_integration_tests = []
 
 [dependencies]
+ahash = "0.8.11"
 assert_matches = "1.5.0"
 async-once-cell = "0.5.3"
 cfg-if = "1.0"

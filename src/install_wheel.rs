@@ -4,6 +4,11 @@ use csv::ReaderBuilder;
 
 type WheelInfo = (Vec<RecordEntry>, PathBuf);
 
+/// Returns records from `.dist-info/RECORD` and determines where
+/// the wheel should be installed
+/// (`purelib`, `platlib` or `unknown`).
+///
+/// This function is used to detect if Python wheels will clobber already installed Conda packages
 pub fn get_wheel_info(whl: &Path, venv: &PythonEnvironment) -> miette::Result<Option<WheelInfo>> {
     let dist_info_prefix = find_dist_info(whl)?;
     // Read the RECORD file.
@@ -191,4 +196,101 @@ pub(crate) fn parse_wheel_file(wheel_text: &str) -> miette::Result<LibKind> {
         return Ok(LibKind::Unknown);
     }
     Ok(lib_kind)
+}
+
+#[cfg(test)]
+mod test {
+    use crate::install_wheel::LibKind;
+    use std::io::Cursor;
+
+    use super::{parse_key_value_file, parse_wheel_file, read_record_file};
+
+    #[test]
+    fn test_parse_key_value_file() {
+        let text = r#"
+Wheel-Version: 1.0
+Generator: bdist_wheel (0.37.1)
+Root-Is-Purelib: false
+Tag: cp38-cp38-manylinux_2_17_x86_64
+Tag: cp38-cp38-manylinux2014_x86_64"#;
+
+        parse_key_value_file(&mut text.as_bytes(), "WHEEL").unwrap();
+    }
+
+    #[test]
+    fn test_parse_wheel_version() {
+        fn wheel_with_version(version: &str) -> String {
+            format!(
+                r#"
+Wheel-Version: {version}
+Generator: bdist_wheel (0.37.0)
+Root-Is-Purelib: true
+Tag: py2-none-any
+Tag: py3-none-any
+                "#
+            )
+        }
+        assert_eq!(
+            parse_wheel_file(&wheel_with_version("1.0")).unwrap(),
+            LibKind::Pure
+        );
+        assert_eq!(
+            parse_wheel_file(&wheel_with_version("2.0")).unwrap(),
+            LibKind::Unknown
+        );
+    }
+
+    #[test]
+    fn record_with_absolute_paths() {
+        let record: &str = r#"
+/selenium/__init__.py,sha256=l8nEsTP4D2dZVula_p4ZuCe8AGnxOq7MxMeAWNvR0Qc,811
+/selenium/common/exceptions.py,sha256=oZx2PS-g1gYLqJA_oqzE4Rq4ngplqlwwRBZDofiqni0,9309
+selenium-4.1.0.dist-info/METADATA,sha256=jqvBEwtJJ2zh6CljTfTXmpF1aiFs-gvOVikxGbVyX40,6468
+selenium-4.1.0.dist-info/RECORD,,"#;
+
+        let entries = read_record_file(&mut record.as_bytes()).unwrap();
+        let expected = [
+            "selenium/__init__.py",
+            "selenium/common/exceptions.py",
+            "selenium-4.1.0.dist-info/METADATA",
+            "selenium-4.1.0.dist-info/RECORD",
+        ]
+        .map(ToString::to_string)
+        .to_vec();
+        let actual = entries
+            .into_iter()
+            .map(|entry| entry.path)
+            .collect::<Vec<String>>();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_empty_value() -> miette::Result<()> {
+        let wheel = r#"
+Wheel-Version: 1.0
+Generator: custom
+Root-Is-Purelib: false
+Tag:
+Tag: -manylinux_2_17_x86_64
+Tag: -manylinux2014_x86_64"#;
+
+        let reader = Cursor::new(wheel.to_string().into_bytes());
+        let wheel_file = parse_key_value_file(reader, "WHEEL")?;
+        assert_eq!(
+            wheel_file.get("Wheel-Version"),
+            Some(&["1.0".to_string()].to_vec())
+        );
+        assert_eq!(
+            wheel_file.get("Tag"),
+            Some(
+                &[
+                    String::new(),
+                    "-manylinux_2_17_x86_64".to_string(),
+                    "-manylinux2014_x86_64".to_string()
+                ]
+                .to_vec()
+            )
+        );
+        Ok(())
+    }
 }

@@ -1,4 +1,4 @@
-use crate::install_wheel::get_wheel_info;
+use crate::conda_pypi_clobber::PypiCondaClobberRegistry;
 use crate::prefix::Prefix;
 use crate::project::manifest::pypi_options::PypiOptions;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
@@ -32,11 +32,11 @@ use distribution_types::{
 };
 use install_wheel_rs::linker::LinkMode;
 
-use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
+use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
 
-use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::collections::HashMap;
+use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -996,52 +996,4 @@ pub async fn update_python_distributions(
     }
 
     Ok(())
-}
-
-#[derive(Default, Debug)]
-struct PypiCondaClobberRegistry {
-    paths_registry: HashMap<PathBuf, rattler_conda_types::PackageName>,
-}
-
-impl PypiCondaClobberRegistry {
-    pub fn with_conda_packages(conda_packages: &[PrefixRecord]) -> Self {
-        let mut registry = HashMap::default();
-        for record in conda_packages {
-            for path in &record.paths_data.paths {
-                registry.insert(
-                    path.relative_path.clone(),
-                    record.repodata_record.package_record.name.clone(),
-                );
-            }
-        }
-        Self {
-            paths_registry: registry,
-        }
-    }
-
-    pub fn clobber_on_instalation(
-        self,
-        wheels: Vec<CachedDist>,
-        venv: &PythonEnvironment,
-    ) -> miette::Result<Option<HashSet<String>>> {
-        let mut clobber_packages: HashSet<String> = HashSet::default();
-
-        for wheel in wheels {
-            let Ok(Some(whl_info)) = get_wheel_info(wheel.path(), venv) else {
-                continue;
-            };
-
-            for entry in whl_info.0 {
-                let path_to_clobber = whl_info.1.join(entry.path);
-
-                if let Some(name) = self.paths_registry.get(&path_to_clobber) {
-                    clobber_packages.insert(name.as_normalized().to_string());
-                }
-            }
-        }
-        if clobber_packages.is_empty() {
-            return Ok(None);
-        }
-        Ok(Some(clobber_packages))
-    }
 }
