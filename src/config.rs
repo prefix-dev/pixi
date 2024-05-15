@@ -491,7 +491,7 @@ impl Config {
                 "repodata-config.disable-zstd",
                 "pypi-config",
                 "pypi-config.index-url",
-                "pyi-config.extra-index-urls",
+                "pypi-config.extra-index-urls",
                 "pypi-config.keyring-provider",
             ];
             format!("Supported keys:\n\n{}", keys.join("\n"))
