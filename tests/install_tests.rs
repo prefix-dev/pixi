@@ -124,7 +124,7 @@ async fn test_incremental_lock_file() {
 /// Test the `pixi install --locked` functionality.
 #[tokio::test]
 #[serial]
-// #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_locked_with_config() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
