@@ -107,7 +107,7 @@ pub async fn amend_pypi_purls(
 ) -> miette::Result<()> {
     let packages_for_prefix_mapping: Vec<RepoDataRecord> = conda_packages
         .iter()
-        .filter(|package| !mapping_url.contains_key(&package.channel))
+        .filter(|package| !mapping_url.contains_key(package.channel.trim_end_matches("/")))
         .cloned()
         .collect();
 
@@ -118,6 +118,7 @@ pub async fn amend_pypi_purls(
     if packages_for_prefix_mapping.is_empty() {
         _amend_only_custom_pypi_purls(conda_packages, custom_mapping)?;
     } else {
+        println!("{:#?}", packages_for_prefix_mapping);
         let prefix_mapping = prefix_pypi_name_mapping::conda_pypi_name_mapping(
             client,
             &packages_for_prefix_mapping,
