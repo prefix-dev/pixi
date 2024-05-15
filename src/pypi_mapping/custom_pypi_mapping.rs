@@ -118,7 +118,6 @@ pub async fn amend_pypi_purls(
     if packages_for_prefix_mapping.is_empty() {
         _amend_only_custom_pypi_purls(conda_packages, custom_mapping)?;
     } else {
-        println!("{:#?}", packages_for_prefix_mapping);
         let prefix_mapping = prefix_pypi_name_mapping::conda_pypi_name_mapping(
             client,
             &packages_for_prefix_mapping,
