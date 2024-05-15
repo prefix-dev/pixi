@@ -107,7 +107,7 @@ pub async fn amend_pypi_purls(
 ) -> miette::Result<()> {
     let packages_for_prefix_mapping: Vec<RepoDataRecord> = conda_packages
         .iter()
-        .filter(|package| !mapping_url.contains_key(package.channel.trim_end_matches("/")))
+        .filter(|package| !mapping_url.contains_key(package.channel.trim_end_matches('/')))
         .cloned()
         .collect();
 
