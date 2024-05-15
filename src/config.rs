@@ -453,12 +453,11 @@ mod tests {
     #[test]
     fn test_config_parse() {
         let toml = format!(
-            r#"
-        default_channels = ["conda-forge"]
-        tls_no_verify = true
-        target-environments-directory = "{}"
+            r#"default-channels = ["conda-forge"]
+tls-no-verify = true
+target-environments-directory = "{}"
         "#,
-            env!("CARGO_MANIFEST_DIR")
+            env!("CARGO_MANIFEST_DIR").replace("\\", "\\\\").as_str()
         );
         let config = Config::from_toml(toml.as_str(), &PathBuf::from("")).unwrap();
         assert_eq!(config.default_channels, vec!["conda-forge"]);
