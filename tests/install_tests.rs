@@ -183,17 +183,17 @@ async fn install_locked_with_config() {
         "python==3.9.0"
     ));
 
+    // Task command depends on the OS
+    let which_command = if cfg!(target_os = "windows") {
+        "where python"
+    } else {
+        "which python"
+    };
+
     // Verify that the folders are present in the target directory using a task.
-    #[cfg(not(target_os = "windows"))]
     pixi.tasks()
         .add("which_python".into(), None, FeatureName::Default)
-        .with_commands(["which python"])
-        .execute()
-        .unwrap();
-    #[cfg(target_os = "windows")]
-    pixi.tasks()
-        .add("which_python".into(), None, FeatureName::Default)
-        .with_commands(["where python"])
+        .with_commands([which_command])
         .execute()
         .unwrap();
 

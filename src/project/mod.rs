@@ -341,7 +341,10 @@ impl Project {
 
             return pixi_dir_name;
         }
-        tracing::debug!("Using default root directory for target environments");
+        tracing::debug!(
+            "Using default root directory: `{}` for target environments.",
+            default_pixi_dir.display()
+        );
         default_pixi_dir
     }
 

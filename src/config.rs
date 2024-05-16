@@ -173,52 +173,49 @@ impl PyPIConfig {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct Config {
     #[serde(default)]
-    #[serde(alias = "default-channels")] // BREAK: rename instead of alias
+    #[serde(alias = "default_channels")] // BREAK(0.22.0): remove alias
     pub default_channels: Vec<String>,
 
     /// If set to true, pixi will set the PS1 environment variable to a custom value.
     #[serde(default)]
-    #[serde(alias = "change-ps1")] // BREAK: rename instead of alias
+    #[serde(alias = "change_ps1")] // BREAK(0.22.0): remove alias
     change_ps1: Option<bool>,
 
     /// Path to the file containing the authentication token.
     #[serde(default)]
-    #[serde(alias = "authentication-override-file")] // BREAK: rename instead of alias
+    #[serde(alias = "authentication_override_file")] // BREAK(0.22.0): remove alias
     authentication_override_file: Option<PathBuf>,
 
     /// If set to true, pixi will not verify the TLS certificate of the server.
     #[serde(default)]
-    #[serde(alias = "tls-no-verify")] // BREAK: rename instead of alias
+    #[serde(alias = "tls_no_verify")] // BREAK(0.22.0): remove alias
     tls_no_verify: Option<bool>,
 
     #[serde(default)]
     mirrors: HashMap<Url, Vec<Url>>,
 
     #[serde(skip)]
-    #[serde(alias = "loaded-from")] // BREAK: rename instead of alias
+    #[serde(alias = "loaded_from")] // BREAK(0.22.0): remove alias
     pub loaded_from: Vec<PathBuf>,
 
     #[serde(skip, default = "default_channel_config")]
-    #[serde(alias = "channel-config")] // BREAK: rename instead of alias
+    #[serde(alias = "channel_config")] // BREAK(0.22.0): remove alias
     pub channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
-    #[serde(alias = "repodata-config")] // BREAK: rename instead of alias
+    #[serde(alias = "repodata_config")] // BREAK(0.22.0): remove alias
     pub repodata_config: Option<RepodataConfig>,
 
     /// Configuration for PyPI packages.
     #[serde(default)]
-    #[serde(rename = "pypi-config")]
     pub pypi_config: PyPIConfig,
 
     /// The location of the environments build by pixi
     #[serde(default)]
-    #[serde(
-        rename = "target-environments-directory",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub target_environments_directory: Option<PathBuf>,
 }
 
@@ -278,7 +275,8 @@ impl Config {
     /// Validate the config file.
     pub fn validate(&self) -> miette::Result<()> {
         if let Some(target_env_dir) = self.target_environments_directory.clone() {
-            if !target_env_dir.exists() {
+            if !target_env_dir.is_absolute() || !target_env_dir.exists() {
+                // The path might exist, but we need it to be absolute because we don't canonicalize it.
                 return Err(miette!("The `target-environments-directory` path does not exist: {:?}. It needs to be an absolute path to a directory.", target_env_dir));
             }
         }

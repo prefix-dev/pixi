@@ -70,7 +70,7 @@ default-channels = ["conda-forge"]
 ```
 !!! note
     The `default-channels` are only used when initializing a new project. Once initialized the `channels` are used from the project manifest.
-    
+
 ### `change-ps1`
 
 When set to false, the `(pixi)` prefix in the shell prompt is removed.
@@ -105,10 +105,10 @@ authentication-override-file = "/path/to/your/override.json"
 
 ### `target-environment-directory`
 The directory where pixi stores the project environments, what would normally be placed in the `.pixi` folder in a project's root.
-It doesn't affect the environments built for `pixi global`. 
+It doesn't affect the environments built for `pixi global`.
 The location of environments created for a `pixi global` installation can be controlled using the `PIXI_HOME` environment variable.
 !!! warning
-    We recommend against using this because any environment created for a project is no longer placed in the same folder as the project. 
+    We recommend against using this because any environment created for a project is no longer placed in the same folder as the project.
     This creates a disconnect between the project and its environments and manual cleanup of the environments is required when deleting the project.
     However, in some cases, this option can still be very useful, for instance to:
 
