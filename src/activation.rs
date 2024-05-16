@@ -216,6 +216,67 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
         .collect()
 }
 
+pub fn get_windows_isolated_environment_variables() -> HashMap<String, String> {
+    let env = std::env::vars().collect::<HashMap<_, _>>();
+    let default_keys = vec![
+        "APPDATA",
+        "COMPUTERNAME",
+        "COMSPEC",
+        "COMMONPROGRAMFILES",
+        "COMMONPROGRAMFILES(X86)",
+        "COMMONPROGRAMW6432",
+        "DRIVERDATA",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "LOGONSERVER",
+        "NUMBER_OF_PROCESSORS",
+        "OS",
+        "PATHEXT",
+        "PROCESSOR_ARCHITECTURE",
+        "PROCESSOR_IDENTIFIER",
+        "PROCESSOR_LEVEL",
+        "PROCESSOR_REVISION",
+        "PROMPT_COMMAND",
+        "PROMPT_COMMAND_RIGHT",
+        "PROMPT_INDICATOR",
+        "PROMPT_INDICATOR_VI_INSERT",
+        "PROMPT_INDICATOR_VI_NORMAL",
+        "PROMPT_MULTILINE_INDICATOR",
+        "PWD",
+        "SESSIONNAME",
+        "SYSTEMDRIVE",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "TERMINAL_EMULATOR",
+        "USERNAME",
+        "USERPROFILE",
+        "USERDOMAIN_ROAMINGPROFILE",
+        "USERDOMAIN",
+        "windir",
+    ];
+
+    let path = env
+        .get("Path")
+        .map(|path| {
+            let path = path.split(';').collect::<Vec<_>>();
+            let path = path
+                .iter()
+                .filter(|p| p.to_lowercase().contains(":\\windows"))
+                .join(";");
+            path
+        })
+        .expect("Could not find PATH in environment variables");
+
+    let env = env
+        .into_iter()
+        .filter(|(key, _)| default_keys.contains(&key.as_str()))
+        .chain(vec![("PATH".to_string(), path)])
+        .collect();
+
+    env
+}
+
 /// Determine the environment variables that need to be set in an interactive shell to make it
 /// function as if the environment has been activated. This method runs the activation scripts from
 /// the environment and stores the environment variables it added, finally it adds environment
@@ -294,5 +355,11 @@ mod tests {
             env.get("PIXI_PROJECT_VERSION").unwrap(),
             &project.version().as_ref().unwrap().to_string()
         );
+    }
+
+    #[test]
+    fn test_get_windows_isolated_environment_variables() {
+        let env = get_windows_isolated_environment_variables();
+        dbg!(env);
     }
 }

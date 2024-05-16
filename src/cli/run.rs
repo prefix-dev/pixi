@@ -19,6 +19,7 @@ use crate::task::{
 };
 use crate::Project;
 
+use crate::activation::get_windows_isolated_environment_variables;
 use crate::lock_file::LockFileDerivedData;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::progress::await_in_progress;
@@ -258,6 +259,11 @@ pub async fn get_task_env<'p>(
     .wrap_err("failed to activate environment")?;
 
     if isolated {
+        if cfg!(windows) {
+            let mut win_env = get_windows_isolated_environment_variables();
+            win_env.extend(activation_env);
+            return Ok(win_env);
+        }
         return Ok(activation_env);
     }
 
