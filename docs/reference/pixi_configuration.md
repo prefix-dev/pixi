@@ -68,7 +68,9 @@ This defaults to only conda-forge.
 ```toml title="config.toml"
 default-channels = ["conda-forge"]
 ```
-
+!!! note
+    The `default-channels` are only used when initializing a new project. Once initialized the `channels` are used from the project manifest.
+    
 ### `change-ps1`
 
 When set to false, the `(pixi)` prefix in the shell prompt is removed.
