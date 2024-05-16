@@ -4,7 +4,7 @@ use crate::common::{
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };
-use pixi::pypi_mapping::{self, MappingSource};
+use pixi::pypi_mapping::{self};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use serial_test::serial;
@@ -398,10 +398,7 @@ async fn test_custom_mapping_channel_with_suffix() {
 
     let mapping_source = project.pypi_name_mapping_source();
 
-    let mapping_map = match mapping_source {
-        MappingSource::Custom { mapping } => mapping,
-        MappingSource::Prefix => unreachable!(),
-    };
+    let mapping_map = mapping_source.custom().unwrap();
 
     pypi_mapping::custom_pypi_mapping::amend_pypi_purls(&client, &mapping_map, &mut packages, None)
         .await
@@ -448,10 +445,7 @@ async fn test_repo_data_record_channel_with_suffix() {
 
     let mapping_source = project.pypi_name_mapping_source();
 
-    let mapping_map = match mapping_source {
-        MappingSource::Custom { mapping } => mapping,
-        MappingSource::Prefix => unreachable!(),
-    };
+    let mapping_map = mapping_source.custom().unwrap();
 
     pypi_mapping::custom_pypi_mapping::amend_pypi_purls(&client, &mapping_map, &mut packages, None)
         .await
