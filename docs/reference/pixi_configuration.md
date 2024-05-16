@@ -102,7 +102,8 @@ authentication-override-file = "/path/to/your/override.json"
 ```
 
 ### `target-environment-directory`
-The directory where pixi stores the environments, what would normally be placed in the `.pixi` folder in a project's root.
+The directory where pixi stores the project environments, what would normally be placed in the `.pixi` folder in a project's root.
+It doesn't affect the environments build with `pixi global` as they listen to the `PIXI_HOME` environment variable.
 This is not recommended to change, but can be useful in some cases.
 
 - Forcing the installation on a specific filesystem/drive
