@@ -37,7 +37,7 @@ The configuration is loaded in the following order:
     | 5            | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments                                                       |
 
 !!! note
-    The highest priority wins. If a configuration file is found in a higher priority location, the lower priority locations are overwritten.
+    The highest priority wins. If a configuration file is found in a higher priority location, the values from the configuration read from lower priority locations are overwritten.
 
 
 !!! note
