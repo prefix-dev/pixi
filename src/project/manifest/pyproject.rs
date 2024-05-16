@@ -1,22 +1,18 @@
 use miette::Report;
-use pep508_rs::VersionOrUrl;
+use pep440_rs::VersionSpecifiers;
 use pyproject_toml::{self, Project};
 use rattler_conda_types::{NamelessMatchSpec, PackageName, ParseStrictness::Lenient, VersionSpec};
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
-use std::{
-    collections::{HashMap, HashSet},
-    str::FromStr,
-};
+use std::{collections::HashMap, str::FromStr};
 use toml_edit::DocumentMut;
 
 use crate::FeatureName;
 
 use super::{
     error::{RequirementConversionError, TomlError},
-    python::PyPiPackageName,
-    ProjectManifest, PyPiRequirement, SpecType,
+    Feature, ProjectManifest, SpecType,
 };
 
 #[derive(Deserialize, Debug, Clone)]
@@ -71,55 +67,50 @@ impl From<PyProjectManifest> for ProjectManifest {
         manifest.project.name = Some(pyproject.name.clone());
 
         // Add python as dependency based on the project.requires_python property (if any)
-        let pythonspec = pyproject
-            .requires_python
-            .clone()
-            .map(VersionOrUrl::VersionSpecifier);
+        let python_spec = pyproject.requires_python.clone();
+
         let target = manifest.default_feature_mut().targets.default_mut();
-        target.add_dependency(
-            PackageName::from_str("python").unwrap(),
-            version_or_url_to_nameless_matchspec(&pythonspec).unwrap(),
-            SpecType::Run,
-        );
+        let python = PackageName::from_str("python").unwrap();
+        // If the target doesn't have any python dependency, we add it from the `requires-python`
+        if !target.has_dependency(&python, Some(SpecType::Run), None) {
+            target.add_dependency(
+                &python,
+                &version_or_url_to_nameless_matchspec(&python_spec).unwrap(),
+                SpecType::Run,
+            );
+        } else if let Some(_spec) = python_spec {
+            if target.has_dependency(&python, Some(SpecType::Run), None) {
+                // TODO: implement some comparison or spec merging logic here
+                tracing::info!(
+                    "Overriding the requires-python with the one defined in pixi dependencies"
+                )
+            }
+        }
 
         // Add pyproject dependencies as pypi dependencies
-        if let Some(deps) = pyproject.dependencies.clone() {
-            for d in deps.into_iter() {
-                target.add_pypi_dependency(
-                    PyPiPackageName::from_normalized(d.name.clone()),
-                    PyPiRequirement::from(d),
-                )
+        if let Some(deps) = &pyproject.dependencies {
+            for requirement in deps.iter() {
+                target.add_pypi_dependency(requirement, None);
             }
         }
 
         // For each extra group, create a feature of the same name if it does not exist,
         // and add pypi dependencies from project.optional-dependencies,
-        // filtering out unused features and self-references
+        // filtering out self-references
         if let Some(extras) = pyproject.optional_dependencies.as_ref() {
             let project_name = pep508_rs::PackageName::new(pyproject.name.clone()).unwrap();
-            let mut features_used = HashSet::new();
-            for env in manifest.environments.iter() {
-                for feature in env.features.iter() {
-                    features_used.insert(feature);
-                }
-            }
             for (extra, reqs) in extras {
-                // Filter out unused features
-                if features_used.contains(extra) {
-                    let target = manifest
-                        .features
-                        .entry(FeatureName::Named(extra.to_string()))
-                        .or_default()
-                        .targets
-                        .default_mut();
-                    for req in reqs.iter() {
-                        // filter out any self references in groups of extra dependencies
-                        if project_name != req.name {
-                            target.add_pypi_dependency(
-                                PyPiPackageName::from_normalized(req.name.clone()),
-                                PyPiRequirement::from(req.clone()),
-                            )
-                        }
+                let feature_name = FeatureName::Named(extra.to_string());
+                let target = manifest
+                    .features
+                    .entry(feature_name.clone())
+                    .or_insert_with(move || Feature::new(feature_name))
+                    .targets
+                    .default_mut();
+                for requirement in reqs.iter() {
+                    // filter out any self references in groups of extra dependencies
+                    if project_name != requirement.name {
+                        target.add_pypi_dependency(requirement, None);
                     }
                 }
             }
@@ -133,15 +124,17 @@ impl From<PyProjectManifest> for ProjectManifest {
 /// This will only work if it is not URL and the VersionSpecifier can successfully
 /// be interpreted as a NamelessMatchSpec.version
 fn version_or_url_to_nameless_matchspec(
-    version: &Option<VersionOrUrl>,
+    version: &Option<VersionSpecifiers>,
 ) -> Result<NamelessMatchSpec, RequirementConversionError> {
     match version {
         // TODO: avoid going through string representation for conversion
-        Some(VersionOrUrl::VersionSpecifier(v)) => Ok(NamelessMatchSpec::from_str(
-            v.to_string().as_str(),
-            Lenient,
-        )?),
-        Some(VersionOrUrl::Url(_)) => Err(RequirementConversionError::Unimplemented),
+        Some(v) => {
+            let version_string = v.to_string();
+            // Double equals works a bit different in conda vs. python
+            let version_string = version_string.strip_prefix("==").unwrap_or(&version_string);
+
+            Ok(NamelessMatchSpec::from_str(version_string, Lenient)?)
+        }
         None => Ok(NamelessMatchSpec {
             version: Some(VersionSpec::Any),
             ..Default::default()
@@ -203,7 +196,8 @@ impl PyProjectToml {
                         }
                     }
                 }
-                environments.insert(extra.clone(), features);
+                // Environments can only contain number, strings and dashes
+                environments.insert(extra.replace('_', "-").clone(), features);
             }
         }
         environments
@@ -235,9 +229,11 @@ mod tests {
     use std::str::FromStr;
 
     use insta::assert_snapshot;
+    use pep440_rs::VersionSpecifiers;
+    use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use crate::{
-        project::manifest::{python::PyPiPackageName, Manifest, PyPiRequirement},
+        project::manifest::{python::PyPiPackageName, Manifest},
         FeatureName,
     };
 
@@ -284,11 +280,11 @@ mod tests {
 
         [tool.pixi.tasks]
         build = "conda build ."
-        test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
+        test = { cmd = "pytest", cwd = "tests", depends-on = ["build"] }
         test2 = { cmd = "pytest", cwd = "tests"}
-        test3 = { cmd = "pytest", depends_on = ["test2"] }
+        test3 = { cmd = "pytest", depends-on = ["test2"] }
         test5 = { cmd = "pytest" }
-        test6 = { depends_on = ["test5"] }
+        test6 = { depends-on = ["test5"] }
 
         [tool.pixi.system-requirements]
         linux = "5.10"
@@ -337,11 +333,11 @@ mod tests {
 
         [tool.pixi.target.linux-64.tasks]
         build = "conda build ."
-        test = { cmd = "pytest", cwd = "tests", depends_on = ["build"] }
+        test = { cmd = "pytest", cwd = "tests", depends-on = ["build"] }
         test2 = { cmd = "pytest", cwd = "tests"}
-        test3 = { cmd = "pytest", depends_on = ["test2"] }
+        test3 = { cmd = "pytest", depends-on = ["test2"] }
         test5 = { cmd = "pytest" }
-        test6 = { depends_on = ["test5"] }
+        test6 = { depends-on = ["test5"] }
 
         [tool.pixi.feature.test.target.linux-64.dependencies]
         test = "bla"
@@ -393,7 +389,6 @@ mod tests {
         dependencies = ["flask==2.*"]
 
         [tool.pixi.project]
-        name = "flask-hello-world-pyproject"
         channels = ["conda-forge"]
         platforms = ["linux-64"]
 
@@ -412,10 +407,9 @@ mod tests {
             Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_BOILERPLATE).unwrap();
 
         // Add numpy to pyproject
-        let name = PyPiPackageName::from_str("numpy").unwrap();
-        let requirement = PyPiRequirement::RawVersion(">=3.12".parse().unwrap());
+        let requirement = pep508_rs::Requirement::from_str("numpy>=3.12").unwrap();
         manifest
-            .add_pypi_dependency(&name, &requirement, None, &FeatureName::Default)
+            .add_pypi_dependency(&requirement, None, &FeatureName::Default, None)
             .unwrap();
 
         assert!(manifest
@@ -426,18 +420,17 @@ mod tests {
             .pypi_dependencies
             .as_ref()
             .unwrap()
-            .get(&name)
+            .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
             .is_some());
 
         // Add numpy to feature in pyproject
-        let name = PyPiPackageName::from_str("pytest").unwrap();
-        let requirement = PyPiRequirement::RawVersion(">=3.12".parse().unwrap());
+        let requirement = pep508_rs::Requirement::from_str("pytest>=3.12").unwrap();
         manifest
             .add_pypi_dependency(
-                &name,
                 &requirement,
                 None,
                 &FeatureName::Named("test".to_string()),
+                None,
             )
             .unwrap();
         assert!(manifest
@@ -449,7 +442,7 @@ mod tests {
             .pypi_dependencies
             .as_ref()
             .unwrap()
-            .get(&name)
+            .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
             .is_some());
 
         assert_snapshot!(manifest.document.to_string());
@@ -478,5 +471,23 @@ mod tests {
             .is_none());
 
         assert_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_version_url_to_matchspec() {
+        fn cmp(v1: &str, v2: &str) {
+            let v = VersionSpecifiers::from_str(v1).unwrap();
+            let matchspec = super::version_or_url_to_nameless_matchspec(&Some(v)).unwrap();
+            let vspec = VersionSpec::from_str(v2, ParseStrictness::Strict).unwrap();
+            assert_eq!(matchspec.version, Some(vspec));
+        }
+
+        // Check that we remove leading `==` for the conda version spec
+        cmp("==3.12", "3.12");
+        cmp("==3.12.*", "3.12.*");
+        // rest should work just fine
+        cmp(">=3.12", ">=3.12");
+        cmp(">=3.10,<3.12", ">=3.10,<3.12");
+        cmp("~=3.12", "~=3.12");
     }
 }

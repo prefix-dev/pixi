@@ -46,18 +46,20 @@ impl EnvironmentName {
 
     /// Tries to read the environment name from an argument, then it will try
     /// to read from an environment variable, otherwise it will fall back to default
-    pub fn from_arg_or_env_var(arg_name: Option<String>) -> Self {
+    pub fn from_arg_or_env_var(
+        arg_name: Option<String>,
+    ) -> Result<Self, ParseEnvironmentNameError> {
         if let Some(arg_name) = arg_name {
-            return EnvironmentName::Named(arg_name);
+            return EnvironmentName::from_str(&arg_name);
         } else if std::env::var("PIXI_IN_SHELL").is_ok() {
             if let Ok(env_var_name) = std::env::var("PIXI_ENVIRONMENT_NAME") {
                 if env_var_name == consts::DEFAULT_ENVIRONMENT_NAME {
-                    return EnvironmentName::Default;
+                    return Ok(EnvironmentName::Default);
                 }
-                return EnvironmentName::Named(env_var_name);
+                return Ok(EnvironmentName::Named(env_var_name));
             }
         }
-        EnvironmentName::Default
+        Ok(EnvironmentName::Default)
     }
 }
 
@@ -140,6 +142,21 @@ pub struct Environment {
     /// An optional solver-group. Multiple environments can share the same solve-group. All the
     /// dependencies of the environment that share the same solve-group will be solved together.
     pub solve_group: Option<usize>,
+
+    /// Whether to include the default feature in that environment
+    pub no_default_feature: bool,
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Self {
+            name: EnvironmentName::Default,
+            features: Vec::new(),
+            features_source_loc: None,
+            solve_group: None,
+            no_default_feature: false,
+        }
+    }
 }
 
 /// Helper struct to deserialize the environment from TOML.
@@ -150,6 +167,8 @@ pub(super) struct TomlEnvironment {
     #[serde(default)]
     pub features: PixiSpanned<Vec<String>>,
     pub solve_group: Option<String>,
+    #[serde(default)]
+    pub no_default_feature: bool,
 }
 
 pub(super) enum TomlEnvironmentMapOrSeq {

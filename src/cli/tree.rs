@@ -7,7 +7,7 @@ use itertools::Itertools;
 use rattler_conda_types::Platform;
 
 use crate::lock_file::UpdateLockFileOptions;
-use crate::project::manifest::EnvironmentName;
+use crate::project::has_features::HasFeatures;
 use crate::Project;
 
 /// Show a tree of project dependencies
@@ -70,10 +70,7 @@ static UTF8_SYMBOLS: Symbols = Symbols {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-    let environment_name = EnvironmentName::from_arg_or_env_var(args.environment);
-    let environment = project
-        .environment(&environment_name)
-        .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))?;
+    let environment = project.environment_from_name_or_env_var(args.environment)?;
     let lock_file = project
         .up_to_date_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.lock_file_usage.into(),
@@ -81,7 +78,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ..UpdateLockFileOptions::default()
         })
         .await?;
-    let platform = args.platform.unwrap_or_else(Platform::current);
+    let platform = args.platform.unwrap_or_else(|| environment.best_platform());
     let locked_deps = lock_file
         .lock_file
         .environment(environment.name().as_str())
@@ -90,10 +87,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let dep_map = generate_dependency_map(&locked_deps);
 
-    let direct_deps = direct_dependencies(&environment, &platform);
+    let direct_deps = direct_dependencies(&environment, &platform, &dep_map);
 
-    if !environment_name.is_default() {
-        eprintln!("Environment: {}", environment_name.fancy_display());
+    if !environment.is_default() {
+        eprintln!("Environment: {}", environment.name().fancy_display());
     }
 
     if args.invert {
@@ -350,22 +347,38 @@ fn print_package(prefix: String, package: &Package, direct: bool, visited: bool)
 fn direct_dependencies(
     environment: &crate::project::Environment<'_>,
     platform: &Platform,
+    dep_map: &HashMap<String, Package>,
 ) -> Vec<String> {
     let mut project_dependency_names = environment
         .dependencies(None, Some(*platform))
         .names()
+        .filter(|p| {
+            if let Some(value) = dep_map.get(p.as_source()) {
+                value.source == PackageSource::Conda
+            } else {
+                false
+            }
+        })
         .map(|p| p.as_source().to_string())
         .collect_vec();
+
     project_dependency_names.extend(
         environment
             .pypi_dependencies(Some(*platform))
             .into_iter()
+            .filter(|(name, _)| {
+                if let Some(value) = dep_map.get(&*name.as_normalized().as_dist_info_name()) {
+                    value.source == PackageSource::Pypi
+                } else {
+                    false
+                }
+            })
             .map(|(name, _)| name.as_normalized().as_dist_info_name().into_owned()),
     );
     project_dependency_names
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum PackageSource {
     Conda,
     Pypi,

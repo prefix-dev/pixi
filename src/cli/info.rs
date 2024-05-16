@@ -13,6 +13,7 @@ use serde_with::DisplayFromStr;
 use tokio::task::spawn_blocking;
 
 use crate::progress::await_in_progress;
+use crate::project::has_features::HasFeatures;
 use crate::task::TaskName;
 use crate::{config, EnvironmentName, FeatureName, Project};
 
@@ -136,7 +137,17 @@ impl Display for EnvironmentInfo {
             )?;
         }
         if !self.tasks.is_empty() {
-            let tasks_list = self.tasks.iter().map(|t| t.fancy_display()).format(", ");
+            let tasks_list = self
+                .tasks
+                .iter()
+                .filter_map(|t| {
+                    if !t.as_str().starts_with('_') {
+                        Some(t.fancy_display())
+                    } else {
+                        None
+                    }
+                })
+                .format(", ");
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Tasks"), tasks_list)?;
         }
         Ok(())
@@ -307,28 +318,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .iter()
                 .map(|env| {
                     let tasks = env
-                        .tasks(None, true)
+                        .tasks(None)
                         .ok()
                         .map(|t| t.into_keys().cloned().collect())
                         .unwrap_or_default();
 
                     EnvironmentInfo {
                         name: env.name().clone(),
-                        features: env
-                            .features(true)
-                            .map(|feature| feature.name.clone())
-                            .collect(),
+                        features: env.features().map(|feature| feature.name.clone()).collect(),
                         solve_group: env
                             .solve_group()
                             .map(|solve_group| solve_group.name().to_string()),
                         environment_size: None,
                         dependencies: env
-                            .dependencies(None, Some(Platform::current()))
+                            .dependencies(None, Some(env.best_platform()))
                             .names()
                             .map(|p| p.as_source().to_string())
                             .collect(),
                         pypi_dependencies: env
-                            .pypi_dependencies(Some(Platform::current()))
+                            .pypi_dependencies(Some(env.best_platform()))
                             .into_iter()
                             .map(|(name, _p)| name.as_source().to_string())
                             .collect(),

@@ -11,8 +11,9 @@ The audience for this tutorial is developers who are familiar with ROS 2 and how
   The crux of this tutorial is to show you only need pixi!
 - On Windows, it's advised to enable Developer mode. Go to Settings -> Update & Security -> For developers -> Developer mode.
 
-If you're new to pixi, you can check out the [basic usage](../basic_usage.md) guide.
-This will teach you the basics of pixi project within 3 minutes.
+!!! note ""
+    If you're new to pixi, you can check out the [basic usage](../basic_usage.md) guide.
+    This will teach you the basics of pixi project within 3 minutes.
 
 ## Create a pixi project.
 
@@ -167,7 +168,7 @@ pixi run hello
 ???+ tip "Advanced task usage"
     Tasks are a powerful feature in pixi.
 
-    - You can add [`depends_on`](../features/advanced_tasks.md#depends-on) to the tasks to create a task chain.
+    - You can add [`depends-on`](../features/advanced_tasks.md#depends-on) to the tasks to create a task chain.
     - You can add [`cwd`](../features/advanced_tasks.md#working-directory) to the tasks to run the task in a different directory from the root of the project.
     - You can add [`inputs` and `outputs`](../features/advanced_tasks.md#caching) to the tasks to create a task that only runs when the inputs are changed.
     - You can use the [`target`](../reference/configuration.md#the-target-table) syntax to run specific tasks on specific machines.
@@ -176,7 +177,7 @@ pixi run hello
 [tasks]
 sim = "ros2 run turtlesim turtlesim_node"
 build = {cmd = "colcon build --symlink-install", inputs = ["src"]}
-hello = { cmd = "ros2 run my_package my_node", depends_on = ["build"] }
+hello = { cmd = "ros2 run my_package my_node", depends-on = ["build"] }
 ```
 
 ## Build a C++ node
@@ -207,6 +208,17 @@ pixi run ros2 run my_cpp_package my_cpp_node
     ```shell
     pixi task add hello-cpp "ros2 run my_cpp_package my_cpp_node"
     ```
+
+## Conclusion
+In this tutorial, we showed you how to create a Python & CMake ROS2 project using `pixi`.
+We also showed you how to **add dependencies** to your project using `pixi`, and how to **run your project** using `pixi run`.
+This way you can make sure that your project is **reproducible** on all your machines that have `pixi` installed.
+
+## Show Off Your Work!
+Finished with your project?
+We'd love to see what you've created!
+Share your work on social media using the hashtag #pixi and tag us @prefix_dev.
+Let's inspire the community together!
 
 ## Frequently asked questions
 

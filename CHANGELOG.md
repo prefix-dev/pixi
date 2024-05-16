@@ -5,6 +5,192 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] - 2024-05-13
+### ✨ Highlights
+
+- Support for source pypi dependencies through the cli:
+  - `pixi add --pypi 'package @ package.whl'`, perfect for adding just build wheels to your environment in CI.
+  - `pixi add --pypi 'package_from_git @ git+https://github.com/org/package.git'`, to add a package from a git repository.
+  - `pixi add --pypi 'package_from_path @ file:///path/to/package' --editable`, to add a package from a local path.
+
+
+### 📃 Details
+#### Added
+- Implement more functions for `pixi add --pypi` by @wolfv in [#1244](https://github.com/prefix-dev/pixi/pull/1244)
+
+#### Documentation
+- Update `install` cli doc by @vigneshmanick in [#1336](https://github.com/prefix-dev/pixi/pull/1336)
+- Replace empty default example with no-default-feature by @beenje in [#1352](https://github.com/prefix-dev/pixi/pull/1352)
+- Document the add & remove cli behaviour with pyproject.toml manifest by @olivier-lacroix in [#1338](https://github.com/prefix-dev/pixi/pull/1338)
+- Add environment activation to GitHub actions docs by @pavelzw in [#1371](https://github.com/prefix-dev/pixi/pull/1371)
+- Clarify in CLI that run can also take commands by @twrightsman in [#1368](https://github.com/prefix-dev/pixi/pull/1368)
+
+#### Fixed
+
+- Automated update of install script in pixi.sh by @ruben-arts in [#1351](https://github.com/prefix-dev/pixi/pull/1351)
+- Wrong description on `pixi project help` by @notPlancha in [#1358](https://github.com/prefix-dev/pixi/pull/1358)
+- Don't need a python interpreter when not having `pypi` dependencies. by @ruben-arts in [#1366](https://github.com/prefix-dev/pixi/pull/1366)
+- Don't error on not editable not path by @ruben-arts in [#1365](https://github.com/prefix-dev/pixi/pull/1365)
+- Align shell-hook cli with shell by @ruben-arts in [#1364](https://github.com/prefix-dev/pixi/pull/1364)
+- Only write prefix file if needed by @ruben-arts in [#1363](https://github.com/prefix-dev/pixi/pull/1363)
+
+
+#### Refactor
+- Lock-file resolve functionality in separated modules by @tdejager in [#1337](https://github.com/prefix-dev/pixi/pull/1337)
+- Use generic for RepoDataRecordsByName and PypiRecordsByName by @olivier-lacroix in [#1341](https://github.com/prefix-dev/pixi/pull/1341)
+
+
+## New Contributors
+* @twrightsman made their first contribution in [#1368](https://github.com/prefix-dev/pixi/pull/1368)
+* @notPlancha made their first contribution in [#1358](https://github.com/prefix-dev/pixi/pull/1358)
+* @vigneshmanick made their first contribution in [#1336](https://github.com/prefix-dev/pixi/pull/1336)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.21.1..v0.22.0)
+
+
+## [0.21.1] - 2024-05-07
+### 📃 Details
+#### Fixed
+- Use read timeout, not global timeout by @wolfv in [#1329](https://github.com/prefix-dev/pixi/pull/1329)
+- Channel priority logic by @ruben-arts in [#1332](https://github.com/prefix-dev/pixi/pull/1332)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.21.0..v0.21.1)
+
+## [0.21.0] - 2024-05-06
+### ✨ Highlights
+- This release adds support for configuring PyPI settings globally, to use alternative PyPI indexes and load credentials with keyring.
+- We now support cross-platform running, for `osx-64` on `osx-arm64` and `wasm` environments.
+- There is now a `no-default-feature` option to simplify usage of environments.
+
+### 📃 Details
+
+#### Added
+- Add pypi config for global local config file + keyring support by @wolfv in [#1279](https://github.com/prefix-dev/pixi/pull/1279)
+- Allow for cross-platform running, for `osx-64` on `osx-arm64` and `wasm` environments by @wolfv in [#1020](https://github.com/prefix-dev/pixi/pull/1020)
+
+#### Changed
+- Add `no-default-feature` option to environments by @olivier-lacroix in [#1092](https://github.com/prefix-dev/pixi/pull/1092)
+- Add `/etc/pixi/config.toml` to global configuration search paths by @pavelzw in [#1304](https://github.com/prefix-dev/pixi/pull/1304)
+- Change global config fields to kebab-case by @tdejager in [#1308](https://github.com/prefix-dev/pixi/pull/1308)
+- Show all available task with `task list` by @Hoxbro in [#1286](https://github.com/prefix-dev/pixi/pull/1286)
+- Allow to emit activation environment variables as JSON by @borchero in [#1317](https://github.com/prefix-dev/pixi/pull/1317)
+- Use locked pypi packages as preferences in the pypi solve to get minimally updating lock files by @ruben-arts in [#1320](https://github.com/prefix-dev/pixi/pull/1320)
+- Allow to upgrade several global packages at once by @olivier-lacroix in [#1324](https://github.com/prefix-dev/pixi/pull/1324)
+
+#### Documentation
+- Typo in tutorials python by @carschandler in [#1297](https://github.com/prefix-dev/pixi/pull/1297)
+- Python Tutorial: Dependencies, PyPI, Order, Grammar by @JesperDramsch in [#1313](https://github.com/prefix-dev/pixi/pull/1313)
+
+#### Fixed
+- Schema version and add it to tbump by @ruben-arts in [#1284](https://github.com/prefix-dev/pixi/pull/1284)
+- Make integration test fail in ci and fix ssh issue by @ruben-arts in [#1301](https://github.com/prefix-dev/pixi/pull/1301)
+- Automate adding install scripts to the docs by @ruben-arts in [#1302](https://github.com/prefix-dev/pixi/pull/1302)
+- Do not always request for prefix mapping by @nichmor in [#1300](https://github.com/prefix-dev/pixi/pull/1300)
+- Align CLI aliases and add missing by @ruben-arts in [#1316](https://github.com/prefix-dev/pixi/pull/1316)
+- Alias `depends_on` to `depends-on` by @ruben-arts in [#1310](https://github.com/prefix-dev/pixi/pull/1310)
+- Add error if channel or platform doesn't exist on remove by @ruben-arts in [#1315](https://github.com/prefix-dev/pixi/pull/1315)
+- Allow spec in `pixi q` instead of only name by @ruben-arts in [#1314](https://github.com/prefix-dev/pixi/pull/1314)
+- Remove dependency on sysroot for linux by @ruben-arts in [#1319](https://github.com/prefix-dev/pixi/pull/1319)
+- Fix linking symlink issue, by updating to the latest `rattler` by @baszalmstra in [#1327](https://github.com/prefix-dev/pixi/pull/1327)
+
+#### Refactor
+- Use IndexSet instead of Vec for collections of unique elements by @olivier-lacroix in [#1289](https://github.com/prefix-dev/pixi/pull/1289)
+- Use generics over PyPiDependencies and CondaDependencies by @olivier-lacroix in [#1303](https://github.com/prefix-dev/pixi/pull/1303)
+
+## New Contributors
+* @borchero made their first contribution in [#1317](https://github.com/prefix-dev/pixi/pull/1317)
+* @JesperDramsch made their first contribution in [#1313](https://github.com/prefix-dev/pixi/pull/1313)
+* @Hoxbro made their first contribution in [#1286](https://github.com/prefix-dev/pixi/pull/1286)
+* @carschandler made their first contribution in [#1297](https://github.com/prefix-dev/pixi/pull/1297)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.20.1..v0.21.0)
+
+## [0.20.1] - 2024-04-26
+### ✨ Highlights
+- Big improvements on the pypi-editable installs.
+
+
+### 📃 Details
+#### Fixed
+- Editable non-satisfiable by @baszalmstra in [#1251](https://github.com/prefix-dev/pixi/pull/1251)
+- Satisfiability with pypi extras by @baszalmstra in [#1253](https://github.com/prefix-dev/pixi/pull/1253)
+- Change global install activation script permission from 0o744 -> 0o755 by @zen-xu in [#1250](https://github.com/prefix-dev/pixi/pull/1250)
+- Avoid creating Empty TOML tables by @olivier-lacroix in [#1270](https://github.com/prefix-dev/pixi/pull/1270)
+- Uses the special-case uv path handling for both built and source by @tdejager in [#1263](https://github.com/prefix-dev/pixi/pull/1263)
+- Modify test before attempting to write to .bash_profile in install.sh by @bruchim-cisco in [#1267](https://github.com/prefix-dev/pixi/pull/1267)
+- Parse properly 'default' as environment Cli argument by @olivier-lacroix in [#1247](https://github.com/prefix-dev/pixi/pull/1247)
+- Apply `schema.json` normalization, add to docs by @bollwyvl in [#1265](https://github.com/prefix-dev/pixi/pull/1265)
+- Improve absolute path satisfiability by @tdejager in [#1252](https://github.com/prefix-dev/pixi/pull/1252)
+- Improve parse deno error and make task a required field in the cli by @ruben-arts in [#1260](https://github.com/prefix-dev/pixi/pull/1260)
+
+## New Contributors
+* @bollwyvl made their first contribution in [#1265](https://github.com/prefix-dev/pixi/pull/1265)
+* @bruchim-cisco made their first contribution in [#1267](https://github.com/prefix-dev/pixi/pull/1267)
+* @zen-xu made their first contribution in [#1250](https://github.com/prefix-dev/pixi/pull/1250)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.20.0..v0.20.1)
+
+
+## [0.20.0] - 2024-04-19
+### ✨ Highlights
+
+- We now support `env` variables in the `task` definition, these can also be used as default values for parameters in your task which you can overwrite with your shell's env variables.
+e.g. `task = { cmd = "task to run", env = { VAR="value1", PATH="my/path:$PATH" } }`
+- We made a big effort on fixing issues and improving documentation!
+
+### 📃 Details
+#### Added
+- Add `env` to the tasks to specify tasks specific environment variables by @wolfv in https://github.com/prefix-dev/pixi/pull/972
+
+#### Changed
+- Add `--pyproject` option to `pixi init` with a pyproject.toml by @olivier-lacroix in [#1188](https://github.com/prefix-dev/pixi/pull/1188)
+- Upgrade to new uv version 0.1.32 by @tdejager in [#1208](https://github.com/prefix-dev/pixi/pull/1208)
+
+#### Documentation
+- Document `pixi.lock` by @ruben-arts in [#1209](https://github.com/prefix-dev/pixi/pull/1209)
+- Document channel `priority` definition by @ruben-arts in [#1234](https://github.com/prefix-dev/pixi/pull/1234)
+- Add rust tutorial including openssl example by @ruben-arts in [#1155](https://github.com/prefix-dev/pixi/pull/1155)
+- Add python tutorial to documentation by @tdejager in [#1179](https://github.com/prefix-dev/pixi/pull/1179)
+- Add JupyterLab integration docs by @renan-r-santos in [#1147](https://github.com/prefix-dev/pixi/pull/1147)
+
+- Add Windows support for PyCharm integration by @pavelzw in [#1192](https://github.com/prefix-dev/pixi/pull/1192)
+- Setup_pixi for local pixi installation by @ytausch in [#1181](https://github.com/prefix-dev/pixi/pull/1181)
+- Update pypi docs by @Hofer-Julian in [#1215](https://github.com/prefix-dev/pixi/pull/1215)
+- Fix order of `--no-deps` when pip installing in editable mode by @glemaitre in [#1220](https://github.com/prefix-dev/pixi/pull/1220)
+- Fix frozen documentation by @ruben-arts in [#1167](https://github.com/prefix-dev/pixi/pull/1167)
+
+#### Fixed
+- Small typo in list cli by @tdejager in [#1169](https://github.com/prefix-dev/pixi/pull/1169)
+- Issue with invalid solve group by @baszalmstra in [#1190](https://github.com/prefix-dev/pixi/pull/1190)
+- Improve error on parsing lockfile by @ruben-arts in [#1180](https://github.com/prefix-dev/pixi/pull/1180)
+- Replace `_` with `-` when creating environments from features by @wolfv in [#1203](https://github.com/prefix-dev/pixi/pull/1203)
+- Prevent duplicate direct dependencies in tree by @abkfenris in [#1184](https://github.com/prefix-dev/pixi/pull/1184)
+- Use project root directory instead of task.working_directory for base dir when hashing by @wolfv in [#1202](https://github.com/prefix-dev/pixi/pull/1202)
+- Do not leak env vars from bat scripts in cmd.exe by @wolfv in [#1205](https://github.com/prefix-dev/pixi/pull/1205)
+- Make file globbing behave more as expected by @wolfv in [#1204](https://github.com/prefix-dev/pixi/pull/1204)
+- Fix for using file::// in pyproject.toml dependencies by @tdejager in [#1196](https://github.com/prefix-dev/pixi/pull/1196)
+- Improve pypi version conversion in pyproject.toml dependencies by @wolfv in [#1201](https://github.com/prefix-dev/pixi/pull/1201)
+- Update to the latest rattler by @wolfv in [#1235](https://github.com/prefix-dev/pixi/pull/1235)
+
+#### **BREAKING**
+- `task = { cmd = "task to run", cwd = "folder", inputs = "input.txt", output = "output.txt"}` Where `input.txt` and `output.txt` where previously in `folder` they are now relative the project root. This changed in: [#1202](https://github.com/prefix-dev/pixi/pull/1202)
+- `task = { cmd = "task to run", inputs = "input.txt"}` previously searched for all `input.txt` files now only for the ones in the project root. This changed in:  [#1204](https://github.com/prefix-dev/pixi/pull/1204)
+
+## New Contributors
+* @glemaitre made their first contribution in [#1220](https://github.com/prefix-dev/pixi/pull/1220)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.19.1..v0.20.0)
+
+
+## [0.19.1] - 2024-04-11
+### ✨ Highlights
+This fixes the issue where pixi would generate broken environments/lockfiles when a mapping for a brand-new version of a package is missing.
+
+### 📃 Details
+- Add fallback mechanism for missing mapping by @nichmor in [#1166](https://github.com/prefix-dev/pixi/pull/1166)
+
+[Full commit history](https://github.com/prefix-dev/pixi/compare/v0.19.0..v0.19.1)
+
 ## [0.19.0] - 2024-04-10
 ### ✨ Highlights
 - This release adds a new `pixi tree` command to show the dependency tree of the project.

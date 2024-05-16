@@ -1,12 +1,13 @@
 mod common;
 
 use std::path::Path;
+use std::str::FromStr;
 
 use crate::common::builders::string_from_iter;
 use crate::common::package_database::{Package, PackageDatabase};
 use common::{LockFileExt, PixiControl};
 use pixi::cli::{run, LockFileUsageArgs};
-use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
+use pixi::consts::{DEFAULT_ENVIRONMENT_NAME, PIXI_UV_INSTALLER};
 use rattler_conda_types::Platform;
 use serial_test::serial;
 use tempfile::TempDir;
@@ -123,7 +124,17 @@ async fn install_locked() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
-    pixi.add("python==3.10.0").await.unwrap();
+    let python_version = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
+        "python==3.10.0"
+    } else if cfg!(target_os = "windows") {
+        // Abusing this test to also test the `add` function of older version of python
+        // Before this wasn't possible because uv queried the python interpreter, even without pypi dependencies.
+        "python==3.6.0"
+    } else {
+        "python==2.7.15"
+    };
+
+    pixi.add(python_version).await.unwrap();
 
     // Add new version of python only to the manifest
     pixi.add("python==3.9.0")
@@ -138,7 +149,7 @@ async fn install_locked() {
     assert!(lock.contains_match_spec(
         DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
-        "python==3.10.0"
+        python_version
     ));
 
     // After an install with lockfile update the locked install should succeed.
@@ -225,7 +236,7 @@ async fn pypi_reinstall_python() {
         .await
         .unwrap();
 
-    let prefix = pixi.project().unwrap().root().join(".pixi/envs/default");
+    let prefix = pixi.default_env_path().unwrap();
 
     let cache = uv_cache::Cache::temp().unwrap();
 
@@ -265,13 +276,13 @@ async fn pypi_add_remove() {
     pixi.add("python==3.11").with_install(true).await.unwrap();
 
     // Add flask from pypi
-    pixi.add("flask")
+    pixi.add("flask[dotenv]")
         .with_install(true)
         .set_type(pixi::DependencyType::PypiDependency)
         .await
         .unwrap();
 
-    let prefix = pixi.project().unwrap().root().join(".pixi/envs/default");
+    let prefix = pixi.default_env_path().unwrap();
 
     let cache = uv_cache::Cache::temp().unwrap();
 
@@ -280,8 +291,9 @@ async fn pypi_add_remove() {
     let installed_311 = uv_installer::SitePackages::from_executable(&env).unwrap();
     assert!(installed_311.iter().count() > 0);
 
-    pixi.remove("flask")
+    pixi.remove("flask[dotenv]")
         .set_type(pixi::DependencyType::PypiDependency)
+        .with_install(true)
         .await
         .unwrap();
 
@@ -350,8 +362,113 @@ async fn install_conda_meta_history() {
     // Add and update lockfile with this version of python
     pixi.add("python==3.11").with_install(true).await.unwrap();
 
-    let prefix = pixi.project().unwrap().root().join(".pixi/envs/default");
+    let prefix = pixi.default_env_path().unwrap();
     let conda_meta_history_file = prefix.join("conda-meta/history");
 
     assert!(conda_meta_history_file.exists());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[serial]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn minimal_lockfile_update_pypi() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    // Add and update lockfile with this version of python
+    pixi.add("python==3.11").with_install(true).await.unwrap();
+
+    // Add pypi dependencies which are not the latest options
+    pixi.add_multiple(vec!["uvicorn==0.28.0", "click==7.1.2"])
+        .set_type(pixi::DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    // Check the locked click dependencies
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_pep508_requirement(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
+    ));
+
+    // Widening the click version to allow for the latest version
+    pixi.add_multiple(vec!["uvicorn==0.29.0", "click"])
+        .set_type(pixi::DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+
+    // Check the locked click dependencies to see if it was only minimally updated
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_pep508_requirement(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        // With a fresh solve this would be bumped to `>=8.0.0`
+        pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
+    ));
+}
+
+/// Create a test that installs a package with pixi
+/// change the installer and see if it does not touch the package
+/// then change the installer back and see if it reinstalls the package
+/// with a new version
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[serial]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_installer_name() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    // Add and update lockfile with this version of python
+    pixi.add("python==3.11").with_install(true).await.unwrap();
+    pixi.add("click==8.0.0")
+        .set_type(pixi::DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+    dbg!(pixi.default_env_path().unwrap());
+
+    // Get the correct dist-info folder
+    let dist_info = if cfg!(not(target_os = "windows")) {
+        pixi.default_env_path()
+            .unwrap()
+            .join("lib/python3.11/site-packages/click-8.0.0.dist-info")
+    } else {
+        let default_env_path = pixi.default_env_path().unwrap();
+        default_env_path.join("Lib/site-packages/click-8.0.0.dist-info")
+    };
+    // Check that installer name is uv-pixi
+    assert!(dist_info.exists(), "{dist_info:?} does not exist");
+    let installer = dist_info.join("INSTALLER");
+    let installer = std::fs::read_to_string(installer).unwrap();
+    assert_eq!(installer, PIXI_UV_INSTALLER);
+
+    // Write a new installer name to the INSTALLER file
+    // so that we fake that it is not installed by pixi
+    std::fs::write(dist_info.join("INSTALLER"), "not-pixi").unwrap();
+    pixi.remove("click==8.0.0")
+        .with_install(true)
+        .set_type(pixi::DependencyType::PypiDependency)
+        .await
+        .unwrap();
+
+    // dist info folder should still exists
+    // and should have the old installer name
+    // we know that pixi did not touch the package
+    assert!(dist_info.exists());
+    let installer = dist_info.join("INSTALLER");
+    let installer = std::fs::read_to_string(installer).unwrap();
+    assert_eq!(installer, "not-pixi");
+
+    // re-manage the package by adding it, this should cause a reinstall
+    pixi.add("click==8.0.0")
+        .set_type(pixi::DependencyType::PypiDependency)
+        .with_install(true)
+        .await
+        .unwrap();
+    let installer = dist_info.join("INSTALLER");
+    let installer = std::fs::read_to_string(installer).unwrap();
+    assert_eq!(installer, PIXI_UV_INSTALLER);
 }

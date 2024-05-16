@@ -5,13 +5,13 @@ use crate::utils::conda_environment_file::CondaEnvFile;
 use crate::{config::get_default_author, consts};
 use crate::{FeatureName, Project};
 use clap::Parser;
-use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use minijinja::{context, Environment};
 use rattler_conda_types::Platform;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::{fs, path::PathBuf};
+use url::Url;
 
 /// Creates a new project
 #[derive(Parser, Debug)]
@@ -31,6 +31,10 @@ pub struct Args {
     /// Environment.yml file to bootstrap the project.
     #[arg(short = 'i', long = "import")]
     pub env_file: Option<PathBuf>,
+
+    /// Create a pyproject.toml manifest instead of a pixi.toml manifest
+    #[arg(long, conflicts_with = "env_file")]
+    pub pyproject: bool,
 }
 
 /// The pixi.toml template
@@ -46,6 +50,13 @@ authors = ["{{ author[0] }} <{{ author[1] }}>"]
 channels = {{ channels }}
 platforms = {{ platforms }}
 
+{%- if index_url or extra_indexes %}
+
+[pypi-options]
+{% if index_url %}index-url = "{{ index_url }}"{% endif %}
+{% if extra_index_urls %}extra-index-urls = {{ extra_index_urls }}{% endif %}
+{%- endif %}
+
 [tasks]
 
 [dependencies]
@@ -53,7 +64,9 @@ platforms = {{ platforms }}
 "#;
 
 /// The pyproject.toml template
-const PYROJECT_TEMPLATE: &str = r#"
+///
+/// This is injected into an existing pyproject.toml
+const PYROJECT_TEMPLATE_EXISTING: &str = r#"
 [tool.pixi.project]
 channels = {{ channels }}
 platforms = {{ platforms }}
@@ -68,6 +81,44 @@ default = { solve-group = "default" }
 {%- endif %}
 {{env}} = { features = {{ features }}, solve-group = "default" }
 {%- endfor %}
+
+[tool.pixi.tasks]
+
+"#;
+
+/// The pyproject.toml template
+///
+/// This is used to create a pyproject.toml from scratch
+const NEW_PYROJECT_TEMPLATE: &str = r#"[project]
+name = "{{ name }}"
+version = "{{ version }}"
+description = "Add a short description here"
+{%- if author %}
+authors = [{name = "{{ author[0] }}", email = "{{ author[1] }}"}]
+{%- endif %}
+requires-python = ">= 3.11"
+dependencies = []
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.pixi.project]
+channels = {{ channels }}
+platforms = {{ platforms }}
+
+
+{%- if index_url or extra_indexes %}
+
+[tool.pixi.pypi-options]
+{% if index_url %}index-url = "{{ index_url }}"{% endif %}
+{% if extra_index_urls %}extra-index-urls = {{ extra_index_urls }}{% endif %}
+{%- endif %}
+
+[tool.pixi.pypi-dependencies]
+{{ name }} = { path = ".", editable = true }
+
+[tool.pixi.tasks]
 
 "#;
 
@@ -117,7 +168,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         //  - Use .condarc as channel config
         //  - Implement it for `[crate::project::manifest::ProjectManifest]` to do this for other filetypes, e.g. (pyproject.toml, requirements.txt)
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
-        let rv = render_project(&env, name, version, &author, channels, &platforms);
+        let rv = render_project(
+            &env,
+            name,
+            version,
+            author.as_ref(),
+            channels,
+            &platforms,
+            None,
+            &vec![],
+        );
         let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
         for spec in conda_deps {
             for platform in platforms.iter() {
@@ -130,31 +190,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 )?;
             }
         }
-        for spec in pypi_deps {
+        for requirement in pypi_deps {
             for platform in platforms.iter() {
                 project.manifest.add_pypi_dependency(
-                    &spec.0,
-                    &spec.1,
+                    &requirement,
                     Some(platform.parse().into_diagnostic()?),
                     &FeatureName::default(),
+                    None,
                 )?;
             }
         }
         project.save()?;
 
-        get_up_to_date_prefix(
-            &project.default_environment(),
-            LockFileUsage::Update,
-            false,
-            IndexMap::default(),
-        )
-        .await?;
+        get_up_to_date_prefix(&project.default_environment(), LockFileUsage::Update, false).await?;
     } else {
         let channels = if let Some(channels) = args.channels {
             channels
         } else {
             config.default_channels().to_vec()
         };
+
+        let index_url = config.pypi_config.index_url;
+        let extra_index_urls = config.pypi_config.extra_index_urls;
 
         // Inject a tool.pixi.project section into an existing pyproject.toml file if there is one without '[tool.pixi.project]'
         if pyproject_manifest_path.is_file() {
@@ -175,7 +232,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,
-                    PYROJECT_TEMPLATE,
+                    PYROJECT_TEMPLATE_EXISTING,
                     context! {
                         name,
                         channels,
@@ -214,13 +271,40 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }
             }
 
+        // Create a 'pyproject.toml' manifest
+        } else if args.pyproject {
+            let rv = env
+                .render_named_str(
+                    consts::PYPROJECT_MANIFEST,
+                    NEW_PYROJECT_TEMPLATE,
+                    context! {
+                        name => default_name,
+                        version,
+                        author,
+                        channels,
+                        platforms,
+                        index_url => index_url.as_ref(),
+                        extra_index_urls => &extra_index_urls,
+                    },
+                )
+                .unwrap();
+            fs::write(&pyproject_manifest_path, rv).into_diagnostic()?;
         // Create a 'pixi.toml' manifest
         } else {
             // Check if the 'pixi.toml' file doesn't already exist. We don't want to overwrite it.
             if pixi_manifest_path.is_file() {
                 miette::bail!("{} already exists", consts::PROJECT_MANIFEST);
             }
-            let rv = render_project(&env, default_name, version, &author, channels, &platforms);
+            let rv = render_project(
+                &env,
+                default_name,
+                version,
+                author.as_ref(),
+                channels,
+                &platforms,
+                index_url.as_ref(),
+                &extra_index_urls,
+            );
             fs::write(&pixi_manifest_path, rv).into_diagnostic()?;
         };
     }
@@ -253,13 +337,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_project(
     env: &Environment<'_>,
     name: String,
     version: &str,
-    author: &Option<(String, String)>,
+    author: Option<&(String, String)>,
     channels: Vec<String>,
     platforms: &Vec<String>,
+    index_url: Option<&Url>,
+    extra_index_urls: &Vec<Url>,
 ) -> String {
     env.render_named_str(
         consts::PROJECT_MANIFEST,
@@ -269,7 +356,9 @@ fn render_project(
             version,
             author,
             channels,
-            platforms
+            platforms,
+            index_url,
+            extra_index_urls,
         },
     )
     .unwrap()

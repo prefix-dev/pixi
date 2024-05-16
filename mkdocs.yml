@@ -100,10 +100,13 @@ nav:
       - Installation: index.md
       - Basic Usage: basic_usage.md
       - IDE Integration:
+          - JupyterLab: ide_integration/jupyterlab.md
           - PyCharm: ide_integration/pycharm.md
           - RStudio: ide_integration/r_studio.md
   - Tutorials:
+      - Python: tutorials/python.md
       - ROS 2: tutorials/ros2.md
+      - Rust: tutorials/rust.md
   - Examples:
       - C++/Cmake: examples/cpp-sdl.md
       - OpenCV: examples/opencv.md
@@ -113,6 +116,7 @@ nav:
       - Tasks: features/advanced_tasks.md
       - Multi Platform: features/multi_platform_configuration.md
       - Multi Environment: features/multi_environment.md
+      - Lockfile: features/lockfile.md
   - Advanced:
       - Authentication: advanced/authentication.md
       - Info Command: advanced/explain_info_command.md
@@ -127,6 +131,10 @@ nav:
       - Pixi vision: vision.md
       - Community: Community.md
       - FAQ: FAQ.md
+
+hooks:
+  - schema/docs_hooks.py
+  - install/docs_hooks.py
 
 plugins:
   - redirects:

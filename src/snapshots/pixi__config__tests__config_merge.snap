@@ -36,6 +36,7 @@ Config {
             query: None,
             fragment: None,
         },
+        root_dir: "/root/dir",
     },
     repodata_config: Some(
         RepodataConfig {
@@ -48,4 +49,9 @@ Config {
             ),
         },
     ),
+    pypi_config: PyPIConfig {
+        index_url: None,
+        extra_index_urls: [],
+        keyring_provider: None,
+    },
 }

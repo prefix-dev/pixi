@@ -1,4 +1,3 @@
-use indexmap::IndexMap;
 use std::collections::HashMap;
 
 use itertools::Itertools;
@@ -10,6 +9,7 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 
+use crate::project::has_features::HasFeatures;
 use crate::{
     environment::{get_up_to_date_prefix, LockFileUsage},
     project::{manifest::EnvironmentName, Environment},
@@ -222,7 +222,7 @@ pub async fn get_activation_env<'p>(
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<&HashMap<String, String>> {
     // Get the prefix which we can then activate.
-    get_up_to_date_prefix(environment, lock_file_usage, false, IndexMap::default()).await?;
+    get_up_to_date_prefix(environment, lock_file_usage, false).await?;
 
     environment.project().get_env_variables(environment).await
 }

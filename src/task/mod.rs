@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_with::{formats::PreferMany, serde_as, OneOrMany};
@@ -129,6 +130,16 @@ impl Task {
         }
     }
 
+    /// Returns the environment variables for the task to run in.
+    pub fn env(&self) -> Option<&IndexMap<String, String>> {
+        match self {
+            Task::Plain(_) => None,
+            Task::Custom(_) => None,
+            Task::Execute(exe) => exe.env.as_ref(),
+            Task::Alias(_) => None,
+        }
+    }
+
     /// Returns the working directory for the task to run in.
     pub fn working_directory(&self) -> Option<&Path> {
         match self {
@@ -161,12 +172,16 @@ pub struct Execute {
     pub outputs: Option<Vec<String>>,
 
     /// A list of commands that should be run before this one
-    #[serde(default)]
+    // BREAK: Make the alias a renamed field to force kebab-case
+    #[serde(default, alias = "depends-on")]
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<TaskName>,
 
     /// The working directory for the command relative to the root of the project.
     pub cwd: Option<PathBuf>,
+
+    /// A list of environment variables to set before running the command
+    pub env: Option<IndexMap<String, String>>,
 }
 
 impl From<Execute> for Task {
@@ -233,6 +248,7 @@ impl CmdArgs {
 #[serde_as]
 pub struct Alias {
     /// A list of commands that should be run before this one
+    #[serde(alias = "depends-on")]
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<TaskName>,
 }
@@ -243,15 +259,10 @@ impl Display for Task {
             Task::Plain(cmd) => {
                 write!(f, "{}", cmd)?;
             }
-            Task::Execute(cmd) => {
-                match &cmd.cmd {
-                    CmdArgs::Single(cmd) => write!(f, "{}", cmd)?,
-                    CmdArgs::Multiple(mult) => write!(f, "{}", mult.join(" "))?,
-                };
-                if !cmd.depends_on.is_empty() {
-                    write!(f, ", ")?;
-                }
-            }
+            Task::Execute(cmd) => match &cmd.cmd {
+                CmdArgs::Single(cmd) => write!(f, "{}", cmd)?,
+                CmdArgs::Multiple(mult) => write!(f, "{}", mult.join(" "))?,
+            },
             _ => {}
         };
 
@@ -260,19 +271,26 @@ impl Display for Task {
             if depends_on.len() == 1 {
                 write!(
                     f,
-                    "depends_on = '{}'",
+                    ", depends-on = '{}'",
                     depends_on.iter().map(|t| t.fancy_display()).join(",")
-                )
+                )?;
             } else {
                 write!(
                     f,
-                    "depends_on = [{}]",
+                    ", depends-on = [{}]",
                     depends_on.iter().map(|t| t.fancy_display()).join(",")
-                )
+                )?;
             }
-        } else {
-            Ok(())
         }
+
+        let env = self.env();
+        if let Some(env) = env {
+            if !env.is_empty() {
+                write!(f, ", env = {:?}", env)?;
+            }
+        }
+
+        Ok(())
     }
 }
 

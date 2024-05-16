@@ -103,3 +103,114 @@ The JSON should follow the following format:
 Note: if you use a wildcard in the host, any subdomain will match (e.g. `*.prefix.dev` also matches `repo.prefix.dev`).
 
 Lastly you can set the authentication override file in the [global configuration file](./global_configuration.md).
+
+## PyPI authentication
+Currently, we support the following methods for authenticating against PyPI:
+
+1. [keyring](https://pypi.org/project/keyring/) authentication.
+2. `.netrc` file authentication.
+
+We want to add more methods in the future, so if you have a specific method you would like to see, please let us know.
+
+### Keyring authentication
+
+Currently, pixi supports the uv method of authentication through the python [keyring](https://pypi.org/project/keyring/) library.
+To enable this use the CLI flag `--pypi-keyring-provider` which can either be set to `subprocess` (activated) or `disabled`.
+
+```shell
+# From an existing pixi project
+pixi install --pypi-keyring-provider subprocess
+```
+
+This option can also be set in the global configuration file under [pypi-config](./global_configuration.md#pypi-configuration).
+
+#### Installing keyring
+To install keyring you can use pixi global install:
+
+Either use:
+
+```shell
+pixi global install keyring
+```
+??? warning "GCP and other backends"
+    The downside of this method is currently, because you cannot inject into a pixi global environment just yet, that installing different keyring backends is not possible. This allows only the default keyring backend to be used.
+    Give the [issue](https://github.com/prefix-dev/pixi/issues/342) a 👍 up if you would like to see inject as a feature.
+
+Or alternatively, you can install keyring using pipx:
+
+```shell
+# Install pipx if you haven't already
+pixi global install pipx
+pipx install keyring
+
+# For Google Artifact Registry, also install and initialize its keyring backend.
+# Inject this into the pipx environment
+pipx inject keyring keyrings.google-artifactregistry-auth --index-url https://pypi.org/simple
+gcloud auth login
+```
+
+#### Using keyring with Basic Auth
+Use keyring to store your credentials e.g:
+
+```shell
+keyring set https://my-index/simple your_username
+# prompt will appear for your password
+```
+
+##### Configuration
+Make sure to include `username@` in the URL of the registry.
+An example of this would be:
+
+```toml
+[pypi-options]
+index-url = "https://username@custom-registry.com/simple"
+```
+
+#### GCP
+For Google Artifact Registry, you can use the Google Cloud SDK to authenticate.
+Make sure to have run `gcloud auth login` before using pixi.
+Another thing to note is that you need to add `oauth2accesstoken` to the URL of the registry.
+An example of this would be:
+
+##### Configuration
+
+```toml
+# rest of the pixi.toml
+#
+# Add's the following options to the default feature
+[pypi-options]
+extra-index-urls = ["https://oauth2accesstoken@<location>-python.pkg.dev/<project>/<repository>/simple"]
+```
+
+!!!Note
+    Include the `/simple` at the end, replace the `<location>` etc. with your project and repository and location.
+To find this URL more easily, you can use the `gcloud` command:
+
+```shell
+gcloud artifacts print-settings python --project=<project> --repository=<repository> --location=<location>
+```
+
+#### Installing your environment
+To actually install either configure your [Global Config](./global_configuration.md#pypi-configuration), or use the flag:
+```shell
+pixi install --pypi-keyring-provider subprocess
+```
+
+
+### `.netrc` file
+
+`pixi` allows you to access private registries securely by authenticating with credentials stored in a `.netrc` file.
+
+- The `.netrc` file can be stored in your home directory (`$HOME/.netrc` for Unix-like systems)
+- or in the user profile directory on Windows (`%HOME%\_netrc`).
+- You can also set up a different location for it using the `NETRC` variable (`export NETRC=/my/custom/location/.netrc`).
+  e.g `export NETRC=/my/custom/location/.netrc pixi install`
+
+In the `.netrc` file, you store authentication details like this:
+
+```sh
+machine registry-name
+login admin
+password admin
+```
+For more details, you can access the [.netrc docs](https://www.ibm.com/docs/en/aix/7.2?topic=formats-netrc-file-format-tcpip).

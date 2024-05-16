@@ -6,7 +6,7 @@ use crate::Project;
 use clap::Parser;
 use std::path::PathBuf;
 
-/// Commands to manage project channels.
+/// Commands to manage project platforms.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The path to 'pixi.toml' or 'pyproject.toml'
@@ -21,10 +21,13 @@ pub struct Args {
 #[derive(Parser, Debug)]
 pub enum Command {
     /// Adds a platform(s) to the project file and updates the lockfile.
+    #[clap(visible_alias = "a")]
     Add(add::Args),
     /// List the platforms in the project file.
+    #[clap(visible_alias = "ls")]
     List,
     /// Remove platform(s) from the project file and updates the lockfile.
+    #[clap(visible_alias = "rm")]
     Remove(remove::Args),
 }
 

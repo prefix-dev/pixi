@@ -1,21 +1,27 @@
-use crate::project::manifest::{EnvironmentName, FeatureName};
+use crate::project::manifest::EnvironmentName;
+use crate::project::manifest::FeatureName;
+use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::task::{quote, Alias, CmdArgs, Execute, Task, TaskName};
 use crate::Project;
 use clap::Parser;
+use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::miette;
 use rattler_conda_types::Platform;
+use std::collections::HashSet;
+use std::error::Error;
 use std::path::PathBuf;
+use std::str::FromStr;
 use toml_edit::{Array, Item, Table, Value};
 
 #[derive(Parser, Debug)]
 pub enum Operation {
     /// Add a command to the project
-    #[clap(alias = "a")]
+    #[clap(visible_alias = "a")]
     Add(AddArgs),
 
     /// Remove a command from the project
-    #[clap(alias = "r")]
+    // BREAK: This should only have the `rm` alias
+    #[clap(visible_alias = "rm", alias = "r")]
     Remove(RemoveArgs),
 
     /// Alias another specific command
@@ -23,7 +29,7 @@ pub enum Operation {
     Alias(AliasArgs),
 
     /// List all tasks
-    #[clap(alias = "l")]
+    #[clap(visible_alias = "ls", alias = "l")]
     List(ListArgs),
 }
 
@@ -68,6 +74,20 @@ pub struct AddArgs {
     /// The working directory relative to the root of the project
     #[arg(long)]
     pub cwd: Option<PathBuf>,
+
+    /// The environment variable to set, use --env key=value multiple times for more than one variable
+    #[arg(long, value_parser = parse_key_val)]
+    pub env: Vec<(String, String)>,
+}
+
+/// Parse a single key-value pair
+fn parse_key_val(s: &str) -> Result<(String, String), Box<dyn Error + Send + Sync + 'static>> {
+    let pos = s
+        .find('=')
+        .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{}`", s))?;
+    let key = s[..pos].to_string();
+    let value = s[pos + 1..].to_string();
+    Ok((key, value))
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -116,15 +136,26 @@ impl From<AddArgs> for Task {
         // complex, or alias command.
         if cmd_args.trim().is_empty() && !depends_on.is_empty() {
             Self::Alias(Alias { depends_on })
-        } else if depends_on.is_empty() && value.cwd.is_none() {
+        } else if depends_on.is_empty() && value.cwd.is_none() && value.env.is_empty() {
             Self::Plain(cmd_args)
         } else {
+            let cwd = value.cwd;
+            let env = if value.env.is_empty() {
+                None
+            } else {
+                let mut env = IndexMap::new();
+                for (key, value) in value.env {
+                    env.insert(key, value);
+                }
+                Some(env)
+            };
             Self::Execute(Execute {
                 cmd: CmdArgs::Single(cmd_args),
                 depends_on,
                 inputs: None,
                 outputs: None,
-                cwd: value.cwd,
+                cwd,
+                env,
             })
         }
     }
@@ -252,17 +283,34 @@ pub fn execute(args: Args) -> miette::Result<()> {
             );
         }
         Operation::List(args) => {
-            let env = EnvironmentName::from_arg_or_env_var(args.environment);
-            let tasks = project
-                .environment(&env)
-                .ok_or(miette!("Environment `{}` not found in project", env))?
-                .tasks(Some(Platform::current()), true)?
-                .into_keys()
-                .collect_vec();
-            if tasks.is_empty() {
+            let explicit_environment = args
+                .environment
+                .map(|n| EnvironmentName::from_str(n.as_str()))
+                .transpose()?
+                .map(|n| {
+                    project
+                        .environment(&n)
+                        .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
+                })
+                .transpose()?;
+            let available_tasks: HashSet<TaskName> =
+                if let Some(explicit_environment) = explicit_environment {
+                    explicit_environment.get_filtered_tasks()
+                } else {
+                    project
+                        .environments()
+                        .into_iter()
+                        .filter(|env| {
+                            verify_current_platform_has_required_virtual_packages(env).is_ok()
+                        })
+                        .flat_map(|env| env.get_filtered_tasks())
+                        .collect()
+                };
+
+            if available_tasks.is_empty() {
                 eprintln!("No tasks found",);
             } else {
-                let formatted: String = tasks
+                let formatted: String = available_tasks
                     .iter()
                     .sorted()
                     .map(|name| {
@@ -299,7 +347,7 @@ impl From<Task> for Item {
                 }
                 if !process.depends_on.is_empty() {
                     table.insert(
-                        "depends_on",
+                        "depends-on",
                         Value::Array(Array::from_iter(
                             process
                                 .depends_on
@@ -312,12 +360,15 @@ impl From<Task> for Item {
                 if let Some(cwd) = process.cwd {
                     table.insert("cwd", cwd.to_string_lossy().to_string().into());
                 }
+                if let Some(env) = process.env {
+                    table.insert("env", Value::InlineTable(env.into_iter().collect()));
+                }
                 Item::Value(Value::InlineTable(table))
             }
             Task::Alias(alias) => {
                 let mut table = Table::new().into_inline_table();
                 table.insert(
-                    "depends_on",
+                    "depends-on",
                     Value::Array(Array::from_iter(
                         alias
                             .depends_on

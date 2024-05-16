@@ -1,7 +1,6 @@
 use crate::project;
 use crate::task::{ExecutableTask, FileHashes, FileHashesError, InvalidWorkingDirectory};
 use miette::Diagnostic;
-use rattler_conda_types::Platform;
 use rattler_lock::LockFile;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
@@ -46,7 +45,8 @@ pub struct EnvironmentHash(String);
 impl EnvironmentHash {
     fn from_environment(run_environment: &project::Environment<'_>, lock_file: &LockFile) -> Self {
         let mut hasher = Xxh3::new();
-        let activation_scripts = run_environment.activation_scripts(Some(Platform::current()));
+        let activation_scripts =
+            run_environment.activation_scripts(Some(run_environment.best_platform()));
 
         for script in activation_scripts {
             script.hash(&mut hasher);
@@ -55,7 +55,7 @@ impl EnvironmentHash {
         let mut urls = Vec::new();
 
         if let Some(env) = lock_file.environment(run_environment.name().as_str()) {
-            if let Some(packages) = env.packages(Platform::current()) {
+            if let Some(packages) = env.packages(run_environment.best_platform()) {
                 for package in packages {
                     urls.push(package.url_or_path().into_owned().to_string())
                 }
@@ -86,7 +86,7 @@ impl TaskHash {
         lock_file: &LockFile,
     ) -> Result<Option<Self>, InputHashesError> {
         let input_hashes = InputHashes::from_task(task).await?;
-        let output_hashes = OutputHashes::from_task(task).await?;
+        let output_hashes = OutputHashes::from_task(task, false).await?;
 
         if input_hashes.is_none() && output_hashes.is_none() {
             return Ok(None);
@@ -104,7 +104,7 @@ impl TaskHash {
         &mut self,
         task: &ExecutableTask<'_>,
     ) -> Result<(), InputHashesError> {
-        self.outputs = OutputHashes::from_task(task).await?;
+        self.outputs = OutputHashes::from_task(task, true).await?;
         Ok(())
     }
 
@@ -132,7 +132,20 @@ impl InputHashes {
             return Ok(None);
         };
 
-        let files = FileHashes::from_files(&task.working_directory()?, inputs.iter()).await?;
+        let files = FileHashes::from_files(task.project().root(), inputs.iter()).await?;
+
+        // check if any files were matched
+        if files.files.is_empty() {
+            tracing::warn!(
+                "No files matched the input globs for task '{}'",
+                task.name().unwrap_or_default()
+            );
+            tracing::warn!(
+                "Input globs: {:?}",
+                inputs.iter().map(|g| g.as_str()).collect::<Vec<_>>()
+            );
+        }
+
         Ok(Some(Self { files }))
     }
 }
@@ -144,13 +157,30 @@ pub struct OutputHashes {
 }
 
 impl OutputHashes {
-    /// Compute the input hashes from a task.
-    pub async fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, InputHashesError> {
+    /// Compute the output hashes from a task.
+    pub async fn from_task(
+        task: &ExecutableTask<'_>,
+        warn: bool,
+    ) -> Result<Option<Self>, InputHashesError> {
         let Some(ref outputs) = task.task().as_execute().and_then(|e| e.outputs.clone()) else {
             return Ok(None);
         };
 
-        let files = FileHashes::from_files(&task.working_directory()?, outputs.iter()).await?;
+        let files = FileHashes::from_files(task.project().root(), outputs.iter()).await?;
+
+        // check if any files were matched
+        if warn && files.files.is_empty() {
+            tracing::warn!(
+                "No files matched the output globs for task` '{}'",
+                task.name().unwrap_or_default()
+            );
+            tracing::warn!(
+                "Output globs: {:?}",
+                outputs.iter().map(|g| g.as_str()).collect::<Vec<_>>()
+            );
+            return Ok(None);
+        }
+
         Ok(Some(Self { files }))
     }
 }

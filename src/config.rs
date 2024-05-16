@@ -6,9 +6,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+
 use url::Url;
 
 use crate::consts;
+use crate::util::default_channel_config;
 
 /// Determines the default author based on the default git author. Both the name and the email
 /// address of the author are returned.
@@ -90,6 +92,10 @@ pub struct ConfigCli {
     /// Path to the file containing the authentication token.
     #[arg(long, env = "RATTLER_AUTH_FILE")]
     auth_file: Option<PathBuf>,
+
+    /// Specifies if we want to use uv keyring provider
+    #[arg(long)]
+    pypi_keyring_provider: Option<KeyringProvider>,
 }
 
 #[derive(Parser, Debug, Default, Clone)]
@@ -105,41 +111,123 @@ pub struct ConfigCliPrompt {
 #[derive(Clone, Default, Debug, Deserialize)]
 pub struct RepodataConfig {
     /// Disable JLAP compression for repodata.
+    #[serde(alias = "disable-jlap")] // BREAK: rename instead of alias
     pub disable_jlap: Option<bool>,
     /// Disable bzip2 compression for repodata.
+    #[serde(alias = "disable-bzip2")] // BREAK: rename instead of alias
     pub disable_bzip2: Option<bool>,
     /// Disable zstd compression for repodata.
+    #[serde(alias = "disable-zstd")] // BREAK: rename instead of alias
     pub disable_zstd: Option<bool>,
 }
 
-#[derive(Clone, Default, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, clap::ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum KeyringProvider {
+    Disabled,
+    Subprocess,
+}
+
+#[derive(Clone, Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct PyPIConfig {
+    /// The default index URL for PyPI packages.
+    #[serde(default)]
+    pub index_url: Option<Url>,
+    /// A list of extra index URLs for PyPI packages
+    #[serde(default)]
+    pub extra_index_urls: Vec<Url>,
+    /// Whether to use the `keyring` executable to look up credentials.
+    #[serde(default)]
+    pub keyring_provider: Option<KeyringProvider>,
+}
+
+impl PyPIConfig {
+    /// Merge the given PyPIConfig into the current one.
+    pub fn merge(self, other: Self) -> Self {
+        let extra_index_urls = self
+            .extra_index_urls
+            .into_iter()
+            .chain(other.extra_index_urls)
+            .collect();
+
+        Self {
+            index_url: other.index_url.or(self.index_url),
+            extra_index_urls,
+            keyring_provider: other.keyring_provider.or(self.keyring_provider),
+        }
+    }
+
+    pub fn with_keyring(mut self, keyring_provider: KeyringProvider) -> Self {
+        self.keyring_provider = Some(keyring_provider);
+        self
+    }
+
+    /// Whether to use the `keyring` executable to look up credentials.
+    /// Defaults to false.
+    pub fn use_keyring(&self) -> KeyringProvider {
+        self.keyring_provider
+            .clone()
+            .unwrap_or(KeyringProvider::Disabled)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
+    #[serde(alias = "default-channels")] // BREAK: rename instead of alias
     pub default_channels: Vec<String>,
 
     /// If set to true, pixi will set the PS1 environment variable to a custom value.
     #[serde(default)]
+    #[serde(alias = "change-ps1")] // BREAK: rename instead of alias
     change_ps1: Option<bool>,
 
     /// Path to the file containing the authentication token.
     #[serde(default)]
+    #[serde(alias = "authentication-override-file")] // BREAK: rename instead of alias
     authentication_override_file: Option<PathBuf>,
 
     /// If set to true, pixi will not verify the TLS certificate of the server.
     #[serde(default)]
+    #[serde(alias = "tls-no-verify")] // BREAK: rename instead of alias
     tls_no_verify: Option<bool>,
 
     #[serde(default)]
     mirrors: HashMap<Url, Vec<Url>>,
 
     #[serde(skip)]
+    #[serde(alias = "loaded-from")] // BREAK: rename instead of alias
     pub loaded_from: Vec<PathBuf>,
 
-    #[serde(skip)]
+    #[serde(skip, default = "default_channel_config")]
+    #[serde(alias = "channel-config")] // BREAK: rename instead of alias
     pub channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
+    #[serde(alias = "repodata-config")] // BREAK: rename instead of alias
     pub repodata_config: Option<RepodataConfig>,
+
+    /// Configuration for PyPI packages.
+    #[serde(default)]
+    #[serde(rename = "pypi-config")]
+    pub pypi_config: PyPIConfig,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            default_channels: Vec::new(),
+            change_ps1: None,
+            authentication_override_file: None,
+            tls_no_verify: None,
+            mirrors: HashMap::new(),
+            loaded_from: Vec::new(),
+            channel_config: default_channel_config(),
+            repodata_config: None,
+            pypi_config: PyPIConfig::default(),
+        }
+    }
 }
 
 impl From<ConfigCli> for Config {
@@ -147,6 +235,10 @@ impl From<ConfigCli> for Config {
         Self {
             tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
             authentication_override_file: cli.auth_file,
+            pypi_config: cli
+                .pypi_keyring_provider
+                .map(|val| PyPIConfig::default().with_keyring(val))
+                .unwrap_or_default(),
             ..Default::default()
         }
     }
@@ -174,12 +266,18 @@ impl Config {
 
     /// Load the global config file from the home directory (~/.pixi/config.toml)
     pub fn load_global() -> Config {
+        #[cfg(target_os = "windows")]
+        let base_path = PathBuf::from("C:\\ProgramData");
+        #[cfg(not(target_os = "windows"))]
+        let base_path = PathBuf::from("/etc");
+
         let xdg_config_home = std::env::var_os("XDG_CONFIG_HOME").map_or_else(
             || dirs::home_dir().map(|d| d.join(".config")),
             |p| Some(PathBuf::from(p)),
         );
 
         let global_locations = vec![
+            Some(base_path.join("pixi").join(consts::CONFIG_FILE)),
             xdg_config_home.map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
             dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
             home_path().map(|d| d.join(consts::CONFIG_FILE)),
@@ -189,13 +287,15 @@ impl Config {
             if location.exists() {
                 tracing::info!("Loading global config from {}", location.display());
                 let global_config = fs::read_to_string(&location).unwrap_or_default();
-                if let Ok(config) = Config::from_toml(&global_config, &location) {
-                    merged_config = merged_config.merge_config(config);
-                } else {
-                    tracing::warn!(
-                        "Could not load global config (invalid toml): {}",
-                        location.display()
-                    );
+                match Config::from_toml(&global_config, &location) {
+                    Ok(config) => merged_config = merged_config.merge_config(config),
+                    Err(e) => {
+                        tracing::warn!(
+                            "Could not load global config (invalid toml): {}",
+                            location.display()
+                        );
+                        tracing::warn!("Error: {}", e);
+                    }
                 }
             } else {
                 tracing::info!("Global config not found at {}", location.display());
@@ -253,9 +353,10 @@ impl Config {
                 .or(self.authentication_override_file),
             mirrors: self.mirrors,
             loaded_from: self.loaded_from,
-            // currently this is always the default so just use the current value
-            channel_config: self.channel_config,
+            // currently this is always the default so just use the other value
+            channel_config: other.channel_config,
             repodata_config: other.repodata_config.or(self.repodata_config),
+            pypi_config: other.pypi_config.merge(self.pypi_config),
         }
     }
 
@@ -288,6 +389,10 @@ impl Config {
 
     pub fn channel_config(&self) -> &ChannelConfig {
         &self.channel_config
+    }
+
+    pub fn pypi_config(&self) -> &PyPIConfig {
+        &self.pypi_config
     }
 
     pub fn compute_channels(
@@ -331,13 +436,19 @@ mod tests {
         let cli = ConfigCli {
             tls_no_verify: true,
             auth_file: None,
+            pypi_keyring_provider: Some(KeyringProvider::Subprocess),
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
+        assert_eq!(
+            config.pypi_config().keyring_provider,
+            Some(KeyringProvider::Subprocess)
+        );
 
         let cli = ConfigCli {
             tls_no_verify: false,
             auth_file: Some(PathBuf::from("path.json")),
+            pypi_keyring_provider: None,
         };
 
         let config = Config::from(cli);
@@ -349,10 +460,31 @@ mod tests {
     }
 
     #[test]
+    fn test_pypi_config_parse() {
+        let toml = r#"
+            [pypi-config]
+            index-url = "https://pypi.org/simple"
+            extra-index-urls = ["https://pypi.org/simple2"]
+            keyring-provider = "subprocess"
+        "#;
+        let config = Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        assert_eq!(
+            config.pypi_config().index_url,
+            Some(Url::parse("https://pypi.org/simple").unwrap())
+        );
+        assert!(config.pypi_config().extra_index_urls.len() == 1);
+        assert_eq!(
+            config.pypi_config().keyring_provider,
+            Some(KeyringProvider::Subprocess)
+        );
+    }
+
+    #[test]
     fn test_config_merge() {
         let mut config = Config::default();
         let other = Config {
             default_channels: vec!["conda-forge".to_string()],
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             ..Default::default()
         };
@@ -366,6 +498,10 @@ mod tests {
 
         let config_1 = Config::from_path(&d.join("config_1.toml")).unwrap();
         let config_2 = Config::from_path(&d.join("config_2.toml")).unwrap();
+        let config_2 = Config {
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
+            ..config_2
+        };
 
         let mut merged = config_1.clone();
         merged = merged.merge_config(config_2);
@@ -375,5 +511,57 @@ mod tests {
         // replace the path with a placeholder
         let debug = debug.replace(&d.to_str().unwrap().replace('\\', "/"), "path");
         insta::assert_snapshot!(debug);
+    }
+
+    #[test]
+    fn test_parse_kebab_and_snake_case() {
+        let toml = r#"
+            default_channels = ["conda-forge"]
+            change_ps1 = true
+            tls_no_verify = false
+            authentication_override_file = "/path/to/your/override.json"
+            [mirrors]
+            "https://conda.anaconda.org/conda-forge" = [
+                "https://prefix.dev/conda-forge"
+            ]
+            [repodata_config]
+            disable_jlap = true
+            disable_bzip2 = true
+            disable_zstd = true
+        "#;
+        let config = Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        assert_eq!(config.default_channels, vec!["conda-forge"]);
+        assert_eq!(config.tls_no_verify, Some(false));
+        assert_eq!(
+            config.authentication_override_file,
+            Some(PathBuf::from("/path/to/your/override.json"))
+        );
+        assert_eq!(config.change_ps1, Some(true));
+        assert_eq!(
+            config
+                .mirrors
+                .get(&Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
+            Some(&vec![Url::parse("https://prefix.dev/conda-forge").unwrap()])
+        );
+        let repodata_config = config.repodata_config.unwrap();
+        assert_eq!(repodata_config.disable_jlap, Some(true));
+        assert_eq!(repodata_config.disable_bzip2, Some(true));
+        assert_eq!(repodata_config.disable_zstd, Some(true));
+        // See if the toml parses in kebab-case
+        let toml = r#"
+            default-channels = ["conda-forge"]
+            change-ps1 = true
+            tls-no-verify = false
+            authentication-override-file = "/path/to/your/override.json"
+            [mirrors]
+            "https://conda.anaconda.org/conda-forge" = [
+                "https://prefix.dev/conda-forge"
+            ]
+            [repodata-config]
+            disable-jlap = true
+            disable-bzip2 = true
+            disable-zstd = true
+        "#;
+        Config::from_toml(toml, &PathBuf::from("")).unwrap();
     }
 }

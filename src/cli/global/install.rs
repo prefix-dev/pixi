@@ -10,9 +10,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler::install::Transaction;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{
-    MatchSpec, PackageName, ParseStrictness, Platform, PrefixRecord, RepoDataRecord,
-};
+use rattler_conda_types::{PackageName, Platform, PrefixRecord, RepoDataRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator, PathModificationBehavior},
     shell::Shell,
@@ -22,7 +20,7 @@ use reqwest_middleware::ClientWithMiddleware;
 
 use super::common::{
     channel_name_from_prefix, find_designated_package, get_client_and_sparse_repodata,
-    load_package_records, package_name, BinDir, BinEnvDir,
+    load_package_records, BinDir, BinEnvDir, HasSpecs,
 };
 
 /// Installs the defined package in a global accessible location.
@@ -44,8 +42,17 @@ pub struct Args {
     #[clap(short, long)]
     channel: Vec<String>,
 
+    #[clap(short, long, default_value_t = Platform::current())]
+    platform: Platform,
+
     #[clap(flatten)]
     config: ConfigCli,
+}
+
+impl HasSpecs for Args {
+    fn packages(&self) -> Vec<&str> {
+        self.package.iter().map(AsRef::as_ref).collect()
+    }
 }
 
 /// Create the environment activation script
@@ -62,9 +69,9 @@ fn create_activation_script(prefix: &Prefix, shell: ShellEnum) -> miette::Result
 
     // Add a shebang on unix based platforms
     let script = if cfg!(unix) {
-        format!("#!/bin/sh\n{}", result.script)
+        format!("#!/bin/sh\n{}", result.script.contents().into_diagnostic()?)
     } else {
-        result.script
+        result.script.contents().into_diagnostic()?
     };
 
     Ok(script)
@@ -209,11 +216,18 @@ pub(super) async fn create_executable_scripts(
             .run_command(
                 &mut script,
                 [
-                    format!(r###""{}""###, prefix.root().join(exec).to_string_lossy()).as_str(),
+                    format!("\"{}\"", prefix.root().join(exec).to_string_lossy()).as_str(),
                     get_catch_all_arg(shell),
                 ],
             )
             .expect("should never fail");
+
+        if matches!(shell, ShellEnum::CmdExe(_)) {
+            // wrap the script contents in `@echo off` and `setlocal` to prevent echoing the script
+            // and to prevent leaking environment variables into the parent shell (e.g. PATH would grow longer and longer)
+            script = format!("@echo off\nsetlocal\n{}\nendlocal", script);
+        }
+
         tokio::fs::write(&executable_script_path, script)
             .await
             .into_diagnostic()?;
@@ -223,7 +237,7 @@ pub(super) async fn create_executable_scripts(
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(
                 executable_script_path,
-                std::fs::Permissions::from_mode(0o744),
+                std::fs::Permissions::from_mode(0o755),
             )
             .into_diagnostic()?;
         }
@@ -237,26 +251,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let channels = config.compute_channels(&args.channel).into_diagnostic()?;
 
-    // Find the MatchSpec we want to install
-    let specs = args
-        .package
-        .into_iter()
-        .map(|package_str| MatchSpec::from_str(&package_str, ParseStrictness::Strict))
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
-
     // Fetch sparse repodata
     let (authenticated_client, sparse_repodata) =
-        get_client_and_sparse_repodata(&channels, &config).await?;
+        get_client_and_sparse_repodata(&channels, args.platform, &config).await?;
 
     // Install the package(s)
     let mut executables = vec![];
-    for package_matchspec in specs {
-        let package_name = package_name(&package_matchspec)?;
+    for (package_name, package_matchspec) in args.specs()? {
         let records = load_package_records(package_matchspec, &sparse_repodata)?;
 
-        let (prefix_package, scripts, _) =
-            globally_install_package(&package_name, records, authenticated_client.clone()).await?;
+        let (prefix_package, scripts, _) = globally_install_package(
+            &package_name,
+            records,
+            authenticated_client.clone(),
+            &args.platform,
+        )
+        .await?;
         let channel_name = channel_name_from_prefix(&prefix_package, config.channel_config());
         let record = &prefix_package.repodata_record.package_record;
 
@@ -321,6 +331,7 @@ pub(super) async fn globally_install_package(
     package_name: &PackageName,
     records: Vec<RepoDataRecord>,
     authenticated_client: ClientWithMiddleware,
+    platform: &Platform,
 ) -> miette::Result<(PrefixRecord, Vec<PathBuf>, bool)> {
     // Create the binary environment prefix where we install or update the package
     let BinEnvDir(bin_prefix) = BinEnvDir::create(package_name).await?;
@@ -329,7 +340,7 @@ pub(super) async fn globally_install_package(
 
     // Create the transaction that we need
     let transaction =
-        Transaction::from_current_and_desired(prefix_records.clone(), records, Platform::current())
+        Transaction::from_current_and_desired(prefix_records.clone(), records, *platform)
             .into_diagnostic()?;
 
     let has_transactions = !transaction.operations.is_empty();
@@ -365,6 +376,7 @@ pub(super) async fn globally_install_package(
     // Construct the reusable activation script for the shell and generate an invocation script
     // for each executable added by the package to the environment.
     let activation_script = create_activation_script(&prefix, shell.clone())?;
+
     let bin_dir = BinDir::create().await?;
     let script_mapping =
         find_and_map_executable_scripts(&prefix, &prefix_package, &bin_dir).await?;

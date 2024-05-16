@@ -6,7 +6,9 @@ on:
       - main
     paths:
       - "docs/**"
+      - ".github/workflows/docs.yml"
       - "mkdocs.yml"
+      - "pixi.*"
     tags:
       - v**
   pull_request:
@@ -39,7 +41,7 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: prefix-dev/setup-pixi@v0.5.1
+      - uses: prefix-dev/setup-pixi@v0.7.0
         with:
           environments: docs
 
@@ -65,7 +67,7 @@ jobs:
         run: |
           git checkout tags/${{ github.event.inputs.tag }}
 
-      - uses: prefix-dev/setup-pixi@v0.5.1
+      - uses: prefix-dev/setup-pixi@v0.7.0
         with:
           environments: docs
 
@@ -98,7 +100,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - uses: prefix-dev/setup-pixi@v0.5.1
+      - uses: prefix-dev/setup-pixi@v0.7.0
         with:
           environments: docs
 
@@ -117,7 +119,6 @@ jobs:
           git checkout gh-pages
           git checkout main -- install/install.sh install/install.ps1
           mv install/install.sh install/install.ps1 .
-          git restore .
           git restore --staged .
           git add install.sh install.ps1
           # Check diff before committing

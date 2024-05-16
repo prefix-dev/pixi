@@ -115,7 +115,7 @@ impl AddBuilder {
         self
     }
 
-    /// Set whether or not to also install the environment. By default the environment is NOT
+    /// Set whether to also install the environment. By default, the environment is NOT
     /// installed to reduce test times.
     pub fn with_install(mut self, install: bool) -> Self {
         self.args.no_install = !install;
@@ -131,6 +131,11 @@ impl AddBuilder {
 
     pub fn set_platforms(mut self, platforms: &[Platform]) -> Self {
         self.args.platform.extend(platforms.iter());
+        self
+    }
+
+    pub fn set_editable(mut self, editable: bool) -> Self {
+        self.args.editable = editable;
         self
     }
 }
@@ -153,6 +158,13 @@ pub struct RemoveBuilder {
 impl RemoveBuilder {
     pub fn with_spec(mut self, spec: &str) -> Self {
         self.args.deps.push(spec.to_string());
+        self
+    }
+
+    /// Set whether to also install the environment. By default, the environment is NOT
+    /// installed to reduce test times.
+    pub fn with_install(mut self, install: bool) -> Self {
+        self.args.no_install = !install;
         self
     }
 
@@ -212,6 +224,12 @@ impl TaskAddBuilder {
     /// With this working directory
     pub fn with_cwd(mut self, cwd: PathBuf) -> Self {
         self.args.cwd = Some(cwd);
+        self
+    }
+
+    /// With this environment variable
+    pub fn with_env(mut self, env: Vec<(String, String)>) -> Self {
+        self.args.env = env;
         self
     }
 

@@ -58,7 +58,7 @@ channels = ["conda-forge", "https://repo.prefix.dev/channel-name"]
 ### `platforms`
 
 Defines the list of platforms that the project supports.
-Pixi solves the dependencies for all these platforms and puts them in the lockfile (`pixi.lock`).
+Pixi solves the dependencies for all these platforms and puts them in the lock file (`pixi.lock`).
 
 ```toml
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
@@ -171,13 +171,20 @@ Pixi's tasks are run in a pixi environment using `pixi run` and are executed usi
 [tasks]
 simple = "echo This is a simple task"
 cmd = { cmd="echo Same as a simple task but now more verbose"}
-depending = { cmd="echo run after simple", depends_on="simple"}
-alias = { depends_on=["depending"]}
+depending = { cmd="echo run after simple", depends-on="simple"}
+alias = { depends-on=["depending"]}
+download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
+build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
+run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
 ```
 
 You can modify this table using [`pixi task`](cli.md#task).
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
+
+!!! info
+    If you want to hide a task from showing up with `pixi task list` or `pixi info`, you can prefix the name with `_`.
+    For example, if you want to hide `depending`, you can rename it to `_depending`.
 
 ## The `system-requirements` table
 
@@ -238,7 +245,39 @@ If you want to use `cuda` in your project you need to add the following to your 
 cuda = "11" # or any other version of cuda you want to use
 ```
 
-This informs the solver that cuda is going to be available, so it can lock it into the lockfile if needed.
+This informs the solver that cuda is going to be available, so it can lock it into the lock file if needed.
+
+## The `pypi-options` table
+
+The `pypi-options` table is used to define options that are specific to PyPI registries.
+These options can be specified either at the root level, which will add it to the default options feature, or on feature level, which will create a union of these options when the features are included in the environment.
+
+### Alternative registries
+
+Currently the main reason to use this table is to define alternative registries.
+We support:
+
+- `index-url`: replaces the main index url.
+   Only one `index-url` can be defined per environment.
+- `extra-index-urls`: adds an extra index url.
+- `find-links`: which can either be a path `{path: './links'}` or a url `{url: 'https://example.com/links'}`.
+   This is similar to the `--find-links` option in `pip`.
+
+An example:
+
+```toml
+[pypi-options]
+index-url = "https://pypi.org/simple"
+extra-index-urls = ["https://example.com/simple"]
+find-links = [{path: './links'}]
+```
+
+There are some examples in the pixi repository that make use of this feature.
+To read about existing authentication methods, please check the [PyPI Authentication](../advanced/authentication.md#pypi-authentication) section.
+
+!!! info "Strict Index Priority"
+    Unlike pip, because we make use of uv, we have a strict index priority. This means that the first index is used where a package can be found.
+    The order is determined by the order in the toml file. Where the `extra-index-urls` are preferred over the `index-url`. Read more about this on the [UV Readme](https://github.com/astral-sh/uv/blob/main/PIP_COMPATIBILITY.md#packages-that-exist-on-multiple-indexes)
 
 ## The `dependencies` table(s)
 
@@ -290,7 +329,7 @@ rust = "1.72"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 ```
 
-### `pypi-dependencies` (Beta feature)
+### `pypi-dependencies`
 
 ??? info "Details regarding the PyPI integration"
     We use [`uv`](https://github.com/astral-sh/uv), which is a new fast pip replacement written in Rust.
@@ -309,7 +348,7 @@ PyPI packages are not indexed on [prefix.dev](https://prefix.dev/channels) but c
 
 !!! warning "Important considerations"
     - **Stability**: PyPI packages might be less stable than their conda counterparts. Prefer using conda packages in the `dependencies` table where possible.
-    - **Compatibility limitations**: Currently, pixi doesn't support: Private PyPI repositories
+    - **Compatibility limitation**: Currently, pixi doesn't support private PyPI repositories
 
 #### Version specification:
 
@@ -563,8 +602,8 @@ The `feature` table allows you to define the following fields per feature.
 - `pypi-dependencies`: Same as the [pypi-dependencies](#pypi-dependencies-beta-feature).
 - `system-requirements`: Same as the [system-requirements](#the-system-requirements-table).
 - `activation`: Same as the [activation](#the-activation-table).
-- `platforms`: Same as the [platforms](#platforms). When adding features together the intersection of the platforms is taken. Be aware that the `default` feature is always implied thus this must contain all platforms the project can support.
-- `channels`: Same as the [channels](#channels). Adding the `priority` field to the channels to allow concatenation of channels instead of overwriting.
+- `platforms`: Same as the [platforms](#platforms). Unless overridden, the `platforms` of the feature will be those defined at project level.
+- `channels`: Same as the [channels](#channels). Unless overridden, the `channels` of the feature will be those defined at project level.
 - `target`: Same as the [target](#the-target-table).
 - `tasks`: Same as the [tasks](#the-tasks-table).
 
@@ -612,32 +651,44 @@ platforms = ["linux-64", "osx-arm64"]
 
 ### The `environments` table
 
-The `environments` table allows you to define environments that are created using the features defined in the `feature` tables.
-
-!!! important
-    `default` is always implied when creating environments.
-    If you don't want to use the `default` feature you can keep all the non feature tables empty.
+The `[environments]` table allows you to define environments that are created using the features defined in the `[feature]` tables.
 
 The environments table is defined using the following fields:
 
-- `features: Vec<Feature>`: The features that are included in the environment set, which is also the default field in the environments.
-- `solve-group: String`: The solve group is used to group environments together at the solve stage.
+- `features`: The features that are included in the environment. Unless `no-default-feature` is set to `true`, the default feature is implicitly included in the environment.
+- `solve-group`: The solve group is used to group environments together at the solve stage.
   This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
   For instance when testing a production environment with additional test dependencies.
   These dependencies will then be the same version in all environments that have the same solve group.
   But the different environments contain different subsets of the solve-groups dependencies set.
+- `no-default-feature`: Whether to include the default feature in that environment. The default is `false`, to include the default feature.
+
+```toml title="Full environments table specification"
+[environments]
+test = {features = ["test"], solve-group = "test"}
+prod = {features = ["prod"], solve-group = "test"}
+lint = {features = ["lint"], no-default-feature = true}
+```
+As shown in the example above, in the simplest of cases, it is possible to define an environment only by listing its features:
 
 ```toml title="Simplest example"
 [environments]
 test = ["test"]
 ```
 
-```toml title="Full environments table specification"
+is equivalent to
+
+```toml title="Simplest example expanded"
 [environments]
-test = {features = ["test"], solve-group = "test"}
-prod = {features = ["prod"], solve-group = "test"}
-lint = ["lint"]
+test = {features = ["test"]}
 ```
+
+When an environment comprises several features (including the default feature):
+- The `activation` and `tasks` of the environment are the union of the `activation` and `tasks` of all its features.
+- The `dependencies` and `pypi-dependencies` of the environment are the union of the `dependencies` and `pypi-dependencies` of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
+- The `system-requirements` of the environment is the union of the `system-requirements` of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.
+- The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
+- The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project `platforms` to all platforms it can support across its environments.
 
 ## Global configuration
 

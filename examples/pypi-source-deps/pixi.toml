@@ -17,14 +17,16 @@ python = "*"
 
 rich = "~=13.7"
 # Lets start with some git dependencies
-# With ssh
-flask = { git = "ssh://git@github.com/pallets/flask" }
+# With ssh: (you need to have the correct ssh keys setup for which I (ruben) am to lazy to set up correctly)
+# flask = { git = "ssh://git@github.com/pallets/flask" }
+
 # With https
+flask = { git = "https://github.com/pallets/flask" }
 requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
 # TODO: will support later -> or use branch = '' or tag = '' to specify a branch or tag
 
 # You can also directly add a source dependency from file
-minimal-project = { path = "./minimal-project", editable = true}
+minimal-project = { path = "./minimal-project", editable = true }
 
 # You can also use a direct url, to either a `.tar.gz` or `.zip`, or a `.whl` file
 click = { url = "https://github.com/pallets/click/releases/download/8.1.7/click-8.1.7-py3-none-any.whl" }

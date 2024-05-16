@@ -33,7 +33,8 @@ use tracing::Level;
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
-    /// The task you want to run in the projects environment.
+    /// The pixi task or a deno task shell command you want to run in the project's environment, which can be an executable in the environment's PATH.
+    #[arg(required = true)]
     pub task: Vec<String>,
 
     /// The path to 'pixi.toml' or 'pyproject.toml'
@@ -102,7 +103,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let search_environment = SearchEnvironments::from_opt_env(
         &project,
         explicit_environment.clone(),
-        Some(Platform::current()),
+        explicit_environment
+            .as_ref()
+            .map(|e| e.best_platform())
+            .or(Some(Platform::current())),
     )
     .with_disambiguate_fn(disambiguate_task_interactive);
 
@@ -129,9 +133,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 eprintln!();
             }
             eprintln!(
-                "{}{}{}{}{}",
+                "{}{}{} in {}{}{}",
                 console::Emoji("✨ ", ""),
                 console::style("Pixi task (").bold(),
+                console::style(executable_task.name().unwrap_or("unnamed"))
+                    .green()
+                    .bold(),
                 executable_task
                     .run_environment
                     .name()
@@ -150,7 +157,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         {
             CanSkip::No(cache) => cache,
             CanSkip::Yes => {
-                eprintln!("Task can be skipped (cache hit) 🚀");
+                eprintln!(
+                    "Task '{}' can be skipped (cache hit) 🚀",
+                    console::style(executable_task.name().unwrap_or("")).bold()
+                );
                 task_idx += 1;
                 continue;
             }
@@ -197,23 +207,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Environment<'p>>) {
     let available_tasks: HashSet<TaskName> =
         if let Some(explicit_environment) = explicit_environment {
-            explicit_environment
-                .tasks(Some(Platform::current()), true)
-                .into_iter()
-                .flat_map(|tasks| tasks.into_keys())
-                .map(ToOwned::to_owned)
-                .collect()
+            explicit_environment.get_filtered_tasks()
         } else {
             project
                 .environments()
                 .into_iter()
                 .filter(|env| verify_current_platform_has_required_virtual_packages(env).is_ok())
-                .flat_map(|env| {
-                    env.tasks(Some(Platform::current()), true)
-                        .into_iter()
-                        .flat_map(|tasks| tasks.into_keys())
-                        .map(ToOwned::to_owned)
-                })
+                .flat_map(|env| env.get_filtered_tasks())
                 .collect()
         };
 

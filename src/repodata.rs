@@ -1,41 +1,19 @@
 use crate::config::Config;
-use crate::project::Environment;
-use crate::{config, progress, project::Project};
+use crate::{config, progress};
 use futures::{stream, StreamExt, TryStreamExt};
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
+use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{Channel, Platform};
 use rattler_repodata_gateway::fetch::FetchRepoDataOptions;
-use rattler_repodata_gateway::{fetch, sparse::SparseRepoData};
+use rattler_repodata_gateway::sparse::SparseRepoData;
+use rattler_repodata_gateway::{fetch, Reporter};
 use reqwest_middleware::ClientWithMiddleware;
-use std::{path::Path, time::Duration};
-
-impl Project {
-    // TODO: Remove this function once everything is migrated to the new environment system.
-    pub async fn fetch_sparse_repodata(
-        &self,
-    ) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
-        self.default_environment().fetch_sparse_repodata().await
-    }
-}
-
-impl Environment<'_> {
-    pub async fn fetch_sparse_repodata(
-        &self,
-    ) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
-        let channels = self.channels();
-        let platforms = self.platforms();
-        fetch_sparse_repodata(
-            channels,
-            platforms,
-            self.project().authenticated_client(),
-            Some(self.project().config()),
-        )
-        .await
-    }
-}
+use std::path::Path;
+use std::sync::Arc;
+use std::time::Duration;
+use url::Url;
 
 pub async fn fetch_sparse_repodata(
     channels: impl IntoIterator<Item = &'_ Channel>,
@@ -145,6 +123,17 @@ pub async fn fetch_sparse_repodata_targets(
     repo_data.wrap_err("failed to fetch repodata from channels")
 }
 
+struct DownloadProgressReporter {
+    progress_bar: ProgressBar,
+}
+
+impl Reporter for DownloadProgressReporter {
+    fn on_download_progress(&self, _url: &Url, _index: usize, bytes: usize, total: Option<usize>) {
+        self.progress_bar.set_length(total.unwrap_or(bytes) as u64);
+        self.progress_bar.set_position(bytes as u64);
+    }
+}
+
 /// Given a channel and platform, download and cache the `repodata.json` for it. This function
 /// reports its progress via a CLI progressbar.
 async fn fetch_repo_data_records_with_progress(
@@ -157,15 +146,13 @@ async fn fetch_repo_data_records_with_progress(
     fetch_options: FetchRepoDataOptions,
 ) -> miette::Result<Option<SparseRepoData>> {
     // Download the repodata.json
-    let download_progress_progress_bar = progress_bar.clone();
     let result = fetch::fetch_repo_data(
         channel.platform_url(platform),
         client,
         repodata_cache.to_path_buf(),
         fetch_options,
-        Some(Box::new(move |fetch::DownloadProgress { total, bytes }| {
-            download_progress_progress_bar.set_length(total.unwrap_or(bytes));
-            download_progress_progress_bar.set_position(bytes);
+        Some(Arc::new(DownloadProgressReporter {
+            progress_bar: progress_bar.clone(),
         })),
     )
     .await;

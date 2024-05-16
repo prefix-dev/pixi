@@ -27,7 +27,7 @@ scipy = "~=1.11.4"
 pyboy = "==1.6.6"
 tensorflow = "==2.14.0"
 flask = "*"
-black = { version = "~=23.10", extras = ["jupyter"] }
+black = { version = "~=24.0", extras = ["jupyter"] }
 # sdists:
 pyliblzfse = "*"
 pycosat = "*"

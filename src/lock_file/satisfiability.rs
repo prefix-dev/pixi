@@ -1,7 +1,9 @@
 use super::{PypiRecord, PypiRecordsByName, RepoDataRecordsByName};
+use crate::project::grouped_environment::GroupedEnvironment;
+use crate::project::has_features::HasFeatures;
 use crate::project::manifest::python::{AsPep508Error, RequirementOrEditable};
 use crate::{project::Environment, pypi_marker_env::determine_marker_environment};
-use distribution_types::DirectGitUrl;
+use distribution_types::ParsedGitUrl;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
@@ -12,6 +14,8 @@ use rattler_conda_types::{
 };
 use rattler_lock::{ConversionError, Package, PypiPackageData, PypiSourceTreeHashable, UrlOrPath};
 use requirements_txt::EditableRequirement;
+use std::fmt::Display;
+use std::ops::Sub;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{
@@ -20,12 +24,24 @@ use std::{
 };
 use thiserror::Error;
 use url::Url;
+use uv_git::GitReference;
 use uv_normalize::{ExtraName, PackageName};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
     #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
+
+    #[error(
+        "the indexes used to previously solve to lock file do not match the environments indexes"
+    )]
+    IndexesMismatch,
+}
+
+#[derive(Debug, Error)]
+pub struct EditablePackagesMismatch {
+    pub expected_editable: Vec<PackageName>,
+    pub unexpected_editable: Vec<PackageName>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -77,11 +93,8 @@ pub enum PlatformUnsat {
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
     DirectUrlDependencyOnCondaInstalledPackage(PackageName),
 
-    #[error("locked package {0} should be editable")]
-    ExpectedEditablePackage(PackageName),
-
-    #[error("locked package {0} should not be editable")]
-    UnexpectedEditablePackage(PackageName),
+    #[error(transparent)]
+    EditablePackageMismatch(EditablePackagesMismatch),
 
     #[error("failed to determine pypi source tree hash for {0}")]
     FailedToDetermineSourceTreeHash(PackageName, std::io::Error),
@@ -104,7 +117,7 @@ impl PlatformUnsat {
                 | PlatformUnsat::AsPep508Error(_, _)
                 | PlatformUnsat::FailedToDetermineSourceTreeHash(_, _)
                 | PlatformUnsat::PythonVersionMismatch(_, _, _)
-                | PlatformUnsat::UnexpectedEditablePackage(_)
+                | PlatformUnsat::EditablePackageMismatch(_)
                 | PlatformUnsat::SourceTreeHashMismatch(_),
         )
     }
@@ -120,16 +133,37 @@ pub fn verify_environment_satisfiability(
     environment: &Environment<'_>,
     locked_environment: &rattler_lock::Environment,
 ) -> Result<(), EnvironmentUnsat> {
+    let grouped_env = GroupedEnvironment::from(environment.clone());
+
     // Check if the channels in the lock file match our current configuration. Note that the order
     // matters here. If channels are added in a different order, the solver might return a different
     // result.
-    let channels = environment
+    let channels = grouped_env
         .channels()
         .into_iter()
         .map(|channel| rattler_lock::Channel::from(channel.base_url().to_string()))
         .collect_vec();
     if !locked_environment.channels().eq(&channels) {
         return Err(EnvironmentUnsat::ChannelsMismatch);
+    }
+
+    // Check if the indexes in the lock file match our current configuration.
+    if !environment.pypi_dependencies(None).is_empty() {
+        match locked_environment.pypi_indexes() {
+            None => {
+                if locked_environment
+                    .version()
+                    .should_pypi_indexes_be_present()
+                {
+                    return Err(EnvironmentUnsat::IndexesMismatch);
+                }
+            }
+            Some(indexes) => {
+                if indexes != &rattler_lock::PypiIndexes::from(grouped_env.pypi_options()) {
+                    return Err(EnvironmentUnsat::IndexesMismatch);
+                }
+            }
+        }
     }
 
     Ok(())
@@ -226,11 +260,11 @@ pub fn pypi_satifisfies_editable(
 
     // In the case that both the spec and the locked data are direct git urls
     // we need to compare the urls to see if they are the same
-    let spec_git_url = DirectGitUrl::try_from(&spec_url.to_url()).ok();
+    let spec_git_url = ParsedGitUrl::try_from(&spec_url.to_url()).ok();
     let locked_git_url = locked_data
         .url_or_path
         .as_url()
-        .and_then(|url| DirectGitUrl::try_from(url).ok());
+        .and_then(|url| ParsedGitUrl::try_from(url).ok());
 
     // Both are git url's
     if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
@@ -238,12 +272,11 @@ pub fn pypi_satifisfies_editable(
 
         // If the spec does not specify a revision than any will do
         // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-        if spec_git_url.url.reference().is_none() {
-            base_is_same
-        } else {
-            // If the spec does specify a revision than the revision must match
-            base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
+        if *spec_git_url.url.reference() == GitReference::DefaultBranch {
+            return base_is_same;
         }
+        // If the spec does specify a revision than the revision must match
+        base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
     } else {
         let spec_path_or_url = spec_url
             .given()
@@ -280,11 +313,11 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
         Some(VersionOrUrl::Url(spec_url)) => {
             // In the case that both the spec and the locked data are direct git urls
             // we need to compare the urls to see if they are the same
-            let spec_git_url = DirectGitUrl::try_from(&spec_url.to_url()).ok();
+            let spec_git_url = ParsedGitUrl::try_from(&spec_url.to_url()).ok();
             let locked_git_url = locked_data
                 .url_or_path
                 .as_url()
-                .and_then(|url| DirectGitUrl::try_from(url).ok());
+                .and_then(|url| ParsedGitUrl::try_from(url).ok());
 
             // Both are git url's
             if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {
@@ -293,12 +326,11 @@ pub fn pypi_satifisfies_requirement(locked_data: &PypiPackageData, spec: &Requir
 
                 // If the spec does not specify a revision than any will do
                 // E.g `git.com/user/repo` is the same as `git.com/user/repo@adbdd`
-                if spec_git_url.url.reference().is_none() {
-                    base_is_same
-                } else {
-                    // If the spec does specify a revision than the revision must match
-                    base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
+                if *spec_git_url.url.reference() == GitReference::DefaultBranch {
+                    return base_is_same;
                 }
+                // If the spec does specify a revision than the revision must match
+                base_is_same && spec_git_url.url.reference() == locked_data_url.url.reference()
             } else {
                 let spec_path_or_url = spec_url
                     .given()
@@ -380,7 +412,20 @@ pub fn verify_package_platform_satisfiability(
     let marker_environment = python_interpreter_record
         .map(|interpreter| determine_marker_environment(platform, &interpreter.package_record))
         .transpose()
-        .map_err(|err| PlatformUnsat::FailedToDetermineMarkerEnvironment(err.into()))?;
+        .map_err(|err| PlatformUnsat::FailedToDetermineMarkerEnvironment(err.into()));
+
+    // We cannot determine the marker environment, for example if installing `wasm32` dependencies.
+    // However, it also doesn't really matter if we don't have any pypi requirements.
+    let marker_environment = match marker_environment {
+        Err(err) => {
+            if !pypi_requirements.is_empty() {
+                return Err(err);
+            } else {
+                None
+            }
+        }
+        Ok(marker_environment) => marker_environment,
+    };
 
     // Determine the pypi packages provided by the locked conda packages.
     let locked_conda_pypi_packages = locked_conda_packages.by_pypi_name();
@@ -400,6 +445,7 @@ pub fn verify_package_platform_satisfiability(
     // requirements. We want to ensure we always check the conda packages first.
     let mut conda_queue = conda_specs;
     let mut pypi_queue = pypi_requirements;
+    let mut expected_editable_pypi_packages = HashSet::new();
     while let Some(package) = conda_queue.pop().or_else(|| pypi_queue.pop()) {
         enum FoundPackage {
             Conda(usize),
@@ -503,12 +549,6 @@ pub fn verify_package_platform_satisfiability(
                     let record = &locked_pypi_environment.records[idx];
                     match requirement {
                         RequirementOrEditable::Editable(package_name, requirement) => {
-                            if !record.0.editable {
-                                return Err(PlatformUnsat::ExpectedEditablePackage(
-                                    record.0.name.clone(),
-                                ));
-                            }
-
                             if !pypi_satifisfies_editable(&record.0, &requirement) {
                                 return Err(PlatformUnsat::UnsatisfiableRequirement(
                                     RequirementOrEditable::Editable(package_name, requirement),
@@ -516,15 +556,14 @@ pub fn verify_package_platform_satisfiability(
                                 ));
                             }
 
+                            // Record that we want this package to be editable. This is used to
+                            // check at the end if packages that should be editable are actually
+                            // editable and vice versa.
+                            expected_editable_pypi_packages.insert(package_name.clone());
+
                             FoundPackage::PyPi(idx, requirement.extras)
                         }
                         RequirementOrEditable::Pep508Requirement(requirement) => {
-                            if record.0.editable {
-                                return Err(PlatformUnsat::UnexpectedEditablePackage(
-                                    record.0.name.clone(),
-                                ));
-                            }
-
                             if !pypi_satifisfies_requirement(&record.0, &requirement) {
                                 return Err(PlatformUnsat::UnsatisfiableRequirement(
                                     RequirementOrEditable::Pep508Requirement(requirement),
@@ -575,10 +614,11 @@ pub fn verify_package_platform_satisfiability(
                     // If this is path based package we need to check if the source tree hash still matches.
                     // and if it is a directory
                     if let UrlOrPath::Path(path) = &record.0.url_or_path {
-                        let path = dunce::canonicalize(project_root.join(path)).map_err(|e| {
-                            PlatformUnsat::FailedToCanonicalizePath(path.clone(), e)
-                        })?;
                         if path.is_dir() {
+                            let path =
+                                dunce::canonicalize(project_root.join(path)).map_err(|e| {
+                                    PlatformUnsat::FailedToCanonicalizePath(path.clone(), e)
+                                })?;
                             let hashable = PypiSourceTreeHashable::from_directory(path)
                                 .map_err(|e| {
                                     PlatformUnsat::FailedToDetermineSourceTreeHash(
@@ -614,12 +654,13 @@ pub fn verify_package_platform_satisfiability(
 
                 // Add all the requirements of the package to the queue.
                 for requirement in &record.0.requires_dist {
-                    if !pypi_requirements_visited.insert(requirement.clone()) {
+                    // Skip this requirement if it does not apply.
+                    if !requirement.evaluate_markers(marker_environment, &extras) {
                         continue;
                     }
 
-                    // Skip this requirement if it does not apply.
-                    if !requirement.evaluate_markers(marker_environment, &extras) {
+                    // Skip this requirement if it has already been visited.
+                    if !pypi_requirements_visited.insert(requirement.clone()) {
                         continue;
                     }
 
@@ -650,6 +691,24 @@ pub fn verify_package_platform_satisfiability(
                     }
                 })
                 .collect(),
+        ));
+    }
+
+    // Check if all packages that should be editable are actually editable and vice versa.
+    let locked_editable_packages = locked_pypi_environment
+        .records
+        .iter()
+        .filter(|record| record.0.editable)
+        .map(|record| record.0.name.clone())
+        .collect::<HashSet<_>>();
+    let expected_editable = expected_editable_pypi_packages.sub(&locked_editable_packages);
+    let unexpected_editable = locked_editable_packages.sub(&expected_editable_pypi_packages);
+    if !expected_editable.is_empty() || !unexpected_editable.is_empty() {
+        return Err(PlatformUnsat::EditablePackageMismatch(
+            EditablePackagesMismatch {
+                expected_editable: expected_editable.into_iter().sorted().collect(),
+                unexpected_editable: unexpected_editable.into_iter().sorted().collect(),
+            },
         ));
     }
 
@@ -702,6 +761,80 @@ impl MatchesMatchspec for GenericVirtualPackage {
     }
 }
 
+impl Display for EditablePackagesMismatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.expected_editable.is_empty() && self.unexpected_editable.is_empty() {
+            write!(f, "expected ")?;
+            format_package_list(f, &self.expected_editable)?;
+            write!(
+                f,
+                " to be editable but in the lock-file {they} {are} not",
+                they = it_they(self.expected_editable.len()),
+                are = is_are(self.expected_editable.len())
+            )?
+        } else if self.expected_editable.is_empty() && !self.unexpected_editable.is_empty() {
+            write!(f, "expected ")?;
+            format_package_list(f, &self.unexpected_editable)?;
+            write!(
+                f,
+                "NOT to be editable but in the lock-file {they} {are}",
+                they = it_they(self.unexpected_editable.len()),
+                are = is_are(self.unexpected_editable.len())
+            )?
+        } else {
+            write!(f, "expected ")?;
+            format_package_list(f, &self.expected_editable)?;
+            write!(
+                f,
+                " to be editable but in the lock-file but {they} {are} not, whereas ",
+                they = it_they(self.expected_editable.len()),
+                are = is_are(self.expected_editable.len())
+            )?;
+            format_package_list(f, &self.unexpected_editable)?;
+            write!(
+                f,
+                " {are} NOT expected to be editable which in the lock-file {they} {are}",
+                they = it_they(self.unexpected_editable.len()),
+                are = is_are(self.unexpected_editable.len())
+            )?
+        }
+
+        return Ok(());
+
+        fn format_package_list(
+            f: &mut std::fmt::Formatter<'_>,
+            packages: &[PackageName],
+        ) -> std::fmt::Result {
+            for (idx, package) in packages.iter().enumerate() {
+                if idx == packages.len() - 1 && idx > 0 {
+                    write!(f, " and ")?;
+                } else if idx > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}", package)?;
+            }
+
+            Ok(())
+        }
+
+        fn is_are(count: usize) -> &'static str {
+            if count == 1 {
+                "is"
+            } else {
+                "are"
+            }
+        }
+
+        fn it_they(count: usize) -> &'static str {
+            if count == 1 {
+                "it"
+            } else {
+                "they"
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -710,7 +843,8 @@ mod tests {
     use pep440_rs::Version;
     use rattler_lock::LockFile;
     use rstest::rstest;
-    use std::{path::PathBuf, str::FromStr};
+    use std::ffi::OsStr;
+    use std::{path::Component, path::PathBuf, str::FromStr};
 
     #[derive(Error, Debug, Diagnostic)]
     enum LockfileUnsat {
@@ -751,6 +885,16 @@ mod tests {
     fn test_good_satisfiability(
         #[files("tests/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
+        // TODO: skip this test on windows
+        // Until we can figure out how to handle unix file paths with pep508_rs url parsing correctly
+        if manifest_path
+            .components()
+            .contains(&Component::Normal(OsStr::new("absolute-paths")))
+            && cfg!(windows)
+        {
+            return;
+        }
+
         let project = Project::load(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file).into_diagnostic() {
@@ -811,6 +955,25 @@ mod tests {
         ));
         // Removing the rev from the Requirement should satisfy any revision
         let spec = Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap();
+        assert!(pypi_satifisfies_requirement(&locked_data, &spec));
+    }
+
+    // Currently this test is missing from `good_satisfiability`, so we test the specific windows case here
+    // this should work an all supported platforms
+    #[test]
+    fn test_windows_absolute_path_handling() {
+        // Mock locked data
+        let locked_data = PypiPackageData {
+            name: "mypkg".parse().unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            url_or_path: UrlOrPath::Path(PathBuf::from_str("C:\\Users\\username\\mypkg").unwrap()),
+            hash: None,
+            requires_dist: vec![],
+            requires_python: None,
+            editable: false,
+        };
+        let spec = Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg").unwrap();
+        // This should satisfy:
         assert!(pypi_satifisfies_requirement(&locked_data, &spec));
     }
 }

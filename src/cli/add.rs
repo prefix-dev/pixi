@@ -1,30 +1,28 @@
 use crate::{
     config::ConfigCli,
     environment::{get_up_to_date_prefix, verify_prefix_location_unchanged, LockFileUsage},
-    project::{manifest::PyPiRequirement, DependencyType, Project, SpecType},
+    project::{has_features::HasFeatures, DependencyType, Project, SpecType},
     FeatureName,
 };
 use clap::Parser;
 use itertools::{Either, Itertools};
 
 use crate::project::grouped_environment::GroupedEnvironment;
-use crate::project::manifest::python::PyPiPackageName;
-use indexmap::IndexMap;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{
     version_spec::{LogicalOperator, RangeOperator},
     Channel, MatchSpec, NamelessMatchSpec, PackageName, ParseStrictness, Platform, Version,
     VersionBumpType, VersionSpec,
 };
-use rattler_repodata_gateway::sparse::SparseRepoData;
-use rattler_solve::{resolvo, SolverImpl};
+use rattler_repodata_gateway::{Gateway, RepoData};
+use rattler_solve::{resolvo, ChannelPriority, RepoDataIter, SolverImpl};
+use std::time::Instant;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
-    str::FromStr,
 };
 
-/// Adds a dependency to the project
+/// Adds dependencies to the project
 #[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
@@ -38,27 +36,29 @@ pub struct Args {
     ///
     /// - `pixi add python=3.9`: This will select the latest minor version that complies with 3.9.*, i.e.,
     ///   python version 3.9.0, 3.9.1, 3.9.2, etc.
-    ///
     /// - `pixi add python`: In absence of a specified version, the latest version will be chosen.
     ///   For instance, this could resolve to python version 3.11.3.* at the time of writing.
     ///
     /// Adding multiple dependencies at once is also supported:
-    ///
     /// - `pixi add python pytest`: This will add both `python` and `pytest` to the project's dependencies.
     ///
     /// The `--platform` and `--build/--host` flags make the dependency target specific.
-    ///
     /// - `pixi add python --platform linux-64 --platform osx-arm64`: Will add the latest version of python for linux-64 and osx-arm64 platforms.
-    ///
     /// - `pixi add python --build`: Will add the latest version of python for as a build dependency.
     ///
     /// Mixing `--platform` and `--build`/`--host` flags is supported
     ///
-    /// The `--pypi` option will add the package as a pypi-dependency this can not be mixed with the conda dependencies
+    /// The `--pypi` option will add the package as a pypi dependency. This can not be mixed with the conda dependencies
     /// - `pixi add --pypi boto3`
     /// - `pixi add --pypi "boto3==version"
     ///
-    #[arg(required = true)]
+    /// If the project manifest is a `pyproject.toml`, adding a pypi dependency will add it to the native pyproject `project.dependencies` array
+    /// or to the native `project.optional-dependencies` table if a feature is specified:
+    /// - `pixi add --pypi boto3` will add `boto3` to the `project.dependencies` array
+    /// - `pixi add --pypi boto3 --feature aws` will add `boto3` to the `project.dependencies.aws` array
+    /// These dependencies will then be read by pixi as if they had been added to the pixi `pypi-dependencies` tables of the default or of a named feature.
+    ///
+    #[arg(required = true, verbatim_doc_comment)]
     pub specs: Vec<String>,
 
     /// The path to 'pixi.toml' or 'pyproject.toml'
@@ -95,6 +95,10 @@ pub struct Args {
 
     #[clap(flatten)]
     pub config: ConfigCli,
+
+    /// Whether the pypi requirement should be editable
+    #[arg(long, requires = "pypi")]
+    pub editable: bool,
 }
 
 impl DependencyType {
@@ -160,27 +164,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .specs
                 .clone()
                 .into_iter()
-                .map(|input| pep508_rs::Requirement::from_str(input.as_ref()).into_diagnostic())
+                .map(|input| {
+                    pep508_rs::Requirement::parse(input.as_ref(), project.root()).into_diagnostic()
+                })
                 .collect::<miette::Result<Vec<_>>>()?;
 
-            // Move those requirements into our custom PyPiRequirement
-            let specs = pep508_requirements
-                .into_iter()
-                .map(|req| {
-                    let name = PyPiPackageName::from_normalized(req.name.clone());
-                    let requirement = PyPiRequirement::from(req);
-                    Ok((name, requirement))
-                })
-                .collect::<Result<Vec<_>, uv_normalize::InvalidNameError>>()
-                .into_diagnostic()?;
-
-            add_pypi_specs_to_project(
+            add_pypi_requirements_to_project(
                 &mut project,
                 &feature_name,
-                specs,
+                pep508_requirements,
                 spec_platforms,
                 args.no_lockfile_update,
                 args.no_install,
+                Some(args.editable),
             )
             .await
         }
@@ -217,26 +213,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-pub async fn add_pypi_specs_to_project(
+pub async fn add_pypi_requirements_to_project(
     project: &mut Project,
     feature_name: &FeatureName,
-    specs: Vec<(PyPiPackageName, PyPiRequirement)>,
-    specs_platforms: &[Platform],
+    requirements: Vec<pep508_rs::Requirement>,
+    platforms: &[Platform],
     no_update_lockfile: bool,
     no_install: bool,
+    editable: Option<bool>,
 ) -> miette::Result<()> {
-    for (name, spec) in &specs {
+    for requirement in &requirements {
         // TODO: Get best version
         // Add the dependency to the project
-        if specs_platforms.is_empty() {
+        if platforms.is_empty() {
             project
                 .manifest
-                .add_pypi_dependency(name, spec, None, feature_name)?;
+                .add_pypi_dependency(requirement, None, feature_name, editable)?;
         } else {
-            for platform in specs_platforms.iter() {
-                project
-                    .manifest
-                    .add_pypi_dependency(name, spec, Some(*platform), feature_name)?;
+            for platform in platforms.iter() {
+                project.manifest.add_pypi_dependency(
+                    requirement,
+                    Some(*platform),
+                    feature_name,
+                    editable,
+                )?;
             }
         }
     }
@@ -246,13 +246,7 @@ pub async fn add_pypi_specs_to_project(
         LockFileUsage::Update
     };
 
-    get_up_to_date_prefix(
-        &project.default_environment(),
-        lock_file_usage,
-        no_install,
-        IndexMap::default(),
-    )
-    .await?;
+    get_up_to_date_prefix(&project.default_environment(), lock_file_usage, no_install).await?;
 
     project.save()?;
 
@@ -276,9 +270,6 @@ pub async fn add_conda_specs_to_project(
             None => Err(miette::miette!("missing package name for spec '{spec}'")),
         })
         .collect::<miette::Result<HashMap<PackageName, NamelessMatchSpec>>>()?;
-
-    // Fetch the repodata for the project
-    let sparse_repo_data = project.fetch_sparse_repodata().await?;
 
     // Determine the best version per platform
     let mut package_versions = HashMap::<PackageName, HashSet<Version>>::new();
@@ -311,9 +302,12 @@ pub async fn add_conda_specs_to_project(
                 &grouped_environment,
                 &new_specs,
                 spec_type,
-                &sparse_repo_data,
                 platform,
-            ) {
+                grouped_environment.channels(),
+                project.repodata_gateway(),
+            )
+            .await
+            {
                 Ok(versions) => versions,
                 Err(err) => {
                     return Err(err).wrap_err_with(|| miette::miette!(
@@ -337,12 +331,9 @@ pub async fn add_conda_specs_to_project(
             if let Some(versions_seen) = package_versions.get(&name).cloned() {
                 updated_spec.version = determine_version_constraint(&versions_seen);
             } else {
-                updated_spec.version = determine_version_constraint(&determine_latest_versions(
-                    project,
-                    specs_platforms,
-                    &sparse_repo_data,
-                    &name,
-                )?);
+                updated_spec.version = determine_version_constraint(
+                    &determine_latest_versions(project, specs_platforms, &name).await?,
+                );
             }
             updated_spec
         } else {
@@ -370,13 +361,7 @@ pub async fn add_conda_specs_to_project(
     };
 
     // Update the prefix
-    get_up_to_date_prefix(
-        &project.default_environment(),
-        lock_file_usage,
-        no_install,
-        sparse_repo_data,
-    )
-    .await?;
+    get_up_to_date_prefix(&project.default_environment(), lock_file_usage, no_install).await?;
 
     project.save()?;
 
@@ -384,15 +369,11 @@ pub async fn add_conda_specs_to_project(
 }
 
 /// Get all the latest versions found in the platforms repodata.
-fn determine_latest_versions(
+async fn determine_latest_versions(
     project: &Project,
     platforms: &[Platform],
-    sparse_repo_data: &IndexMap<(Channel, Platform), SparseRepoData>,
     name: &PackageName,
 ) -> miette::Result<Vec<Version>> {
-    // If we didn't find any versions, we'll just use the latest version we can find in the repodata.
-    let mut found_records = Vec::new();
-
     // Get platforms to search for including NoArch
     let platforms = if platforms.is_empty() {
         let mut temp = project.platforms().into_iter().collect_vec();
@@ -404,36 +385,49 @@ fn determine_latest_versions(
         temp
     };
 
-    // Search for the package in the all the channels and platforms
-    for channel in project.channels() {
-        for platform in &platforms {
-            let sparse_repo_data = sparse_repo_data.get(&(channel.clone(), *platform));
-            if let Some(sparse_repo_data) = sparse_repo_data {
-                let records = sparse_repo_data.load_records(name).into_diagnostic()?;
-                // Add max of every channel and platform
-                if let Some(max_record) = records
-                    .into_iter()
-                    .max_by_key(|record| record.package_record.version.version().clone())
-                {
-                    found_records.push(max_record);
+    // Get the records for the package
+    let records = project
+        .repodata_gateway()
+        .query(
+            project.channels().into_iter().cloned(),
+            platforms,
+            [name.clone()],
+        )
+        .recursive(false)
+        .await
+        .into_diagnostic()?;
+
+    // Find the first non-empty channel
+    let Some(priority_records) = records.into_iter().find(|records| !records.is_empty()) else {
+        return Ok(vec![]);
+    };
+
+    // Find the maximum versions per platform
+    let mut found_records: HashMap<String, Version> = HashMap::new();
+    for record in priority_records.iter() {
+        let version = record.package_record.version.version().clone();
+        let platform = &record.package_record.subdir;
+        found_records
+            .entry(platform.clone())
+            .and_modify(|max| {
+                if &version > max {
+                    *max = version.clone();
                 }
-            };
-        }
+            })
+            .or_insert(version);
     }
 
     // Determine the version constraint based on the max of every channel and platform.
-    Ok(found_records
-        .iter()
-        .map(|record| record.package_record.version.version().clone())
-        .collect_vec())
+    Ok(found_records.into_values().collect())
 }
 /// Given several specs determines the highest installable version for them.
-pub fn determine_best_version(
-    environment: &GroupedEnvironment,
+pub async fn determine_best_version<'p>(
+    environment: &GroupedEnvironment<'p>,
     new_specs: &HashMap<PackageName, NamelessMatchSpec>,
     new_specs_type: SpecType,
-    sparse_repo_data: &IndexMap<(Channel, Platform), SparseRepoData>,
     platform: Platform,
+    channels: impl IntoIterator<Item = &'p Channel>,
+    repodata_gateway: &Gateway,
 ) -> miette::Result<HashMap<PackageName, Version>> {
     // Build the combined set of specs while updating the dependencies with the new specs.
     let dependencies = SpecType::all()
@@ -451,23 +445,21 @@ pub fn determine_best_version(
         .unwrap_or_default();
 
     // Extract the package names from all the dependencies
-    let package_names = dependencies.names().cloned().collect_vec();
-
-    // Get the repodata for the current platform and for NoArch
-    let platform_sparse_repo_data = environment
-        .channels()
-        .into_iter()
-        .cloned()
-        .cartesian_product(vec![platform, Platform::NoArch])
-        .filter_map(|target| sparse_repo_data.get(&target));
-
-    // Load only records we need for this platform
-    let available_packages = SparseRepoData::load_records_recursive(
-        platform_sparse_repo_data,
-        package_names.iter().cloned(),
-        None,
-    )
-    .into_diagnostic()?;
+    let fetch_repodata_start = Instant::now();
+    let available_packages = repodata_gateway
+        .query(
+            channels.into_iter().cloned(),
+            [platform, Platform::NoArch],
+            dependencies.clone().into_match_specs(),
+        )
+        .recursive(true)
+        .await
+        .into_diagnostic()?;
+    let total_records = available_packages.iter().map(RepoData::len).sum::<usize>();
+    tracing::info!(
+        "fetched {total_records} records in {:?}",
+        fetch_repodata_start.elapsed()
+    );
 
     // Construct a solver task to start solving.
     let task = rattler_solve::SolverTask {
@@ -475,16 +467,15 @@ pub fn determine_best_version(
             .iter_specs()
             .map(|(name, spec)| MatchSpec::from_nameless(spec.clone(), Some(name.clone())))
             .collect(),
-
-        available_packages: &available_packages,
-
+        available_packages: available_packages
+            .iter()
+            .map(RepoDataIter)
+            .collect::<Vec<_>>(),
         virtual_packages: environment.virtual_packages(platform),
-
         locked_packages: vec![],
-
         pinned_packages: vec![],
-
         timeout: None,
+        channel_priority: ChannelPriority::Strict,
     };
 
     let records = resolvo::Solver.solve(task).into_diagnostic()?;

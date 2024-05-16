@@ -50,6 +50,11 @@ async fn add_functionality() {
     assert!(lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==3"));
     assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==2"));
     assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==1"));
+
+    // remove the package, using matchspec
+    pixi.remove("rattler==1").await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(!lock.contains_match_spec(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "rattler==1"));
 }
 
 /// Test that we get the union of all packages in the lockfile for the run, build and host
@@ -184,7 +189,7 @@ async fn add_pypi_functionality() {
         .unwrap();
 
     // Add a pypi package to a target
-    pixi.add("boto3>=1.33")
+    pixi.add("boltons")
         .set_type(DependencyType::PypiDependency)
         .with_install(true)
         .set_platforms(&[Platform::Osx64])
@@ -199,7 +204,35 @@ async fn add_pypi_functionality() {
         .await
         .unwrap();
 
-    pixi.add("requests [security,tests] >= 2.8.1, == 2.8.*")
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "pipx"));
+    assert!(lock.contains_pep508_requirement(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::Osx64,
+        pep508_rs::Requirement::from_str("boltons").unwrap()
+    ));
+    assert!(lock.contains_pep508_requirement(
+        DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        pep508_rs::Requirement::from_str("pytest[all]").unwrap(),
+    ));
+
+    // Add a pypi package with a git url
+    pixi.add("requests @ git+https://github.com/psf/requests.git")
+        .set_type(DependencyType::PypiDependency)
+        .set_platforms(&[Platform::Linux64])
+        .with_install(true)
+        .await
+        .unwrap();
+
+    pixi.add("isort @ git+https://github.com/PyCQA/isort@c655831799765e9593989ee12faba13b6ca391a5")
+        .set_type(DependencyType::PypiDependency)
+        .set_platforms(&[Platform::Linux64])
+        .with_install(true)
+        .await
+        .unwrap();
+
+    pixi.add("pytest @ https://github.com/pytest-dev/pytest/releases/download/8.2.0/pytest-8.2.0-py3-none-any.whl")
         .set_type(DependencyType::PypiDependency)
         .set_platforms(&[Platform::Linux64])
         .with_install(true)
@@ -207,22 +240,9 @@ async fn add_pypi_functionality() {
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::current(), "pipx"));
-    assert!(lock.contains_pep508_requirement(
-        DEFAULT_ENVIRONMENT_NAME,
-        Platform::Osx64,
-        pep508_rs::Requirement::from_str("boto3>=1.33").unwrap()
-    ));
-    assert!(lock.contains_pep508_requirement(
-        DEFAULT_ENVIRONMENT_NAME,
-        Platform::Linux64,
-        pep508_rs::Requirement::from_str("pytest[all]").unwrap(),
-    ));
-    assert!(lock.contains_pep508_requirement(
-        DEFAULT_ENVIRONMENT_NAME,
-        Platform::Linux64,
-        pep508_rs::Requirement::from_str("requests [security,tests] >= 2.8.1, == 2.8.*").unwrap(),
-    ));
+    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::Linux64, "requests"));
+    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::Linux64, "isort"));
+    assert!(lock.contains_pypi_package(DEFAULT_ENVIRONMENT_NAME, Platform::Linux64, "pytest"));
 }
 
 /// Test the sdist support for pypi packages

@@ -1,6 +1,6 @@
 mod activation;
 pub mod cli;
-mod config;
+pub mod config;
 pub mod consts;
 mod environment;
 mod install;
@@ -10,7 +10,6 @@ mod prefix;
 mod progress;
 mod project;
 mod prompt;
-mod repodata;
 pub mod task;
 #[cfg(unix)]
 pub mod unix;
@@ -21,12 +20,14 @@ mod pypi_marker_env;
 mod pypi_tags;
 mod uv_reporter;
 
-mod pypi_mapping;
+pub mod pypi_mapping;
+mod repodata;
 
 pub use activation::get_activation_env;
 pub use lock_file::load_lock_file;
 pub use lock_file::UpdateLockFileOptions;
 pub use project::{
+    has_features::HasFeatures,
     manifest::{EnvironmentName, FeatureName},
     DependencyType, Project, SpecType,
 };

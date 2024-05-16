@@ -2,20 +2,23 @@ mod dependencies;
 mod environment;
 pub mod errors;
 pub mod grouped_environment;
+pub mod has_features;
 pub mod manifest;
+mod repodata;
 mod solve_group;
 pub mod virtual_packages;
 
 use async_once_cell::OnceCell as AsyncCell;
-use distribution_types::IndexLocations;
-use indexmap::{Equivalent, IndexMap, IndexSet};
+use indexmap::{Equivalent, IndexSet};
 use miette::{IntoDiagnostic, NamedSource};
 
 use rattler_conda_types::{Channel, Platform, Version};
 use reqwest_middleware::ClientWithMiddleware;
 use std::hash::Hash;
 
+use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::VirtualPackage;
+use std::sync::OnceLock;
 use std::{
     collections::{HashMap, HashSet},
     env,
@@ -34,14 +37,15 @@ use crate::{
     consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
     task::Task,
 };
-use manifest::{EnvironmentName, Manifest, PyPiRequirement, SystemRequirements};
+use manifest::{EnvironmentName, Manifest, SystemRequirements};
 
-use crate::project::manifest::python::PyPiPackageName;
-pub use dependencies::Dependencies;
+use self::{
+    has_features::HasFeatures,
+    manifest::{pyproject::PyProjectToml, Environments},
+};
+pub use dependencies::{CondaDependencies, PyPiDependencies};
 pub use environment::Environment;
 pub use solve_group::SolveGroup;
-
-use self::manifest::{pyproject::PyProjectToml, Environments};
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -98,6 +102,9 @@ pub struct Project {
     client: reqwest::Client,
     /// Authenticated reqwest client shared for this project
     authenticated_client: ClientWithMiddleware,
+    /// The repodata gateway to use for answering queries about repodata.
+    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
+    repodata_gateway: OnceLock<Arc<Gateway>>,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
     /// The cache that contains environment variables
@@ -126,6 +133,7 @@ impl Project {
             Config::load(&root.join(consts::PIXI_DIR)).unwrap_or_else(|_| Config::load_global());
 
         let (client, authenticated_client) = build_reqwest_clients(Some(&config));
+
         Self {
             root,
             client,
@@ -133,6 +141,7 @@ impl Project {
             manifest,
             env_vars,
             config,
+            repodata_gateway: Default::default(),
         }
     }
 
@@ -217,6 +226,7 @@ impl Project {
             manifest,
             env_vars,
             config,
+            repodata_gateway: Default::default(),
         })
     }
 
@@ -333,6 +343,16 @@ impl Project {
             .collect()
     }
 
+    /// Returns an environment in this project based on a name or an environment variable.
+    pub fn environment_from_name_or_env_var(
+        &self,
+        name: Option<String>,
+    ) -> miette::Result<Environment> {
+        let environment_name = EnvironmentName::from_arg_or_env_var(name).into_diagnostic()?;
+        self.environment(&environment_name)
+            .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
+    }
+
     /// Returns all the solve groups in the project.
     pub fn solve_groups(&self) -> Vec<SolveGroup> {
         self.manifest
@@ -394,7 +414,7 @@ impl Project {
     /// TODO: Remove this function and use the tasks from the default environment instead.
     pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&TaskName, &Task> {
         self.default_environment()
-            .tasks(platform, true)
+            .tasks(platform)
             .unwrap_or_default()
     }
 
@@ -423,17 +443,18 @@ impl Project {
     /// Returns the dependencies of the project.
     ///
     /// TODO: Remove this function and use the `dependencies` function from the default environment instead.
-    pub fn dependencies(&self, kind: Option<SpecType>, platform: Option<Platform>) -> Dependencies {
+    pub fn dependencies(
+        &self,
+        kind: Option<SpecType>,
+        platform: Option<Platform>,
+    ) -> CondaDependencies {
         self.default_environment().dependencies(kind, platform)
     }
 
     /// Returns the PyPi dependencies of the project
     ///
     /// TODO: Remove this function and use the `dependencies` function from the default environment instead.
-    pub fn pypi_dependencies(
-        &self,
-        platform: Option<Platform>,
-    ) -> IndexMap<PyPiPackageName, Vec<PyPiRequirement>> {
+    pub fn pypi_dependencies(&self, platform: Option<Platform>) -> PyPiDependencies {
         self.default_environment().pypi_dependencies(platform)
     }
 
@@ -455,12 +476,6 @@ impl Project {
         self.manifest
             .pypi_name_mapping_source()
             .expect("mapping source should be ok")
-    }
-
-    /// Returns the Python index locations to use for this project.
-    pub fn pypi_index_locations(&self) -> IndexLocations {
-        // TODO: Currently we just default to Pypi always.
-        IndexLocations::default()
     }
 
     /// Returns the reqwest client used for http networking
@@ -589,7 +604,7 @@ mod tests {
         }
     }
 
-    fn format_dependencies(deps: Dependencies) -> String {
+    fn format_dependencies(deps: CondaDependencies) -> String {
         deps.iter_specs()
             .map(|(name, spec)| format!("{} = \"{}\"", name.as_source(), spec))
             .join("\n")
