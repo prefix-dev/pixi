@@ -105,8 +105,12 @@ pub async fn amend_pypi_purls(
     conda_packages: &mut [RepoDataRecord],
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
-    let packages_for_prefix_mapping: Vec<RepoDataRecord> =
-        filter_packages_for_prefix_mapping(mapping_url, conda_packages);
+    trim_conda_packages_channel_url_suffix(conda_packages);
+    let packages_for_prefix_mapping: Vec<RepoDataRecord> = conda_packages
+        .iter()
+        .filter(|package| !mapping_url.contains_key(&package.channel))
+        .cloned()
+        .collect();
 
     let custom_mapping = fetch_custom_mapping(client, mapping_url).await?;
 
@@ -186,13 +190,8 @@ pub fn _amend_only_custom_pypi_purls(
     Ok(())
 }
 
-fn filter_packages_for_prefix_mapping(
-    mapping_url: &MappingMap,
-    conda_packages: &[RepoDataRecord],
-) -> Vec<RepoDataRecord> {
-    conda_packages
-        .iter()
-        .filter(|package| !mapping_url.contains_key(package.channel.trim_end_matches('/')))
-        .cloned()
-        .collect()
+fn trim_conda_packages_channel_url_suffix(conda_packages: &mut [RepoDataRecord]) {
+    for package in conda_packages {
+        package.channel = package.channel.trim_end_matches('/').to_string();
+    }
 }
