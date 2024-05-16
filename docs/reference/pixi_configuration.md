@@ -105,11 +105,14 @@ authentication-override-file = "/path/to/your/override.json"
 The directory where pixi stores the project environments, what would normally be placed in the `.pixi` folder in a project's root.
 It doesn't affect the environments built for `pixi global`. 
 The location of environments created for a `pixi global` installation can be controlled using the `PIXI_HOME` environment variable.
-This is not recommended to change, but can be useful in some cases.
+!!! warning
+    We recommend against using this because any environment created for a project is no longer placed in the same folder as the project. 
+    This creates a disconnect between the project and its environments and manual cleanup of the environments is required when deleting the project.
+    However, in some cases, this option can still be very useful, for instance to:
 
-- Forcing the installation on a specific filesystem/drive
-- Network hosted projects, but local environments
-- Let the system-administrator have more control over all environments on a system.
+    - force the installation on a specific filesystem/drive.
+    - install environments locally but keep the project on a network drive.
+    - let a system-administrator have more control over all environments on a system.
 
 ```toml title="config.toml"
 target-environment-diretory = "/opt/pixi/envs"
