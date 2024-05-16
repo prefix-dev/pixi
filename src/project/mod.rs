@@ -319,21 +319,29 @@ impl Project {
                 if !default_pixi_dir.is_symlink() {
                     if default_pixi_dir.join(consts::ENVIRONMENTS_DIR).exists() {
                         tracing::warn!(
-                            "Environments found in '{}', this will be ignored in favor of custom target directory '{}'\n\
-                            \t\tIt's advised to remove the environments from the default directory to avoid confusion.",
+                            "Environments found in '{}', this will be ignored and the environment will be installed in the custom target directory '{}'\n\
+                            \t\tIt's advised to remove the {} folder from the default directory to avoid confusion{}.",
                             default_pixi_dir.display(),
-                            custom_root.display()
+                            custom_root.display(),
+                            consts::PIXI_DIR,
+                            if cfg!(windows) { "" } else { " and a symlink to be made. Re-install if needed." }
                         );
                     } else {
+
+                        if cfg!(windows) {
+                            tracing::warn!("Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi') directory.");
+                            // Write file with warning to the default pixi directory
+                            let warning_file = default_pixi_dir.join("README.txt");
+                            std::fs::write(&warning_file, format!("Environments are installed in a custom target directory: {}.\nSymlinks are not supported on this platform so environments will not be reachable from the default ('.pixi') directory.", pixi_dir_name.display())).map_err(|e| println!("Failed to write warning file to {}: {}", warning_file.display(), e)).ok();
+                        }
+
                         // Create symlink from custom root to default pixi directory
                         #[cfg(not(windows))]
                         match symlink(pixi_dir_name.clone(), default_pixi_dir.clone()) {
-                                Ok(_) => tracing::info!("Symlink created successfully from {} to {} folder", custom_root.display(), default_pixi_dir.display()),
-                                Err(e) => println!("Failed to create symlink: {}", e),
+                            Ok(_) => tracing::info!("Symlink created successfully from {} to {} folder", custom_root.display(), default_pixi_dir.display()),
+                            Err(e) => println!("Failed to create symlink: {}", e),
                         }
 
-                        #[cfg(windows)]
-                         tracing::info!("Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi') directory.");
                     }
                 }
 
