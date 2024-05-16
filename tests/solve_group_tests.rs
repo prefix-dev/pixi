@@ -4,7 +4,7 @@ use crate::common::{
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };
-use pixi::pypi_mapping;
+use pixi::pypi_mapping::{self, MappingSource};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use serial_test::serial;
@@ -184,4 +184,90 @@ async fn test_compressed_mapping_catch_missing_package() {
     let first_purl = repo_data_record.package_record.purls.pop().unwrap();
 
     assert!(first_purl.name() == "my-test-name")
+}
+
+#[tokio::test]
+async fn test_custom_mapping_channel_with_suffix() {
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+     [project]
+     name = "test-channel-change"
+     channels = ["conda-forge"]
+     platforms = ["linux-64"]
+     conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge/" = "tests/custom_mapping.json" }}
+     "#,
+    ))
+    .unwrap();
+
+    let project = pixi.project().unwrap();
+
+    let client = project.authenticated_client();
+
+    let foo_bar_package = Package::build("pixi-something-new", "2").finish();
+
+    let repo_data_record = RepoDataRecord {
+        package_record: foo_bar_package.package_record,
+        file_name: "pixi-something-new".to_owned(),
+        url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
+        channel: "https://conda.anaconda.org/conda-forge".to_owned(),
+    };
+
+    let mut packages = vec![repo_data_record];
+
+    let mapping_source = project.pypi_name_mapping_source();
+
+    let mapping_map = match mapping_source {
+        MappingSource::Custom { mapping } => mapping,
+        MappingSource::Prefix => unreachable!(),
+    };
+
+    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(&client, &mapping_map, &mut packages, None)
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    assert!(!package.package_record.purls.is_empty());
+}
+
+#[tokio::test]
+async fn test_repo_data_record_channel_with_suffix() {
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+     [project]
+     name = "test-channel-change"
+     channels = ["conda-forge"]
+     platforms = ["linux-64"]
+     conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge" = "tests/custom_mapping.json" }}
+     "#,
+    ))
+    .unwrap();
+
+    let project = pixi.project().unwrap();
+
+    let client = project.authenticated_client();
+
+    let foo_bar_package = Package::build("pixi-something-new", "2").finish();
+
+    let repo_data_record = RepoDataRecord {
+        package_record: foo_bar_package.package_record,
+        file_name: "pixi-something-new".to_owned(),
+        url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
+        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+    };
+
+    let mut packages = vec![repo_data_record];
+
+    let mapping_source = project.pypi_name_mapping_source();
+
+    let mapping_map = match mapping_source {
+        MappingSource::Custom { mapping } => mapping,
+        MappingSource::Prefix => unreachable!(),
+    };
+
+    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(&client, &mapping_map, &mut packages, None)
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    assert!(!package.package_record.purls.is_empty());
 }
