@@ -441,8 +441,8 @@ impl Config {
     }
 
     /// Retrieve the value for the target_environments_directory field.
-    pub fn target_environments_directory(&self) -> Option<PathBuf> {
-        self.target_environments_directory.clone()
+    pub fn target_environments_directory(&self) -> Option<&Path> {
+        self.target_environments_directory.as_deref()
     }
 }
 
