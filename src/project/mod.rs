@@ -303,56 +303,44 @@ impl Project {
     pub fn pixi_dir(&self) -> PathBuf {
         let default_pixi_dir = self.root.join(consts::PIXI_DIR);
 
-        // Custom root directory for target environments if set in configuration.
         if let Some(custom_root) = self.config().target_environments_directory() {
             let pixi_dir_name = custom_root.join(format!(
                 "{}-{}",
                 self.name(),
                 xxh3_64(self.root.to_string_lossy().as_bytes())
             ));
+
             let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
-                tracing::info!(
-                    "Using custom target directory for environments: {}",
-                    pixi_dir_name.display()
+
+                #[cfg(not(windows))]
+                if !default_pixi_dir.is_symlink()
+                    && default_pixi_dir.join(consts::ENVIRONMENTS_DIR).exists()
+                {
+                    tracing::warn!(
+                    "Environments found in '{}', this will be ignored and the environment will be installed in the custom target directory '{}'\n\
+                    \t\tIt's advised to remove the {} folder from the default directory to avoid confusion{}.",
+                    default_pixi_dir.display(),
+                    custom_root.display(),
+                    consts::PIXI_DIR,
+                    if cfg!(windows) { "" } else { " and a symlink to be made. Re-install if needed." }
                 );
-                // Warn user if environments are found in the default directory
-                if !default_pixi_dir.is_symlink() {
-                    if default_pixi_dir.join(consts::ENVIRONMENTS_DIR).exists() {
-                        tracing::warn!(
-                            "Environments found in '{}', this will be ignored and the environment will be installed in the custom target directory '{}'\n\
-                            \t\tIt's advised to remove the {} folder from the default directory to avoid confusion{}.",
-                            default_pixi_dir.display(),
-                            custom_root.display(),
-                            consts::PIXI_DIR,
-                            if cfg!(windows) { "" } else { " and a symlink to be made. Re-install if needed." }
-                        );
-                    } else {
+                } else {
+                    create_symlink(&pixi_dir_name, &default_pixi_dir);
 
-                        if cfg!(windows) {
-                            tracing::warn!("Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi') directory.");
-                            // Write file with warning to the default pixi directory
-                            let warning_file = default_pixi_dir.join("README.txt");
-                            std::fs::write(&warning_file, format!("Environments are installed in a custom target directory: {}.\nSymlinks are not supported on this platform so environments will not be reachable from the default ('.pixi') directory.", pixi_dir_name.display())).map_err(|e| println!("Failed to write warning file to {}: {}", warning_file.display(), e)).ok();
-                        }
-
-                        // Create symlink from custom root to default pixi directory
-                        #[cfg(not(windows))]
-                        match symlink(pixi_dir_name.clone(), default_pixi_dir.clone()) {
-                            Ok(_) => tracing::info!("Symlink created successfully from {} to {} folder", custom_root.display(), default_pixi_dir.display()),
-                            Err(e) => println!("Failed to create symlink: {}", e),
-                        }
-
-                    }
                 }
 
+                #[cfg(windows)]
+                write_warning_file(&default_pixi_dir, &pixi_dir_name);
             });
 
             return pixi_dir_name;
         }
+
         tracing::debug!(
             "Using default root directory: `{}` for target environments.",
             default_pixi_dir.display()
         );
+
         default_pixi_dir
     }
 
@@ -608,6 +596,63 @@ pub fn find_project_manifest() -> Option<PathBuf> {
                 }
             })
     })
+}
+
+/// Create a symlink from the default pixi directory to the custom target directory
+#[cfg(not(windows))]
+fn create_symlink(pixi_dir_name: &PathBuf, default_pixi_dir: &PathBuf) {
+    symlink(pixi_dir_name.clone(), default_pixi_dir.clone())
+        .map_err(|e| {
+            tracing::error!(
+                "Failed to create symlink from '{}' to '{}': {}",
+                pixi_dir_name.display(),
+                default_pixi_dir.display(),
+                e
+            )
+        })
+        .ok();
+}
+
+/// Write a warning file to the default pixi directory to inform the user that symlinks are not supported on this platform (Windows).
+#[cfg(windows)]
+fn write_warning_file(default_pixi_dir: &PathBuf, pixi_dir_name: &Path) {
+    let warning_file = default_pixi_dir.join("README.txt");
+    if warning_file.exists() {
+        tracing::debug!(
+            "Symlink warning file already exists at '{}', skipping writing warning file.",
+            warning_file.display()
+        );
+        return;
+    }
+    let warning_message = format!(
+        "Environments are installed in a custom target directory: {}.\n\
+        Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi') directory.",
+        pixi_dir_name.display()
+    );
+
+    // Create directory if it doesn't exist
+    if let Err(e) = std::fs::create_dir_all(default_pixi_dir) {
+        tracing::error!(
+            "Failed to create directory '{}': {}",
+            default_pixi_dir.display(),
+            e
+        );
+        return;
+    }
+
+    // Write warning message to file
+    match std::fs::write(&warning_file, warning_message.clone()) {
+        Ok(_) => tracing::info!(
+            "Symlink warning file written to '{}': {}",
+            warning_file.display(),
+            warning_message
+        ),
+        Err(e) => tracing::error!(
+            "Failed to write symlink warning file to '{}': {}",
+            warning_file.display(),
+            e
+        ),
+    }
 }
 
 #[cfg(test)]
