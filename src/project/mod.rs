@@ -313,20 +313,17 @@ impl Project {
             let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
 
                 #[cfg(not(windows))]
-                if !default_pixi_dir.is_symlink()
-                    && default_pixi_dir.join(consts::ENVIRONMENTS_DIR).exists()
-                {
+                if default_pixi_dir.join(consts::ENVIRONMENTS_DIR).exists() && !default_pixi_dir.is_symlink() {
                     tracing::warn!(
-                    "Environments found in '{}', this will be ignored and the environment will be installed in the custom target directory '{}'\n\
-                    \t\tIt's advised to remove the {} folder from the default directory to avoid confusion{}.",
-                    default_pixi_dir.display(),
-                    custom_root.display(),
-                    consts::PIXI_DIR,
-                    if cfg!(windows) { "" } else { " and a symlink to be made. Re-install if needed." }
-                );
+                        "Environments found in '{}', this will be ignored and the environment will be installed in the custom target directory '{}'\n\
+                        \t\tIt's advised to remove the {} folder from the default directory to avoid confusion{}.",
+                        default_pixi_dir.display(),
+                        custom_root.display(),
+                        consts::PIXI_DIR,
+                        if cfg!(windows) { "" } else { " and a symlink to be made. Re-install if needed." }
+                    );
                 } else {
                     create_symlink(&pixi_dir_name, &default_pixi_dir);
-
                 }
 
                 #[cfg(windows)]
@@ -600,8 +597,15 @@ pub fn find_project_manifest() -> Option<PathBuf> {
 
 /// Create a symlink from the default pixi directory to the custom target directory
 #[cfg(not(windows))]
-fn create_symlink(pixi_dir_name: &PathBuf, default_pixi_dir: &PathBuf) {
-    symlink(pixi_dir_name.clone(), default_pixi_dir.clone())
+fn create_symlink(pixi_dir_name: &Path, default_pixi_dir: &Path) {
+    if default_pixi_dir.exists() {
+        tracing::debug!(
+            "Symlink already exists at '{}', skipping creating symlink.",
+            default_pixi_dir.display()
+        );
+        return;
+    }
+    symlink(pixi_dir_name, default_pixi_dir)
         .map_err(|e| {
             tracing::error!(
                 "Failed to create symlink from '{}' to '{}': {}",
