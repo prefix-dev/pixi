@@ -34,6 +34,9 @@ impl PypiCondaClobberRegistry {
 
     /// Check if the installation of the wheels is going to clobber any installed conda package
     /// and return the names of the packages that are going to be clobbered
+    /// this allow to warn the user about the overwriting of already installed packages
+    /// in case of wrong mapping data
+    /// or malicious packages
     pub fn clobber_on_instalation(
         self,
         wheels: Vec<CachedDist>,
