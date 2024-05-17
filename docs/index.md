@@ -3,7 +3,7 @@ part: pixi
 title: Getting Started
 description: Package management made easy
 ---
-
+# Getting Started
 ![Pixi with magic wand](assets/pixi.webp)
 
 Pixi is a package management tool for developers.
