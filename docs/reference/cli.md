@@ -351,6 +351,7 @@ List project's packages. Highlighted packages are explicit dependencies.
 - `--json`: Whether to output in json format.
 - `--json-pretty`: Whether to output in pretty json format
 - `--sort-by <SORT_BY>`: Sorting strategy [default: name] [possible values: size, name, type]
+- `--explicit (-x)`: Only list the packages that are explicitly added to the [manifest file](configuration.md).
 - `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](configuration.md), by default it searches for one in the parent directories.
 - `--environment (-e)`: The environment's packages to list, if non is provided the default environment's packages will be listed.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
@@ -360,6 +361,7 @@ List project's packages. Highlighted packages are explicit dependencies.
 ```shell
 pixi list
 pixi list --json-pretty
+pixi list --explicit
 pixi list --sort-by size
 pixi list --platform win-64
 pixi list --environment cuda
