@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::Parser;
-use indexmap::IndexMap;
 use miette::miette;
 use pep508_rs::Requirement;
 use rattler_conda_types::Platform;
@@ -149,7 +148,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,
-        IndexMap::default(),
     )
     .await?;
 

@@ -443,7 +443,7 @@ impl Manifest {
                                     }
                                 };
 
-                                Ok((channel.clone(), url_or_path))
+                                Ok((channel.trim_end_matches('/').into(), url_or_path))
                             })
                             .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
 
