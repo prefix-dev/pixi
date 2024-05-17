@@ -683,6 +683,93 @@ pixi auth logout repo.prefix.dev
 pixi auth logout anaconda.org
 ```
 
+## `config`
+
+Use this command to manage the configuration.
+
+### Common options
+
+- `--system`: Specify management scope to system configuration.
+- `--global`: Specify management scope to global configuration.
+- `--local`: Specify management scope to local configuration.
+
+### `config edit`
+
+Edit the configuration file in the default editor.
+
+### `config list`
+
+List the configuration
+
+##### Arguments
+
+1. `[KEY]`: The key to list the value of. (all if not provided)
+
+##### Options
+
+- `--json`: Output the configuration in JSON format.
+
+```shell
+pixi config list default-channels
+pixi config list --json
+```
+
+### `config prepend`
+
+Prepend a value to a list configuration key.
+
+##### Arguments
+
+1. `<KEY>`: The key to prepend the value to.
+2. `<VALUE>`: The value to prepend.
+
+```shell
+pixi config prepend default-channels conda-forge
+```
+
+### `config append`
+
+Append a value to a list configuration key.
+
+##### Arguments
+
+1. `<KEY>`: The key to append the value to.
+2. `<VALUE>`: The value to append.
+
+```shell
+pixi config append default-channels robostack
+pixi config append default-channels bioconda --global
+```
+
+### `config set`
+
+Set a configuration key to a value.
+
+##### Arguments
+
+1. `<KEY>`: The key to set the value of.
+2. `[VALUE]`: The value to set. (if not provided, the key will be removed)
+
+```shell
+pixi config set default-channels '["conda-forge", "bioconda"]'
+pixi config set --global mirrors '{"https://conda.anaconda.org/": ["https://prefix.dev/conda-forge"]}'
+pixi config set repodata-config.disable-zstd true --system
+```
+
+### `config unset`
+
+Unset a configuration key.
+
+##### Arguments
+
+1. `<KEY>`: The key to unset.
+
+```shell
+pixi config unset default-channels
+pixi config unset --global mirrors
+pixi config unset repodata-config.disable-zstd --system
+```
+
 ## `global`
 
 Global is the main entry point for the part of pixi that executes on the
