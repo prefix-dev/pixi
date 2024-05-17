@@ -39,6 +39,9 @@ enum Subcommand {
     Set(SetArgs),
 
     /// Unset a configuration value
+    ///
+    /// Example:
+    ///     pixi config unset default-channels
     Unset(UnsetArgs),
 }
 
@@ -270,7 +273,7 @@ fn alter_config(
                 }
                 "pypi-config.extra-index-urls" => {
                     let input = url::Url::parse(&value.expect("value must be provided"))
-                        .into_diagnostic()?;
+                        .map_err(|e| miette::miette!("Invalid URL: {}", e))?;
                     let mut new_urls = config.pypi_config().extra_index_urls.clone();
                     if is_prepend {
                         new_urls.insert(0, input);

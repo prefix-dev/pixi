@@ -448,6 +448,10 @@ impl Config {
         &self.channel_config
     }
 
+    pub fn repodata_config(&self) -> Option<&RepodataConfig> {
+        self.repodata_config.as_ref()
+    }
+
     pub fn pypi_config(&self) -> &PyPIConfig {
         &self.pypi_config
     }
@@ -789,5 +793,81 @@ mod tests {
             disable-zstd = true
         "#;
         Config::from_toml(toml).unwrap();
+    }
+
+    #[test]
+    fn test_alter_config() {
+        let mut config = Config::default();
+        config
+            .set("default-channels", Some(r#"["conda-forge"]"#.to_string()))
+            .unwrap();
+        assert_eq!(config.default_channels, vec!["conda-forge"]);
+
+        config
+            .set("tls-no-verify", Some("true".to_string()))
+            .unwrap();
+        assert_eq!(config.tls_no_verify, Some(true));
+
+        config
+            .set(
+                "authentication-override-file",
+                Some("/path/to/your/override.json".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            config.authentication_override_file,
+            Some(PathBuf::from("/path/to/your/override.json"))
+        );
+
+        config
+            .set("mirrors", Some(r#"{"https://conda.anaconda.org/conda-forge": ["https://prefix.dev/conda-forge"]}"#.to_string()))
+            .unwrap();
+        assert_eq!(
+            config
+                .mirrors
+                .get(&Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
+            Some(&vec![Url::parse("https://prefix.dev/conda-forge").unwrap()])
+        );
+
+        config
+            .set("repodata-config.disable-jlap", Some("true".to_string()))
+            .unwrap();
+        let repodata_config = config.repodata_config().unwrap();
+        assert_eq!(repodata_config.disable_jlap, Some(true));
+
+        config
+            .set(
+                "pypi-config.index-url",
+                Some("https://pypi.org/simple".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            config.pypi_config().index_url,
+            Some(Url::parse("https://pypi.org/simple").unwrap())
+        );
+
+        config
+            .set(
+                "pypi-config.extra-index-urls",
+                Some(r#"["https://pypi.org/simple2"]"#.to_string()),
+            )
+            .unwrap();
+        assert!(config.pypi_config().extra_index_urls.len() == 1);
+
+        config
+            .set(
+                "pypi-config.keyring-provider",
+                Some("subprocess".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            config.pypi_config().keyring_provider,
+            Some(KeyringProvider::Subprocess)
+        );
+
+        config.set("change-ps1", None).unwrap();
+        assert_eq!(config.change_ps1, None);
+
+        config.set("unknown-key", None).unwrap_err();
     }
 }
