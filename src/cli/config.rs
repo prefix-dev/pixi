@@ -14,10 +14,28 @@ enum Subcommand {
     Edit(EditArgs),
 
     /// List configuration values
+    ///
+    /// Example:
+    ///     pixi config list default-channels
     #[clap(visible_alias = "ls", alias = "l")]
     List(ListArgs),
 
+    /// Prepend a value to a list configuration key
+    ///
+    /// Example:
+    ///     pixi config prepend default-channels bioconda
+    Prepend(PendArgs),
+
+    /// Append a value to a list configuration key
+    ///
+    /// Example:
+    ///     pixi config append default-channels bioconda
+    Append(PendArgs),
+
     /// Set a configuration value
+    ///
+    /// Example:
+    ///     pixi config set default-channels '["conda-forge", "bioconda"]'
     Set(SetArgs),
 
     /// Unset a configuration value
@@ -26,15 +44,15 @@ enum Subcommand {
 
 #[derive(Parser, Debug, Clone)]
 struct CommonArgs {
-    /// operation on project-local configuration
+    /// Operation on project-local configuration
     #[arg(long, conflicts_with_all = &["global", "system"])]
     local: bool,
 
-    /// operation on global configuration
+    /// Operation on global configuration
     #[arg(long, conflicts_with_all = &["local", "system"])]
     global: bool,
 
-    /// operation on system configuration
+    /// Operation on system configuration
     #[arg(long, conflicts_with_all = &["local", "global"])]
     system: bool,
 }
@@ -47,10 +65,10 @@ struct EditArgs {
 
 #[derive(Parser, Debug, Clone)]
 struct ListArgs {
-    /// configuration key to show (all if not provided)
+    /// Configuration key to show (all if not provided)
     key: Option<String>,
 
-    /// output in JSON format
+    /// Output in JSON format
     #[arg(long)]
     json: bool,
 
@@ -59,11 +77,23 @@ struct ListArgs {
 }
 
 #[derive(Parser, Debug, Clone)]
-struct SetArgs {
-    /// configuration key to set
+struct PendArgs {
+    /// Configuration key to set
     key: String,
 
-    /// configuration value to set (key will be unset if value not provided)
+    /// Configuration value to (pre|ap)pend
+    value: String,
+
+    #[clap(flatten)]
+    common: CommonArgs,
+}
+
+#[derive(Parser, Debug, Clone)]
+struct SetArgs {
+    /// Configuration key to set
+    key: String,
+
+    /// Configuration value to set (key will be unset if value not provided)
     value: Option<String>,
 
     #[clap(flatten)]
@@ -72,11 +102,18 @@ struct SetArgs {
 
 #[derive(Parser, Debug, Clone)]
 struct UnsetArgs {
-    /// configuration key to unset
+    /// Configuration key to unset
     key: String,
 
     #[clap(flatten)]
     common: CommonArgs,
+}
+
+enum AlterMode {
+    Prepend,
+    Append,
+    Set,
+    Unset,
 }
 
 /// Configuration management
@@ -127,8 +164,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 eprintln!("{}", out);
             }
         }
-        Subcommand::Set(args) => alter_config(&args.common, &args.key, args.value)?,
-        Subcommand::Unset(args) => alter_config(&args.common, &args.key, None)?,
+        Subcommand::Prepend(args) => alter_config(
+            &args.common,
+            &args.key,
+            Some(args.value),
+            AlterMode::Prepend,
+        )?,
+        Subcommand::Append(args) => {
+            alter_config(&args.common, &args.key, Some(args.value), AlterMode::Append)?
+        }
+        Subcommand::Set(args) => alter_config(&args.common, &args.key, args.value, AlterMode::Set)?,
+        Subcommand::Unset(args) => alter_config(&args.common, &args.key, None, AlterMode::Unset)?,
     };
     Ok(())
 }
@@ -198,11 +244,55 @@ fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathB
     Ok(write_path)
 }
 
-fn alter_config(common_args: &CommonArgs, key: &str, value: Option<String>) -> miette::Result<()> {
+fn alter_config(
+    common_args: &CommonArgs,
+    key: &str,
+    value: Option<String>,
+    mode: AlterMode,
+) -> miette::Result<()> {
     let mut config = load_config(common_args)?;
     let to = determine_config_write_path(common_args)?;
 
-    config.set(key, value)?;
+    match mode {
+        AlterMode::Prepend | AlterMode::Append => {
+            let is_prepend = matches!(mode, AlterMode::Prepend);
+
+            match key {
+                "default-channels" => {
+                    let input = value.expect("value must be provided");
+                    let mut new_channels = config.default_channels.clone();
+                    if is_prepend {
+                        new_channels.insert(0, input);
+                    } else {
+                        new_channels.push(input);
+                    }
+                    config.default_channels = new_channels;
+                }
+                "pypi-config.extra-index-urls" => {
+                    let input = url::Url::parse(&value.expect("value must be provided"))
+                        .into_diagnostic()?;
+                    let mut new_urls = config.pypi_config().extra_index_urls.clone();
+                    if is_prepend {
+                        new_urls.insert(0, input);
+                    } else {
+                        new_urls.push(input);
+                    }
+                    config.pypi_config.extra_index_urls = new_urls;
+                }
+                _ => {
+                    let list_keys = ["default-channels", "pypi-config.extra-index-urls"];
+                    let msg_cmd = if is_prepend { "prepend" } else { "append" };
+                    return Err(miette::miette!(
+                        "{} is only supported for list keys: {}",
+                        msg_cmd,
+                        list_keys.join(", ")
+                    ));
+                }
+            }
+        }
+        AlterMode::Set | AlterMode::Unset => config.set(key, value)?,
+    }
+
     config.save(&to)?;
     eprintln!("✅ Updated config at {}", to.display());
     Ok(())
@@ -222,7 +312,18 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
         "mirrors" => new.mirrors = config.mirrors.clone(),
         "repodata-config" => new.repodata_config = config.repodata_config.clone(),
         "pypi-config" => new.pypi_config = config.pypi_config.clone(),
-        _ => return Err(miette::miette!("unknown key: {}", key)),
+        _ => {
+            let keys = [
+                "default-channels",
+                "change-ps1",
+                "tls-no-verify",
+                "authentication-override-file",
+                "mirrors",
+                "repodata-config",
+                "pypi-config",
+            ];
+            return Err(miette::miette!("key must be one of: {}", keys.join(", ")));
+        }
     }
 
     *config = new;
