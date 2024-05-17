@@ -18,7 +18,9 @@ use crate::{
     Project,
 };
 
-/// Print the activation script so users can source it in their shell, without needing the pixi executable.
+/// Print the pixi environment activation script.
+///
+/// You can source the script to activate the environment without needing pixi itself.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`,  `powershell`,  `fish`,  `nushell`]

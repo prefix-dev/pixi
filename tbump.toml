@@ -55,6 +55,10 @@ search = "Version: v{current_version}"
 src = "install/install.ps1"
 search = "Version: v{current_version}"
 
+[[file]]
+src = "src/cli/mod.rs"
+search = "version {current_version}"
+
 [[field]]
 # the name of the field
 name = "candidate"

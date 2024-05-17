@@ -27,7 +27,9 @@ pub enum SortBy {
     Kind,
 }
 
-/// List project's packages. Highlighted packages are explicit dependencies.
+/// List project's packages.
+///
+/// Highlighted packages are explicit dependencies.
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
 pub struct Args {

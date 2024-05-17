@@ -14,7 +14,13 @@ use tokio_util::io::ReaderStream;
 
 use crate::progress;
 
-/// Upload a package to a prefix.dev channel
+/// Upload a conda package
+///
+/// With this command, you can upload a conda package to a channel.
+/// Example:
+///     pixi upload repo.prefix.dev/my_channel my_package.conda
+///
+/// Use `pixi auth login` to authenticate with the server.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The host + channel to upload to
