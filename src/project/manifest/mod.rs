@@ -926,6 +926,8 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             #[serde(default)]
             environments: IndexMap<EnvironmentName, TomlEnvironmentMapOrSeq>,
 
+            /// NOTE that we are depecrating top-level
+            /// pypi-options
             #[serde(default)]
             pypi_options: Option<PypiOptions>,
 
@@ -948,6 +950,22 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             dependencies.insert(SpecType::Build, build_deps);
         }
 
+        // Warn the user about the default-feature pypi options
+        if toml_manifest.pypi_options.is_some() {
+            let example = r#" E.g change:
+This
+[pypi-options]
+index-url = "https://pypi.org/simple"
+
+To:
+[project.pypi-options] # Note the added project
+index-url = "https://pypi.org/simple"
+        "#;
+            tracing::warn!("Non project or feature level pypi-options no longer supported");
+            tracing::warn!("This currently *does not* do anything, use the following to rewrite:");
+            tracing::warn!("{example}");
+        }
+
         let default_target = Target {
             dependencies,
             pypi_dependencies: toml_manifest.pypi_dependencies,
@@ -965,7 +983,7 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             channels: None,
 
             system_requirements: toml_manifest.system_requirements,
-            pypi_options: toml_manifest.pypi_options,
+            pypi_options: None,
 
             // Combine the default target with all user specified targets
             targets: Targets::from_default_and_user_defined(default_target, toml_manifest.target),
@@ -1368,19 +1386,19 @@ mod tests {
         let contents = format!(
             r#"
             {PROJECT_BOILERPLATE}
-            [pypi-options]
+            [project.pypi-options]
             index-url = "https://pypi.org/simple"
             extra-index-urls = ["https://pypi.org/simple2"]
-            [[pypi-options.find-links]]
+            [[project.pypi-options.find-links]]
             path = "../foo"
-            [[pypi-options.find-links]]
+            [[project.pypi-options.find-links]]
             url = "https://example.com/bar"
             "#
         );
 
         assert_yaml_snapshot!(toml_edit::de::from_str::<ProjectManifest>(&contents)
             .expect("parsing should succeed!")
-            .default_feature()
+            .project
             .pypi_options
             .clone()
             .unwrap());
