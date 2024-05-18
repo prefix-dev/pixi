@@ -163,12 +163,10 @@ impl DependencyConfig {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let editable = args.editable;
-    let (args, config) = (args.dependency_config, args.config);
+    let (args, config, editable) = (args.dependency_config, args.config, args.editable);
     let mut project =
         Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(config);
     let dependency_type = args.dependency_type();
-    let spec_platforms = &args.platform;
 
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
@@ -176,7 +174,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Add the platform if it is not already present
     project
         .manifest
-        .add_platforms(spec_platforms.iter(), &FeatureName::Default)?;
+        .add_platforms(args.platform.iter(), &FeatureName::Default)?;
 
     match dependency_type {
         DependencyType::CondaDependency(spec_type) => {
@@ -194,7 +192,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 spec_type,
                 args.no_install,
                 args.lock_file_usage(),
-                spec_platforms,
+                &args.platform,
             )
             .await
         }
@@ -213,7 +211,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &mut project,
                 &args.feature_name(),
                 pep508_requirements,
-                spec_platforms,
+                &args.platform,
                 args.lock_file_usage(),
                 args.no_install,
                 Some(editable),
