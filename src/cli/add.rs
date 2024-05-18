@@ -130,6 +130,36 @@ impl DependencyConfig {
             .clone()
             .map_or(FeatureName::Default, FeatureName::Named)
     }
+
+    pub fn display_success(&self, operation: &str) {
+        for package in self.specs.clone() {
+            eprintln!(
+                "{}{operation} {}",
+                console::style(console::Emoji("✔ ", "")).green(),
+                console::style(package).bold(),
+            );
+        }
+
+        // Print if it is something different from host and dep
+        let dependency_type = self.dependency_type();
+        if !matches!(
+            dependency_type,
+            DependencyType::CondaDependency(SpecType::Run)
+        ) {
+            eprintln!(
+                "{operation} these as {}.",
+                console::style(dependency_type.name()).bold()
+            );
+        }
+
+        // Print something if we've modified for platforms
+        if !self.platform.is_empty() {
+            eprintln!(
+                "{operation} these only for platform(s): {}",
+                console::style(self.platform.iter().join(", ")).bold()
+            )
+        }
+    }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -192,32 +222,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }?;
 
-    for package in args.specs {
-        eprintln!(
-            "{}Added {}",
-            console::style(console::Emoji("✔ ", "")).green(),
-            console::style(package).bold(),
-        );
-    }
-
-    // Print if it is something different from host and dep
-    if !matches!(
-        dependency_type,
-        DependencyType::CondaDependency(SpecType::Run)
-    ) {
-        eprintln!(
-            "Added these as {}.",
-            console::style(dependency_type.name()).bold()
-        );
-    }
-
-    // Print something if we've added for platforms
-    if !args.platform.is_empty() {
-        eprintln!(
-            "Added these only for platform(s): {}",
-            console::style(args.platform.iter().join(", ")).bold()
-        )
-    }
+    args.display_success("Added");
 
     Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
