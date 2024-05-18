@@ -137,7 +137,7 @@ An unsatisfying experience with `pixi` on RTD might go something like this:
 > packages with [build.apt_packages], this has no effect in the above workflow,
 > as [build.commands] will be silently ignored.
 
-> When going to the supprted build [extension] method, trying to install `firefox`
+> When going to the supported build [extension] method, trying to install `firefox`
 > with `build.apt_packages` installs without error, but fails during the build.
 
 > Logs reveal this installs a `snap`... but `snapd` is _also_ not installed, and
