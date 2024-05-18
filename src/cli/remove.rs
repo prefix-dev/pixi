@@ -1,16 +1,12 @@
-use std::str::FromStr;
-
 use clap::Parser;
-use miette::miette;
-use pep508_rs::Requirement;
 
 use crate::config::ConfigCli;
 use crate::environment::get_up_to_date_prefix;
-use crate::project::manifest::python::PyPiPackageName;
 use crate::DependencyType;
 use crate::Project;
 
 use super::add::DependencyConfig;
+use super::has_specs::HasSpecs;
 
 /// Removes dependencies from the project
 ///
@@ -28,18 +24,6 @@ pub struct Args {
     pub config: ConfigCli,
 }
 
-fn convert_pkg_name<T>(deps: &[String]) -> miette::Result<Vec<T>>
-where
-    T: FromStr,
-{
-    deps.iter()
-        .map(|dep| {
-            T::from_str(dep)
-                .map_err(|_| miette!("Can't convert dependency name `{dep}` to package name"))
-        })
-        .collect()
-}
-
 pub async fn execute(args: Args) -> miette::Result<()> {
     let (args, config) = (args.dependency_config, args.config);
     let mut project =
@@ -48,26 +32,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     match dependency_type {
         DependencyType::PypiDependency => {
-            let all_pkg_name = convert_pkg_name::<Requirement>(&args.specs)?;
-            for dep in all_pkg_name.iter() {
-                let name = PyPiPackageName::from_normalized(dep.clone().name);
+            for name in args.pypi_deps(&project)?.keys() {
                 project.manifest.remove_pypi_dependency(
-                    &name,
+                    name,
                     &args.platform,
                     &args.feature_name(),
                 )?;
             }
         }
         DependencyType::CondaDependency(spec_type) => {
-            let all_pkg_name = convert_pkg_name::<rattler_conda_types::MatchSpec>(&args.specs)?;
-            for dep in all_pkg_name.iter() {
-                // Get name or error on missing name
-                let name = dep
-                    .clone()
-                    .name
-                    .ok_or_else(|| miette!("Can't remove dependency without a name: {}", dep))?;
+            for name in args.specs()?.keys() {
                 project.manifest.remove_dependency(
-                    &name,
+                    name,
                     spec_type,
                     &args.platform,
                     &args.feature_name(),

@@ -5,14 +5,15 @@ use crate::{
     FeatureName,
 };
 use clap::Parser;
+use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 
 use crate::project::grouped_environment::GroupedEnvironment;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{
     version_spec::{LogicalOperator, RangeOperator},
-    Channel, MatchSpec, NamelessMatchSpec, PackageName, ParseStrictness, Platform, Version,
-    VersionBumpType, VersionSpec,
+    Channel, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version, VersionBumpType,
+    VersionSpec,
 };
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::{resolvo, ChannelPriority, RepoDataIter, SolverImpl};
@@ -21,6 +22,8 @@ use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
 };
+
+use super::has_specs::HasSpecs;
 
 /// Adds dependencies to the project
 ///
@@ -130,7 +133,6 @@ impl DependencyConfig {
             .clone()
             .map_or(FeatureName::Default, FeatureName::Named)
     }
-
     pub fn display_success(&self, operation: &str) {
         for package in self.specs.clone() {
             eprintln!(
@@ -162,6 +164,12 @@ impl DependencyConfig {
     }
 }
 
+impl HasSpecs for DependencyConfig {
+    fn packages(&self) -> Vec<&str> {
+        self.specs.iter().map(AsRef::as_ref).collect()
+    }
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let (args, config, editable) = (args.dependency_config, args.config, args.editable);
     let mut project =
@@ -178,13 +186,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     match dependency_type {
         DependencyType::CondaDependency(spec_type) => {
-            let specs = args
-                .specs
-                .clone()
-                .into_iter()
-                .map(|s| MatchSpec::from_str(&s, ParseStrictness::Strict))
-                .collect::<Result<Vec<_>, _>>()
-                .into_diagnostic()?;
+            let specs = args.specs()?;
             add_conda_specs_to_project(
                 &mut project,
                 &args.feature_name(),
@@ -197,20 +199,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .await
         }
         DependencyType::PypiDependency => {
-            // Parse specs as pep508_rs requirements
-            let pep508_requirements = args
-                .specs
-                .clone()
-                .into_iter()
-                .map(|input| {
-                    pep508_rs::Requirement::parse(input.as_ref(), project.root()).into_diagnostic()
-                })
-                .collect::<miette::Result<Vec<_>>>()?;
-
+            let specs = args.pypi_deps(&project)?.values().cloned().collect_vec();
             add_pypi_requirements_to_project(
                 &mut project,
                 &args.feature_name(),
-                pep508_requirements,
+                specs,
                 &args.platform,
                 args.lock_file_usage(),
                 args.no_install,
@@ -253,21 +246,12 @@ pub async fn add_pypi_requirements_to_project(
 pub async fn add_conda_specs_to_project(
     project: &mut Project,
     feature_name: &FeatureName,
-    specs: Vec<MatchSpec>,
+    specs: IndexMap<PackageName, MatchSpec>,
     spec_type: SpecType,
     no_install: bool,
     lock_file_usage: LockFileUsage,
     specs_platforms: &[Platform],
 ) -> miette::Result<()> {
-    // Split the specs into package name and version specifier
-    let new_specs = specs
-        .into_iter()
-        .map(|spec| match &spec.name {
-            Some(name) => Ok((name.clone(), spec.into())),
-            None => Err(miette::miette!("missing package name for spec '{spec}'")),
-        })
-        .collect::<miette::Result<HashMap<PackageName, NamelessMatchSpec>>>()?;
-
     // Determine the best version per platform
     let mut package_versions = HashMap::<PackageName, HashSet<Version>>::new();
 
@@ -297,7 +281,7 @@ pub async fn add_conda_specs_to_project(
             // Solve the environment with the new specs added
             let solved_versions = match determine_best_version(
                 &grouped_environment,
-                &new_specs,
+                &specs,
                 spec_type,
                 platform,
                 grouped_environment.channels(),
@@ -309,7 +293,7 @@ pub async fn add_conda_specs_to_project(
                 Err(err) => {
                     return Err(err).wrap_err_with(|| miette::miette!(
                         "could not determine any available versions for {} on {platform}. Either the package could not be found or version constraints on other dependencies result in a conflict.",
-                        new_specs.keys().map(|s| s.as_source()).join(", ")
+                        specs.keys().map(|s| s.as_source()).join(", ")
                     ));
                 }
             };
@@ -322,9 +306,9 @@ pub async fn add_conda_specs_to_project(
     }
 
     // Update the specs passed on the command line with the best available versions.
-    for (name, spec) in new_specs {
+    for (name, spec) in specs {
         let updated_spec = if spec.version.is_none() {
-            let mut updated_spec = spec.clone();
+            let mut updated_spec = NamelessMatchSpec::from(spec.clone());
             if let Some(versions_seen) = package_versions.get(&name).cloned() {
                 updated_spec.version = determine_version_constraint(&versions_seen);
             } else {
@@ -334,7 +318,7 @@ pub async fn add_conda_specs_to_project(
             }
             updated_spec
         } else {
-            spec
+            spec.into()
         };
         let spec = MatchSpec::from_nameless(updated_spec, Some(name));
 
@@ -415,7 +399,7 @@ async fn determine_latest_versions(
 /// Given several specs determines the highest installable version for them.
 pub async fn determine_best_version<'p>(
     environment: &GroupedEnvironment<'p>,
-    new_specs: &HashMap<PackageName, NamelessMatchSpec>,
+    new_specs: &IndexMap<PackageName, MatchSpec>,
     new_specs_type: SpecType,
     platform: Platform,
     channels: impl IntoIterator<Item = &'p Channel>,
@@ -428,7 +412,8 @@ pub async fn determine_best_version<'p>(
             if spec_type == new_specs_type {
                 for (new_name, new_spec) in new_specs.iter() {
                     deps.remove(new_name); // Remove any existing specs
-                    deps.insert(new_name.clone(), new_spec.clone()); // Add the new specs
+                    deps.insert(new_name.clone(), NamelessMatchSpec::from(new_spec.clone()));
+                    // Add the new specs
                 }
             }
             deps
