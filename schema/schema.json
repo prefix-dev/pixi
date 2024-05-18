@@ -139,7 +139,7 @@
     },
     "pypi-options": {
       "$ref": "#/$defs/PyPIOptions",
-      "description": "Options related to PyPI indexes"
+      "description": "Options related to PyPI indexes, on the default feature"
     },
     "system-requirements": {
       "$ref": "#/$defs/SystemRequirements",
@@ -680,6 +680,10 @@
               }
             ]
           }
+        },
+        "pypi-options": {
+          "$ref": "#/$defs/PyPIOptions",
+          "description": "Options related to PyPI indexes for this project"
         },
         "readme": {
           "title": "Readme",
