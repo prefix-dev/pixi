@@ -1,57 +1,29 @@
-use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::Parser;
+use itertools::Itertools;
 use miette::miette;
 use pep508_rs::Requirement;
-use rattler_conda_types::Platform;
 
 use crate::config::ConfigCli;
-use crate::environment::{get_up_to_date_prefix, LockFileUsage};
+use crate::environment::get_up_to_date_prefix;
 use crate::project::manifest::python::PyPiPackageName;
-use crate::project::manifest::FeatureName;
-use crate::{consts, project::SpecType, Project};
+use crate::DependencyType;
+use crate::{consts, Project};
+
+use super::add::DependencyConfig;
 
 /// Removes dependencies from the project
+///
+///  If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
+/// - the native pyproject `project.dependencies` array or, if a feature is specified, the native `project.optional-dependencies` table
+/// - pixi `pypi-dependencies` tables of the default feature or, if a feature is specified, a named feature
+///
 #[derive(Debug, Default, Parser)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
-    /// Specify the dependencies you wish to remove from the project.
-    ///
-    /// If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
-    /// - the native pyproject `project.dependencies` array or, if a feature is specified, the native `project.optional-dependencies` table
-    /// - pixi `pypi-dependencies` tables of the default feature or, if a feature is specified, a named feature
-    ///
-    #[arg(required = true, verbatim_doc_comment)]
-    pub deps: Vec<String>,
-
-    /// The path to 'pixi.toml' or 'pyproject.toml'
-    #[arg(long)]
-    pub manifest_path: Option<PathBuf>,
-
-    /// Whether dependency is a host dependency
-    #[arg(long, conflicts_with = "build")]
-    pub host: bool,
-
-    /// Whether dependency is a build dependency
-    #[arg(long, conflicts_with = "host")]
-    pub build: bool,
-
-    /// Whether the dependency is a pypi package
-    #[arg(long)]
-    pub pypi: bool,
-
-    /// Don't install the environment, only remove the package from the lock-file and manifest.
-    #[arg(long)]
-    pub no_install: bool,
-
-    /// The platform for which the dependency should be removed
-    #[arg(long, short)]
-    pub platform: Option<Platform>,
-
-    /// The feature for which the dependency should be removed
-    #[arg(long, short)]
-    pub feature: Option<String>,
+    #[clap(flatten)]
+    pub dependency_config: DependencyConfig,
 
     #[clap(flatten)]
     pub config: ConfigCli,
@@ -70,72 +42,70 @@ where
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    let (args, config) = (args.dependency_config, args.config);
     let mut project =
-        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
-    let deps = args.deps;
-    let spec_type = if args.host {
-        SpecType::Host
-    } else if args.build {
-        SpecType::Build
-    } else {
-        SpecType::Run
-    };
+        Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(config);
+    let dependency_type = args.dependency_type();
+    let deps = args.specs.clone();
 
-    let section_name: String = if args.pypi {
-        consts::PYPI_DEPENDENCIES.to_string()
-    } else {
-        spec_type.name().to_string()
+    let section_name = match dependency_type {
+        DependencyType::PypiDependency => consts::PYPI_DEPENDENCIES.to_string(),
+        DependencyType::CondaDependency(spec_type) => spec_type.name().to_string(),
     };
-    let table_name = if let Some(p) = &args.platform {
-        format!("target.{}.{}", p.as_str(), section_name)
+    let table_name = if args.platform.is_empty() {
+        format!("[{section_name}]")
     } else {
-        section_name
+        args.platform
+            .iter()
+            .map(|p| format!("[target.{}.{}]", p.as_str(), section_name))
+            .join(", ")
     };
-    let feature_name = args
-        .feature
-        .map_or(FeatureName::Default, FeatureName::Named);
 
     fn format_ok_message(pkg_name: &str, pkg_extras: &str, table_name: &str) -> String {
         format!(
-            "Removed {} from [{}]",
+            "Removed {} from {}",
             console::style(format!("{pkg_name} {pkg_extras}")).bold(),
             console::style(table_name).bold()
         )
     }
     let mut sucessful_output: Vec<String> = Vec::with_capacity(deps.len());
-    if args.pypi {
-        let all_pkg_name = convert_pkg_name::<Requirement>(&deps)?;
-        for dep in all_pkg_name.iter() {
-            let name = PyPiPackageName::from_normalized(dep.clone().name);
-            let (name, req) =
-                project
-                    .manifest
-                    .remove_pypi_dependency(&name, args.platform, &feature_name)?;
-            sucessful_output.push(format_ok_message(
-                name.as_source(),
-                &req.to_string(),
-                &table_name,
-            ));
+    match dependency_type {
+        DependencyType::PypiDependency => {
+            let all_pkg_name = convert_pkg_name::<Requirement>(&deps)?;
+            for dep in all_pkg_name.iter() {
+                let name = PyPiPackageName::from_normalized(dep.clone().name);
+                let (name, req) = project.manifest.remove_pypi_dependency(
+                    &name,
+                    &args.platform,
+                    &args.feature_name(),
+                )?;
+                sucessful_output.push(format_ok_message(
+                    name.as_source(),
+                    &req.to_string(),
+                    &table_name,
+                ));
+            }
         }
-    } else {
-        let all_pkg_name = convert_pkg_name::<rattler_conda_types::MatchSpec>(&deps)?;
-        for dep in all_pkg_name.iter() {
-            // Get name or error on missing name
-            let name = dep
-                .clone()
-                .name
-                .ok_or_else(|| miette!("Can't remove dependency without a name: {}", dep))?;
-            let (name, req) = project.manifest.remove_dependency(
-                &name,
-                spec_type,
-                args.platform,
-                &feature_name,
-            )?;
-            sucessful_output.push(format_ok_message(
-                name.as_source(),
-                &req.to_string(),
-                &table_name,
-            ));
+        DependencyType::CondaDependency(spec_type) => {
+            let all_pkg_name = convert_pkg_name::<rattler_conda_types::MatchSpec>(&deps)?;
+            for dep in all_pkg_name.iter() {
+                // Get name or error on missing name
+                let name = dep
+                    .clone()
+                    .name
+                    .ok_or_else(|| miette!("Can't remove dependency without a name: {}", dep))?;
+                let (name, req) = project.manifest.remove_dependency(
+                    &name,
+                    spec_type,
+                    &args.platform,
+                    &args.feature_name(),
+                )?;
+                sucessful_output.push(format_ok_message(
+                    name.as_source(),
+                    &req.to_string(),
+                    &table_name,
+                ));
+            }
         }
     };
 
@@ -146,7 +116,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // updating prefix after removing from toml
     get_up_to_date_prefix(
         &project.default_environment(),
-        LockFileUsage::Update,
+        args.lock_file_usage(),
         args.no_install,
     )
     .await?;

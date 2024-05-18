@@ -409,7 +409,7 @@ mod tests {
         // Add numpy to pyproject
         let requirement = pep508_rs::Requirement::from_str("numpy>=3.12").unwrap();
         manifest
-            .add_pypi_dependency(&requirement, None, &FeatureName::Default, None)
+            .add_pypi_dependency(&requirement, &[], &FeatureName::Default, None)
             .unwrap();
 
         assert!(manifest
@@ -428,7 +428,7 @@ mod tests {
         manifest
             .add_pypi_dependency(
                 &requirement,
-                None,
+                &[],
                 &FeatureName::Named("test".to_string()),
                 None,
             )
@@ -456,7 +456,7 @@ mod tests {
         // Remove flask from pyproject
         let name = PyPiPackageName::from_str("flask").unwrap();
         manifest
-            .remove_pypi_dependency(&name, None, &FeatureName::Default)
+            .remove_pypi_dependency(&name, &[], &FeatureName::Default)
             .unwrap();
 
         assert!(manifest

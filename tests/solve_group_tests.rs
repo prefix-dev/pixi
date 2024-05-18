@@ -1,6 +1,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use crate::common::{
+    builders::HasDependencyConfig,
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };
