@@ -125,14 +125,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
 
     // Add the platform if it is not already present
-    let platforms_to_add = spec_platforms
-        .iter()
-        .filter(|p| !project.platforms().contains(p))
-        .cloned()
-        .collect::<Vec<Platform>>();
     project
         .manifest
-        .add_platforms(platforms_to_add.iter(), &FeatureName::Default)?;
+        .add_platforms(spec_platforms.iter(), &FeatureName::Default)?;
 
     let feature_name = args
         .feature
@@ -376,7 +371,11 @@ async fn determine_latest_versions(
 ) -> miette::Result<Vec<Version>> {
     // Get platforms to search for including NoArch
     let platforms = if platforms.is_empty() {
-        let mut temp = project.platforms().into_iter().collect_vec();
+        let mut temp = project
+            .default_environment()
+            .platforms()
+            .into_iter()
+            .collect_vec();
         temp.push(Platform::NoArch);
         temp
     } else {
@@ -389,7 +388,11 @@ async fn determine_latest_versions(
     let records = project
         .repodata_gateway()
         .query(
-            project.channels().into_iter().cloned(),
+            project
+                .default_environment()
+                .channels()
+                .into_iter()
+                .cloned(),
             platforms,
             [name.clone()],
         )

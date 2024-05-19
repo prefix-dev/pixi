@@ -145,7 +145,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         index_locations = environment.pypi_options().to_index_locations();
         tags = get_pypi_tags(
             platform,
-            &project.system_requirements(),
+            &environment.system_requirements(),
             python_record.package_record(),
         )?;
         Some(RegistryWheelIndex::new(

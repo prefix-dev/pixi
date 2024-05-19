@@ -1,7 +1,7 @@
 mod common;
 
 use crate::common::PixiControl;
-use pixi::util::default_channel_config;
+use pixi::{util::default_channel_config, HasFeatures};
 use rattler_conda_types::{Channel, Version};
 use std::str::FromStr;
 
@@ -43,7 +43,7 @@ async fn specific_channel() {
     let project = pixi.project().unwrap();
 
     // The only channel should be the "random" channel
-    let channels = Vec::from_iter(project.channels());
+    let channels = Vec::from_iter(project.default_environment().channels());
     assert_eq!(
         channels,
         [
@@ -65,7 +65,7 @@ async fn default_channel() {
     let project = pixi.project().unwrap();
 
     // The only channel should be the "conda-forge" channel
-    let channels = Vec::from_iter(project.channels());
+    let channels = Vec::from_iter(project.default_environment().channels());
     assert_eq!(
         channels,
         [&Channel::from_str("conda-forge", &default_channel_config()).unwrap()]
