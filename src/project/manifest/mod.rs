@@ -950,22 +950,6 @@ impl<'de> Deserialize<'de> for ProjectManifest {
             dependencies.insert(SpecType::Build, build_deps);
         }
 
-        // Warn the user about the default-feature pypi options
-        if toml_manifest.pypi_options.is_some() {
-            let example = r#" E.g change:
-This
-[pypi-options]
-index-url = "https://pypi.org/simple"
-
-To:
-[project.pypi-options] # Note the added project
-index-url = "https://pypi.org/simple"
-        "#;
-            tracing::warn!("Non project or feature level pypi-options no longer supported");
-            tracing::warn!("This currently *does not* do anything, use the following to rewrite:");
-            tracing::warn!("{example}");
-        }
-
         let default_target = Target {
             dependencies,
             pypi_dependencies: toml_manifest.pypi_dependencies,
@@ -983,7 +967,10 @@ index-url = "https://pypi.org/simple"
             channels: None,
 
             system_requirements: toml_manifest.system_requirements,
-            pypi_options: None,
+
+            // Use the pypi-options from the manifest for
+            // the default feature
+            pypi_options: toml_manifest.pypi_options,
 
             // Combine the default target with all user specified targets
             targets: Targets::from_default_and_user_defined(default_target, toml_manifest.target),

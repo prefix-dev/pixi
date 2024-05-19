@@ -450,6 +450,9 @@ mod tests {
 
         [project.pypi-options]
         index-url = "https://pypi.org/simple"
+
+        [pypi-options]
+        extra-index-urls = ["https://mypypi.org/simple"]
         "#,
         )
         .unwrap();
@@ -457,7 +460,7 @@ mod tests {
         // This behavior has changed from >0.22.0
         // and should now be none, previously this was added
         // to the default feature
-        assert!(manifest.default_feature().pypi_options().is_none());
+        assert!(manifest.default_feature().pypi_options().is_some());
         assert!(manifest.parsed.project.pypi_options.is_some());
     }
 }
