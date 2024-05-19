@@ -1,20 +1,9 @@
-use crate::project::has_features::HasFeatures;
-use crate::project::Environment;
-use crate::{config, project::Project, repodata};
-use indexmap::IndexMap;
-use rattler_conda_types::{Channel, Platform};
-use rattler_repodata_gateway::{sparse::SparseRepoData, ChannelConfig, Gateway, SourceConfig};
+use crate::{config, project::Project};
+use rattler_repodata_gateway::{ChannelConfig, Gateway, SourceConfig};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 impl Project {
-    // TODO: Remove this function once everything is migrated to the new environment system.
-    pub async fn fetch_sparse_repodata(
-        &self,
-    ) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
-        self.default_environment().fetch_sparse_repodata().await
-    }
-
     /// Returns the [`Gateway`] used by this project.
     pub fn repodata_gateway(&self) -> &Arc<Gateway> {
         self.repodata_gateway.get_or_init(|| {
@@ -49,21 +38,5 @@ impl Project {
 
             Arc::new(gateway)
         })
-    }
-}
-
-impl Environment<'_> {
-    pub async fn fetch_sparse_repodata(
-        &self,
-    ) -> miette::Result<IndexMap<(Channel, Platform), SparseRepoData>> {
-        let channels = self.channels();
-        let platforms = self.platforms();
-        repodata::fetch_sparse_repodata(
-            channels,
-            platforms,
-            self.project().authenticated_client(),
-            Some(self.project().config()),
-        )
-        .await
     }
 }
