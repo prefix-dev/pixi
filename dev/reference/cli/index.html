@@ -1305,6 +1305,75 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#config" class="md-nav__link">
+    <span class="md-ellipsis">
+      config
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="config">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#config-edit" class="md-nav__link">
+    <span class="md-ellipsis">
+      config edit
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      config list
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-prepend" class="md-nav__link">
+    <span class="md-ellipsis">
+      config prepend
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-append" class="md-nav__link">
+    <span class="md-ellipsis">
+      config append
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      config set
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-unset" class="md-nav__link">
+    <span class="md-ellipsis">
+      config unset
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#global" class="md-nav__link">
     <span class="md-ellipsis">
       global
@@ -1828,6 +1897,75 @@
   <a href="#auth-logout" class="md-nav__link">
     <span class="md-ellipsis">
       auth logout
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config" class="md-nav__link">
+    <span class="md-ellipsis">
+      config
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="config">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#config-edit" class="md-nav__link">
+    <span class="md-ellipsis">
+      config edit
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      config list
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-prepend" class="md-nav__link">
+    <span class="md-ellipsis">
+      config prepend
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-append" class="md-nav__link">
+    <span class="md-ellipsis">
+      config append
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      config set
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-unset" class="md-nav__link">
+    <span class="md-ellipsis">
+      config unset
     </span>
   </a>
   
@@ -2608,6 +2746,70 @@ More information <a href="../../advanced/explain_info_command/">here</a>.</p>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>pixi<span class="w"> </span>auth<span class="w"> </span><span class="nb">logout</span><span class="w"> </span>repo.prefix.dev
 </span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>pixi<span class="w"> </span>auth<span class="w"> </span><span class="nb">logout</span><span class="w"> </span>anaconda.org
 </span></code></pre></div>
+<h2 id="config"><code>config</code><a class="headerlink" href="#config" title="Permanent link">#</a></h2>
+<p>Use this command to manage the configuration.</p>
+<h5 id="options_18">Options<a class="headerlink" href="#options_18" title="Permanent link">#</a></h5>
+<ul>
+<li><code>--system</code>: Specify management scope to system configuration.</li>
+<li><code>--global</code>: Specify management scope to global configuration.</li>
+<li><code>--local</code>: Specify management scope to local configuration.</li>
+</ul>
+<p>Checkout the <a href="../../advanced/global_configuration/">global configuration</a> for more information about the locations.</p>
+<h3 id="config-edit"><code>config edit</code><a class="headerlink" href="#config-edit" title="Permanent link">#</a></h3>
+<p>Edit the configuration file in the default editor.</p>
+<h3 id="config-list"><code>config list</code><a class="headerlink" href="#config-list" title="Permanent link">#</a></h3>
+<p>List the configuration</p>
+<h5 id="arguments_12">Arguments<a class="headerlink" href="#arguments_12" title="Permanent link">#</a></h5>
+<ol>
+<li><code>[KEY]</code>: The key to list the value of. (all if not provided)</li>
+</ol>
+<h5 id="options_19">Options<a class="headerlink" href="#options_19" title="Permanent link">#</a></h5>
+<ul>
+<li><code>--json</code>: Output the configuration in JSON format.</li>
+</ul>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>pixi<span class="w"> </span>config<span class="w"> </span>list<span class="w"> </span>default-channels
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>pixi<span class="w"> </span>config<span class="w"> </span>list<span class="w"> </span>--json
+</span></code></pre></div>
+<h3 id="config-prepend"><code>config prepend</code><a class="headerlink" href="#config-prepend" title="Permanent link">#</a></h3>
+<p>Prepend a value to a list configuration key.</p>
+<h5 id="arguments_13">Arguments<a class="headerlink" href="#arguments_13" title="Permanent link">#</a></h5>
+<ol>
+<li><code>&lt;KEY&gt;</code>: The key to prepend the value to.</li>
+<li><code>&lt;VALUE&gt;</code>: The value to prepend.</li>
+</ol>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>pixi<span class="w"> </span>config<span class="w"> </span>prepend<span class="w"> </span>default-channels<span class="w"> </span>conda-forge
+</span></code></pre></div>
+<h3 id="config-append"><code>config append</code><a class="headerlink" href="#config-append" title="Permanent link">#</a></h3>
+<p>Append a value to a list configuration key.</p>
+<h5 id="arguments_14">Arguments<a class="headerlink" href="#arguments_14" title="Permanent link">#</a></h5>
+<ol>
+<li><code>&lt;KEY&gt;</code>: The key to append the value to.</li>
+<li><code>&lt;VALUE&gt;</code>: The value to append.</li>
+</ol>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>pixi<span class="w"> </span>config<span class="w"> </span>append<span class="w"> </span>default-channels<span class="w"> </span>robostack
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>pixi<span class="w"> </span>config<span class="w"> </span>append<span class="w"> </span>default-channels<span class="w"> </span>bioconda<span class="w"> </span>--global
+</span></code></pre></div>
+<h3 id="config-set"><code>config set</code><a class="headerlink" href="#config-set" title="Permanent link">#</a></h3>
+<p>Set a configuration key to a value.</p>
+<h5 id="arguments_15">Arguments<a class="headerlink" href="#arguments_15" title="Permanent link">#</a></h5>
+<ol>
+<li><code>&lt;KEY&gt;</code>: The key to set the value of.</li>
+<li><code>[VALUE]</code>: The value to set. (if not provided, the key will be removed)</li>
+</ol>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>default-channels<span class="w"> </span><span class="s1">&#39;[&quot;conda-forge&quot;, &quot;bioconda&quot;]&#39;</span>
+</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>--global<span class="w"> </span>mirrors<span class="w"> </span><span class="s1">&#39;{&quot;https://conda.anaconda.org/&quot;: [&quot;https://prefix.dev/conda-forge&quot;]}&#39;</span>
+</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>repodata-config.disable-zstd<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--system
+</span></code></pre></div>
+<h3 id="config-unset"><code>config unset</code><a class="headerlink" href="#config-unset" title="Permanent link">#</a></h3>
+<p>Unset a configuration key.</p>
+<h5 id="arguments_16">Arguments<a class="headerlink" href="#arguments_16" title="Permanent link">#</a></h5>
+<ol>
+<li><code>&lt;KEY&gt;</code>: The key to unset.</li>
+</ol>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">unset</span><span class="w"> </span>default-channels
+</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">unset</span><span class="w"> </span>--global<span class="w"> </span>mirrors
+</span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">unset</span><span class="w"> </span>repodata-config.disable-zstd<span class="w"> </span>--system
+</span></code></pre></div>
 <h2 id="global"><code>global</code><a class="headerlink" href="#global" title="Permanent link">#</a></h2>
 <p>Global is the main entry point for the part of pixi that executes on the
 global(system) level.</p>
@@ -2619,214 +2821,214 @@ variable.</p>
 </div>
 <h3 id="global-install"><code>global install</code><a class="headerlink" href="#global-install" title="Permanent link">#</a></h3>
 <p>This command installs package(s) into its own environment and adds the binary to <code>PATH</code>, allowing you to access it anywhere on your system without activating the environment.</p>
-<h5 id="arguments_12">Arguments<a class="headerlink" href="#arguments_12" title="Permanent link">#</a></h5>
+<h5 id="arguments_17">Arguments<a class="headerlink" href="#arguments_17" title="Permanent link">#</a></h5>
 <p>1.<code>&lt;PACKAGE&gt;</code>: The package(s) to install, this can also be a version constraint.</p>
-<h5 id="options_18">Options<a class="headerlink" href="#options_18" title="Permanent link">#</a></h5>
+<h5 id="options_20">Options<a class="headerlink" href="#options_20" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses. Defaults to <code>conda-forge</code>. (Allowed to be used more than once)</li>
 </ul>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ruff
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1"># multiple packages can be installed at once</span>
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>starship<span class="w"> </span>rattler-build
-</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># specify the channel(s)</span>
-</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>trackplot
-</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="c1"># Or in a more concise form</span>
-</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
-</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>
-</span><span id="__span-29-9"><a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a><span class="c1"># Support full conda matchspec</span>
-</span><span id="__span-29-10"><a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9.*
-</span><span id="__span-29-11"><a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build_number=1]&quot;</span>
-</span><span id="__span-29-12"><a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build=he550d4f_1_cpython]&quot;</span>
-</span><span id="__span-29-13"><a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.11.0<span class="o">=</span>h10a6764_1_cpython
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ruff
+</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="c1"># multiple packages can be installed at once</span>
+</span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>starship<span class="w"> </span>rattler-build
+</span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="c1"># specify the channel(s)</span>
+</span><span id="__span-34-5"><a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+</span><span id="__span-34-6"><a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a><span class="c1"># Or in a more concise form</span>
+</span><span id="__span-34-7"><a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+</span><span id="__span-34-8"><a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a>
+</span><span id="__span-34-9"><a id="__codelineno-34-9" name="__codelineno-34-9" href="#__codelineno-34-9"></a><span class="c1"># Support full conda matchspec</span>
+</span><span id="__span-34-10"><a id="__codelineno-34-10" name="__codelineno-34-10" href="#__codelineno-34-10"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9.*
+</span><span id="__span-34-11"><a id="__codelineno-34-11" name="__codelineno-34-11" href="#__codelineno-34-11"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build_number=1]&quot;</span>
+</span><span id="__span-34-12"><a id="__codelineno-34-12" name="__codelineno-34-12" href="#__codelineno-34-12"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;python [version=&#39;3.11.0&#39;, build=he550d4f_1_cpython]&quot;</span>
+</span><span id="__span-34-13"><a id="__codelineno-34-13" name="__codelineno-34-13" href="#__codelineno-34-13"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.11.0<span class="o">=</span>h10a6764_1_cpython
 </span></code></pre></div>
 <p>After using global install, you can use the package you installed anywhere on your system.</p>
 <h3 id="global-list"><code>global list</code><a class="headerlink" href="#global-list" title="Permanent link">#</a></h3>
 <p>This command shows the current installed global environments including what binaries come with it.
 A global installed package/environment can possibly contain multiple binaries and
 they will be listed out in the command output. Here is an example of a few installed packages:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>&gt; pixi global list
-</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>Global install location: /home/hanabi/.pixi
-</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>├── bat 0.24.0
-</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>|   └─ exec: bat
-</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>├── conda-smithy 3.31.1
-</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>|   └─ exec: feedstocks, conda-smithy
-</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>├── rattler-build 0.13.0
-</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>|   └─ exec: rattler-build
-</span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>├── ripgrep 14.1.0
-</span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>|   └─ exec: rg
-</span><span id="__span-30-11"><a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>└── uv 0.1.17
-</span><span id="__span-30-12"><a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a>    └─ exec: uv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>&gt; pixi global list
+</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>Global install location: /home/hanabi/.pixi
+</span><span id="__span-35-3"><a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>├── bat 0.24.0
+</span><span id="__span-35-4"><a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a>|   └─ exec: bat
+</span><span id="__span-35-5"><a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a>├── conda-smithy 3.31.1
+</span><span id="__span-35-6"><a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a>|   └─ exec: feedstocks, conda-smithy
+</span><span id="__span-35-7"><a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a>├── rattler-build 0.13.0
+</span><span id="__span-35-8"><a id="__codelineno-35-8" name="__codelineno-35-8" href="#__codelineno-35-8"></a>|   └─ exec: rattler-build
+</span><span id="__span-35-9"><a id="__codelineno-35-9" name="__codelineno-35-9" href="#__codelineno-35-9"></a>├── ripgrep 14.1.0
+</span><span id="__span-35-10"><a id="__codelineno-35-10" name="__codelineno-35-10" href="#__codelineno-35-10"></a>|   └─ exec: rg
+</span><span id="__span-35-11"><a id="__codelineno-35-11" name="__codelineno-35-11" href="#__codelineno-35-11"></a>└── uv 0.1.17
+</span><span id="__span-35-12"><a id="__codelineno-35-12" name="__codelineno-35-12" href="#__codelineno-35-12"></a>    └─ exec: uv
 </span></code></pre></div>
 <h3 id="global-upgrade"><code>global upgrade</code><a class="headerlink" href="#global-upgrade" title="Permanent link">#</a></h3>
 <p>This command upgrades a globally installed package (to the latest version by default).</p>
-<h5 id="arguments_13">Arguments<a class="headerlink" href="#arguments_13" title="Permanent link">#</a></h5>
+<h5 id="arguments_18">Arguments<a class="headerlink" href="#arguments_18" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PACKAGE&gt;</code>: The package to upgrade.</li>
 </ol>
-<h5 id="options_19">Options<a class="headerlink" href="#options_19" title="Permanent link">#</a></h5>
+<h5 id="options_21">Options<a class="headerlink" href="#options_21" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses.
   Defaults to <code>conda-forge</code>. Note the channel the package was installed from
   will be always used for upgrade. (Allowed to be used more than once)</li>
 </ul>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>ruff
-</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>trackplot
-</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="c1"># Or in a more concise form</span>
-</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
-</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a>
-</span><span id="__span-31-6"><a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a><span class="c1"># Conda matchspec is supported</span>
-</span><span id="__span-31-7"><a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="c1"># You can specify the version to upgrade to when you don&#39;t want the latest version</span>
-</span><span id="__span-31-8"><a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a><span class="c1"># or you can even use it to downgrade a globally installed package</span>
-</span><span id="__span-31-9"><a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.10
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>ruff
+</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="c1"># Or in a more concise form</span>
+</span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+</span><span id="__span-36-5"><a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a>
+</span><span id="__span-36-6"><a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a><span class="c1"># Conda matchspec is supported</span>
+</span><span id="__span-36-7"><a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a><span class="c1"># You can specify the version to upgrade to when you don&#39;t want the latest version</span>
+</span><span id="__span-36-8"><a id="__codelineno-36-8" name="__codelineno-36-8" href="#__codelineno-36-8"></a><span class="c1"># or you can even use it to downgrade a globally installed package</span>
+</span><span id="__span-36-9"><a id="__codelineno-36-9" name="__codelineno-36-9" href="#__codelineno-36-9"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.10
 </span></code></pre></div>
 <h3 id="global-upgrade-all"><code>global upgrade-all</code><a class="headerlink" href="#global-upgrade-all" title="Permanent link">#</a></h3>
 <p>This command upgrades all globally installed packages to their latest version.</p>
-<h5 id="options_20">Options<a class="headerlink" href="#options_20" title="Permanent link">#</a></h5>
+<h5 id="options_22">Options<a class="headerlink" href="#options_22" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--channel &lt;CHANNEL&gt; (-c)</code>: specify a channel that the project uses.
   Defaults to <code>conda-forge</code>. Note the channel the package was installed from
   will be always used for upgrade. (Allowed to be used more than once)</li>
 </ul>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all
-</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda
-</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="c1"># Or in a more concise form</span>
-</span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all
+</span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all<span class="w"> </span>--channel<span class="w"> </span>conda-forge<span class="w"> </span>--channel<span class="w"> </span>bioconda
+</span><span id="__span-37-3"><a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="c1"># Or in a more concise form</span>
+</span><span id="__span-37-4"><a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>upgrade-all<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>-c<span class="w"> </span>bioconda<span class="w"> </span>trackplot
 </span></code></pre></div>
 <h3 id="global-remove"><code>global remove</code><a class="headerlink" href="#global-remove" title="Permanent link">#</a></h3>
 <p>Removes a package previously installed into a globally accessible location via
 <code>pixi global install</code></p>
 <p>Use <code>pixi global info</code> to find out what the package name is that belongs to the tool you want to remove.</p>
-<h5 id="arguments_14">Arguments<a class="headerlink" href="#arguments_14" title="Permanent link">#</a></h5>
+<h5 id="arguments_19">Arguments<a class="headerlink" href="#arguments_19" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PACKAGE&gt;</code>: The package(s) to remove.</li>
 </ol>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>pre-commit
-</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>
-</span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="c1"># multiple packages can be removed at once</span>
-</span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>pre-commit<span class="w"> </span>starship
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>pre-commit
+</span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a>
+</span><span id="__span-38-3"><a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="c1"># multiple packages can be removed at once</span>
+</span><span id="__span-38-4"><a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>remove<span class="w"> </span>pre-commit<span class="w"> </span>starship
 </span></code></pre></div>
 <h2 id="project"><code>project</code><a class="headerlink" href="#project" title="Permanent link">#</a></h2>
 <p>This subcommand allows you to modify the project configuration through the command line interface.</p>
-<h5 id="options_21">Options<a class="headerlink" href="#options_21" title="Permanent link">#</a></h5>
+<h5 id="options_23">Options<a class="headerlink" href="#options_23" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--manifest-path &lt;MANIFEST_PATH&gt;</code>: the path to <a href="../configuration/">manifest file</a>, by default it searches for one in the parent directories.</li>
 </ul>
 <h3 id="project-channel-add"><code>project channel add</code><a class="headerlink" href="#project-channel-add" title="Permanent link">#</a></h3>
 <p>Add channels to the channel list in the project configuration.
 When you add channels, the channels are tested for existence, added to the lock file and the environment is reinstalled.</p>
-<h5 id="arguments_15">Arguments<a class="headerlink" href="#arguments_15" title="Permanent link">#</a></h5>
+<h5 id="arguments_20">Arguments<a class="headerlink" href="#arguments_20" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;CHANNEL&gt;</code>: The channels to add, name or URL.</li>
-</ol>
-<h5 id="options_22">Options<a class="headerlink" href="#options_22" title="Permanent link">#</a></h5>
-<ul>
-<li><code>--no-install</code>: do not update the environment, only add changed packages to the lock-file.</li>
-<li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the channel is added.</li>
-</ul>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>pixi project channel add robostack
-</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>pixi project channel add bioconda conda-forge robostack
-</span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>pixi project channel add file:///home/user/local_channel
-</span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a>pixi project channel add https://repo.prefix.dev/conda-forge
-</span><span id="__span-34-5"><a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a>pixi project channel add --no-install robostack
-</span><span id="__span-34-6"><a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a>pixi project channel add --feature cuda nividia
-</span></code></pre></div>
-<h3 id="project-channel-list"><code>project channel list</code><a class="headerlink" href="#project-channel-list" title="Permanent link">#</a></h3>
-<p>List the channels in the project file</p>
-<h5 id="options_23">Options<a class="headerlink" href="#options_23" title="Permanent link">#</a></h5>
-<ul>
-<li><code>urls</code>: show the urls of the channels instead of the names.</li>
-</ul>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>list
-</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>Environment:<span class="w"> </span>default
-</span><span id="__span-35-3"><a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>-<span class="w"> </span>conda-forge
-</span><span id="__span-35-4"><a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a>
-</span><span id="__span-35-5"><a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>list<span class="w"> </span>--urls
-</span><span id="__span-35-6"><a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a>Environment:<span class="w"> </span>default
-</span><span id="__span-35-7"><a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a>-<span class="w"> </span>https://conda.anaconda.org/conda-forge/
-</span></code></pre></div>
-<h3 id="project-channel-remove"><code>project channel remove</code><a class="headerlink" href="#project-channel-remove" title="Permanent link">#</a></h3>
-<p>List the channels in the project file</p>
-<h5 id="arguments_16">Arguments<a class="headerlink" href="#arguments_16" title="Permanent link">#</a></h5>
-<ol>
-<li><code>&lt;CHANNEL&gt;...</code>: The channels to remove, name(s) or URL(s).</li>
 </ol>
 <h5 id="options_24">Options<a class="headerlink" href="#options_24" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--no-install</code>: do not update the environment, only add changed packages to the lock-file.</li>
-<li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the channel is removed.</li>
+<li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the channel is added.</li>
 </ul>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>conda-forge
-</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>https://conda.anaconda.org/conda-forge/
-</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>--no-install<span class="w"> </span>conda-forge
-</span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>--feature<span class="w"> </span>cuda<span class="w"> </span>nividia
+<div class="language-text highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>pixi project channel add robostack
+</span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a>pixi project channel add bioconda conda-forge robostack
+</span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a>pixi project channel add file:///home/user/local_channel
+</span><span id="__span-39-4"><a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a>pixi project channel add https://repo.prefix.dev/conda-forge
+</span><span id="__span-39-5"><a id="__codelineno-39-5" name="__codelineno-39-5" href="#__codelineno-39-5"></a>pixi project channel add --no-install robostack
+</span><span id="__span-39-6"><a id="__codelineno-39-6" name="__codelineno-39-6" href="#__codelineno-39-6"></a>pixi project channel add --feature cuda nividia
 </span></code></pre></div>
-<h3 id="project-description-get"><code>project description get</code><a class="headerlink" href="#project-description-get" title="Permanent link">#</a></h3>
-<p>Get the project description.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>description<span class="w"> </span>get
-</span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>Package<span class="w"> </span>management<span class="w"> </span>made<span class="w"> </span>easy!
-</span></code></pre></div>
-<h3 id="project-description-set"><code>project description set</code><a class="headerlink" href="#project-description-set" title="Permanent link">#</a></h3>
-<p>Set the project description.</p>
-<h5 id="arguments_17">Arguments<a class="headerlink" href="#arguments_17" title="Permanent link">#</a></h5>
-<ol>
-<li><code>&lt;DESCRIPTION&gt;</code>: The description to set.</li>
-</ol>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>description<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="s2">&quot;my new description&quot;</span>
-</span></code></pre></div>
-<h3 id="project-platform-add"><code>project platform add</code><a class="headerlink" href="#project-platform-add" title="Permanent link">#</a></h3>
-<p>Adds a platform(s) to the project file and updates the lock file.</p>
-<h5 id="arguments_18">Arguments<a class="headerlink" href="#arguments_18" title="Permanent link">#</a></h5>
-<ol>
-<li><code>&lt;PLATFORM&gt;...</code>: The platforms to add.</li>
-</ol>
+<h3 id="project-channel-list"><code>project channel list</code><a class="headerlink" href="#project-channel-list" title="Permanent link">#</a></h3>
+<p>List the channels in the project file</p>
 <h5 id="options_25">Options<a class="headerlink" href="#options_25" title="Permanent link">#</a></h5>
 <ul>
-<li><code>--no-install</code>: do not update the environment, only add changed packages to the lock-file.</li>
-<li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the platform will be added.</li>
+<li><code>urls</code>: show the urls of the channels instead of the names.</li>
 </ul>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>win-64
-</span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>win-64
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>list
+</span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>Environment:<span class="w"> </span>default
+</span><span id="__span-40-3"><a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a>-<span class="w"> </span>conda-forge
+</span><span id="__span-40-4"><a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a>
+</span><span id="__span-40-5"><a id="__codelineno-40-5" name="__codelineno-40-5" href="#__codelineno-40-5"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>list<span class="w"> </span>--urls
+</span><span id="__span-40-6"><a id="__codelineno-40-6" name="__codelineno-40-6" href="#__codelineno-40-6"></a>Environment:<span class="w"> </span>default
+</span><span id="__span-40-7"><a id="__codelineno-40-7" name="__codelineno-40-7" href="#__codelineno-40-7"></a>-<span class="w"> </span>https://conda.anaconda.org/conda-forge/
 </span></code></pre></div>
-<h3 id="project-platform-list"><code>project platform list</code><a class="headerlink" href="#project-platform-list" title="Permanent link">#</a></h3>
-<p>List the platforms in the project file.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>list
-</span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>osx-64
-</span><span id="__span-40-3"><a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a>linux-64
-</span><span id="__span-40-4"><a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a>win-64
-</span><span id="__span-40-5"><a id="__codelineno-40-5" name="__codelineno-40-5" href="#__codelineno-40-5"></a>osx-arm64
-</span></code></pre></div>
-<h3 id="project-platform-remove"><code>project platform remove</code><a class="headerlink" href="#project-platform-remove" title="Permanent link">#</a></h3>
-<p>Remove platform(s) from the project file and updates the lock file.</p>
-<h5 id="arguments_19">Arguments<a class="headerlink" href="#arguments_19" title="Permanent link">#</a></h5>
+<h3 id="project-channel-remove"><code>project channel remove</code><a class="headerlink" href="#project-channel-remove" title="Permanent link">#</a></h3>
+<p>List the channels in the project file</p>
+<h5 id="arguments_21">Arguments<a class="headerlink" href="#arguments_21" title="Permanent link">#</a></h5>
 <ol>
-<li><code>&lt;PLATFORM&gt;...</code>: The platforms to remove.</li>
+<li><code>&lt;CHANNEL&gt;...</code>: The channels to remove, name(s) or URL(s).</li>
 </ol>
 <h5 id="options_26">Options<a class="headerlink" href="#options_26" title="Permanent link">#</a></h5>
 <ul>
 <li><code>--no-install</code>: do not update the environment, only add changed packages to the lock-file.</li>
+<li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the channel is removed.</li>
+</ul>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>conda-forge
+</span><span id="__span-41-2"><a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>https://conda.anaconda.org/conda-forge/
+</span><span id="__span-41-3"><a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>--no-install<span class="w"> </span>conda-forge
+</span><span id="__span-41-4"><a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a>pixi<span class="w"> </span>project<span class="w"> </span>channel<span class="w"> </span>remove<span class="w"> </span>--feature<span class="w"> </span>cuda<span class="w"> </span>nividia
+</span></code></pre></div>
+<h3 id="project-description-get"><code>project description get</code><a class="headerlink" href="#project-description-get" title="Permanent link">#</a></h3>
+<p>Get the project description.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>description<span class="w"> </span>get
+</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a>Package<span class="w"> </span>management<span class="w"> </span>made<span class="w"> </span>easy!
+</span></code></pre></div>
+<h3 id="project-description-set"><code>project description set</code><a class="headerlink" href="#project-description-set" title="Permanent link">#</a></h3>
+<p>Set the project description.</p>
+<h5 id="arguments_22">Arguments<a class="headerlink" href="#arguments_22" title="Permanent link">#</a></h5>
+<ol>
+<li><code>&lt;DESCRIPTION&gt;</code>: The description to set.</li>
+</ol>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>description<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="s2">&quot;my new description&quot;</span>
+</span></code></pre></div>
+<h3 id="project-platform-add"><code>project platform add</code><a class="headerlink" href="#project-platform-add" title="Permanent link">#</a></h3>
+<p>Adds a platform(s) to the project file and updates the lock file.</p>
+<h5 id="arguments_23">Arguments<a class="headerlink" href="#arguments_23" title="Permanent link">#</a></h5>
+<ol>
+<li><code>&lt;PLATFORM&gt;...</code>: The platforms to add.</li>
+</ol>
+<h5 id="options_27">Options<a class="headerlink" href="#options_27" title="Permanent link">#</a></h5>
+<ul>
+<li><code>--no-install</code>: do not update the environment, only add changed packages to the lock-file.</li>
+<li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the platform will be added.</li>
+</ul>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>win-64
+</span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>win-64
+</span></code></pre></div>
+<h3 id="project-platform-list"><code>project platform list</code><a class="headerlink" href="#project-platform-list" title="Permanent link">#</a></h3>
+<p>List the platforms in the project file.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>list
+</span><span id="__span-45-2"><a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a>osx-64
+</span><span id="__span-45-3"><a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a>linux-64
+</span><span id="__span-45-4"><a id="__codelineno-45-4" name="__codelineno-45-4" href="#__codelineno-45-4"></a>win-64
+</span><span id="__span-45-5"><a id="__codelineno-45-5" name="__codelineno-45-5" href="#__codelineno-45-5"></a>osx-arm64
+</span></code></pre></div>
+<h3 id="project-platform-remove"><code>project platform remove</code><a class="headerlink" href="#project-platform-remove" title="Permanent link">#</a></h3>
+<p>Remove platform(s) from the project file and updates the lock file.</p>
+<h5 id="arguments_24">Arguments<a class="headerlink" href="#arguments_24" title="Permanent link">#</a></h5>
+<ol>
+<li><code>&lt;PLATFORM&gt;...</code>: The platforms to remove.</li>
+</ol>
+<h5 id="options_28">Options<a class="headerlink" href="#options_28" title="Permanent link">#</a></h5>
+<ul>
+<li><code>--no-install</code>: do not update the environment, only add changed packages to the lock-file.</li>
 <li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the platform will be removed.</li>
 </ul>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>remove<span class="w"> </span>win-64
-</span><span id="__span-41-2"><a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>remove<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>win-64
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>remove<span class="w"> </span>win-64
+</span><span id="__span-46-2"><a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>remove<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>win-64
 </span></code></pre></div>
 <h3 id="project-version-get"><code>project version get</code><a class="headerlink" href="#project-version-get" title="Permanent link">#</a></h3>
 <p>Get the project version.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>get
-</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="m">0</span>.11.0
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>get
+</span><span id="__span-47-2"><a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a><span class="m">0</span>.11.0
 </span></code></pre></div>
 <h3 id="project-version-set"><code>project version set</code><a class="headerlink" href="#project-version-set" title="Permanent link">#</a></h3>
 <p>Set the project version.</p>
-<h5 id="arguments_20">Arguments<a class="headerlink" href="#arguments_20" title="Permanent link">#</a></h5>
+<h5 id="arguments_25">Arguments<a class="headerlink" href="#arguments_25" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;VERSION&gt;</code>: The version to set.</li>
 </ol>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="s2">&quot;0.13.0&quot;</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="s2">&quot;0.13.0&quot;</span>
 </span></code></pre></div>
 <h3 id="project-version-majorminorpatch"><code>project version {major|minor|patch}</code><a class="headerlink" href="#project-version-majorminorpatch" title="Permanent link">#</a></h3>
 <p>Bump the project version to {MAJOR|MINOR|PATCH}.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>major
-</span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>minor
-</span><span id="__span-44-3"><a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>patch
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>major
+</span><span id="__span-49-2"><a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>minor
+</span><span id="__span-49-3"><a id="__codelineno-49-3" name="__codelineno-49-3" href="#__codelineno-49-3"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>patch
 </span></code></pre></div>
 <div class="footnote">
 <hr />
