@@ -2,13 +2,12 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use clap::Parser;
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, Report};
 use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform};
+use tokio::task::JoinSet;
 
 use crate::config::Config;
 use crate::progress::{global_multi_progress, long_running_progress_style};
@@ -66,19 +65,18 @@ pub(super) async fn upgrade_packages(
     // Get channels and version of globally installed packages in parallel
     let mut channels = HashMap::with_capacity(specs.len());
     let mut versions = HashMap::with_capacity(specs.len());
-    let mut handles = FuturesUnordered::<tokio::task::JoinHandle<Result<_, Report>>>::new();
+    let mut set: JoinSet<Result<_, Report>> = JoinSet::new();
     for package_name in specs.keys().cloned() {
         let channel_config = config.channel_config().clone();
-        let future: tokio::task::JoinHandle<Result<_, Report>> = tokio::spawn(async move {
+        set.spawn(async move {
             let p = find_installed_package(&package_name).await?;
             let channel =
                 Channel::from_str(p.repodata_record.channel, &channel_config).into_diagnostic()?;
             let version = p.repodata_record.package_record.version.into_version();
             Ok((package_name, channel, version))
         });
-        handles.push(future);
     }
-    while let Some(data) = handles.next().await {
+    while let Some(data) = set.join_next().await {
         let (package_name, channel, version) = data.into_diagnostic()??;
         channels.insert(package_name.clone(), channel);
         versions.insert(package_name, version);
