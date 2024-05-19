@@ -687,11 +687,13 @@ pixi auth logout anaconda.org
 
 Use this command to manage the configuration.
 
-### Common options
+##### Options
 
 - `--system`: Specify management scope to system configuration.
 - `--global`: Specify management scope to global configuration.
 - `--local`: Specify management scope to local configuration.
+
+Checkout the [global configuration](../advanced/global_configuration.md) for more information about the locations.
 
 ### `config edit`
 
