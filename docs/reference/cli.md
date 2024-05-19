@@ -351,6 +351,7 @@ List project's packages. Highlighted packages are explicit dependencies.
 - `--json`: Whether to output in json format.
 - `--json-pretty`: Whether to output in pretty json format
 - `--sort-by <SORT_BY>`: Sorting strategy [default: name] [possible values: size, name, type]
+- `--explicit (-x)`: Only list the packages that are explicitly added to the [manifest file](configuration.md).
 - `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](configuration.md), by default it searches for one in the parent directories.
 - `--environment (-e)`: The environment's packages to list, if non is provided the default environment's packages will be listed.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
@@ -360,6 +361,7 @@ List project's packages. Highlighted packages are explicit dependencies.
 ```shell
 pixi list
 pixi list --json-pretty
+pixi list --explicit
 pixi list --sort-by size
 pixi list --platform win-64
 pixi list --environment cuda
@@ -681,6 +683,95 @@ Remove authentication information for a given host.
 pixi auth logout <HOST>
 pixi auth logout repo.prefix.dev
 pixi auth logout anaconda.org
+```
+
+## `config`
+
+Use this command to manage the configuration.
+
+##### Options
+
+- `--system`: Specify management scope to system configuration.
+- `--global`: Specify management scope to global configuration.
+- `--local`: Specify management scope to local configuration.
+
+Checkout the [global configuration](../advanced/global_configuration.md) for more information about the locations.
+
+### `config edit`
+
+Edit the configuration file in the default editor.
+
+### `config list`
+
+List the configuration
+
+##### Arguments
+
+1. `[KEY]`: The key to list the value of. (all if not provided)
+
+##### Options
+
+- `--json`: Output the configuration in JSON format.
+
+```shell
+pixi config list default-channels
+pixi config list --json
+```
+
+### `config prepend`
+
+Prepend a value to a list configuration key.
+
+##### Arguments
+
+1. `<KEY>`: The key to prepend the value to.
+2. `<VALUE>`: The value to prepend.
+
+```shell
+pixi config prepend default-channels conda-forge
+```
+
+### `config append`
+
+Append a value to a list configuration key.
+
+##### Arguments
+
+1. `<KEY>`: The key to append the value to.
+2. `<VALUE>`: The value to append.
+
+```shell
+pixi config append default-channels robostack
+pixi config append default-channels bioconda --global
+```
+
+### `config set`
+
+Set a configuration key to a value.
+
+##### Arguments
+
+1. `<KEY>`: The key to set the value of.
+2. `[VALUE]`: The value to set. (if not provided, the key will be removed)
+
+```shell
+pixi config set default-channels '["conda-forge", "bioconda"]'
+pixi config set --global mirrors '{"https://conda.anaconda.org/": ["https://prefix.dev/conda-forge"]}'
+pixi config set repodata-config.disable-zstd true --system
+```
+
+### `config unset`
+
+Unset a configuration key.
+
+##### Arguments
+
+1. `<KEY>`: The key to unset.
+
+```shell
+pixi config unset default-channels
+pixi config unset --global mirrors
+pixi config unset repodata-config.disable-zstd --system
 ```
 
 ## `global`
