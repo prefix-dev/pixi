@@ -370,6 +370,7 @@ impl PixiControl {
                     locked: false,
                 },
                 config: Default::default(),
+                all: false,
             },
         }
     }
