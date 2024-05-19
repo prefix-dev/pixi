@@ -96,7 +96,7 @@ pub struct Project {
     authenticated_client: ClientWithMiddleware,
     /// The repodata gateway to use for answering queries about repodata.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    repodata_gateway: OnceLock<Arc<Gateway>>,
+    repodata_gateway: OnceLock<Gateway>,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
     /// The cache that contains environment variables
