@@ -15,7 +15,7 @@ pub struct Args {
     pub lock_file_usage: super::LockFileUsageArgs,
 
     #[arg(long, short)]
-    pub environment: Option<String>,
+    pub environments: Option<Vec<String>>,
 
     #[clap(flatten)]
     pub config: ConfigCli,
@@ -24,9 +24,16 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project =
         Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(args.config);
-    let environment = project.environment_from_name_or_env_var(args.environment)?;
 
-    get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;
+    if let Some(envs) = args.environments {
+        for env in envs {
+            let environment = project.environment_from_name_or_env_var(Some(env))?;
+            get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;
+        }
+    } else {
+        let environment = project.environment_from_name_or_env_var(None)?;
+        get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;
+    }
 
     // Emit success
     eprintln!(
