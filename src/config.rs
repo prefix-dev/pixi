@@ -1,5 +1,5 @@
 use clap::{ArgAction, Parser};
-use miette::IntoDiagnostic;
+use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -298,7 +298,9 @@ impl Config {
     /// I/O errors or parsing errors
     pub fn from_path(path: &Path) -> miette::Result<Config> {
         tracing::debug!("Loading config from {}", path.display());
-        let s = fs::read_to_string(path).into_diagnostic()?;
+        let s = fs::read_to_string(path)
+            .into_diagnostic()
+            .wrap_err(format!("failed to read config from '{}'", path.display()))?;
         let mut config = Config::from_toml(&s)?;
         config.loaded_from.push(path.to_path_buf());
         tracing::info!("Loaded config from: {}", path.display());
@@ -611,9 +613,16 @@ impl Config {
         let contents = toml_edit::ser::to_string_pretty(&self).into_diagnostic()?;
         tracing::debug!("Saving config to: {}", to.display());
 
-        fs::create_dir_all(to.parent().expect("config path should have a parent"))
-            .into_diagnostic()?;
-        fs::write(to, contents).into_diagnostic()
+        let parent = to.parent().expect("config path should have a parent");
+        fs::create_dir_all(parent)
+            .into_diagnostic()
+            .wrap_err(format!(
+                "failed to create directories in '{}'",
+                parent.display()
+            ))?;
+        fs::write(to, contents)
+            .into_diagnostic()
+            .wrap_err(format!("failed to write config to '{}'", to.display()))
     }
 }
 
