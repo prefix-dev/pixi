@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use clap::Parser;
@@ -87,30 +88,44 @@ pub(super) async fn upgrade_packages(
     let (client, repodata) =
         get_client_and_sparse_repodata(all_channels, *platform, &config).await?;
 
+    // Resolve environments in parallel
+    let mut set: JoinSet<Result<_, Report>> = JoinSet::new();
+    let repodata = Arc::new(repodata);
+    let channels = Arc::new(channels);
+    for (package_name, package_matchspec) in specs {
+        let repodata = Arc::clone(&repodata);
+        let channels = Arc::clone(&channels);
+        let channel_cli = channel_cli.clone();
+        set.spawn_blocking(move || {
+            // Filter repodata based on channels specific to the package (and from the CLI)
+            let specific_repodata = repodata.iter().filter_map(|((c, _), v)| {
+                if channel_cli.contains(c) || channels.get(&package_name).unwrap() == c {
+                    Some(v)
+                } else {
+                    None
+                }
+            });
+            let records = load_package_records(package_matchspec.clone(), specific_repodata)?;
+            Ok((package_name, package_matchspec, records))
+        });
+    }
+
     // Upgrade each package when relevant
     let mut upgraded = false;
-    for (package_name, package_matchspec) in specs.iter() {
-        // Filter repodata based on channels specific to the package (and from the CLI)
-        let specific_repodata = repodata.iter().filter_map(|((c, _), v)| {
-            if channel_cli.contains(c) || channels.get(package_name).unwrap() == c {
-                Some(v)
-            } else {
-                None
-            }
-        });
-        let records = load_package_records(package_matchspec.clone(), specific_repodata)?;
-        let package_record = records
+    while let Some(data) = set.join_next().await {
+        let (package_name, package_matchspec, records) = data.into_diagnostic()??;
+        let toinstall_version = records
             .iter()
-            .find(|r| r.package_record.name == *package_name)
+            .find(|r| r.package_record.name == package_name)
+            .map(|p| p.package_record.version.version().to_owned())
             .ok_or_else(|| {
                 miette::miette!(
                     "Package {} not found in the specified channels",
                     package_name.as_normalized()
                 )
             })?;
-        let toinstall_version = package_record.package_record.version.version().to_owned();
         let installed_version = versions
-            .get(package_name)
+            .get(&package_name)
             .expect("should have the installed version")
             .to_owned();
 
@@ -132,7 +147,7 @@ pub(super) async fn upgrade_packages(
                 console::style("Updating").green(),
                 message
             ));
-            globally_install_package(package_name, records, client.clone(), platform).await?;
+            globally_install_package(&package_name, records, client.clone(), platform).await?;
             pb.finish_with_message(format!("{} {}", console::style("Updated").green(), message));
             upgraded = true;
         }
