@@ -9,15 +9,14 @@ mod solve_group;
 pub mod virtual_packages;
 
 use async_once_cell::OnceCell as AsyncCell;
-use indexmap::{Equivalent, IndexSet};
+use indexmap::Equivalent;
 use miette::{IntoDiagnostic, NamedSource};
 
-use rattler_conda_types::{Channel, Platform, Version};
+use rattler_conda_types::Version;
 use reqwest_middleware::ClientWithMiddleware;
 use std::hash::Hash;
 
 use rattler_repodata_gateway::Gateway;
-use rattler_virtual_packages::VirtualPackage;
 use std::sync::OnceLock;
 use std::{
     collections::{HashMap, HashSet},
@@ -29,20 +28,13 @@ use std::{
 
 use crate::activation::{get_environment_variables, run_activation};
 use crate::config::Config;
+use crate::consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST};
 use crate::project::grouped_environment::GroupedEnvironment;
 use crate::pypi_mapping::MappingSource;
-use crate::task::TaskName;
 use crate::utils::reqwest::build_reqwest_clients;
-use crate::{
-    consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST},
-    task::Task,
-};
-use manifest::{EnvironmentName, Manifest, SystemRequirements};
+use manifest::{EnvironmentName, Manifest};
 
-use self::{
-    has_features::HasFeatures,
-    manifest::{pyproject::PyProjectToml, Environments},
-};
+use self::manifest::{pyproject::PyProjectToml, Environments};
 pub use dependencies::{CondaDependencies, PyPiDependencies};
 pub use environment::Environment;
 pub use solve_group::SolveGroup;
@@ -395,76 +387,6 @@ impl Project {
         environments.into_iter().collect()
     }
 
-    /// Returns the channels used by this project.
-    ///
-    /// TODO: Remove this function and use the channels from the default environment instead.
-    pub fn channels(&self) -> IndexSet<&Channel> {
-        self.default_environment().channels()
-    }
-
-    /// Returns the platforms this project targets
-    ///
-    /// TODO: Remove this function and use the platforms from the default environment instead.
-    pub fn platforms(&self) -> HashSet<Platform> {
-        self.default_environment().platforms()
-    }
-
-    /// Get the tasks of this project
-    ///
-    /// TODO: Remove this function and use the tasks from the default environment instead.
-    pub fn tasks(&self, platform: Option<Platform>) -> HashMap<&TaskName, &Task> {
-        self.default_environment()
-            .tasks(platform)
-            .unwrap_or_default()
-    }
-
-    /// Get the task with the specified `name` or `None` if no such task exists. If `platform` is
-    /// specified then the task will first be looked up in the target specific tasks for the given
-    /// platform.
-    ///
-    /// TODO: Remove this function and use the `task` function from the default environment instead.
-    pub fn task_opt(&self, name: &TaskName, platform: Option<Platform>) -> Option<&Task> {
-        self.default_environment().task(name, platform).ok()
-    }
-
-    /// TODO: Remove this method and use the one from Environment instead.
-    pub fn virtual_packages(&self, platform: Platform) -> Vec<VirtualPackage> {
-        self.default_environment().virtual_packages(platform)
-    }
-
-    /// Get the system requirements defined under the `system-requirements` section of the project manifest.
-    /// They will act as the description of a reference machine which is minimally needed for this package to be run.
-    ///
-    /// TODO: Remove this function and use the `system_requirements` function from the default environment instead.
-    pub fn system_requirements(&self) -> SystemRequirements {
-        self.default_environment().system_requirements()
-    }
-
-    /// Returns the dependencies of the project.
-    ///
-    /// TODO: Remove this function and use the `dependencies` function from the default environment instead.
-    pub fn dependencies(
-        &self,
-        kind: Option<SpecType>,
-        platform: Option<Platform>,
-    ) -> CondaDependencies {
-        self.default_environment().dependencies(kind, platform)
-    }
-
-    /// Returns the PyPi dependencies of the project
-    ///
-    /// TODO: Remove this function and use the `dependencies` function from the default environment instead.
-    pub fn pypi_dependencies(&self, platform: Option<Platform>) -> PyPiDependencies {
-        self.default_environment().pypi_dependencies(platform)
-    }
-
-    /// Returns the all specified activation scripts that are used in the current platform.
-    ///
-    /// TODO: Remove this function and use the `activation_scripts function from the default environment instead.
-    pub fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
-        self.default_environment().activation_scripts(platform)
-    }
-
     /// Returns true if the project contains any reference pypi dependencies. Even if just
     /// `[pypi-dependencies]` is specified without any requirements this will return true.
     pub fn has_pypi_dependencies(&self) -> bool {
@@ -551,10 +473,12 @@ pub fn find_project_manifest() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use self::has_features::HasFeatures;
     use super::*;
     use crate::project::manifest::FeatureName;
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
+    use rattler_conda_types::Platform;
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use std::str::FromStr;
 
@@ -598,7 +522,10 @@ mod tests {
                 version: Version::from_str("2.12").unwrap(),
             })];
 
-            let virtual_packages = project.system_requirements().virtual_packages();
+            let virtual_packages = project
+                .default_environment()
+                .system_requirements()
+                .virtual_packages();
 
             assert_eq!(virtual_packages, expected_result);
         }
@@ -631,7 +558,9 @@ mod tests {
         let project = Project::from_manifest(manifest);
 
         assert_snapshot!(format_dependencies(
-            project.dependencies(None, Some(Platform::Linux64))
+            project
+                .default_environment()
+                .dependencies(None, Some(Platform::Linux64))
         ));
     }
 
@@ -664,7 +593,9 @@ mod tests {
         let project = Project::from_manifest(manifest);
 
         assert_snapshot!(format_dependencies(
-            project.dependencies(None, Some(Platform::Linux64))
+            project
+                .default_environment()
+                .dependencies(None, Some(Platform::Linux64))
         ));
     }
 
@@ -694,9 +625,21 @@ mod tests {
 
         assert_snapshot!(format!(
             "= Linux64\n{}\n\n= Win64\n{}\n\n= OsxArm64\n{}",
-            fmt_activation_scripts(project.activation_scripts(Some(Platform::Linux64))),
-            fmt_activation_scripts(project.activation_scripts(Some(Platform::Win64))),
-            fmt_activation_scripts(project.activation_scripts(Some(Platform::OsxArm64)))
+            fmt_activation_scripts(
+                project
+                    .default_environment()
+                    .activation_scripts(Some(Platform::Linux64))
+            ),
+            fmt_activation_scripts(
+                project
+                    .default_environment()
+                    .activation_scripts(Some(Platform::Win64))
+            ),
+            fmt_activation_scripts(
+                project
+                    .default_environment()
+                    .activation_scripts(Some(Platform::OsxArm64))
+            )
         ));
     }
 
