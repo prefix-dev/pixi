@@ -1148,7 +1148,7 @@ enum TaskResult {
 async fn spawn_solve_conda_environment_task(
     group: GroupedEnvironment<'_>,
     existing_repodata_records: Arc<RepoDataRecordsByName>,
-    repodata_gateway: Arc<Gateway>,
+    repodata_gateway: Gateway,
     platform: Platform,
     concurrency_semaphore: Arc<Semaphore>,
     client: reqwest::Client,
