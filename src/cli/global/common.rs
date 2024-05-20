@@ -153,13 +153,13 @@ pub(super) fn channel_name_from_prefix(
 /// # Returns
 ///
 /// The package records (with dependencies records) for the given package MatchSpec
-pub fn load_package_records(
+pub fn load_package_records<'a>(
     package_matchspec: MatchSpec,
-    sparse_repodata: &IndexMap<(Channel, Platform), SparseRepoData>,
+    sparse_repodata: impl IntoIterator<Item = &'a SparseRepoData>,
 ) -> miette::Result<Vec<RepoDataRecord>> {
     let package_name = package_name(&package_matchspec)?;
     let available_packages =
-        SparseRepoData::load_records_recursive(sparse_repodata.values(), vec![package_name], None)
+        SparseRepoData::load_records_recursive(sparse_repodata, vec![package_name], None)
             .into_diagnostic()?;
     let virtual_packages = rattler_virtual_packages::VirtualPackage::current()
         .into_diagnostic()?
