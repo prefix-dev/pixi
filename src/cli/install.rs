@@ -16,7 +16,7 @@ pub struct Args {
     pub lock_file_usage: super::LockFileUsageArgs,
 
     #[arg(long, short)]
-    pub environments: Option<Vec<String>>,
+    pub environment: Option<Vec<String>>,
 
     #[clap(flatten)]
     pub config: ConfigCli,
@@ -34,7 +34,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // 1. specific environments
     // 2. all environments
     // 3. default environment (if no environments are specified)
-    let envs = if let Some(envs) = args.environments {
+    let envs = if let Some(envs) = args.environment {
         envs
     } else if args.all {
         project
