@@ -49,18 +49,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut installed_envs = Vec::with_capacity(envs.len());
     for env in envs {
         let environment = project.environment_from_name_or_env_var(Some(env))?;
-        installed_envs.push(environment.name().to_string());
         get_up_to_date_prefix(&environment, args.lock_file_usage.into(), false).await?;
+        installed_envs.push(environment.name().clone());
     }
 
     let s = if installed_envs.len() > 1 { "s" } else { "" };
     // Message what's installed
     eprintln!(
         "> The following environment{s} are ready to use: \n\t{}",
-        installed_envs
-            .iter()
-            .map(|n| console::style(n).bold())
-            .join(", "),
+        installed_envs.iter().map(|n| n.fancy_display()).join(", "),
     );
 
     // Emit success
