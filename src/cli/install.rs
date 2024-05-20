@@ -56,7 +56,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let s = if installed_envs.len() > 1 { "s" } else { "" };
     // Message what's installed
     eprintln!(
-        "> Installed environment{s}: {}!",
+        "> The following environment{s} are ready to use: \n\t{}",
         installed_envs
             .iter()
             .map(|n| console::style(n).bold())
