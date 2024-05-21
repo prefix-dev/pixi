@@ -43,7 +43,7 @@ pub fn get_fish_prompt(env_name: &str) -> String {
 
         function fish_prompt
             set -l last_status $status
-            if set -q PIXIE_LEFT_PROMPT
+            if set -q PIXI_LEFT_PROMPT
                 __pixi_add_prompt
             end
             __fish_prompt_orig
@@ -51,7 +51,7 @@ pub fn get_fish_prompt(env_name: &str) -> String {
         end
 
         function fish_right_prompt
-            if not set -q PIXIE_LEFT_PROMPT
+            if not set -q PIXI_LEFT_PROMPT
                 __pixi_add_prompt
             end
             __fish_right_prompt_orig
