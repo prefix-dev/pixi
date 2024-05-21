@@ -62,7 +62,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     } else {
         eprintln!(
-            "{}The following environments where installed: \n\t{}",
+            "{}The following environments have been installed: \n\t{}",
             console::style(console::Emoji("✔ ", "")).green(),
             installed_envs
                 .iter()
