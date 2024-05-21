@@ -1,0 +1,16 @@
+[project]
+name = "readthedocs-override"
+description = "override a ReadTheDocs build with pixi"
+version = "0.0.0"
+
+[tool.pixi.project]
+platforms = ["linux-64"]
+channels = ["conda-forge"]
+
+[tool.pixi.dependencies]
+mkdocs = "*"
+
+[tool.pixi.tasks]
+start = "mkdocs serve"
+docs = "mkdocs build --strict"
+readthedocs = "rm -rf $READTHEDOCS_OUTPUT/html && cp -r site $READTHEDOCS_OUTPUT/html"

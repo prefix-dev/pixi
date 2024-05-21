@@ -1,0 +1,38 @@
+[project]
+name = "readthedocs-extend"
+platforms = ["linux-64"]
+channels = ["conda-forge"]
+
+[environments]
+rtd = ["docs", "rtd"]
+docs = ["docs", "dev"]
+
+[feature.dev.tasks.start]
+cmd = "sphinx-autobuild docs ./build/docs"
+
+[feature.docs.tasks.docs]
+cmd = "sphinx-build -W --keep-going --color -b html docs ./build/docs"
+inputs = ["docs/"]
+outputs = ["build/docs/.buildinfo"]
+
+[feature.docs.dependencies]
+firefox = "115.*"
+myst-parser = "*"
+sphinx = "*"
+
+[feature.dev.dependencies]
+sphinx-autobuild = "*"
+
+[feature.rtd.tasks.rtd]
+cmd = """
+  rm -rf $READTHEDOCS_OUTPUT/html
+  && cp -r build/docs $READTHEDOCS_OUTPUT/html
+"""
+depends-on = ["docs"]
+inputs = ["build/docs/"]
+
+
+[feature.rtd]
+platforms = ["linux-64"]
+dependencies = {requests = "*", jinja2 = ">=2.9", packaging = "*"}
+pypi-dependencies = {readthedocs-sphinx-ext = "*"}
