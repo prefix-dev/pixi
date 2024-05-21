@@ -193,7 +193,7 @@ Normally the locations would be:
 Platform-specific default cache folder:
 - Linux: `$XDG_CACHE_HOME/rattler` or `$HOME`/.cache/rattler
 - macOS: `$HOME`/Library/Caches/rattler
-- Windows: `%APPDATA%\rattler`
+- Windows: `%LOCALAPPDATA%\rattler`
 
 This location is configurable by setting the `PIXI_CACHE_DIR` or `RATTLER_CACHE_DIR` environment variable.
 
