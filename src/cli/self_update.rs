@@ -10,6 +10,8 @@ use miette::{Context, IntoDiagnostic};
 use reqwest::Client;
 use serde::Deserialize;
 
+use crate::config::home_path;
+
 /// Update pixi to the latest version or a specific version. If the pixi binary is not found in the default location
 /// (e.g. `~/.pixi/bin/pixi`), pixi won't updated to prevent breaking the current installation (Homebrew, etc).
 /// The behaviour can be overridden with the `--force` flag.
@@ -240,9 +242,8 @@ fn pixi_binary_name() -> String {
 }
 
 fn default_pixi_binary_path() -> std::path::PathBuf {
-    dirs::home_dir()
+    home_path()
         .expect("Could not find the home directory")
-        .join(".pixi")
         .join("bin")
         .join(pixi_binary_name())
 }
