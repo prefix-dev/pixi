@@ -21,7 +21,7 @@ pub struct Args {
     #[clap(flatten)]
     pub config: ConfigCli,
 
-    #[arg(long, short, conflicts_with = "environments")]
+    #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 }
 

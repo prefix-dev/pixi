@@ -363,7 +363,7 @@ impl PixiControl {
     pub fn install(&self) -> InstallBuilder {
         InstallBuilder {
             args: Args {
-                environments: None,
+                environment: None,
                 manifest_path: Some(self.manifest_path()),
                 lock_file_usage: LockFileUsageArgs {
                     frozen: false,
