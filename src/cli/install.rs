@@ -53,19 +53,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         installed_envs.push(environment.name().clone());
     }
 
-    let s = if installed_envs.len() > 1 { "s" } else { "" };
     // Message what's installed
-    eprintln!(
-        "> The following environment{s} are ready to use: \n\t{}",
-        installed_envs.iter().map(|n| n.fancy_display()).join(", "),
-    );
+    if installed_envs.len() == 1 {
+        eprintln!(
+            "{}The {} environment is installed.",
+            console::style(console::Emoji("✔ ", "")).green(),
+            installed_envs[0].fancy_display(),
+        );
+    } else {
+        eprintln!(
+            "{}The following environments where installed: \n\t{}",
+            console::style(console::Emoji("✔ ", "")).green(),
+            installed_envs
+                .iter()
+                .map(|n| n.fancy_display())
+                .join("\n\t"),
+        );
+    }
 
-    // Emit success
-    eprintln!(
-        "{}Project in {} is ready to use!",
-        console::style(console::Emoji("✔ ", "")).green(),
-        project.root().display()
-    );
     Project::warn_on_discovered_from_env(args.manifest_path.as_deref());
     Ok(())
 }
