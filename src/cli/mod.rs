@@ -11,7 +11,9 @@ use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter
 
 pub mod add;
 pub mod completion;
+pub mod config;
 pub mod global;
+pub mod has_specs;
 pub mod info;
 pub mod init;
 pub mod install;
@@ -106,6 +108,7 @@ pub enum Command {
     #[clap(visible_alias = "g")]
     Global(global::Args),
     Auth(rattler::cli::auth::Args),
+    Config(config::Args),
     Info(info::Args),
     Upload(upload::Args),
     Search(search::Args),
@@ -255,6 +258,7 @@ pub async fn execute() -> miette::Result<()> {
 pub async fn execute_command(command: Command) -> miette::Result<()> {
     match command {
         Command::Completion(cmd) => completion::execute(cmd),
+        Command::Config(cmd) => config::execute(cmd).await,
         Command::Init(cmd) => init::execute(cmd).await,
         Command::Add(cmd) => add::execute(cmd).await,
         Command::Run(cmd) => run::execute(cmd).await,

@@ -24,6 +24,7 @@
 //! ```
 
 use futures::FutureExt;
+use pixi::cli::add::DependencyConfig;
 use pixi::cli::remove;
 use pixi::task::TaskName;
 use pixi::{
@@ -77,39 +78,50 @@ impl IntoFuture for InitBuilder {
     }
 }
 
-/// Contains the arguments to pass to [`add::execute()`]. Call `.await` to call the CLI execute method
-/// and await the result at the same time.
-pub struct AddBuilder {
-    pub args: add::Args,
-}
+/// A trait used by AddBuilder and RemoveBuilder to set their inner DependencyConfig
+pub trait HasDependencyConfig: Sized {
+    fn dependency_config(&mut self) -> &mut DependencyConfig;
 
-impl AddBuilder {
-    pub fn with_spec(mut self, spec: &str) -> Self {
-        self.args.specs.push(spec.to_string());
+    fn dependency_config_with_specs(specs: Vec<&str>, manifest_path: PathBuf) -> DependencyConfig {
+        DependencyConfig {
+            specs: specs.iter().map(|s| s.to_string()).collect(),
+            manifest_path: Some(manifest_path),
+            host: false,
+            build: false,
+            pypi: false,
+            platform: Default::default(),
+            feature: None,
+            no_install: true,
+            no_lockfile_update: false,
+        }
+    }
+
+    fn with_spec(mut self, spec: &str) -> Self {
+        self.dependency_config().specs.push(spec.to_string());
         self
     }
 
     /// Set as a host
-    pub fn set_type(mut self, t: DependencyType) -> Self {
+    fn set_type(mut self, t: DependencyType) -> Self {
         match t {
             DependencyType::CondaDependency(spec_type) => match spec_type {
                 SpecType::Host => {
-                    self.args.host = true;
-                    self.args.build = false;
+                    self.dependency_config().host = true;
+                    self.dependency_config().build = false;
                 }
                 SpecType::Build => {
-                    self.args.host = false;
-                    self.args.build = true;
+                    self.dependency_config().host = false;
+                    self.dependency_config().build = true;
                 }
                 SpecType::Run => {
-                    self.args.host = false;
-                    self.args.build = false;
+                    self.dependency_config().host = false;
+                    self.dependency_config().build = false;
                 }
             },
             DependencyType::PypiDependency => {
-                self.args.host = false;
-                self.args.build = false;
-                self.args.pypi = true;
+                self.dependency_config().host = false;
+                self.dependency_config().build = false;
+                self.dependency_config().pypi = true;
             }
         }
         self
@@ -117,26 +129,40 @@ impl AddBuilder {
 
     /// Set whether to also install the environment. By default, the environment is NOT
     /// installed to reduce test times.
-    pub fn with_install(mut self, install: bool) -> Self {
-        self.args.no_install = !install;
+    fn with_install(mut self, install: bool) -> Self {
+        self.dependency_config().no_install = !install;
         self
     }
 
     /// Skip updating lockfile, this will only check if it can add a dependencies.
     /// If it can add it will only add it to the manifest. Install will be skipped by default.
-    pub fn without_lockfile_update(mut self) -> Self {
-        self.args.no_lockfile_update = true;
+    fn without_lockfile_update(mut self) -> Self {
+        self.dependency_config().no_lockfile_update = true;
         self
     }
 
-    pub fn set_platforms(mut self, platforms: &[Platform]) -> Self {
-        self.args.platform.extend(platforms.iter());
+    fn set_platforms(mut self, platforms: &[Platform]) -> Self {
+        self.dependency_config().platform.extend(platforms.iter());
         self
     }
+}
 
+/// Contains the arguments to pass to [`add::execute()`]. Call `.await` to call the CLI execute method
+/// and await the result at the same time.
+pub struct AddBuilder {
+    pub args: add::Args,
+}
+
+impl AddBuilder {
     pub fn set_editable(mut self, editable: bool) -> Self {
         self.args.editable = editable;
         self
+    }
+}
+
+impl HasDependencyConfig for AddBuilder {
+    fn dependency_config(&mut self) -> &mut DependencyConfig {
+        &mut self.args.dependency_config
     }
 }
 
@@ -155,43 +181,9 @@ pub struct RemoveBuilder {
     pub args: remove::Args,
 }
 
-impl RemoveBuilder {
-    pub fn with_spec(mut self, spec: &str) -> Self {
-        self.args.deps.push(spec.to_string());
-        self
-    }
-
-    /// Set whether to also install the environment. By default, the environment is NOT
-    /// installed to reduce test times.
-    pub fn with_install(mut self, install: bool) -> Self {
-        self.args.no_install = !install;
-        self
-    }
-
-    /// Set as a host
-    pub fn set_type(mut self, t: DependencyType) -> Self {
-        match t {
-            DependencyType::CondaDependency(spec_type) => match spec_type {
-                SpecType::Host => {
-                    self.args.host = true;
-                    self.args.build = false;
-                }
-                SpecType::Build => {
-                    self.args.host = false;
-                    self.args.build = true;
-                }
-                SpecType::Run => {
-                    self.args.host = false;
-                    self.args.build = false;
-                }
-            },
-            DependencyType::PypiDependency => {
-                self.args.host = false;
-                self.args.build = false;
-                self.args.pypi = true;
-            }
-        }
-        self
+impl HasDependencyConfig for RemoveBuilder {
+    fn dependency_config(&mut self) -> &mut DependencyConfig {
+        &mut self.args.dependency_config
     }
 }
 

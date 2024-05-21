@@ -67,6 +67,10 @@ pub struct Args {
     /// Don't install the environment for pypi solving, only update the lock-file if it can solve without installing.
     #[arg(long)]
     pub no_install: bool,
+
+    /// Only list packages that are explicitly defined in the project.
+    #[arg(short = 'x', long)]
+    pub explicit: bool,
 }
 
 fn serde_skip_is_editable(editable: &bool) -> bool {
@@ -143,7 +147,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         index_locations = environment.pypi_options().to_index_locations();
         tags = get_pypi_tags(
             platform,
-            &project.system_requirements(),
+            &environment.system_requirements(),
             python_record.package_record(),
         )?;
         Some(RegistryWheelIndex::new(
@@ -180,6 +184,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         packages_to_output = packages_to_output
             .into_iter()
             .filter(|p| regex.is_match(&p.name))
+            .collect::<Vec<_>>();
+    }
+
+    // Filter packages by explicit if needed
+    if args.explicit {
+        packages_to_output = packages_to_output
+            .into_iter()
+            .filter(|p| p.is_explicit)
             .collect::<Vec<_>>();
     }
 

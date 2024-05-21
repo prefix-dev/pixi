@@ -16,6 +16,7 @@ use tokio::task::spawn_blocking;
 use crate::config::Config;
 use crate::util::default_channel_config;
 use crate::utils::reqwest::build_reqwest_clients;
+use crate::HasFeatures;
 use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata, Project};
 
 /// Search a conda package
@@ -117,7 +118,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         // if user doesn't pass channels and we are in a project
         (None, Some(p)) => {
-            let channels: Vec<_> = p.channels().into_iter().cloned().collect();
+            let channels: Vec<_> = p
+                .default_environment()
+                .channels()
+                .into_iter()
+                .cloned()
+                .collect();
             eprintln!(
                 "Using channels from project ({}): {}",
                 p.name(),

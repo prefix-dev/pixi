@@ -1,3 +1,4 @@
+use crate::conda_pypi_clobber::PypiCondaClobberRegistry;
 use crate::prefix::Prefix;
 use crate::project::manifest::pypi_options::PypiOptions;
 use crate::uv_reporter::{UvReporter, UvReporterOptions};
@@ -83,7 +84,7 @@ struct PixiInstallPlan {
 
     /// Keep track of any packages that have been re-installed because of installer mismatch
     /// we can warn the user later that this has happened
-    pub installer_mismatch: Vec<PackageName>,
+    pub installer_mismatch: Vec<String>,
 }
 
 /// Converts our locked data to a file
@@ -444,6 +445,10 @@ fn whats_the_plan<'a>(
         }
     }
 
+    // Used to verify if there are any additional .dist-info installed
+    // that should be removed
+    let required_map_copy = required_map.clone();
+
     // Walk over all installed packages and check if they are required
     for dist in site_packages.iter() {
         // Check if we require the package to be installed
@@ -454,13 +459,15 @@ fn whats_the_plan<'a>(
             // Empty string if no installer or any other error
             .map_or(String::new(), |f| f.unwrap_or_default());
 
+        if required_map_copy.contains_key(&dist.name()) && installer != PIXI_UV_INSTALLER {
+            // We are managing the package but something else has installed a version
+            // let's re-install to make sure that we have the **correct** version
+            reinstalls.push(dist.clone());
+            installer_mismatch.push(dist.name().to_string());
+        }
+
         if let Some(pkg) = pkg {
-            if installer != PIXI_UV_INSTALLER {
-                // We are managing the package but something else has installed a version
-                // let's re-install to make sure that we have the **correct** version
-                reinstalls.push(dist.clone());
-                installer_mismatch.push(dist.name().clone());
-            } else {
+            if installer == PIXI_UV_INSTALLER {
                 // Check if we need to reinstall
                 match need_reinstall(dist, pkg, python_version)? {
                     ValidateInstall::Keep => {
@@ -789,7 +796,7 @@ pub async fn update_python_distributions(
         remote,
         reinstalls,
         extraneous,
-        installer_mismatch,
+        mut installer_mismatch,
     } = whats_the_plan(
         &python_packages,
         &editables_with_temp.resolved_editables,
@@ -799,6 +806,19 @@ pub async fn update_python_distributions(
         venv.interpreter().python_version(),
         lock_file_dir,
     )?;
+
+    // Determine the currently installed conda packages.
+    let installed_packages = prefix
+        .find_installed_packages(None)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to determine the currently installed packages for {}",
+                prefix.root().display()
+            )
+        })?;
+
+    let pypi_conda_clobber = PypiCondaClobberRegistry::with_conda_packages(&installed_packages);
 
     // Nothing to do.
     if remote.is_empty() && local.is_empty() && reinstalls.is_empty() && extraneous.is_empty() {
@@ -886,17 +906,6 @@ pub async fn update_python_distributions(
         wheels
     };
 
-    // Notify the user if there are any packages that were re-installed because they were installed
-    // by a different installer.
-    if !installer_mismatch.is_empty() {
-        let packages = installer_mismatch
-            .iter()
-            .map(|name| name.to_string())
-            .join(", ");
-        // BREAK(0.20.1): change this into a warning in a future release
-        tracing::info!("These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: \n\t{packages}")
-    }
-
     // Remove any unnecessary packages.
     if !extraneous.is_empty() || !reinstalls.is_empty() {
         let start = std::time::Instant::now();
@@ -932,11 +941,40 @@ pub async fn update_python_distributions(
 
     // Install the resolved distributions.
     let wheels = wheels.into_iter().chain(local).collect::<Vec<_>>();
+
+    // Verify if pypi wheels will override existing conda packages
+    // and warn if they are
+    if let Ok(Some(clobber_packages)) =
+        pypi_conda_clobber.clobber_on_instalation(wheels.clone(), &venv)
+    {
+        let packages_names = clobber_packages.iter().join(", ");
+
+        tracing::warn!("These conda-packages will be overridden by pypi: \n\t{packages_names}");
+
+        // because we are removing conda packages
+        // we filter the ones we already warn
+        if !installer_mismatch.is_empty() {
+            installer_mismatch.retain(|name| !packages_names.contains(name));
+        }
+    }
+
+    if !installer_mismatch.is_empty() {
+        // Notify the user if there are any packages that were re-installed because they were installed
+        // by a different installer.
+        let packages = installer_mismatch
+            .iter()
+            .map(|name| name.to_string())
+            .join(", ");
+        // BREAK(0.20.1): change this into a warning in a future release
+        tracing::info!("These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: \n\t{packages}")
+    }
+
     let options = UvReporterOptions::new()
         .with_length(wheels.len() as u64)
         .with_capacity(wheels.len() + 30)
         .with_starting_tasks(wheels.iter().map(|d| format!("{}", d.name())))
         .with_top_level_message("Installing distributions");
+
     if !wheels.is_empty() {
         let start = std::time::Instant::now();
         uv_installer::Installer::new(&venv)

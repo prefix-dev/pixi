@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use crate::{common::package_database::PackageDatabase, common::PixiControl};
 use insta::assert_debug_snapshot;
-use pixi::{util::default_channel_config, Project};
+use pixi::{util::default_channel_config, HasFeatures, Project};
 use rattler_conda_types::{Channel, Platform};
 use tempfile::TempDir;
 use url::Url;
@@ -47,13 +47,17 @@ async fn add_channel() {
         &default_channel_config(),
     )
     .unwrap();
-    assert!(project.channels().contains(&local_channel));
+    assert!(project
+        .default_environment()
+        .channels()
+        .contains(&local_channel));
 }
 
 #[tokio::test]
 async fn parse_project() {
     fn dependency_names(project: &Project, platform: Platform) -> Vec<String> {
         project
+            .default_environment()
             .dependencies(None, Some(platform))
             .iter()
             .map(|dep| dep.0.as_normalized().to_string())
