@@ -19,10 +19,44 @@ pub fn get_zsh_hook(env_name: &str) -> String {
 /// Set default pixi prompt for the fish shell
 pub fn get_fish_prompt(env_name: &str) -> String {
     format!(
-        "functions -c fish_prompt old_fish_prompt; \
-         function fish_prompt; \
-             echo \"({})\" (old_fish_prompt); \
-         end;",
+        r#"
+        function __pixi_add_prompt
+            set_color -o green
+            echo -n "({}) "
+            set_color normal
+        end
+
+        if not functions -q __fish_prompt_orig
+            functions -c fish_prompt __fish_prompt_orig
+        end
+
+        if functions -q fish_right_prompt
+            if not functions -q __fish_right_prompt_orig
+                functions -c fish_right_prompt __fish_right_prompt_orig
+            end
+        else
+            function __fish_right_prompt_orig
+                # Placeholder function for when fish_right_prompt does not exist
+                echo ""
+            end
+        end
+
+        function fish_prompt
+            set -l last_status $status
+            if set -q PIXIE_LEFT_PROMPT
+                __pixi_add_prompt
+            end
+            __fish_prompt_orig
+            return $last_status
+        end
+
+        function fish_right_prompt
+            if not set -q PIXIE_LEFT_PROMPT
+                __pixi_add_prompt
+            end
+            __fish_right_prompt_orig
+        end
+        "#,
         env_name
     )
 }
