@@ -2,7 +2,6 @@ use super::util::IndicatifWriter;
 use crate::progress;
 use crate::progress::global_multi_progress;
 use clap::Parser;
-use clap_complete;
 use clap_verbosity_flag::Verbosity;
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
@@ -31,7 +30,32 @@ pub mod tree;
 pub mod upload;
 
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
+#[command(
+    version,
+    about = "
+Pixi [version 0.22.0] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
+
+Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
+Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
+
+Basic Usage:
+    Initialize pixi for a project:
+    $ pixi init
+    $ pixi add python numpy pytest
+
+    Run a task:
+    $ pixi add task test 'pytest -s'
+    $ pixi run test
+
+Found a Bug or Have a Feature Request?
+Open an issue at: https://github.com/prefix-dev/pixi/issues
+
+Need Help?
+Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
+
+For more information, see the documentation at: https://pixi.sh
+"
+)]
 #[clap(arg_required_else_help = true)]
 struct Args {
     #[command(subcommand)]
@@ -51,43 +75,45 @@ struct Args {
     no_progress: bool,
 }
 
-/// Generates a completion script for a shell.
-#[derive(Parser, Debug)]
-pub struct CompletionCommand {
-    /// The shell to generate a completion script for (defaults to 'bash').
-    #[arg(short, long)]
-    shell: Option<clap_complete::Shell>,
-}
-
 #[derive(Parser, Debug)]
 pub enum Command {
-    Completion(CompletionCommand),
-    Config(config::Args),
     Init(init::Args),
+
+    // Installation commands
     #[clap(visible_alias = "a")]
     Add(add::Args),
+    #[clap(visible_alias = "rm")]
+    Remove(remove::Args),
+    #[clap(visible_alias = "i")]
+    Install(install::Args),
+
+    // Execution commands
     #[clap(visible_alias = "r")]
     Run(run::Args),
     #[clap(visible_alias = "s")]
     Shell(shell::Args),
     ShellHook(shell_hook::Args),
-    #[clap(visible_alias = "g")]
-    Global(global::Args),
-    Auth(rattler::cli::auth::Args),
-    #[clap(visible_alias = "i")]
-    Install(install::Args),
-    Task(task::Args),
-    Info(info::Args),
-    Upload(upload::Args),
-    Search(search::Args),
+
+    // Project modification commands
     Project(project::Args),
-    #[clap(visible_alias = "rm")]
-    Remove(remove::Args),
-    SelfUpdate(self_update::Args),
+    Task(task::Args),
+
+    // Environment inspection
     #[clap(visible_alias = "ls")]
     List(list::Args),
     #[clap(visible_alias = "t")]
     Tree(tree::Args),
+
+    // Global level commands
+    #[clap(visible_alias = "g")]
+    Global(global::Args),
+    Auth(rattler::cli::auth::Args),
+    Config(config::Args),
+    Info(info::Args),
+    Upload(upload::Args),
+    Search(search::Args),
+    SelfUpdate(self_update::Args),
+    Completion(completion::Args),
 }
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
