@@ -14,6 +14,7 @@ pub mod add;
 pub mod completion;
 pub mod config;
 pub mod global;
+pub mod has_specs;
 pub mod info;
 pub mod init;
 pub mod install;

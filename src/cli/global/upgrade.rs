@@ -10,12 +10,11 @@ use miette::{IntoDiagnostic, Report};
 use rattler_conda_types::{Channel, MatchSpec, PackageName, Platform};
 use tokio::task::JoinSet;
 
+use crate::cli::has_specs::HasSpecs;
 use crate::config::Config;
 use crate::progress::{global_multi_progress, long_running_progress_style};
 
-use super::common::{
-    find_installed_package, get_client_and_sparse_repodata, load_package_records, HasSpecs,
-};
+use super::common::{find_installed_package, get_client_and_sparse_repodata, load_package_records};
 use super::install::globally_install_package;
 
 /// Upgrade specific package which is installed globally.

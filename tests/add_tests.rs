@@ -1,5 +1,6 @@
 mod common;
 
+use crate::common::builders::HasDependencyConfig;
 use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
