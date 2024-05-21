@@ -56,7 +56,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Message what's installed
     if installed_envs.len() == 1 {
         eprintln!(
-            "{}The {} environment is installed.",
+            "{}The {} environment has been installed.",
             console::style(console::Emoji("✔ ", "")).green(),
             installed_envs[0].fancy_display(),
         );
