@@ -12,7 +12,6 @@ use tracing_subscriber::{filter::LevelFilter, util::SubscriberInitExt, EnvFilter
 pub mod add;
 pub mod completion;
 pub mod config;
-pub mod export;
 pub mod global;
 pub mod has_specs;
 pub mod info;
@@ -104,8 +103,6 @@ pub enum Command {
     List(list::Args),
     #[clap(visible_alias = "t")]
     Tree(tree::Args),
-    #[clap(visible_alias = "e")]
-    Export(export::Args),
 
     // Global level commands
     #[clap(visible_alias = "g")]
@@ -279,7 +276,6 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
         Command::List(cmd) => list::execute(cmd).await,
         Command::Tree(cmd) => tree::execute(cmd).await,
-        Command::Export(cmd) => export::execute(cmd).await,
     }
 }
 

@@ -8,7 +8,7 @@ pub enum Command {
     Conda(conda::Args),
 }
 
-/// Subcommand for exporting dependencies to additional formats
+/// Commands for exporting dependencies to additional formats
 #[derive(Debug, Parser)]
 pub struct Args {
     #[command(subcommand)]
