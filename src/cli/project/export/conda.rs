@@ -75,7 +75,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let pypi_dependencies = environment
         .pypi_dependencies(Some(platform))
         .into_specs()
-        .map(|(name, _spec)| name.as_source().to_string())
+        .map(|(name, spec)| match args.version_spec {
+            VersionSpec::Manifest => {
+                let requirement = spec
+                    .as_pep508(name.as_normalized(), project.root())
+                    .into_diagnostic()
+                    .unwrap();
+                requirement.to_string()
+            }
+            _ => name.as_source().to_string(),
+        })
         .collect_vec();
 
     if !pypi_dependencies.is_empty() {
