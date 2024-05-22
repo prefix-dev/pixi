@@ -4,10 +4,18 @@ use clap::Parser;
 
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use rattler_conda_types::Platform;
+use rattler_conda_types::{MatchSpec, Platform};
 
 use crate::utils::conda_environment_file::{CondaEnvDep, CondaEnvFile};
 use crate::{HasFeatures, Project};
+
+// enum to select version spec formatting
+#[derive(clap::ValueEnum, Clone, Debug)]
+pub enum VersionSpec {
+    Manifest,
+    // Locked,
+    None,
+}
 
 /// Exports a projects dependencies as an environment.yml
 ///
@@ -30,6 +38,10 @@ pub struct Args {
     /// Name for environment
     #[arg(short, long)]
     pub name: Option<String>,
+
+    /// Dependency spec output method
+    #[arg(long, default_value = "manifest", value_enum)]
+    pub version_spec: VersionSpec,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -52,7 +64,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut dependencies = environment
         .dependencies(None, Some(platform))
         .into_specs()
-        .map(|(name, _spec)| CondaEnvDep::Conda(name.as_source().to_string()))
+        .map(|(name, spec)| match args.version_spec {
+            VersionSpec::Manifest => {
+                CondaEnvDep::Conda(MatchSpec::from_nameless(spec, Some(name)).to_string())
+            }
+            _ => CondaEnvDep::Conda(name.as_source().to_string()),
+        })
         .collect_vec();
 
     let pypi_dependencies = environment
