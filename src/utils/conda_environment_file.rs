@@ -2,22 +2,22 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{Channel, MatchSpec};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::{io::BufRead, path::Path, sync::Arc};
 
 use crate::config::Config;
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CondaEnvFile {
     #[serde(default)]
-    name: Option<String>,
+    pub name: Option<String>,
     #[serde(default)]
-    channels: Vec<String>,
-    dependencies: Vec<CondaEnvDep>,
+    pub channels: Vec<String>,
+    pub dependencies: Vec<CondaEnvDep>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum CondaEnvDep {
     Conda(String),
