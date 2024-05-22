@@ -19,7 +19,9 @@ use crate::utils::reqwest::build_reqwest_clients;
 use crate::HasFeatures;
 use crate::{progress::await_in_progress, repodata::fetch_sparse_repodata, Project};
 
-/// Search a package, output will list the latest version of package
+/// Search a conda package
+///
+/// Its output will list the latest version of package.
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {

@@ -15,6 +15,7 @@ pub struct Args {
     #[clap(flatten)]
     pub lock_file_usage: super::LockFileUsageArgs,
 
+    /// The environment to install
     #[arg(long, short)]
     pub environment: Option<Vec<String>>,
 
