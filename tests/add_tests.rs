@@ -1,10 +1,11 @@
 mod common;
 
+use crate::common::builders::HasDependencyConfig;
 use crate::common::package_database::{Package, PackageDatabase};
 use crate::common::LockFileExt;
 use crate::common::PixiControl;
 use pixi::consts::DEFAULT_ENVIRONMENT_NAME;
-use pixi::{DependencyType, SpecType};
+use pixi::{DependencyType, HasFeatures, SpecType};
 use rattler_conda_types::{PackageName, Platform};
 use serial_test::serial;
 use std::str::FromStr;
@@ -100,13 +101,19 @@ async fn add_functionality_union() {
     let project = pixi.project().unwrap();
 
     // Should contain all added dependencies
-    let dependencies = project.dependencies(Some(SpecType::Run), Some(Platform::current()));
+    let dependencies = project
+        .default_environment()
+        .dependencies(Some(SpecType::Run), Some(Platform::current()));
     let (name, _) = dependencies.into_specs().next().unwrap();
     assert_eq!(name, PackageName::try_from("rattler").unwrap());
-    let host_deps = project.dependencies(Some(SpecType::Host), Some(Platform::current()));
+    let host_deps = project
+        .default_environment()
+        .dependencies(Some(SpecType::Host), Some(Platform::current()));
     let (name, _) = host_deps.into_specs().next().unwrap();
     assert_eq!(name, PackageName::try_from("libcomputer").unwrap());
-    let build_deps = project.dependencies(Some(SpecType::Build), Some(Platform::current()));
+    let build_deps = project
+        .default_environment()
+        .dependencies(Some(SpecType::Build), Some(Platform::current()));
     let (name, _) = build_deps.into_specs().next().unwrap();
     assert_eq!(name, PackageName::try_from("libidk").unwrap());
 

@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use crate::common::builders::string_from_iter;
+use crate::common::builders::{string_from_iter, HasDependencyConfig};
 use crate::common::package_database::{Package, PackageDatabase};
 use common::{LockFileExt, PixiControl};
 use pixi::cli::run::Args;
@@ -139,7 +139,7 @@ async fn install_locked_with_config() {
     create_dir_all(config_path.parent().unwrap()).unwrap();
 
     let mut file = File::create(config_path).unwrap();
-    file.write_all(toml::to_string(&config).unwrap().as_bytes())
+    file.write_all(toml_edit::ser::to_string(&config).unwrap().as_bytes())
         .unwrap();
 
     // Add and update lockfile with this version of python

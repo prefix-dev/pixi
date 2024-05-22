@@ -96,13 +96,12 @@ extra:
     provider: mike
 
 nav:
-  - Getting Started:
-      - Installation: index.md
-      - Basic Usage: basic_usage.md
-      - IDE Integration:
-          - JupyterLab: ide_integration/jupyterlab.md
-          - PyCharm: ide_integration/pycharm.md
-          - RStudio: ide_integration/r_studio.md
+  - Installation: index.md
+  - Basic Usage: basic_usage.md
+  - IDE Integration:
+      - JupyterLab: ide_integration/jupyterlab.md
+      - PyCharm: ide_integration/pycharm.md
+      - RStudio: ide_integration/r_studio.md
   - Tutorials:
       - Python: tutorials/python.md
       - ROS 2: tutorials/ros2.md

@@ -109,15 +109,19 @@ pub struct ConfigCliPrompt {
 }
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct RepodataConfig {
     /// Disable JLAP compression for repodata.
-    #[serde(alias = "disable-jlap")] // BREAK: rename instead of alias
+    #[serde(alias = "disable_jlap")] // BREAK: remove to stop supporting snake_case alias
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_jlap: Option<bool>,
     /// Disable bzip2 compression for repodata.
-    #[serde(alias = "disable-bzip2")] // BREAK: rename instead of alias
+    #[serde(alias = "disable_bzip2")] // BREAK: remove to stop supporting snake_case alias
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_bzip2: Option<bool>,
     /// Disable zstd compression for repodata.
-    #[serde(alias = "disable-zstd")] // BREAK: rename instead of alias
+    #[serde(alias = "disable_zstd")] // BREAK: remove to stop supporting snake_case alias
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_zstd: Option<bool>,
 }
 
@@ -133,12 +137,15 @@ pub enum KeyringProvider {
 pub struct PyPIConfig {
     /// The default index URL for PyPI packages.
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub index_url: Option<Url>,
     /// A list of extra index URLs for PyPI packages
     #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub extra_index_urls: Vec<Url>,
     /// Whether to use the `keyring` executable to look up credentials.
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keyring_provider: Option<KeyringProvider>,
 }
 
@@ -170,47 +177,60 @@ impl PyPIConfig {
             .clone()
             .unwrap_or(KeyringProvider::Disabled)
     }
+
+    fn is_default(&self) -> bool {
+        self.index_url.is_none()
+            && self.extra_index_urls.is_empty()
+            && self.keyring_provider.is_none()
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     #[serde(default)]
-    #[serde(alias = "default_channels")] // BREAK(0.22.0): remove alias
+    #[serde(alias = "default_channels")] // BREAK: remove to stop supporting snake_case alias
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub default_channels: Vec<String>,
 
     /// If set to true, pixi will set the PS1 environment variable to a custom value.
     #[serde(default)]
-    #[serde(alias = "change_ps1")] // BREAK(0.22.0): remove alias
-    change_ps1: Option<bool>,
+    #[serde(alias = "change_ps1")] // BREAK: remove to stop supporting snake_case alias
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub change_ps1: Option<bool>,
 
     /// Path to the file containing the authentication token.
     #[serde(default)]
-    #[serde(alias = "authentication_override_file")] // BREAK(0.22.0): remove alias
-    authentication_override_file: Option<PathBuf>,
+    #[serde(alias = "authentication_override_file")] // BREAK: remove to stop supporting snake_case alias
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authentication_override_file: Option<PathBuf>,
 
     /// If set to true, pixi will not verify the TLS certificate of the server.
     #[serde(default)]
-    #[serde(alias = "tls_no_verify")] // BREAK(0.22.0): remove alias
-    tls_no_verify: Option<bool>,
+    #[serde(alias = "tls_no_verify")] // BREAK: remove to stop supporting snake_case alias
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tls_no_verify: Option<bool>,
 
     #[serde(default)]
-    mirrors: HashMap<Url, Vec<Url>>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub mirrors: HashMap<Url, Vec<Url>>,
 
     #[serde(skip)]
-    #[serde(alias = "loaded_from")] // BREAK(0.22.0): remove alias
+    #[serde(alias = "loaded_from")] // BREAK: remove to stop supporting snake_case alias
     pub loaded_from: Vec<PathBuf>,
 
     #[serde(skip, default = "default_channel_config")]
-    #[serde(alias = "channel_config")] // BREAK(0.22.0): remove alias
+    #[serde(alias = "channel_config")] // BREAK: remove to stop supporting snake_case alias
     pub channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
-    #[serde(alias = "repodata_config")] // BREAK(0.22.0): remove alias
+    #[serde(alias = "repodata_config")] // BREAK: remove to stop supporting snake_case alias
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub repodata_config: Option<RepodataConfig>,
 
     /// Configuration for PyPI packages.
     #[serde(default)]
+    #[serde(skip_serializing_if = "PyPIConfig::is_default")]
     pub pypi_config: PyPIConfig,
 
     /// The location of the environments build by pixi
@@ -260,18 +280,77 @@ impl From<ConfigCliPrompt> for Config {
 
 impl Config {
     /// Parse the given toml string and return a Config instance.
-    pub fn from_toml(toml: &str, location: &Path) -> miette::Result<Config> {
-        let mut config: Config = toml_edit::de::from_str(toml)
-            .into_diagnostic()
-            .context(format!("Failed to parse {}", consts::CONFIG_FILE))?;
+    ///
+    /// # Returns
+    ///
+    /// The parsed config
+    ///
+    /// # Errors
+    ///
+    /// Parsing errors
+    #[inline]
+    pub fn from_toml(toml: &str) -> miette::Result<Config> {
+        toml_edit::de::from_str(toml).into_diagnostic()
+    }
 
-        config.loaded_from.push(location.to_path_buf());
+    /// Load the config from the given path.
+    ///
+    /// # Returns
+    ///
+    /// The loaded config
+    ///
+    /// # Errors
+    ///
+    /// I/O errors or parsing errors
+    pub fn from_path(path: &Path) -> miette::Result<Config> {
+        tracing::debug!("Loading config from {}", path.display());
+        let s = fs::read_to_string(path)
+            .into_diagnostic()
+            .wrap_err(format!("failed to read config from '{}'", path.display()))?;
+        let mut config = Config::from_toml(&s)?;
+        config.loaded_from.push(path.to_path_buf());
+        tracing::info!("Loaded config from: {}", path.display());
 
         config.validate()?;
 
         Ok(config)
     }
 
+    /// Try to load the system config file from the system path.
+    ///
+    /// # Returns
+    ///
+    /// The loaded system config
+    ///
+    /// # Errors
+    ///
+    /// I/O errors or parsing errors
+    pub fn try_load_system() -> miette::Result<Config> {
+        Self::from_path(&config_path_system())
+    }
+
+    /// Load the system config file from the system path.
+    ///
+    /// # Returns
+    ///
+    /// The loaded system config
+    pub fn load_system() -> Config {
+        Self::try_load_system().unwrap_or_else(|e| {
+            let path = config_path_system();
+            tracing::debug!(
+                "Failed to load system config: {} (error: {})",
+                path.display(),
+                e
+            );
+            Self::default()
+        })
+    }
+
+    /// Load the global config file from various global paths.
+    ///
+    /// # Returns
+    ///
+    /// The loaded global config
     /// Validate the config file.
     pub fn validate(&self) -> miette::Result<()> {
         if let Some(target_env_dir) = self.target_environments_directory.clone() {
@@ -286,39 +365,16 @@ impl Config {
 
     /// Load the global config file from the home directory (~/.pixi/config.toml)
     pub fn load_global() -> Config {
-        #[cfg(target_os = "windows")]
-        let base_path = PathBuf::from("C:\\ProgramData");
-        #[cfg(not(target_os = "windows"))]
-        let base_path = PathBuf::from("/etc");
+        let mut config = Self::load_system();
 
-        let xdg_config_home = std::env::var_os("XDG_CONFIG_HOME").map_or_else(
-            || dirs::home_dir().map(|d| d.join(".config")),
-            |p| Some(PathBuf::from(p)),
-        );
-
-        let global_locations = vec![
-            Some(base_path.join("pixi").join(consts::CONFIG_FILE)),
-            xdg_config_home.map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
-            dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
-            home_path().map(|d| d.join(consts::CONFIG_FILE)),
-        ];
-        let mut merged_config = Config::default();
-        for location in global_locations.into_iter().flatten() {
-            if location.exists() {
-                tracing::info!("Loading global config from {}", location.display());
-                let global_config = fs::read_to_string(&location).unwrap_or_default();
-                match Config::from_toml(&global_config, &location) {
-                    Ok(config) => merged_config = merged_config.merge_config(config),
-                    Err(e) => {
-                        tracing::warn!(
-                            "Could not load global config (invalid toml): {}",
-                            location.display()
-                        );
-                        tracing::warn!("Error: {}", e);
-                    }
-                }
-            } else {
-                tracing::info!("Global config not found at {}", location.display());
+        for p in config_path_global() {
+            match Self::from_path(&p) {
+                Ok(c) => config = config.merge_config(c),
+                Err(e) => tracing::debug!(
+                    "Failed to load global config: {} (error: {})",
+                    p.display(),
+                    e
+                ),
             }
         }
 
@@ -326,7 +382,7 @@ impl Config {
         // This will add any environment variables defined in the `clap` attributes to the config
         let mut default_cli = ConfigCli::default();
         default_cli.update_from(std::env::args().take(0));
-        merged_config.merge_config(default_cli.into())
+        config.merge_config(default_cli.into())
     }
 
     /// Load the global config and layer the given cli config on top of it.
@@ -335,23 +391,27 @@ impl Config {
         config.merge_config(cli.clone().into())
     }
 
-    /// Load the config from the given path pixi folder and merge it with the global config.
-    pub fn load(p: &Path) -> miette::Result<Config> {
-        let local_config = p.join(consts::CONFIG_FILE);
+    /// Load the config from the given path (project root).
+    ///
+    /// # Returns
+    ///
+    /// The loaded config (merged with the global config)
+    pub fn load(project_root: &Path) -> Config {
         let mut config = Self::load_global();
+        let local_config_path = project_root
+            .join(consts::PIXI_DIR)
+            .join(consts::CONFIG_FILE);
 
-        if local_config.exists() {
-            let s = fs::read_to_string(&local_config).into_diagnostic()?;
-            let local = Config::from_toml(&s, &local_config)?;
-            config = config.merge_config(local);
+        match Self::from_path(&local_config_path) {
+            Ok(c) => config = config.merge_config(c),
+            Err(e) => tracing::debug!(
+                "Failed to load local config: {} (error: {})",
+                local_config_path.display(),
+                e
+            ),
         }
 
-        Ok(config)
-    }
-
-    pub fn from_path(p: &Path) -> miette::Result<Config> {
-        let s = fs::read_to_string(p).into_diagnostic()?;
-        Config::from_toml(&s, p)
+        config
     }
 
     /// Merge the given config into the current one.
@@ -414,6 +474,10 @@ impl Config {
         &self.channel_config
     }
 
+    pub fn repodata_config(&self) -> Option<&RepodataConfig> {
+        self.repodata_config.as_ref()
+    }
+
     pub fn pypi_config(&self) -> &PyPIConfig {
         &self.pypi_config
     }
@@ -442,6 +506,182 @@ impl Config {
     pub fn target_environments_directory(&self) -> Option<&Path> {
         self.target_environments_directory.as_deref()
     }
+
+    /// Modify this config with the given key and value
+    ///
+    /// # Note
+    ///
+    /// It is required to call `save()` to persist the changes.
+    pub fn set(&mut self, key: &str, value: Option<String>) -> miette::Result<()> {
+        let show_supported_keys = || {
+            let keys = [
+                "default-channels",
+                "change-ps1",
+                "authentication-override-file",
+                "tls-no-verify",
+                "mirrors",
+                "repodata-config",
+                "repodata-config.disable-jlap",
+                "repodata-config.disable-bzip2",
+                "repodata-config.disable-zstd",
+                "pypi-config",
+                "pypi-config.index-url",
+                "pypi-config.extra-index-urls",
+                "pypi-config.keyring-provider",
+            ];
+            format!("Supported keys:\n\n{}", keys.join("\n"))
+        };
+
+        let err = miette::miette!("Unknown key: {}\n{}", key, show_supported_keys());
+
+        match key {
+            "default-channels" => {
+                self.default_channels = value
+                    .map(|v| serde_json::de::from_str(&v))
+                    .transpose()
+                    .into_diagnostic()?
+                    .unwrap_or_default();
+            }
+            "change-ps1" => {
+                self.change_ps1 = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "authentication-override-file" => {
+                self.authentication_override_file = value.map(PathBuf::from);
+            }
+            "tls-no-verify" => {
+                self.tls_no_verify = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "mirrors" => {
+                self.mirrors = value
+                    .map(|v| serde_json::de::from_str(&v))
+                    .transpose()
+                    .into_diagnostic()?
+                    .unwrap_or_default();
+            }
+            key if key.starts_with("repodata-config") => {
+                if key == "repodata-config" {
+                    self.repodata_config = value
+                        .map(|v| serde_json::de::from_str(&v))
+                        .transpose()
+                        .into_diagnostic()?;
+                    return Ok(());
+                } else if !key.starts_with("repodata-config.") {
+                    return Err(err);
+                }
+
+                let subkey = key.strip_prefix("repodata-config.").unwrap();
+                match subkey {
+                    "disable-jlap" => {
+                        self.repodata_config
+                            .get_or_insert(RepodataConfig::default())
+                            .disable_jlap =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "disable-bzip2" => {
+                        self.repodata_config
+                            .get_or_insert(RepodataConfig::default())
+                            .disable_bzip2 =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "disable-zstd" => {
+                        self.repodata_config
+                            .get_or_insert(RepodataConfig::default())
+                            .disable_zstd =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    _ => return Err(err),
+                }
+            }
+            key if key.starts_with("pypi-config") => {
+                if key == "pypi-config" {
+                    if let Some(value) = value {
+                        self.pypi_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        self.pypi_config = PyPIConfig::default();
+                    }
+                    return Ok(());
+                } else if !key.starts_with("pypi-config.") {
+                    return Err(err);
+                }
+
+                let subkey = key.strip_prefix("pypi-config.").unwrap();
+                match subkey {
+                    "index-url" => {
+                        self.pypi_config.index_url = value
+                            .map(|v| Url::parse(&v))
+                            .transpose()
+                            .into_diagnostic()?;
+                    }
+                    "extra-index-urls" => {
+                        self.pypi_config.extra_index_urls = value
+                            .map(|v| serde_json::de::from_str(&v))
+                            .transpose()
+                            .into_diagnostic()?
+                            .unwrap_or_default();
+                    }
+                    "keyring-provider" => {
+                        self.pypi_config.keyring_provider = value
+                            .map(|v| match v.as_str() {
+                                "disabled" => Ok(KeyringProvider::Disabled),
+                                "subprocess" => Ok(KeyringProvider::Subprocess),
+                                _ => Err(miette::miette!("invalid keyring provider")),
+                            })
+                            .transpose()?;
+                    }
+                    _ => return Err(err),
+                }
+            }
+            _ => return Err(err),
+        }
+
+        Ok(())
+    }
+
+    /// Save the config to the given path.
+    pub fn save(&self, to: &Path) -> miette::Result<()> {
+        let contents = toml_edit::ser::to_string_pretty(&self).into_diagnostic()?;
+        tracing::debug!("Saving config to: {}", to.display());
+
+        let parent = to.parent().expect("config path should have a parent");
+        fs::create_dir_all(parent)
+            .into_diagnostic()
+            .wrap_err(format!(
+                "failed to create directories in '{}'",
+                parent.display()
+            ))?;
+        fs::write(to, contents)
+            .into_diagnostic()
+            .wrap_err(format!("failed to write config to '{}'", to.display()))
+    }
+}
+
+/// Returns the path to the system-level pixi config file.
+pub fn config_path_system() -> PathBuf {
+    // TODO: the base_path for Windows is currently hardcoded, it should be
+    // determined via the system API to support general volume label
+    #[cfg(target_os = "windows")]
+    let base_path = PathBuf::from("C:\\ProgramData");
+    #[cfg(not(target_os = "windows"))]
+    let base_path = PathBuf::from("/etc");
+
+    base_path.join("pixi").join(consts::CONFIG_FILE)
+}
+
+/// Returns the path(s) to the global pixi config file.
+pub fn config_path_global() -> Vec<PathBuf> {
+    let xdg_config_home = std::env::var_os("XDG_CONFIG_HOME").map_or_else(
+        || dirs::home_dir().map(|d| d.join(".config")),
+        |p| Some(PathBuf::from(p)),
+    );
+
+    vec![
+        xdg_config_home.map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
+        dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
+        home_path().map(|d| d.join(consts::CONFIG_FILE)),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 #[cfg(test)]
@@ -457,7 +697,7 @@ target-environments-directory = "{}"
         "#,
             env!("CARGO_MANIFEST_DIR").replace("\\", "\\\\").as_str()
         );
-        let config = Config::from_toml(toml.as_str(), &PathBuf::from("")).unwrap();
+        let config = Config::from_toml(toml.as_str()).unwrap();
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(true));
         assert_eq!(
@@ -502,7 +742,7 @@ target-environments-directory = "{}"
             extra-index-urls = ["https://pypi.org/simple2"]
             keyring-provider = "subprocess"
         "#;
-        let config = Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        let config = Config::from_toml(toml).unwrap();
         assert_eq!(
             config.pypi_config().index_url,
             Some(Url::parse("https://pypi.org/simple").unwrap())
@@ -585,7 +825,7 @@ target-environments-directory = "{}"
             disable_bzip2 = true
             disable_zstd = true
         "#;
-        let config = Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        let config = Config::from_toml(toml).unwrap();
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(false));
         assert_eq!(
@@ -618,6 +858,82 @@ target-environments-directory = "{}"
             disable-bzip2 = true
             disable-zstd = true
         "#;
-        Config::from_toml(toml, &PathBuf::from("")).unwrap();
+        Config::from_toml(toml).unwrap();
+    }
+
+    #[test]
+    fn test_alter_config() {
+        let mut config = Config::default();
+        config
+            .set("default-channels", Some(r#"["conda-forge"]"#.to_string()))
+            .unwrap();
+        assert_eq!(config.default_channels, vec!["conda-forge"]);
+
+        config
+            .set("tls-no-verify", Some("true".to_string()))
+            .unwrap();
+        assert_eq!(config.tls_no_verify, Some(true));
+
+        config
+            .set(
+                "authentication-override-file",
+                Some("/path/to/your/override.json".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            config.authentication_override_file,
+            Some(PathBuf::from("/path/to/your/override.json"))
+        );
+
+        config
+            .set("mirrors", Some(r#"{"https://conda.anaconda.org/conda-forge": ["https://prefix.dev/conda-forge"]}"#.to_string()))
+            .unwrap();
+        assert_eq!(
+            config
+                .mirrors
+                .get(&Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
+            Some(&vec![Url::parse("https://prefix.dev/conda-forge").unwrap()])
+        );
+
+        config
+            .set("repodata-config.disable-jlap", Some("true".to_string()))
+            .unwrap();
+        let repodata_config = config.repodata_config().unwrap();
+        assert_eq!(repodata_config.disable_jlap, Some(true));
+
+        config
+            .set(
+                "pypi-config.index-url",
+                Some("https://pypi.org/simple".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            config.pypi_config().index_url,
+            Some(Url::parse("https://pypi.org/simple").unwrap())
+        );
+
+        config
+            .set(
+                "pypi-config.extra-index-urls",
+                Some(r#"["https://pypi.org/simple2"]"#.to_string()),
+            )
+            .unwrap();
+        assert!(config.pypi_config().extra_index_urls.len() == 1);
+
+        config
+            .set(
+                "pypi-config.keyring-provider",
+                Some("subprocess".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            config.pypi_config().keyring_provider,
+            Some(KeyringProvider::Subprocess)
+        );
+
+        config.set("change-ps1", None).unwrap();
+        assert_eq!(config.change_ps1, None);
+
+        config.set("unknown-key", None).unwrap_err();
     }
 }

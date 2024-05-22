@@ -2,6 +2,7 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::cli::has_specs::HasSpecs;
 use crate::config::{Config, ConfigCli};
 use crate::install::execute_transaction;
 use crate::{config, prefix::Prefix, progress::await_in_progress};
@@ -20,7 +21,7 @@ use reqwest_middleware::ClientWithMiddleware;
 
 use super::common::{
     channel_name_from_prefix, find_designated_package, get_client_and_sparse_repodata,
-    load_package_records, BinDir, BinEnvDir, HasSpecs,
+    load_package_records, BinDir, BinEnvDir,
 };
 
 /// Installs the defined package in a global accessible location.
@@ -258,7 +259,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Install the package(s)
     let mut executables = vec![];
     for (package_name, package_matchspec) in args.specs()? {
-        let records = load_package_records(package_matchspec, &sparse_repodata)?;
+        let records = load_package_records(package_matchspec, sparse_repodata.values())?;
 
         let (prefix_package, scripts, _) = globally_install_package(
             &package_name,
