@@ -112,8 +112,6 @@ impl PlatformUnsat {
     /// Returns true if this is a problem with pypi packages only. This means the conda packages
     /// are still considered valid.
     pub fn is_pypi_only(&self) -> bool {
-        tracing::info!("Checking if error is pypi only {:?}", self);
-
         matches!(
             self,
             PlatformUnsat::UnsatisfiableRequirement(_, _)
