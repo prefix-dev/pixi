@@ -169,7 +169,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9db67cd9cf4f56a10d2cbae6a3b552e5bd36701fd37b74a18c14a231bdf446c7"
 dependencies = [
  "cfg-if",
- "itertools",
+ "itertools 0.12.1",
  "libc",
  "serde",
  "serde_json",
@@ -384,7 +384,7 @@ dependencies = [
  "bisection",
  "futures",
  "http-content-range",
- "itertools",
+ "itertools 0.12.1",
  "memmap2 0.9.4",
  "reqwest 0.12.4",
  "reqwest-middleware",
@@ -1173,7 +1173,7 @@ dependencies = [
  "distribution-filename",
  "fs-err",
  "git2",
- "itertools",
+ "itertools 0.12.1",
  "once_cell",
  "pep440_rs",
  "pep508_rs",
@@ -1388,7 +1388,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1cd0e1a8a0c7a1829090615ebce07ebf31911031a08915ca869f1085f0e39032"
 dependencies = [
- "itertools",
+ "itertools 0.12.1",
  "percent-encoding",
  "typed-path",
  "url",
@@ -1397,9 +1397,9 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.1.1"
-source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#7a20178715aa67e7902d72483dc009ad57b51c14"
+source = "git+https://github.com/mamba-org/rattler?branch=main#eb0a7afb0a21341426efeef9fe1b2129337a3214"
 dependencies = [
- "itertools",
+ "itertools 0.12.1",
  "percent-encoding",
  "typed-path",
  "url",
@@ -2331,6 +2331,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3052,7 +3061,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b645dcde5f119c2c454a92d0dfa271a2a3b205da92e4292a68ead4bdbfde1f33"
 dependencies = [
  "heck 0.4.1",
- "itertools",
+ "itertools 0.12.1",
  "proc-macro2",
  "proc-macro2-diagnostics",
  "quote",
@@ -3329,7 +3338,7 @@ dependencies = [
  "insta",
  "install-wheel-rs",
  "is_executable",
- "itertools",
+ "itertools 0.12.1",
  "lazy_static",
  "libc",
  "miette 7.2.0",
@@ -3684,7 +3693,7 @@ dependencies = [
  "futures",
  "fxhash",
  "indexmap 2.2.6",
- "itertools",
+ "itertools 0.12.1",
  "memchr",
  "memmap2 0.9.4",
  "once_cell",
@@ -3710,18 +3719,18 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.23.1"
-source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#7a20178715aa67e7902d72483dc009ad57b51c14"
+source = "git+https://github.com/mamba-org/rattler?branch=main#eb0a7afb0a21341426efeef9fe1b2129337a3214"
 dependencies = [
  "chrono",
- "file_url 0.1.1 (git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file)",
+ "file_url 0.1.1 (git+https://github.com/mamba-org/rattler?branch=main)",
  "fxhash",
  "glob",
  "hex",
- "itertools",
+ "itertools 0.12.1",
  "lazy-regex",
  "nom",
  "purl",
- "rattler_digest 0.19.4 (git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file)",
+ "rattler_digest 0.19.4 (git+https://github.com/mamba-org/rattler?branch=main)",
  "rattler_macros",
  "regex",
  "serde",
@@ -3756,7 +3765,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.19.4"
-source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#7a20178715aa67e7902d72483dc009ad57b51c14"
+source = "git+https://github.com/mamba-org/rattler?branch=main#eb0a7afb0a21341426efeef9fe1b2129337a3214"
 dependencies = [
  "blake2",
  "digest",
@@ -3771,18 +3780,18 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.22.7"
-source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#7a20178715aa67e7902d72483dc009ad57b51c14"
+source = "git+https://github.com/mamba-org/rattler?branch=main#eb0a7afb0a21341426efeef9fe1b2129337a3214"
 dependencies = [
  "chrono",
- "file_url 0.1.1 (git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file)",
+ "file_url 0.1.1 (git+https://github.com/mamba-org/rattler?branch=main)",
  "fxhash",
  "indexmap 2.2.6",
- "itertools",
+ "itertools 0.12.1",
  "pep440_rs",
  "pep508_rs",
  "purl",
  "rattler_conda_types",
- "rattler_digest 0.19.4 (git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file)",
+ "rattler_digest 0.19.4 (git+https://github.com/mamba-org/rattler?branch=main)",
  "serde",
  "serde_json",
  "serde_repr",
@@ -3795,7 +3804,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.19.3"
-source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#7a20178715aa67e7902d72483dc009ad57b51c14"
+source = "git+https://github.com/mamba-org/rattler?branch=main#eb0a7afb0a21341426efeef9fe1b2129337a3214"
 dependencies = [
  "quote",
  "syn 2.0.65",
@@ -3816,7 +3825,7 @@ dependencies = [
  "getrandom",
  "google-cloud-auth",
  "http 1.1.0",
- "itertools",
+ "itertools 0.12.1",
  "keyring",
  "netrc-rs",
  "reqwest 0.12.4",
@@ -3877,7 +3886,7 @@ dependencies = [
  "http-cache-semantics",
  "humansize",
  "humantime",
- "itertools",
+ "itertools 0.12.1",
  "json-patch",
  "libc",
  "md-5",
@@ -3914,7 +3923,7 @@ checksum = "7694ac06d4f04e13f095401acfcaaf21d950cad057f216a700666c372b462de2"
 dependencies = [
  "enum_dispatch",
  "indexmap 2.2.6",
- "itertools",
+ "itertools 0.12.1",
  "rattler_conda_types",
  "serde_json",
  "shlex",
@@ -3932,7 +3941,7 @@ checksum = "144e21282e37fbc0594672d02daeaaf0d3ae4ea94ff1f8ca31d632f387358290"
 dependencies = [
  "chrono",
  "futures",
- "itertools",
+ "itertools 0.12.1",
  "rattler_conda_types",
  "rattler_digest 0.19.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "resolvo",
@@ -4250,15 +4259,15 @@ dependencies = [
 
 [[package]]
 name = "resolvo"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2016584c3fd9df0fd859a7dcbc7fafdc7fdd2d87b53a576e8e63e62fad140e33"
+checksum = "d299d168910c5d71f3c0f5441abe38ca4a6ae21f70fae909bfc6bead28f6620f"
 dependencies = [
  "bitvec",
  "elsa",
  "event-listener 5.3.0",
  "futures",
- "itertools",
+ "itertools 0.13.0",
  "petgraph",
  "tracing",
 ]
@@ -5686,7 +5695,7 @@ dependencies = [
  "distribution-types",
  "fs-err",
  "indoc",
- "itertools",
+ "itertools 0.12.1",
  "once_cell",
  "pep440_rs",
  "pep508_rs",
@@ -5782,7 +5791,7 @@ version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.1.38#0b23caa18d7eb2f874d73e57b7b4bdf35e881a46"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.12.1",
  "pep508_rs",
  "platform-tags",
  "rustc-hash",
@@ -5801,7 +5810,7 @@ dependencies = [
  "distribution-types",
  "futures",
  "install-wheel-rs",
- "itertools",
+ "itertools 0.12.1",
  "pep508_rs",
  "rustc-hash",
  "tracing",
@@ -6014,7 +6023,7 @@ dependencies = [
  "futures",
  "indexmap 2.2.6",
  "install-wheel-rs",
- "itertools",
+ "itertools 0.12.1",
  "once-map",
  "once_cell",
  "owo-colors",
