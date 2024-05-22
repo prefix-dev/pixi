@@ -210,8 +210,10 @@ pub fn verify_platform_satisfiability(
     // to reflect new purls for pypi packages
     // we need to invalidate the locked environment
     // if all conda packages have empty purls
+    // and lock version does not record every time purls
     if environment.has_pypi_dependencies()
         && pypi_packages.is_empty()
+        && !lock_version.should_purls_be_present()
         && !conda_packages
             .iter()
             .any(|record| !record.package_record.purls.is_empty())
