@@ -171,8 +171,6 @@ tokio = { version = "1.37.0", features = ["rt"] }
 # If you change this also change the versions in the the patch section for uv
 pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
-# pep440_rs = { version = "0.6.0" }
-# pep508_rs = { version = "0.6.0" }
 # deno_task_shell = { path = "../deno_task_shell" }
 
 # rattler = { git = "https://github.com/nichmor/rattler", branch = "feat/introduce-v6-lock-file" }

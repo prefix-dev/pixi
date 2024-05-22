@@ -1397,7 +1397,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.1.1"
-source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#81022f5ecbcb3410f2316885c931401f8a74604d"
+source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#d14373c05e19dc3d492e9244392f3ce48fc4dc62"
 dependencies = [
  "itertools",
  "percent-encoding",
@@ -3710,7 +3710,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.23.1"
-source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#81022f5ecbcb3410f2316885c931401f8a74604d"
+source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#d14373c05e19dc3d492e9244392f3ce48fc4dc62"
 dependencies = [
  "chrono",
  "file_url 0.1.1 (git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file)",
@@ -3756,7 +3756,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "0.19.4"
-source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#81022f5ecbcb3410f2316885c931401f8a74604d"
+source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#d14373c05e19dc3d492e9244392f3ce48fc4dc62"
 dependencies = [
  "blake2",
  "digest",
@@ -3771,7 +3771,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.22.7"
-source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#81022f5ecbcb3410f2316885c931401f8a74604d"
+source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#d14373c05e19dc3d492e9244392f3ce48fc4dc62"
 dependencies = [
  "chrono",
  "file_url 0.1.1 (git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file)",
@@ -3795,7 +3795,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "0.19.3"
-source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#81022f5ecbcb3410f2316885c931401f8a74604d"
+source = "git+https://github.com/nichmor/rattler?branch=feat/introduce-v6-lock-file#d14373c05e19dc3d492e9244392f3ce48fc4dc62"
 dependencies = [
  "quote",
  "syn 2.0.65",
