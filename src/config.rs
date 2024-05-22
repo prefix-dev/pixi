@@ -373,13 +373,9 @@ impl Config {
         })
     }
 
-    /// Load the global config file from various global paths.
-    ///
-    /// # Returns
-    ///
-    /// The loaded global config
     /// Validate the config file.
     pub fn validate(&self) -> miette::Result<()> {
+        // Validate the target environments directory
         if let Some(target_env_dir) = self.target_environments_directory.clone() {
             if !target_env_dir.is_absolute() || !target_env_dir.exists() {
                 // The path might exist, but we need it to be absolute because we don't canonicalize it.
@@ -390,7 +386,11 @@ impl Config {
         Ok(())
     }
 
-    /// Load the global config file from the home directory (~/.pixi/config.toml)
+    /// Load the global config file from various global paths.
+    ///
+    /// # Returns
+    ///
+    /// The loaded global config
     pub fn load_global() -> Config {
         let mut config = Self::load_system();
 
