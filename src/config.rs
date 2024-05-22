@@ -2,10 +2,11 @@ use clap::{ArgAction, Parser};
 use miette::{miette, Context, IntoDiagnostic};
 use rattler_conda_types::{Channel, ChannelConfig, ParseChannelError};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeSet as Set, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::str::FromStr;
 
 use url::Url;
 
@@ -133,7 +134,7 @@ pub enum KeyringProvider {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
 pub struct PyPIConfig {
     /// The default index URL for PyPI packages.
     #[serde(default)]
@@ -283,14 +284,23 @@ impl Config {
     ///
     /// # Returns
     ///
-    /// The parsed config
+    /// The parsed config, and the unused keys
     ///
     /// # Errors
     ///
     /// Parsing errors
     #[inline]
-    pub fn from_toml(toml: &str) -> miette::Result<Config> {
-        toml_edit::de::from_str(toml).into_diagnostic()
+    pub fn from_toml(toml: &str) -> miette::Result<(Config, Set<String>)> {
+        let de = toml_edit::de::Deserializer::from_str(toml).into_diagnostic()?;
+
+        // Deserialize the config and collect unused keys
+        let mut unused_keys = Set::new();
+        let config: Config = serde_ignored::deserialize(de, |path| {
+            unused_keys.insert(path.to_string());
+        })
+        .into_diagnostic()?;
+
+        Ok((config, unused_keys))
     }
 
     /// Load the config from the given path.
@@ -307,7 +317,24 @@ impl Config {
         let s = fs::read_to_string(path)
             .into_diagnostic()
             .wrap_err(format!("failed to read config from '{}'", path.display()))?;
-        let mut config = Config::from_toml(&s)?;
+
+        let (mut config, unused_keys) = Config::from_toml(&s)?;
+
+        if !unused_keys.is_empty() {
+            tracing::warn!(
+                "Ignoring '{}' in at {}",
+                console::style(
+                    unused_keys
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+                .yellow(),
+                path.display()
+            );
+        }
+
         config.loaded_from.push(path.to_path_buf());
         tracing::info!("Loaded config from: {}", path.display());
 
@@ -694,16 +721,18 @@ mod tests {
             r#"default-channels = ["conda-forge"]
 tls-no-verify = true
 target-environments-directory = "{}"
+UNUSED = "unused"
         "#,
             env!("CARGO_MANIFEST_DIR").replace("\\", "\\\\").as_str()
         );
-        let config = Config::from_toml(toml.as_str()).unwrap();
+        let (config, unused) = Config::from_toml(toml.as_str()).unwrap();
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(true));
         assert_eq!(
             config.target_environments_directory,
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         );
+        assert!(unused.contains(&"UNUSED".to_string()));
     }
 
     #[test]
@@ -742,7 +771,7 @@ target-environments-directory = "{}"
             extra-index-urls = ["https://pypi.org/simple2"]
             keyring-provider = "subprocess"
         "#;
-        let config = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml).unwrap();
         assert_eq!(
             config.pypi_config().index_url,
             Some(Url::parse("https://pypi.org/simple").unwrap())
@@ -825,7 +854,7 @@ target-environments-directory = "{}"
             disable_bzip2 = true
             disable_zstd = true
         "#;
-        let config = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml).unwrap();
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(false));
         assert_eq!(
