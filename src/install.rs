@@ -17,12 +17,11 @@ use rattler_conda_types::{PrefixRecord, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Duration;
 
 /// Executes the transaction on the given environment.
 pub async fn execute_transaction(
-    package_cache: Arc<PackageCache>,
+    package_cache: PackageCache,
     transaction: &Transaction<PrefixRecord, RepoDataRecord>,
     prefix_records: &[PrefixRecord],
     target_prefix: PathBuf,
