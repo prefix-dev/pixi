@@ -1,7 +1,7 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
+use crate::cli::has_specs::HasSpecs;
 use crate::config::{Config, ConfigCli};
 use crate::install::execute_transaction;
 use crate::{config, prefix::Prefix, progress::await_in_progress};
@@ -20,7 +20,7 @@ use reqwest_middleware::ClientWithMiddleware;
 
 use super::common::{
     channel_name_from_prefix, find_designated_package, get_client_and_sparse_repodata,
-    load_package_records, BinDir, BinEnvDir, HasSpecs,
+    load_package_records, BinDir, BinEnvDir,
 };
 
 /// Installs the defined package in a global accessible location.
@@ -258,7 +258,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Install the package(s)
     let mut executables = vec![];
     for (package_name, package_matchspec) in args.specs()? {
-        let records = load_package_records(package_matchspec, &sparse_repodata)?;
+        let records = load_package_records(package_matchspec, sparse_repodata.values())?;
 
         let (prefix_package, scripts, _) = globally_install_package(
             &package_name,
@@ -347,7 +347,7 @@ pub(super) async fn globally_install_package(
 
     // Execute the transaction if there is work to do
     if has_transactions {
-        let package_cache = Arc::new(PackageCache::new(config::get_cache_dir()?.join("pkgs")));
+        let package_cache = PackageCache::new(config::get_cache_dir()?.join("pkgs"));
 
         // Execute the operations that are returned by the solver.
         await_in_progress("creating virtual environment", |pb| {

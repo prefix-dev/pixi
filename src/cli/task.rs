@@ -175,7 +175,7 @@ impl From<AliasArgs> for Task {
     }
 }
 
-/// Command management in project
+/// Interact with tasks in the project
 #[derive(Parser, Debug)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {

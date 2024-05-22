@@ -10,7 +10,9 @@ use miette::{Context, IntoDiagnostic};
 use reqwest::Client;
 use serde::Deserialize;
 
-/// Update pixi to the latest version or a specific version. If the pixi binary is not found in the default location
+/// Update pixi to the latest version or a specific version.
+///
+/// If the pixi binary is not found in the default location
 /// (e.g. `~/.pixi/bin/pixi`), pixi won't updated to prevent breaking the current installation (Homebrew, etc).
 /// The behaviour can be overridden with the `--force` flag.
 #[derive(Debug, clap::Parser)]
