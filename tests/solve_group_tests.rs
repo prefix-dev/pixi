@@ -110,14 +110,7 @@ async fn test_purl_are_added_for_pypi() {
             if dep.as_conda().unwrap().package_record().name
                 == PackageName::from_str("boltons").unwrap()
             {
-                assert!(dep
-                    .as_conda()
-                    .unwrap()
-                    .package_record()
-                    .purls
-                    .as_ref()
-                    .unwrap()
-                    .is_empty());
+                assert!(dep.as_conda().unwrap().package_record().purls.is_none());
             }
         });
 
