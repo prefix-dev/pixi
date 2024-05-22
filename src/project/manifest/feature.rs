@@ -242,7 +242,11 @@ impl Feature {
             .next()
     }
 
-    pub fn activation_env(&self, platform: Option<Platform>) -> Option<&HashMap<String, String>> {
+    /// Returns the activation environment for the most specific target that matches the given
+    /// `platform`.
+    ///
+    /// Returns `None` if this feature does not define any target with an activation.
+    pub fn activation_env(&self, platform: Option<Platform>) -> Option<&IndexMap<String, String>> {
         self.targets
             .resolve(platform)
             .filter_map(|t| t.activation.as_ref())

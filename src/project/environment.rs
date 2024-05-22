@@ -237,7 +237,7 @@ impl<'p> Environment<'p> {
     ///
     /// The environment variables of all features are combined in the order they are defined for the environment.
     pub fn activation_env(&self, platform: Option<Platform>) -> HashMap<String, String> {
-        self.features(true)
+        self.features()
             .filter_map(|f| f.activation_env(platform))
             .fold(HashMap::new(), |mut acc, env| {
                 acc.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
