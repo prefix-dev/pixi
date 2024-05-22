@@ -45,9 +45,12 @@ impl PypiPackageIdentifier {
             }
         }
 
-        // Backwards compatibility: If the lock file version is less than 6 and there is no pypi purl
+        // Backwards compatibility:
+        // If lock file don't have a purl
         // but the package is a conda-forge package, we just assume that
         // the name of the package is equivalent to the name of the python package.
+        // In newer versions of the lock file, we should always have a purl
+        // where empty purls means that the package is not a pypi-one.
         if record.package_record.purls.is_none()
             && !has_pypi_purl
             && pypi_mapping::is_conda_forge_record(record)
