@@ -195,8 +195,6 @@ pub fn amend_pypi_purls_for_record(
         return Ok(());
     }
 
-    // initialize the vector
-
     // Initialize the vector if it's None
     if record.package_record.purls.is_none() {
         record.package_record.purls = Some(Vec::new());
