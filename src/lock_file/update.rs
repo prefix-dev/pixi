@@ -17,6 +17,7 @@ use crate::{
     utils::BarrierCell,
     EnvironmentName, Project,
 };
+
 use futures::{future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt};
 use indexmap::IndexSet;
 use indicatif::{HumanBytes, ProgressBar, ProgressState};
@@ -25,7 +26,7 @@ use miette::{IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
 use parking_lot::Mutex;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, MatchSpec, Platform, RepoDataRecord};
-use rattler_lock::{LockFile, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{FileFormatVersion, LockFile, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use std::collections::VecDeque;
 use std::fmt::Write;
@@ -427,6 +428,7 @@ pub async fn ensure_up_to_date_lock_file(
     options: UpdateLockFileOptions,
 ) -> miette::Result<LockFileDerivedData<'_>> {
     let lock_file = load_lock_file(project).await?;
+    let lock_version = lock_file.version();
     let current_platform = Platform::current();
     let package_cache = Arc::new(PackageCache::new(config::get_cache_dir()?.join("pkgs")));
     let max_concurrent_solves = options
@@ -796,6 +798,7 @@ pub async fn ensure_up_to_date_lock_file(
             pypi_solve_semaphore.clone(),
             project.root().to_path_buf(),
             locked_pypi_records,
+            &lock_version,
         );
 
         pending_futures.push(pypi_solve_future.boxed_local());
@@ -830,6 +833,7 @@ pub async fn ensure_up_to_date_lock_file(
         let extract_resolution_task = spawn_extract_environment_task(
             environment.clone(),
             platform,
+            &lock_version,
             grouped_repodata_records,
             grouped_pypi_records,
         );
@@ -1275,6 +1279,7 @@ async fn spawn_solve_conda_environment_task(
 async fn spawn_extract_environment_task(
     environment: Environment<'_>,
     platform: Platform,
+    lock_version: &FileFormatVersion,
     grouped_repodata_records: impl Future<Output = Arc<RepoDataRecordsByName>>,
     grouped_pypi_records: impl Future<Output = Arc<PypiRecordsByName>>,
 ) -> miette::Result<TaskResult> {
@@ -1295,7 +1300,7 @@ async fn spawn_extract_environment_task(
     }
 
     // Convert all the conda records to package identifiers.
-    let conda_package_identifiers = grouped_repodata_records.by_pypi_name();
+    let conda_package_identifiers = grouped_repodata_records.by_pypi_name(lock_version);
 
     #[derive(Clone, Eq, PartialEq, Hash)]
     enum PackageName {
@@ -1439,6 +1444,7 @@ async fn spawn_solve_pypi_task(
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
     locked_pypi_packages: Arc<Vec<PypiRecord>>,
+    lock_version: &FileFormatVersion,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = environment.pypi_dependencies(Some(platform));
@@ -1509,6 +1515,7 @@ async fn spawn_solve_pypi_task(
             &python_path,
             env_variables,
             &project_root,
+            lock_version,
         )
         .await
         .with_context(|| {

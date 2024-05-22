@@ -12,7 +12,9 @@ use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, ParseMatchSpecError, Platform, RepoDataRecord,
 };
-use rattler_lock::{ConversionError, Package, PypiPackageData, PypiSourceTreeHashable, UrlOrPath};
+use rattler_lock::{
+    ConversionError, FileFormatVersion, Package, PypiPackageData, PypiSourceTreeHashable, UrlOrPath,
+};
 use requirements_txt::EditableRequirement;
 use std::fmt::Display;
 use std::ops::Sub;
@@ -110,6 +112,8 @@ impl PlatformUnsat {
     /// Returns true if this is a problem with pypi packages only. This means the conda packages
     /// are still considered valid.
     pub fn is_pypi_only(&self) -> bool {
+        tracing::info!("Checking if error is pypi only {:?}", self);
+
         matches!(
             self,
             PlatformUnsat::UnsatisfiableRequirement(_, _)
@@ -184,6 +188,7 @@ pub fn verify_platform_satisfiability(
     locked_environment: &rattler_lock::Environment,
     platform: Platform,
     project_root: &Path,
+    lock_version: &FileFormatVersion,
 ) -> Result<(), PlatformUnsat> {
     // Convert the lock file into a list of conda and pypi packages
     let mut conda_packages: Vec<RepoDataRecord> = Vec::new();
@@ -242,6 +247,7 @@ pub fn verify_platform_satisfiability(
         &pypi_records_by_name,
         platform,
         project_root,
+        lock_version,
     )
 }
 
@@ -361,6 +367,7 @@ pub fn verify_package_platform_satisfiability(
     locked_pypi_environment: &PypiRecordsByName,
     platform: Platform,
     project_root: &Path,
+    lock_version: &FileFormatVersion,
 ) -> Result<(), PlatformUnsat> {
     // Determine the dependencies requested by the environment
     let conda_specs = environment
@@ -428,7 +435,7 @@ pub fn verify_package_platform_satisfiability(
     };
 
     // Determine the pypi packages provided by the locked conda packages.
-    let locked_conda_pypi_packages = locked_conda_packages.by_pypi_name();
+    let locked_conda_pypi_packages = locked_conda_packages.by_pypi_name(lock_version);
 
     // Keep a list of all conda packages that we have already visisted
     let mut conda_packages_visited = HashSet::new();
@@ -872,10 +879,14 @@ mod tests {
                 .map_err(|e| LockfileUnsat::Environment(env.name().to_string(), e))?;
 
             for platform in env.platforms() {
-                verify_platform_satisfiability(&env, &locked_env, platform, project.root())
-                    .map_err(|e| {
-                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, e)
-                    })?;
+                verify_platform_satisfiability(
+                    &env,
+                    &locked_env,
+                    platform,
+                    project.root(),
+                    &lock_file.version(),
+                )
+                .map_err(|e| LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, e))?;
             }
         }
         Ok(())

@@ -34,7 +34,8 @@ use pypi_types::{HashAlgorithm, HashDigest, Metadata23};
 use rattler_conda_types::RepoDataRecord;
 use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
-    PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
+    FileFormatVersion, PackageHashes, PypiPackageData, PypiPackageEnvironmentData,
+    PypiSourceTreeHashable, UrlOrPath,
 };
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -179,6 +180,7 @@ pub async fn resolve_pypi(
     python_location: &Path,
     env_variables: &HashMap<String, String>,
     project_root: &Path,
+    lock_version: &FileFormatVersion,
 ) -> miette::Result<LockedPypiPackages> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -187,12 +189,13 @@ pub async fn resolve_pypi(
     let conda_python_packages = locked_conda_records
         .iter()
         .flat_map(|record| {
-            package_identifier::PypiPackageIdentifier::from_record(record).map_or_else(
-                |err| Either::Right(once(Err(err))),
-                |identifiers| {
-                    Either::Left(identifiers.into_iter().map(|i| Ok((record.clone(), i))))
-                },
-            )
+            package_identifier::PypiPackageIdentifier::from_record(record, lock_version)
+                .map_or_else(
+                    |err| Either::Right(once(Err(err))),
+                    |identifiers| {
+                        Either::Left(identifiers.into_iter().map(|i| Ok((record.clone(), i))))
+                    },
+                )
         })
         .map_ok(|(record, p)| (p.name.as_normalized().clone(), (record.clone(), p)))
         .collect::<Result<HashMap<_, _>, _>>()

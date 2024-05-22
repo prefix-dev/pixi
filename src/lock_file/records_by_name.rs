@@ -1,6 +1,7 @@
 use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
 use crate::pypi_tags::is_python_record;
 use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
+use rattler_lock::FileFormatVersion;
 use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -158,12 +159,13 @@ impl RepoDataRecordsByName {
     /// extracted from.
     pub fn by_pypi_name(
         &self,
+        lock_version: &FileFormatVersion,
     ) -> HashMap<uv_normalize::PackageName, (PypiPackageIdentifier, usize, &RepoDataRecord)> {
         self.records
             .iter()
             .enumerate()
             .filter_map(|(idx, record)| {
-                PypiPackageIdentifier::from_record(record)
+                PypiPackageIdentifier::from_record(record, lock_version)
                     .ok()
                     .map(move |identifiers| (idx, record, identifiers))
             })
