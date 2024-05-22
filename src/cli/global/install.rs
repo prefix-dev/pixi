@@ -1,6 +1,5 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use crate::cli::has_specs::HasSpecs;
 use crate::config::{Config, ConfigCli};
@@ -348,7 +347,7 @@ pub(super) async fn globally_install_package(
 
     // Execute the transaction if there is work to do
     if has_transactions {
-        let package_cache = Arc::new(PackageCache::new(config::get_cache_dir()?.join("pkgs")));
+        let package_cache = PackageCache::new(config::get_cache_dir()?.join("pkgs"));
 
         // Execute the operations that are returned by the solver.
         await_in_progress("creating virtual environment", |pb| {

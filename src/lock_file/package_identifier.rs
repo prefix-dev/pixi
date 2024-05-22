@@ -1,7 +1,6 @@
 use crate::{project::manifest::python::PyPiPackageName, pypi_mapping};
 use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
-use rattler_lock::FileFormatVersion;
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
 use url::Url;
@@ -20,10 +19,7 @@ pub struct PypiPackageIdentifier {
 impl PypiPackageIdentifier {
     /// Extracts the python packages that will be installed when the specified conda package is
     /// installed.
-    pub fn from_record(
-        record: &RepoDataRecord,
-        _lock_version: &FileFormatVersion,
-    ) -> Result<Vec<Self>, ConversionError> {
+    pub fn from_record(record: &RepoDataRecord) -> Result<Vec<Self>, ConversionError> {
         let mut result = Vec::new();
         Self::from_record_into(record, &mut result)?;
 

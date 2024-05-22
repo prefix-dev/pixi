@@ -151,7 +151,6 @@ fn find_unsatisfiable_targets<'p>(
                 &locked_environment,
                 platform,
                 project.root(),
-                &lock_file.version(),
             ) {
                 Ok(_) => {}
                 Err(unsat) if unsat.is_pypi_only() => {
