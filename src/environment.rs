@@ -27,7 +27,7 @@ use rattler_conda_types::{Platform, PrefixRecord, RepoDataRecord};
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use std::convert::identity;
-use std::{collections::HashMap, io::ErrorKind, path::Path, sync::Arc};
+use std::{collections::HashMap, io::ErrorKind, path::Path};
 
 /// Verify the location of the prefix folder is not changed so the applied prefix path is still valid.
 /// Errors when there is a file system error or the path does not align with the defined prefix.
@@ -262,7 +262,7 @@ pub async fn update_prefix_pypi(
     pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
     status: &PythonStatus,
     system_requirements: &SystemRequirements,
-    uv_context: UvResolutionContext,
+    uv_context: &UvResolutionContext,
     pypi_options: &PypiOptions,
     environment_variables: &HashMap<String, String>,
     lock_file_dir: &Path,
@@ -441,7 +441,7 @@ impl PythonStatus {
 pub async fn update_prefix_conda(
     environment_name: GroupedEnvironmentName,
     prefix: &Prefix,
-    package_cache: Arc<PackageCache>,
+    package_cache: PackageCache,
     authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
     repodata_records: &[RepoDataRecord],

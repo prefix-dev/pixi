@@ -56,19 +56,8 @@ In that case, if pixi cannot find the `__cuda` virtual package on your machine t
 
 ### Cache dir
 
-Pixi caches all previously downloaded packages in a cache folder.
-This cache folder is shared between all pixi projects and globally installed tools.
-Normally the locations would be:
-
-1. XDG compliant cache folder when it's available (`$XDG_CACHE_HOME/pixi`
-   or `$HOME/.cache/pixi`)
-2. Platform-specific default cache folder:
-   - Linux: `$XDG_CACHE_HOME/rattler` or `$HOME`/.cache/rattler
-   - macOS: `$HOME`/Library/Caches/rattler
-   - Windows: `%APPDATA%\rattler`
-
-When your system is filling up you can easily remove this folder.
-It will re-download everything it needs the next time you install a project.
+The directory where pixi stores its cache.
+Checkout the [cache documentation](../features/environment.md#caching) for more information.
 
 ### Auth storage
 

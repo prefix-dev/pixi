@@ -6,9 +6,10 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::PackageName;
 
+use crate::cli::has_specs::HasSpecs;
 use crate::prefix::Prefix;
 
-use super::common::{find_designated_package, BinDir, BinEnvDir, HasSpecs};
+use super::common::{find_designated_package, BinDir, BinEnvDir};
 use super::install::{find_and_map_executable_scripts, BinScriptMapping};
 
 /// Removes a package previously installed into a globally accessible location via `pixi global install`.
