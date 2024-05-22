@@ -186,10 +186,21 @@ This will always be slower than the pure conda solves. So for the best pixi expe
 
 ## Caching
 
-Pixi caches the packages used in the environment.
-So if you have multiple projects that use the same packages, pixi will only download the packages once.
+Pixi caches all previously downloaded packages in a cache folder.
+This cache folder is shared between all pixi projects and globally installed tools.
 
-The cache is located in the `~/.cache/rattler/cache` directory by default.
+Normally the locations would be:
+Platform-specific default cache folder:
+- Linux: `$XDG_CACHE_HOME/rattler` or `$HOME/.cache/rattler`
+- macOS: `$HOME/Library/Caches/rattler`
+- Windows: `%LOCALAPPDATA%\rattler`
+
 This location is configurable by setting the `PIXI_CACHE_DIR` or `RATTLER_CACHE_DIR` environment variable.
 
 When you want to clean the cache, you can simply delete the cache directory, and pixi will re-create the cache when needed.
+
+The cache contains multiple folders concerning different caches from within pixi.
+- `pkgs`: Contains the downloaded/unpacked `conda` packages.
+- `repodata`: Contains the `conda` repodata cache.
+- `uv-cache`: Contains the `uv` cache. This includes multiple caches, e.g. `built-wheels` `wheels` `archives`
+- `http-cache`: Contains the `conda-pypi` mapping cache.
