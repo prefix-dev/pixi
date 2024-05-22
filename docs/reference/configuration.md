@@ -507,22 +507,35 @@ Typical examples of build dependencies are:
 
 ## The `activation` table
 
-If you want to run an activation script inside the environment when either doing a `pixi run` or `pixi shell` these can be defined here.
-The scripts defined in this table will be sourced when the environment is activated using `pixi run` or `pixi shell`
+The activation table is used for specialized activation operations that need to be run when the environment is activated.
+
+There are two types of activation operations a user can modify in the manifest:
+
+- `scripts`: A list of scripts that are run when the environment is activated.
+- `env`: A mapping of environment variables that are set when the environment is activated.
+
+These activation operations will be run before the `pixi run` and `pixi shell` commands.
 
 !!! note
-    The activation scripts are run by the system shell interpreter as they run before an environment is available.
+    The activation operations are run by the system shell interpreter as they run before an environment is available.
     This means that it runs as `cmd.exe` on windows and `bash` on linux and osx (Unix).
     Only `.sh`, `.bash` and `.bat` files are supported.
 
-    If you have scripts per platform use the [target](#the-target-table) table.
+    And the environment variables are set in the shell that is running the activation script, thus take note when using e.g. `$` or `%`.
+
+    If you have scripts or env variable per platform use the [target](#the-target-table) table.
 
 ```toml
 [activation]
 scripts = ["env_setup.sh"]
+env = { ENV_VAR = "value" }
+
 # To support windows platforms as well add the following
 [target.win-64.activation]
 scripts = ["env_setup.bat"]
+
+[target.linux-64.activation.env]
+ENV_VAR = "linux-value"
 ```
 
 ## The `target` table
