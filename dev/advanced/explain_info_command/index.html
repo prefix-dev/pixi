@@ -1616,21 +1616,8 @@ These packages aren't real dependencies that are going to be installed, but rath
 A simple example: When a package depends on Cuda drivers being present on the host machine it can do that by depending on the <code>__cuda</code> virtual package.
 In that case, if pixi cannot find the <code>__cuda</code> virtual package on your machine the installation will fail.</p>
 <h3 id="cache-dir">Cache dir<a class="headerlink" href="#cache-dir" title="Permanent link">#</a></h3>
-<p>Pixi caches all previously downloaded packages in a cache folder.
-This cache folder is shared between all pixi projects and globally installed tools.
-Normally the locations would be:</p>
-<ol>
-<li>XDG compliant cache folder when it's available (<code>$XDG_CACHE_HOME/pixi</code>
-   or <code>$HOME/.cache/pixi</code>)</li>
-<li>Platform-specific default cache folder:<ul>
-<li>Linux: <code>$XDG_CACHE_HOME/rattler</code> or <code>$HOME</code>/.cache/rattler</li>
-<li>macOS: <code>$HOME</code>/Library/Caches/rattler</li>
-<li>Windows: <code>%APPDATA%\rattler</code></li>
-</ul>
-</li>
-</ol>
-<p>When your system is filling up you can easily remove this folder.
-It will re-download everything it needs the next time you install a project.</p>
+<p>The directory where pixi stores its cache.
+Checkout the <a href="../../features/environment/#caching">cache documentation</a> for more information.</p>
 <h3 id="auth-storage">Auth storage<a class="headerlink" href="#auth-storage" title="Permanent link">#</a></h3>
 <p>Check the <a href="../authentication/">authentication documentation</a></p>
 <h3 id="cache-size">Cache size<a class="headerlink" href="#cache-size" title="Permanent link">#</a></h3>
