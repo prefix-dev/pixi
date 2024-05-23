@@ -236,7 +236,7 @@ impl<'p> LockFileDerivedData<'p> {
     }
 }
 
-struct UpdateContext<'p> {
+pub struct UpdateContext<'p> {
     project: &'p Project,
 
     /// Repodata records from the lock-file. This contains the records that
@@ -530,7 +530,7 @@ pub async fn ensure_up_to_date_lock_file(
     Ok(lock_file_derived_data)
 }
 
-struct UpdateContextBuilder<'p> {
+pub struct UpdateContextBuilder<'p> {
     /// The project
     project: &'p Project,
 
