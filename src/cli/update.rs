@@ -4,8 +4,8 @@ use ahash::HashMap;
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::{Either, Itertools};
-use rattler_conda_types::{PackageName, Platform};
-use rattler_lock::{CondaPackageData, LockFile, LockFileBuilder, Package};
+use rattler_conda_types::Platform;
+use rattler_lock::{LockFile, LockFileBuilder, Package};
 
 use crate::{config::ConfigCli, consts, load_lock_file, lock_file::UpdateContext, Project};
 
@@ -27,24 +27,65 @@ pub struct Args {
     pub dry_run: bool,
 
     #[clap(flatten)]
-    specs: UpdateSpecs,
+    specs: UpdateSpecsArgs,
 }
 
 #[derive(Parser, Debug, Default)]
-pub struct UpdateSpecs {
+pub struct UpdateSpecsArgs {
     /// The packages to update
-    pub packages: HashSet<String>,
+    pub packages: Option<Vec<String>>,
+
+    /// The environments to update. If none is specified, all environments are
+    /// updated.
+    #[clap(long = "env", short = 'e')]
+    pub environments: Option<Vec<String>>,
+
+    /// The platforms to update. If none is specified, all platforms are
+    /// updated.
+    #[clap(long = "platform", short = 'p')]
+    pub platforms: Option<Vec<Platform>>,
+}
+
+/// A distilled version of `UpdateSpecsArgs`.
+struct UpdateSpecs {
+    packages: Option<HashSet<String>>,
+    environments: Option<HashSet<String>>,
+    platforms: Option<HashSet<Platform>>,
 }
 
 impl UpdateSpecs {
+    fn from_args(args: UpdateSpecsArgs) -> Self {
+        Self {
+            packages: args.packages.map(|args| args.into_iter().collect()),
+            environments: args.environments.map(|args| args.into_iter().collect()),
+            platforms: args.platforms.map(|args| args.into_iter().collect()),
+        }
+    }
+
     /// Returns true if the package should be relaxed.
-    fn should_relax(
-        &self,
-        _environment_name: &str,
-        _platform: Platform,
-        package: &Package,
-    ) -> bool {
-        self.packages.contains(&*package.name())
+    fn should_relax(&self, environment_name: &str, platform: Platform, package: &Package) -> bool {
+        // Check if the platform is in the list of platforms to update.
+        if let Some(platforms) = &self.platforms {
+            if !platforms.contains(&platform) {
+                return false;
+            }
+        }
+
+        // Check if the environmtent is in the list of environments to update.
+        if let Some(environments) = &self.environments {
+            if !environments.contains(environment_name) {
+                return false;
+            }
+        }
+
+        // Check if the package is in the list of packages to update.
+        if let Some(packages) = &self.packages {
+            if !packages.contains(&*package.name()) {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
@@ -58,7 +99,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let loaded_lock_file = load_lock_file(&project).await?;
 
     // Unlock dependencies in the lock-file that we want to update.
-    let relaxed_lock_file = unlock_packages(loaded_lock_file, args.specs);
+    let relaxed_lock_file = unlock_packages(&loaded_lock_file, &UpdateSpecs::from_args(args.specs));
 
     // Update the packages in the lock-file.
     let updated_lock_file = UpdateContext::builder(&project)
@@ -93,7 +134,7 @@ fn unlock_packages(lock_file: &LockFile, specs: &UpdateSpecs) -> LockFile {
 
     for (environment_name, environment) in lock_file.environments() {
         // Copy channels and indexes
-        builder.set_channels(environment_name, environment.channels().clone());
+        builder.set_channels(environment_name, environment.channels().to_vec());
         if let Some(indexes) = environment.pypi_indexes().cloned() {
             builder.set_pypi_indexes(environment_name, indexes);
         }
@@ -102,18 +143,7 @@ fn unlock_packages(lock_file: &LockFile, specs: &UpdateSpecs) -> LockFile {
         for (platform, packages) in environment.packages_by_platform() {
             for package in packages {
                 if !specs.should_relax(environment_name, platform, &package) {
-                    match package {
-                        Package::Conda(p) => {
-                            builder.add_conda_package(
-                                environment_name,
-                                platform,
-                                CondaPackageData {},
-                            );
-                        }
-                        Package::Pypi(p) => {
-                            builder.add_pypi_package(environment_name, platform, p.clone());
-                        }
-                    }
+                    builder.add_package(environment_name, platform, package);
                 }
             }
         }
@@ -251,7 +281,6 @@ impl LockFileDiff {
         // Find environments that were completely removed
         for (environment_name, environment) in previous
             .environments()
-            .into_iter()
             .filter(|(name, _)| !result.environment.contains_key(*name))
             .collect_vec()
         {
