@@ -1,12 +1,20 @@
-use std::{cmp::Ordering, collections::HashSet, path::PathBuf};
+use std::{
+    cmp::Ordering,
+    collections::HashSet,
+    io::{stdout, Write},
+    path::PathBuf,
+};
 
 use ahash::HashMap;
 use clap::Parser;
+use console::Style;
 use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 use miette::MietteDiagnostic;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockFileBuilder, Package};
+use similar::{Algorithm, ChangeTag};
+use tabwriter::TabWriter;
 
 use crate::{
     config::ConfigCli, consts, load_lock_file, lock_file::UpdateContext, EnvironmentName, Project,
@@ -140,7 +148,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let diff = LockFileDiff::from_lock_files(&loaded_lock_file, &updated_lock_file.lock_file);
     if diff.is_empty() {
         println!(
-            "{}Lock-file is up-to-date",
+            "{}Lock-file was already up-to-date",
             console::style(console::Emoji("✔ ", "")).green()
         );
     } else {
@@ -423,15 +431,22 @@ impl LockFileDiff {
             }
         }
 
+        let mut writer = TabWriter::new(stdout());
         for (environment_name, environment) in
             self.environment.iter().sorted_by(|(a, _), (b, _)| a.cmp(b))
         {
-            println!(
-                "Environment: {}",
+            writeln!(
+                writer,
+                "Environment: {}\t\t",
                 consts::ENVIRONMENT_STYLE.apply_to(environment_name),
             );
             for (platform, packages) in environment {
-                println!("  Platform: {}", consts::PLATFORM_STYLE.apply_to(platform));
+                writeln!(
+                    writer,
+                    "  Platform: {}\t\t",
+                    consts::PLATFORM_STYLE.apply_to(platform)
+                );
+
                 itertools::chain!(
                     packages.added.iter().map(Change::Added),
                     packages.removed.iter().map(Change::Removed),
@@ -444,32 +459,64 @@ impl LockFileDiff {
                 })
                 .for_each(|c| match c {
                     Change::Added(p) => {
-                        println!(
+                        writeln!(
+                            writer,
                             "    {} {} {}",
                             console::style("+").green(),
                             p.name(),
                             format_package_identifier(p)
-                        )
+                        );
                     }
                     Change::Removed(p) => {
-                        println!(
+                        writeln!(
+                            writer,
                             "    {} {} {}",
                             console::style("-").red(),
                             p.name(),
                             format_package_identifier(p)
-                        )
+                        );
                     }
                     Change::Changed(previous, current) => {
-                        println!(
-                            "    {} {} {} -> {}",
+                        write!(
+                            writer,
+                            "    {} {} ",
                             console::style("~").yellow(),
-                            previous.name(),
-                            format_package_identifier(previous),
-                            format_package_identifier(current)
-                        )
+                            previous.name()
+                        );
+                        let previous = format_package_identifier(previous);
+                        let current = format_package_identifier(current);
+                        let diff = similar::TextDiff::configure()
+                            .algorithm(Algorithm::Lcs)
+                            .diff_lines(&previous, &current);
+                        for op in diff.ops().iter() {
+                            for (idx, change) in diff.iter_inline_changes(op).enumerate() {
+                                let s = match change.tag() {
+                                    ChangeTag::Delete => Style::new().bold(),
+                                    ChangeTag::Insert => Style::new().bold(),
+                                    ChangeTag::Equal => Style::new().dim(),
+                                };
+                                for (emphasized, value) in change.iter_strings_lossy() {
+                                    if emphasized {
+                                        write!(
+                                            writer,
+                                            "{}",
+                                            s.apply_to(value).underlined().on_black()
+                                        );
+                                    } else {
+                                        write!(writer, "{}", value);
+                                    }
+                                }
+                                if idx == 0 {
+                                    write!(writer, "\t->\t");
+                                }
+                            }
+                        }
+
+                        writeln!(writer);
                     }
                 });
             }
         }
+        writer.flush().unwrap();
     }
 }

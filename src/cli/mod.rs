@@ -91,7 +91,6 @@ pub enum Command {
     Remove(remove::Args),
     #[clap(visible_alias = "i")]
     Install(install::Args),
-    #[clap(visible_alias = "u")]
     Update(update::Args),
 
     // Execution commands
