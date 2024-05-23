@@ -168,13 +168,11 @@ tokio = { version = "1.37.0", features = ["rt"] }
 
 [patch.crates-io]
 # For pyproject-toml
+pyproject-toml = { git = "https://github.com/tdejager/pyproject-toml-rs", branch = "feat/bump-508-440" }
 # If you change this also change the versions in the the patch section for uv
-pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.2" }
-pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.2" }
-# deno_task_shell = { path = "../deno_task_shell" }
-
-#rattler = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
-#rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
+pep440_rs = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+pep508_rs = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+# deno_task_shell = { path = "../deno_task_shell" }#rattler = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }#rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
 #rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
 #rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
 #rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "feat/gateway_v3" }
@@ -195,22 +193,23 @@ pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.2.2" }
 #rattler = { path = "../rattler/crates/rattler" }
 
 # Change these lines if you want a patched version of uv
-# [patch.'https://github.com/astral-sh/uv']
-# pep440_rs = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# pep508_rs = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-build = { git = "https://github.com/wolfv/uv", tag = "expose-yanks" }
-# uv-cache = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-client = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-dispatch = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-distribution = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-installer = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-interpreter = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-normalize = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-resolver = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# uv-types = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# distribution-filename = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# distribution-types = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# install-wheel-rs = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# platform-tags = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# pypi-types = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
-# requirements-txt = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
+[patch.'https://github.com/astral-sh/uv']
+pep440_rs = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+pep508_rs = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+uv-build = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+uv-cache = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+uv-client = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+uv-configuration = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+uv-dispatch = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+uv-distribution = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+uv-installer = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+uv-interpreter = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+uv-normalize = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+uv-resolver = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+uv-types = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+distribution-filename = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+distribution-types = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+install-wheel-rs = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+platform-tags = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+pypi-types = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+requirements-txt = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }

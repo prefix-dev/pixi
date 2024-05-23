@@ -1,4 +1,4 @@
-use pep508_rs::{MarkerEnvironment, StringVersion};
+use pep508_rs::{MarkerEnvironment, MarkerEnvironmentBuilder, StringVersion};
 use rattler_conda_types::{PackageRecord, Platform, VersionWithSource};
 use std::str::FromStr;
 
@@ -48,18 +48,18 @@ pub fn determine_marker_environment(
         _ => "",
     };
 
-    MarkerEnvironment::new(MarkerEnvironment {
-        implementation_name: String::from(implementation_name),
-        implementation_version: version_to_string_version(&python_record.version),
-        os_name: String::from(os_name),
-        platform_python_implementation: String::from(platform_python_implementation),
-        platform_system: String::from(platform_system),
-        python_full_version: version_to_string_version(&python_record.version),
+    MarkerEnvironment::try_from(MarkerEnvironmentBuilder {
+        implementation_name,
+        implementation_version: python_record.version.as_str().as_ref(),
+        os_name,
+        platform_python_implementation,
+        platform_system,
+        python_full_version: python_record.version.as_str().as_ref(),
         python_version: python_record
             .version
             .version()
             .as_major_minor()
-            .and_then(|(major, minor)| StringVersion::from_str(&format!("{major}.{minor}")).ok())
+            .and_then(|(major, minor)| &format!("{major}.{minor}").ok())
             .ok_or_else(|| {
                 miette::miette!(
                     "could not convert python version {}, to a major minor version",

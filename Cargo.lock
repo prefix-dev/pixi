@@ -694,6 +694,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cache-key"
+version = "0.0.1"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
+dependencies = [
+ "hex",
+ "seahash",
+ "url",
+]
+
+[[package]]
 name = "cache_control"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1152,9 +1162,9 @@ dependencies = [
 [[package]]
 name = "distribution-filename"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
- "pep440_rs 0.5.0",
+ "pep440_rs",
  "platform-tags",
  "rkyv",
  "serde",
@@ -1166,18 +1176,18 @@ dependencies = [
 [[package]]
 name = "distribution-types"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anyhow",
- "cache-key",
+ "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "distribution-filename",
  "fs-err",
  "git2",
  "indexmap 2.2.6",
  "itertools 0.13.0",
  "once_cell",
- "pep440_rs 0.5.0",
- "pep508_rs 0.4.2",
+ "pep440_rs",
+ "pep508_rs",
  "platform-tags",
  "pypi-types",
  "rkyv",
@@ -1187,8 +1197,8 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
- "uv-fs",
- "uv-git",
+ "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-git 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-normalize",
 ]
 
@@ -2231,7 +2241,7 @@ dependencies = [
 [[package]]
 name = "install-wheel-rs"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "configparser",
  "csv",
@@ -2241,7 +2251,7 @@ dependencies = [
  "mailparse",
  "once_cell",
  "pathdiff",
- "pep440_rs 0.5.0",
+ "pep440_rs",
  "platform-info",
  "platform-tags",
  "pypi-types",
@@ -2254,7 +2264,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
- "uv-fs",
+ "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-normalize",
  "walkdir",
  "zip 0.6.6",
@@ -2942,6 +2952,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "once-map"
+version = "0.0.1"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
+dependencies = [
+ "dashmap",
+ "futures",
+ "tokio",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3166,8 +3186,8 @@ dependencies = [
 
 [[package]]
 name = "pep440_rs"
-version = "0.5.0"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+version = "0.6.0"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "once_cell",
  "rkyv",
@@ -3177,49 +3197,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "pep440_rs"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca0a570e7ec9171250cac57614e901f62408094b54b3798bb920d3cf0d4a0e09"
-dependencies = [
- "once_cell",
- "serde",
- "unicode-width",
- "unscanny",
-]
-
-[[package]]
 name = "pep508_rs"
-version = "0.4.2"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+version = "0.6.0"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "derivative",
  "once_cell",
- "pep440_rs 0.5.0",
+ "pep440_rs",
  "regex",
  "serde",
  "thiserror",
  "unicode-width",
  "url",
- "uv-fs",
+ "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-normalize",
-]
-
-[[package]]
-name = "pep508_rs"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "581c27e97a3f38c5d691962af7da93c2672b5227d59cf165b87a9b1fd53dd724"
-dependencies = [
- "derivative",
- "once_cell",
- "pep440_rs 0.6.0",
- "regex",
- "serde",
- "thiserror",
- "unicode-width",
- "url",
- "urlencoding",
 ]
 
 [[package]]
@@ -3365,8 +3356,8 @@ dependencies = [
  "nix 0.28.0",
  "once_cell",
  "parking_lot 0.12.2",
- "pep440_rs 0.5.0",
- "pep508_rs 0.4.2",
+ "pep440_rs",
+ "pep508_rs",
  "platform-tags",
  "pypi-types",
  "pyproject-toml",
@@ -3406,14 +3397,14 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
- "uv-auth",
+ "uv-auth 0.0.1 (git+https://github.com/astral-sh/uv?tag=0.2.2)",
  "uv-build",
  "uv-cache",
  "uv-client",
  "uv-configuration",
  "uv-dispatch",
  "uv-distribution",
- "uv-git",
+ "uv-git 0.0.1 (git+https://github.com/astral-sh/uv?tag=0.2.2)",
  "uv-installer",
  "uv-interpreter",
  "uv-normalize",
@@ -3442,7 +3433,7 @@ dependencies = [
 [[package]]
 name = "platform-tags"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "rustc-hash",
  "serde",
@@ -3605,14 +3596,14 @@ dependencies = [
 [[package]]
 name = "pypi-types"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "chrono",
  "indexmap 2.2.6",
  "mailparse",
  "once_cell",
- "pep440_rs 0.5.0",
- "pep508_rs 0.4.2",
+ "pep440_rs",
+ "pep508_rs",
  "regex",
  "rkyv",
  "serde",
@@ -3626,12 +3617,11 @@ dependencies = [
 [[package]]
 name = "pyproject-toml"
 version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b80f889b6d413c3f8963a2c7db03f95dd6e1d85e1074137cb2013ea2faa8898"
+source = "git+https://github.com/tdejager/pyproject-toml-rs?branch=feat/bump-508-440#0f4118fe85c9b2aa99004de30b7cf39dad5efb9f"
 dependencies = [
  "indexmap 2.2.6",
- "pep440_rs 0.5.0",
- "pep508_rs 0.4.2",
+ "pep440_rs",
+ "pep508_rs",
  "serde",
  "toml",
 ]
@@ -3793,8 +3783,8 @@ dependencies = [
  "fxhash",
  "indexmap 2.2.6",
  "itertools 0.12.1",
- "pep440_rs 0.6.0",
- "pep508_rs 0.6.0",
+ "pep440_rs",
+ "pep508_rs",
  "purl",
  "rattler_conda_types",
  "rattler_digest",
@@ -4116,11 +4106,11 @@ dependencies = [
 [[package]]
 name = "requirements-txt"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "distribution-types",
  "fs-err",
- "pep508_rs 0.4.2",
+ "pep508_rs",
  "regex",
  "thiserror",
  "tracing",
@@ -4128,9 +4118,9 @@ dependencies = [
  "url",
  "uv-client",
  "uv-configuration",
- "uv-fs",
+ "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-normalize",
- "uv-warnings",
+ "uv-warnings 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
 ]
 
 [[package]]
@@ -5683,7 +5673,28 @@ dependencies = [
  "base64 0.22.1",
  "futures",
  "http 1.1.0",
- "once-map",
+ "once-map 0.0.1 (git+https://github.com/astral-sh/uv?tag=0.2.2)",
+ "once_cell",
+ "reqwest 0.12.4",
+ "reqwest-middleware",
+ "rust-netrc",
+ "tokio",
+ "tracing",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
+name = "uv-auth"
+version = "0.0.1"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "futures",
+ "http 1.1.0",
+ "once-map 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "once_cell",
  "reqwest 0.12.4",
  "reqwest-middleware",
@@ -5697,7 +5708,7 @@ dependencies = [
 [[package]]
 name = "uv-build"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5705,8 +5716,8 @@ dependencies = [
  "indoc",
  "itertools 0.13.0",
  "once_cell",
- "pep440_rs 0.5.0",
- "pep508_rs 0.4.2",
+ "pep440_rs",
+ "pep508_rs",
  "regex",
  "rustc-hash",
  "serde",
@@ -5717,7 +5728,7 @@ dependencies = [
  "toml",
  "tracing",
  "uv-configuration",
- "uv-fs",
+ "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-interpreter",
  "uv-types",
  "uv-virtualenv",
@@ -5726,9 +5737,9 @@ dependencies = [
 [[package]]
 name = "uv-cache"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
- "cache-key",
+ "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "directories",
  "distribution-types",
  "fs-err",
@@ -5740,7 +5751,7 @@ dependencies = [
  "tempfile",
  "tracing",
  "url",
- "uv-fs",
+ "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-normalize",
  "walkdir",
 ]
@@ -5748,13 +5759,13 @@ dependencies = [
 [[package]]
 name = "uv-client"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anyhow",
  "async-trait",
  "async_http_range_reader",
  "async_zip",
- "cache-key",
+ "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "chrono",
  "distribution-filename",
  "distribution-types",
@@ -5763,8 +5774,8 @@ dependencies = [
  "html-escape",
  "http 1.1.0",
  "install-wheel-rs",
- "pep440_rs 0.5.0",
- "pep508_rs 0.4.2",
+ "pep440_rs",
+ "pep508_rs",
  "platform-tags",
  "pypi-types",
  "reqwest 0.12.4",
@@ -5783,37 +5794,37 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
- "uv-auth",
+ "uv-auth 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-cache",
  "uv-configuration",
- "uv-fs",
+ "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-normalize",
  "uv-version",
- "uv-warnings",
+ "uv-warnings 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
 ]
 
 [[package]]
 name = "uv-configuration"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anyhow",
  "distribution-types",
  "itertools 0.13.0",
- "pep508_rs 0.4.2",
+ "pep508_rs",
  "platform-tags",
  "rustc-hash",
  "serde",
  "serde_json",
  "tracing",
- "uv-auth",
+ "uv-auth 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-normalize",
 ]
 
 [[package]]
 name = "uv-dispatch"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anyhow",
  "distribution-types",
@@ -5836,10 +5847,10 @@ dependencies = [
 [[package]]
 name = "uv-distribution"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anyhow",
- "cache-key",
+ "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "distribution-filename",
  "distribution-types",
  "fs-err",
@@ -5847,8 +5858,8 @@ dependencies = [
  "install-wheel-rs",
  "nanoid",
  "once_cell",
- "pep440_rs 0.5.0",
- "pep508_rs 0.4.2",
+ "pep440_rs",
+ "pep508_rs",
  "platform-tags",
  "pypi-types",
  "reqwest 0.12.4",
@@ -5866,8 +5877,8 @@ dependencies = [
  "uv-client",
  "uv-configuration",
  "uv-extract",
- "uv-fs",
- "uv-git",
+ "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-git 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-normalize",
  "uv-types",
  "zip 0.6.6",
@@ -5876,7 +5887,7 @@ dependencies = [
 [[package]]
 name = "uv-extract"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "async-compression",
  "async_zip",
@@ -5912,7 +5923,27 @@ dependencies = [
  "tempfile",
  "tracing",
  "urlencoding",
- "uv-warnings",
+ "uv-warnings 0.0.1 (git+https://github.com/astral-sh/uv?tag=0.2.2)",
+]
+
+[[package]]
+name = "uv-fs"
+version = "0.0.1"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
+dependencies = [
+ "backoff",
+ "cachedir",
+ "dunce",
+ "encoding_rs_io",
+ "fs-err",
+ "fs2",
+ "junction",
+ "once_cell",
+ "path-absolutize",
+ "tempfile",
+ "tracing",
+ "urlencoding",
+ "uv-warnings 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
 ]
 
 [[package]]
@@ -5922,7 +5953,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd6188
 dependencies = [
  "anyhow",
  "base64 0.22.1",
- "cache-key",
+ "cache-key 0.0.1 (git+https://github.com/astral-sh/uv?tag=0.2.2)",
  "cargo-util",
  "fs-err",
  "git2",
@@ -5935,24 +5966,47 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "uv-fs",
+ "uv-fs 0.0.1 (git+https://github.com/astral-sh/uv?tag=0.2.2)",
+]
+
+[[package]]
+name = "uv-git"
+version = "0.0.1"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "cargo-util",
+ "fs-err",
+ "git2",
+ "glob",
+ "hmac",
+ "home",
+ "rand",
+ "reqwest 0.12.4",
+ "sha1",
+ "tokio",
+ "tracing",
+ "url",
+ "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
 ]
 
 [[package]]
 name = "uv-installer"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anyhow",
  "async-channel",
- "cache-key",
+ "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "distribution-filename",
  "distribution-types",
  "fs-err",
  "futures",
  "install-wheel-rs",
- "pep440_rs 0.5.0",
- "pep508_rs 0.4.2",
+ "pep440_rs",
+ "pep508_rs",
  "platform-tags",
  "pypi-types",
  "rayon",
@@ -5969,30 +6023,30 @@ dependencies = [
  "uv-configuration",
  "uv-distribution",
  "uv-extract",
- "uv-fs",
- "uv-git",
+ "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-git 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-interpreter",
  "uv-normalize",
  "uv-types",
- "uv-warnings",
+ "uv-warnings 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "walkdir",
 ]
 
 [[package]]
 name = "uv-interpreter"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anyhow",
- "cache-key",
+ "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "configparser",
  "fs-err",
  "futures",
  "install-wheel-rs",
  "itertools 0.13.0",
  "once_cell",
- "pep440_rs 0.5.0",
- "pep508_rs 0.4.2",
+ "pep440_rs",
+ "pep508_rs",
  "platform-tags",
  "pypi-types",
  "regex",
@@ -6010,8 +6064,8 @@ dependencies = [
  "uv-cache",
  "uv-client",
  "uv-extract",
- "uv-fs",
- "uv-warnings",
+ "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-warnings 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "which",
  "winapi",
 ]
@@ -6019,7 +6073,7 @@ dependencies = [
 [[package]]
 name = "uv-normalize"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "rkyv",
  "serde",
@@ -6028,11 +6082,11 @@ dependencies = [
 [[package]]
 name = "uv-resolver"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anstream",
  "anyhow",
- "cache-key",
+ "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "chrono",
  "dashmap",
  "derivative",
@@ -6043,11 +6097,11 @@ dependencies = [
  "indexmap 2.2.6",
  "install-wheel-rs",
  "itertools 0.13.0",
- "once-map",
+ "once-map 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "once_cell",
  "owo-colors",
- "pep440_rs 0.5.0",
- "pep508_rs 0.4.2",
+ "pep440_rs",
+ "pep508_rs",
  "petgraph",
  "platform-tags",
  "pubgrub",
@@ -6066,23 +6120,23 @@ dependencies = [
  "uv-client",
  "uv-configuration",
  "uv-distribution",
- "uv-git",
+ "uv-git 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-interpreter",
  "uv-normalize",
  "uv-types",
- "uv-warnings",
+ "uv-warnings 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
 ]
 
 [[package]]
 name = "uv-types"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anyhow",
  "distribution-types",
- "once-map",
- "pep440_rs 0.5.0",
- "pep508_rs 0.4.2",
+ "once-map 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "pep440_rs",
+ "pep508_rs",
  "pypi-types",
  "rustc-hash",
  "thiserror",
@@ -6096,12 +6150,12 @@ dependencies = [
 [[package]]
 name = "uv-version"
 version = "0.2.2"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 
 [[package]]
 name = "uv-virtualenv"
 version = "0.0.4"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "fs-err",
  "itertools 0.13.0",
@@ -6110,7 +6164,7 @@ dependencies = [
  "pypi-types",
  "thiserror",
  "tracing",
- "uv-fs",
+ "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-interpreter",
  "uv-version",
 ]
@@ -6119,6 +6173,17 @@ dependencies = [
 name = "uv-warnings"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
+dependencies = [
+ "anstream",
+ "once_cell",
+ "owo-colors",
+ "rustc-hash",
+]
+
+[[package]]
+name = "uv-warnings"
+version = "0.0.1"
+source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anstream",
  "once_cell",
