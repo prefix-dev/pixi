@@ -300,14 +300,12 @@ impl Project {
         let default_envs_dir = self.pixi_dir().join(consts::ENVIRONMENTS_DIR);
 
         // Early out if detached-environments is not set
-        if self.config().detached_environments().is_none() {
+        if self.config().detached_environments().is_false() {
             return default_envs_dir;
         }
 
-        let detached_environments_path = self.config().detached_environments().unwrap().path();
-
         // If the detached-environments path is set, use it instead of the default directory.
-        if let Ok(Some(detached_environments_path)) = detached_environments_path {
+        if let Ok(Some(detached_environments_path)) = self.config().detached_environments().path() {
             let environments_dir_name = detached_environments_path.join(format!(
                 "{}-{}",
                 self.name(),
@@ -317,14 +315,13 @@ impl Project {
             let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
 
                 #[cfg(not(windows))]
-                if default_envs_dir.join(consts::ENVIRONMENTS_DIR).exists() && !default_envs_dir.is_symlink() {
+                if default_envs_dir.exists() && !default_envs_dir.is_symlink() {
                     tracing::warn!(
-                        "Environments found in '{}', this will be ignored and the environment will be installed in the detached-environments directory '{}'\n\
-                        \t\tIt's advised to remove the {} folder from the default directory to avoid confusion{}.",
+                        "Environments found in '{}', this will be ignored and the environment will be installed in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
                         default_envs_dir.display(),
                         detached_environments_path.display(),
-                        consts::PIXI_DIR,
-                        if cfg!(windows) { "" } else { " and a symlink to be made. Re-install if needed." }
+                        format!("{}/{}", consts::PIXI_DIR, consts::ENVIRONMENTS_DIR),
+                        if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
                     );
                 } else {
                     create_symlink(&environments_dir_name, &default_envs_dir);

@@ -56,7 +56,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Message what's installed
     let detached_envs_message =
-        if let Some(path) = project.config().detached_environments().map(|d| d.path()) {
+        if let Ok(Some(path)) = project.config().detached_environments().path() {
             format!(" in '{}'", console::style(path.display()).bold())
         } else {
             "".to_string()
