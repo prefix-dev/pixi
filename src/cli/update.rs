@@ -9,6 +9,7 @@ use rattler_lock::{LockFile, LockFileBuilder, Package};
 
 use crate::{config::ConfigCli, consts, load_lock_file, lock_file::UpdateContext, Project};
 
+/// Update dependencies as recorded in the local lock file
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
@@ -27,7 +28,7 @@ pub struct Args {
     pub dry_run: bool,
 
     #[clap(flatten)]
-    specs: UpdateSpecsArgs,
+    pub specs: UpdateSpecsArgs,
 }
 
 #[derive(Parser, Debug, Default)]
