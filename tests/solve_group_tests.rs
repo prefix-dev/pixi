@@ -5,6 +5,7 @@ use crate::common::{
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };
+
 use pixi::pypi_mapping::{self};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;

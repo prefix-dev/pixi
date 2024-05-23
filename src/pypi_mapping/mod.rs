@@ -1,12 +1,14 @@
 use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 
+use async_once_cell::OnceCell as AsyncCell;
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
+use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
-use reqwest_middleware::ClientBuilder;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use url::Url;
 
-use crate::config::get_cache_dir;
+use crate::{config::get_cache_dir, pypi_mapping::custom_pypi_mapping::fetch_mapping_from_url};
 
 pub mod custom_pypi_mapping;
 pub mod prefix_pypi_name_mapping;
@@ -27,21 +29,94 @@ pub enum MappingLocation {
     Url(Url),
 }
 
+#[derive(Debug, Clone)]
+/// Struct with a mapping of channel names to their respective mapping locations
+/// location could be a remote url or local file
+pub struct CustomMapping {
+    pub mapping: MappingMap,
+}
+
+impl CustomMapping {
+    /// Create a new `CustomMapping` with the specified mapping.
+    pub fn new(mapping: MappingMap) -> Self {
+        Self { mapping }
+    }
+
+    /// Fetch the custom mapping from the server or load from the local
+    pub async fn fetch_custom_mapping(
+        &self,
+        client: &ClientWithMiddleware,
+    ) -> miette::Result<&'static HashMap<String, HashMap<String, Option<String>>>> {
+        static MAPPING: AsyncCell<HashMap<String, HashMap<String, Option<String>>>> =
+            AsyncCell::new();
+        MAPPING
+            .get_or_try_init(async {
+                let mut mapping_url_to_name: HashMap<String, HashMap<String, Option<String>>> =
+                    Default::default();
+
+                for (name, url) in self.mapping.iter() {
+                    // Fetch the mapping from the server or from the local
+
+                    match url {
+                        MappingLocation::Url(url) => {
+                            let response = client
+                                .get(url.clone())
+                                .send()
+                                .await
+                                .into_diagnostic()
+                                .context(format!(
+                                "failed to download pypi mapping from {} location",
+                                url.as_str()
+                            ))?;
+
+                            if !response.status().is_success() {
+                                return Err(miette::miette!(
+                                    "Could not request mapping located at {:?}",
+                                    url.as_str()
+                                ));
+                            }
+
+                            let mapping_by_name = fetch_mapping_from_url(client, url).await?;
+
+                            mapping_url_to_name.insert(name.to_string(), mapping_by_name);
+                        }
+                        MappingLocation::Path(path) => {
+                            let contents = std::fs::read_to_string(path)
+                                .into_diagnostic()
+                                .context(format!("mapping on {path:?} could not be loaded"))?;
+                            let data: HashMap<String, Option<String>> =
+                                serde_json::from_str(&contents).into_diagnostic().context(
+                                    format!(
+                                        "Failed to parse JSON mapping located at {}",
+                                        path.display()
+                                    ),
+                                )?;
+
+                            mapping_url_to_name.insert(name.to_string(), data);
+                        }
+                    }
+                }
+
+                Ok(mapping_url_to_name)
+            })
+            .await
+    }
+}
+
 /// This enum represents the source of mapping
 /// it can be user-defined ( custom )
 /// or from prefix.dev ( prefix )
-
 pub enum MappingSource {
-    Custom { mapping: MappingMap },
+    Custom(CustomMapping),
     Prefix,
 }
 
 impl MappingSource {
     /// Return the custom `MappingMap`
     /// for `MappingSource::Custom`
-    pub fn custom(&self) -> Option<MappingMap> {
+    pub fn custom(&self) -> Option<CustomMapping> {
         match self {
-            MappingSource::Custom { mapping } => Some(mapping.clone()),
+            MappingSource::Custom(mapping) => Some(mapping.clone()),
             _ => None,
         }
     }
@@ -72,7 +147,7 @@ pub async fn amend_pypi_purls(
         .build();
 
     match mapping_source {
-        MappingSource::Custom { mapping } => {
+        MappingSource::Custom(mapping) => {
             custom_pypi_mapping::amend_pypi_purls(&client, mapping, conda_packages, reporter)
                 .await?;
         }

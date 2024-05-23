@@ -30,6 +30,7 @@ use crate::activation::{get_environment_variables, run_activation};
 use crate::config::Config;
 use crate::consts::{self, PROJECT_MANIFEST, PYPROJECT_MANIFEST};
 use crate::project::grouped_environment::GroupedEnvironment;
+
 use crate::pypi_mapping::MappingSource;
 use crate::utils::reqwest::build_reqwest_clients;
 use manifest::{EnvironmentName, Manifest};

@@ -10,7 +10,7 @@ use crate::pypi_mapping::MappingLocation;
 
 use super::{
     build_pypi_purl_from_package_record, is_conda_forge_record, prefix_pypi_name_mapping,
-    MappingMap, Reporter,
+    CustomMapping, MappingMap, Reporter,
 };
 
 pub async fn fetch_mapping_from_url<T>(
@@ -105,18 +105,18 @@ pub async fn fetch_custom_mapping(
 /// Amend the records with pypi purls if they are not present yet.
 pub async fn amend_pypi_purls(
     client: &ClientWithMiddleware,
-    mapping_url: &MappingMap,
+    mapping_url: &CustomMapping,
     conda_packages: &mut [RepoDataRecord],
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
     trim_conda_packages_channel_url_suffix(conda_packages);
     let packages_for_prefix_mapping: Vec<RepoDataRecord> = conda_packages
         .iter()
-        .filter(|package| !mapping_url.contains_key(&package.channel))
+        .filter(|package| !mapping_url.mapping.contains_key(&package.channel))
         .cloned()
         .collect();
 
-    let custom_mapping = fetch_custom_mapping(client, mapping_url).await?;
+    let custom_mapping = mapping_url.fetch_custom_mapping(client).await?;
 
     // When all requested channels are present in the custom_mapping, we don't have to request from the prefix_mapping.
     // This will avoid fetching unwanted URLs, e.g. behind corporate firewalls
@@ -133,7 +133,7 @@ pub async fn amend_pypi_purls(
             prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client).await?;
 
         for record in conda_packages.iter_mut() {
-            if !mapping_url.contains_key(&record.channel) {
+            if !mapping_url.mapping.contains_key(&record.channel) {
                 prefix_pypi_name_mapping::amend_pypi_purls_for_record(
                     record,
                     &prefix_mapping,

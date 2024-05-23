@@ -17,7 +17,7 @@ use crate::project::manifest::channel::PrioritizedChannel;
 use crate::project::manifest::environment::TomlEnvironmentMapOrSeq;
 use crate::project::manifest::pypi_options::PypiOptions;
 use crate::project::manifest::python::PyPiPackageName;
-use crate::pypi_mapping::{ChannelName, MappingLocation, MappingSource};
+use crate::pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use crate::task::TaskName;
 use crate::{consts, project::SpecType, task::Task, utils::spanned::PixiSpanned};
 pub use activation::Activation;
@@ -452,7 +452,7 @@ impl Manifest {
                             })
                             .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
 
-                    Ok(MappingSource::Custom { mapping })
+                    Ok(MappingSource::Custom(CustomMapping::new(mapping)))
                 },
                 None => Ok(MappingSource::Prefix),
             }
