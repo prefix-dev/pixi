@@ -158,6 +158,9 @@ nix = { version = "0.28.0", default-features = false, features = [
 libc = { version = "0.2.153", default-features = false }
 signal-hook = "0.3.17"
 
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3.9", default-features = false, features = ["winuser", "winioctl", "ioapiset"] }
+
 [dev-dependencies]
 insta = { version = "1.38.0", features = ["yaml", "glob"] }
 rattler_digest = "0.19.3"

@@ -3400,6 +3400,7 @@ dependencies = [
  "uv-normalize",
  "uv-resolver",
  "uv-types",
+ "winapi",
  "xxhash-rust",
  "zip 1.3.1",
 ]
