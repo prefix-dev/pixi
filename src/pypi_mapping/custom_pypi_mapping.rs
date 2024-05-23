@@ -166,12 +166,8 @@ fn amend_pypi_purls_for_record(
         return Ok(());
     }
 
-    // Initialize the vector if it's None
-    if record.package_record.purls.is_none() {
-        record.package_record.purls = Some(Vec::new());
-    }
-
     let mut not_a_pypi = false;
+    let mut purls = Vec::new();
 
     // we verify if we have package channel and name in user provided mapping
     if let Some(mapped_channel) = custom_mapping.get(&record.channel) {
@@ -182,39 +178,25 @@ fn amend_pypi_purls_for_record(
                     .with_qualifier("source", "project-defined-mapping")
                     .expect("valid qualifier");
 
-                // Push the value into the vector
-                record
-                    .package_record
-                    .purls
-                    .as_mut()
-                    .expect("purls should be already initialise")
-                    .push(purl.build().expect("valid pypi package url"));
+                purls.push(purl.build().expect("valid pypi package url"));
             } else {
                 not_a_pypi = true;
-                record.package_record.purls = None;
             }
         }
     }
 
     // if we don't have it and it's channel is conda-forge
     // we assume that it's the pypi package
-    if !not_a_pypi
-        && record
-            .package_record
-            .purls
-            .as_ref()
-            .is_some_and(|vec| vec.is_empty())
-        && is_conda_forge_record(record)
-    {
+    if !not_a_pypi && purls.is_empty() && is_conda_forge_record(record) {
         // Convert the conda package names to pypi package names. If the conversion fails we
         // just assume that its not a valid python package.
         if let Some(purl) = build_pypi_purl_from_package_record(&record.package_record) {
-            // Push the value into the vector
-            if let Some(ref mut vec) = record.package_record.purls {
-                vec.push(purl);
-            }
+            purls.push(purl);
         }
     }
+
+    let package_purls = record.package_record.purls.get_or_insert_with(Vec::new);
+    package_purls.extend(purls);
 
     Ok(())
 }
