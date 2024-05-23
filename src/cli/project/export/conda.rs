@@ -7,7 +7,7 @@ use miette::IntoDiagnostic;
 use rattler_conda_types::{MatchSpec, Platform};
 
 use crate::utils::conda_environment_file::{CondaEnvDep, CondaEnvFile};
-use crate::{HasFeatures, Project};
+use crate::{project, HasFeatures, Project};
 
 // enum to select version spec formatting
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -81,7 +81,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .as_pep508(name.as_normalized(), project.root())
                     .into_diagnostic()
                     .unwrap();
-                requirement.to_string()
+                return match &requirement {
+                    project::manifest::python::RequirementOrEditable::Editable(
+                        _package_name,
+                        requirements_txt,
+                    ) => {
+                        let relative_path = requirements_txt
+                            .path
+                            .as_path()
+                            .strip_prefix(project.manifest_path().parent().unwrap());
+                        format!("-e ./{}", relative_path.unwrap().to_string_lossy())
+                    }
+                    _ => requirement.to_string(),
+                };
             }
             _ => name.as_source().to_string(),
         })
