@@ -150,6 +150,35 @@ pub struct PyPIConfig {
     pub keyring_provider: Option<KeyringProvider>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+enum DetachedEnvironments {
+    Boolean(bool),
+    Path(PathBuf),
+}
+impl DetachedEnvironments {
+    fn as_ref(&self) -> &DetachedEnvironments {
+        self
+    }
+
+    // Get the path to the detached-environments directory. None means the default directory.
+    pub(crate) fn path(&self) -> miette::Result<Option<PathBuf>> {
+        match self {
+            DetachedEnvironments::Path(p) => Ok(Some(p.clone())),
+            DetachedEnvironments::Boolean(b) if *b => {
+                let path = get_cache_dir()?.join(consts::ENVIRONMENTS_DIR);
+                Ok(Some(path))
+            }
+            _ => Ok(None),
+        }
+    }
+}
+impl Default for DetachedEnvironments {
+    fn default() -> Self {
+        DetachedEnvironments::Boolean(false)
+    }
+}
+
 impl PyPIConfig {
     /// Merge the given PyPIConfig into the current one.
     pub fn merge(self, other: Self) -> Self {
@@ -234,10 +263,13 @@ pub struct Config {
     #[serde(skip_serializing_if = "PyPIConfig::is_default")]
     pub pypi_config: PyPIConfig,
 
-    /// The location of the environments build by pixi
+    /// The option to specify the directory where detached environments are stored.
+    /// When using 'true', it defaults to the cache directory.
+    /// When using a path, it uses the specified path.
+    /// When using 'false', it disables detached environments, meaning it moves it back to the .pixi folder.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub target_environments_directory: Option<PathBuf>,
+    pub detached_environments: Option<DetachedEnvironments>,
 }
 
 impl Default for Config {
@@ -252,7 +284,7 @@ impl Default for Config {
             channel_config: default_channel_config(),
             repodata_config: None,
             pypi_config: PyPIConfig::default(),
-            target_environments_directory: None,
+            detached_environments: Some(DetachedEnvironments::default()),
         }
     }
 }
@@ -375,11 +407,18 @@ impl Config {
 
     /// Validate the config file.
     pub fn validate(&self) -> miette::Result<()> {
-        // Validate the target environments directory
-        if let Some(target_env_dir) = self.target_environments_directory.clone() {
-            if !target_env_dir.is_absolute() || !target_env_dir.exists() {
-                // The path might exist, but we need it to be absolute because we don't canonicalize it.
-                return Err(miette!("The `target-environments-directory` path does not exist: {:?}. It needs to be an absolute path to a directory.", target_env_dir));
+        // Validate the detached environments directory is set correctly
+        if let Some(detached_environments) = self.detached_environments.clone() {
+            match detached_environments {
+                DetachedEnvironments::Boolean(_) => {}
+                DetachedEnvironments::Path(path) => {
+                    if !path.is_absolute() {
+                        return Err(miette!(
+                            "The `detached-environments` path must be an absolute path: {}",
+                            path.display()
+                        ));
+                    }
+                }
             }
         }
 
@@ -464,9 +503,7 @@ impl Config {
             channel_config: other.channel_config,
             repodata_config: other.repodata_config.or(self.repodata_config),
             pypi_config: other.pypi_config.merge(self.pypi_config),
-            target_environments_directory: other
-                .target_environments_directory
-                .or(self.target_environments_directory),
+            detached_environments: other.detached_environments.or(self.detached_environments),
         }
     }
 
@@ -530,8 +567,8 @@ impl Config {
     }
 
     /// Retrieve the value for the target_environments_directory field.
-    pub fn target_environments_directory(&self) -> Option<&Path> {
-        self.target_environments_directory.as_deref()
+    pub fn detached_environments(&self) -> Option<&DetachedEnvironments> {
+        self.detached_environments.as_ref()
     }
 
     /// Modify this config with the given key and value
@@ -720,7 +757,7 @@ mod tests {
         let toml = format!(
             r#"default-channels = ["conda-forge"]
 tls-no-verify = true
-target-environments-directory = "{}"
+detached-environments = "{}"
 UNUSED = "unused"
         "#,
             env!("CARGO_MANIFEST_DIR").replace("\\", "\\\\").as_str()
@@ -729,10 +766,26 @@ UNUSED = "unused"
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(true));
         assert_eq!(
-            config.target_environments_directory,
+            config.detached_environments().unwrap().path().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         );
         assert!(unused.contains(&"UNUSED".to_string()));
+
+        let toml = r#"detached-environments = true
+        "#;
+        let (config, unused) = Config::from_toml(toml).unwrap();
+        assert_eq!(
+            config
+                .detached_environments()
+                .unwrap()
+                .path()
+                .unwrap()
+                .unwrap(),
+            get_cache_dir()
+                .unwrap()
+                .join(consts::ENVIRONMENTS_DIR)
+                .as_path()
+        );
     }
 
     #[test]
@@ -790,14 +843,14 @@ UNUSED = "unused"
             default_channels: vec!["conda-forge".to_string()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
-            target_environments_directory: Some(PathBuf::from("/path/to/envs")),
+            detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
             ..Default::default()
         };
         config = config.merge_config(other);
         assert_eq!(config.default_channels, vec!["conda-forge"]);
         assert_eq!(config.tls_no_verify, Some(true));
         assert_eq!(
-            config.target_environments_directory,
+            config.detached_environments().unwrap().path().unwrap(),
             Some(PathBuf::from("/path/to/envs"))
         );
 
@@ -805,7 +858,9 @@ UNUSED = "unused"
             default_channels: vec!["channel".to_string()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir2")),
             tls_no_verify: Some(false),
-            target_environments_directory: Some(PathBuf::from("/path/to/envs2")),
+            detached_environments: Some(DetachedEnvironments::Path(PathBuf::from(
+                "/path/to/envs2",
+            ))),
             ..Default::default()
         };
 
@@ -813,7 +868,7 @@ UNUSED = "unused"
         assert_eq!(config.default_channels, vec!["channel"]);
         assert_eq!(config.tls_no_verify, Some(false));
         assert_eq!(
-            config.target_environments_directory,
+            config.detached_environments().unwrap().path().unwrap(),
             Some(PathBuf::from("/path/to/envs2"))
         );
 

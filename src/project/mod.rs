@@ -292,10 +292,23 @@ impl Project {
 
     /// Returns the pixi directory
     pub fn pixi_dir(&self) -> PathBuf {
-        let default_pixi_dir = self.root.join(consts::PIXI_DIR);
+        self.root.join(consts::PIXI_DIR)
+    }
 
-        if let Some(custom_root) = self.config().target_environments_directory() {
-            let pixi_dir_name = custom_root.join(format!(
+    /// Returns the environment directory
+    pub fn environments_dir(&self) -> PathBuf {
+        let default_envs_dir = self.pixi_dir().join(consts::ENVIRONMENTS_DIR);
+
+        // Early out if detached-environments is not set
+        if self.config().detached_environments().is_none() {
+            return default_envs_dir;
+        }
+
+        let detached_environments_path = self.config().detached_environments().unwrap().path();
+
+        // If the detached-environments path is set, use it instead of the default directory.
+        if let Ok(Some(detached_environments_path)) = detached_environments_path {
+            let environments_dir_name = detached_environments_path.join(format!(
                 "{}-{}",
                 self.name(),
                 xxh3_64(self.root.to_string_lossy().as_bytes())
@@ -304,37 +317,32 @@ impl Project {
             let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
 
                 #[cfg(not(windows))]
-                if default_pixi_dir.join(consts::ENVIRONMENTS_DIR).exists() && !default_pixi_dir.is_symlink() {
+                if default_envs_dir.join(consts::ENVIRONMENTS_DIR).exists() && !default_envs_dir.is_symlink() {
                     tracing::warn!(
-                        "Environments found in '{}', this will be ignored and the environment will be installed in the custom target directory '{}'\n\
+                        "Environments found in '{}', this will be ignored and the environment will be installed in the detached-environments directory '{}'\n\
                         \t\tIt's advised to remove the {} folder from the default directory to avoid confusion{}.",
-                        default_pixi_dir.display(),
-                        custom_root.display(),
+                        default_envs_dir.display(),
+                        detached_environments_path.display(),
                         consts::PIXI_DIR,
                         if cfg!(windows) { "" } else { " and a symlink to be made. Re-install if needed." }
                     );
                 } else {
-                    create_symlink(&pixi_dir_name, &default_pixi_dir);
+                    create_symlink(&environments_dir_name, &default_envs_dir);
                 }
 
                 #[cfg(windows)]
-                write_warning_file(&default_pixi_dir, &pixi_dir_name);
+                write_warning_file(&default_envs_dir, &environments_dir_name);
             });
 
-            return pixi_dir_name;
+            return environments_dir_name;
         }
 
         tracing::debug!(
-            "Using default root directory: `{}` for target environments.",
-            default_pixi_dir.display()
+            "Using default root directory: `{}` as environments directory.",
+            default_envs_dir.display()
         );
 
-        default_pixi_dir
-    }
-
-    /// Returns the environment directory
-    pub fn environments_dir(&self) -> PathBuf {
-        self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
+        default_envs_dir
     }
 
     /// Returns the solve group directory
@@ -540,8 +548,8 @@ fn create_symlink(pixi_dir_name: &Path, default_pixi_dir: &Path) {
 
 /// Write a warning file to the default pixi directory to inform the user that symlinks are not supported on this platform (Windows).
 #[cfg(windows)]
-fn write_warning_file(default_pixi_dir: &PathBuf, pixi_dir_name: &Path) {
-    let warning_file = default_pixi_dir.join("README.txt");
+fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
+    let warning_file = default_envs_dir.join("README.txt");
     if warning_file.exists() {
         tracing::debug!(
             "Symlink warning file already exists at '{}', skipping writing warning file.",
@@ -550,16 +558,16 @@ fn write_warning_file(default_pixi_dir: &PathBuf, pixi_dir_name: &Path) {
         return;
     }
     let warning_message = format!(
-        "Environments are installed in a custom target directory: {}.\n\
-        Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi') directory.",
-        pixi_dir_name.display()
+        "Environments are installed in a custom detached-environments directory: {}.\n\
+        Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi/envs') directory.",
+        envs_dir_name.display()
     );
 
     // Create directory if it doesn't exist
-    if let Err(e) = std::fs::create_dir_all(default_pixi_dir) {
+    if let Err(e) = std::fs::create_dir_all(default_envs_dir) {
         tracing::error!(
             "Failed to create directory '{}': {}",
-            default_pixi_dir.display(),
+            default_envs_dir.display(),
             e
         );
         return;

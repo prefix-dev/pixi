@@ -55,28 +55,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Message what's installed
-    let target_envs_dir_message = if project.config().target_environments_directory.is_some() {
-        format!(
-            " in '{}'",
-            console::style(
-                project
-                    .config()
-                    .target_environments_directory
-                    .as_ref()
-                    .unwrap()
-                    .display()
-            )
-            .bold()
-        )
-    } else {
-        "".to_string()
-    };
+    let detached_envs_message =
+        if let Some(path) = project.config().detached_environments().map(|d| d.path()) {
+            format!(" in '{}'", console::style(path.display()).bold())
+        } else {
+            "".to_string()
+        };
+
     if installed_envs.len() == 1 {
         eprintln!(
             "{}The {} environment has been installed{}.",
             console::style(console::Emoji("✔ ", "")).green(),
             installed_envs[0].fancy_display(),
-            target_envs_dir_message
+            detached_envs_message
         );
     } else {
         eprintln!(
@@ -86,7 +77,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .iter()
                 .map(|n| n.fancy_display())
                 .join("\n\t"),
-            target_envs_dir_message
+            detached_envs_message
         );
     }
 
