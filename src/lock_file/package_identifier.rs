@@ -1,4 +1,4 @@
-use crate::project::manifest::python::PyPiPackageName;
+use crate::{project::manifest::python::PyPiPackageName, pypi_mapping};
 use pep508_rs::{Requirement, VersionOrUrl};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
@@ -22,6 +22,7 @@ impl PypiPackageIdentifier {
     pub fn from_record(record: &RepoDataRecord) -> Result<Vec<Self>, ConversionError> {
         let mut result = Vec::new();
         Self::from_record_into(record, &mut result)?;
+
         Ok(result)
     }
 
@@ -31,12 +32,46 @@ impl PypiPackageIdentifier {
         record: &RepoDataRecord,
         result: &mut Vec<Self>,
     ) -> Result<(), ConversionError> {
+        let mut has_pypi_purl = false;
         // Check the PURLs for a python package.
-        for purl in record.package_record.purls.iter() {
-            if let Some(entry) =
-                Self::convert_from_purl(purl, &record.package_record.version.as_str())?
-            {
-                result.push(entry);
+        if let Some(purls) = &record.package_record.purls {
+            for purl in purls.iter() {
+                if let Some(entry) =
+                    Self::convert_from_purl(purl, &record.package_record.version.as_str())?
+                {
+                    result.push(entry);
+                    has_pypi_purl = true;
+                }
+            }
+        }
+
+        // Backwards compatibility:
+        // If lock file don't have a purl
+        // but the package is a conda-forge package, we just assume that
+        // the name of the package is equivalent to the name of the python package.
+        // In newer versions of the lock file, we should always have a purl
+        // where empty purls means that the package is not a pypi-one.
+        if record.package_record.purls.is_none()
+            && !has_pypi_purl
+            && pypi_mapping::is_conda_forge_record(record)
+        {
+            tracing::debug!(
+                "Using backwards compatibility purl logic for conda package: {}",
+                record.package_record.name.as_source()
+            );
+            // Convert the conda package names to pypi package names. If the conversion fails we
+            // just assume that its not a valid python package.
+            let name = PackageName::from_str(record.package_record.name.as_source()).ok();
+            let version =
+                pep440_rs::Version::from_str(&record.package_record.version.as_str()).ok();
+            if let (Some(name), Some(version)) = (name, version) {
+                result.push(PypiPackageIdentifier {
+                    name: PyPiPackageName::from_normalized(name),
+                    version,
+                    url: record.url.clone(),
+                    // TODO: We can't really tell which python extras are enabled in a conda package.
+                    extras: Default::default(),
+                })
             }
         }
 

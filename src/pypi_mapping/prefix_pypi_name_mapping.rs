@@ -73,7 +73,13 @@ pub async fn conda_pypi_name_mapping(
         // that have purls
         // here we only filter packages that don't them
         // to save some requests
-        .filter(|package| package.package_record.purls.is_empty())
+        .filter(|package| {
+            package
+                .package_record
+                .purls
+                .as_ref()
+                .is_some_and(|p| p.is_empty())
+        })
         .filter_map(|package| {
             package
                 .package_record
@@ -183,11 +189,13 @@ pub fn amend_pypi_purls_for_record(
     if record
         .package_record
         .purls
-        .iter()
-        .any(|p| p.package_type() == "pypi")
+        .as_ref()
+        .is_some_and(|vec| vec.iter().any(|p| p.package_type() == "pypi"))
     {
         return Ok(());
     }
+
+    let mut purls = Vec::new();
 
     let mut not_a_pypi = false;
 
@@ -203,7 +211,8 @@ pub fn amend_pypi_purls_for_record(
                         .with_qualifier("source", "conda-forge-mapping")
                         .expect("valid qualifier");
                     let built_purl = purl.build().expect("valid pypi package url");
-                    record.package_record.purls.push(built_purl);
+                    // Push the value into the vector
+                    purls.push(built_purl);
                 }
             } else {
                 // it's not a pypi name
@@ -220,7 +229,7 @@ pub fn amend_pypi_purls_for_record(
     if let Some(possible_mapped_name) =
         compressed_mapping.get(record.package_record.name.as_normalized())
     {
-        if !not_a_pypi && record.package_record.purls.is_empty() {
+        if !not_a_pypi && purls.is_empty() {
             // if we have a pypi name for it
             // we record the purl
             if let Some(mapped_name) = possible_mapped_name {
@@ -228,7 +237,7 @@ pub fn amend_pypi_purls_for_record(
                     .with_qualifier("source", "conda-forge-mapping")
                     .expect("valid qualifier");
                 let built_purl = purl.build().expect("valid pypi package url");
-                record.package_record.purls.push(built_purl);
+                purls.push(built_purl);
             } else {
                 // it's not a pypi name
                 not_a_pypi = true;
@@ -238,13 +247,16 @@ pub fn amend_pypi_purls_for_record(
 
     // package is not in our mapping yet
     // so we assume that it is the same as the one from conda-forge
-    if !not_a_pypi && record.package_record.purls.is_empty() && is_conda_forge_record(record) {
+    if !not_a_pypi && purls.is_empty() && is_conda_forge_record(record) {
         // Convert the conda package names to pypi package names. If the conversion fails we
         // just assume that its not a valid python package.
         if let Some(purl) = build_pypi_purl_from_package_record(&record.package_record) {
-            record.package_record.purls.push(purl);
+            purls.push(purl);
         }
     }
+
+    let package_purls = record.package_record.purls.get_or_insert_with(Vec::new);
+    package_purls.extend(purls);
 
     Ok(())
 }

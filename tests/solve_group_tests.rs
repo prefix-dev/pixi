@@ -110,7 +110,7 @@ async fn test_purl_are_added_for_pypi() {
             if dep.as_conda().unwrap().package_record().name
                 == PackageName::from_str("boltons").unwrap()
             {
-                assert!(dep.as_conda().unwrap().package_record().purls.is_empty());
+                assert!(dep.as_conda().unwrap().package_record().purls.is_none());
             }
         });
 
@@ -133,7 +133,14 @@ async fn test_purl_are_added_for_pypi() {
             if dep.as_conda().unwrap().package_record().name
                 == PackageName::from_str("boltons").unwrap()
             {
-                assert!(!dep.as_conda().unwrap().package_record().purls.is_empty());
+                assert!(!dep
+                    .as_conda()
+                    .unwrap()
+                    .package_record()
+                    .purls
+                    .as_ref()
+                    .unwrap()
+                    .is_empty());
             }
         });
 
@@ -183,7 +190,12 @@ async fn test_purl_are_generated_using_custom_mapping() {
     )
     .unwrap();
 
-    let first_purl = repo_data_record.package_record.purls.pop().unwrap();
+    let first_purl = repo_data_record
+        .package_record
+        .purls
+        .unwrap()
+        .pop()
+        .unwrap();
 
     // We verify that `my-test-name` is used for `foo-bar-car` package
     assert!(first_purl.name() == "my-test-name")
@@ -226,7 +238,7 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
 
     // pandoc is not a python package
     // so purls for it should be empty
-    assert!(repo_data_record.package_record.purls.is_empty())
+    assert!(repo_data_record.package_record.purls.unwrap().is_empty())
 }
 
 #[tokio::test]
@@ -284,14 +296,24 @@ async fn test_dont_record_not_present_package_as_purl() {
     )
     .unwrap();
 
-    let first_purl = repo_data_record.package_record.purls.pop().unwrap();
+    let first_purl = repo_data_record
+        .package_record
+        .purls
+        .unwrap()
+        .pop()
+        .unwrap();
 
     // we verify that even if this name is not present in our mapping
     // we anyway record a purl because we make an assumption
     // that it's a pypi package
     assert!(first_purl.name() == "pixi-something-new-for-test");
 
-    let boltons_purl = boltons_repo_data_record.package_record.purls.pop().unwrap();
+    let boltons_purl = boltons_repo_data_record
+        .package_record
+        .purls
+        .unwrap()
+        .pop()
+        .unwrap();
 
     // for boltons we have a mapping record
     // so we test that we also record source=conda-forge-mapping qualifier
@@ -349,18 +371,18 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
         .await
         .unwrap();
 
-    let mut boltons_package = packages.pop().unwrap();
+    let boltons_package = packages.pop().unwrap();
 
-    let boltons_first_purl = boltons_package.package_record.purls.pop().unwrap();
+    let boltons_first_purl = boltons_package.package_record.purls.unwrap().pop().unwrap();
 
     // for boltons we have a mapping record
     // so we test that we also record source=project-defined-mapping qualifier
     assert!(boltons_first_purl.name() == "boltons");
     assert!(boltons_first_purl.qualifiers().get("source").unwrap() == "project-defined-mapping");
 
-    let mut package = packages.pop().unwrap();
+    let package = packages.pop().unwrap();
 
-    let first_purl = package.package_record.purls.pop().unwrap();
+    let first_purl = package.package_record.purls.unwrap().pop().unwrap();
 
     // we verify that even if this name is not present in our mapping
     // we anyway record a purl because we make an assumption
@@ -408,7 +430,7 @@ async fn test_custom_mapping_channel_with_suffix() {
     let package = packages.pop().unwrap();
 
     assert!(
-        package.package_record.purls[0]
+        package.package_record.purls.unwrap()[0]
             .qualifiers()
             .get("source")
             .unwrap()
@@ -454,7 +476,7 @@ async fn test_repo_data_record_channel_with_suffix() {
 
     let package = packages.pop().unwrap();
     assert!(
-        package.package_record.purls[0]
+        package.package_record.purls.unwrap()[0]
             .qualifiers()
             .get("source")
             .unwrap()
