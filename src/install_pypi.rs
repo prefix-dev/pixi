@@ -5,7 +5,7 @@ use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use distribution_filename::DistFilename;
+use distribution_filename::{DistFilename, WheelFilename};
 
 use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, WrapErr};
@@ -13,7 +13,6 @@ use pep440_rs::Version;
 use pep508_rs::VerbatimUrl;
 use platform_tags::Tags;
 use pypi_types::{HashAlgorithm, HashDigest};
-use requirements_txt::EditableRequirement;
 use tempfile::{tempdir, TempDir};
 use url::Url;
 
@@ -28,8 +27,9 @@ use crate::project::manifest::SystemRequirements;
 
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use distribution_types::{
-    CachedDist, Dist, IndexUrl, InstalledDist, LocalEditable, LocalEditables, Name, ParsedGitUrl,
-    ParsedUrl, VerbatimParsedUrl,
+    BuiltDist, CachedDist, Dist, IndexUrl, InstalledDist, LocalEditable, LocalEditables, Name,
+    ParsedGitUrl, ParsedPathUrl, ParsedUrl, RegistryBuiltDist, RegistryBuiltWheel,
+    VerbatimParsedUrl,
 };
 use install_wheel_rs::linker::LinkMode;
 
@@ -43,8 +43,8 @@ use std::time::Duration;
 
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_dispatch::BuildDispatch;
-use uv_distribution::RegistryWheelIndex;
-use uv_installer::{Downloader, ResolvedEditable, SitePackages};
+use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
+use uv_installer::{Downloader, InstalledEditable, ResolvedEditable, SitePackages};
 use uv_interpreter::{Interpreter, PythonEnvironment};
 use uv_normalize::PackageName;
 use uv_resolver::FlatIndex;
@@ -158,36 +158,41 @@ fn strip_direct_scheme(url: &Url) -> Cow<'_, Url> {
 }
 
 /// Convert from a PypiPackageData to a uv [`distribution_types::Dist`]
-fn convert_to_dist(pkg: &PypiPackageData, lock_file_dir: &Path) -> Dist {
+fn convert_to_dist(pkg: &PypiPackageData, lock_file_dir: &Path) -> miette::Result<Dist> {
     // Figure out if it is a url from the registry or a direct url
-    match &pkg.url_or_path {
-        UrlOrPath::Url(url) if is_direct_url(url.scheme()) => Dist::from_url(
-            pkg.name.clone(),
-            VerbatimUrl::from_url(strip_direct_scheme(url).into_owned()),
-        )
-        .expect("could not convert into uv dist"),
+    let dist = match &pkg.url_or_path {
+        UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
+            let url_without_direct = strip_direct_scheme(url);
+            Dist::from_url(
+                pkg.name.clone(),
+                VerbatimParsedUrl {
+                    parsed_url: ParsedUrl::try_from(url_without_direct.into_owned())
+                        .into_diagnostic()?,
+                    verbatim: VerbatimUrl::from(url_without_direct.into_owned()),
+                },
+            )
+            .into_diagnostic()?
+        }
         UrlOrPath::Url(url) => {
             // We consider it to be a registry url
             // Extract last component from registry url
             // should be something like `package-0.1.0-py3-none-any.whl`
             let filename_raw = url.path_segments().unwrap().last().unwrap();
             // Recreate the filename from the extracted last component
-            let filename =
-                DistFilename::try_from_normalized_filename(filename_raw).unwrap_or_else(|| {
-                    panic!(
-                        "package = {}, url = {} => could not convert to dist filename",
-                        pkg.name.as_ref(),
-                        url
-                    )
-                });
+            let filename = WheelFilename::from_str(filename_raw).into_diagnostic()?;
             // Now we can convert the locked data to a [`distribution_types::File`]
             // which is essentially the file information for a wheel or sdist
             let file = locked_data_to_file(pkg, filename_raw);
-            Dist::from_registry(
-                filename,
-                file,
-                IndexUrl::Pypi(VerbatimUrl::from_url(url.clone())),
-            )
+            Dist::Built(BuiltDist::Registry(RegistryBuiltDist {
+                wheels: vec![RegistryBuiltWheel {
+                    filename: filename,
+                    file: Box::new(file),
+                    // TODO: this should be the index url of the package
+                    index: IndexUrl::Pypi(VerbatimUrl::from_url(url.clone())),
+                }],
+                best_wheel_index: 0,
+                sdist: None,
+            }))
         }
         UrlOrPath::Path(path) => {
             // uv always expects an absolute path.
@@ -200,13 +205,21 @@ fn convert_to_dist(pkg: &PypiPackageData, lock_file_dir: &Path) -> Dist {
             Dist::from_url(
                 pkg.name.clone(),
                 VerbatimParsedUrl {
-                    parsed_url: ParsedUrl::try_from(),
-                    verbatim: VerbatimUrl::from_path(&path).with_given(path.display().to_string()),
+                    parsed_url: ParsedUrl::Path(ParsedPathUrl {
+                        url: Url::from_file_path(path).expect("could not convert path to url"),
+                        path,
+                        editable: pkg.editable,
+                    }),
+                    verbatim: VerbatimUrl::from_path(&path)
+                        .into_diagnostic()?
+                        .with_given(path.display().to_string()),
                 },
             )
             .expect("could not convert path into uv dist")
         }
-    }
+    };
+
+    Ok(dist)
 }
 
 enum ValidateInstall {
@@ -342,7 +355,7 @@ fn need_reinstall(
                 } => {
                     let url = Url::parse(&url).into_diagnostic()?;
                     let git_url = match &locked.url_or_path {
-                        UrlOrPath::Url(url) => ParsedGitUrl::try_from(url),
+                        UrlOrPath::Url(url) => ParsedGitUrl::try_from(url.clone()),
                         UrlOrPath::Path(_path) => {
                             // Previously
                             return Ok(ValidateInstall::Reinstall);
@@ -367,6 +380,9 @@ fn need_reinstall(
                 }
             }
         }
+        // Figure out what to do with these
+        InstalledDist::EggInfo(_) => {}
+        InstalledDist::LegacyEditable(_) => {}
     };
 
     // Do some extra checks if the version is the same
@@ -490,7 +506,7 @@ fn whats_the_plan<'a>(
             // Check if we need to revalidate the package
             // then we should get it from the remote
             if uv_cache.must_revalidate(&pkg.name) {
-                remote.push(convert_to_dist(pkg, lock_file_dir));
+                remote.push(convert_to_dist(pkg, lock_file_dir)?);
                 continue;
             }
 
@@ -501,7 +517,7 @@ fn whats_the_plan<'a>(
             if let Some((_, cached)) = wheel {
                 local.push(CachedDist::Registry(cached.clone()));
             } else {
-                remote.push(convert_to_dist(pkg, lock_file_dir));
+                remote.push(convert_to_dist(pkg, lock_file_dir)?);
             }
         } else if installer != PIXI_UV_INSTALLER {
             // Ignore packages that we are not managed by us
@@ -518,7 +534,7 @@ fn whats_the_plan<'a>(
         // Check if we need to revalidate
         // In that case we need to download from the registry
         if uv_cache.must_revalidate(&pkg.name) {
-            remote.push(convert_to_dist(pkg, lock_file_dir));
+            remote.push(convert_to_dist(pkg, lock_file_dir)?);
             continue;
         }
 
@@ -531,7 +547,7 @@ fn whats_the_plan<'a>(
             local.push(CachedDist::Registry(cached.clone()));
         } else {
             // We need to download from the registry or any url
-            remote.push(convert_to_dist(pkg, lock_file_dir));
+            remote.push(convert_to_dist(pkg, lock_file_dir)?);
         }
     }
 
@@ -568,7 +584,7 @@ struct EditablesWithTemp {
 async fn resolve_editables(
     lock_file_dir: &Path,
     editables: Vec<&CombinedPypiPackageData>,
-    site_packages: &SitePackages<'_>,
+    site_packages: &SitePackages,
     uv_context: &UvResolutionContext,
     tags: &Tags,
     registry_client: &RegistryClient,
@@ -612,17 +628,18 @@ async fn resolve_editables(
                 if ArchiveTimestamp::up_to_date_with(&editable.path, ArchiveTarget::Install(dist))
                     .into_diagnostic()?
                     // If the editable is dynamic, we need to rebuild it
-                    && !uv_installer::is_dynamic(&EditableRequirement {
-                        url: VerbatimUrl::from_url(url.clone()),
-                        extras: vec![],
-                        // Only this field is actually used in the `is_dynamic` function
-                        path: editable.path.clone(),
-                    })
+                    && !uv_installer::is_dynamic(dist.path())
                     // And the dist is already editable
                     && dist.is_editable()
                 {
                     // Keep it as is
-                    installed.push((*dist).clone());
+                    installed.push(InstalledEditable {
+                        editable,
+                        wheel: (**dist).clone(),
+                        metadata: dist
+                            .metadata()
+                            .map_err(|e| miette!("metadata error: {}", e))?,
+                    });
                 } else {
                     // The editable is not up to date but present
                     // rebuild it
@@ -653,13 +670,18 @@ async fn resolve_editables(
         // Create a tempdir to store the built editables
         let temp = tempdir().into_diagnostic()?;
 
+        let database = DistributionDatabase::new(
+            registry_client,
+            build_dispatch,
+            uv_context.concurrency.builds,
+        );
+
         // Build the editables
         let built_editables = Downloader::new(
             &uv_context.cache,
             tags,
             &uv_types::HashStrategy::None,
-            registry_client,
-            build_dispatch,
+            database,
         )
         .with_reporter(UvReporter::new(options))
         .build_editables(
@@ -759,6 +781,7 @@ pub async fn update_python_distributions(
         LinkMode::default(),
         &uv_context.no_build,
         &uv_context.no_binary,
+        uv_context.concurrency,
     )
     .with_build_extra_env_vars(environment_variables.iter());
 
@@ -882,12 +905,17 @@ pub async fn update_python_distributions(
             .with_starting_tasks(remote.iter().map(|d| format!("{}", d.name())))
             .with_top_level_message("Downloading");
 
+        let distribution_database = DistributionDatabase::new(
+            registry_client.as_ref(),
+            build_dispatch,
+            uv_context.concurrency.downloads,
+        );
+
         let downloader = Downloader::new(
             &uv_context.cache,
             &tags,
             &uv_types::HashStrategy::None,
-            &registry_client,
-            &build_dispatch,
+            distribution_database,
         )
         .with_reporter(UvReporter::new(options));
 

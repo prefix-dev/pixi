@@ -686,16 +686,6 @@ dependencies = [
 [[package]]
 name = "cache-key"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
-dependencies = [
- "hex",
- "seahash",
- "url",
-]
-
-[[package]]
-name = "cache-key"
-version = "0.0.1"
 source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "hex",
@@ -1179,7 +1169,7 @@ version = "0.0.1"
 source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anyhow",
- "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "cache-key",
  "distribution-filename",
  "fs-err",
  "git2",
@@ -1197,8 +1187,8 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
- "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
- "uv-git 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-fs",
+ "uv-git",
  "uv-normalize",
 ]
 
@@ -2264,7 +2254,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
- "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-fs",
  "uv-normalize",
  "walkdir",
  "zip 0.6.6",
@@ -3209,7 +3199,7 @@ dependencies = [
  "thiserror",
  "unicode-width",
  "url",
- "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-fs",
  "uv-normalize",
 ]
 
@@ -3404,7 +3394,7 @@ dependencies = [
  "uv-configuration",
  "uv-dispatch",
  "uv-distribution",
- "uv-git 0.0.1 (git+https://github.com/astral-sh/uv?tag=0.2.2)",
+ "uv-git",
  "uv-installer",
  "uv-interpreter",
  "uv-normalize",
@@ -4118,9 +4108,9 @@ dependencies = [
  "url",
  "uv-client",
  "uv-configuration",
- "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-fs",
  "uv-normalize",
- "uv-warnings 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-warnings",
 ]
 
 [[package]]
@@ -5728,7 +5718,7 @@ dependencies = [
  "toml",
  "tracing",
  "uv-configuration",
- "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-fs",
  "uv-interpreter",
  "uv-types",
  "uv-virtualenv",
@@ -5739,7 +5729,7 @@ name = "uv-cache"
 version = "0.0.1"
 source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
- "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "cache-key",
  "directories",
  "distribution-types",
  "fs-err",
@@ -5751,7 +5741,7 @@ dependencies = [
  "tempfile",
  "tracing",
  "url",
- "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-fs",
  "uv-normalize",
  "walkdir",
 ]
@@ -5765,7 +5755,7 @@ dependencies = [
  "async-trait",
  "async_http_range_reader",
  "async_zip",
- "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "cache-key",
  "chrono",
  "distribution-filename",
  "distribution-types",
@@ -5797,10 +5787,10 @@ dependencies = [
  "uv-auth 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
  "uv-cache",
  "uv-configuration",
- "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-fs",
  "uv-normalize",
  "uv-version",
- "uv-warnings 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-warnings",
 ]
 
 [[package]]
@@ -5850,7 +5840,7 @@ version = "0.0.1"
 source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anyhow",
- "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "cache-key",
  "distribution-filename",
  "distribution-types",
  "fs-err",
@@ -5877,8 +5867,8 @@ dependencies = [
  "uv-client",
  "uv-configuration",
  "uv-extract",
- "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
- "uv-git 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-fs",
+ "uv-git",
  "uv-normalize",
  "uv-types",
  "zip 0.6.6",
@@ -5909,26 +5899,6 @@ dependencies = [
 [[package]]
 name = "uv-fs"
 version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
-dependencies = [
- "backoff",
- "cachedir",
- "dunce",
- "encoding_rs_io",
- "fs-err",
- "fs2",
- "junction",
- "once_cell",
- "path-absolutize",
- "tempfile",
- "tracing",
- "urlencoding",
- "uv-warnings 0.0.1 (git+https://github.com/astral-sh/uv?tag=0.2.2)",
-]
-
-[[package]]
-name = "uv-fs"
-version = "0.0.1"
 source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "backoff",
@@ -5943,30 +5913,7 @@ dependencies = [
  "tempfile",
  "tracing",
  "urlencoding",
- "uv-warnings 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
-]
-
-[[package]]
-name = "uv-git"
-version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "cache-key 0.0.1 (git+https://github.com/astral-sh/uv?tag=0.2.2)",
- "cargo-util",
- "fs-err",
- "git2",
- "glob",
- "hmac",
- "home",
- "rand",
- "reqwest 0.12.4",
- "sha1",
- "tokio",
- "tracing",
- "url",
- "uv-fs 0.0.1 (git+https://github.com/astral-sh/uv?tag=0.2.2)",
+ "uv-warnings",
 ]
 
 [[package]]
@@ -5976,7 +5923,7 @@ source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504
 dependencies = [
  "anyhow",
  "base64 0.22.1",
- "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "cache-key",
  "cargo-util",
  "fs-err",
  "git2",
@@ -5989,7 +5936,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-fs",
 ]
 
 [[package]]
@@ -5999,7 +5946,7 @@ source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504
 dependencies = [
  "anyhow",
  "async-channel",
- "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "cache-key",
  "distribution-filename",
  "distribution-types",
  "fs-err",
@@ -6023,12 +5970,12 @@ dependencies = [
  "uv-configuration",
  "uv-distribution",
  "uv-extract",
- "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
- "uv-git 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-fs",
+ "uv-git",
  "uv-interpreter",
  "uv-normalize",
  "uv-types",
- "uv-warnings 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-warnings",
  "walkdir",
 ]
 
@@ -6038,7 +5985,7 @@ version = "0.0.1"
 source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504b5813ceac1312ffff2fd9905f517de9"
 dependencies = [
  "anyhow",
- "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "cache-key",
  "configparser",
  "fs-err",
  "futures",
@@ -6064,8 +6011,8 @@ dependencies = [
  "uv-cache",
  "uv-client",
  "uv-extract",
- "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
- "uv-warnings 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-fs",
+ "uv-warnings",
  "which",
  "winapi",
 ]
@@ -6086,7 +6033,7 @@ source = "git+https://github.com/tdejager/uv?branch=feat/bump-uv-types#0d5905504
 dependencies = [
  "anstream",
  "anyhow",
- "cache-key 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "cache-key",
  "chrono",
  "dashmap",
  "derivative",
@@ -6120,11 +6067,11 @@ dependencies = [
  "uv-client",
  "uv-configuration",
  "uv-distribution",
- "uv-git 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-git",
  "uv-interpreter",
  "uv-normalize",
  "uv-types",
- "uv-warnings 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-warnings",
 ]
 
 [[package]]
@@ -6164,20 +6111,9 @@ dependencies = [
  "pypi-types",
  "thiserror",
  "tracing",
- "uv-fs 0.0.1 (git+https://github.com/tdejager/uv?branch=feat/bump-uv-types)",
+ "uv-fs",
  "uv-interpreter",
  "uv-version",
-]
-
-[[package]]
-name = "uv-warnings"
-version = "0.0.1"
-source = "git+https://github.com/astral-sh/uv?tag=0.2.2#e52ae0e2bcb2e7d73efd61881fe166b854018825"
-dependencies = [
- "anstream",
- "once_cell",
- "owo-colors",
- "rustc-hash",
 ]
 
 [[package]]

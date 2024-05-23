@@ -260,11 +260,11 @@ pub fn pypi_satifisfies_editable(
 
     // In the case that both the spec and the locked data are direct git urls
     // we need to compare the urls to see if they are the same
-    let spec_git_url = ParsedGitUrl::try_from(&spec_url.to_url()).ok();
+    let spec_git_url = ParsedGitUrl::try_from(spec_url.to_url().clone()).ok();
     let locked_git_url = locked_data
         .url_or_path
         .as_url()
-        .and_then(|url| ParsedGitUrl::try_from(url).ok());
+        .and_then(|url| ParsedGitUrl::try_from(url.clone()).ok());
 
     // Both are git url's
     if let (Some(spec_git_url), Some(locked_data_url)) = (spec_git_url, locked_git_url) {

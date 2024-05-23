@@ -89,7 +89,7 @@ rattler_lock = { version = "=0.22.7", default-features = false }
 rattler_networking = { version = "0.20.6", default-features = false }
 rattler_repodata_gateway = { version = "0.20.1", default-features = false, features = [
     "sparse",
-    "gateway"
+    "gateway",
 ] }
 rattler_shell = { version = "0.20.2", default-features = false, features = [
     "sysinfo",
@@ -200,6 +200,7 @@ uv-build = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-type
 uv-cache = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
 uv-client = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
 uv-configuration = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
+uv-git = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
 uv-dispatch = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
 uv-distribution = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }
 uv-installer = { git = "https://github.com/tdejager/uv", branch = "feat/bump-uv-types" }

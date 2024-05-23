@@ -396,6 +396,8 @@ pub enum AsPep508Error {
     },
     #[error("using an editable flag for a path that is not a directory: {path}")]
     EditableIsNotDir { path: PathBuf },
+    #[error("error while canonicalizing {0}")]
+    VerabatimUrlError(#[from] pep508_rs::VerbatimUrlError),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -501,7 +503,7 @@ impl PyPiRequirement {
                     .to_str()
                     .map(|s| s.to_owned())
                     .unwrap_or_else(String::new);
-                let verbatim = VerbatimUrl::from_path(canonicalized.clone()).with_given(given);
+                let verbatim = VerbatimUrl::from_path(canonicalized.clone())?.with_given(given);
 
                 if *editable == Some(true) {
                     if !canonicalized.is_dir() {

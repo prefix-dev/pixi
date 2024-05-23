@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use miette::{Context, IntoDiagnostic};
 use uv_cache::Cache;
-use uv_configuration::{NoBinary, NoBuild};
+use uv_configuration::{Concurrency, NoBinary, NoBuild};
 use uv_types::{HashStrategy, InFlight};
 
 use crate::{
@@ -20,6 +20,7 @@ pub struct UvResolutionContext {
     pub hash_strategy: HashStrategy,
     pub client: reqwest::Client,
     pub keyring_provider: uv_configuration::KeyringProviderType,
+    pub concurrency: Concurrency,
 }
 
 impl UvResolutionContext {
@@ -52,6 +53,7 @@ impl UvResolutionContext {
             hash_strategy: HashStrategy::None,
             client: project.client().clone(),
             keyring_provider,
+            concurrency: Concurrency::default(),
         })
     }
 }
