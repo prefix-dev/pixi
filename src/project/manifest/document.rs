@@ -1,10 +1,10 @@
-use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use std::{fmt, str::FromStr};
+
+use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform};
 use toml_edit::{value, Array, InlineTable, Item, Table, Value};
 
-use crate::{consts, util::default_channel_config, FeatureName, SpecType, Task};
-
 use super::{error::TomlError, python::PyPiPackageName, PyPiRequirement};
+use crate::{consts, util::default_channel_config, FeatureName, SpecType, Task};
 
 const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";
 
@@ -25,6 +25,27 @@ impl fmt::Display for ManifestSource {
 }
 
 impl ManifestSource {
+    /// Returns a new empty pixi manifest.
+    #[cfg(test)]
+    fn empty_pixi() -> Self {
+        ManifestSource::PixiToml(toml_edit::DocumentMut::new())
+    }
+
+    /// Returns a new empty pyproject manifest.
+    #[cfg(test)]
+    fn empty_pyproject() -> Self {
+        ManifestSource::PyProjectToml(toml_edit::DocumentMut::new())
+    }
+
+    /// Returns the file name of the manifest
+    #[cfg(test)]
+    fn file_name(&self) -> &'static str {
+        match self {
+            ManifestSource::PyProjectToml(_) => "pyproject.toml",
+            ManifestSource::PixiToml(_) => "pixi.toml",
+        }
+    }
+
     /// Returns the a nested path. It is composed of
     /// - the 'tool.pixi' prefix if the manifest is a 'pyproject.toml' file
     /// - the feature if it is not the default feature
@@ -123,7 +144,8 @@ impl ManifestSource {
         Ok(array)
     }
 
-    /// Returns a mutable reference to the specified array either in project or feature.
+    /// Returns a mutable reference to the specified array either in project or
+    /// feature.
     pub fn get_array_mut(
         &mut self,
         array_name: &str,
@@ -154,7 +176,8 @@ impl ManifestSource {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
-        // For 'pyproject.toml' manifest, try and remove the dependency from native arrays
+        // For 'pyproject.toml' manifest, try and remove the dependency from native
+        // arrays
         let array = match self {
             ManifestSource::PyProjectToml(_) if feature_name.is_default() => {
                 self.get_toml_array("project", "dependencies")?
@@ -220,7 +243,8 @@ impl ManifestSource {
 
     /// Adds a pypi dependency to the TOML manifest
     ///
-    /// If a pypi dependency with the same name already exists, it will be replaced.
+    /// If a pypi dependency with the same name already exists, it will be
+    /// replaced.
     pub fn add_pypi_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
@@ -263,7 +287,8 @@ impl ManifestSource {
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
         // Get the task table either from the target platform or the default tasks.
-        // If it does not exist in TOML, consider this ok as we want to remove it anyways
+        // If it does not exist in TOML, consider this ok as we want to remove it
+        // anyways
         self.get_or_insert_toml_table(platform, feature_name, "tasks")?
             .remove(name);
 
@@ -285,6 +310,47 @@ impl ManifestSource {
         Ok(())
     }
 
+    /// Adds an environment to the manifest
+    pub fn add_environment<'f>(
+        &mut self,
+        name: &str,
+        features: impl IntoIterator<Item = &'f FeatureName>,
+        solve_group: Option<&str>,
+        no_default_features: bool,
+    ) -> Result<(), TomlError> {
+        let features = Array::from_iter(features.into_iter().map(|f| f.to_string()));
+
+        // Construct the TOML item
+        let item = if solve_group.is_some() || no_default_features {
+            let mut table = toml_edit::InlineTable::new();
+            table.insert("features", features.into());
+            if let Some(solve_group) = solve_group {
+                table.insert("solve-group", solve_group.into());
+            }
+            if no_default_features {
+                table.insert("no-default-features", true.into());
+            }
+            Item::Value(table.into())
+        } else {
+            Item::Value(Value::Array(features))
+        };
+
+        // Get the environment table
+        self.get_or_insert_toml_table(None, &FeatureName::Default, "environments")?
+            .insert(name, item);
+
+        Ok(())
+    }
+
+    /// Removes an environment from the manifest. Returns `true` if the
+    /// environment was removed.
+    pub fn remove_environment(&mut self, name: &str) -> Result<bool, TomlError> {
+        Ok(self
+            .get_or_insert_toml_table(None, &FeatureName::Default, "environments")?
+            .remove(name)
+            .is_some())
+    }
+
     /// Sets the description of the project
     pub fn set_description(&mut self, description: &str) {
         self.as_table_mut()["project"]["description"] = value(description);
@@ -296,8 +362,9 @@ impl ManifestSource {
     }
 }
 
-/// Given a nameless matchspec convert it into a TOML value. If the spec only contains a version a
-/// string is returned, otherwise an entire table is constructed.
+/// Given a nameless matchspec convert it into a TOML value. If the spec only
+/// contains a version a string is returned, otherwise an entire table is
+/// constructed.
 fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
     match spec {
         NamelessMatchSpec {
@@ -311,7 +378,8 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
             md5: None,
             sha256: None,
         } => {
-            // No other fields besides the version was specified, so we can just return the version as a string.
+            // No other fields besides the version was specified, so we can just return the
+            // version as a string.
             version
                 .as_ref()
                 .map_or_else(|| String::from("*"), |v| v.to_string())
@@ -373,12 +441,14 @@ fn nameless_match_spec_to_toml(spec: &NamelessMatchSpec) -> Value {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use insta::assert_snapshot;
+    use rattler_conda_types::{MatchSpec, ParseStrictness::Strict};
+    use rstest::rstest;
+
     use super::*;
     use crate::project::manifest::Manifest;
-    use insta::assert_snapshot;
-    use rattler_conda_types::MatchSpec;
-    use rattler_conda_types::ParseStrictness::Strict;
-    use std::path::Path;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -480,6 +550,62 @@ platforms = ["linux-64", "win-64"]
                 Some(Platform::Linux64),
                 Some("dependencies")
             )
+        );
+    }
+
+    #[rstest]
+    #[case::pixi_toml(ManifestSource::empty_pixi())]
+    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
+    fn test_add_environment(#[case] mut source: ManifestSource) {
+        source.add_environment("foo", [], None, false).unwrap();
+        source
+            .add_environment("bar", &[FeatureName::Default], None, false)
+            .unwrap();
+        source
+            .add_environment("baz", &[FeatureName::Default], Some("group1"), false)
+            .unwrap();
+        source
+            .add_environment("foobar", &[FeatureName::Default], Some("group1"), true)
+            .unwrap();
+        source
+            .add_environment("barfoo", &[FeatureName::Default], None, true)
+            .unwrap();
+
+        // Overwrite
+        source
+            .add_environment(
+                "bar",
+                &[FeatureName::Named(String::from("not-default"))],
+                None,
+                false,
+            )
+            .unwrap();
+
+        assert_snapshot!(
+            format!("test_add_environment_{}", source.file_name()),
+            source.to_string()
+        );
+    }
+
+    #[rstest]
+    #[case::pixi_toml(ManifestSource::empty_pixi())]
+    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
+    fn test_remove_environment(#[case] mut source: ManifestSource) {
+        source
+            .add_environment("foo", &[FeatureName::Default], None, false)
+            .unwrap();
+        source
+            .add_environment("bar", &[FeatureName::Default], None, false)
+            .unwrap();
+        assert_eq!(source.remove_environment("default").unwrap(), false);
+        source
+            .add_environment("default", &[FeatureName::Default], None, false)
+            .unwrap();
+        assert_eq!(source.remove_environment("default").unwrap(), true);
+        assert_eq!(source.remove_environment("foo").unwrap(), true);
+        assert_snapshot!(
+            format!("test_remove_environment_{}", source.file_name()),
+            source.to_string()
         );
     }
 }
