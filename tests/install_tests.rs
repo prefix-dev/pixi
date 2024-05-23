@@ -3,7 +3,7 @@ mod common;
 use std::path::Path;
 use std::str::FromStr;
 
-use crate::common::builders::string_from_iter;
+use crate::common::builders::{string_from_iter, HasDependencyConfig};
 use crate::common::package_database::{Package, PackageDatabase};
 use common::{LockFileExt, PixiControl};
 use pixi::cli::{run, LockFileUsageArgs};

@@ -27,6 +27,7 @@ pub struct Args {
     #[clap(flatten)]
     lock_file_usage: LockFileUsageArgs,
 
+    /// The environment to activate in the shell
     #[arg(long, short)]
     environment: Option<String>,
 

@@ -23,9 +23,12 @@ pub enum Command {
     UpgradeAll(upgrade_all::Args),
 }
 
-/// Global is the main entry point for the part of pixi that executes on the global(system) level.
+/// Subcommand for global package management actions
 ///
-/// It does not touch your system but in comparison to the normal pixi workflow which focuses on project level actions this will work on your system level.
+/// Install packages on the user level.
+/// Example:
+///    pixi global install my_package
+///    pixi global remove my_package
 #[derive(Debug, Parser)]
 pub struct Args {
     #[command(subcommand)]

@@ -310,20 +310,21 @@ impl Manifest {
         &mut self,
         spec: &MatchSpec,
         spec_type: SpecType,
-        platform: Option<Platform>,
+        platforms: &[Platform],
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Determine the name of the package to add
         let (Some(name), spec) = spec.clone().into_nameless() else {
             miette::bail!("pixi does not support wildcard dependencies")
         };
-
-        // Add the dependency to the manifest
-        self.get_or_insert_target_mut(platform, Some(feature_name))
-            .try_add_dependency(&name, &spec, spec_type)?;
-        // and to the TOML document
-        self.document
-            .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
+        for platform in to_options(platforms) {
+            // Add the dependency to the manifest
+            self.get_or_insert_target_mut(platform, Some(feature_name))
+                .try_add_dependency(&name, &spec, spec_type)?;
+            // and to the TOML document
+            self.document
+                .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
+        }
         Ok(())
     }
 
@@ -331,16 +332,18 @@ impl Manifest {
     pub fn add_pypi_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
-        platform: Option<Platform>,
+        platforms: &[Platform],
         feature_name: &FeatureName,
         editable: Option<bool>,
     ) -> miette::Result<()> {
-        // Add the pypi dependency to the manifest
-        self.get_or_insert_target_mut(platform, Some(feature_name))
-            .try_add_pypi_dependency(requirement, editable)?;
-        // and to the TOML document
-        self.document
-            .add_pypi_dependency(requirement, platform, feature_name)?;
+        for platform in to_options(platforms) {
+            // Add the pypi dependency to the manifest
+            self.get_or_insert_target_mut(platform, Some(feature_name))
+                .try_add_pypi_dependency(requirement, editable)?;
+            // and to the TOML document
+            self.document
+                .add_pypi_dependency(requirement, platform, feature_name)?;
+        }
         Ok(())
     }
 
@@ -349,34 +352,36 @@ impl Manifest {
         &mut self,
         dep: &PackageName,
         spec_type: SpecType,
-        platform: Option<Platform>,
+        platforms: &[Platform],
         feature_name: &FeatureName,
-    ) -> miette::Result<(PackageName, NamelessMatchSpec)> {
-        // Remove the dependency from the manifest
-        let res = self
-            .target_mut(platform, feature_name)
-            .remove_dependency(dep, spec_type);
-        // Remove the dependency from the TOML document
-        self.document
-            .remove_dependency(dep, spec_type, platform, feature_name)?;
-        res.into_diagnostic()
+    ) -> miette::Result<()> {
+        for platform in to_options(platforms) {
+            // Remove the dependency from the manifest
+            self.target_mut(platform, feature_name)
+                .remove_dependency(dep, spec_type)?;
+            // Remove the dependency from the TOML document
+            self.document
+                .remove_dependency(dep, spec_type, platform, feature_name)?;
+        }
+        Ok(())
     }
 
     /// Removes a pypi dependency.
     pub fn remove_pypi_dependency(
         &mut self,
         dep: &PyPiPackageName,
-        platform: Option<Platform>,
+        platforms: &[Platform],
         feature_name: &FeatureName,
-    ) -> miette::Result<(PyPiPackageName, PyPiRequirement)> {
-        // Remove the dependency from the manifest
-        let res = self
-            .target_mut(platform, feature_name)
-            .remove_pypi_dependency(dep);
-        // Remove the dependency from the TOML document
-        self.document
-            .remove_pypi_dependency(dep, platform, feature_name)?;
-        res.into_diagnostic()
+    ) -> miette::Result<()> {
+        for platform in to_options(platforms) {
+            // Remove the dependency from the manifest
+            self.target_mut(platform, feature_name)
+                .remove_pypi_dependency(dep)?;
+            // Remove the dependency from the TOML document
+            self.document
+                .remove_pypi_dependency(dep, platform, feature_name)?;
+        }
+        Ok(())
     }
 
     /// Returns true if any of the features has pypi dependencies defined.
@@ -627,6 +632,14 @@ impl Manifest {
         Q: Hash + Equivalent<String>,
     {
         self.parsed.solve_groups.find(name)
+    }
+}
+
+/// Converts an array of Platforms to a non-empty Vec of Option<Platform>
+fn to_options(platforms: &[Platform]) -> Vec<Option<Platform>> {
+    match platforms.is_empty() {
+        true => vec![None],
+        false => platforms.iter().map(|p| Some(*p)).collect_vec(),
     }
 }
 
@@ -1395,46 +1408,50 @@ mod tests {
         file_contents: &str,
         name: &str,
         kind: SpecType,
-        platform: Option<Platform>,
+        platforms: &[Platform],
         feature_name: &FeatureName,
     ) {
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
         // Initially the dependency should exist
-        assert!(manifest
-            .feature_mut(feature_name)
-            .unwrap()
-            .targets
-            .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
-            .unwrap()
-            .dependencies
-            .get(&kind)
-            .unwrap()
-            .get(name)
-            .is_some());
+        for platform in to_options(platforms) {
+            assert!(manifest
+                .feature_mut(feature_name)
+                .unwrap()
+                .targets
+                .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+                .unwrap()
+                .dependencies
+                .get(&kind)
+                .unwrap()
+                .get(name)
+                .is_some());
+        }
 
         // Remove the dependency from the manifest
         manifest
             .remove_dependency(
                 &PackageName::new_unchecked(name),
                 kind,
-                platform,
+                platforms,
                 feature_name,
             )
             .unwrap();
 
         // The dependency should no longer exist
-        assert!(manifest
-            .feature_mut(feature_name)
-            .unwrap()
-            .targets
-            .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
-            .unwrap()
-            .dependencies
-            .get(&kind)
-            .unwrap()
-            .get(name)
-            .is_none());
+        for platform in to_options(platforms) {
+            assert!(manifest
+                .feature_mut(feature_name)
+                .unwrap()
+                .targets
+                .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+                .unwrap()
+                .dependencies
+                .get(&kind)
+                .unwrap()
+                .get(name)
+                .is_none());
+        }
 
         // Write the toml to string and verify the content
         assert_snapshot!(
@@ -1446,7 +1463,7 @@ mod tests {
     fn test_remove_pypi(
         file_contents: &str,
         name: &str,
-        platform: Option<Platform>,
+        platforms: &[Platform],
         feature_name: &FeatureName,
     ) {
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
@@ -1454,35 +1471,39 @@ mod tests {
         let package_name = PyPiPackageName::from_str(name).unwrap();
 
         // Initially the dependency should exist
-        assert!(manifest
-            .feature_mut(feature_name)
-            .unwrap()
-            .targets
-            .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
-            .unwrap()
-            .pypi_dependencies
-            .as_ref()
-            .unwrap()
-            .get(&package_name)
-            .is_some());
+        for platform in to_options(platforms) {
+            assert!(manifest
+                .feature_mut(feature_name)
+                .unwrap()
+                .targets
+                .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+                .unwrap()
+                .pypi_dependencies
+                .as_ref()
+                .unwrap()
+                .get(&package_name)
+                .is_some());
+        }
 
         // Remove the dependency from the manifest
         manifest
-            .remove_pypi_dependency(&package_name, platform, feature_name)
+            .remove_pypi_dependency(&package_name, platforms, feature_name)
             .unwrap();
 
         // The dependency should no longer exist
-        assert!(manifest
-            .feature_mut(feature_name)
-            .unwrap()
-            .targets
-            .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
-            .unwrap()
-            .pypi_dependencies
-            .as_ref()
-            .unwrap()
-            .get(&package_name)
-            .is_none());
+        for platform in to_options(platforms) {
+            assert!(manifest
+                .feature_mut(feature_name)
+                .unwrap()
+                .targets
+                .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+                .unwrap()
+                .pypi_dependencies
+                .as_ref()
+                .unwrap()
+                .get(&package_name)
+                .is_none());
+        }
 
         // Write the toml to string and verify the content
         assert_snapshot!(
@@ -1492,14 +1513,14 @@ mod tests {
     }
 
     #[rstest]
-    #[case::xpackage("xpackage", Some(Platform::Linux64), FeatureName::Default)]
-    #[case::jax("jax", Some(Platform::Win64), FeatureName::Default)]
-    #[case::requests("requests", None, FeatureName::Default)]
-    #[case::feature_dep("feature_dep", None, FeatureName::Named("test".to_string()))]
-    #[case::feature_target_dep("feature_target_dep", Some(Platform::Linux64), FeatureName::Named("test".to_string()))]
+    #[case::xpackage("xpackage", &[Platform::Linux64], FeatureName::Default)]
+    #[case::jax("jax", &[Platform::Win64], FeatureName::Default)]
+    #[case::requests("requests", &[], FeatureName::Default)]
+    #[case::feature_dep("feature_dep", &[], FeatureName::Named("test".to_string()))]
+    #[case::feature_target_dep("feature_target_dep", &[Platform::Linux64], FeatureName::Named("test".to_string()))]
     fn test_remove_pypi_dependencies(
         #[case] package_name: &str,
-        #[case] platform: Option<Platform>,
+        #[case] platforms: &[Platform],
         #[case] feature_name: FeatureName,
     ) {
         let pixi_cfg = r#"[project]
@@ -1528,7 +1549,7 @@ feature_dep = "*"
 [feature.test.target.linux-64.pypi-dependencies]
 feature_target_dep = "*"
 "#;
-        test_remove_pypi(pixi_cfg, package_name, platform, &feature_name);
+        test_remove_pypi(pixi_cfg, package_name, platforms, &feature_name);
     }
 
     #[test]
@@ -1555,21 +1576,21 @@ feature_target_dep = "*"
             file_contents,
             "baz",
             SpecType::Build,
-            Some(Platform::Linux64),
+            &[Platform::Linux64],
             &FeatureName::Default,
         );
         test_remove(
             file_contents,
             "bar",
             SpecType::Run,
-            Some(Platform::Win64),
+            &[Platform::Win64],
             &FeatureName::Default,
         );
         test_remove(
             file_contents,
             "fooz",
             SpecType::Run,
-            None,
+            &[],
             &FeatureName::Default,
         );
     }
@@ -1600,7 +1621,7 @@ feature_target_dep = "*"
             .remove_dependency(
                 &PackageName::new_unchecked("fooz"),
                 SpecType::Run,
-                None,
+                &[],
                 &FeatureName::Default,
             )
             .unwrap();
@@ -2368,7 +2389,7 @@ bar = "*"
             .add_dependency(
                 &MatchSpec::from_str(" baz >=1.2.3", Strict).unwrap(),
                 SpecType::Run,
-                None,
+                &[],
                 &FeatureName::Default,
             )
             .unwrap();
@@ -2389,7 +2410,7 @@ bar = "*"
             .add_dependency(
                 &MatchSpec::from_str(" bal >=2.3", Strict).unwrap(),
                 SpecType::Run,
-                None,
+                &[],
                 &FeatureName::Named("test".to_string()),
             )
             .unwrap();
@@ -2413,7 +2434,7 @@ bar = "*"
             .add_dependency(
                 &MatchSpec::from_str(" boef >=2.3", Strict).unwrap(),
                 SpecType::Run,
-                Some(Platform::Linux64),
+                &[Platform::Linux64],
                 &FeatureName::Named("extra".to_string()),
             )
             .unwrap();
@@ -2438,7 +2459,7 @@ bar = "*"
             .add_dependency(
                 &MatchSpec::from_str(" cmake >=2.3", ParseStrictness::Strict).unwrap(),
                 SpecType::Build,
-                Some(Platform::Linux64),
+                &[Platform::Linux64],
                 &FeatureName::Named("build".to_string()),
             )
             .unwrap();

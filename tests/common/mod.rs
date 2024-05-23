@@ -36,7 +36,7 @@ use std::{
 use tempfile::TempDir;
 use thiserror::Error;
 
-use self::builders::RemoveBuilder;
+use self::builders::{HasDependencyConfig, RemoveBuilder};
 
 /// To control the pixi process
 pub struct PixiControl {
@@ -227,21 +227,7 @@ impl PixiControl {
     /// Add a dependency to the project. Returns an [`AddBuilder`].
     /// the command and await the result call `.await` on the return value.
     pub fn add(&self, spec: &str) -> AddBuilder {
-        AddBuilder {
-            args: add::Args {
-                manifest_path: Some(self.manifest_path()),
-                host: false,
-                specs: vec![spec.to_string()],
-                build: false,
-                no_install: true,
-                no_lockfile_update: false,
-                platform: Default::default(),
-                pypi: false,
-                feature: None,
-                config: Default::default(),
-                editable: false,
-            },
-        }
+        self.add_multiple(vec![spec])
     }
 
     /// Add dependencies to the project. Returns an [`AddBuilder`].
@@ -249,15 +235,10 @@ impl PixiControl {
     pub fn add_multiple(&self, specs: Vec<&str>) -> AddBuilder {
         AddBuilder {
             args: add::Args {
-                manifest_path: Some(self.manifest_path()),
-                host: false,
-                specs: specs.iter().map(|s| s.to_string()).collect(),
-                build: false,
-                no_install: true,
-                no_lockfile_update: false,
-                platform: Default::default(),
-                pypi: false,
-                feature: None,
+                dependency_config: AddBuilder::dependency_config_with_specs(
+                    specs,
+                    self.manifest_path(),
+                ),
                 config: Default::default(),
                 editable: false,
             },
@@ -268,15 +249,11 @@ impl PixiControl {
     pub fn remove(&self, spec: &str) -> RemoveBuilder {
         RemoveBuilder {
             args: remove::Args {
-                deps: vec![spec.to_string()],
-                manifest_path: Some(self.manifest_path()),
-                host: false,
-                build: false,
-                pypi: false,
-                platform: Default::default(),
-                feature: None,
+                dependency_config: AddBuilder::dependency_config_with_specs(
+                    vec![spec],
+                    self.manifest_path(),
+                ),
                 config: Default::default(),
-                no_install: true,
             },
         }
     }
@@ -370,6 +347,7 @@ impl PixiControl {
                     locked: false,
                 },
                 config: Default::default(),
+                all: false,
             },
         }
     }
