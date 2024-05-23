@@ -29,6 +29,7 @@ use crate::project::manifest::SystemRequirements;
 use crate::pypi_tags::{get_pypi_tags, is_python_record};
 use distribution_types::{
     CachedDist, Dist, IndexUrl, InstalledDist, LocalEditable, LocalEditables, Name, ParsedGitUrl,
+    ParsedUrl, VerbatimParsedUrl,
 };
 use install_wheel_rs::linker::LinkMode;
 
@@ -198,7 +199,10 @@ fn convert_to_dist(pkg: &PypiPackageData, lock_file_dir: &Path) -> Dist {
 
             Dist::from_url(
                 pkg.name.clone(),
-                VerbatimUrl::from_path(&path).with_given(path.display().to_string()),
+                VerbatimParsedUrl {
+                    parsed_url: ParsedUrl::try_from(),
+                    verbatim: VerbatimUrl::from_path(&path).with_given(path.display().to_string()),
+                },
             )
             .expect("could not convert path into uv dist")
         }
@@ -390,7 +394,7 @@ fn need_reinstall(
 fn whats_the_plan<'a>(
     required: &[&'a CombinedPypiPackageData],
     editables: &Vec<ResolvedEditable>,
-    site_packages: &mut SitePackages<'_>,
+    site_packages: &mut SitePackages,
     registry_index: &'a mut RegistryWheelIndex<'a>,
     uv_cache: &Cache,
     python_version: &Version,
@@ -419,7 +423,7 @@ fn whats_the_plan<'a>(
                 tracing::debug!("Treating editable install as non-mutated: {dist}");
 
                 // Remove from the site-packages index, to avoid marking as extraneous.
-                let Some(editable) = dist.as_editable() else {
+                let Some(editable) = dist.wheel.as_editable() else {
                     tracing::warn!("Requested editable is actually not editable");
                     continue;
                 };

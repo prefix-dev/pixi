@@ -48,7 +48,7 @@ pub fn determine_marker_environment(
         _ => "",
     };
 
-    Ok(MarkerEnvironment {
+    MarkerEnvironment::new(MarkerEnvironment {
         implementation_name: String::from(implementation_name),
         implementation_version: version_to_string_version(&python_record.version),
         os_name: String::from(os_name),

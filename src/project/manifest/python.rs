@@ -513,7 +513,9 @@ impl PyPiRequirement {
                         requirements_txt::EditableRequirement {
                             url: verbatim,
                             extras: extras.clone(),
+                            marker: None,
                             path: canonicalized,
+                            origin: None,
                         },
                     ));
                 }
@@ -552,6 +554,7 @@ impl PyPiRequirement {
                 extras: self.extras().to_vec(),
                 version_or_url,
                 marker: None,
+                origin: None,
             },
         ))
     }
