@@ -1,5 +1,5 @@
 [codespell]
-skip = .git,*.pdf,*.svg,Cargo.lock,**/pixi.lock,install/windows/resources/LICENSE.rtf
+skip = .git,*.pdf,*.svg,Cargo.lock,**/pixi.lock,install/windows/resources/LICENSE.rtf,tests/mapping_files/*.json
 # all images and other binaries embedded in .ipynb jsons
 # also ignore a case in the test
 ignore-regex = "image/png": ".*|^ *".*data:\S+;base64.*|verion = "2.12"
