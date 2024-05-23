@@ -1,13 +1,16 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{cmp::Ordering, collections::HashSet, path::PathBuf};
 
 use ahash::HashMap;
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::{Either, Itertools};
+use miette::MietteDiagnostic;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockFileBuilder, Package};
 
-use crate::{config::ConfigCli, consts, load_lock_file, lock_file::UpdateContext, Project};
+use crate::{
+    config::ConfigCli, consts, load_lock_file, lock_file::UpdateContext, EnvironmentName, Project,
+};
 
 /// Update dependencies as recorded in the local lock file
 #[derive(Parser, Debug, Default)]
@@ -38,8 +41,8 @@ pub struct UpdateSpecsArgs {
 
     /// The environments to update. If none is specified, all environments are
     /// updated.
-    #[clap(long = "env", short = 'e')]
-    pub environments: Option<Vec<String>>,
+    #[clap(long = "environment", short = 'e')]
+    pub environments: Option<Vec<EnvironmentName>>,
 
     /// The platforms to update. If none is specified, all platforms are
     /// updated.
@@ -50,7 +53,7 @@ pub struct UpdateSpecsArgs {
 /// A distilled version of `UpdateSpecsArgs`.
 struct UpdateSpecs {
     packages: Option<HashSet<String>>,
-    environments: Option<HashSet<String>>,
+    environments: Option<HashSet<EnvironmentName>>,
     platforms: Option<HashSet<Platform>>,
 }
 
@@ -95,12 +98,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project =
         Project::load_or_else_discover(args.manifest_path.as_deref())?.with_cli_config(config);
 
+    let specs = UpdateSpecs::from_args(args.specs);
+
+    // If the user specified an environment name, check to see if it exists.
+    if let Some(env) = &specs.environments {
+        for env in env {
+            if project.environment(env).is_none() {
+                miette::bail!("could not find an environment named '{}'", env)
+            }
+        }
+    }
+
     // Load the current lock-file, if any. If none is found, a dummy lock-file is
     // returned.
     let loaded_lock_file = load_lock_file(&project).await?;
 
+    // If the user specified a package name, check to see if it is even locked.
+    if let Some(packages) = &specs.packages {
+        for package in packages {
+            check_package_exists(&loaded_lock_file, package, &specs)?
+        }
+    }
+
     // Unlock dependencies in the lock-file that we want to update.
-    let relaxed_lock_file = unlock_packages(&loaded_lock_file, &UpdateSpecs::from_args(args.specs));
+    let relaxed_lock_file = unlock_packages(&loaded_lock_file, &specs);
 
     // Update the packages in the lock-file.
     let updated_lock_file = UpdateContext::builder(&project)
@@ -127,6 +148,74 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+fn check_package_exists(
+    lock_file: &LockFile,
+    package_name: &str,
+    specs: &UpdateSpecs,
+) -> miette::Result<()> {
+    let environments = lock_file
+        .environments()
+        .filter_map(|(name, env)| {
+            if let Some(envs) = &specs.environments {
+                if !envs.contains(name) {
+                    return None;
+                }
+            }
+            Some(env)
+        })
+        .collect_vec();
+
+    let similar_names = environments
+        .iter()
+        .flat_map(|env| env.packages_by_platform())
+        .filter_map(|(p, packages)| {
+            if let Some(platforms) = &specs.platforms {
+                if !platforms.contains(&p) {
+                    return None;
+                }
+            }
+            Some(packages)
+        })
+        .flatten()
+        .map(|p| p.name().to_string())
+        .unique()
+        .filter_map(|name| {
+            let distance = strsim::jaro(package_name, &name);
+            if distance > 0.6 {
+                Some((name, distance))
+            } else {
+                None
+            }
+        })
+        .sorted_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap_or(Ordering::Equal))
+        .take(5)
+        .map(|(name, _)| name)
+        .collect_vec();
+
+    if similar_names.first().map(String::as_str) == Some(package_name) {
+        return Ok(());
+    }
+
+    let message = format!("could not find a package named '{package_name}'");
+
+    Err(MietteDiagnostic {
+        message,
+        code: None,
+        severity: None,
+        help: if !similar_names.is_empty() {
+            Some(format!(
+                "did you mean '{}'?",
+                similar_names.iter().format("', '")
+            ))
+        } else {
+            None
+        },
+        url: None,
+        labels: None,
+    }
+    .into())
 }
 
 /// Constructs a new lock-file where some of the constraints have been removed.
