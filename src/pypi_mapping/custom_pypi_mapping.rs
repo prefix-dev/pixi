@@ -4,13 +4,9 @@ use reqwest_middleware::ClientWithMiddleware;
 use std::{collections::HashMap, sync::Arc};
 use url::Url;
 
-use async_once_cell::OnceCell;
-
-use crate::pypi_mapping::MappingLocation;
-
 use super::{
     build_pypi_purl_from_package_record, is_conda_forge_record, prefix_pypi_name_mapping,
-    CustomMapping, MappingMap, Reporter,
+    CustomMapping, Reporter,
 };
 
 pub async fn fetch_mapping_from_url<T>(
@@ -43,63 +39,6 @@ where
     ))?;
 
     Ok(mapping_by_name)
-}
-
-pub async fn fetch_custom_mapping(
-    client: &ClientWithMiddleware,
-    mapping_url: &MappingMap,
-) -> miette::Result<&'static HashMap<String, HashMap<String, Option<String>>>> {
-    static MAPPING: OnceCell<HashMap<String, HashMap<String, Option<String>>>> = OnceCell::new();
-    MAPPING
-        .get_or_try_init(async {
-            let mut mapping_url_to_name: HashMap<String, HashMap<String, Option<String>>> =
-                Default::default();
-
-            for (name, url) in mapping_url.iter() {
-                // Fetch the mapping from the server or from the local
-
-                match url {
-                    MappingLocation::Url(url) => {
-                        let response = client
-                            .get(url.clone())
-                            .send()
-                            .await
-                            .into_diagnostic()
-                            .context(format!(
-                                "failed to download pypi mapping from {} location",
-                                url.as_str()
-                            ))?;
-
-                        if !response.status().is_success() {
-                            return Err(miette::miette!(
-                                "Could not request mapping located at {:?}",
-                                url.as_str()
-                            ));
-                        }
-
-                        let mapping_by_name = fetch_mapping_from_url(client, url).await?;
-
-                        mapping_url_to_name.insert(name.to_string(), mapping_by_name);
-                    }
-                    MappingLocation::Path(path) => {
-                        let contents = std::fs::read_to_string(path)
-                            .into_diagnostic()
-                            .context(format!("mapping on {path:?} could not be loaded"))?;
-                        let data: HashMap<String, Option<String>> = serde_json::from_str(&contents)
-                            .into_diagnostic()
-                            .context(format!(
-                                "Failed to parse JSON mapping located at {}",
-                                path.display()
-                            ))?;
-
-                        mapping_url_to_name.insert(name.to_string(), data);
-                    }
-                }
-            }
-
-            Ok(mapping_url_to_name)
-        })
-        .await
 }
 
 /// Amend the records with pypi purls if they are not present yet.
