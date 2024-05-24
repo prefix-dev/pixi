@@ -1048,27 +1048,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/global_configuration/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Global Configuration
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../advanced/pyproject_toml/" class="md-nav__link">
         
   
@@ -1137,11 +1116,32 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/" class="md-nav__link">
+      <a href="../../reference/project_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
     Project Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/pixi_configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pixi Configuration
   </span>
   
 
@@ -1492,7 +1492,7 @@ The directory is relative to the pixi package root, where the <code>pixi.toml</c
 <p>To add a task to run the <code>bar.py</code> file, use:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>bar<span class="w"> </span><span class="s2">&quot;python bar.py&quot;</span><span class="w"> </span>--cwd<span class="w"> </span>scripts
 </span></code></pre></div>
-<p>This will add the following line to <a href="../../reference/configuration/">manifest file</a>:</p>
+<p>This will add the following line to <a href="../../reference/project_configuration/">manifest file</a>:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[tasks]</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">bar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python bar.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cwd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;scripts&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>

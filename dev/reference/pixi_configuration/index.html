@@ -6,17 +6,15 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="The resulting environment of a pixi installation.">
       
       
-      
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/features/environment/">
-      
-      
-        <link rel="prev" href="../../examples/ros2-nav2/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/reference/pixi_configuration/">
       
       
-        <link rel="next" href="../advanced_tasks/">
+        <link rel="prev" href="../project_configuration/">
+      
+      
+        <link rel="next" href="../cli/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -24,7 +22,7 @@
     
     
       
-        <title>Environment - Pixi by prefix.dev</title>
+        <title>Pixi Configuration - Pixi by prefix.dev</title>
       
     
     
@@ -61,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Environment - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Pixi Configuration - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="The resulting environment of a pixi installation." >
+        <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/features/environment.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/reference/pixi_configuration.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -73,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/features/environment/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/reference/pixi_configuration/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Environment - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Pixi Configuration - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="The resulting environment of a pixi installation." >
+        <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/features/environment.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/reference/pixi_configuration.png" >
       
     
     
@@ -104,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#environments" class="md-skip">
+        <a href="#the-configuration-of-pixi-itself" class="md-skip">
           Skip to content
         </a>
       
@@ -143,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Environment
+              Pixi Configuration
             
           </span>
         </div>
@@ -662,8 +660,6 @@
       
   
   
-    
-  
   
   
     
@@ -675,11 +671,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
           <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
@@ -693,7 +689,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             Features
@@ -704,30 +700,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Environments
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../features/environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -736,110 +712,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#structure" class="md-nav__link">
-    <span class="md-ellipsis">
-      Structure
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Structure">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#cleaning-up" class="md-nav__link">
-    <span class="md-ellipsis">
-      Cleaning up
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#activation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Activation
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#traditional-conda-activate-like-activation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Traditional conda activate-like activation
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Traditional conda activate-like activation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#using-pixi-with-direnv" class="md-nav__link">
-    <span class="md-ellipsis">
-      Using pixi with direnv
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#environment-variables" class="md-nav__link">
-    <span class="md-ellipsis">
-      Environment variables
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#solving-environments" class="md-nav__link">
-    <span class="md-ellipsis">
-      Solving environments
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#caching" class="md-nav__link">
-    <span class="md-ellipsis">
-      Caching
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -852,7 +724,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../advanced_tasks/" class="md-nav__link">
+      <a href="../../features/advanced_tasks/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -873,7 +745,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../multi_platform_configuration/" class="md-nav__link">
+      <a href="../../features/multi_platform_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -894,7 +766,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../multi_environment/" class="md-nav__link">
+      <a href="../../features/multi_environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -915,7 +787,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../lockfile/" class="md-nav__link">
+      <a href="../../features/lockfile/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1092,8 +964,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -1103,11 +977,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -1121,7 +995,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             Reference
@@ -1135,7 +1009,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/project_configuration/" class="md-nav__link">
+      <a href="../project_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1153,10 +1027,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../reference/pixi_configuration/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Pixi Configuration
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -1165,6 +1059,137 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reference
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      default-channels
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#change-ps1" class="md-nav__link">
+    <span class="md-ellipsis">
+      change-ps1
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tls-no-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      tls-no-verify
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication-override-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      authentication-override-file
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detached-environments" class="md-nav__link">
+    <span class="md-ellipsis">
+      detached-environments
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mirrors" class="md-nav__link">
+    <span class="md-ellipsis">
+      mirrors
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#repodata-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      repodata-config
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pypi-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      pypi-config
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mirror-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mirror configuration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mirror configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#oci-mirrors" class="md-nav__link">
+    <span class="md-ellipsis">
+      OCI Mirrors
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1177,7 +1202,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/cli/" class="md-nav__link">
+      <a href="../cli/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1335,19 +1360,82 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#structure" class="md-nav__link">
+  <a href="#reference" class="md-nav__link">
     <span class="md-ellipsis">
-      Structure
+      Reference
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Structure">
+    <nav class="md-nav" aria-label="Reference">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#cleaning-up" class="md-nav__link">
+  <a href="#default-channels" class="md-nav__link">
     <span class="md-ellipsis">
-      Cleaning up
+      default-channels
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#change-ps1" class="md-nav__link">
+    <span class="md-ellipsis">
+      change-ps1
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tls-no-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      tls-no-verify
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication-override-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      authentication-override-file
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detached-environments" class="md-nav__link">
+    <span class="md-ellipsis">
+      detached-environments
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mirrors" class="md-nav__link">
+    <span class="md-ellipsis">
+      mirrors
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#repodata-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      repodata-config
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pypi-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      pypi-config
     </span>
   </a>
   
@@ -1359,28 +1447,19 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#activation" class="md-nav__link">
+  <a href="#mirror-configuration" class="md-nav__link">
     <span class="md-ellipsis">
-      Activation
+      Mirror configuration
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#traditional-conda-activate-like-activation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Traditional conda activate-like activation
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Traditional conda activate-like activation">
+    <nav class="md-nav" aria-label="Mirror configuration">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#using-pixi-with-direnv" class="md-nav__link">
+  <a href="#oci-mirrors" class="md-nav__link">
     <span class="md-ellipsis">
-      Using pixi with direnv
+      OCI Mirrors
     </span>
   </a>
   
@@ -1388,33 +1467,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#environment-variables" class="md-nav__link">
-    <span class="md-ellipsis">
-      Environment variables
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#solving-environments" class="md-nav__link">
-    <span class="md-ellipsis">
-      Solving environments
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#caching" class="md-nav__link">
-    <span class="md-ellipsis">
-      Caching
-    </span>
-  </a>
   
 </li>
       
@@ -1433,7 +1485,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/features/environment.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/reference/pixi_configuration.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1441,168 +1493,307 @@
   
 
 
-<h1 id="environments">Environments<a class="headerlink" href="#environments" title="Permanent link">#</a></h1>
-<p>Pixi is a tool to manage virtual environments.
-This document explains what an environment looks like and how to use it.</p>
-<h2 id="structure">Structure<a class="headerlink" href="#structure" title="Permanent link">#</a></h2>
-<p>A pixi environment is located in the <code>.pixi/envs</code> directory of the project.
-This location is <strong>not</strong> configurable as it is a specific design decision to keep the environments in the project directory.
-This keeps your machine and your project clean and isolated from each other, and makes it easy to clean up after a project is done.</p>
-<p>If you look at the <code>.pixi/envs</code> directory, you will see a directory for each environment, the <code>default</code> being the one that is normally used, if you specify a custom environment the name you specified will be used.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>.pixi
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>└──<span class="w"> </span>envs
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span>├──<span class="w"> </span>cuda
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span>│<span class="w">   </span>├──<span class="w"> </span>bin
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span>│<span class="w">   </span>├──<span class="w"> </span>conda-meta
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span>│<span class="w">   </span>├──<span class="w"> </span>etc
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span>│<span class="w">   </span>├──<span class="w"> </span>include
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span>│<span class="w">   </span>├──<span class="w"> </span>lib
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span>│<span class="w">   </span>...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span>└──<span class="w"> </span>default
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">        </span>├──<span class="w"> </span>bin
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">        </span>├──<span class="w"> </span>conda-meta
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">        </span>├──<span class="w"> </span>etc
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">        </span>├──<span class="w"> </span>include
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">        </span>├──<span class="w"> </span>lib
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">        </span>...
-</span></code></pre></div>
-<p>These directories are conda environments, and you can use them as such, but you cannot manually edit them, this should always go through the <code>pixi.toml</code>.
-Pixi will always make sure the environment is in sync with the <code>pixi.lock</code> file.
-If this is not the case then all the commands that use the environment will automatically update the environment, e.g. <code>pixi run</code>, <code>pixi shell</code>.</p>
-<h3 id="cleaning-up">Cleaning up<a class="headerlink" href="#cleaning-up" title="Permanent link">#</a></h3>
-<p>If you want to clean up the environments, you can simply delete the <code>.pixi/envs</code> directory, and pixi will recreate the environments when needed.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># either:</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>rm<span class="w"> </span>-rf<span class="w"> </span>.pixi/envs
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># or per environment:</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>rm<span class="w"> </span>-rf<span class="w"> </span>.pixi/envs/default
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>rm<span class="w"> </span>-rf<span class="w"> </span>.pixi/envs/cuda
-</span></code></pre></div>
-<h2 id="activation">Activation<a class="headerlink" href="#activation" title="Permanent link">#</a></h2>
-<p>An environment is nothing more than a set of files that are installed into a certain location, that somewhat mimics a global system install.
-You need to activate the environment to use it.
-In the most simple sense that mean adding the <code>bin</code> directory of the environment to the <code>PATH</code> variable.
-But there is more to it in a conda environment, as it also sets some environment variables.</p>
-<p>To do the activation we have multiple options:</p>
-<ul>
-<li>Use the <code>pixi shell</code> command to open a shell with the environment activated.</li>
-<li>Use the <code>pixi shell-hook</code> command to print the command to activate the environment in your current shell.</li>
-<li>Use the <code>pixi run</code> command to run a command in the environment.</li>
-</ul>
-<p>Where the <code>run</code> command is special as it runs its own cross-platform shell and has the ability to run tasks.
-More information about tasks can be found in the <a href="../advanced_tasks/">tasks documentation</a>.</p>
-<p>Using the <code>pixi shell-hook</code> in pixi you would get the following output:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/bin:/home/user/.local/bin:/home/user/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/home/user/.pixi/bin&quot;</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CONDA_PREFIX</span><span class="o">=</span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default&quot;</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_PROJECT_NAME</span><span class="o">=</span><span class="s2">&quot;pixi&quot;</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_PROJECT_ROOT</span><span class="o">=</span><span class="s2">&quot;/home/user/development/pixi&quot;</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_PROJECT_VERSION</span><span class="o">=</span><span class="s2">&quot;0.12.0&quot;</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_PROJECT_MANIFEST</span><span class="o">=</span><span class="s2">&quot;/home/user/development/pixi/pixi.toml&quot;</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CONDA_DEFAULT_ENV</span><span class="o">=</span><span class="s2">&quot;pixi&quot;</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_ENVIRONMENT_PLATFORMS</span><span class="o">=</span><span class="s2">&quot;osx-64,linux-64,win-64,osx-arm64&quot;</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_ENVIRONMENT_NAME</span><span class="o">=</span><span class="s2">&quot;default&quot;</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_PROMPT</span><span class="o">=</span><span class="s2">&quot;(pixi) &quot;</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>.<span class="w"> </span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-binutils_linux-64.sh&quot;</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>.<span class="w"> </span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-gcc_linux-64.sh&quot;</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>.<span class="w"> </span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-gfortran_linux-64.sh&quot;</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>.<span class="w"> </span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-gxx_linux-64.sh&quot;</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>.<span class="w"> </span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/libglib_activate.sh&quot;</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>.<span class="w"> </span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/rust.sh&quot;</span>
-</span></code></pre></div>
-<p>It sets the <code>PATH</code> and some more environment variables. But more importantly it also runs activation scripts that are presented by the installed packages.
-An example of this would be the <a href="https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh"><code>libglib_activate.sh</code></a> script.
-Thus, just adding the <code>bin</code> directory to the <code>PATH</code> is not enough.</p>
-<h2 id="traditional-conda-activate-like-activation">Traditional <code>conda activate</code>-like activation<a class="headerlink" href="#traditional-conda-activate-like-activation" title="Permanent link">#</a></h2>
-<p>If you prefer to use the traditional <code>conda activate</code>-like activation, you could use the <code>pixi shell-hook</code> command.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>$<span class="w"> </span>which<span class="w"> </span>python
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>python<span class="w"> </span>not<span class="w"> </span>found
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>$<span class="w"> </span><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>$<span class="w"> </span><span class="o">(</span>default<span class="o">)</span><span class="w"> </span>which<span class="w"> </span>python
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>/path/to/project/.pixi/envs/default/bin/python
-</span></code></pre></div>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>It is not encouraged to use the traditional <code>conda activate</code>-like activation, as deactivating the environment is not really possible. Use <code>pixi shell</code> instead.</p>
+<h1 id="the-configuration-of-pixi-itself">The configuration of pixi itself<a class="headerlink" href="#the-configuration-of-pixi-itself" title="Permanent link">#</a></h1>
+<p>Apart from the <a href="../project_configuration/">project specific configuration</a> pixi supports configuration options which are not required for the project to work but are local to the machine.
+The configuration is loaded in the following order:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux</label><label for="__tabbed_1_2">macOS</label><label for="__tabbed_1_3">Windows</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<table>
+<thead>
+<tr>
+<th><strong>Priority</strong></th>
+<th><strong>Location</strong></th>
+<th><strong>Comments</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>/etc/pixi/config.toml</code></td>
+<td>System-wide configuration</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>$XDG_CONFIG_HOME/pixi/config.toml</code></td>
+<td>XDG compliant user-specific configuration</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>$HOME/.config/pixi/config.toml</code></td>
+<td>User-specific configuration</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>$PIXI_HOME/config.toml</code></td>
+<td>Global configuration in the user home directory. <code>PIXI_HOME</code> defaults to <code>~/.pixi</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>your_project/.pixi/config.toml</code></td>
+<td>Project-specific configuration</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code>, etc.)</td>
+<td>Configuration via command line arguments</td>
+</tr>
+</tbody>
+</table>
 </div>
-<h3 id="using-pixi-with-direnv">Using <code>pixi</code> with <code>direnv</code><a class="headerlink" href="#using-pixi-with-direnv" title="Permanent link">#</a></h3>
-<details class="note">
-<summary>Installing direnv</summary>
-<p>Of course you can use <code>pixi</code> to install <code>direnv</code> globally. We recommend to run</p>
-<p><code>pixi global install direnv</code></p>
-<p>to install the latest version of <code>direnv</code> on your computer.</p>
-</details>
-<p>This allows you to use <code>pixi</code> in combination with <code>direnv</code>.
-Enter the following into your <code>.envrc</code> file:</p>
-<div class="language-shell highlight"><span class="filename">.envrc</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>watch_file<span class="w"> </span>pixi.lock<span class="w"> </span><span class="c1"># (1)!</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="c1"># (2)!</span>
-</span></code></pre></div>
-<ol>
-<li>This ensures that every time your <code>pixi.lock</code> changes, <code>direnv</code> invokes the shell-hook again.</li>
-<li>This installs if needed, and activates the environment. <code>direnv</code> ensures that the environment is deactivated when you leave the directory.</li>
-</ol>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>my-project
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>direnv:<span class="w"> </span>error<span class="w"> </span>/my-project/.envrc<span class="w"> </span>is<span class="w"> </span>blocked.<span class="w"> </span>Run<span class="w"> </span><span class="sb">`</span>direnv<span class="w"> </span>allow<span class="sb">`</span><span class="w"> </span>to<span class="w"> </span>approve<span class="w"> </span>its<span class="w"> </span>content
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>$<span class="w"> </span>direnv<span class="w"> </span>allow
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>direnv:<span class="w"> </span>loading<span class="w"> </span>/my-project/.envrc
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>✔<span class="w"> </span>Project<span class="w"> </span><span class="k">in</span><span class="w"> </span>/my-project<span class="w"> </span>is<span class="w"> </span>ready<span class="w"> </span>to<span class="w"> </span>use!
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>direnv:<span class="w"> </span><span class="nb">export</span><span class="w"> </span>+CONDA_DEFAULT_ENV<span class="w"> </span>+CONDA_PREFIX<span class="w"> </span>+PIXI_ENVIRONMENT_NAME<span class="w"> </span>+PIXI_ENVIRONMENT_PLATFORMS<span class="w"> </span>+PIXI_PROJECT_MANIFEST<span class="w"> </span>+PIXI_PROJECT_NAME<span class="w"> </span>+PIXI_PROJECT_ROOT<span class="w"> </span>+PIXI_PROJECT_VERSION<span class="w"> </span>+PIXI_PROMPT<span class="w"> </span>~PATH
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>$<span class="w"> </span>which<span class="w"> </span>python
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>/my-project/.pixi/envs/default/bin/python
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>..
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>direnv:<span class="w"> </span>unloading
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>$<span class="w"> </span>which<span class="w"> </span>python
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>python<span class="w"> </span>not<span class="w"> </span>found
-</span></code></pre></div>
-<h2 id="environment-variables">Environment variables<a class="headerlink" href="#environment-variables" title="Permanent link">#</a></h2>
-<p>The following environment variables are set by pixi, when using the <code>pixi run</code>, <code>pixi shell</code>, or <code>pixi shell-hook</code> command:</p>
-<ul>
-<li><code>PIXI_PROJECT_ROOT</code>: The root directory of the project.</li>
-<li><code>PIXI_PROJECT_NAME</code>: The name of the project.</li>
-<li><code>PIXI_PROJECT_MANIFEST</code>: The path to the manifest file (<code>pixi.toml</code>).</li>
-<li><code>PIXI_PROJECT_VERSION</code>: The version of the project.</li>
-<li><code>PIXI_PROMPT</code>: The prompt to use in the shell, also used by <code>pixi shell</code> itself.</li>
-<li><code>PIXI_ENVIRONMENT_NAME</code>: The name of the environment, defaults to <code>default</code>.</li>
-<li><code>PIXI_ENVIRONMENT_PLATFORMS</code>: The path to the environment.</li>
-<li><code>CONDA_PREFIX</code>: The path to the environment. (Used by multiple tools that already understand conda environments)</li>
-<li><code>CONDA_DEFAULT_ENV</code>: The name of the environment. (Used by multiple tools that already understand conda environments)</li>
-<li><code>PATH</code>: We prepend the <code>bin</code> directory of the environment to the <code>PATH</code> variable, so you can use the tools installed in the environment directly.</li>
-</ul>
+<div class="tabbed-block">
+<table>
+<thead>
+<tr>
+<th><strong>Priority</strong></th>
+<th><strong>Location</strong></th>
+<th><strong>Comments</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>/etc/pixi/config.toml</code></td>
+<td>System-wide configuration</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>$XDG_CONFIG_HOME/pixi/config.toml</code></td>
+<td>XDG compliant user-specific configuration</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>$HOME/Library/Application Support/pixi/config.toml</code></td>
+<td>User-specific configuration</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>$PIXI_HOME/config.toml</code></td>
+<td>Global configuration in the user home directory. <code>PIXI_HOME</code> defaults to <code>~/.pixi</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>your_project/.pixi/config.toml</code></td>
+<td>Project-specific configuration</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code>, etc.)</td>
+<td>Configuration via command line arguments</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="tabbed-block">
+<table>
+<thead>
+<tr>
+<th><strong>Priority</strong></th>
+<th><strong>Location</strong></th>
+<th><strong>Comments</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>C:\ProgramData\pixi\config.toml</code></td>
+<td>System-wide configuration</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>%APPDATA%\pixi\config.toml</code></td>
+<td>User-specific configuration</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>$PIXI_HOME\config.toml</code></td>
+<td>Global configuration in the user home directory. <code>PIXI_HOME</code> defaults to <code>%USERPROFILE%/.pixi</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>your_project\.pixi\config.toml</code></td>
+<td>Project-specific configuration</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code>, etc.)</td>
+<td>Configuration via command line arguments</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting <code>PIXI_PROJECT_ROOT</code> in the environment.</p>
+<p>The highest priority wins. If a configuration file is found in a higher priority location, the values from the configuration read from lower priority locations are overwritten.</p>
 </div>
-<h2 id="solving-environments">Solving environments<a class="headerlink" href="#solving-environments" title="Permanent link">#</a></h2>
-<p>When you run a command that uses the environment, pixi will check if the environment is in sync with the <code>pixi.lock</code> file.
-If it is not, pixi will solve the environment and update it.
-This means that pixi will retrieve the best set of packages for the dependency requirements that you specified in the <code>pixi.toml</code> and will put the output of the solve step into the <code>pixi.lock</code> file.
-Solving is a mathematical problem and can take some time, but we take pride in the way we solve environments, and we are confident that we can solve your environment in a reasonable time.
-If you want to learn more about the solving process, you can read these:</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>To find the locations where <code>pixi</code> looks for configuration files, run
+<code>pixi</code> with <code>-v</code> or <code>--verbose</code>.</p>
+</div>
+<h2 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">#</a></h2>
+<details class="info">
+<summary>Casing In Configuration</summary>
+<p>In versions of pixi <code>0.20.1</code> and older the global configuration used snake_case
+we've changed to <code>kebab-case</code> for consistency with the rest of the configuration.
+But we still support the old <code>snake_case</code> configuration, for older configuration options.
+These are:</p>
 <ul>
-<li><a href="https://prefix.dev/blog/the_new_rattler_resolver">Rattler(conda) resolver blog</a></li>
-<li><a href="https://prefix.dev/blog/introducing_rip">Rip(PyPI) resolver blog</a></li>
+<li><code>default_channels</code></li>
+<li><code>change_ps1</code></li>
+<li><code>tls_no_verify</code></li>
+<li><code>authentication_override_file</code></li>
+<li><code>mirrors</code> and sub-options</li>
+<li><code>repodata-config</code> and sub-options</li>
 </ul>
-<p>Pixi solves both the <code>conda</code> and <code>PyPI</code> dependencies, where the <code>PyPI</code> dependencies use the conda packages as a base, so you can be sure that the packages are compatible with each other.
-These solvers are split between the <a href="https://github.com/mamba-org/rattler"><code>rattler</code></a> and <a href="https://github.com/prefix-dev/rip"><code>rip</code></a> library, these control the heavy lifting of the solving process, which is executed by our custom SAT solver: <a href="https://github.com/mamba-org/resolvo"><code>resolvo</code></a>.
-<code>resolve</code> is able to solve multiple ecosystem like <code>conda</code> and <code>PyPI</code>. It implements the lazy solving process for <code>PyPI</code> packages, which means that it only downloads the metadata of the packages that are needed to solve the environment.
-It also supports the <code>conda</code> way of solving, which means that it downloads the metadata of all the packages at once and then solves in one go.</p>
-<p>For the <code>[pypi-dependencies]</code>, <code>rip</code> implements <code>sdist</code> building to retrieve the metadata of the packages, and <code>wheel</code> building to install the packages.
-For this building step, <code>pixi</code> requires to first install <code>python</code> in the (conda)<code>[dependencies]</code> section of the <code>pixi.toml</code> file.
-This will always be slower than the pure conda solves. So for the best pixi experience you should stay within the <code>[dependencies]</code> section of the <code>pixi.toml</code> file.</p>
-<h2 id="caching">Caching<a class="headerlink" href="#caching" title="Permanent link">#</a></h2>
-<p>Pixi caches all previously downloaded packages in a cache folder.
-This cache folder is shared between all pixi projects and globally installed tools.</p>
-<p>Normally the locations would be:
-Platform-specific default cache folder:
-- Linux: <code>$XDG_CACHE_HOME/rattler</code> or <code>$HOME/.cache/rattler</code>
-- macOS: <code>$HOME/Library/Caches/rattler</code>
-- Windows: <code>%LOCALAPPDATA%\rattler</code></p>
-<p>This location is configurable by setting the <code>PIXI_CACHE_DIR</code> or <code>RATTLER_CACHE_DIR</code> environment variable.</p>
-<p>When you want to clean the cache, you can simply delete the cache directory, and pixi will re-create the cache when needed.</p>
-<p>The cache contains multiple folders concerning different caches from within pixi.
-- <code>pkgs</code>: Contains the downloaded/unpacked <code>conda</code> packages.
-- <code>repodata</code>: Contains the <code>conda</code> repodata cache.
-- <code>uv-cache</code>: Contains the <code>uv</code> cache. This includes multiple caches, e.g. <code>built-wheels</code> <code>wheels</code> <code>archives</code>
-- <code>http-cache</code>: Contains the <code>conda-pypi</code> mapping cache.</p>
+</details>
+<p>The following reference describes all available configuration options.</p>
+<h3 id="default-channels"><code>default-channels</code><a class="headerlink" href="#default-channels" title="Permanent link">#</a></h3>
+<p>The default channels to select when running <code>pixi init</code> or <code>pixi global install</code>.
+This defaults to only conda-forge.
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">default-channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span></code></pre></div></p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The <code>default-channels</code> are only used when initializing a new project. Once initialized the <code>channels</code> are used from the project manifest.</p>
+</div>
+<h3 id="change-ps1"><code>change-ps1</code><a class="headerlink" href="#change-ps1" title="Permanent link">#</a></h3>
+<p>When set to false, the <code>(pixi)</code> prefix in the shell prompt is removed.
+This applies to the <code>pixi shell</code> subcommand.
+You can override this from the CLI with <code>--change-ps1</code>.</p>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">change-ps1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span></code></pre></div>
+<h3 id="tls-no-verify"><code>tls-no-verify</code><a class="headerlink" href="#tls-no-verify" title="Permanent link">#</a></h3>
+<p>When set to true, the TLS certificates are not verified.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>This is a security risk and should only be used for testing purposes or internal networks.</p>
+</div>
+<p>You can override this from the CLI with <code>--tls-no-verify</code>.</p>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">tls-no-verify</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+</span></code></pre></div>
+<h3 id="authentication-override-file"><code>authentication-override-file</code><a class="headerlink" href="#authentication-override-file" title="Permanent link">#</a></h3>
+<p>Override from where the authentication information is loaded.
+Usually, we try to use the keyring to load authentication data from, and only use a JSON
+file as a fallback. This option allows you to force the use of a JSON file.
+Read more in the authentication section.
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">authentication-override-file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/path/to/your/override.json&quot;</span>
+</span></code></pre></div></p>
+<h3 id="detached-environments"><code>detached-environments</code><a class="headerlink" href="#detached-environments" title="Permanent link">#</a></h3>
+<p>The directory where pixi stores the project environments, what would normally be placed in the <code>.pixi/envs</code> folder in a project's root.
+It doesn't affect the environments built for <code>pixi global</code>.
+The location of environments created for a <code>pixi global</code> installation can be controlled using the <code>PIXI_HOME</code> environment variable.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>We recommend against using this because any environment created for a project is no longer placed in the same folder as the project.
+This creates a disconnect between the project and its environments and manual cleanup of the environments is required when deleting the project.</p>
+<p>However, in some cases, this option can still be very useful, for instance to:</p>
+<ul>
+<li>force the installation on a specific filesystem/drive.</li>
+<li>install environments locally but keep the project on a network drive.</li>
+<li>let a system-administrator have more control over all environments on a system.</li>
+</ul>
+</div>
+<p>This field can consist of two types of input.</p>
+<ul>
+<li>A boolean value, <code>true</code> or <code>false</code>, which will enable or disable the feature respectively. (not <code>"true"</code> or <code>"false"</code>, this is read as <code>false</code>)</li>
+<li>A string value, which will be the absolute path to the directory where the environments will be stored.</li>
+</ul>
+<p><div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">detached-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span></code></pre></div>
+or:
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">detached-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/opt/pixi/envs&quot;</span>
+</span></code></pre></div></p>
+<p>The environments will be stored in the <a href="../../features/environment/#caching">cache directory</a> when this option is <code>true</code>.
+When you specify a custom path the environments will be stored in that directory.</p>
+<p>The resulting directory structure will look like this:
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">detached-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/opt/pixi/envs&quot;</span>
+</span></code></pre></div>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>/opt/pixi/envs
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>├──<span class="w"> </span>pixi-6837172896226367631
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>│<span class="w">   </span>└──<span class="w"> </span>envs
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>└──<span class="w"> </span>NAME_OF_PROJECT-HASH_OF_ORIGINAL_PATH
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span>├──<span class="w"> </span>envs<span class="w"> </span><span class="c1"># the runnable environments</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span>└──<span class="w"> </span>solve-group-envs<span class="w"> </span><span class="c1"># If there are solve groups</span>
+</span></code></pre></div></p>
+<h3 id="mirrors"><code>mirrors</code><a class="headerlink" href="#mirrors" title="Permanent link">#</a></h3>
+<p>Configuration for conda channel-mirrors, more info <a href="#mirror-configuration">below</a>.</p>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># redirect all requests for conda-forge to the prefix.dev mirror</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="p">]</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># redirect all requests for bioconda to one of the three listed mirrors</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Note: for repodata we try the first mirror first.</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="s2">&quot;https://conda.anaconda.org/bioconda&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span><span class="s2">&quot;https://conda.anaconda.org/bioconda&quot;</span><span class="p">,</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">    </span><span class="c1"># OCI registries are also supported</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">    </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/bioconda&quot;</span><span class="p">,</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">    </span><span class="s2">&quot;https://prefix.dev/bioconda&quot;</span><span class="p">,</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="p">]</span>
+</span></code></pre></div>
+<h3 id="repodata-config"><code>repodata-config</code><a class="headerlink" href="#repodata-config" title="Permanent link">#</a></h3>
+<p>Configuration for repodata fetching.
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[repodata-config]</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># disable fetching of jlap, bz2 or zstd repodata files.</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># This should only be used for specific old versions of artifactory and other non-compliant</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># servers.</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">disable-jlap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">  </span><span class="c1"># don&#39;t try to download repodata.jlap</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">disable-bzip2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="c1"># don&#39;t try to download repodata.json.bz2</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">disable-zstd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">  </span><span class="c1"># don&#39;t try to download repodata.json.zst</span>
+</span></code></pre></div></p>
+<h3 id="pypi-config"><code>pypi-config</code><a class="headerlink" href="#pypi-config" title="Permanent link">#</a></h3>
+<p>To setup a certain number of defaults for the usage of PyPI registries. You can use the following configuration options:</p>
+<ul>
+<li><code>index-url</code>: The default index URL to use for PyPI packages. This will be added to a manifest file on a <code>pixi init</code>.</li>
+<li><code>extra-index-urls</code>: A list of additional URLs to use for PyPI packages. This will be added to a manifest file on a <code>pixi init</code>.</li>
+<li><code>keyring-provider</code>: Allows the use of the <a href="https://pypi.org/project/keyring/">keyring</a> python package to store and retrieve credentials.</li>
+</ul>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[pypi-config]</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># Main index url</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://pypi.org/simple&quot;</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># list of additional urls</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://pypi.org/simple2&quot;</span><span class="p">]</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># can be &quot;subprocess&quot; or &quot;disabled&quot;</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="n">keyring-provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;subprocess&quot;</span>
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title"><code>index-url</code> and <code>extra-index-urls</code> are <em>not</em> globals</p>
+<p>Unlike pip, these settings, with the exception of <code>keyring-provider</code> will only modify the <code>pixi.toml</code>/<code>pyproject.toml</code> file and are not globally interpreted when not present in the manifest.
+This is because we want to keep the manifest file as complete and reproducible as possible.</p>
+</div>
+<h2 id="mirror-configuration">Mirror configuration<a class="headerlink" href="#mirror-configuration" title="Permanent link">#</a></h2>
+<p>You can configure mirrors for conda channels. We expect that mirrors are exact
+copies of the original channel. The implementation will look for the mirror key
+(a URL) in the <code>mirrors</code> section of the configuration file and replace the
+original URL with the mirror URL.</p>
+<p>To also include the original URL, you have to repeat it in the list of mirrors.</p>
+<p>The mirrors are prioritized based on the order of the list. We attempt to fetch
+the repodata (the most important file) from the first mirror in the list. The
+repodata contains all the SHA256 hashes of the individual packages, so it is
+important to get this file from a trusted source.</p>
+<p>You can also specify mirrors for an entire "host", e.g.</p>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="s2">&quot;https://prefix.dev/&quot;</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="p">]</span>
+</span></code></pre></div>
+<p>This will forward all request to channels on anaconda.org to prefix.dev.
+Channels that are not currently mirrored on prefix.dev will fail in the above example.</p>
+<h3 id="oci-mirrors">OCI Mirrors<a class="headerlink" href="#oci-mirrors" title="Permanent link">#</a></h3>
+<p>You can also specify mirrors on the OCI registry. There is a public mirror on
+the Github container registry (ghcr.io) that is maintained by the conda-forge
+team. You can use it like this:</p>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="p">]</span>
+</span></code></pre></div>
+<p>The GHCR mirror also contains <code>bioconda</code> packages. You can search the <a href="https://github.com/orgs/channel-mirrors/packages">available
+packages on Github</a>.</p>
 
 
 
@@ -1674,9 +1865,9 @@ Platform-specific default cache folder:
           
             
             <a
-              href="../../examples/ros2-nav2/"
+              href="../project_configuration/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: ROS 2"
+              aria-label="Previous: Project Configuration"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1687,7 +1878,7 @@ Platform-specific default cache folder:
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  ROS 2
+                  Project Configuration
                 </div>
               </div>
             </a>
@@ -1697,16 +1888,16 @@ Platform-specific default cache folder:
           
             
             <a
-              href="../advanced_tasks/"
+              href="../cli/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Tasks"
+              aria-label="Next: CLI"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Tasks
+                  CLI
                 </div>
               </div>
               <div class="md-footer__button md-icon">

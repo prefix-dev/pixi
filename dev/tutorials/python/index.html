@@ -1101,27 +1101,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/global_configuration/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Global Configuration
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../advanced/pyproject_toml/" class="md-nav__link">
         
   
@@ -1190,11 +1169,32 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/" class="md-nav__link">
+      <a href="../../reference/project_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
     Project Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/pixi_configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pixi Configuration
   </span>
   
 
@@ -1614,7 +1614,7 @@ The main reason being so that you can choose which environment this package shou
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[project.optional-dependencies]</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pytest&quot;</span><span class="p">]</span>
 </span></code></pre></div></p>
-<p>After we have added the optional dependencies to the <code>pyproject.toml</code>, pixi automatically creates a <a href="../../reference/configuration/#the-feature-and-environments-tables"><code>feature</code></a>, which can contain a collection of <code>dependencies</code>, <code>tasks</code>, <code>channels</code>, and more.</p>
+<p>After we have added the optional dependencies to the <code>pyproject.toml</code>, pixi automatically creates a <a href="../../reference/project_configuration/#the-feature-and-environments-tables"><code>feature</code></a>, which can contain a collection of <code>dependencies</code>, <code>tasks</code>, <code>channels</code>, and more.</p>
 <p>Sometimes there are packages that aren't available on conda channels but are published on PyPI.
 We can add these as well, which pixi will solve together with the default dependencies.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>add<span class="w"> </span>black<span class="w"> </span>--pypi

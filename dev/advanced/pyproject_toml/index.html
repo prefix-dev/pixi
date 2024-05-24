@@ -11,10 +11,10 @@
         <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/pyproject_toml/">
       
       
-        <link rel="prev" href="../global_configuration/">
+        <link rel="prev" href="../github_actions/">
       
       
-        <link rel="next" href="../../reference/configuration/">
+        <link rel="next" href="../../reference/project_configuration/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -938,27 +938,6 @@
                 
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../global_configuration/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Global Configuration
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
     
   
   
@@ -1124,11 +1103,32 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/" class="md-nav__link">
+      <a href="../../reference/project_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
     Project Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/pixi_configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pixi Configuration
   </span>
   
 
@@ -1466,7 +1466,7 @@ Pixi understands that field and automatically adds the dependencies to the proje
 <p>This would result in the conda dependencies being installed and the pypi dependencies being ignored.
 As pixi takes the conda dependencies over the pypi dependencies.</p>
 <h2 id="optional-dependencies">Optional dependencies<a class="headerlink" href="#optional-dependencies" title="Permanent link">#</a></h2>
-<p>If your python project includes groups of optional dependencies, pixi will automatically interpret them as <a href="../../reference/configuration/#the-feature-table">pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
+<p>If your python project includes groups of optional dependencies, pixi will automatically interpret them as <a href="../../reference/project_configuration/#the-feature-table">pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
 <p>You can add them to pixi environments manually, or use <code>pixi init</code> to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.</p>
 <p>For instance, imagine you have a project folder with a <code>pyproject.toml</code> file similar to:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[project]</span>
@@ -1621,9 +1621,9 @@ As pixi takes the conda dependencies over the pypi dependencies.</p>
           
             
             <a
-              href="../global_configuration/"
+              href="../github_actions/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Global Configuration"
+              aria-label="Previous: GitHub Actions"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1634,7 +1634,7 @@ As pixi takes the conda dependencies over the pypi dependencies.</p>
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Global Configuration
+                  GitHub Actions
                 </div>
               </div>
             </a>
@@ -1644,7 +1644,7 @@ As pixi takes the conda dependencies over the pypi dependencies.</p>
           
             
             <a
-              href="../../reference/configuration/"
+              href="../../reference/project_configuration/"
               class="md-footer__link md-footer__link--next"
               aria-label="Next: Project Configuration"
             >

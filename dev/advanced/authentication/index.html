@@ -1048,27 +1048,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../global_configuration/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Global Configuration
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../pyproject_toml/" class="md-nav__link">
         
   
@@ -1137,11 +1116,32 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/" class="md-nav__link">
+      <a href="../../reference/project_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
     Project Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/pixi_configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pixi Configuration
   </span>
   
 
@@ -1472,7 +1472,7 @@ When this environment variable is set, it provides the only source of authentica
 </span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>Note: if you use a wildcard in the host, any subdomain will match (e.g. <code>*.prefix.dev</code> also matches <code>repo.prefix.dev</code>).</p>
-<p>Lastly you can set the authentication override file in the <a href="../global_configuration/">global configuration file</a>.</p>
+<p>Lastly you can set the authentication override file in the <a href="../../reference/pixi_configuration/">global configuration file</a>.</p>
 <h2 id="pypi-authentication">PyPI authentication<a class="headerlink" href="#pypi-authentication" title="Permanent link">#</a></h2>
 <p>Currently, we support the following methods for authenticating against PyPI:</p>
 <ol>
@@ -1486,7 +1486,7 @@ To enable this use the CLI flag <code>--pypi-keyring-provider</code> which can e
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># From an existing pixi project</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>pixi<span class="w"> </span>install<span class="w"> </span>--pypi-keyring-provider<span class="w"> </span>subprocess
 </span></code></pre></div>
-<p>This option can also be set in the global configuration file under <a href="../global_configuration/#pypi-configuration">pypi-config</a>.</p>
+<p>This option can also be set in the global configuration file under <a href="../../reference/pixi_configuration/#pypi-configuration">pypi-config</a>.</p>
 <h4 id="installing-keyring">Installing keyring<a class="headerlink" href="#installing-keyring" title="Permanent link">#</a></h4>
 <p>To install keyring you can use pixi global install:</p>
 <p>Either use:</p>
@@ -1538,7 +1538,7 @@ An example of this would be:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>gcloud<span class="w"> </span>artifacts<span class="w"> </span>print-settings<span class="w"> </span>python<span class="w"> </span>--project<span class="o">=</span>&lt;project&gt;<span class="w"> </span>--repository<span class="o">=</span>&lt;repository&gt;<span class="w"> </span>--location<span class="o">=</span>&lt;location&gt;
 </span></code></pre></div>
 <h4 id="installing-your-environment">Installing your environment<a class="headerlink" href="#installing-your-environment" title="Permanent link">#</a></h4>
-<p>To actually install either configure your <a href="../global_configuration/#pypi-configuration">Global Config</a>, or use the flag:
+<p>To actually install either configure your <a href="../../reference/pixi_configuration/#pypi-config">Global Config</a>, or use the flag:
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>install<span class="w"> </span>--pypi-keyring-provider<span class="w"> </span>subprocess
 </span></code></pre></div></p>
 <h3 id="netrc-file"><code>.netrc</code> file<a class="headerlink" href="#netrc-file" title="Permanent link">#</a></h3>
