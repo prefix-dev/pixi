@@ -10,7 +10,7 @@ use crate::common::package_database::{Package, PackageDatabase};
 use common::{LockFileExt, PixiControl};
 use pixi::cli::run::Args;
 use pixi::cli::{run, LockFileUsageArgs};
-use pixi::config::Config;
+use pixi::config::{Config, DetachedEnvironments};
 use pixi::consts::{DEFAULT_ENVIRONMENT_NAME, PIXI_UV_INSTALLER};
 use pixi::FeatureName;
 use rattler_conda_types::Platform;
@@ -132,7 +132,7 @@ async fn install_locked_with_config() {
     // Overwrite install location to a target directory
     let mut config = Config::default();
     let target_dir = pixi.project_path().join("target");
-    config.target_environments_directory = Some(target_dir.clone());
+    config.detached_environments = Some(DetachedEnvironments::Path(target_dir.clone()));
     create_dir_all(target_dir.clone()).unwrap();
 
     let config_path = pixi.project().unwrap().pixi_dir().join("config.toml");
