@@ -3363,7 +3363,6 @@ dependencies = [
  "serial_test",
  "shlex",
  "signal-hook",
- "similar",
  "spdx",
  "strsim",
  "tabwriter",

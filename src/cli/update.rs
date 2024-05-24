@@ -7,13 +7,11 @@ use std::{
 
 use ahash::HashMap;
 use clap::Parser;
-use console::Style;
 use indexmap::IndexMap;
 use itertools::{Either, Itertools};
-use miette::MietteDiagnostic;
+use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockFileBuilder, Package};
-use similar::{Algorithm, ChangeTag};
 use tabwriter::TabWriter;
 
 use crate::{
@@ -152,7 +150,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             console::style(console::Emoji("✔ ", "")).green()
         );
     } else {
-        diff.print();
+        diff.print()
+            .into_diagnostic()
+            .context("failed to print lock-file diff")?;
     }
 
     Ok(())
@@ -413,7 +413,7 @@ impl LockFileDiff {
     }
 
     // Format the lock-file
-    pub fn print(&self) {
+    pub fn print(&self) -> std::io::Result<()> {
         enum Change<'i> {
             Added(&'i Package),
             Removed(&'i Package),
@@ -437,17 +437,17 @@ impl LockFileDiff {
         {
             writeln!(
                 writer,
-                "Environment: {}\t\t",
+                "Environment: {}\t\t\t",
                 consts::ENVIRONMENT_STYLE.apply_to(environment_name),
-            );
+            )?;
             for (platform, packages) in environment {
                 writeln!(
                     writer,
-                    "  Platform: {}\t\t",
+                    "  Platform: {}\t\t\t",
                     consts::PLATFORM_STYLE.apply_to(platform)
-                );
+                )?;
 
-                itertools::chain!(
+                for p in itertools::chain!(
                     packages.added.iter().map(Change::Added),
                     packages.removed.iter().map(Change::Removed),
                     packages.changed.iter().map(|a| Change::Changed(&a.0, &a.1))
@@ -456,67 +456,97 @@ impl LockFileDiff {
                     Change::Added(p) => p.name(),
                     Change::Removed(p) => p.name(),
                     Change::Changed(p, _) => p.name(),
-                })
-                .for_each(|c| match c {
-                    Change::Added(p) => {
-                        writeln!(
-                            writer,
-                            "    {} {} {}",
-                            console::style("+").green(),
-                            p.name(),
-                            format_package_identifier(p)
-                        );
-                    }
-                    Change::Removed(p) => {
-                        writeln!(
-                            writer,
-                            "    {} {} {}",
-                            console::style("-").red(),
-                            p.name(),
-                            format_package_identifier(p)
-                        );
-                    }
-                    Change::Changed(previous, current) => {
-                        write!(
-                            writer,
-                            "    {} {} ",
-                            console::style("~").yellow(),
-                            previous.name()
-                        );
-                        let previous = format_package_identifier(previous);
-                        let current = format_package_identifier(current);
-                        let diff = similar::TextDiff::configure()
-                            .algorithm(Algorithm::Lcs)
-                            .diff_lines(&previous, &current);
-                        for op in diff.ops().iter() {
-                            for (idx, change) in diff.iter_inline_changes(op).enumerate() {
-                                let s = match change.tag() {
-                                    ChangeTag::Delete => Style::new().bold(),
-                                    ChangeTag::Insert => Style::new().bold(),
-                                    ChangeTag::Equal => Style::new().dim(),
-                                };
-                                for (emphasized, value) in change.iter_strings_lossy() {
-                                    if emphasized {
-                                        write!(
-                                            writer,
-                                            "{}",
-                                            s.apply_to(value).underlined().on_black()
-                                        );
-                                    } else {
-                                        write!(writer, "{}", value);
-                                    }
-                                }
-                                if idx == 0 {
-                                    write!(writer, "\t->\t");
+                }) {
+                    match p {
+                        Change::Added(p) => {
+                            writeln!(
+                                writer,
+                                "    {} {}\t{}\t\t",
+                                console::style("+").green(),
+                                p.name(),
+                                format_package_identifier(p)
+                            )?;
+                        }
+                        Change::Removed(p) => {
+                            writeln!(
+                                writer,
+                                "    {} {}\t{}\t\t",
+                                console::style("-").red(),
+                                p.name(),
+                                format_package_identifier(p)
+                            )?;
+                        }
+                        Change::Changed(previous, current) => {
+                            write!(
+                                writer,
+                                "    {} {}\t",
+                                console::style("~").yellow(),
+                                previous.name()
+                            )?;
+
+                            fn choose_style<'a>(
+                                a: &'a str,
+                                b: &'a str,
+                            ) -> console::StyledObject<&'a str> {
+                                if a == b {
+                                    console::style(a).dim()
+                                } else {
+                                    console::style(a)
                                 }
                             }
-                        }
 
-                        writeln!(writer);
+                            match (previous, current) {
+                                (Package::Conda(previous), Package::Conda(current)) => {
+                                    let previous = previous.package_record();
+                                    let current = current.package_record();
+
+                                    writeln!(
+                                        writer,
+                                        "{} {}\t->\t{} {}",
+                                        choose_style(
+                                            &previous.version.as_str(),
+                                            &current.version.as_str()
+                                        ),
+                                        choose_style(
+                                            previous.build.as_str(),
+                                            current.build.as_str()
+                                        ),
+                                        choose_style(
+                                            &current.version.as_str(),
+                                            &previous.version.as_str()
+                                        ),
+                                        choose_style(
+                                            current.build.as_str(),
+                                            previous.build.as_str()
+                                        ),
+                                    )?;
+                                }
+                                (Package::Pypi(previous), Package::Pypi(current)) => {
+                                    let previous = previous.data().package;
+                                    let current = current.data().package;
+
+                                    writeln!(
+                                        writer,
+                                        "{}\t->\t{}",
+                                        choose_style(
+                                            &previous.version.to_string(),
+                                            &current.version.to_string()
+                                        ),
+                                        choose_style(
+                                            &current.version.to_string(),
+                                            &previous.version.to_string()
+                                        ),
+                                    )?;
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
                     }
-                });
+                }
             }
+            writer.flush()?;
         }
-        writer.flush().unwrap();
+
+        Ok(())
     }
 }
