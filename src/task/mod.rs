@@ -182,8 +182,8 @@ pub struct Execute {
     pub outputs: Option<Vec<String>>,
 
     /// A list of commands that should be run before this one
-    // BREAK: Make the alias a renamed field to force kebab-case
-    #[serde(default, alias = "depends-on")]
+    // BREAK: Make the remove the alias and force kebab-case
+    #[serde(default, alias = "depends_on")]
     #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<TaskName>,
 

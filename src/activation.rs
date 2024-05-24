@@ -216,9 +216,62 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
         .collect()
 }
 
+/// Get the environment variables that are set by default on Linux.
+pub fn get_linux_clean_environment_variables() -> HashMap<String, String> {
+    let env = std::env::vars().collect::<HashMap<_, _>>();
+    let default_keys = [
+        "DISPLAY",
+        "LC_ALL",
+        "LC_TIME",
+        "LC_NUMERIC",
+        "LC_MEASUREMENT",
+        "SHELL",
+        "USER",
+        "USERNAME",
+        "LOGNAME",
+        "HOME",
+        "HOSTNAME",
+    ];
+
+    let env = env
+        .into_iter()
+        .filter(|(key, _)| default_keys.contains(&key.as_str()))
+        .collect();
+    env
+}
+
+/// Get the environment variables that are set by default on macOS.
+pub fn get_macos_clean_environment_variables() -> HashMap<String, String> {
+    let env = std::env::vars().collect::<HashMap<_, _>>();
+    let default_keys = [
+        "DISPLAY",
+        "LC_ALL",
+        "LC_TIME",
+        "LC_NUMERIC",
+        "LC_MEASUREMENT",
+        "USER",
+        "USERNAME",
+        "LOGNAME",
+        "HOME",
+        "HOSTNAME",
+        "PATH",
+        "SHELL",
+        "TMPDIR",
+        "XPC_SERVICE_NAME",
+        "XPC_FLAGS",
+    ];
+
+    let env = env
+        .into_iter()
+        .filter(|(key, _)| default_keys.contains(&key.as_str()))
+        .collect();
+    env
+}
+
+/// Get the environment variables that are set by default on Windows.
 pub fn get_windows_clean_environment_variables() -> HashMap<String, String> {
     let env = std::env::vars().collect::<HashMap<_, _>>();
-    let default_keys = vec![
+    let default_keys = [
         "APPDATA",
         "COMPUTERNAME",
         "COMSPEC",
@@ -358,8 +411,36 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
+    fn test_get_linux_clean_environment_variables() {
+        let env = get_linux_clean_environment_variables();
+        // Make sure that the environment variables are set.
+        assert_eq!(
+            env.get("USER").unwrap(),
+            std::env::var("USER").as_ref().unwrap()
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn test_get_macos_clean_environment_variables() {
+        let env = get_macos_clean_environment_variables();
+        // Make sure that the environment variables are set.
+        assert_eq!(
+            env.get("USER").unwrap(),
+            std::env::var("USER").as_ref().unwrap()
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
     fn test_get_windows_clean_environment_variables() {
         let env = get_windows_clean_environment_variables();
-        dbg!(env);
+        // Make sure that the environment variables are set.
+        assert_eq!(
+            env.get("USERNAME").unwrap(),
+            std::env::var("USERNAME").as_ref().unwrap()
+        );
+        assert!(env.get("Path").is_some());
     }
 }
