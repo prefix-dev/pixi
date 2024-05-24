@@ -211,7 +211,7 @@ pub fn verify_platform_satisfiability(
         && pypi_packages.is_empty()
         && !conda_packages
             .iter()
-            .any(|record| !record.package_record.purls.is_empty())
+            .any(|record| record.package_record.purls.is_some())
     {
         {
             return Err(PlatformUnsat::MissingPurls);
