@@ -135,14 +135,14 @@ This command will allow you to update the lock file directly, without manually d
 ## `update`
 
 The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly.
-It will only update the lock file if the dependencies in the [manifest file](configuration.md) are still compatible with the new versions.
+It will only update the lock file if the dependencies in the [manifest file](project_configuration.md) are still compatible with the new versions.
 
 ##### Arguments
 
 1. `[PACKAGES]...` The packages to update, space separated. If no packages are provided, all packages will be updated.
 
 ##### Options
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](./configuration.md), by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
 - `--environment <ENVIRONMENT> (-e)`: The environment to install, if none are provided all the environments are updated.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependencies should be updated.
 - `--dry-run (-n)`: Only show the changes that would be made, without actually updating the lock file or environment.
