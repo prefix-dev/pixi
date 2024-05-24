@@ -104,7 +104,7 @@ pub struct Project {
     /// The cache that contains environment variables
     env_vars: HashMap<EnvironmentName, Arc<AsyncCell<HashMap<String, String>>>>,
     /// The cache that contains mapping
-    mapping_source: Arc<OnceCell<MappingSource>>,
+    mapping_source: OnceCell<MappingSource>,
     /// The global configuration as loaded from the config file(s)
     config: Config,
 }
