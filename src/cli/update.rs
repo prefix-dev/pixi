@@ -32,7 +32,7 @@ pub struct Args {
     #[arg(long)]
     pub manifest_path: Option<PathBuf>,
 
-    /// Don't modify the environment, only modify the lock-file.
+    /// Don't install the (solve) environments needed for pypi-dependencies solving.
     #[arg(long)]
     pub no_install: bool,
 
