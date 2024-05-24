@@ -103,21 +103,48 @@ Read more in the authentication section.
 authentication-override-file = "/path/to/your/override.json"
 ```
 
-### `target-environment-directory`
-The directory where pixi stores the project environments, what would normally be placed in the `.pixi` folder in a project's root.
+### `detached-environments`
+The directory where pixi stores the project environments, what would normally be placed in the `.pixi/envs` folder in a project's root.
 It doesn't affect the environments built for `pixi global`.
 The location of environments created for a `pixi global` installation can be controlled using the `PIXI_HOME` environment variable.
 !!! warning
     We recommend against using this because any environment created for a project is no longer placed in the same folder as the project.
     This creates a disconnect between the project and its environments and manual cleanup of the environments is required when deleting the project.
+
     However, in some cases, this option can still be very useful, for instance to:
 
     - force the installation on a specific filesystem/drive.
     - install environments locally but keep the project on a network drive.
     - let a system-administrator have more control over all environments on a system.
 
+This field can consist of two types of input.
+
+- A boolean value, `true` or `false`, which will enable or disable the feature respectively. (not `"true"` or `"false"`, this is read as `false`)
+- A string value, which will be the absolute path to the directory where the environments will be stored.
+
 ```toml title="config.toml"
-target-environment-diretory = "/opt/pixi/envs"
+detached-environments = true
+```
+or:
+```toml title="config.toml"
+detached-environments = "/opt/pixi/envs"
+```
+
+The environments will be stored in the [cache directory](../features/environment.md#caching) when this option is `true`.
+When you specify a custom path the environments will be stored in that directory.
+
+The resulting directory structure will look like this:
+```toml title="config.toml"
+detached-environments = "/opt/pixi/envs"
+```
+```shell
+/opt/pixi/envs
+├── pixi-6837172896226367631
+│   └── envs
+└── NAME_OF_PROJECT-HASH_OF_ORIGINAL_PATH
+    ├── envs # the runnable environments
+    └── solve-group-envs # If there are solve groups
+
 ```
 
 ### `mirrors`

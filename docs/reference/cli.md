@@ -758,6 +758,8 @@ Set a configuration key to a value.
 pixi config set default-channels '["conda-forge", "bioconda"]'
 pixi config set --global mirrors '{"https://conda.anaconda.org/": ["https://prefix.dev/conda-forge"]}'
 pixi config set repodata-config.disable-zstd true --system
+pixi config set --global detached-environments "/opt/pixi/envs"
+pixi config set detached-environments false
 ```
 
 ### `config unset`
