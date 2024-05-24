@@ -438,6 +438,7 @@ impl PythonStatus {
 }
 
 /// Updates the environment to contain the packages from the specified lock-file
+#[allow(clippy::too_many_arguments)]
 pub async fn update_prefix_conda(
     prefix: &Prefix,
     package_cache: PackageCache,
