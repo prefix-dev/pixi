@@ -82,6 +82,7 @@ pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 pyproject-toml = "0.10.0"
 rattler = { version = "0.25.0", default-features = false, features = [
     "cli-tools",
+    "indicatif"
 ] }
 rattler_conda_types = { version = "0.23.1", default-features = false }
 rattler_digest = { version = "0.19.4", default-features = false }
@@ -178,15 +179,15 @@ pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.1.38" }
 # deno_task_shell = { path = "../deno_task_shell" }
 
-rattler = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_conda_types = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_digest = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_lock = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_networking = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_repodata_gateway = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_shell = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_solve = { git = "https://github.com/mamba-org/rattler", branch = "main" }
-rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branch = "main" }
+rattler = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
+rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
+rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
+rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
+rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
+rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
+rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
+rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
+rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch = "refactor/installer" }
 
 # rattler_conda_types = { path = "../rattler-1/crates/rattler_conda_types" }
 # rattler_digest = { path = "../rattler-1/crates/rattler_digest" }
@@ -219,3 +220,6 @@ rattler_virtual_packages = { git = "https://github.com/mamba-org/rattler", branc
 # platform-tags = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
 # pypi-types = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
 # requirements-txt = { git = "https://github.com/wolfv/uv", branch = "expose-yanks" }
+
+[profile.release]
+debug = true
