@@ -451,9 +451,7 @@ pub async fn update_prefix_conda(
 ) -> miette::Result<PythonStatus> {
     // Execute the operations that are returned by the solver.
     let result = progress::await_in_progress(
-        format!(
-            "{progress_bar_prefix}{progress_bar_message}",
-        ),
+        format!("{progress_bar_prefix}{progress_bar_message}",),
         |pb| async {
             Installer::new()
                 .with_download_client(authenticated_client)
@@ -466,7 +464,10 @@ pub async fn update_prefix_conda(
                     IndicatifReporter::builder()
                         .with_multi_progress(global_multi_progress())
                         .with_placement(rattler::install::Placement::After(pb))
-                        .with_formatter(DefaultProgressFormatter::default().with_prefix(format!("{progress_bar_prefix}  ")))
+                        .with_formatter(
+                            DefaultProgressFormatter::default()
+                                .with_prefix(format!("{progress_bar_prefix}  ")),
+                        )
                         .clear_when_done(true)
                         .finish(),
                 )
