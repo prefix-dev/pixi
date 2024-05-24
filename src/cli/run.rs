@@ -19,10 +19,7 @@ use crate::task::{
 };
 use crate::Project;
 
-use crate::activation::{
-    get_linux_clean_environment_variables, get_macos_clean_environment_variables,
-    get_windows_clean_environment_variables,
-};
+use crate::activation::get_clean_environment_variables;
 use crate::lock_file::LockFileDerivedData;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::progress::await_in_progress;
@@ -120,8 +117,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .with_disambiguate_fn(disambiguate_task_interactive);
 
-    let task_graph =
-        TaskGraph::from_cmd_args(&project, &search_environment, task_args, args.clean_env)?;
+    let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, task_args)?;
 
     tracing::info!("Task graph: {}", task_graph);
 
@@ -266,21 +262,9 @@ pub async fn get_task_env<'p>(
     .wrap_err("failed to activate environment")?;
 
     if clean_env {
-        if cfg!(windows) {
-            let mut win_env = get_windows_clean_environment_variables();
-            win_env.extend(activation_env);
-            return Ok(win_env);
-        } else if cfg!(unix) {
-            let mut unix_env = get_linux_clean_environment_variables();
-            unix_env.extend(activation_env);
-            return Ok(unix_env);
-        } else if cfg!(macos) {
-            let mut macos_env = get_macos_clean_environment_variables();
-            macos_env.extend(activation_env);
-            return Ok(macos_env);
-        }
-        // If none of the os' are detected, use the activation environment without defaults.
-        return Ok(activation_env);
+        let mut env = get_clean_environment_variables();
+        env.extend(activation_env);
+        return Ok(env);
     }
 
     // Concatenate with the system environment variables

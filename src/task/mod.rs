@@ -159,7 +159,7 @@ impl Task {
     pub fn clean_env(&self) -> bool {
         match self {
             Task::Plain(_) => false,
-            Task::Custom(custom) => custom.clean_env,
+            Task::Custom(_) => false,
             Task::Execute(execute) => execute.clean_env,
             Task::Alias(_) => false,
         }
@@ -213,10 +213,8 @@ pub struct Custom {
 
     /// The working directory for the command relative to the root of the project.
     pub cwd: Option<PathBuf>,
-
-    /// Isolate the task from the running machine
-    pub clean_env: bool,
 }
+
 impl From<Custom> for Task {
     fn from(value: Custom) -> Self {
         Task::Custom(value)

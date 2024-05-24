@@ -140,7 +140,7 @@ pub async fn run_activation(
         ))
     })?;
 
-    let path_modification_behavior = if clean_env {
+    let path_modification_behavior = if clean_env && !cfg!(target_os = "windows") {
         PathModificationBehavior::Replace
     } else {
         PathModificationBehavior::Prepend
@@ -216,99 +216,76 @@ pub fn get_environment_variables<'p>(environment: &'p Environment<'p>) -> HashMa
         .collect()
 }
 
-/// Get the environment variables that are set by default on Linux.
-pub fn get_linux_clean_environment_variables() -> HashMap<String, String> {
+pub fn get_clean_environment_variables() -> HashMap<String, String> {
     let env = std::env::vars().collect::<HashMap<_, _>>();
-    let default_keys = [
-        "DISPLAY",
-        "LC_ALL",
-        "LC_TIME",
-        "LC_NUMERIC",
-        "LC_MEASUREMENT",
-        "SHELL",
-        "USER",
-        "USERNAME",
-        "LOGNAME",
-        "HOME",
-        "HOSTNAME",
-    ];
 
-    let env = env
-        .into_iter()
-        .filter(|(key, _)| default_keys.contains(&key.as_str()))
-        .collect();
-    env
-}
+    let unix_keys = if cfg!(target_os = "unix") {
+        vec![
+            "DISPLAY",
+            "LC_ALL",
+            "LC_TIME",
+            "LC_NUMERIC",
+            "LC_MEASUREMENT",
+            "SHELL",
+            "USER",
+            "USERNAME",
+            "LOGNAME",
+            "HOME",
+            "HOSTNAME",
+        ]
+    } else {
+        vec![]
+    };
 
-/// Get the environment variables that are set by default on macOS.
-pub fn get_macos_clean_environment_variables() -> HashMap<String, String> {
-    let env = std::env::vars().collect::<HashMap<_, _>>();
-    let default_keys = [
-        "DISPLAY",
-        "LC_ALL",
-        "LC_TIME",
-        "LC_NUMERIC",
-        "LC_MEASUREMENT",
-        "USER",
-        "USERNAME",
-        "LOGNAME",
-        "HOME",
-        "HOSTNAME",
-        "PATH",
-        "SHELL",
-        "TMPDIR",
-        "XPC_SERVICE_NAME",
-        "XPC_FLAGS",
-    ];
+    let macos_keys = if cfg!(target_os = "macos") {
+        vec!["TMPDIR", "XPC_SERVICE_NAME", "XPC_FLAGS"]
+    } else {
+        vec![]
+    };
 
-    let env = env
-        .into_iter()
-        .filter(|(key, _)| default_keys.contains(&key.as_str()))
-        .collect();
-    env
-}
+    let windows_keys = if cfg!(target_os = "windows") {
+        vec![
+            "APPDATA",
+            "COMPUTERNAME",
+            "COMSPEC",
+            "COMMONPROGRAMFILES",
+            "COMMONPROGRAMFILES(X86)",
+            "COMMONPROGRAMW6432",
+            "DRIVERDATA",
+            "HOMEDRIVE",
+            "HOMEPATH",
+            "LOGONSERVER",
+            "NUMBER_OF_PROCESSORS",
+            "OS",
+            "PATHEXT",
+            "PROCESSOR_ARCHITECTURE",
+            "PROCESSOR_IDENTIFIER",
+            "PROCESSOR_LEVEL",
+            "PROCESSOR_REVISION",
+            "PROMPT_COMMAND",
+            "PROMPT_COMMAND_RIGHT",
+            "PROMPT_INDICATOR",
+            "PROMPT_INDICATOR_VI_INSERT",
+            "PROMPT_INDICATOR_VI_NORMAL",
+            "PROMPT_MULTILINE_INDICATOR",
+            "PWD",
+            "SESSIONNAME",
+            "SYSTEMDRIVE",
+            "SYSTEMROOT",
+            "TEMP",
+            "TMP",
+            "TERMINAL_EMULATOR",
+            "USERNAME",
+            "USERPROFILE",
+            "USERDOMAIN_ROAMINGPROFILE",
+            "USERDOMAIN",
+            "windir",
+        ]
+    } else {
+        vec![]
+    };
 
-/// Get the environment variables that are set by default on Windows.
-pub fn get_windows_clean_environment_variables() -> HashMap<String, String> {
-    let env = std::env::vars().collect::<HashMap<_, _>>();
-    let default_keys = [
-        "APPDATA",
-        "COMPUTERNAME",
-        "COMSPEC",
-        "COMMONPROGRAMFILES",
-        "COMMONPROGRAMFILES(X86)",
-        "COMMONPROGRAMW6432",
-        "DRIVERDATA",
-        "HOMEDRIVE",
-        "HOMEPATH",
-        "LOGONSERVER",
-        "NUMBER_OF_PROCESSORS",
-        "OS",
-        "PATHEXT",
-        "PROCESSOR_ARCHITECTURE",
-        "PROCESSOR_IDENTIFIER",
-        "PROCESSOR_LEVEL",
-        "PROCESSOR_REVISION",
-        "PROMPT_COMMAND",
-        "PROMPT_COMMAND_RIGHT",
-        "PROMPT_INDICATOR",
-        "PROMPT_INDICATOR_VI_INSERT",
-        "PROMPT_INDICATOR_VI_NORMAL",
-        "PROMPT_MULTILINE_INDICATOR",
-        "PWD",
-        "SESSIONNAME",
-        "SYSTEMDRIVE",
-        "SYSTEMROOT",
-        "TEMP",
-        "TMP",
-        "TERMINAL_EMULATOR",
-        "USERNAME",
-        "USERPROFILE",
-        "USERDOMAIN_ROAMINGPROFILE",
-        "USERDOMAIN",
-        "windir",
-    ];
-
+    #[cfg(target_os = "windows")]
     let path = env
         .get("Path")
         .map(|path| {
@@ -321,9 +298,20 @@ pub fn get_windows_clean_environment_variables() -> HashMap<String, String> {
         })
         .expect("Could not find PATH in environment variables");
 
+    let keys = unix_keys
+        .into_iter()
+        .chain(macos_keys)
+        .chain(windows_keys)
+        .collect_vec();
+
     let env = env
         .into_iter()
-        .filter(|(key, _)| default_keys.contains(&key.as_str()))
+        .filter(|(key, _)| keys.contains(&key.as_str()))
+        .collect();
+
+    #[cfg(target_os = "windows")]
+    let env = env
+        .into_iter()
         .chain(vec![("PATH".to_string(), path)])
         .collect();
 
@@ -411,20 +399,9 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(target_os = "unix")]
     fn test_get_linux_clean_environment_variables() {
-        let env = get_linux_clean_environment_variables();
-        // Make sure that the environment variables are set.
-        assert_eq!(
-            env.get("USER").unwrap(),
-            std::env::var("USER").as_ref().unwrap()
-        );
-    }
-
-    #[test]
-    #[cfg(target_os = "macos")]
-    fn test_get_macos_clean_environment_variables() {
-        let env = get_macos_clean_environment_variables();
+        let env = get_clean_environment_variables();
         // Make sure that the environment variables are set.
         assert_eq!(
             env.get("USER").unwrap(),
@@ -435,7 +412,7 @@ mod tests {
     #[test]
     #[cfg(target_os = "windows")]
     fn test_get_windows_clean_environment_variables() {
-        let env = get_windows_clean_environment_variables();
+        let env = get_clean_environment_variables();
         // Make sure that the environment variables are set.
         assert_eq!(
             env.get("USERNAME").unwrap(),
