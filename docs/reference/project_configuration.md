@@ -692,4 +692,4 @@ When an environment comprises several features (including the default feature):
 
 ## Global configuration
 
-The global configuration options are documented in the [global configuration](../advanced/global_configuration.md) section.
+The global configuration options are documented in the [global configuration](../reference/pixi_configuration.md) section.
