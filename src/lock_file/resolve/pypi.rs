@@ -1,5 +1,5 @@
 use super::pypi_editables::build_editables;
-use crate::consts::PROJECT_MANIFEST;
+use crate::consts::{DEFAULT_PYPI_INDEX_URL, PROJECT_MANIFEST};
 use crate::lock_file::resolve::resolver_provider::CondaResolverProvider;
 use crate::project::manifest::pypi_options::PypiOptions;
 use crate::project::manifest::python::RequirementOrEditable;
@@ -18,17 +18,17 @@ use crate::{
     project::manifest::{PyPiRequirement, SystemRequirements},
 };
 
-use distribution_types::FileLocation;
 use distribution_types::{
-    BuiltDist, Dist, FlatIndexLocation, HashPolicy, IndexUrl, LocalEditable, Name, Resolution,
-    ResolvedDist, SourceDist,
+    BuiltDist, Dist, FlatIndexLocation, HashPolicy, IndexUrl, LocalEditable, Name, ParsedUrl,
+    Resolution, ResolvedDist, SourceDist,
 };
+use distribution_types::{FileLocation, RequirementSource};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use install_wheel_rs::linker::LinkMode;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
-use pep440_rs::{Operator, VersionSpecifier};
+use pep440_rs::{Operator, VersionSpecifier, VersionSpecifiers};
 use pep508_rs::{Requirement, VerbatimUrl, VersionOrUrl};
 use pypi_types::{HashAlgorithm, HashDigest, Metadata23};
 use rattler_conda_types::RepoDataRecord;
@@ -317,16 +317,25 @@ pub async fn resolve_pypi(
     .with_build_extra_env_vars(env_variables.iter());
 
     // Constrain the conda packages to the specific python packages
+    // TODO
     let constraints = conda_python_packages
         .values()
-        .map(|(repo, p)| Requirement {
-            name: p.name.as_normalized().clone(),
-            extras: vec![],
-            version_or_url: Some(pep508_rs::VersionOrUrl::Url(VerbatimUrl::unknown(
-                repo.url.clone(),
-            ))),
-            marker: None,
-            origin: None,
+        .map(|(repo, p)| {
+            // TODO: sh
+
+            // Only one requirement source and we just assume thats a PyPI source
+            let source = RequirementSource::Registry {
+                specifier: todo!(),
+                index: todo!(),
+            };
+
+            let requirement = distribution_types::Requirement {
+                name: p.name.clone(),
+                extras: None,
+                marker: None,
+                source,
+                origin: None,
+            };
         })
         .collect::<Vec<_>>();
 
@@ -343,14 +352,43 @@ pub async fn resolve_pypi(
         .iter()
         .map(|record| {
             let (package_data, environment_data) = record;
+
             let version =
                 VersionSpecifier::from_version(Operator::Equal, package_data.version.clone())
                     .expect("invalid version specifier");
+
+            // TODO refactor this later into function
+            let source = match package_data.url_or_path {
+                UrlOrPath::Url(url) => {
+                    if url.as_ref().starts_with("direct+") {
+                        // TODO: strip the direct scheme
+                        RequirementSource::Url {
+                            subdirectory: None,
+                            location: url.clone(),
+                            url: VerbatimUrl::from_url(url.clone()),
+                        }
+                    } else {
+                        // TODO: create correct Index
+                        RequirementSource::Registry {
+                            specifier: VersionSpecifiers::from(version),
+                            index: Some(DEFAULT_PYPI_INDEX_URL.clone().to_string()),
+                        }
+                    }
+                }
+                UrlOrPath::Path(path) => RequirementSource::Path {
+                    path: path.clone(),
+                    editable: package_data.editable,
+                    url: VerbatimUrl::from_url(
+                        Url::from_file_path(path).expect("could not create file-path url"),
+                    ),
+                },
+            };
+
             let requirement = distribution_types::Requirement {
                 name: package_data.name.clone(),
-                extras: vec![],
+                extras: environment_data.extras.iter().cloned().collect_vec(),
                 marker: None,
-                source: todo!(),
+                source,
                 origin: None,
             };
             Preference::from_requirement(requirement)

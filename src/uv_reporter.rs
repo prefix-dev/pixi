@@ -197,7 +197,7 @@ impl uv_installer::InstallReporter for UvReporter {
 }
 
 impl uv_resolver::ResolverReporter for UvReporter {
-    fn on_progress(&self, name: &PackageName, version: &VersionOrUrl) {
+    fn on_progress(&self, name: &PackageName, version: &VersionOrUrlRef) {
         self.pb
             .set_message(format!("resolving {}{}", name, version));
     }

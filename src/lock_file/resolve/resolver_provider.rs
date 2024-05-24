@@ -1,12 +1,11 @@
 use std::{
     collections::{BTreeMap, HashMap},
     future::ready,
-    sync::Arc,
 };
 
 use distribution_types::{
-    DirectUrlSourceDist, Dist, HashComparison, IndexLocations, PrioritizedDist, SourceDist,
-    SourceDistCompatibility,
+    DirectUrlSourceDist, Dist, File, FileLocation, HashComparison, IndexLocations, IndexUrl,
+    PrioritizedDist, RegistrySourceDist, SourceDist, SourceDistCompatibility,
 };
 use futures::{Future, FutureExt};
 use pep508_rs::{PackageName, VerbatimUrl};
@@ -19,7 +18,10 @@ use uv_resolver::{
 };
 use uv_types::BuildContext;
 
-use crate::lock_file::PypiPackageIdentifier;
+use crate::{
+    consts::DEFAULT_PYPI_INDEX_URL,
+    lock_file::{records_by_name::HasNameVersion, PypiPackageIdentifier},
+};
 
 pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) fallback: DefaultResolverProvider<'a, Context>,
@@ -40,16 +42,37 @@ impl<'a, Context: BuildContext + Send + Sync> ResolverProvider
             // available version in the form of a source distribution with the URL of the
             // conda package.
             //
-            // Obviously this is not a valid source distribution but it easies debugging.
-            let dist = Dist::Source(SourceDist::DirectUrl(DirectUrlSourceDist {
+            // Obviously this is not a valid source distribution but it eases debugging.
+
+            // Don't think this matters much
+            // so just fill it up with empty fields
+            let file = File {
+                dist_info_metadata: false,
+                filename: identifier.name.as_normalized().clone().to_string(),
+                hashes: vec![],
+                requires_python: None,
+                size: None,
+                upload_time_utc_ms: None,
+                url: FileLocation::AbsoluteUrl(repodata_record.url.to_string()),
+                yanked: None,
+            };
+
+            let source_dist = RegistrySourceDist {
                 name: identifier.name.as_normalized().clone(),
-                url: VerbatimUrl::unknown(repodata_record.url.clone()),
-                location: repodata_record.url.clone(),
-                subdirectory: None,
-            }));
+                version: repodata_record
+                    .version()
+                    .version()
+                    .to_string()
+                    .parse()
+                    .expect("could not convert to pypi version"),
+                file: Box::new(file),
+                // TODO: correct this later with the correct index
+                index: IndexUrl::Pypi(VerbatimUrl::from_url(DEFAULT_PYPI_INDEX_URL.clone())),
+                wheels: vec![],
+            };
 
             let prioritized_dist = PrioritizedDist::from_source(
-                dist,
+                source_dist,
                 Vec::new(),
                 SourceDistCompatibility::Compatible(HashComparison::Matched),
             );

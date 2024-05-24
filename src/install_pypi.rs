@@ -5,7 +5,7 @@ use crate::uv_reporter::{UvReporter, UvReporterOptions};
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use distribution_filename::{DistFilename, WheelFilename};
+use distribution_filename::WheelFilename;
 
 use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, WrapErr};
